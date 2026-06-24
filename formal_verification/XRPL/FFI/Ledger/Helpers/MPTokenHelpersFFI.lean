@@ -12,8 +12,8 @@ open XRPL.Model.Ledger.Helpers (authorizeMPToken)
 @[export lean_authorize_mptoken]
 def lean_authorize_mptoken (ledger : Ledger) (priorBalance : Int64) (mptIssuanceID : MPTID)
     (accountID : AccountID) (flags : UInt32) (holderID : Option AccountID) : Ledger × Except String TER :=
-  match (authorizeMPToken ⟨priorBalance⟩ mptIssuanceID accountID flags holderID).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (authorizeMPToken ⟨priorBalance⟩ mptIssuanceID accountID flags holderID).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 end XRPL.FFI

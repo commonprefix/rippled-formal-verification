@@ -15,15 +15,15 @@ def lean_trust_create (ledger : Ledger) (bSrcHigh : UInt8) (uSrcAccountID uDstAc
     (saBalance saLimit : STAmount) (uQualityIn uQualityOut : UInt32) : Ledger × Except String TER :=
   match (trustCreate (bSrcHigh != 0) uSrcAccountID uDstAccountID uIndex sleAccount
       (bAuth != 0) (bNoRipple != 0) (bFreeze != 0) (bDeepFreeze != 0)
-      saBalance saLimit uQualityIn uQualityOut).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+      saBalance saLimit uQualityIn uQualityOut).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_trust_delete]
 def lean_trust_delete (ledger : Ledger) (sleRippleState : RippleState)
     (uLowAccountID uHighAccountID : AccountID) : Ledger × Except String TER :=
-  match (trustDelete sleRippleState uLowAccountID uHighAccountID).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (trustDelete sleRippleState uLowAccountID uHighAccountID).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_credit_limit]

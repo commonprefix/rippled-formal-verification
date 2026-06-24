@@ -5,30 +5,41 @@ namespace XRPL.Model.Ledger
 
 open XRPL.Model.Protocol
 
-abbrev ApplyView := StateT Ledger (Except String)
+-- The mutating apply state: the ledger plus the set of keys touched by
+-- insert/update/erase (mirrors rippled's apply dirty-set, including
+-- identical-content rewrites). The invariant checker consumes `touched`.
+structure ApplyState where
+  ledger : Ledger
+  touched : List UInt256 := []
+
+abbrev ApplyView := StateT ApplyState (Except String)
+
+@[inline] def ApplyState.read (s : ApplyState) (k : Keylet) : Option LedgerEntry := s.ledger.read k
+@[inline] def ApplyState.readUnchecked (s : ApplyState) (key : UInt256) : Option LedgerEntry := s.ledger.readUnchecked key
+@[inline] def ApplyState.fees (s : ApplyState) : Fees := s.ledger.fees
+@[inline] def ApplyState.parentCloseTime (s : ApplyState) : NetClock.TimePoint := s.ledger.parentCloseTime
 
 def ApplyView.peek (k : Keylet) : ApplyView (Option LedgerEntry) := return (← get).read k
 
 def ApplyView.insert (e : LedgerEntry) : ApplyView Unit := do
-  let sb ← get
-  if (sb.read ⟨e.type, e.key⟩).isSome then
+  let s ← get
+  if (s.read ⟨e.type, e.key⟩).isSome then
     throw "ApplyView.insert: entry already exists"
-  modify (·.put e)
+  set { s with ledger := s.ledger.put e, touched := e.key :: s.touched }
 def ApplyView.update (e : LedgerEntry) : ApplyView Unit := do
-  let sb ← get
-  if (sb.read ⟨e.type, e.key⟩).isNone then
+  let s ← get
+  if (s.read ⟨e.type, e.key⟩).isNone then
     throw "ApplyView.update: entry not present"
-  modify (·.put e)
+  set { s with ledger := s.ledger.put e, touched := e.key :: s.touched }
 def ApplyView.erase (k : Keylet) : ApplyView Unit := do
-  let sb ← get
-  if (sb.read k).isNone then
+  let s ← get
+  if (s.read k).isNone then
     throw "ApplyView.erase: entry not present"
-  modify (·.remove k.key)
+  set { s with ledger := s.ledger.remove k.key, touched := k.key :: s.touched }
 
--- Run a read-only computation in the mutating view (models C++ `ApplyView : ReadView`).
+-- Run a read-only computation against the ledger component.
 def ApplyView.ofReadView {α : Type} (x : ReadView α) : ApplyView α := do
-  let sb ← get
-  match x.run sb with
+  match x.run (← get).ledger with
   | .ok a => return a
   | .error e => throw e
 
@@ -48,9 +59,16 @@ def balanceHookMPTStub (_account : AccountID) (issue : MPTIssue) (amount : Int64
   STAmount.ofInt64 (.mptIssue issue) amount 0 .to_nearest
 
 def applyTx (initial : Ledger) (computation : ApplyView TER) : TER × Ledger :=
-  match computation.run initial with
-  | .ok (.tesSUCCESS, final) => (.tesSUCCESS, final)
-  | .ok (ter, _)             => (ter, initial)
-  | .error _                 => (.tecINTERNAL, initial)
+  match computation.run { ledger := initial } with
+  | .ok (.tesSUCCESS, s) => (.tesSUCCESS, s.ledger)
+  | .ok (ter, _)         => (ter, initial)
+  | .error _             => (.tecINTERNAL, initial)
+
+-- Like `applyTx` but surfaces the touched-key set (meaningful only on success).
+def applyTxTouched (initial : Ledger) (computation : ApplyView TER)
+    : TER × Ledger × List UInt256 :=
+  match computation.run { ledger := initial } with
+  | .ok (ter, s) => (ter, s.ledger, s.touched)
+  | .error _     => (.tecINTERNAL, initial, [])
 
 end XRPL.Model.Ledger

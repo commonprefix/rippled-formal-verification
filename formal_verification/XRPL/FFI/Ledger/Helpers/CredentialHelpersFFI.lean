@@ -11,8 +11,8 @@ open XRPL.Model.Ledger.Helpers (deleteSLE authorizedDepositPreauth verifyDeposit
 
 @[export lean_credentials_delete_sle]
 def lean_credentials_delete_sle (ledger : Ledger) (sleCredential : Option Credential) : Ledger × Except String TER :=
-  match (deleteSLE sleCredential).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (deleteSLE sleCredential).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_credentials_authorized_deposit_preauth]
@@ -22,8 +22,8 @@ def lean_credentials_authorized_deposit_preauth (ledger : Ledger) (credIDs : STV
 @[export lean_credentials_verify_deposit_preauth]
 def lean_credentials_verify_deposit_preauth (ledger : Ledger) (credentialIDs : Option STVector256) (src dst : AccountID)
     (sleDst : Option AccountRoot) : Ledger × Except String TER :=
-  match (verifyDepositPreauth credentialIDs src dst sleDst).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (verifyDepositPreauth credentialIDs src dst sleDst).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 end XRPL.FFI

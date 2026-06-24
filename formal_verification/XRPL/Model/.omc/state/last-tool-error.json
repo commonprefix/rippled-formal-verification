@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /home/v3lmx/work/ripple/rippled-formal-verification/formal_verification\\nwhich lake elan 2>/dev/null; echo \\\"---\\\"; lake --version 2>&1 | head -3; echo \\\"--- elan ---\\\"; ls ~/.elan/bin ...",
+  "error": "Exit code 2\n---\nLake version 5.0.0-src+7e01a1b (Lean version 4.28.0)\n--- elan ---",
+  "timestamp": "2026-06-24T08:46:56.901Z",
+  "retry_count": 1
+}

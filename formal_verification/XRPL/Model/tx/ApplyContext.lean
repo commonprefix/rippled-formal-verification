@@ -7,7 +7,7 @@ namespace XRPL.Model.tx
 
 The ledger lives in the `ApplyView` (StateT) monad; the context carries the tx. -/
 
-structure ApplyContext (α : Type) [Tx α] where
+structure ApplyContext (α : Type) [Transactor α] where
   tx : α
 
 end XRPL.Model.tx

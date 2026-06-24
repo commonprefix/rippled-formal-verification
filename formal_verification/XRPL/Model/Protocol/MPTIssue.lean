@@ -15,4 +15,8 @@ def MPTIssue.getMptID (m : MPTIssue) : MPTID := m.mptID
 -- Trailing 160 bits of the 192-bit MPTID are the issuer.
 def MPTIssue.getIssuer (m : MPTIssue) : AccountID := ⟨m.mptID.val.truncate 160⟩
 
+-- The 192-bit MPTID is (sequence ++ issuer).
+def makeMptID (sequence : UInt32) (issuer : AccountID) : MPTID :=
+  ⟨BitVec.ofNat 192 (sequence.toNat * 2 ^ 160 + issuer.val.toNat)⟩
+
 end XRPL.Model.Protocol

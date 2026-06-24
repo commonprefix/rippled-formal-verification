@@ -16,17 +16,21 @@ open XRPL.Model.tx
 structure VaultDepositTx where
   txID : String
   account : AccountID
+  preFeeBalance : XRPAmount
   vaultID : UInt256
   amount  : STAmount
 
-instance : Tx VaultDepositTx where
+instance : Transactor VaultDepositTx where
   txID := (·.txID)
   account := (·.account)
+  preFeeBalance := (·.preFeeBalance)
+  txnType := fun _ => .vaultDeposit
+  amount := fun tx => some tx.amount
 
 structure VaultDepositTr where
 
-def VaultDepositTr.PreflightAny (α : Type) [Tx α] (ctx : PreflightContext α) : TER := Id.run do
-  if Tx.txID ctx.tx = "" then
+def VaultDepositTr.PreflightAny (α : Type) [Transactor α] (ctx : PreflightContext α) : TER := Id.run do
+  if Transactor.txID ctx.tx = "" then
     return TER.temMALFORMED
   return TER.tesSUCCESS
 

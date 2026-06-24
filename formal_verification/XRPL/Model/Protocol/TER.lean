@@ -3,6 +3,7 @@ namespace XRPL.Model.Protocol
 inductive TER where
   | tesSUCCESS
   | tecINTERNAL
+  | tecINVARIANT_FAILED
   | tecAMM_INVALID_TOKENS
   | tecAMM_FAILED
   | tecUNFUNDED_AMM
@@ -28,6 +29,7 @@ inductive TER where
   | tefBAD_LEDGER
   | terNO_ACCOUNT
   | terNO_RIPPLE
+  | terADDRESS_COLLISION
   | tecFROZEN
   | tecLOCKED
   | temMALFORMED

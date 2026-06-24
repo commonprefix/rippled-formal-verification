@@ -15,4 +15,10 @@ def maxUInt64 : UInt64 := 0xFFFFFFFFFFFFFFFF
 -- max recursion depth for vault-share asset checks (frozen / requireAuth)
 def kMaxAssetCheckDepth : Nat := 5
 
+def kMaxDataPayloadLength : Nat := 256
+def kMaxMpTokenMetadataLength : Nat := 1024
+def kVaultStrategyFirstComeFirstServe : UInt8 := 1
+def kVaultDefaultIouScale : UInt8 := 6
+def kVaultMaximumIouScale : UInt8 := 18
+
 end XRPL.Model.Protocol

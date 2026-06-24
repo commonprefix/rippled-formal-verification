@@ -39,8 +39,8 @@ def lean_can_add_holding (ledger : Ledger) (asset : Asset) : Ledger × Except St
 @[export lean_add_empty_holding]
 def lean_add_empty_holding (ledger : Ledger) (accountID : AccountID) (priorBalance : Int64)
     (asset : Asset) : Ledger × Except String TER :=
-  match (addEmptyHoldingAsset accountID ⟨priorBalance⟩ asset).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (addEmptyHoldingAsset accountID ⟨priorBalance⟩ asset).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_is_global_frozen]
@@ -82,23 +82,23 @@ def lean_account_holds (ledger : Ledger) (account : AccountID) (asset : Asset)
 def lean_account_send (ledger : Ledger) (uSenderID uReceiverID : AccountID) (saAmount : STAmount)
     (mode waiveFee allowOverflow : UInt8) : Ledger × Except String TER :=
   match (accountSend uSenderID uReceiverID saAmount (decodeMode mode)
-      (decodeWaiveTransferFee waiveFee) (decodeAllowMPTOverflow allowOverflow)).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+      (decodeWaiveTransferFee waiveFee) (decodeAllowMPTOverflow allowOverflow)).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_account_send_multi]
 def lean_account_send_multi (ledger : Ledger) (senderID : AccountID) (asset : Asset)
     (receivers : MultiplePaymentDestinations) (mode waiveFee : UInt8) : Ledger × Except String TER :=
   match (accountSendMulti senderID asset receivers (decodeMode mode)
-      (decodeWaiveTransferFee waiveFee)).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+      (decodeWaiveTransferFee waiveFee)).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 @[export lean_remove_empty_holding]
 def lean_remove_empty_holding (ledger : Ledger) (accountID : AccountID) (asset : Asset)
     : Ledger × Except String TER :=
-  match (removeEmptyHoldingAsset accountID asset).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (removeEmptyHoldingAsset accountID asset).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger,.ok ter)
   | .error e => (ledger, .error e)
 
 end XRPL.FFI

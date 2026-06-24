@@ -15,8 +15,8 @@ def decodePseudoField (n : UInt8) : PseudoField := match n.toNat with
 
 @[export lean_adjust_owner_count]
 def lean_adjust_owner_count (ledger : Ledger) (sle : Option AccountRoot) (amount : Int32) : Ledger × Except String Unit :=
-  match (adjustOwnerCount sle amount).run ledger with
-  | .ok (_, ledger') => (ledger', .ok ())
+  match (adjustOwnerCount sle amount).run { ledger := ledger } with
+  | .ok (_, ledger') => (ledger'.ledger,.ok ())
   | .error e => (ledger, .error e)
 
 @[export lean_check_destination_and_tag]
@@ -27,8 +27,8 @@ def lean_check_destination_and_tag (ledger : Ledger) (sleDst : Option AccountRoo
 @[export lean_create_pseudo_account]
 def lean_create_pseudo_account (ledger : Ledger) (pseudoOwnerKey : UInt256) (ownerField : UInt8)
     : Ledger × Except String (Except TER AccountRoot) :=
-  match (createPseudoAccount pseudoOwnerKey (decodePseudoField ownerField)).run ledger with
-  | .ok (res, ledger') => (ledger', .ok res)
+  match (createPseudoAccount pseudoOwnerKey (decodePseudoField ownerField)).run { ledger := ledger } with
+  | .ok (res, ledger') => (ledger'.ledger,.ok res)
   | .error e => (ledger, .error e)
 
 @[export lean_is_pseudo_account]

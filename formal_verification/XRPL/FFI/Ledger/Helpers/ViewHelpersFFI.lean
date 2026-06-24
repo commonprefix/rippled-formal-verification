@@ -13,8 +13,8 @@ open XRPL.Model.Ledger (Ledger doWithdraw)
 def lean_do_withdraw (ledger : Ledger) (credentialIDs : Option STVector256)
     (senderAcct dstAcct sourceAcct : AccountID) (priorBalance : Int64)
     (amount : STAmount) (mode : UInt8) : Ledger × Except String TER :=
-  match (doWithdraw credentialIDs senderAcct dstAcct sourceAcct ⟨priorBalance⟩ amount (decodeMode mode)).run ledger with
-  | .ok (ter, ledger') => (ledger', .ok ter)
+  match (doWithdraw credentialIDs senderAcct dstAcct sourceAcct ⟨priorBalance⟩ amount (decodeMode mode)).run { ledger := ledger } with
+  | .ok (ter, ledger') => (ledger'.ledger, .ok ter)
   | .error e => (ledger, .error e)
 
 end XRPL.FFI
