@@ -44,8 +44,16 @@ def SharesSnap.make (i : MPTokenIssuance) : SharesSnap :=
     sharesTotal := i.outstandingAmount,
     sharesMaximum := i.maximumAmount.getD maxMPTokenAmount.toUInt64 }
 
+-- Known model boundaries (intentional divergences from rippled, tracked here):
+--   * Balance `deltas` map deferred to Phase 2/3 (only snapshots built below); the
+--     universal block + vaultCreate case do not need it.
+--   * Directory mechanics are stubbed (ApplyView.dir{Insert,Link}Stub never fail),
+--     so tecDIR_FULL / dirLink rejections cannot occur — dir-full vectors are out
+--     of scope for differential testing.
+--   * Fees are not modeled; amendments are assumed enabled (e.g. fixCleanup3_2_0).
+--
 -- visitEntry equivalent: over the apply touched-set, collect before/after vault
--- and share-issuance snapshots. (Balance deltas are deferred to Phase 2/3.)
+-- and share-issuance snapshots.
 def collect (initial final : Ledger) (touched : List UInt256) : State := Id.run do
   let mut st : State := {}
   for key in touched.dedup do
@@ -65,8 +73,6 @@ def ltz (n : Number) : Bool := n.operator_lt Number.zero
 private def findShares (mpts : List SharesSnap) (id : MPTID) : Option SharesSnap :=
   mpts.find? (fun e => e.share.getMptID == id)
 
--- Mirrors ValidVault::finalize. `enforce` (featureSingleAssetVault) is assumed
--- enabled, so any violation returns false. Phase 1: universal block + vaultCreate.
 def finalize {α : Type} [Transactor α] (tx : α) (ret : TER) (_fee : XRPAmount)
     (final : Ledger) (st : State) : Bool := Id.run do
   if !ret.isTesSuccess then
@@ -153,7 +159,7 @@ def finalize {α : Type} [Transactor α] (tx : α) (ret : TER) (_fee : XRPAmount
         | some vid => if vid != afterVault.key then r := false
         | none => r := false
       return r
-    | _ => true  -- Phase 2/3: vaultSet / vaultDeposit / vaultWithdraw / vaultClawback
+    | _ => true
   if !caseResult then result := false
   return result
 

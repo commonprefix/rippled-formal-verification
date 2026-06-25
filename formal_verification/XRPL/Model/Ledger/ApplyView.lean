@@ -14,10 +14,10 @@ structure ApplyState where
 
 abbrev ApplyView := StateT ApplyState (Except String)
 
-@[inline] def ApplyState.read (s : ApplyState) (k : Keylet) : Option LedgerEntry := s.ledger.read k
-@[inline] def ApplyState.readUnchecked (s : ApplyState) (key : UInt256) : Option LedgerEntry := s.ledger.readUnchecked key
-@[inline] def ApplyState.fees (s : ApplyState) : Fees := s.ledger.fees
-@[inline] def ApplyState.parentCloseTime (s : ApplyState) : NetClock.TimePoint := s.ledger.parentCloseTime
+def ApplyState.read (s : ApplyState) (k : Keylet) : Option LedgerEntry := s.ledger.read k
+def ApplyState.readUnchecked (s : ApplyState) (key : UInt256) : Option LedgerEntry := s.ledger.readUnchecked key
+def ApplyState.fees (s : ApplyState) : Fees := s.ledger.fees
+def ApplyState.parentCloseTime (s : ApplyState) : NetClock.TimePoint := s.ledger.parentCloseTime
 
 def ApplyView.peek (k : Keylet) : ApplyView (Option LedgerEntry) := return (← get).read k
 
@@ -64,11 +64,14 @@ def applyTx (initial : Ledger) (computation : ApplyView TER) : TER × Ledger :=
   | .ok (ter, _)         => (ter, initial)
   | .error _             => (.tecINTERNAL, initial)
 
--- Like `applyTx` but surfaces the touched-key set (meaningful only on success).
+-- Like `applyTx` but also surfaces the touched-key set. Mirrors `applyTx`:
+-- mutations are kept only on `tesSUCCESS`; any other result reverts to `initial`
+-- (and yields no touched keys), matching rippled discarding the apply view.
 def applyTxTouched (initial : Ledger) (computation : ApplyView TER)
     : TER × Ledger × List UInt256 :=
   match computation.run { ledger := initial } with
-  | .ok (ter, s) => (ter, s.ledger, s.touched)
-  | .error _     => (.tecINTERNAL, initial, [])
+  | .ok (.tesSUCCESS, s) => (.tesSUCCESS, s.ledger, s.touched)
+  | .ok (ter, _)         => (ter, initial, [])
+  | .error _             => (.tecINTERNAL, initial, [])
 
 end XRPL.Model.Ledger
