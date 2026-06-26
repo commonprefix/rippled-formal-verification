@@ -162,9 +162,9 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
         have hempty : g.empty = true := h_empty_above (by omega)
         have hgP_eq : gP = g := by
           rcases hzm_cases with h | h
-            rw [hgP_def]
+          · rw [hgP_def]
             exact pushOverflow_noop_of_le_maxRep_of_empty (by omega) g mode hempty
-            rw [hgP_def]
+          · rw [hgP_def]
             unfold Guard.pushOverflow
             rw [if_neg]
             intro ⟨_, h2⟩

@@ -319,7 +319,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
   unfold Guard.pushOverflow
   rw [if_pos ⟨UInt64.le_of_lt hmr_u, hlt_u⟩]
   by_cases h9 : zm % (10 : UInt64) < 9
-    have hzm_val : zm.toNat = maxRep.toNat + 1 := by
+  · have hzm_val : zm.toNat = maxRep.toNat + 1 := by
       rcases hdiff_bound with h | h
       · exact h
       · exfalso
@@ -332,7 +332,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
     rw [hmid_eq]
     by_cases hbump : (g.round mode == 1 ||
         (g.round mode == 0 && zm == zm)) = true
-      rw [if_pos hbump]
+    · rw [if_pos hbump]
       simp only [show (zm + 1 == maxRep) = false from beq_eq_false_iff_ne.mpr hne1,
                  Bool.false_eq_true, ite_false]
       constructor
@@ -347,7 +347,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
             UInt64.toNat_mul, show (10 : UInt64).toNat = 10 from rfl, hsub]
         norm_num
       · rfl
-      rw [Bool.not_eq_true] at hbump
+    · rw [Bool.not_eq_true] at hbump
       simp only [hbump, Bool.false_eq_true, ite_false,
                  show (zm == maxRep) = false from beq_eq_false_iff_ne.mpr hne]
       constructor
@@ -357,7 +357,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
             UInt64.toNat_mul, show (10 : UInt64).toNat = 10 from rfl, hdiff, hzm_val, maxRep_val]
         norm_num
       · rfl
-    have hzm_val : zm.toNat = maxRep.toNat + 2 := by
+  · have hzm_val : zm.toNat = maxRep.toNat + 2 := by
       rcases hdiff_bound with h | h
       · exfalso
         have : zm.toNat % 10 = 8 := by rw [h, maxRep_val]
@@ -996,7 +996,7 @@ lemma doRoundUp_output_invariants_downward
           · change minExponent ≤ e; exact hexp
           · change (m + 1).toNat > maxRep.toNat → (m + 1).toNat % 10 = 0
             intro h_gt; exfalso; have : (m + 1).toNat ≤ maxRep.toNat := h_m1_le_maxRep; omega
-    rw [Bool.not_eq_true] at h_ru
+  · rw [Bool.not_eq_true] at h_ru
     have h_g_round_ne1 : g.round .downward ≠ 1 := by
       intro hone
       rcases Nat.lt_or_ge m.toNat maxRep.toNat with hlt | hge

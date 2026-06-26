@@ -808,7 +808,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
     have h_zm_eq_maxRep : zm = maxRep := UInt64.toNat_inj.mp h_cusp
     have h_zm_odd : zm % 2 = 1 := by rw [h_zm_eq_maxRep]; decide
     rcases h_round_values with h_up | h_tie | h_down
-      have hf_gt_half : f > 1/2 := hround_pos.mp h_up
+    · have hf_gt_half : f > 1/2 := hround_pos.mp h_up
       have h_pof : g.pushOverflow zm .to_nearest = g.push 3 := by
         subst h_zm_eq_maxRep
         unfold Guard.pushOverflow
