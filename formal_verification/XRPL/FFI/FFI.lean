@@ -1,18 +1,8 @@
-import XRPL.FFI.Ledger.Helpers.AccountRootHelpersFFI
-import XRPL.FFI.Ledger.Helpers.CredentialHelpersFFI
-import XRPL.FFI.Ledger.Helpers.MPTokenHelpersFFI
-import XRPL.FFI.Ledger.Helpers.RippleStateHelpersFFI
-import XRPL.FFI.Ledger.Helpers.TokenHelpersFFI
-import XRPL.FFI.Ledger.Helpers.ViewHelpersFFI
-import XRPL.FFI.Ledger.LedgerFFI
-import XRPL.FFI.Ledger.ViewFFI
-import XRPL.FFI.Protocol.AcceptedCredentialFFI
 import XRPL.FFI.Protocol.AccountIDFFI
 import XRPL.FFI.Protocol.AssetFFI
 import XRPL.FFI.Protocol.FeesFFI
 import XRPL.FFI.Protocol.IOUAmountFFI
 import XRPL.FFI.Protocol.IssueFFI
-import XRPL.FFI.Protocol.KeyletFFI
 import XRPL.FFI.Protocol.LedgerEntries.AccountRootFFI
 import XRPL.FFI.Protocol.LedgerEntries.CredentialFFI
 import XRPL.FFI.Protocol.LedgerEntries.DepositPreauthFFI
@@ -23,7 +13,6 @@ import XRPL.FFI.Protocol.LedgerEntries.MPTokenIssuanceFFI
 import XRPL.FFI.Protocol.LedgerEntries.PermissionedDomainFFI
 import XRPL.FFI.Protocol.LedgerEntries.RippleStateFFI
 import XRPL.FFI.Protocol.LedgerEntries.VaultFFI
-import XRPL.FFI.Protocol.LedgerHeaderFFI
 import XRPL.FFI.Protocol.MPTAmountFFI
 import XRPL.FFI.Protocol.MPTIssueFFI
 import XRPL.FFI.Protocol.NumberFFI
@@ -32,5 +21,5 @@ import XRPL.FFI.Protocol.STAmountFFI
 import XRPL.FFI.Protocol.STNumberFFI
 import XRPL.FFI.Protocol.UintTypesFFI
 import XRPL.FFI.Protocol.XRPAmountFFI
-import XRPL.FFI.tx.TxFFI
-import XRPL.FFI.tx.vault.VaultSetFFI
+
+import XRPL.NewModel.SingleAssetVault.VaultDeposit
