@@ -61,7 +61,7 @@ def TER.isTec : TER → Bool
   | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED => true
   | _ => false
 
-def TER.code : TER → Int64
+def TER.code : TER → Int32
   | .tesSUCCESS => 0
   | .tecINTERNAL => 144
   | .tecAMM_INVALID_TOKENS => 165
@@ -85,20 +85,20 @@ def TER.code : TER → Int64
   | .tecFAILED_PROCESSING => 105
   | .tecPATH_DRY => 128
   | .tecINSUFFICIENT_FUNDS => 159
-  | .tefINTERNAL => 200
-  | .tefBAD_LEDGER => 201
-  | .terNO_ACCOUNT => 300
-  | .terNO_RIPPLE => 301
+  | .tefINTERNAL => -192
+  | .tefBAD_LEDGER => -195
+  | .terNO_ACCOUNT => -96
+  | .terNO_RIPPLE => -90
   | .tecFROZEN => 137
   | .tecLOCKED => 192
-  | .temMALFORMED => 400
-  | .temBAD_AMOUNT => 401
-  | .telFAILED_PROCESSING => 402
-  | .temINVALID => 403
-  | .temINVALID_FLAG => 404
-  | .temBAD_FEE => 405
-  | .temBAD_SRC_ACCOUNT => 406
-  | .temDISABLED => 407
+  | .temMALFORMED => -299
+  | .temBAD_AMOUNT => -298
+  | .telFAILED_PROCESSING => -395
+  | .temINVALID => -277
+  | .temINVALID_FLAG => -276
+  | .temBAD_FEE => -295
+  | .temBAD_SRC_ACCOUNT => -281
+  | .temDISABLED => -273
   | .tecLIMIT_EXCEEDED => 195
   | .tecPRECISION_LOSS => 197
 

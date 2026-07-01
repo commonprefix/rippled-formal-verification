@@ -29,8 +29,8 @@ def isZeroAtScale (amount : STAmount) (scale : Int) : Except String Bool := do
   let rounded ← STAmount.roundToScale amount scale .to_nearest
   return rounded.isZero
 
-def canDeposit (state : VaultState) (tx : VaultDeposit) : Except String TER := do
-  let roundedAmount ← roundToVaultScale tx.amount state.assetsTotal
+def canDeposit (state : VaultState) (amount : STAmount) (accountIsIssuer : Bool) : Except String TER := do
+  let roundedAmount ← roundToVaultScale amount state.assetsTotal
   if roundedAmount.isZero then
     return .tecPRECISION_LOSS
   let accountBalance := state.accountBalance
@@ -38,7 +38,7 @@ def canDeposit (state : VaultState) (tx : VaultDeposit) : Except String TER := d
   if ← accountBalance.operator_lt roundedAmount then
     return .tecINSUFFICIENT_FUNDS
 
-  if !roundedAmount.integral then -- how to check the issuer?
+  if !roundedAmount.integral && !accountIsIssuer then
     let accountBalanceNumber ← accountBalance.toNumber .to_nearest
     let assetScale ← scale accountBalanceNumber state.asset
     if ← isZeroAtScale accountBalance assetScale then
@@ -47,6 +47,3 @@ def canDeposit (state : VaultState) (tx : VaultDeposit) : Except String TER := d
   return .tesSUCCESS
 
 
-@[export lean_can_deposit]
-def lean_can_deposit (state : VaultState) (tx : VaultDeposit) : Except String TER := do
-  canDeposit state tx

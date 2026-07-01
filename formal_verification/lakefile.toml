@@ -24,4 +24,4 @@ name = "XRPL"
 [[lean_lib]]
 name = "XRPLModel"
 roots = ["XRPL.Model.Model", "XRPL.FFI.FFI"]
-globs = ["XRPL.Model.+", "XRPL.FFI.+"]
+globs = ["XRPL.Model.+", "XRPL.FFI.+", "XRPL.NewModel.+"]

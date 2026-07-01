@@ -8,34 +8,37 @@
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/XRPAmount.h>
 
+#include "test/formal_verification/numbers/helpers/NumberTypes.h"
+#include <lean/lean.h>
+
 #include <cstdint>
-#include <string>
 
 namespace xrpl::test::formal_verification {
 
 // Outcome of a Lean view op returning a value of type T
 // `threw` reports a model error (message in `error`), otherwise `value` holds the result
-template <class T>
-struct LeanResult
-{
-    bool threw{};
-    T value;
-    std::string error;
-};
+// template <class T>
+// struct LeanResult
+// {
+//     bool threw{};
+//     T value;
+//     std::string error;
+// };
 
-using LeanTerResult = LeanResult<uint8_t>;
-using LeanSTAmountResult = LeanResult<STAmount>;
-using LeanBoolResult = LeanResult<bool>;
-using LeanXRPAmountResult = LeanResult<XRPAmount>;
-
-inline LeanTerResult
-leanTerResult(LeanViewResult const& r)
+struct LeanTerResult
 {
-    if (!r.ok())
+    bool threw;
+    int32_t code;
+
+    static LeanTerResult
+    fromLean(lean_object* obj)
     {
-        return {true, 0xFF, r.error()};
-    }
-    return {false, terTag(r.okValue()), {}};
-}
+        LeanObjOwner const guard{obj};
+        return {
+            .threw = (lean_ctor_get_uint8(obj, 4) == 1),
+            .code = static_cast<int32_t>(lean_ctor_get_uint32(obj, 0)),
+        };
+    };
+};
 
 }  // namespace xrpl::test::formal_verification

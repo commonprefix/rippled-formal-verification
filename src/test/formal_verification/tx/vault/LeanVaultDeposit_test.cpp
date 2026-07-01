@@ -1,5 +1,10 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/vault/deposit.h>
+#include <test/formal_verification/ffi/vault/state.h>
 #include <test/jtx.h>
+#include <test/jtx/ter.h>
+
+#include <xrpl/protocol/TER.h>
 
 namespace xrpl::test {
 
@@ -25,11 +30,39 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         Env env(*this);
+
+        auto state = VaultState{
+            .assetsTotal = Number{0},
+            .accountBalance = XRP(1000),
+            .asset = xrpIssue(),
+        };
+        auto amount = XRP(1000);
+
+        Account const owner{"owner"};
+        env.fund(XRP(10000), owner);
+        auto const vaultKeylet = createVault(env, owner);
+
+        TER const leanResult = leanCanDeposit(state, amount, false);
+
+        env(Vault::deposit({
+                .depositor = owner,
+                .id = vaultKeylet.key,
+                .amount = amount,
+            }),
+            jtx::Ter(
+                std::ignore));  // ignore the result of the tx here to get it with env.ter() below
+        TER const cppTer = env.ter();
+
+        env.close();
+
+        BEAST_EXPECT(cppTer == leanResult);
+        BEAST_EXPECT(cppTer == tesSUCCESS);
     }
 
     void
     runTests() override
     {
+        testCanDeposit();
     }
 };
 

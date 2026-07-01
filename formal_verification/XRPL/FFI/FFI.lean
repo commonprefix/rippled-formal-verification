@@ -22,4 +22,4 @@ import XRPL.FFI.Protocol.STNumberFFI
 import XRPL.FFI.Protocol.UintTypesFFI
 import XRPL.FFI.Protocol.XRPAmountFFI
 
-import XRPL.NewModel.SingleAssetVault.VaultDeposit
+import XRPL.FFI.Vault.Deposit
