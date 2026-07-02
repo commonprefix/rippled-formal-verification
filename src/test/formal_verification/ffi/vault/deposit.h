@@ -7,28 +7,28 @@
 
 #include <lean/lean.h>
 
-#include <stdexcept>
+#include <optional>
 
 extern "C" {
 lean_object*
-lean_can_deposit(lean_object* state, lean_object* amount, bool accountIsIssuer);
+lean_can_deposit(lean_object* state, lean_object* amount, lean_object* accountBalance);
 }
 
 namespace xrpl::test::formal_verification {
 
-inline TER
-leanCanDeposit(VaultState const& state, STAmount const& amount, bool accountIsIssuer)
+inline LeanTerResult
+leanCanDeposit(
+    VaultState const& state,
+    STAmount const& amount,
+    std::optional<STAmount> accountBalance)
 {
     lean_object* raw = leanCall(
-        lean_can_deposit, VaultStateFFI::build(state), STAmountFFI::build(amount), accountIsIssuer);
+        lean_can_deposit,
+        VaultStateFFI::build(state),
+        STAmountFFI::build(amount),
+        leanOptHandle<STAmountFFI>(accountBalance));
 
-    LeanTerResult const result = LeanTerResult::fromLean(raw);
-    if (result.threw)
-    {
-        throw std::runtime_error("Lean canDeposit model error");
-    }
-
-    return TER::fromInt(result.code);
+    return LeanTerResult::fromLean(raw);
 }
 
 }  // namespace xrpl::test::formal_verification

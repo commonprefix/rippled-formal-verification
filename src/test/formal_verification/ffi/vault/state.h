@@ -16,13 +16,12 @@ namespace xrpl::test::formal_verification {
 struct VaultState
 {
     Number assetsTotal;
-    STAmount accountBalance;
     Asset asset;
 };
 
 extern "C" {
 lean_object*
-lean_vault_state_build(lean_object* assetsTotal, lean_object* accountBalance, lean_object* asset);
+lean_vault_state_build(lean_object* assetsTotal, lean_object* asset);
 }
 
 class VaultStateFFI : public LeanObjectFFI
@@ -37,7 +36,6 @@ public:
         return VaultStateFFI(leanCall(
             lean_vault_state_build,
             NumberFFI::build(state.assetsTotal),
-            STAmountFFI::build(state.accountBalance),
             AssetFFI::build(state.asset)));
     }
 };
