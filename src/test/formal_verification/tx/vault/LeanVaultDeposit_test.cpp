@@ -5,10 +5,11 @@
 #include <test/jtx/ter.h>
 
 #include <xrpl/protocol/SField.h>
+#include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
 
 #include <cstdint>
-#include <optional>
+#include <limits>
 #include <string>
 
 namespace xrpl::test {
@@ -17,249 +18,203 @@ using namespace formal_verification;
 
 class LeanVaultDeposit_test : public LeanSuite
 {
-    // Share MPToken ceiling. Fresh-vault deposit computes shares ~ amount * 10^scale,
-    // which must stay <= this or doApply throws and returns tecPATH_DRY.
-    static constexpr std::int64_t kMaxMptShares = 9'223'372'036'854'775'807LL;  // 2^63 - 1
-
-    enum class Kind { XRP, IOU, MPT };
-    enum class Mag { Min, Avg, Max, OverMax };
-
-    static char const*
-    kindName(Kind k)
-    {
-        switch (k)
-        {
-            case Kind::XRP:
-                return "XRP";
-            case Kind::IOU:
-                return "IOU";
-            case Kind::MPT:
-                return "MPT";
-        }
-        return "?";
-    }
-
-    static char const*
-    magName(Mag m)
-    {
-        switch (m)
-        {
-            case Mag::Min:
-                return "min";
-            case Mag::Avg:
-                return "avg";
-            case Mag::Max:
-                return "max";
-            case Mag::OverMax:
-                return "over-max";
-        }
-        return "?";
-    }
+    // Share MPToken ceiling (2^63 - 1). Fresh-vault deposit computes shares ~ amount * 10^scale,
+    // which must stay <= this or doApply throws and returns tecPATH_DRY. There is no named
+    // maxMPTokenAmount constant in the code; STAmount enforces this same int64 max directly.
+    static constexpr std::int64_t kMaxMptShares = std::numeric_limits<std::int64_t>::max();
 
     static Keylet
-    createVault(
-        jtx::Env& env,
-        jtx::Account const& owner,
-        Asset const& asset,
-        std::optional<std::uint32_t> flags = {})
+    createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
     {
         jtx::Vault vault{env};
-        auto const [jv, keylet] = vault.create({.owner = owner, .asset = asset, .flags = flags});
+        auto const [jv, keylet] = vault.create({.owner = owner, .asset = asset});
         env(jv);
         env.close();
         return keylet;
     }
 
-    // The deposit amount for a (kind, magnitude). `asset(n)` yields the right STAmount per
-    // kind; `vaultScale` bounds the IOU maximum via the share ceiling.
-    static STAmount
-    amountFor(Kind kind, Mag mag, jtx::PrettyAsset const& asset, std::uint8_t vaultScale)
-    {
-        using namespace jtx;
-
-        // Largest deposit whose shares (~amount * 10^scale) still fit under kMaxMptShares.
-        auto iouMax = [&]() -> std::int64_t {
-            std::int64_t pow = 1;
-            for (std::uint8_t i = 0; i < vaultScale; ++i)
-                pow *= 10;
-            return kMaxMptShares / pow;  // (iouMax + 1) * pow always exceeds the ceiling
-        };
-
-        switch (kind)
-        {
-            case Kind::XRP:  // scale 0; bounded by supply/fundability, not the share ceiling
-                switch (mag)
-                {
-                    case Mag::Min:
-                        return drops(1);
-                    case Mag::Avg:
-                        return XRP(1'000);
-                    case Mag::Max:
-                        return XRP(80'000'000'000);  // 8e16 drops, well under cMaxNative (1e17)
-                    case Mag::OverMax:
-                        return XRP(80'000'000'000);  // no share overflow for XRP; unused
-                }
-                break;
-            case Kind::IOU:  // max ~ kMaxMptShares / 10^scale
-                switch (mag)
-                {
-                    case Mag::Min:
-                        return asset(1);
-                    case Mag::Avg:
-                        return asset(1'000);
-                    case Mag::Max:
-                        return asset(iouMax());
-                    case Mag::OverMax:
-                        return asset(iouMax() + 1);  // shares overflow -> tecPATH_DRY in doApply
-                }
-                break;
-            case Kind::MPT:  // scale 0
-                switch (mag)
-                {
-                    case Mag::Min:
-                        return asset(1);
-                    case Mag::Avg:
-                        return asset(1'000);
-                    case Mag::Max:
-                        return asset(kMaxMptShares);  // 2^63 - 1
-                    case Mag::OverMax:
-                        return asset(kMaxMptShares);  // not representable above max; unused
-                }
-                break;
-        }
-        return STAmount{};
-    }
-
-    // Run one deposit scenario differentially. `expected` is the correct TER; both the full
-    // C++ transaction and the preclaim model are checked against it. A gap in the model (e.g.
-    // it does not yet cover the doApply share-overflow -> tecPATH_DRY) shows up as a failure.
+    // Create a vault, optionally seed it (a first deposit by `seeder`), then deposit `amount` as
+    // `depositor` and compare the model against C++. The model reads the real seeded total.
     void
-    testDeposit(Kind kind, Mag mag, bool depositorIsIssuer, TER expected)
+    runDeposit(
+        jtx::Env& env,
+        jtx::Account const& vaultOwner,
+        jtx::Account const& seeder,
+        jtx::Account const& depositor,
+        Asset const& asset,
+        STAmount const& vaultBalanceBeforeDeposit,
+        STAmount const& amount,
+        TER expected)
     {
         using namespace jtx;
-        testcase(
-            std::string("deposit ") + kindName(kind) + " " + magName(mag) +
-            (depositorIsIssuer ? " (issuer)" : ""));
+        auto const vaultKeylet = createVault(env, vaultOwner, asset);
 
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        // --- per-kind asset + depositor + holder setup ---
-        PrettyAsset asset = xrpIssue();
-        Account depositor = holder;
-        switch (kind)
+        if (vaultBalanceBeforeDeposit.signum() != 0)
         {
-            case Kind::XRP:
-                asset = xrpIssue();
-                depositor = holder;  // no issuer concept for XRP; holder funded below
-                break;
-
-            case Kind::IOU:
-                asset = issuer["USD"];
-                depositor = depositorIsIssuer ? issuer : holder;
-                if (!depositorIsIssuer)
-                {
-                    env.fund(XRP(1'000'000), holder);
-                    env.close();
-                    // limit large enough to cover any Max/OverMax amount
-                    env(trust(holder, asset(10'000'000'000'000'000LL)));
-                    env.close();
-                }
-                break;
-
-            case Kind::MPT: {
-                MPTTester mptt{env, issuer, kMptInitNoFund};
-                mptt.create({.flags = tfMPTCanTransfer});
-                asset = mptt.issuanceID();
-                depositor = holder;
-                env.fund(XRP(1'000'000), holder);
-                env.close();
-                mptt.authorize({.account = holder});
-                env.close();
-                break;
-            }
-        }
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        auto const vaultSle = env.le(vaultKeylet);
-        BEAST_EXPECT(vaultSle);
-        std::uint8_t const scale = vaultSle->isFieldPresent(sfScale) ? vaultSle->at(sfScale) : 0;
-
-        STAmount const amount = amountFor(kind, mag, asset, scale);
-
-        // Fund the depositor so the amount is actually held (the issuer is the source).
-        if (!depositorIsIssuer)
-        {
-            if (kind == Kind::XRP)
-            {
-                env.fund(STAmount(amount) + XRP(1'000'000), holder);
-            }
-            else
-            {
-                env(pay(issuer, holder, amount));
-            }
+            env(Vault::deposit(
+                    {.depositor = seeder,
+                     .id = vaultKeylet.key,
+                     .amount = vaultBalanceBeforeDeposit}),
+                jtx::Ter(tesSUCCESS));
             env.close();
         }
 
-        // Fresh vault: assetsTotal is zero.
-        VaultState const state{.assetsTotal = Number{0}, .asset = asset.raw()};
+        Number const assetsTotal = env.le(vaultKeylet)->at(sfAssetsTotal);
+        VaultState const state{.assetsTotal = assetsTotal, .asset = asset};
 
-        std::optional<STAmount> const accountBalance = depositorIsIssuer
-            ? std::nullopt
-            : std::optional<STAmount>{
-                  kind == Kind::XRP ? STAmount(env.balance(depositor))
-                                    : STAmount(env.balance(depositor, asset.raw()))};
-
-        LeanTerResult const lean = leanCanDeposit(state, amount, accountBalance);
-        BEAST_EXPECTS(!lean.threw, "lean canDeposit raised");
+        LeanRoundedDepositResult const lean = leanRoundedDepositAmount(state, amount);
+        BEAST_EXPECTS(!lean.threw(), "lean roundedDepositAmount raised");
 
         env(Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         env.close();
 
+        // A rejection carries its TER; a successful rounding maps to tesSUCCESS.
+        TER const leanTer = lean.rejected() ? TER::fromInt(lean.code) : tesSUCCESS;
         BEAST_EXPECTS(
-            cppTer == expected,
-            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
+            leanTer == cppTer,
+            std::string("lean=") + transToken(leanTer) + " cpp=" + transToken(cppTer));
         BEAST_EXPECTS(
-            TER::fromInt(lean.code) == expected,
-            std::string("lean=") + transToken(TER::fromInt(lean.code)) + " expected " +
-                transToken(expected));
+            leanTer == expected,
+            std::string("lean=") + transToken(leanTer) + " expected " + transToken(expected));
+    }
+
+    void
+    testDepositXRP(STAmount vaultBalanceBeforeDeposit, STAmount amount, TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            "deposit XRP " + amount.getText() + " into " + vaultBalanceBeforeDeposit.getText());
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const holder{"holder"};
+        env.fund(STAmount(vaultBalanceBeforeDeposit) + XRP(1'000'000), vaultOwner);
+        env.fund(STAmount(amount) + XRP(1'000'000), holder);
+        env.close();
+
+        runDeposit(
+            env,
+            vaultOwner,
+            vaultOwner,
+            holder,
+            xrpIssue(),
+            vaultBalanceBeforeDeposit,
+            amount,
+            expected);
+    }
+
+    void
+    testDepositIOU(
+        Number vaultBalanceBeforeDeposit,
+        Number amount,
+        bool depositorIsIssuer,
+        TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            "deposit IOU " + to_string(amount) + " into " + to_string(vaultBalanceBeforeDeposit) +
+            (depositorIsIssuer ? " (issuer)" : ""));
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        Account const depositor = depositorIsIssuer ? issuer : holder;
+        if (!depositorIsIssuer)
+        {
+            // limit large enough to cover any tested amount
+            env(trust(holder, asset(10'000'000'000'000'000LL)));
+            env.close();
+            env(pay(issuer, holder, asset(amount)));
+            env.close();
+        }
+
+        // The issuer seeds the vault (it can issue any amount of its own IOU).
+        runDeposit(
+            env,
+            vaultOwner,
+            issuer,
+            depositor,
+            asset.raw(),
+            asset(vaultBalanceBeforeDeposit),
+            asset(amount),
+            expected);
+    }
+
+    void
+    testDepositMPT(std::int64_t vaultBalanceBeforeDeposit, std::int64_t amount, TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            "deposit MPT " + std::to_string(amount) + " into " +
+            std::to_string(vaultBalanceBeforeDeposit));
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = holder});
+        env.close();
+        env(pay(issuer, holder, asset(amount)));
+        env.close();
+
+        runDeposit(
+            env,
+            vaultOwner,
+            issuer,
+            holder,
+            asset.raw(),
+            asset(vaultBalanceBeforeDeposit),
+            asset(amount),
+            expected);
     }
 
     void
     testDepositScenarios()
     {
         using namespace jtx;
-        //          kind        magnitude       issuer  expected
 
         // XRP: scale 0, no share overflow within the XRP domain.
-        testDeposit(Kind::XRP, Mag::Min, false, tesSUCCESS);
-        testDeposit(Kind::XRP, Mag::Avg, false, tesSUCCESS);
-        testDeposit(Kind::XRP, Mag::Max, false, tesSUCCESS);
+        testDepositXRP(XRP(0), drops(1), tesSUCCESS);
+        testDepositXRP(XRP(0), XRP(1'000), tesSUCCESS);
+        testDepositXRP(XRP(0), XRP(80'000'000'000), tesSUCCESS);
+        testDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
 
-        // IOU, holder as depositor.
-        testDeposit(Kind::IOU, Mag::Min, false, tesSUCCESS);
-        testDeposit(Kind::IOU, Mag::Avg, false, tesSUCCESS);
-        testDeposit(Kind::IOU, Mag::Max, false, tesSUCCESS);
-        // Over the share ceiling: doApply overflow -> tecPATH_DRY. The preclaim model does not
-        // cover this yet, so this case FAILS on the lean side, representing the gap.
-        testDeposit(Kind::IOU, Mag::OverMax, false, tecPATH_DRY);
+        // IOU: vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptShares / 1e6.
+        testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{kMaxMptShares / 1'000'000}, false, tesSUCCESS);
+        // Over the share ceiling: doApply overflow -> tecPATH_DRY. The model does not cover this
+        // yet, so this case FAILS on the lean side, representing the gap.
+        testDepositIOU(Number{0}, Number{(kMaxMptShares / 1'000'000) + 1}, false, tecPATH_DRY);
 
-        // IOU, issuer as depositor (accountBalance = none in the model).
-        testDeposit(Kind::IOU, Mag::Min, true, tesSUCCESS);
-        testDeposit(Kind::IOU, Mag::Avg, true, tesSUCCESS);
-        testDeposit(Kind::IOU, Mag::Max, true, tesSUCCESS);
-        testDeposit(Kind::IOU, Mag::OverMax, true, tecPATH_DRY);
+        testDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{kMaxMptShares / 1'000'000}, true, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{(kMaxMptShares / 1'000'000) + 1}, true, tecPATH_DRY);
+
+        // Precision loss: a sub-ULP deposit into a large vault rounds to zero at the vault scale.
+        // Vault holds 1e12 USD -> ULP 1e-3; depositing 1e-4 rounds to zero -> tecPRECISION_LOSS.
+        testDepositIOU(Number{1, 12}, Number{1, -4}, false, tecPRECISION_LOSS);
+        testDepositIOU(Number{1, 12}, Number{1, -4}, true, tecPRECISION_LOSS);
+        // sanity: a normal deposit into the same non-empty vault still succeeds
+        testDepositIOU(Number{1, 12}, Number{1'000}, false, tesSUCCESS);
 
         // MPT: scale 0; max deposit is the MPT ceiling itself.
-        testDeposit(Kind::MPT, Mag::Min, false, tesSUCCESS);
-        testDeposit(Kind::MPT, Mag::Avg, false, tesSUCCESS);
-        testDeposit(Kind::MPT, Mag::Max, false, tesSUCCESS);
+        testDepositMPT(0, 1, tesSUCCESS);
+        testDepositMPT(0, 1'000, tesSUCCESS);
+        testDepositMPT(0, kMaxMptShares, tesSUCCESS);
     }
 
     void

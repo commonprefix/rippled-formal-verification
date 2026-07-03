@@ -11,24 +11,16 @@
 
 extern "C" {
 lean_object*
-lean_can_deposit(lean_object* state, lean_object* amount, lean_object* accountBalance);
+lean_rounded_deposit_amount(lean_object* state, lean_object* amount);
 }
 
 namespace xrpl::test::formal_verification {
 
-inline LeanTerResult
-leanCanDeposit(
-    VaultState const& state,
-    STAmount const& amount,
-    std::optional<STAmount> accountBalance)
+inline LeanRoundedDepositResult
+leanRoundedDepositAmount(VaultState const& state, STAmount const& amount)
 {
-    lean_object* raw = leanCall(
-        lean_can_deposit,
-        VaultStateFFI::build(state),
-        STAmountFFI::build(amount),
-        leanOptHandle<STAmountFFI>(accountBalance));
-
-    return LeanTerResult::fromLean(raw);
+    return LeanRoundedDepositResult::fromLean(leanCall(
+        lean_rounded_deposit_amount, VaultStateFFI::build(state), STAmountFFI::build(amount)));
 }
 
 }  // namespace xrpl::test::formal_verification

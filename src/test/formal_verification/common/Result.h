@@ -41,4 +41,48 @@ struct LeanTerResult
     };
 };
 
+// Mirrors FFIRoundedDepositResult. status: 0 = rounded (STAmount fields valid),
+// 1 = rejected (code valid), 2 = threw. Offsets follow Lean's scalar layout:
+// 8-byte group in decl order (code@0, mValue@8, mOffset@16), then 1-byte group
+// (assetKind@24, mIsNegative@25, status@26).
+struct LeanRoundedDepositResult
+{
+    uint8_t status;
+    int32_t code;
+    uint8_t assetKind;
+    uint64_t mValue;
+    int64_t mOffset;
+    bool mIsNegative;
+
+    bool
+    threw() const
+    {
+        return status == 2;
+    }
+    bool
+    rejected() const
+    {
+        return status == 1;
+    }
+    bool
+    rounded() const
+    {
+        return status == 0;
+    }
+
+    static LeanRoundedDepositResult
+    fromLean(lean_object* obj)
+    {
+        LeanObjOwner const guard{obj};
+        return {
+            .status = lean_ctor_get_uint8(obj, 26),
+            .code = static_cast<int32_t>(lean_ctor_get_uint64(obj, 0)),
+            .assetKind = lean_ctor_get_uint8(obj, 24),
+            .mValue = lean_ctor_get_uint64(obj, 8),
+            .mOffset = static_cast<int64_t>(lean_ctor_get_uint64(obj, 16)),
+            .mIsNegative = lean_ctor_get_uint8(obj, 25) != 0,
+        };
+    }
+};
+
 }  // namespace xrpl::test::formal_verification

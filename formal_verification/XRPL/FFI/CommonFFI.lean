@@ -43,6 +43,17 @@ structure FFISTAmountResult where
   mIsNegative : UInt8
   status : UInt8
 
+-- status: 0 = rounded (STAmount fields valid), 1 = rejected (code valid), 2 = threw.
+-- Only 8-byte and 1-byte fields so the C++ decode offsets are predictable
+-- (8-byte group first in decl order: 0, 8, 16; then 1-byte group: 24, 25, 26).
+structure FFIRoundedDepositResult where
+  code : Int64
+  mValue : UInt64
+  mOffset : Int64
+  assetKind : UInt8
+  mIsNegative : UInt8
+  status : UInt8
+
 def ffiMPTIssue : MPTIssue := { mptID := ⟨0⟩ }
 
 def decodeMode (m : UInt8) : rounding_mode := match m.toNat with
