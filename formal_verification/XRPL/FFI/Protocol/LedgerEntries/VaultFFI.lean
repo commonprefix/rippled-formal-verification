@@ -1,7 +1,6 @@
 import XRPL.FFI.CommonFFI
 import XRPL.Model.Protocol.LedgerEntries.Vault
 
-
 namespace XRPL.FFI
 
 open XRPL.Model.Protocol

@@ -35,7 +35,7 @@ class LeanVaultDeposit_test : public LeanSuite
     }
 
     // Create a vault, optionally seed it (a first deposit by `seeder`), then deposit `amount` as
-    // `depositor` and compare the model against C++. The model reads the real seeded total.
+    // `depositor` and compare the model against C++
     void
     runDeposit(
         jtx::Env& env,
@@ -66,6 +66,7 @@ class LeanVaultDeposit_test : public LeanSuite
         auto const issuanceKeylet = keylet::mptIssuance(shareMptId);
         VaultState const state{
             .assetsTotal = vaultSle->at(sfAssetsTotal),
+            .assetsAvailable = vaultSle->at(sfAssetsAvailable),
             .asset = asset,
             .scale = vaultSle->at(sfScale),
             .sharesTotal =
@@ -109,10 +110,13 @@ class LeanVaultDeposit_test : public LeanSuite
         BEAST_EXPECTS(!deposit.threw, "lean deposit raised on success");
         auto const newVaultSle = env.le(vaultKeylet);
         Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
+        Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
             static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
-        BEAST_EXPECTS(deposit.assetsTotal == cppAssetsTotal, "assetsTotal mismatch");
-        BEAST_EXPECTS(deposit.sharesTotal == cppSharesTotal, "sharesTotal mismatch");
+        BEAST_EXPECTS(deposit.newState.assetsTotal == cppAssetsTotal, "assetsTotal mismatch");
+        BEAST_EXPECTS(
+            deposit.newState.assetsAvailable == cppAssetsAvailable, "assetsAvailable mismatch");
+        BEAST_EXPECTS(deposit.newState.sharesTotal == cppSharesTotal, "sharesTotal mismatch");
     }
 
     void
@@ -221,125 +225,6 @@ class LeanVaultDeposit_test : public LeanSuite
             expected);
     }
 
-    // // TEMPORARY (exploration): seed an IOU vault to 10^totalExp USD so roundToVaultScale rounds
-    // // deposits to ULP = 10^(totalExp-15). For a fixed 10-USD balance, locate the 202-203
-    // // sufficiency breakpoint per (scaleMode, roundMode) to Number precision via binary search
-    // // (window [10, 10 + 2 ULP]), and report a coarse flip count (steps of ULP/10) to reveal any
-    // // *additional* transitions beyond the single expected one. fullMatrix=false sweeps only
-    // round
-    // // modes (scale = ToNearest).
-    // void
-    // exploreBreakpoints(std::int64_t totalExp, bool fullMatrix)
-    // {
-    //     using namespace jtx;
-    //
-    //     Env env(*this);
-    //     Account const vaultOwner{"vaultOwner"};
-    //     Account const issuer{"issuer"};
-    //     env.fund(XRP(1'000'000), vaultOwner, issuer);
-    //     env.close();
-    //
-    //     PrettyAsset const asset = issuer["USD"];
-    //     auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-    //     env(Vault::deposit(
-    //             {.depositor = issuer,
-    //              .id = vaultKeylet.key,
-    //              .amount = asset(Number{1, static_cast<int>(totalExp)})}),
-    //         jtx::Ter(tesSUCCESS));
-    //     env.close();
-    //
-    //     Number const assetsTotal = env.le(vaultKeylet)->at(sfAssetsTotal);
-    //     VaultState const state{.assetsTotal = assetsTotal, .asset = asset.raw()};
-    //     STAmount const balance = asset(Number{10});  // fixed 10 USD, no funding needed
-    //     (model-only)
-    //
-    //     Number const base{10};
-    //     Number const two{2};
-    //     Number const ten{10};
-    //     Number const ulp{1, static_cast<int>(totalExp) - 15};
-    //
-    //     auto insufficientAt =
-    //         [&](Number const& a, Number::RoundingMode sm, Number::RoundingMode rm) -> bool {
-    //         LeanRoundedDepositAmountResult const r =
-    //             leanRoundedDepositAmountModes(state, asset(a), sm, rm);
-    //         return r.rounded() && (balance < r.roundedAmount(asset.raw()));
-    //     };
-    //
-    //     Number::RoundingMode const modes[] = {
-    //         Number::RoundingMode::ToNearest,
-    //         Number::RoundingMode::TowardsZero,
-    //         Number::RoundingMode::Downward,
-    //         Number::RoundingMode::Upward};
-    //
-    //     log << "total=1e" << totalExp << " ULP=" << to_string(ulp) << " balance=10" << std::endl;
-    //     for (auto scaleMode : modes)
-    //     {
-    //         if (!fullMatrix && scaleMode != Number::RoundingMode::ToNearest)
-    //             continue;
-    //         for (auto roundMode : modes)
-    //         {
-    //             // Coarse flip count over [10, 10 + 2 ULP] (step ULP/10) to detect multiplicity.
-    //             int flips = 0;
-    //             bool prev = insufficientAt(base, scaleMode, roundMode);
-    //             for (int i = 1; i <= 20; ++i)
-    //             {
-    //                 bool const cur =
-    //                     insufficientAt(base + ulp * Number{i} / ten, scaleMode, roundMode);
-    //                 flips += (cur != prev);
-    //                 prev = cur;
-    //             }
-    //
-    //             // Binary search the (monotonic) transition to Number precision.
-    //             Number lo = base;             // sufficient
-    //             Number hi = base + ulp * two;  // insufficient
-    //             for (int k = 0; k < 80; ++k)
-    //             {
-    //                 Number const mid = (lo + hi) / two;
-    //                 if (insufficientAt(mid, scaleMode, roundMode))
-    //                     hi = mid;
-    //                 else
-    //                     lo = mid;
-    //             }
-    //
-    //             // Snap the raw breakpoint (hi) to the nearest half-ULP for a clean value;
-    //             // the breakpoints all land at k/2 ULP above the balance (k in [0, 4]).
-    //             Number const offset = hi - base;
-    //             Number const halfUlp = ulp / two;
-    //             int kBest = 0;
-    //             Number bestDiff{0};
-    //             for (int k = 0; k <= 4; ++k)
-    //             {
-    //                 Number const cand = halfUlp * Number{k};
-    //                 Number const diff = offset < cand ? cand - offset : offset - cand;
-    //                 if (k == 0 || diff < bestDiff)
-    //                 {
-    //                     bestDiff = diff;
-    //                     kBest = k;
-    //                 }
-    //             }
-    //             Number const snapped = base + halfUlp * Number{kBest};
-    //
-    //             log << "  scale=" << to_string(scaleMode) << " round=" << to_string(roundMode)
-    //                 << " flips=" << flips << " breakpoint=" << to_string(snapped) << " (+" <<
-    //                 kBest
-    //                 << "/2 ULP)  raw[" << to_string(lo) << ", " << to_string(hi) << "]"
-    //                 << std::endl;
-    //         }
-    //     }
-    // }
-
-    // // TEMPORARY: exploration harness used to find the rounding breakpoints; not a prod guard.
-    // void
-    // testRoundingExploration()
-    // {
-    //     testcase("rounding exploration: scale-mode x round-mode x vault magnitude");
-    //     // (a) full scale x round matrix at ULP 1e-3
-    //     exploreBreakpoints(12, /*fullMatrix=*/true);
-    //     // (b) round modes across vault magnitudes (ULP 1e-6, 1e-9)
-    //     exploreBreakpoints(9, /*fullMatrix=*/false);
-    //     exploreBreakpoints(6, /*fullMatrix=*/false);
-    // }
-
     void
     testDepositScenarios()
     {
@@ -351,7 +236,7 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositXRP(XRP(0), XRP(80'000'000'000), tesSUCCESS);
         testDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
 
-        // IOU: vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptShares / 1e6.
+        // IOU: default vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptShares / 1e6.
         testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMptShares / 1'000'000}, false, tesSUCCESS);
@@ -378,12 +263,7 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositMPT(0, 1'000, tesSUCCESS);
         testDepositMPT(0, kMaxMptShares, tesSUCCESS);
 
-        // Rounding-mode regression traps. Deposit a NON-grid amount into a 1e12 vault (ULP 1e-3);
-        // the holder is funded with exactly that amount. Production floors the amount below the
-        // balance (tesSUCCESS), but a switch of the deposit rounding to ToNearest or Upward rounds
-        // it up past the balance -> tecINSUFFICIENT_FUNDS, failing these. See ROUNDING_FINDINGS.md.
-        //   10.0006 -> catches ToNearest (bp ~10.0005) and Upward
-        //   10.0001 -> catches Upward specifically
+        // Rounding-mode regression traps, these values catch potential rounding mode changes
         testDepositIOU(Number{1, 12}, Number{100006, -4}, false, tesSUCCESS);
         testDepositIOU(Number{1, 12}, Number{100001, -4}, false, tesSUCCESS);
     }
@@ -392,7 +272,6 @@ class LeanVaultDeposit_test : public LeanSuite
     runTests() override
     {
         testDepositScenarios();
-        // testRoundingExploration();
     }
 };
 

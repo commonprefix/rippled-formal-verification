@@ -83,7 +83,7 @@ struct LeanRoundedDepositAmountResultFFI
 };
 
 // Vault deposit result in C++ primitives. amountDeposit'/sharesIssued carry the vault asset and
-// the share MPT respectively; assetsTotal/sharesTotal are the new vault totals. Fields are only
+// the share MPT respectively; newState is the full post-deposit vault state. Fields are only
 // meaningful when !threw; error holds the model's TER when the deposit was rejected.
 struct LeanDepositResult
 {
@@ -91,13 +91,12 @@ struct LeanDepositResult
     std::optional<TER> error;
     STAmount amountDeposit;
     STAmount sharesIssued;
-    Number assetsTotal;
-    Number sharesTotal;
+    VaultState newState;
 };
 
 // Raw parse of FFIDepositResult. status: 0 = ok, 1 = threw. hasError: TER in `code`.
-// 8-byte group @0,8,16,24,32,40,48,56,64; 1-byte group @72..79. decode() turns it into the
-// usable LeanDepositResult, resolving the concrete deposit/share assets the FFI can't carry.
+// 8-byte group @0,8,…,80; 1-byte group @88..96. decode() turns it into the usable
+// LeanDepositResult, folding the changed totals into the caller's pre-deposit vault state.
 struct LeanDepositResultFFI
 {
     uint8_t status;
@@ -114,12 +113,17 @@ struct LeanDepositResultFFI
     uint64_t assetsTotalMantissa;
     int64_t assetsTotalExponent;
     bool assetsTotalNegative;
+    uint64_t assetsAvailableMantissa;
+    int64_t assetsAvailableExponent;
+    bool assetsAvailableNegative;
     uint64_t sharesTotalMantissa;
     int64_t sharesTotalExponent;
     bool sharesTotalNegative;
 
+    // `state` is the pre-deposit vault; the deposit only changes the totals, so the new state is
+    // `state` with assetsTotal/assetsAvailable/sharesTotal overwritten by the model's results.
     [[nodiscard]] LeanDepositResult
-    decode(Asset const& asset, Asset const& sharesAsset) const
+    decode(VaultState const& state) const
     {
         auto const stAmount = [](Asset const& a, uint64_t value, int64_t offset, bool negative) {
             if (a.native() && offset == 0)
@@ -130,14 +134,20 @@ struct LeanDepositResultFFI
             auto const m = static_cast<std::int64_t>(mantissa);
             return Number{negative ? -m : m, static_cast<int>(exponent)};
         };
+        VaultState newState = state;
+        newState.assetsTotal =
+            number(assetsTotalMantissa, assetsTotalExponent, assetsTotalNegative);
+        newState.assetsAvailable =
+            number(assetsAvailableMantissa, assetsAvailableExponent, assetsAvailableNegative);
+        newState.sharesTotal =
+            number(sharesTotalMantissa, sharesTotalExponent, sharesTotalNegative);
         return {
             .threw = status == 1,
             .error = hasError ? std::optional<TER>{TER::fromInt(static_cast<int32_t>(code))}
                               : std::nullopt,
-            .amountDeposit = stAmount(asset, amountValue, amountOffset, amountNegative),
-            .sharesIssued = stAmount(sharesAsset, sharesValue, sharesOffset, sharesNegative),
-            .assetsTotal = number(assetsTotalMantissa, assetsTotalExponent, assetsTotalNegative),
-            .sharesTotal = number(sharesTotalMantissa, sharesTotalExponent, sharesTotalNegative),
+            .amountDeposit = stAmount(state.asset, amountValue, amountOffset, amountNegative),
+            .sharesIssued = stAmount(state.sharesAsset, sharesValue, sharesOffset, sharesNegative),
+            .newState = newState,
         };
     }
 
@@ -146,23 +156,26 @@ struct LeanDepositResultFFI
     {
         LeanObjOwner const guard{obj};
         return {
-            .status = lean_ctor_get_uint8(obj, 79),
-            .hasError = lean_ctor_get_uint8(obj, 78) != 0,
-            .code = static_cast<int64_t>(lean_ctor_get_uint64(obj, 64)),
-            .amountKind = lean_ctor_get_uint8(obj, 72),
+            .status = lean_ctor_get_uint8(obj, 96),
+            .hasError = lean_ctor_get_uint8(obj, 95) != 0,
+            .code = static_cast<int64_t>(lean_ctor_get_uint64(obj, 80)),
+            .amountKind = lean_ctor_get_uint8(obj, 88),
             .amountValue = lean_ctor_get_uint64(obj, 0),
             .amountOffset = static_cast<int64_t>(lean_ctor_get_uint64(obj, 8)),
-            .amountNegative = lean_ctor_get_uint8(obj, 73) != 0,
-            .sharesKind = lean_ctor_get_uint8(obj, 74),
+            .amountNegative = lean_ctor_get_uint8(obj, 89) != 0,
+            .sharesKind = lean_ctor_get_uint8(obj, 90),
             .sharesValue = lean_ctor_get_uint64(obj, 16),
             .sharesOffset = static_cast<int64_t>(lean_ctor_get_uint64(obj, 24)),
-            .sharesNegative = lean_ctor_get_uint8(obj, 75) != 0,
+            .sharesNegative = lean_ctor_get_uint8(obj, 91) != 0,
             .assetsTotalMantissa = lean_ctor_get_uint64(obj, 32),
             .assetsTotalExponent = static_cast<int64_t>(lean_ctor_get_uint64(obj, 40)),
-            .assetsTotalNegative = lean_ctor_get_uint8(obj, 76) != 0,
-            .sharesTotalMantissa = lean_ctor_get_uint64(obj, 48),
-            .sharesTotalExponent = static_cast<int64_t>(lean_ctor_get_uint64(obj, 56)),
-            .sharesTotalNegative = lean_ctor_get_uint8(obj, 77) != 0,
+            .assetsTotalNegative = lean_ctor_get_uint8(obj, 92) != 0,
+            .assetsAvailableMantissa = lean_ctor_get_uint64(obj, 48),
+            .assetsAvailableExponent = static_cast<int64_t>(lean_ctor_get_uint64(obj, 56)),
+            .assetsAvailableNegative = lean_ctor_get_uint8(obj, 93) != 0,
+            .sharesTotalMantissa = lean_ctor_get_uint64(obj, 64),
+            .sharesTotalExponent = static_cast<int64_t>(lean_ctor_get_uint64(obj, 72)),
+            .sharesTotalNegative = lean_ctor_get_uint8(obj, 94) != 0,
         };
     }
 };
@@ -175,16 +188,16 @@ leanVaultDeposit(VaultState const& state, STAmount const& amount, bool isDonatio
                                               VaultStateFFI::build(state),
                                               STAmountFFI::build(amount),
                                               static_cast<uint8_t>(isDonation ? 1 : 0)))
-        .decode(state.asset, state.sharesAsset);
+        .decode(state);
 }
 
 inline LeanRoundedDepositAmountResult
 leanRoundedDepositAmount(VaultState const& state, STAmount const& amount)
 {
     return LeanRoundedDepositAmountResultFFI::fromLean(leanCall(
-                                                     lean_rounded_deposit_amount,
-                                                     VaultStateFFI::build(state),
-                                                     STAmountFFI::build(amount)))
+                                                           lean_rounded_deposit_amount,
+                                                           VaultStateFFI::build(state),
+                                                           STAmountFFI::build(amount)))
         .decode(state.asset);
 }
 
@@ -196,10 +209,10 @@ leanRoundedDepositAmountMode(
     Number::RoundingMode mode)
 {
     return LeanRoundedDepositAmountResultFFI::fromLean(leanCall(
-                                                     lean_rounded_deposit_amount_mode,
-                                                     VaultStateFFI::build(state),
-                                                     STAmountFFI::build(amount),
-                                                     toLeanMode(mode)))
+                                                           lean_rounded_deposit_amount_mode,
+                                                           VaultStateFFI::build(state),
+                                                           STAmountFFI::build(amount),
+                                                           toLeanMode(mode)))
         .decode(state.asset);
 }
 
@@ -213,11 +226,11 @@ leanRoundedDepositAmountModes(
     Number::RoundingMode roundMode)
 {
     return LeanRoundedDepositAmountResultFFI::fromLean(leanCall(
-                                                     lean_rounded_deposit_amount_modes,
-                                                     VaultStateFFI::build(state),
-                                                     STAmountFFI::build(amount),
-                                                     toLeanMode(scaleRounding),
-                                                     toLeanMode(roundMode)))
+                                                           lean_rounded_deposit_amount_modes,
+                                                           VaultStateFFI::build(state),
+                                                           STAmountFFI::build(amount),
+                                                           toLeanMode(scaleRounding),
+                                                           toLeanMode(roundMode)))
         .decode(state.asset);
 }
 

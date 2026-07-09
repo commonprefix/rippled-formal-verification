@@ -6,6 +6,7 @@ open XRPL.Model.Protocol
 
 structure Vault where
   assetsTotal : Number
+  assetsAvailable : Number
   asset : Asset
   scale : UInt8
   sharesTotal : Number -- shares MPT sfOutstandingAmount

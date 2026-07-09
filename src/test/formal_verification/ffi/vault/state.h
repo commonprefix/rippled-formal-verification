@@ -18,6 +18,7 @@ namespace xrpl::test::formal_verification {
 struct VaultState
 {
     Number assetsTotal;
+    Number assetsAvailable;
     Asset asset;
     std::uint8_t scale{};
     Number sharesTotal;
@@ -29,6 +30,7 @@ extern "C" {
 lean_object*
 lean_vault_state_build(
     lean_object* assetsTotal,
+    lean_object* assetsAvailable,
     lean_object* asset,
     uint8_t scale,
     lean_object* sharesTotal,
@@ -48,6 +50,7 @@ public:
         return VaultStateFFI(leanCall(
             lean_vault_state_build,
             NumberFFI::build(state.assetsTotal),
+            NumberFFI::build(state.assetsAvailable),
             AssetFFI::build(state.asset),
             state.scale,
             NumberFFI::build(state.sharesTotal),
