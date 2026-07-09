@@ -21,9 +21,6 @@ using namespace formal_verification;
 
 class LeanVaultDeposit_test : public LeanSuite
 {
-    // Share MPToken ceiling (2^63 - 1)
-    static constexpr std::int64_t kMaxMptShares = std::numeric_limits<std::int64_t>::max();
-
     static Keylet
     createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
     {
@@ -325,20 +322,21 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositXRP(XRP(0), XRP(80'000'000'000), tesSUCCESS);
         testDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
 
-        // IOU: default vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptShares / 1e6.
+        // IOU: default vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptTokenAmount /
+        // 1e6.
         testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
-        testDepositIOU(Number{0}, Number{kMaxMptShares / 1'000'000}, false, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
         // Over the share ceiling: C++ overflows in doApply -> tecPATH_DRY, but the preclaim model
         // (roundedDepositAmount) does not cover that and returns tesSUCCESS. Documented gap:
         // cppExpected = tecPATH_DRY, leanExpected = tesSUCCESS.
         testDepositIOU(
-            Number{0}, Number{(kMaxMptShares / 1'000'000) + 1}, false, tecPATH_DRY, tesSUCCESS);
+            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY, tesSUCCESS);
 
         testDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
-        testDepositIOU(Number{0}, Number{kMaxMptShares / 1'000'000}, true, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, true, tesSUCCESS);
         testDepositIOU(
-            Number{0}, Number{(kMaxMptShares / 1'000'000) + 1}, true, tecPATH_DRY, tesSUCCESS);
+            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY, tesSUCCESS);
 
         // Precision loss: a sub-ULP deposit into a large vault rounds to zero at the vault scale.
         // Vault holds 1e12 USD -> ULP 1e-3; depositing 1e-4 rounds to zero -> tecPRECISION_LOSS.
@@ -350,7 +348,7 @@ class LeanVaultDeposit_test : public LeanSuite
         // MPT: scale 0; max deposit is the MPT ceiling itself.
         testDepositMPT(0, 1, tesSUCCESS);
         testDepositMPT(0, 1'000, tesSUCCESS);
-        testDepositMPT(0, kMaxMptShares, tesSUCCESS);
+        testDepositMPT(0, kMaxMpTokenAmount, tesSUCCESS);
 
         // Rounding-mode regression traps, these values catch potential rounding mode changes
         testDepositIOU(Number{1, 12}, Number{100006, -4}, false, tesSUCCESS);

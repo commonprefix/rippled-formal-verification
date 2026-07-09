@@ -192,38 +192,4 @@ leanRoundedDepositAmount(VaultState const& state, STAmount const& amount)
                                                            STAmountFFI::build(amount)))
         .decode(state.asset);
 }
-
-// TEMPORARY (rounding-mode probe): rounded deposit with the roundToScale mode chosen by caller.
-inline LeanRoundedDepositAmountResult
-leanRoundedDepositAmountMode(
-    VaultState const& state,
-    STAmount const& amount,
-    Number::RoundingMode mode)
-{
-    return LeanRoundedDepositAmountResultFFI::fromLean(leanCall(
-                                                           lean_rounded_deposit_amount_mode,
-                                                           VaultStateFFI::build(state),
-                                                           STAmountFFI::build(amount),
-                                                           toLeanMode(mode)))
-        .decode(state.asset);
-}
-
-// TEMPORARY (rounding-mode probe): both the scale-computation mode and the final roundToScale
-// mode chosen by caller. Production is (ToNearest, Downward).
-inline LeanRoundedDepositAmountResult
-leanRoundedDepositAmountModes(
-    VaultState const& state,
-    STAmount const& amount,
-    Number::RoundingMode scaleRounding,
-    Number::RoundingMode roundMode)
-{
-    return LeanRoundedDepositAmountResultFFI::fromLean(leanCall(
-                                                           lean_rounded_deposit_amount_modes,
-                                                           VaultStateFFI::build(state),
-                                                           STAmountFFI::build(amount),
-                                                           toLeanMode(scaleRounding),
-                                                           toLeanMode(roundMode)))
-        .decode(state.asset);
-}
-
 }  // namespace xrpl::test::formal_verification
