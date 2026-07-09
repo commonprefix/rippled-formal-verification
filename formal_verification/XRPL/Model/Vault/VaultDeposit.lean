@@ -41,8 +41,9 @@ structure DepositResult where
 
 def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except String STAmount := do
   if vault.assetsTotal.mantissa_ = 0 then
-    let sharesExponent ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + vault.scale.toNat) largeRange.min largeRange.max .to_nearest
-    let shares ← STAmount.ofNumber vault.sharesAsset sharesExponent .to_nearest
+    let sharesNumber ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + vault.scale.toNat) largeRange.min largeRange.max .to_nearest
+    let sharesNumber ← sharesNumber.truncate
+    let shares ← STAmount.ofNumber vault.sharesAsset sharesNumber .to_nearest
     return shares
   let amountDepositNumber ← amountDeposit.toNumber .to_nearest
   let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
@@ -63,10 +64,18 @@ def sharesToAssetsDeposit (vault : Vault) (shares : STAmount) : Except String ST
   let amountDeposit ← STAmount.ofNumber vault.asset amountDepositNumber .to_nearest
   return amountDeposit
 
-def computeDeposit (state : Vault) (amountDeposit : STAmount) : Except String (STAmount × STAmount) := do
+inductive ComputeDepositResult where
+  | error (error : TER)
+  | success (assetDeposited : STAmount) (sharesCreated : STAmount)
+
+def computeDeposit (state : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
   let shares ← assetsToSharesDeposit state amountDeposit
+  if shares.isZero then
+    return .error .tecPRECISION_LOSS
   let amountDeposit' ← sharesToAssetsDeposit state shares
-  return (amountDeposit', shares)
+  if ← amountDeposit'.operator_gt amountDeposit then
+    return .error .tecINTERNAL
+  return .success amountDeposit' shares
 
 def Vault.deposit (state : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
   let amount ← roundToVaultExponent amountDeposit state.assetsTotal
@@ -77,7 +86,9 @@ def Vault.deposit (state : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     if isDonation then
       pure (amount, STAmount.ofAsset state.sharesAsset)
     else
-      computeDeposit state amount
+      match ← computeDeposit state amount with
+      | .error e => return {result with error := some e}
+      | .success a s => pure (a, s)
   let state' : Vault := {
     state with
     assetsTotal := ← state.assetsTotal.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
