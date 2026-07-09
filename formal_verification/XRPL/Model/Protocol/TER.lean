@@ -58,7 +58,7 @@ def TER.isTec : TER → Bool
   | .tecNO_PERMISSION | .tecDUPLICATE | .tecNO_LINE_INSUF_RESERVE
   | .tecHAS_OBLIGATIONS | .tecNO_DST | .tecDST_TAG_NEEDED | .tecNO_LINE
   | .tecFAILED_PROCESSING | .tecPATH_DRY | .tecINSUFFICIENT_FUNDS
-  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED => true
+  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED | .tecPRECISION_LOSS => true
   | _ => false
 
 def TER.code : TER → Int32

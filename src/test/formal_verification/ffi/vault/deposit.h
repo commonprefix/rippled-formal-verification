@@ -18,14 +18,6 @@ lean_object*
 lean_vault_deposit(lean_object* state, lean_object* amount, uint8_t isDonation);
 lean_object*
 lean_rounded_deposit_amount(lean_object* state, lean_object* amount);
-lean_object*
-lean_rounded_deposit_amount_mode(lean_object* state, lean_object* amount, uint8_t mode);
-lean_object*
-lean_rounded_deposit_amount_modes(
-    lean_object* state,
-    lean_object* amount,
-    uint8_t scaleRounding,
-    uint8_t roundMode);
 }
 
 namespace xrpl::test::formal_verification {
