@@ -43,7 +43,7 @@ structure FFISTAmountResult where
   mIsNegative : UInt8
   status : UInt8
 
--- status: 0 = rounded (STAmount fields valid), 1 = rejected (code valid), 2 = threw.
+-- status: 0 = ok, 1 = threw. code: 0 = rounded (STAmount fields valid), else the rejection TER.
 -- Only 8-byte and 1-byte fields so the C++ decode offsets are predictable
 -- (8-byte group first in decl order: 0, 8, 16; then 1-byte group: 24, 25, 26).
 structure FFIRoundedDepositResult where
@@ -52,6 +52,27 @@ structure FFIRoundedDepositResult where
   mOffset : Int64
   assetKind : UInt8
   mIsNegative : UInt8
+  status : UInt8
+
+-- status: 0 = ok, 1 = threw. hasError: 1 if error TER present (errorCode valid).
+-- Scalar layout: 8-byte group in decl order (0,8,…,64), then 1-byte group (72,73,…,79).
+structure FFIDepositResult where
+  amountValue : UInt64
+  amountOffset : Int64
+  sharesValue : UInt64
+  sharesOffset : Int64
+  assetsTotalMantissa : UInt64
+  assetsTotalExponent : Int64
+  sharesTotalMantissa : UInt64
+  sharesTotalExponent : Int64
+  errorCode : Int64
+  amountKind : UInt8
+  amountNegative : UInt8
+  sharesKind : UInt8
+  sharesNegative : UInt8
+  assetsTotalNegative : UInt8
+  sharesTotalNegative : UInt8
+  hasError : UInt8
   status : UInt8
 
 def ffiMPTIssue : MPTIssue := { mptID := ⟨0⟩ }

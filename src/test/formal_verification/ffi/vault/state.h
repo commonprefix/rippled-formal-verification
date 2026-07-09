@@ -11,17 +11,29 @@
 
 #include <lean/lean.h>
 
+#include <cstdint>
+
 namespace xrpl::test::formal_verification {
 
 struct VaultState
 {
     Number assetsTotal;
     Asset asset;
+    std::uint8_t scale{};
+    Number sharesTotal;
+    Asset sharesAsset;
+    Number interestUnrealized;
 };
 
 extern "C" {
 lean_object*
-lean_vault_state_build(lean_object* assetsTotal, lean_object* asset);
+lean_vault_state_build(
+    lean_object* assetsTotal,
+    lean_object* asset,
+    uint8_t scale,
+    lean_object* sharesTotal,
+    lean_object* sharesAsset,
+    lean_object* interestUnrealized);
 }
 
 class VaultStateFFI : public LeanObjectFFI
@@ -36,7 +48,11 @@ public:
         return VaultStateFFI(leanCall(
             lean_vault_state_build,
             NumberFFI::build(state.assetsTotal),
-            AssetFFI::build(state.asset)));
+            AssetFFI::build(state.asset),
+            state.scale,
+            NumberFFI::build(state.sharesTotal),
+            AssetFFI::build(state.sharesAsset),
+            NumberFFI::build(state.interestUnrealized)));
     }
 };
 

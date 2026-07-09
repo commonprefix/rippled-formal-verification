@@ -646,7 +646,7 @@ def STAmount.canSubtract (a b : STAmount) : Except String Bool :=
     -- IOU subtraction can never underflow.
     .ok true
 
-def STAmount.roundToScale (value : STAmount) (scale : Int) (rounding : rounding_mode)
+def STAmount.roundToExponent (value : STAmount) (scale : Int) (rounding : rounding_mode)
     : Except String STAmount :=
   if value.integral then .ok value
   else if value.isZero then .ok value
@@ -671,7 +671,7 @@ def STAmount.roundToAsset (asset : Asset) (value : Number) (rounding : rounding_
     | some s =>
       if ret.integral then ret.toNumber rounding
       else
-        match STAmount.roundToScale ret s rounding with
+        match STAmount.roundToExponent ret s rounding with
         | .error e => .error e
         | .ok rounded => rounded.toNumber rounding
 
