@@ -34,3 +34,5 @@ import XRPL.FFI.Protocol.UintTypesFFI
 import XRPL.FFI.Protocol.XRPAmountFFI
 import XRPL.FFI.tx.TxFFI
 import XRPL.FFI.tx.vault.VaultSetFFI
+
+import XRPL.FFI.Vault.Deposit

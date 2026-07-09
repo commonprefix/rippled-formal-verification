@@ -259,6 +259,25 @@ def Number.from_rep (mantissa : Int64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except String Number :=
   Number.normalized (mantissa < 0) mantissa.toInt.natAbs.toUInt64 exponent minMant maxMant mode
 
+-- Divide the mantissa by 10 (dropping the low digit) until the exponent reaches 0,
+-- i.e. discard the fractional part toward zero.
+def Number.truncateAux (m : UInt64) (e : Int) : UInt64 × Int :=
+  if e < 0 ∧ m ≠ 0 then
+    Number.truncateAux (m / 10) (e + 1)
+  else
+    (m, e)
+termination_by (-e).toNat
+decreasing_by omega
+
+-- Round toward zero to an integer. Sign is preserved; the exponent is ≥ 0 afterwards
+-- so re-normalization neither rounds nor throws (mode is inert).
+def Number.truncate (n : Number) : Except String Number :=
+  if n.exponent_ ≥ 0 ∨ n.mantissa_ = 0 then
+    .ok n
+  else
+    let (m, e) := Number.truncateAux n.mantissa_ n.exponent_
+    Number.normalized n.negative_ m e largeRange.min largeRange.max .to_nearest
+
 def Number.operator_eq (x y : Number) : Bool :=
   x.negative_ == y.negative_ &&
     x.mantissa_ == y.mantissa_ &&

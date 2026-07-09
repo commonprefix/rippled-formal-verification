@@ -766,7 +766,7 @@ public:
             for (uint64_t m :
                  {Number::kMaxRep + 1,
                   Number::kMaxRep + 2,
-                  9'999'999'999'999'999'999ULL,
+                  uint64_t{9'999'999'999'999'999'999ULL},
                   minM - 1,
                   uint64_t{1},
                   uint64_t{0}})
