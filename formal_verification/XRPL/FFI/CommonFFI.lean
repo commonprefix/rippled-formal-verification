@@ -2,7 +2,7 @@ import XRPL.Model.Protocol.IOUAmount
 import XRPL.Model.Protocol.MPTAmount
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.XRPAmount
-
+import XRPL.Model.Protocol.TER
 
 namespace XRPL.FFI
 
@@ -29,6 +29,10 @@ structure FFIXRPResult where
 structure FFIIOUResult where
   mantissa : Int64
   exponent : Int64
+  status : UInt8
+
+structure FFITERResult where
+  code : Int32
   status : UInt8
 
 -- assetKind: 0 = XRP, 1 = IOU (noIssue), 2 = MPT (ffiMPTIssue).
@@ -103,6 +107,11 @@ def encodeSTAmountResult (r : Except String STAmount) : FFISTAmountResult :=
 def encodeBoolResult (r : Except String Bool) : FFIBoolResult :=
   match r with
   | .ok b => ⟨if b then 1 else 0, 0⟩
+  | .error _ => ⟨0, 1⟩
+
+def encodeTERResult (r : Except String TER) : FFITERResult :=
+  match r with
+  | .ok t => ⟨t.code, 0⟩
   | .error _ => ⟨0, 1⟩
 
 end XRPL.FFI

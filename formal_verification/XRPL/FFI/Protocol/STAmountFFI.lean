@@ -246,7 +246,7 @@ def lean_stamount_round_to_scale
     (kind : UInt8) (mValue : UInt64) (mOffset : Int64) (mIsNegative : UInt8)
     (scale : Int64) (mode : UInt8) : FFISTAmountResult :=
   let s := decodeSTAmount kind mValue mOffset mIsNegative
-  encodeSTAmountResult (STAmount.roundToScale s scale.toInt (decodeMode mode))
+  encodeSTAmountResult (STAmount.roundToExponent s scale.toInt (decodeMode mode))
 
 @[export lean_stamount_get_rate]
 def lean_stamount_get_rate

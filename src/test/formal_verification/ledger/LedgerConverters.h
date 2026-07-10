@@ -19,7 +19,7 @@ namespace xrpl::test::formal_verification {
 template <class T>
 struct LeanResult
 {
-    bool threw;
+    bool threw{};
     T value;
     std::string error;
 };
