@@ -68,14 +68,24 @@ inductive ComputeDepositResult where
   | error (error : TER)
   | success (assetDeposited : STAmount) (sharesCreated : STAmount)
 
+-- temporary fix to detect overflow exception on arithmetic operations.
+-- todo: replace with actual exception handling
+def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
+
 def computeDeposit (state : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
-  let shares ← assetsToSharesDeposit state amountDeposit
-  if shares.isZero then
-    return .error .tecPRECISION_LOSS
-  let amountDeposit' ← sharesToAssetsDeposit state shares
-  if ← amountDeposit'.operator_gt amountDeposit then
-    return .error .tecINTERNAL
-  return .success amountDeposit' shares
+  try
+    let shares ← assetsToSharesDeposit state amountDeposit
+    if shares.isZero then
+      return .error .tecPRECISION_LOSS
+    let amountDeposit' ← sharesToAssetsDeposit state shares
+    if ← amountDeposit'.operator_gt amountDeposit then
+      return .error .tecINTERNAL
+    return .success amountDeposit' shares
+  catch e =>
+    if isOverflow e then
+      return .error .tecPATH_DRY
+    else
+      throw e
 
 def Vault.deposit (state : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
   let amount ← roundToVaultExponent amountDeposit state.assetsTotal

@@ -327,16 +327,11 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
-        // Over the share ceiling: C++ overflows in doApply -> tecPATH_DRY, but the preclaim model
-        // (roundedDepositAmount) does not cover that and returns tesSUCCESS. Documented gap:
-        // cppExpected = tecPATH_DRY, leanExpected = tesSUCCESS.
-        testDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY);
 
         testDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, true, tesSUCCESS);
-        testDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY);
 
         // Precision loss: a sub-ULP deposit into a large vault rounds to zero at the vault scale.
         // Vault holds 1e12 USD -> ULP 1e-3; depositing 1e-4 rounds to zero -> tecPRECISION_LOSS.
