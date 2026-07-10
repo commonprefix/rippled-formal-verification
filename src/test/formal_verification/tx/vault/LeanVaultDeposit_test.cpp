@@ -83,7 +83,8 @@ class LeanVaultDeposit_test : public LeanSuite
             .sharesTotal =
                 Number{static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))},
             .sharesAsset = MPTIssue{shareMptId},
-            .interestUnrealized = vaultSle->at(sfInterestUnrealized)};
+            .interestUnrealized = vaultSle->at(sfInterestUnrealized),
+            .lossUnrealized = vaultSle->at(sfLossUnrealized)};
 
         LeanRoundedDepositAmountResult const rounded = leanRoundedDepositAmount(state, amount);
         LeanDepositResult const deposit = leanVaultDeposit(state, amount, false);

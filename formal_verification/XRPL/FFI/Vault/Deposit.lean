@@ -88,8 +88,8 @@ def lean_vault_deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : 
 
 @[export lean_vault_state_build]
 def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number) (asset : Asset) (scale : UInt8)
-    (sharesTotal : Number) (sharesAsset : Asset) (interestUnrealized : Number) : Vault :=
-  { assetsTotal, assetsAvailable, asset, scale, sharesTotal, sharesAsset, interestUnrealized }
+    (sharesTotal : Number) (sharesAsset : Asset) (interestUnrealized lossUnrealized : Number) : Vault :=
+  { assetsTotal, assetsAvailable, asset, scale, sharesTotal, sharesAsset, interestUnrealized, lossUnrealized }
 
 @[export lean_vault_state_assets_total]
 def lean_vault_state_assets_total (vs : Vault) : Number := vs.assetsTotal
