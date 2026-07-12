@@ -414,20 +414,16 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
-        // Over the share ceiling: C++ overflows in doApply -> tecPATH_DRY, but the preclaim model
-        // (roundedDepositAmount) does not cover that and returns tesSUCCESS. Documented gap:
-        // cppExpected = tecPATH_DRY, leanExpected = tesSUCCESS.
-        testDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY, tesSUCCESS);
+        // Over the share ceiling: the share amount overflows the MPT domain. C++ returns
+        // tecPATH_DRY; the model's computeDeposit catches the overflow and returns the same.
+        testDepositIOU(Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY);
 
         testDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, true, tesSUCCESS);
-        testDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY);
 
         // IOU STAmount magnitude extremes (offset range is [kMinOffset, kMaxOffset] = [-96, 80]).
-        testDepositIOU(
-            Number{0}, Number{9'999'999'999'999'999LL, 80}, true, tecPATH_DRY, tesSUCCESS);
+        testDepositIOU(Number{0}, Number{9'999'999'999'999'999LL, 80}, true, tecPATH_DRY);
         testDepositIOU(Number{0}, Number{1, -80}, true, tecPRECISION_LOSS);
 
         // Precision loss: a sub-ULP deposit into a large vault rounds to zero at the vault scale.
