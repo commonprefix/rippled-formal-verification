@@ -24,6 +24,7 @@ struct VaultState
     Number sharesTotal;
     Asset sharesAsset;
     Number interestUnrealized;
+    Number lossUnrealized;
 };
 
 extern "C" {
@@ -35,7 +36,8 @@ lean_vault_state_build(
     uint8_t scale,
     lean_object* sharesTotal,
     lean_object* sharesAsset,
-    lean_object* interestUnrealized);
+    lean_object* interestUnrealized,
+    lean_object* lossUnrealized);
 lean_object*
 lean_vault_state_assets_total(lean_object* vs);
 lean_object*
@@ -69,7 +71,8 @@ public:
             state.scale,
             NumberFFI::build(state.sharesTotal),
             AssetFFI::build(state.sharesAsset),
-            NumberFFI::build(state.interestUnrealized)));
+            NumberFFI::build(state.interestUnrealized),
+            NumberFFI::build(state.lossUnrealized)));
     }
 
     VaultState
