@@ -23,3 +23,5 @@ def lean_vault_state_shares_total (vault : Vault) : Number := vault.sharesTotal
 def lean_vault_state_shares_asset (vault : Vault) : Asset := vault.sharesAsset
 @[export lean_vault_state_interest_unrealized]
 def lean_vault_state_interest_unrealized (vault : Vault) : Number := vault.interestUnrealized
+@[export lean_vault_state_loss_unrealized]
+def lean_vault_state_loss_unrealized (vault : Vault) : Number := vault.lossUnrealized

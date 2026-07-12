@@ -41,7 +41,8 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
         .sharesTotal = Number{static_cast<std::int64_t>(
             env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount))},
         .sharesAsset = MPTIssue{shareMptId},
-        .interestUnrealized = vaultSle->at(sfInterestUnrealized)};
+        .interestUnrealized = vaultSle->at(sfInterestUnrealized),
+        .lossUnrealized = vaultSle->at(sfLossUnrealized)};
 }
 
 // Overwrite the vault totals and share issuance outstanding on the open ledger to reach states a

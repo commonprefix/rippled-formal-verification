@@ -52,6 +52,8 @@ lean_object*
 lean_vault_state_shares_asset(lean_object* vs);
 lean_object*
 lean_vault_state_interest_unrealized(lean_object* vs);
+lean_object*
+lean_vault_state_loss_unrealized(lean_object* vs);
 }
 
 class VaultStateFFI : public LeanObjectFFI
@@ -85,7 +87,8 @@ public:
             .scale = leanGet<std::uint8_t>(lean_vault_state_scale),
             .sharesTotal = leanGetObj<NumberFFI>(lean_vault_state_shares_total),
             .sharesAsset = leanGetObj<AssetFFI>(lean_vault_state_shares_asset),
-            .interestUnrealized = leanGetObj<NumberFFI>(lean_vault_state_interest_unrealized)};
+            .interestUnrealized = leanGetObj<NumberFFI>(lean_vault_state_interest_unrealized),
+            .lossUnrealized = leanGetObj<NumberFFI>(lean_vault_state_loss_unrealized)};
     }
 };
 
