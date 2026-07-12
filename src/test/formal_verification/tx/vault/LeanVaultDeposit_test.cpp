@@ -73,9 +73,9 @@ class LeanVaultDeposit_test : public LeanSuite
         if (cppTer != tesSUCCESS)
             return;
 
-        // On success the model must have completed and its new vault state must match the env: the
-        // updated assetsTotal/assetsAvailable (rounding parity) and sharesTotal == the share MPT
-        // outstanding.
+        // On success, the model's new vault state must match the ledger:
+        // assetsTotal/assetsAvailable (rounding parity) and sharesTotal (the share MPT
+        // outstanding).
         BEAST_EXPECTS(!deposit.threw, "lean deposit raised on success");
         auto const newVaultSle = env.le(vaultKeylet);
         auto const issuanceKeylet = keylet::mptIssuance(newVaultSle->at(sfShareMPTID));
@@ -115,8 +115,8 @@ class LeanVaultDeposit_test : public LeanSuite
             env.close();
         }
 
-        // An owner donation adds assets with no shares, drifting NAV off shareTotal/10^scale so the
-        // exchange-rate path is exercised with a non-terminating ratio.
+        // An owner donation adds assets without shares, drifting NAV off shareTotal/10^scale to
+        // exercise the exchange-rate path.
         if (donation.signum() != 0)
         {
             env(Vault::deposit(
@@ -188,8 +188,7 @@ class LeanVaultDeposit_test : public LeanSuite
             env.close();
         }
 
-        // The issuer seeds the vault (it can issue any amount of its own IOU). leanExpected
-        // defaults to the cpp expectation (a true match) unless a divergence is passed.
+        // The issuer seeds the vault, since it can issue any amount of its own IOU.
         runVaultDeposit(
             env,
             vaultOwner,
@@ -243,9 +242,8 @@ class LeanVaultDeposit_test : public LeanSuite
             leanExpected.value_or(expected));
     }
 
-    // Exchange-rate path with NAV drifted off shareTotal/10^scale by an owner donation, so the
-    // shares come from a genuine non-terminating division (NAV = seed + donation). Guards the
-    // non-empty assetsToShares / sharesToAssets arithmetic.
+    // Exchange-rate path: an owner donation drifts NAV so shares come from a non-terminating
+    // division, exercising the non-empty assetsToShares / sharesToAssets arithmetic.
     void
     testDepositExchangeRate()
     {
@@ -280,9 +278,8 @@ class LeanVaultDeposit_test : public LeanSuite
             asset(Number{2}));
     }
 
-    // Documented, out-of-scope divergence: a non-issuer deposit whose amount rounds to zero at the
-    // depositor's own trust-line scale is rejected by C++ (preclaim, VaultDeposit.cpp:205-217) but
-    // out of scope of the model.
+    // Documented divergence: a non-issuer deposit that rounds to zero at the depositor's own
+    // trust-line scale is rejected by C++ in preclaim, but is out of scope for the model.
     void
     testDepositTrustLineScale()
     {
@@ -409,8 +406,8 @@ class LeanVaultDeposit_test : public LeanSuite
         testDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
         testDepositXRP(XRP(1'000), drops(1), tesSUCCESS);    // minimum deposit, non-empty
 
-        // IOU: default vault scale 6, so shares ~ amount * 1e6; overflow above kMaxMptTokenAmount /
-        // 1e6.
+        // IOU: default vault scale 6, so shares ~ amount * 1e6; over kMaxMpTokenAmount / 1e6 the
+        // share amount overflows.
         testDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
         testDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
@@ -484,10 +481,8 @@ class LeanVaultDeposit_test : public LeanSuite
         // (documented gap).
         testUpdatedStateDepositMPT(Number{-5}, 5, 1, tecINTERNAL, tesSUCCESS);
 
-        // The precision tests above deposit as the issuer (for whom the depositor trust-line-scale
-        // check is skipped) to isolate the vault arithmetic. testDepositTrustLineScale documents
-        // the non-issuer divergence (out of scope: it depends on the depositor's balance, not the
-        // vault).
+        // The tests above deposit as the issuer to isolate the vault arithmetic (the depositor
+        // trust-line-scale check is skipped). The non-issuer divergence is documented below.
         testDepositTrustLineScale();
     }
 
