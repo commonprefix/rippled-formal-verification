@@ -26,9 +26,9 @@ inductive RoundedDepositResult where
   | rejected (ter : TER)
   | rounded (amount : STAmount)
 
-def Vault.roundedDepositAmount (state : Vault) (amountDeposit : STAmount)
+def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
     : Except String RoundedDepositResult := do
-  let roundedAmount ← roundToVaultExponent amountDeposit state.assetsTotal
+  let roundedAmount ← roundToVaultExponent amountDeposit vault.assetsTotal
   if roundedAmount.isZero then
     return .rejected .tecPRECISION_LOSS
   return .rounded roundedAmount
@@ -68,32 +68,31 @@ inductive ComputeDepositResult where
   | error (error : TER)
   | success (assetDeposited : STAmount) (sharesCreated : STAmount)
 
-def computeDeposit (state : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
-  let shares ← assetsToSharesDeposit state amountDeposit
+def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
+  let shares ← assetsToSharesDeposit vault amountDeposit
   if shares.isZero then
     return .error .tecPRECISION_LOSS
-  let amountDeposit' ← sharesToAssetsDeposit state shares
+  let amountDeposit' ← sharesToAssetsDeposit vault shares
   if ← amountDeposit'.operator_gt amountDeposit then
     return .error .tecINTERNAL
   return .success amountDeposit' shares
 
-def Vault.deposit (state : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
-  let amount ← roundToVaultExponent amountDeposit state.assetsTotal
-  let result : DepositResult := ⟨none, state, amount, STAmount.ofAsset state.asset⟩
+def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
+  let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
+  let result : DepositResult := ⟨none, vault, amount, STAmount.ofAsset vault.asset⟩
   if amount.isZero then
     return {result with error := some .tecINTERNAL}
   let (assetDeposited, sharesCreated) ←
     if isDonation then
-      pure (amount, STAmount.ofAsset state.sharesAsset)
+      pure (amount, STAmount.ofAsset vault.sharesAsset)
     else
-      match ← computeDeposit state amount with
+      match ← computeDeposit vault amount with
       | .error e => return {result with error := some e}
       | .success a s => pure (a, s)
-  let state' : Vault := {
-    state with
-    assetsTotal := ← state.assetsTotal.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
-    assetsAvailable := ← state.assetsAvailable.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
-    sharesTotal := ← state.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
+  let vault' : Vault := {
+    vault with
+    assetsTotal := ← vault.assetsTotal.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
+    assetsAvailable := ← vault.assetsAvailable.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
+    sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
-  return { result with vault' := state', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }
-
+  return { result with vault' := vault', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }

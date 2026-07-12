@@ -35,4 +35,7 @@ import XRPL.FFI.Protocol.XRPAmountFFI
 import XRPL.FFI.tx.TxFFI
 import XRPL.FFI.tx.vault.VaultSetFFI
 
-import XRPL.FFI.Vault.Deposit
+import XRPL.FFI.Vault.VaultState
+import XRPL.FFI.Vault.VaultDeposit
+import XRPL.FFI.Vault.VaultSet
+import XRPL.FFI.Vault.VaultDelete
