@@ -73,9 +73,8 @@ class LeanVaultDeposit_test : public LeanSuite
         if (cppTer != tesSUCCESS)
             return;
 
-        // On success, the model's new vault state must match the ledger:
-        // assetsTotal/assetsAvailable (rounding parity) and sharesTotal (the share MPT
-        // outstanding).
+        // On success, the model's new vault state must equal the ledger's assetsTotal,
+        // assetsAvailable and sharesTotal.
         BEAST_EXPECTS(!deposit.threw, "lean deposit raised on success");
         auto const newVaultSle = env.le(vaultKeylet);
         auto const issuanceKeylet = keylet::mptIssuance(newVaultSle->at(sfShareMPTID));
@@ -476,9 +475,8 @@ class LeanVaultDeposit_test : public LeanSuite
             tefEXCEPTION,
             true);
 
-        // Negative AssetsTotal (below the ValidVault floor): C++ rejects with tecINTERNAL,
-        // but the model does not guard the sign and returns success with negative shares
-        // (documented gap).
+        // Negative AssetsTotal (below the ValidVault floor): C++ rejects (tecINTERNAL) but the
+        // model does not guard the sign and succeeds (documented gap).
         testUpdatedStateDepositMPT(Number{-5}, 5, 1, tecINTERNAL, tesSUCCESS);
 
         // The tests above deposit as the issuer to isolate the vault arithmetic (the depositor
