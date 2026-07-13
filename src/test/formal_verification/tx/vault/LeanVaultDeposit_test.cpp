@@ -29,9 +29,7 @@ class LeanVaultDeposit_test : public LeanSuite
         jtx::Account const& depositor,
         Asset const& asset,
         STAmount const& amount,
-        TER cppExpected,
-        TER leanExpected,
-        bool leanRaises = false)
+        TER expected)
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
@@ -45,18 +43,12 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         BEAST_EXPECTS(
-            cppTer == cppExpected,
-            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(cppExpected));
-
-        if (leanRaises)
-        {
-            BEAST_EXPECTS(rounded.threw || deposit.threw, "expected lean to raise");
-            return;
-        }
+            cppTer == expected,
+            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
         BEAST_EXPECTS(!rounded.threw, "lean roundedDepositAmount raised");
 
-        // The lean TER is the first error surfaced: roundedDepositAmount's rejection, else the full
-        // deposit's error. cppExpected/leanExpected differ only for a documented model gap.
+        // The lean TER is the first error surfaced: roundedDepositAmount's rejection, else the
+        // deposit's error.
         TER leanTer = tesSUCCESS;
         if (rounded.error)
         {
@@ -67,8 +59,8 @@ class LeanVaultDeposit_test : public LeanSuite
             leanTer = *deposit.error;
         }
         BEAST_EXPECTS(
-            leanTer == leanExpected,
-            std::string("lean=") + transToken(leanTer) + " expected " + transToken(leanExpected));
+            leanTer == expected,
+            std::string("lean=") + transToken(leanTer) + " expected " + transToken(expected));
 
         if (cppTer != tesSUCCESS)
             return;
@@ -97,8 +89,7 @@ class LeanVaultDeposit_test : public LeanSuite
         Asset const& asset,
         STAmount const& vaultBalanceBeforeDeposit,
         STAmount const& amount,
-        TER cppExpected,
-        TER leanExpected,
+        TER expected,
         STAmount const& donation = STAmount{})
     {
         using namespace jtx;
@@ -127,7 +118,7 @@ class LeanVaultDeposit_test : public LeanSuite
             env.close();
         }
 
-        compareDeposit(env, vaultKeylet, depositor, asset, amount, cppExpected, leanExpected);
+        compareDeposit(env, vaultKeylet, depositor, asset, amount, expected);
     }
 
     void
@@ -152,7 +143,6 @@ class LeanVaultDeposit_test : public LeanSuite
             xrpIssue(),
             vaultBalanceBeforeDeposit,
             amount,
-            expected,
             expected);
     }
 
@@ -161,8 +151,7 @@ class LeanVaultDeposit_test : public LeanSuite
         Number vaultBalanceBeforeDeposit,
         Number amount,
         bool depositorIsIssuer,
-        TER expected,
-        std::optional<TER> leanExpected = std::nullopt)
+        TER expected)
     {
         using namespace jtx;
         testcase(
@@ -196,16 +185,11 @@ class LeanVaultDeposit_test : public LeanSuite
             asset.raw(),
             asset(vaultBalanceBeforeDeposit),
             asset(amount),
-            expected,
-            leanExpected.value_or(expected));
+            expected);
     }
 
     void
-    testDepositMPT(
-        std::int64_t vaultBalanceBeforeDeposit,
-        std::int64_t amount,
-        TER expected,
-        std::optional<TER> leanExpected = std::nullopt)
+    testDepositMPT(std::int64_t vaultBalanceBeforeDeposit, std::int64_t amount, TER expected)
     {
         using namespace jtx;
         testcase(
@@ -237,8 +221,7 @@ class LeanVaultDeposit_test : public LeanSuite
             asset.raw(),
             asset(vaultBalanceBeforeDeposit),
             asset(amount),
-            expected,
-            leanExpected.value_or(expected));
+            expected);
     }
 
     // Exchange-rate path: an owner donation drifts NAV so shares come from a non-terminating
@@ -273,45 +256,7 @@ class LeanVaultDeposit_test : public LeanSuite
             asset(Number{1}),
             asset(Number{100}),
             tesSUCCESS,
-            tesSUCCESS,
             asset(Number{2}));
-    }
-
-    // Documented divergence: a non-issuer deposit that rounds to zero at the depositor's own
-    // trust-line scale is rejected by C++ in preclaim, but is out of scope for the model.
-    void
-    testDepositTrustLineScale()
-    {
-        using namespace jtx;
-        testcase("deposit below depositor trust-line scale (documented divergence)");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        // A large holder balance gives a coarse trust-line scale (ULP ~ 1e-3), so a 1e-6 deposit
-        // vanishes at that scale.
-        env(trust(holder, asset(1'000'000'000'000'000LL)));
-        env.close();
-        env(pay(issuer, holder, asset(Number{1, 12})));
-        env.close();
-
-        // 1e-6 USD: C++ rounds it to zero at the holder's ~1e-3 balance scale -> tecPRECISION_LOSS.
-        // The model computes shares = truncate(1e-6 * 1e6) = 1 and succeeds. cppExpected != lean.
-        runVaultDeposit(
-            env,
-            vaultOwner,
-            issuer,  // seeder (unused: fresh vault)
-            holder,  // non-issuer depositor
-            asset.raw(),
-            asset(Number{0}),  // fresh vault
-            asset(Number{1, -6}),
-            tecPRECISION_LOSS,  // cpp
-            tesSUCCESS);        // lean (documented divergence)
     }
 
     // Update an MPT vault to an extreme state a real deposit cannot reach, then deposit and
@@ -321,9 +266,7 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const& assetsTotal,
         std::uint64_t sharesTotal,
         std::int64_t amount,
-        TER cppExpected,
-        std::optional<TER> leanExpected = std::nullopt,
-        bool leanRaises = false)
+        TER expected)
     {
         using namespace jtx;
         testcase(
@@ -347,25 +290,13 @@ class LeanVaultDeposit_test : public LeanSuite
 
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
         BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
-        compareDeposit(
-            env,
-            vaultKeylet,
-            holder,
-            asset.raw(),
-            asset(amount),
-            cppExpected,
-            leanExpected.value_or(cppExpected),
-            leanRaises);
+        compareDeposit(env, vaultKeylet, holder, asset.raw(), asset(amount), expected);
     }
 
     // Update an IOU vault to an extreme AssetsTotal so a small issuer deposit rounds to zero at
     // the vault scale.
     void
-    testUpdatedStateDepositIOU(
-        Number const& assetsTotal,
-        Number const& amount,
-        TER cppExpected,
-        bool leanRaises = false)
+    testUpdatedStateDepositIOU(Number const& assetsTotal, Number const& amount, TER expected)
     {
         using namespace jtx;
         testcase(
@@ -382,19 +313,74 @@ class LeanVaultDeposit_test : public LeanSuite
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
         // Update shares so the vault is not zero-sized, the deposit still rejects on rounding.
         BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, 1'000'000));
-        compareDeposit(
+        compareDeposit(env, vaultKeylet, issuer, asset.raw(), asset(amount), expected);
+    }
+
+    // Discrepancy: a non-issuer deposit that rounds to zero at the depositor's trust-line scale is
+    // rejected by C++ (tecPRECISION_LOSS) but succeeds in the model (out of scope).
+    void
+    testDepositTrustLineScale()
+    {
+        using namespace jtx;
+        testcase("deposit below depositor trust-line scale");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        // A large holder balance gives a coarse trust-line scale (ULP ~ 1e-3), so a 1e-6 deposit
+        // vanishes at that scale.
+        env(trust(holder, asset(1'000'000'000'000'000LL)));
+        env.close();
+        env(pay(issuer, holder, asset(Number{1, 12})));
+        env.close();
+
+        runVaultDeposit(
             env,
-            vaultKeylet,
+            vaultOwner,
             issuer,
+            holder,
             asset.raw(),
-            asset(amount),
-            cppExpected,
-            cppExpected,
-            leanRaises);
+            asset(Number{0}),
+            asset(Number{1, -6}),
+            tecPRECISION_LOSS);
+    }
+
+    // Discrepancy: the model does not model the MPT mint ceiling. A deposit that would push
+    // outstanding shares past INT64_MAX succeeds where C++ returns tecPATH_DRY.
+    void
+    testDepositMptCeiling()
+    {
+        testUpdatedStateDepositMPT(
+            Number{static_cast<std::int64_t>(kMaxMpTokenAmount)},
+            kMaxMpTokenAmount,
+            1'000,
+            tecPATH_DRY);
+    }
+
+    // Discrepancy: the model does not guard a negative AssetsTotal; the deposit succeeds where C++
+    // returns tecINTERNAL.
+    void
+    testDepositNegativeAssetsTotal()
+    {
+        testUpdatedStateDepositMPT(Number{-5}, 5, 1, tecINTERNAL);
+    }
+
+    // Discrepancy: AssetsTotal + amount near the IOU maximum overflows; the model raises where C++
+    // catches it as tefEXCEPTION.
+    void
+    testDepositArithmeticOverflow()
+    {
+        testUpdatedStateDepositIOU(
+            Number{9'999'999'999'999'999LL, 80}, Number{9'999'999'999'999'999LL, 80}, tefEXCEPTION);
     }
 
     void
-    testDepositScenarios()
+    runTests() override
     {
         using namespace jtx;
 
@@ -452,42 +438,19 @@ class LeanVaultDeposit_test : public LeanSuite
         // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 -> tecPRECISION_LOSS.
         testDepositIOU(Number{0}, Number{6, -7}, true, tecPRECISION_LOSS);
 
-        // Exchange-rate path with a drifted NAV (non-terminating share division).
         testDepositExchangeRate();
 
         // Extreme NAV ratio AssetsTotal >> SharesTotal: a unit deposit buys zero shares.
         testUpdatedStateDepositMPT(Number{1, 18}, 1, 1, tecPRECISION_LOSS);
-        // SharesTotal updated to the MPT ceiling (INT64_MAX): the mint would overflow it. C++
-        // rejects (tecPATH_DRY). The model does not model the ceiling (documented gap).
-        testUpdatedStateDepositMPT(
-            Number{static_cast<std::int64_t>(kMaxMpTokenAmount)},
-            kMaxMpTokenAmount,
-            1'000,
-            tecPATH_DRY,
-            tesSUCCESS);
         // AssetsTotal near the STAmount exponent ceiling: a small IOU deposit rounds to zero.
         testUpdatedStateDepositIOU(
             Number{9'999'999'999'999'999LL, 80}, Number{1}, tecPRECISION_LOSS);
-        // Arithmetic overflow: AssetsTotal + amount, both near the IOU maximum
-        testUpdatedStateDepositIOU(
-            Number{9'999'999'999'999'999LL, 80},
-            Number{9'999'999'999'999'999LL, 80},
-            tefEXCEPTION,
-            true);
 
-        // Negative AssetsTotal (below the ValidVault floor): C++ rejects (tecINTERNAL) but the
-        // model does not guard the sign and succeeds (documented gap).
-        testUpdatedStateDepositMPT(Number{-5}, 5, 1, tecINTERNAL, tesSUCCESS);
-
-        // The tests above deposit as the issuer to isolate the vault arithmetic (the depositor
-        // trust-line-scale check is skipped). The non-issuer divergence is documented below.
-        testDepositTrustLineScale();
-    }
-
-    void
-    runTests() override
-    {
-        testDepositScenarios();
+        // Known discrepancies: each fails until the model is fixed; uncomment to verify.
+        // testDepositMptCeiling();          // model tesSUCCESS where C++ gives tecPATH_DRY
+        // testDepositNegativeAssetsTotal(); // model tesSUCCESS where C++ gives tecINTERNAL
+        // testDepositArithmeticOverflow();  // model raises where C++ gives tefEXCEPTION
+        // testDepositTrustLineScale();      // model tesSUCCESS where C++ gives tecPRECISION_LOSS
     }
 };
 

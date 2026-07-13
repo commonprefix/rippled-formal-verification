@@ -14,7 +14,7 @@ def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrea
 
   let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
-  
+
   if netAssetValue.mantissa_ == 0 then
     return STAmount.ofAsset vault.asset
 
@@ -58,10 +58,6 @@ structure ComputeWithdrawResult where
   assets' : STAmount
   sharesRedeemed : STAmount
 
-
--- temporary fix to detect overflow exception on arithmetic operations.
--- todo: replace with actual exception handling
-def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
 
 
 def computeWithdrawByAssets (vault : Vault) (assets : STAmount) : Except String ComputeWithdrawResult := do
@@ -137,9 +133,3 @@ def Vault.withdraw (vault : Vault) (assets : STAmount) : Except String WithdrawR
     sharesTotal := ← vault.sharesTotal.operator_sub sharesBurnedNumber .to_nearest,}
 
   return ⟨none, vault', result.assets', result.sharesRedeemed⟩
-  
-
-
-
-
-

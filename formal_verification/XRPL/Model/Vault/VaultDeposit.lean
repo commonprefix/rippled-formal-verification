@@ -68,10 +68,6 @@ inductive ComputeDepositResult where
   | error (error : TER)
   | success (assetDeposited : STAmount) (sharesCreated : STAmount)
 
--- temporary fix to detect overflow exception on arithmetic operations.
--- todo: replace with actual exception handling
-def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
-
 def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
   try
     let shares ← assetsToSharesDeposit vault amountDeposit
