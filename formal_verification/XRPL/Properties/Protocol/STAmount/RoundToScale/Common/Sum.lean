@@ -7,7 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.DecadeBridge
 
 namespace XRPL.Model.Protocol
 
-/-! # Stage A of the `roundToScale` discrete theorem
+/-! # Stage A of the `roundToExponent` discrete theorem
 
 Characterizes `value + reference`: the sum lands at `(10^15 + k)·10^s` with
 `k` the per-mode rounding of `|value|/10^s`. -/
@@ -82,7 +82,7 @@ set_option maxHeartbeats 3200000 in
 /-- Stage A: the sum of a canonical value (with `mOffset < s`) and the
 reference `±10^15·10^s` is the record `(10^15 + k)·10^s` with `k` the
 per-mode rounding of `|value|/10^s`. -/
-theorem STAmount.roundToScale_sum_spec (value : STAmount) (s : ℤ) (mode : rounding_mode)
+theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : rounding_mode)
     (iss : Issue)
     (h_asset : value.mAsset = .issue iss) (h_not_xrp : iss.isXRP = false)
     (hc : value.IOUCanonical) (h_ev : value.mOffset < s)

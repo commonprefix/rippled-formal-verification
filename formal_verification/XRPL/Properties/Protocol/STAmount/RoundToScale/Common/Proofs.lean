@@ -5,9 +5,9 @@ import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
 
 namespace XRPL.Model.Protocol
 
-/-! # `STAmount.roundToScale` is correctly rounded onto the scale grid
+/-! # `STAmount.roundToExponent` is correctly rounded onto the scale grid
 
-The flagship discrete theorem for the quantization layer: `roundToScale`
+The flagship discrete theorem for the quantization layer: `roundToExponent`
 returns the value rounded onto `10^s·ℤ`, exactly the floor/ceiling per the
 directed modes, and one of the two enclosing grid points for `.to_nearest`
 (faithful rounding; the tie decision is blurred by double rounding through
@@ -161,17 +161,17 @@ private lemma RoundsToRepresentableAt_grid_self (result : STAmount) (truth : ℚ
 
 set_option maxHeartbeats 3200000 in
 -- assembles the full pipeline: guards, reference, sum stage, exact subtraction
-/-- **`roundToScale` is correctly rounded onto the grid `10^s·ℤ`** (faithfully
+/-- **`roundToExponent` is correctly rounded onto the grid `10^s·ℤ`** (faithfully
 for `.to_nearest`): the result is the floor/ceiling of the value at scale `s`
 per the directed mode, or one of the two enclosing grid points for
 `.to_nearest`. Hypotheses: a canonical nonzero IOU value and a scale in
 `[-81, 80]` (below `-81` the 16-digit exponent clamp can flush nonzero
 results; above `80` the reference construction overflows). -/
-theorem STAmount.roundToScale_rounded_proof (value result : STAmount) (s : ℤ)
+theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : ℤ)
     (mode : rounding_mode)
     (hc : value.IOUCanonical)
     (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
-    (hok : STAmount.roundToScale value s mode = .ok result) :
+    (hok : STAmount.roundToExponent value s mode = .ok result) :
     RoundsToRepresentableAt result value.toRat s mode := by
   obtain ⟨iss, ha⟩ : ∃ iss, value.mAsset = .issue iss := by
     rcases h : value.mAsset with iss | m
@@ -193,7 +193,7 @@ theorem STAmount.roundToScale_rounded_proof (value result : STAmount) (s : ℤ)
     have h1 : value.mValue.toNat = 0 := by rw [h0]; rfl
     have := hc.mant_lo
     omega
-  unfold STAmount.roundToScale at hok
+  unfold STAmount.roundToExponent at hok
   rw [if_neg (by rw [h_int]; exact Bool.false_ne_true),
       if_neg (by
         show ¬ value.isZero = true
@@ -239,7 +239,7 @@ theorem STAmount.roundToScale_rounded_proof (value result : STAmount) (s : ℤ)
         exact ⟨sum, rfl, hok⟩
     obtain ⟨k, hk_le, h_sum_asset, h_sum_mv, h_sum_off, h_sum_neg,
         h_tn, h_tz, h_dn, h_up⟩ :=
-      STAmount.roundToScale_sum_spec value s mode iss ha h_not_xrp hc h_ev
+      STAmount.roundToExponent_sum_spec value s mode iss ha h_not_xrp hc h_ev
         (by omega) h_s_hi sum h_sum_ok
     -- Stage B: subtract the reference exactly.
     unfold STAmount.operator_sub at h_sub_ok

@@ -4,13 +4,13 @@
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/ffi/protocol/TerFFI.h>
 #include <test/formal_verification/ffi/protocol/XRPAmountFFI.h>
+#include <test/formal_verification/numbers/helpers/NumberTypes.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/XRPAmount.h>
 
-#include "test/formal_verification/numbers/helpers/NumberTypes.h"
 #include <lean/lean.h>
 
 #include <cstdint>

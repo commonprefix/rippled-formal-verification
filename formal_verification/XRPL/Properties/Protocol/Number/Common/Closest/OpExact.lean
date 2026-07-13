@@ -13,7 +13,7 @@ namespace XRPL.Model.Protocol
 A correctly/faithfully rounded operation returns an exactly representable
 result *exactly*, in every mode: the two grid neighbors of a grid point
 coincide with it. This file packages that for addition (the diff-sign form
-the `roundToScale` proof needs) together with the normalized-representation
+the `roundToExponent` proof needs) together with the normalized-representation
 uniqueness lemmas it rests on. -/
 
 /-- Two normalized mantissa/exponent pairs in the canonical decade denote

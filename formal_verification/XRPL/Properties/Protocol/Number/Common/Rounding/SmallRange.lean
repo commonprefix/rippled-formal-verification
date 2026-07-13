@@ -9,7 +9,7 @@ namespace XRPL.Model.Protocol
 
 `IOUAmount.fromNumber` runs `Number.normalizeToRange cMinValue cMaxValue`, i.e.
 `doNormalize` at the 16-digit mantissa range. For the inputs the
-`STAmount.roundToScale` proof produces — 19-digit normalized mantissas — the
+`STAmount.roundToExponent` proof produces — 19-digit normalized mantissas — the
 pipeline is a 3-step `scaleDown` followed by a cusp-free `doRoundUp`: every
 16-digit mantissa sits far below `maxRep`, so `pushOverflow`, the cusp
 branches, and `capAtMaxRep` are all dead. -/
@@ -502,7 +502,7 @@ theorem normalizeToRange_16_exact (n : Number) (mode : rounding_mode)
   rfl
 
 /-- General per-mode characterization for mantissas up to `2·10^18` (the
-sum-decade the `roundToScale` proof produces). The output mantissa is the
+sum-decade the `roundToExponent` proof produces). The output mantissa is the
 3-digit truncation, optionally bumped per the mode/sign decision. -/
 theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat ≤ 2 * 10 ^ 18)
