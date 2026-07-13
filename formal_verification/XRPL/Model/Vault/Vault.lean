@@ -2,6 +2,8 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 -- Assets are modeled in the vault, but might be abstracted in the future
@@ -15,3 +17,5 @@ structure Vault where
   sharesAsset : Asset -- modeled for now
   interestUnrealized : Number
   lossUnrealized : Number
+
+end XRPL.Model.SingleAssetVault
