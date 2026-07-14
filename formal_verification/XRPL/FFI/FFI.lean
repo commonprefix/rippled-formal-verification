@@ -36,3 +36,5 @@ import XRPL.FFI.tx.TxFFI
 import XRPL.FFI.tx.vault.VaultSetFFI
 
 import XRPL.FFI.Vault.Deposit
+import XRPL.FFI.Vault.Withdraw
+import XRPL.FFI.Vault.Clawback

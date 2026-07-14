@@ -2,8 +2,12 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
+import XRPL.Model.Vault.Helpers
+
+namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+open XRPL.Model.SingleAssetVault
 
 -- if the amount supplied for the withdrawal is specified as an amount of shares, this function
 -- calculates the amount of assets that will be withdrawn from the vault.
@@ -14,7 +18,7 @@ def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrea
 
   let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
-  
+
   if netAssetValue.mantissa_ == 0 then
     return STAmount.ofAsset vault.asset
 
@@ -100,17 +104,18 @@ def computeWithdrawByShares (vault : Vault) (shares : STAmount) : Except String 
       throw e
 
 
+inductive WithdrawAmount where
+  | vaultAssets (amount : STAmount)
+  | vaultShares (amount : STAmount)
+
+
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (vault : Vault) (assets : STAmount) : Except String WithdrawResult := do
-  let result ← if assets.asset == vault.asset then
-      let result ← computeWithdrawByAssets vault assets
-      pure result
-    else if assets.asset == vault.sharesAsset then
-      let result ← computeWithdrawByShares vault assets
-      pure result
-    else
-      throw "Invalid asset for withdrawal"
+def Vault.withdraw (vault : Vault) (assets : WithdrawAmount) : Except String WithdrawResult := do
+  let result ← match assets with
+  | .vaultAssets assets => computeWithdrawByAssets vault assets
+  | .vaultShares shares => computeWithdrawByShares vault shares
+
   if result.error.isSome then
     return ⟨result.error, vault, result.assets', result.sharesRedeemed⟩
 
@@ -137,9 +142,5 @@ def Vault.withdraw (vault : Vault) (assets : STAmount) : Except String WithdrawR
     sharesTotal := ← vault.sharesTotal.operator_sub sharesBurnedNumber .to_nearest,}
 
   return ⟨none, vault', result.assets', result.sharesRedeemed⟩
-  
 
-
-
-
-
+end XRPL.Model.SingleAssetVault
