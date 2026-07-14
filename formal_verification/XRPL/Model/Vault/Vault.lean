@@ -14,3 +14,4 @@ structure Vault where
   sharesTotal : Number -- shares MPT sfOutstandingAmount
   sharesAsset : Asset -- modeled for now
   interestUnrealized : Number
+  lossUnrealized : Number
