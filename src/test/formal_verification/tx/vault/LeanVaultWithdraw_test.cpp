@@ -43,12 +43,14 @@ class LeanVaultWithdraw_test : public LeanSuite
         jtx::Account const& withdrawer,
         Asset const& asset,
         STAmount const& amount,
-        TER expected)
+        TER expected,
+        bool waiveUnrealizedLoss = false)
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
         bool const byShares = amount.asset() != asset;
-        LeanWithdrawResult const withdraw = leanVaultWithdraw(state, amount, byShares);
+        LeanWithdrawResult const withdraw =
+            leanVaultWithdraw(state, amount, byShares, waiveUnrealizedLoss);
 
         env(Vault::withdraw({.depositor = withdrawer, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
@@ -355,6 +357,65 @@ class LeanVaultWithdraw_test : public LeanSuite
             env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
+    // Finding (C++ bug): preclaim computes waiveUnrealizedLoss (Yes for a sole shareholder) but
+    // doApply ignores it and applies the loss, paying the withdrawer less.
+    void
+    testWithdrawWaiveLoss()
+    {
+        using namespace jtx;
+        testcase("withdraw sole shareholder waives unrealized loss");
+
+        Env env(*this);
+        Account const issuer{"issuer"};
+        Account const lender{"lender"};
+        Account const borrower{"borrower"};
+        env.fund(XRP(1'000'000), issuer, lender, borrower);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(lender, asset(10'000'000)));
+        env(trust(borrower, asset(10'000'000)));
+        env.close();
+        env(pay(issuer, lender, asset(1'000'000)));
+        env(pay(issuer, borrower, asset(100'000)));
+        env.close();
+
+        // The lender is the sole shareholder.
+        auto const vaultKeylet = createVault(env, lender, asset.raw());
+        env(Vault::deposit({.depositor = lender, .id = vaultKeylet.key, .amount = asset(5'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // A loan impaired immediately gives the vault a real unrealized loss.
+        auto const brokerID = keylet::loanbroker(lender.id(), env.seq(lender)).key;
+        {
+            using namespace loanBroker;
+            env(set(lender, vaultKeylet.key), kDebtMaximum(asset(33'330).value()));
+            env.close();
+        }
+        auto const sleBroker = env.le(keylet::loanbroker(brokerID));
+        BEAST_EXPECT(sleBroker);
+        auto const loanKeylet = keylet::loan(brokerID, sleBroker->at(sfLoanSequence));
+        {
+            using namespace loan;
+            env(set(borrower, brokerID, 3'333),
+                Sig(sfCounterpartySignature, lender),
+                kPaymentTotal(2),
+                kPaymentInterval(600),
+                Fee(env.current()->fees().base * 2),
+                jtx::Ter(tesSUCCESS));
+            env.close();
+            env(manage(lender, loanKeylet.key, tfLoanImpair), jtx::Ter(tesSUCCESS));
+            env.close();
+        }
+        BEAST_EXPECT(env.le(vaultKeylet)->at(sfLossUnrealized) != Number{0});
+
+        // Sole shareholder withdraws shares: model waives the loss (higher payout), C++ doApply
+        // applies it (lower payout).
+        STAmount const shares{shareIssue(env, vaultKeylet), 100'000'000};
+        compareWithdraw(env, vaultKeylet, lender, asset.raw(), shares, tesSUCCESS, true);
+    }
+
     void
     runTests() override
     {
@@ -407,6 +468,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         // testWithdrawNegativeNav();  // model tecINSUFFICIENT_FUNDS where C++ gives tecINTERNAL
         // testWithdrawOvervaluedShares();  // model rounds the payout down where C++ overpays
         // testWithdrawPrecisionLoss();  // model tecPRECISION_LOSS where C++ hits the invariant
+        // testWithdrawWaiveLoss();  // model waives the loss where C++ applies it
     }
 };
 

@@ -21,7 +21,7 @@ lean_shares_to_assets_withdraw(
 lean_object*
 lean_mk_withdraw_amount(lean_object* amount, uint8_t byShares);
 lean_object*
-lean_vault_withdraw(lean_object* state, lean_object* amount);
+lean_vault_withdraw(lean_object* state, lean_object* amount, uint8_t waiveUnrealizedLoss);
 
 lean_object*
 lean_withdraw_result_assets(lean_object* r);
@@ -103,12 +103,17 @@ public:
 };
 
 inline LeanWithdrawResult
-leanVaultWithdraw(VaultState const& state, STAmount const& amount, bool byShares)
+leanVaultWithdraw(
+    VaultState const& state,
+    STAmount const& amount,
+    bool byShares,
+    bool waiveUnrealizedLoss = false)
 {
     LeanExcept<WithdrawResultFFI> const e = readExcept<WithdrawResultFFI>(leanCall(
         lean_vault_withdraw,
         VaultStateFFI::build(state),
-        WithdrawAmountFFI::build(amount, byShares)));
+        WithdrawAmountFFI::build(amount, byShares),
+        static_cast<std::uint8_t>(waiveUnrealizedLoss ? 1 : 0)));
     if (!e.value)
     {
         LeanWithdrawResult result;
