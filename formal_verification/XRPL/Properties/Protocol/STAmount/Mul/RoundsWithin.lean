@@ -50,8 +50,7 @@ theorem STAmount.operator_mul_rounds_iou (v1 v2 result : STAmount) (asset : Asse
     (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
     (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 asset .to_nearest = .ok result)
-    (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 asset .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
     RoundsWithin result (v1.toRat * v2.toRat) .to_nearest εMulIOUToNearest :=
   STAmount.operator_mul_iou_rel_error v1 v2 result asset iss hv1 hv2 h_xrp ha_iou ha_not_xrp
     hc1 hc2 hok hresult

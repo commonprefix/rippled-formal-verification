@@ -13,9 +13,8 @@ theorem STAmount.operator_mul_repr_native (v1 v2 result : STAmount) (asset : Ass
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hasset : asset.isNative = true)
     (hok : STAmount.multiply v1 v2 asset mode = .ok result) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 0 mode :=
-  RoundsToRepresentableWithin_of_eq result (v1.toRat * v2.toRat) mode
-    (STAmount.operator_mul_native_exact v1 v2 result asset mode hc1 hc2 hn1 hn2 hasset hok)
+    |result.toRat - v1.toRat * v2.toRat| = 0 := by
+    simp [STAmount.operator_mul_native_exact v1 v2 result asset mode hc1 hc2 hn1 hn2 hasset hok]
 
 /-- MPT multiplication is exact. -/
 theorem STAmount.operator_mul_repr_mpt (v1 v2 result : STAmount) (asset : Asset)
@@ -26,9 +25,8 @@ theorem STAmount.operator_mul_repr_mpt (v1 v2 result : STAmount) (asset : Asset)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hbound : v1.mValue.toNat * v2.mValue.toNat ≤ maxMPTokenAmount)
     (hok : STAmount.multiply v1 v2 asset mode = .ok result) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 0 mode :=
-  RoundsToRepresentableWithin_of_eq result (v1.toRat * v2.toRat) mode
-    (STAmount.operator_mul_mpt_exact v1 v2 result asset mode hv1 hv2 hasset hc1 hc2 hn1 hn2 hbound hok)
+    |result.toRat - v1.toRat * v2.toRat| = 0 := by
+    simp [STAmount.operator_mul_mpt_exact v1 v2 result asset mode hv1 hv2 hasset hc1 hc2 hn1 hn2 hbound hok]
 
 /-- **IOU multiplication lands within `1` ULP of `v1 · v2` (`to_nearest`).** -/
 theorem STAmount.operator_mul_repr_iou (v1 v2 result : STAmount) (asset : Asset) (iss : Issue)
@@ -36,7 +34,7 @@ theorem STAmount.operator_mul_repr_iou (v1 v2 result : STAmount) (asset : Asset)
     (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 asset .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .to_nearest :=
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_repr_iou_proof v1 v2 result asset iss hv1 hv2 h_xrp ha_iou ha_not_xrp
     hc1 hc2 hok hresult
 
@@ -49,7 +47,9 @@ theorem STAmount.operator_mul_repr_iou_directed (v1 v2 result : STAmount) (asset
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 mode :=
+  (mode = .downward → result.toRat ≤ v1.toRat * v2.toRat) ∧
+  (mode = .upward → v1.toRat * v2.toRat ≤ result.toRat) ∧
+  |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_repr_iou_directed_proof v1 v2 result asset iss mode hv1 hv2 h_xrp ha_iou
     ha_not_xrp hc1 hc2 hn1 hn2 hok hresult
 
@@ -67,7 +67,7 @@ theorem STAmount.operator_mul_iou_within_1ulp (v1 v2 result : STAmount) (asset :
     (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
-    |result.toRat - v1.toRat * v2.toRat| ≤ 1 * (10 : ℚ) ^ result.exponent :=
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_iou_within_1ulp_proof v1 v2 result asset iss mode hv1 hv2 h_xrp ha_iou
     ha_not_xrp hc1 hc2 hok hresult
 
@@ -82,11 +82,9 @@ theorem STAmount.operator_mul_repr_iou_towards_zero (v1 v2 result : STAmount) (a
     (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 asset .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .towards_zero :=
-  ⟨trivial, by
-    rw [Nat.cast_one, one_mul]
-    exact STAmount.operator_mul_iou_towards_zero_one v1 v2 result asset iss hv1 hv2 h_xrp ha_iou
-      ha_not_xrp hc1 hc2 hok hresult⟩
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
+  STAmount.operator_mul_iou_towards_zero_one v1 v2 result asset iss hv1 hv2 h_xrp ha_iou
+    ha_not_xrp hc1 hc2 hok hresult
 
 /-- **IOU multiplication never increases magnitude (`towards_zero`), any sign.** The
 faithful *directional* guarantee for the magnitude-rounding semantics: `|result| ≤ |v1·v2|`

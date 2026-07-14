@@ -239,7 +239,7 @@ lemma RoundsWithin_trans {A B : Type} [RatValued A] [RatValued B]
 modes. `k = 1` is the achievable target for IOU arithmetic, the relaxed
 `RoundsToRepresentable` that survives double-rounding. -/
 def STAmount.RoundsToRepresentableWithin
-    (result : STAmount) (truth : ℚ) (k : ℕ) (mode : rounding_mode) : Prop :=
+    (result : STAmount) (truth : ℚ) (mode : rounding_mode) (k : ℕ) : Prop :=
   (match mode with
    | .downward => result.toRat ≤ truth
    | .upward   => truth ≤ result.toRat
@@ -248,7 +248,7 @@ def STAmount.RoundsToRepresentableWithin
 
 /-- An exact result lands within `0` ULP of `truth` in every mode. -/
 lemma RoundsToRepresentableWithin_of_eq (result : STAmount) (truth : ℚ) (mode : rounding_mode)
-    (h : result.toRat = truth) : STAmount.RoundsToRepresentableWithin result truth 0 mode := by
+    (h : result.toRat = truth) : STAmount.RoundsToRepresentableWithin result truth mode 0 := by
   unfold STAmount.RoundsToRepresentableWithin
   refine ⟨?_, ?_⟩
   · cases mode <;> simp [h]
@@ -303,7 +303,7 @@ lemma STAmount.RoundsToRepresentableWithin_of_double_round
     (hop : |r.toRat - truth| ≤ |truth| * ε)
     (hε0 : 0 ≤ ε) (hεle : ε ≤ (10 : ℚ) ^ (-17 : ℤ))
     (hk : csnap + 1 / 5 ≤ (k : ℚ)) :
-    STAmount.RoundsToRepresentableWithin result truth k mode :=
+    STAmount.RoundsToRepresentableWithin result truth mode k :=
   ⟨h_dir, STAmount.double_round_abs_le result r truth k csnap ε hsnap hr_ulp hop hε0 hεle hk⟩
 
 /-- Extract the magnitude bound `|result − truth| ≤ |truth|·ε` from `RoundsWithin` in
