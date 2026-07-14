@@ -23,7 +23,8 @@ def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrea
   let sharesNumber ← shares.toNumber .to_nearest
   let NAVShares ← netAssetValue.operator_mul sharesNumber .to_nearest
   let assetsNumber ← NAVShares.operator_div vault.sharesTotal .to_nearest
-  let assets ← STAmount.ofNumber vault.asset assetsNumber .to_nearest
+  -- (waiting the C++ fix) round the payout down so a withdrawer never receives more than the shares are worth
+  let assets ← STAmount.ofNumber vault.asset assetsNumber .downward
   return assets
 
 

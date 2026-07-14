@@ -379,6 +379,38 @@ class LeanVaultDeposit_test : public LeanSuite
             Number{9'999'999'999'999'999LL, 80}, Number{9'999'999'999'999'999LL, 80}, tefEXCEPTION);
     }
 
+    // Finding (C++ bug): a deposit charges round-to-nearest, so a deposit into a vault
+    // can be undercharged, overvaluing the new shares and diluting existing holders.
+    void
+    testDepositOvervaluedShares()
+    {
+        using namespace jtx;
+        testcase("deposit overvalued shares");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const bob{"bob"};
+        env.fund(XRP(1'000'000), vaultOwner, bob);
+        env.close();
+
+        auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
+        // The owner deposits 3 drops (3 shares) then donates 2 drops, so 3 shares now back 5 drops
+        // (1 share = 1.667 drops). bob depositing 4 drops gets 2 shares. C++ charges round(3.33) =
+        // 3, the model charges ceil = 4.
+        env(Vault::deposit({.depositor = vaultOwner, .id = vaultKeylet.key, .amount = drops(3)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(Vault::deposit(
+                {.depositor = vaultOwner,
+                 .id = vaultKeylet.key,
+                 .amount = drops(2),
+                 .flags = tfVaultDonate}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        compareDeposit(env, vaultKeylet, bob, xrpIssue(), drops(4), tesSUCCESS);
+    }
+
     void
     runTests() override
     {
@@ -451,6 +483,7 @@ class LeanVaultDeposit_test : public LeanSuite
         // testDepositNegativeAssetsTotal(); // model tesSUCCESS where C++ gives tecINTERNAL
         // testDepositArithmeticOverflow();  // model raises where C++ gives tefEXCEPTION
         // testDepositTrustLineScale();      // model tesSUCCESS where C++ gives tecPRECISION_LOSS
+        // testDepositOvervaluedShares();
     }
 };
 

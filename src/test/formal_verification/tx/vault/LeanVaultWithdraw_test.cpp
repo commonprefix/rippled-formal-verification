@@ -288,6 +288,39 @@ class LeanVaultWithdraw_test : public LeanSuite
             Number{-1'000}, Number{-1'000}, 1'000'000'000, 500'000'000, tecINTERNAL);
     }
 
+    // Finding (C++ bug): a share withdrawal pays round-to-nearest, so a single-share withdraw from
+    // a vault pays more than the share is worth.
+    void
+    testWithdrawOvervaluedShares()
+    {
+        using namespace jtx;
+        testcase("withdraw overvalued shares");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const bob{"bob"};
+        env.fund(XRP(1'000'000), owner, bob);
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, xrpIssue());
+        // bob deposits 3 drops (3 shares) and the owner donates 2 drops, so 3 shares now back
+        // 5 drops (1 share = 1.667 drops). A single-share withdraw pays round(1.667) = 2 in C++,
+        // 1 in model.
+        env(Vault::deposit({.depositor = bob, .id = vaultKeylet.key, .amount = drops(3)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(Vault::deposit(
+                {.depositor = owner,
+                 .id = vaultKeylet.key,
+                 .amount = drops(2),
+                 .flags = tfVaultDonate}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        STAmount const oneShare{shareIssue(env, vaultKeylet), 1};
+        compareWithdraw(env, vaultKeylet, bob, xrpIssue(), oneShare, tesSUCCESS);
+    }
+
     void
     runTests() override
     {
@@ -338,6 +371,7 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // Known discrepancies: each fails until the model is fixed
         // testWithdrawNegativeNav();  // model tecINSUFFICIENT_FUNDS where C++ gives tecINTERNAL
+        // testWithdrawOvervaluedShares();
     }
 };
 
