@@ -6,6 +6,7 @@ import XRPL.FFI.CommonFFI
 
 open XRPL.FFI (encodeAsset encodeSTAmount encodeNumber decodeMode)
 open XRPL.Model.Protocol (Number STAmount Asset)
+open XRPL.Model.SingleAssetVault
 
 -- status: 0 = ok, 1 = threw. code: 0 = rounded (STAmount fields valid), else the rejection TER.
 -- Only 8-byte and 1-byte fields so the C++ decode offsets are predictable
