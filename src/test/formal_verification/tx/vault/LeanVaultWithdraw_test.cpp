@@ -321,6 +321,40 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, bob, xrpIssue(), oneShare, tesSUCCESS);
     }
 
+    // Finding (C++ bug): a withdrawal too small to debit assetsTotal (the debit rounds back to the
+    // old value) still pays the withdrawer. C++ only catches it with the global invariant, where
+    // it should reject with tecPRECISION_LOSS.
+    void
+    testWithdrawPrecisionLoss()
+    {
+        using namespace jtx;
+        testcase("withdraw below assetsTotal precision");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        // Move assetsTotal to ~1e10 (ULP 1e-5): deposit 9,999,999,999.999999, then 0.00001.
+        env(Vault::deposit(
+                {.depositor = issuer,
+                 .id = vaultKeylet.key,
+                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(Vault::deposit(
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, -5})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Withdraw 1e-6, below the vault's 1e-5 ULP: the payout cannot debit assetsTotal.
+        compareWithdraw(
+            env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
+    }
+
     void
     runTests() override
     {
@@ -371,7 +405,8 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // Known discrepancies: each fails until the model is fixed
         // testWithdrawNegativeNav();  // model tecINSUFFICIENT_FUNDS where C++ gives tecINTERNAL
-        // testWithdrawOvervaluedShares();
+        // testWithdrawOvervaluedShares();  // model rounds the payout down where C++ overpays
+        // testWithdrawPrecisionLoss();  // model tecPRECISION_LOSS where C++ hits the invariant
     }
 };
 

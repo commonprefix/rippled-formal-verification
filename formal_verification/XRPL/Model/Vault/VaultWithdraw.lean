@@ -130,11 +130,20 @@ def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) : Except String Wit
     return ⟨none, vault', assets', result.sharesRedeemed⟩
 
   let sharesBurnedNumber ← result.sharesRedeemed.toNumber .to_nearest
+  let assetsTotal' ← vault.assetsTotal.operator_sub assetsNumber' .to_nearest
+
+  -- (waiting the C++ fix) reject a payout too small to reduce the stored assetsTotal
+  let assetsTotalRounded ← STAmount.ofNumber vault.asset vault.assetsTotal .to_nearest
+  let assetsTotalRounded' ← STAmount.ofNumber vault.asset assetsTotal' .to_nearest
+  if assetsNumber'.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
+    return ⟨.some .tecPRECISION_LOSS, vault, result.assets', result.sharesRedeemed⟩
+
   let vault' := {vault with
     assetsAvailable := ← vault.assetsAvailable.operator_sub assetsNumber' .to_nearest,
-    assetsTotal := ← vault.assetsTotal.operator_sub assetsNumber' .to_nearest,
+    assetsTotal := assetsTotal',
     sharesTotal := ← vault.sharesTotal.operator_sub sharesBurnedNumber .to_nearest,}
 
   return ⟨none, vault', result.assets', result.sharesRedeemed⟩
+
 
 end XRPL.Model.SingleAssetVault
