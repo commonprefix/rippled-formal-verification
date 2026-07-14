@@ -19,6 +19,8 @@ lean_shares_to_assets_withdraw(
     lean_object* shares,
     uint8_t waiveUnrealizedLoss);
 lean_object*
+lean_mk_withdraw_amount(lean_object* amount, uint8_t byShares);
+lean_object*
 lean_vault_withdraw(lean_object* state, lean_object* amount);
 
 lean_object*
@@ -32,6 +34,21 @@ lean_withdraw_result_error(lean_object* r);
 }
 
 namespace xrpl::test::formal_verification {
+
+class WithdrawAmountFFI : public LeanObjectFFI
+{
+public:
+    using LeanObjectFFI::LeanObjectFFI;
+
+    static WithdrawAmountFFI
+    build(STAmount const& amount, bool byShares)
+    {
+        return WithdrawAmountFFI(leanCall(
+            lean_mk_withdraw_amount,
+            STAmountFFI::build(amount),
+            static_cast<std::uint8_t>(byShares ? 1 : 0)));
+    }
+};
 
 // Shares-to-assets conversion result. The assets are valid only when !threw.
 struct LeanSharesToAssetsResult
@@ -86,10 +103,12 @@ public:
 };
 
 inline LeanWithdrawResult
-leanVaultWithdraw(VaultState const& state, STAmount const& amount)
+leanVaultWithdraw(VaultState const& state, STAmount const& amount, bool byShares)
 {
-    LeanExcept<WithdrawResultFFI> const e = readExcept<WithdrawResultFFI>(
-        leanCall(lean_vault_withdraw, VaultStateFFI::build(state), STAmountFFI::build(amount)));
+    LeanExcept<WithdrawResultFFI> const e = readExcept<WithdrawResultFFI>(leanCall(
+        lean_vault_withdraw,
+        VaultStateFFI::build(state),
+        WithdrawAmountFFI::build(amount, byShares)));
     if (!e.value)
     {
         LeanWithdrawResult result;

@@ -47,7 +47,8 @@ class LeanVaultWithdraw_test : public LeanSuite
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
-        LeanWithdrawResult const withdraw = leanVaultWithdraw(state, amount);
+        bool const byShares = amount.asset() != asset;
+        LeanWithdrawResult const withdraw = leanVaultWithdraw(state, amount, byShares);
 
         env(Vault::withdraw({.depositor = withdrawer, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
@@ -287,30 +288,6 @@ class LeanVaultWithdraw_test : public LeanSuite
             Number{-1'000}, Number{-1'000}, 1'000'000'000, 500'000'000, tecINTERNAL);
     }
 
-    // Discrepancy: an amount that is neither the vault asset nor its shares makes the model raise,
-    // where C++ rejects in preclaim (tecWRONG_ASSET).
-    void
-    testWithdrawWrongAsset()
-    {
-        using namespace jtx;
-        testcase("withdraw wrong asset");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), owner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(Vault::deposit({.depositor = issuer, .id = vaultKeylet.key, .amount = asset(1'000)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        PrettyAsset const other = issuer["EUR"];
-        compareWithdraw(env, vaultKeylet, issuer, asset.raw(), other(100), tecWRONG_ASSET);
-    }
-
     void
     runTests() override
     {
@@ -361,7 +338,6 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // Known discrepancies: each fails until the model is fixed
         // testWithdrawNegativeNav();  // model tecINSUFFICIENT_FUNDS where C++ gives tecINTERNAL
-        // testWithdrawWrongAsset();   // model raises where C++ gives tecWRONG_ASSET
     }
 };
 

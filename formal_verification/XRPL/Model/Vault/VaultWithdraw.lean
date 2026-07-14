@@ -98,17 +98,17 @@ def computeWithdrawByShares (vault : Vault) (shares : STAmount) : Except String 
       throw e
 
 
+-- withdrawal amount, either as vault assets or as vault shares
+inductive WithdrawAmount where
+  | vaultAssets (amount : STAmount)
+  | vaultShares (amount : STAmount)
+
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (vault : Vault) (assets : STAmount) : Except String WithdrawResult := do
-  let result ← if assets.asset == vault.asset then
-      let result ← computeWithdrawByAssets vault assets
-      pure result
-    else if assets.asset == vault.sharesAsset then
-      let result ← computeWithdrawByShares vault assets
-      pure result
-    else
-      throw "Invalid asset for withdrawal"
+def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) : Except String WithdrawResult := do
+  let result ← match amount with
+    | .vaultAssets assets => computeWithdrawByAssets vault assets
+    | .vaultShares shares => computeWithdrawByShares vault shares
   if result.error.isSome then
     return ⟨result.error, vault, result.assets', result.sharesRedeemed⟩
 
