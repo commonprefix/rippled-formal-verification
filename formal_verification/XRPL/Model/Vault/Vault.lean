@@ -18,4 +18,7 @@ structure Vault where
   interestUnrealized : Number
   lossUnrealized : Number
 
+-- Detect an overflow exception surfaced as a String error from arithmetic ops.
+def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
+
 end XRPL.Model.SingleAssetVault

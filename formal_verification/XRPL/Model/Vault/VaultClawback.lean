@@ -3,18 +3,16 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Vault.VaultWithdraw
-import XRPL.Model.Vault.Helpers
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 inductive CanClawbackVaultSharesResult where
   | error (error : TER)
-  | assets (amount : STAmount) 
+  | assets (amount : STAmount)
 
-inductive AmountClawback where
+inductive ClawbackAmount where
   | vaultShares
   | vaultAssets (amount : STAmount)
 
@@ -35,9 +33,9 @@ def canClawbackVaultShares (vault : Vault) : Except String CanClawbackVaultShare
   return .assets (← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest)
 
 
-def computeClawback (vault : Vault) (amount : AmountClawback) : Except String ComputeClawbackResult := do
+def computeClawback (vault : Vault) (amount : ClawbackAmount) : Except String ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.ofAsset vault.asset, STAmount.ofAsset vault.sharesAsset⟩
-  let amount ← match amount with 
+  let amount ← match amount with
   | .vaultShares => pure (← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest)
   | .vaultAssets amount => pure amount
   if amount.negative then
@@ -64,7 +62,7 @@ def computeClawback (vault : Vault) (amount : AmountClawback) : Except String Co
       throw e
 
 
-def clawback (vault : Vault) (amount : AmountClawback) : Except String ClawbackResult := do
+def clawback (vault : Vault) (amount : ClawbackAmount) : Except String ClawbackResult := do
   let result ← computeClawback vault amount
   if result.error.isSome then
     return {result with vault' := vault}

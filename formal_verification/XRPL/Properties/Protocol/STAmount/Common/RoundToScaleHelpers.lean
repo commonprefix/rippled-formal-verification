@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
 namespace XRPL.Model.Protocol
 
-/-! # Operator-level helpers for the `roundToScale` discrete theorem
+/-! # Operator-level helpers for the `roundToExponent` discrete theorem
 
 `ofIOUAmount` on in-range 16-digit IOUAmounts, `operator_neg`, and the value
 forms of the canonical records. -/

@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
 namespace XRPL.Model.Protocol
 
-/-! # Plumbing for the `roundToScale` discrete theorem
+/-! # Plumbing for the `roundToExponent` discrete theorem
 
 The IOU pipeline (`STAmount.iou` → `IOUAmount.normalize` → `from_rep` at
 `largeRange` → `normalizeToRange` at the 16-digit range → exponent clamp)

@@ -2,12 +2,10 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
-import XRPL.Model.Vault.Helpers
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 -- if the amount supplied for the withdrawal is specified as an amount of shares, this function
 -- calculates the amount of assets that will be withdrawn from the vault.
@@ -63,10 +61,6 @@ structure ComputeWithdrawResult where
   sharesRedeemed : STAmount
 
 
--- temporary fix to detect overflow exception on arithmetic operations.
--- todo: replace with actual exception handling
-def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
-
 
 def computeWithdrawByAssets (vault : Vault) (assets : STAmount) : Except String ComputeWithdrawResult := do
   try
@@ -104,18 +98,17 @@ def computeWithdrawByShares (vault : Vault) (shares : STAmount) : Except String 
       throw e
 
 
+-- withdrawal amount, either as vault assets or as vault shares
 inductive WithdrawAmount where
   | vaultAssets (amount : STAmount)
   | vaultShares (amount : STAmount)
 
-
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (vault : Vault) (assets : WithdrawAmount) : Except String WithdrawResult := do
-  let result ← match assets with
-  | .vaultAssets assets => computeWithdrawByAssets vault assets
-  | .vaultShares shares => computeWithdrawByShares vault shares
-
+def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) : Except String WithdrawResult := do
+  let result ← match amount with
+    | .vaultAssets assets => computeWithdrawByAssets vault assets
+    | .vaultShares shares => computeWithdrawByShares vault shares
   if result.error.isSome then
     return ⟨result.error, vault, result.assets', result.sharesRedeemed⟩
 

@@ -38,6 +38,22 @@ lean_vault_state_build(
     lean_object* sharesAsset,
     lean_object* interestUnrealized,
     lean_object* lossUnrealized);
+lean_object*
+lean_vault_state_assets_total(lean_object* vs);
+lean_object*
+lean_vault_state_assets_available(lean_object* vs);
+lean_object*
+lean_vault_state_asset(lean_object* vs);
+uint8_t
+lean_vault_state_scale(lean_object* vs);
+lean_object*
+lean_vault_state_shares_total(lean_object* vs);
+lean_object*
+lean_vault_state_shares_asset(lean_object* vs);
+lean_object*
+lean_vault_state_interest_unrealized(lean_object* vs);
+lean_object*
+lean_vault_state_loss_unrealized(lean_object* vs);
 }
 
 class VaultStateFFI : public LeanObjectFFI
@@ -60,6 +76,22 @@ public:
             NumberFFI::build(state.interestUnrealized),
             NumberFFI::build(state.lossUnrealized)));
     }
+
+    VaultState
+    read() const
+    {
+        return VaultState{
+            .assetsTotal = leanGetObj<NumberFFI>(lean_vault_state_assets_total),
+            .assetsAvailable = leanGetObj<NumberFFI>(lean_vault_state_assets_available),
+            .asset = leanGetObj<AssetFFI>(lean_vault_state_asset),
+            .scale = leanGet<std::uint8_t>(lean_vault_state_scale),
+            .sharesTotal = leanGetObj<NumberFFI>(lean_vault_state_shares_total),
+            .sharesAsset = leanGetObj<AssetFFI>(lean_vault_state_shares_asset),
+            .interestUnrealized = leanGetObj<NumberFFI>(lean_vault_state_interest_unrealized),
+            .lossUnrealized = leanGetObj<NumberFFI>(lean_vault_state_loss_unrealized)};
+    }
 };
+
+static_assert(LeanWrapper<VaultStateFFI>);
 
 }  // namespace xrpl::test::formal_verification
