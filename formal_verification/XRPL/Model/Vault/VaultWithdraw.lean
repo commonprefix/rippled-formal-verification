@@ -3,6 +3,8 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 -- if the amount supplied for the withdrawal is specified as an amount of shares, this function
@@ -133,3 +135,5 @@ def Vault.withdraw (vault : Vault) (assets : STAmount) : Except String WithdrawR
     sharesTotal := ← vault.sharesTotal.operator_sub sharesBurnedNumber .to_nearest,}
 
   return ⟨none, vault', result.assets', result.sharesRedeemed⟩
+
+end XRPL.Model.SingleAssetVault

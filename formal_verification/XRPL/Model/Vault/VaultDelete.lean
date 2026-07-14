@@ -2,6 +2,8 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 -- Vault related checks from VaultDelete::preclaim, in C++ order.
@@ -14,3 +16,5 @@ def Vault.canVaultDelete (vault : Vault) : TER :=
     .tecHAS_OBLIGATIONS
   else
     .tesSUCCESS
+
+end XRPL.Model.SingleAssetVault

@@ -3,6 +3,8 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 -- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
@@ -102,3 +104,5 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
   return { result with vault' := vault', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }
+
+end XRPL.Model.SingleAssetVault

@@ -2,6 +2,7 @@ import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Model.Protocol.STAmount
 
 open XRPL.Model.Protocol (STAmount)
+open XRPL.Model.SingleAssetVault
 
 @[export lean_shares_to_assets_withdraw]
 def lean_shares_to_assets_withdraw

@@ -2,6 +2,7 @@ import XRPL.Model.Vault.VaultDeposit
 import XRPL.Model.Protocol.STAmount
 
 open XRPL.Model.Protocol (STAmount)
+open XRPL.Model.SingleAssetVault
 
 @[export lean_rounded_deposit_amount]
 def lean_rounded_deposit_amount (vault : Vault) (amountDeposit : STAmount)

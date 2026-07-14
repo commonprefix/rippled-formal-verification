@@ -3,6 +3,7 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Asset
 
 open XRPL.Model.Protocol (Number Asset)
+open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_state_build]
 def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number) (asset : Asset) (scale : UInt8)

@@ -2,6 +2,8 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 def Vault.canVaultSet (vault : Vault) (assetsMaximum : Number) : TER :=
@@ -10,3 +12,5 @@ def Vault.canVaultSet (vault : Vault) (assetsMaximum : Number) : TER :=
     .tecLIMIT_EXCEEDED
   else
     .tesSUCCESS
+
+end XRPL.Model.SingleAssetVault

@@ -2,6 +2,8 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 
+namespace XRPL.Model.SingleAssetVault
+
 open XRPL.Model.Protocol
 
 -- Assets are modeled in the vault, but might be abstracted in the future
@@ -18,3 +20,5 @@ structure Vault where
 
 -- Detect an overflow exception surfaced as a String error from arithmetic ops.
 def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
+
+end XRPL.Model.SingleAssetVault
