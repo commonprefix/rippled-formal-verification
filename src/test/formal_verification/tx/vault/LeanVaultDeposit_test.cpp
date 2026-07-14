@@ -483,7 +483,7 @@ class LeanVaultDeposit_test : public LeanSuite
         // testDepositNegativeAssetsTotal(); // model tesSUCCESS where C++ gives tecINTERNAL
         // testDepositArithmeticOverflow();  // model raises where C++ gives tefEXCEPTION
         // testDepositTrustLineScale();      // model tesSUCCESS where C++ gives tecPRECISION_LOSS
-        // testDepositOvervaluedShares();
+        // testDepositOvervaluedShares();  // model rounds the charge up where C++ undercharges
     }
 };
 
