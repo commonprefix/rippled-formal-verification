@@ -15,8 +15,9 @@ def lean_mk_withdraw_amount (amount : STAmount) (byShares : UInt8) : WithdrawAmo
   if byShares != 0 then .vaultShares amount else .vaultAssets amount
 
 @[export lean_vault_withdraw]
-def lean_vault_withdraw (vault : Vault) (amount : WithdrawAmount) : Except String WithdrawResult :=
-  vault.withdraw amount
+def lean_vault_withdraw
+    (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : UInt8) : Except String WithdrawResult :=
+  vault.withdraw amount (waiveUnrealizedLoss != 0)
 
 @[export lean_withdraw_result_assets]
 def lean_withdraw_result_assets (r : WithdrawResult) : STAmount := r.assets'

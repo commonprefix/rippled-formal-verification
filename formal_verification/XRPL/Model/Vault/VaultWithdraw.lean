@@ -63,17 +63,15 @@ structure ComputeWithdrawResult where
 
 
 
-def computeWithdrawByAssets (vault : Vault) (assets : STAmount) : Except String ComputeWithdrawResult := do
+def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
     let result : ComputeWithdrawResult := ⟨none, assets, STAmount.ofAsset vault.sharesAsset⟩
-    -- waiveUnrealizedLoss = false by default value, defined in header file
     -- truncateShares = false in fn call
-    let shares ← assetsToSharesWithdraw vault assets false false
+    let shares ← assetsToSharesWithdraw vault assets false waiveUnrealizedLoss
     if shares.isZero then
       return {result with error := some .tecPRECISION_LOSS}
 
-    -- truncateShares = false in fn call
-    let assets' ← Vault.sharesToAssetsWithdraw vault shares false
+    let assets' ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
     return {result with
       assets' := assets',
       sharesRedeemed := shares}
@@ -84,11 +82,10 @@ def computeWithdrawByAssets (vault : Vault) (assets : STAmount) : Except String 
       throw e
 
 
-def computeWithdrawByShares (vault : Vault) (shares : STAmount) : Except String ComputeWithdrawResult := do
+def computeWithdrawByShares (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
     let result : ComputeWithdrawResult := ⟨none, STAmount.ofAsset vault.asset, shares⟩
-    -- waiveUnrealizedLoss = false by default value, defined in header file
-    let assets ← Vault.sharesToAssetsWithdraw vault shares false
+    let assets ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
     return {result with
       assets' := assets,
       sharesRedeemed := shares}
@@ -106,10 +103,10 @@ inductive WithdrawAmount where
 
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) : Except String WithdrawResult := do
+def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except String WithdrawResult := do
   let result ← match amount with
-    | .vaultAssets assets => computeWithdrawByAssets vault assets
-    | .vaultShares shares => computeWithdrawByShares vault shares
+    | .vaultAssets assets => computeWithdrawByAssets vault assets waiveUnrealizedLoss
+    | .vaultShares shares => computeWithdrawByShares vault shares waiveUnrealizedLoss
   if result.error.isSome then
     return ⟨result.error, vault, result.assets', result.sharesRedeemed⟩
 
