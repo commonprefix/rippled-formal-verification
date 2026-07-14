@@ -74,10 +74,18 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
             static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
-        BEAST_EXPECTS(deposit.vault.assetsTotal == cppAssetsTotal, "assetsTotal mismatch");
         BEAST_EXPECTS(
-            deposit.vault.assetsAvailable == cppAssetsAvailable, "assetsAvailable mismatch");
-        BEAST_EXPECTS(deposit.vault.sharesTotal == cppSharesTotal, "sharesTotal mismatch");
+            deposit.vault.assetsTotal == cppAssetsTotal,
+            "assetsTotal lean=" + to_string(deposit.vault.assetsTotal) +
+                " cpp=" + to_string(cppAssetsTotal));
+        BEAST_EXPECTS(
+            deposit.vault.assetsAvailable == cppAssetsAvailable,
+            "assetsAvailable lean=" + to_string(deposit.vault.assetsAvailable) +
+                " cpp=" + to_string(cppAssetsAvailable));
+        BEAST_EXPECTS(
+            deposit.vault.sharesTotal == cppSharesTotal,
+            "sharesTotal lean=" + to_string(deposit.vault.sharesTotal) +
+                " cpp=" + to_string(cppSharesTotal));
     }
 
     void

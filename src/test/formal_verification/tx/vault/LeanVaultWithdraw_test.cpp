@@ -76,10 +76,18 @@ class LeanVaultWithdraw_test : public LeanSuite
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
             static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
-        BEAST_EXPECTS(withdraw.vault.assetsTotal == cppAssetsTotal, "assetsTotal mismatch");
         BEAST_EXPECTS(
-            withdraw.vault.assetsAvailable == cppAssetsAvailable, "assetsAvailable mismatch");
-        BEAST_EXPECTS(withdraw.vault.sharesTotal == cppSharesTotal, "sharesTotal mismatch");
+            withdraw.vault.assetsTotal == cppAssetsTotal,
+            "assetsTotal lean=" + to_string(withdraw.vault.assetsTotal) +
+                " cpp=" + to_string(cppAssetsTotal));
+        BEAST_EXPECTS(
+            withdraw.vault.assetsAvailable == cppAssetsAvailable,
+            "assetsAvailable lean=" + to_string(withdraw.vault.assetsAvailable) +
+                " cpp=" + to_string(cppAssetsAvailable));
+        BEAST_EXPECTS(
+            withdraw.vault.sharesTotal == cppSharesTotal,
+            "sharesTotal lean=" + to_string(withdraw.vault.sharesTotal) +
+                " cpp=" + to_string(cppSharesTotal));
     }
 
     // Seed the vault with a deposit by `holder` (who thereby gets shares), then withdraw `amount`.
