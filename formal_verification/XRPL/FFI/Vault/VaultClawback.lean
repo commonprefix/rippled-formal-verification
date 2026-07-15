@@ -8,6 +8,10 @@ open XRPL.Model.SingleAssetVault
 def lean_vault_clawback (vault : Vault) (assets : STAmount) : Except String ClawbackResult :=
   vault.clawback assets
 
+@[export lean_vault_burn_shares]
+def lean_vault_burn_shares (vault : Vault) (sharesDestroyed : STAmount) : Except String Vault :=
+  vault.burnShares sharesDestroyed
+
 @[export lean_clawback_result_assets]
 def lean_clawback_result_assets (r : ClawbackResult) : STAmount := r.assetsRecovered
 @[export lean_clawback_result_shares]
