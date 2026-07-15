@@ -12,10 +12,6 @@ inductive CanClawbackVaultSharesResult where
   | error (error : TER)
   | assets (amount : STAmount)
 
-inductive ClawbackAmount where
-  | vaultShares
-  | vaultAssets (amount : STAmount)
-
 structure ComputeClawbackResult where
   error : Option TER
   assetsRecovered : STAmount
@@ -27,21 +23,27 @@ structure ClawbackResult where
   assetsRecovered : STAmount
   sharesDestroyed : STAmount
 
-def canClawbackVaultShares (vault : Vault) : Except String CanClawbackVaultSharesResult := do
+def Vault.canClawbackVaultShares (vault : Vault) : Except String CanClawbackVaultSharesResult := do
   if vault.sharesTotal.mantissa_ == 0 || (vault.assetsTotal.mantissa_ != 0 || vault.assetsAvailable.mantissa_ != 0) then do
     return .error .tecNO_PERMISSION
   return .assets (← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest)
 
 
-def computeClawback (vault : Vault) (amount : ClawbackAmount) : Except String ComputeClawbackResult := do
+def Vault.burnShares (vault : Vault) (sharesDestroyed : STAmount) : Except String Vault := do
+  let sharesDestroyedNumber ← sharesDestroyed.toNumber .to_nearest
+  let vault' := {
+    vault with
+      sharesTotal := ← vault.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest
+  }
+  return vault'
+
+
+def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.ofAsset vault.asset, STAmount.ofAsset vault.sharesAsset⟩
-  let amount ← match amount with
-  | .vaultShares => pure (← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest)
-  | .vaultAssets amount => pure amount
-  if amount.negative then
+  if assets.negative then
     return {result with error := some .tecINTERNAL}
   try
-    let sharesDestroyed ← assetsToSharesWithdraw vault amount false false
+    let sharesDestroyed ← assetsToSharesWithdraw vault assets false false
     let assetsRecovered ← Vault.sharesToAssetsWithdraw vault sharesDestroyed false
 
     let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
@@ -62,8 +64,8 @@ def computeClawback (vault : Vault) (amount : ClawbackAmount) : Except String Co
       throw e
 
 
-def clawback (vault : Vault) (amount : ClawbackAmount) : Except String ClawbackResult := do
-  let result ← computeClawback vault amount
+def Vault.clawback (vault : Vault) (assets : STAmount) : Except String ClawbackResult := do
+  let result ← computeClawback vault assets
   if result.error.isSome then
     return {result with vault' := vault}
 
