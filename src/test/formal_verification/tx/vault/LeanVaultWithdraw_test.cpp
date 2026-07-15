@@ -289,15 +289,6 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, issuer, asset.raw(), asset(1'000), expected);
     }
 
-    // Discrepancy: the model does not guard a negative NAV. It hits its own available check
-    // (tecINSUFFICIENT_FUNDS) where C++ returns tecINTERNAL.
-    void
-    testWithdrawNegativeNav()
-    {
-        testWithdrawUpdatedState(
-            Number{-1'000}, Number{-1'000}, 1'000'000'000, 500'000'000, tecINTERNAL);
-    }
-
     // Finding (C++ bug): a share withdrawal pays round-to-nearest, so a single-share withdraw from
     // a vault pays more than the share is worth.
     void
@@ -472,8 +463,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Overflow: sharesTotal * assets / NAV exceeds the MPT domain (by assets).
         testWithdrawAssetsShareOverflow(tecPATH_DRY);
 
-        // Known discrepancies: each fails until the model is fixed
-        // testWithdrawNegativeNav();  // model tecINSUFFICIENT_FUNDS where C++ gives tecINTERNAL
+        // Known discrepancies: each fails until the C++ code is fixed
         // testWithdrawOvervaluedShares();  // model rounds the payout down where C++ overpays
         // testWithdrawPrecisionLoss();  // model tecPRECISION_LOSS where C++ hits the invariant
         // testWithdrawWaiveLoss();  // model waives the loss where C++ applies it

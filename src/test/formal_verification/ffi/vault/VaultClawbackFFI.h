@@ -14,9 +14,9 @@
 
 extern "C" {
 lean_object*
-lean_mk_clawback_amount(lean_object* amount, uint8_t byShares);
+lean_vault_clawback(lean_object* state, lean_object* assets);
 lean_object*
-lean_vault_clawback(lean_object* state, lean_object* amount);
+lean_vault_burn_shares(lean_object* state, lean_object* sharesDestroyed);
 lean_object*
 lean_can_clawback_vault_shares(lean_object* state);
 
@@ -36,21 +36,6 @@ lean_can_clawback_result_code(lean_object* r);
 }
 
 namespace xrpl::test::formal_verification {
-
-class ClawbackAmountFFI : public LeanObjectFFI
-{
-public:
-    using LeanObjectFFI::LeanObjectFFI;
-
-    static ClawbackAmountFFI
-    build(STAmount const& amount, bool byShares)
-    {
-        return ClawbackAmountFFI(leanCall(
-            lean_mk_clawback_amount,
-            STAmountFFI::build(amount),
-            static_cast<std::uint8_t>(byShares ? 1 : 0)));
-    }
-};
 
 struct LeanClawbackResult
 {
@@ -82,12 +67,10 @@ public:
 };
 
 inline LeanClawbackResult
-leanVaultClawback(VaultState const& state, STAmount const& amount, bool byShares)
+leanVaultClawback(VaultState const& state, STAmount const& assets)
 {
-    LeanExcept<ClawbackResultFFI> const e = readExcept<ClawbackResultFFI>(leanCall(
-        lean_vault_clawback,
-        VaultStateFFI::build(state),
-        ClawbackAmountFFI::build(amount, byShares)));
+    LeanExcept<ClawbackResultFFI> const e = readExcept<ClawbackResultFFI>(
+        leanCall(lean_vault_clawback, VaultStateFFI::build(state), STAmountFFI::build(assets)));
     if (!e.value)
     {
         LeanClawbackResult result;
@@ -95,6 +78,27 @@ leanVaultClawback(VaultState const& state, STAmount const& amount, bool byShares
         return result;
     }
     return e.value->read();
+}
+
+// Owner-burn: destroy `sharesDestroyed` shares, returning the new vault state (sharesTotal only).
+struct LeanBurnResult
+{
+    bool threw{};
+    VaultState vault;
+};
+
+inline LeanBurnResult
+leanBurnShares(VaultState const& state, STAmount const& sharesDestroyed)
+{
+    LeanExcept<VaultStateFFI> const e = readExcept<VaultStateFFI>(leanCall(
+        lean_vault_burn_shares, VaultStateFFI::build(state), STAmountFFI::build(sharesDestroyed)));
+    if (!e.value)
+    {
+        LeanBurnResult result;
+        result.threw = true;
+        return result;
+    }
+    return {.threw = false, .vault = e.value->read()};
 }
 
 struct LeanCanClawbackResult
