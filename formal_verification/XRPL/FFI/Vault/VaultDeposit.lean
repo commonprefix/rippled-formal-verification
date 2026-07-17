@@ -21,6 +21,10 @@ def lean_rounded_deposit_result_code (r : RoundedDepositResult) : Option Int32 :
   | .rejected t => some t.code
   | .rounded _ => none
 
+@[export lean_vault_is_insolvent]
+def lean_vault_is_insolvent (vault : Vault) : Bool :=
+  vault.isInsolvent
+
 @[export lean_vault_deposit]
 def lean_vault_deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : UInt8)
     : Except String DepositResult :=

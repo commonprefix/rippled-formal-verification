@@ -35,6 +35,9 @@ def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
     return .rejected .tecPRECISION_LOSS
   return .rounded roundedAmount
 
+def Vault.isInsolvent (vault : Vault) : Bool :=
+  vault.assetsTotal.mantissa_ = 0 && vault.sharesTotal.signum = 1
+
 structure DepositResult where
   error : Option TER
   vault' : Vault
@@ -89,8 +92,16 @@ def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String Co
 def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
   let result : DepositResult := ⟨none, vault, amount, STAmount.ofAsset vault.asset⟩
+
   if amount.isZero then
     return {result with error := some .tecINTERNAL}
+
+  if isDonation && vault.sharesTotal.mantissa_ == 0 then
+    return {result with error := some .tecNO_PERMISSION}
+
+  if vault.isInsolvent then
+    return {result with error := some .tecNO_PERMISSION}
+  
   let (assetDeposited, sharesCreated) ←
     if isDonation then
       pure (amount, STAmount.ofAsset vault.sharesAsset)
@@ -98,12 +109,17 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
       match ← computeDeposit vault amount with
       | .error e => return {result with error := some e}
       | .success a s => pure (a, s)
+ 
   let vault' : Vault := {
     vault with
     assetsTotal := ← vault.assetsTotal.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
     assetsAvailable := ← vault.assetsAvailable.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
     sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
+
+  if vault'.assetsTotal.operator_gt vault.assetsMaximum then
+    return { result with error := some .tecLIMIT_EXCEEDED }
+
   return { result with vault' := vault', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }
 
 end XRPL.Model.SingleAssetVault

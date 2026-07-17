@@ -6,14 +6,16 @@ open XRPL.Model.Protocol (Number Asset)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_state_build]
-def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number) (asset : Asset) (scale : UInt8)
+def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number) (assetsMaximum : Number) (asset : Asset) (scale : UInt8)
     (sharesTotal : Number) (sharesAsset : Asset) (interestUnrealized lossUnrealized : Number) : Vault :=
-  { assetsTotal, assetsAvailable, asset, scale, sharesTotal, sharesAsset, interestUnrealized, lossUnrealized }
+  { assetsTotal, assetsAvailable, assetsMaximum, asset, scale, sharesTotal, sharesAsset, interestUnrealized, lossUnrealized }
 
 @[export lean_vault_state_assets_total]
 def lean_vault_state_assets_total (vault : Vault) : Number := vault.assetsTotal
 @[export lean_vault_state_assets_available]
 def lean_vault_state_assets_available (vault : Vault) : Number := vault.assetsAvailable
+@[export lean_vault_state_assets_maximum]
+def lean_vault_state_assets_maximum (vault : Vault) : Number := vault.assetsMaximum
 @[export lean_vault_state_asset]
 def lean_vault_state_asset (vault : Vault) : Asset := vault.asset
 @[export lean_vault_state_scale]
