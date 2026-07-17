@@ -499,6 +499,25 @@ leanI64(lean_object* o)
 {
     return static_cast<int64_t>(lean_unbox_uint64(o));
 }
+
+// `Except String Bool` unpacked: the bool on ok, the message on error (nullopt value).
+inline LeanExcept<bool>
+readExceptBool(lean_object* e)
+{
+    LeanObjectFFI g(e);
+    if (exceptOk(g.raw()))
+        return {leanBool(exceptVal(g.raw())), {}};
+    return {std::nullopt, lean_string_cstr(exceptVal(g.raw()))};
+}
+// `Except String Int64` unpacked: the int64 on ok, the message on error (nullopt value).
+inline LeanExcept<int64_t>
+readExceptI64(lean_object* e)
+{
+    LeanObjectFFI g(e);
+    if (exceptOk(g.raw()))
+        return {leanI64(exceptVal(g.raw())), {}};
+    return {std::nullopt, lean_string_cstr(exceptVal(g.raw()))};
+}
 // Pair (a x b)
 inline lean_object*
 pairFirst(lean_object* p)

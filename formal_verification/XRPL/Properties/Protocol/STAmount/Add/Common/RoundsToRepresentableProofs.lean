@@ -6,15 +6,14 @@ headlines. The thin headlines live in `Add.RoundsToRepresentable`. -/
 namespace XRPL.Model.Protocol
 
 /-- Proof of `operator_add_repr_iou` (IOU addition within 1 ULP, `to_nearest`). -/
-theorem STAmount.operator_add_repr_iou_proof (v1 v2 result : STAmount) (iss : Issue)
-    (hv1 : v1.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
+theorem STAmount.operator_add_repr_iou_proof (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (hok : STAmount.operator_add v1 v2 .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
     STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) 1 .to_nearest := by
   obtain ⟨xn, yn, sum, sumI, hrv, hexp_br, hofn, hsumI_ne, h_lo, h_hi, he_lo, he_hi,
       hxn_val, hyn_val, hxn_norm, hyn_norm, hxn_ne, hyn_ne, h_no_cancel, hsum_ne, hadd⟩ :=
-    STAmount.operator_add_iou_decompose_anyMode v1 v2 result iss .to_nearest hv1 h_xrp hc1 hc2
+    STAmount.operator_add_iou_decompose_anyMode v1 v2 result .to_nearest hc1 hc2
       h_truth_ne hok hresult
   have hexp : sum.exponent_ + 3 ≤ result.exponent := by
     rw [hexp_br]; exact IOUAmount.ofNumber_exp_ge sum .to_nearest sumI h_lo h_hi he_lo he_hi hofn hsumI_ne
@@ -48,16 +47,15 @@ theorem STAmount.operator_add_repr_iou_proof (v1 v2 result : STAmount) (iss : Is
 
 /-- Proof of `operator_add_repr_iou_directed` (IOU addition within 2 ULP, directed modes,
 any sign). -/
-theorem STAmount.operator_add_repr_iou_directed_proof (v1 v2 result : STAmount) (iss : Issue)
+theorem STAmount.operator_add_repr_iou_directed_proof (v1 v2 result : STAmount)
     (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (hok : STAmount.operator_add v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
     STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) 2 mode := by
   obtain ⟨xn, yn, sum, sumI, hrv, hexp_br, hofn, hsumI_ne, h_lo, h_hi, he_lo, he_hi,
       hxn_val, hyn_val, hxn_norm, hyn_norm, hxn_ne, hyn_ne, h_no_cancel, hsum_ne, hadd⟩ :=
-    STAmount.operator_add_iou_decompose_anyMode v1 v2 result iss mode hv1 h_xrp hc1 hc2
+    STAmount.operator_add_iou_decompose_anyMode v1 v2 result mode hc1 hc2
       h_truth_ne hok hresult
   have hb := operator_add_RoundsWithin_anyMode xn yn sum mode hxn_norm hyn_norm hxn_ne hyn_ne
     h_no_cancel hsum_ne hadd

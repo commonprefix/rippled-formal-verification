@@ -1,5 +1,5 @@
-import XRPL.Model.Vault.VaultSet
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Vault.VaultSet
 
 open XRPL.Model.Protocol (Number)
 open XRPL.Model.SingleAssetVault

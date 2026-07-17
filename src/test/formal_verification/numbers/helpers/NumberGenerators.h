@@ -59,18 +59,19 @@ randomInt64(std::mt19937_64& rng)
         std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max()}(rng);
 }
 
+// Lean FFI numericType tag: 0 = native (XRP, 10^17), 1 = int64 for MPT (2^63-1), 2 = fractional
+// (IOU).
+constexpr uint8_t kNative = 0;
+constexpr uint8_t kIntegral = 1;
+constexpr uint8_t kFractional = 2;
+
 inline uint8_t
-randomKind(std::mt19937_64& rng)
+randomNumericType(std::mt19937_64& rng)
 {
-    return static_cast<uint8_t>(std::uniform_int_distribution<int>{0, 2}(rng));
+    return std::uniform_int_distribution<int>{0, 1}(rng) ? kFractional : kIntegral;
 }
 
-// Lean FFI assetKind tag: 0=XRP, 1=IOU (noIssue), 2=MPT (ffiMPTIssue).
-constexpr uint8_t kKindXRP = 0;
-constexpr uint8_t kKindIOU = 1;
-constexpr uint8_t kKindMPT = 2;
-
-// All-zero MPTID sentinel; matches Lean's ffiMPTIssue.
+// All-zero MPTID sentinel; matches Lean's integral placeholder asset.
 inline MPTIssue const&
 ffiMPTIssue()
 {
@@ -78,19 +79,19 @@ ffiMPTIssue()
     return k;
 }
 
+// Each tag maps to the C++ asset with the matching ceiling: native XRP (10^17), an MPT (2^63-1),
+// or an IOU (fractional).
 inline Asset
-assetForKind(uint8_t kind)
+assetForNumericType(uint8_t nt)
 {
-    switch (kind)
+    switch (nt)
     {
-        case kKindXRP:
-            return xrpIssue();
-        case kKindIOU:
-            return noIssue();
-        case kKindMPT:
-            return ffiMPTIssue();
+        case kNative:
+            return Asset{xrpIssue()};
+        case kIntegral:
+            return Asset{ffiMPTIssue()};
         default:
-            throw std::logic_error("assetForKind: unknown kind " + std::to_string(kind));
+            return Asset{noIssue()};
     }
 }
 
@@ -177,9 +178,9 @@ randomIOUAmountPair(std::mt19937_64& rng)
 
 // STAmount::Unchecked ctor - mirrors Lean's decodeSTAmount (no canonicalize).
 inline STAmount
-stAmountUnchecked(uint8_t kind, uint64_t mValue, int64_t mOffset, uint8_t mIsNegative)
+stAmountUnchecked(uint8_t nt, uint64_t mValue, int64_t mOffset, uint8_t mIsNegative)
 {
-    Asset const asset = assetForKind(kind);
+    Asset const asset = assetForNumericType(nt);
     return asset.visit(
         [&](Issue const& iss) {
             return STAmount{
@@ -200,11 +201,11 @@ stAmountUnchecked(uint8_t kind, uint64_t mValue, int64_t mOffset, uint8_t mIsNeg
 }
 
 inline STAmountPair
-makeSTAmountPair(uint8_t kind, uint64_t mValue, int64_t mOffset, uint8_t isNegative)
+makeSTAmountPair(uint8_t nt, uint64_t mValue, int64_t mOffset, uint8_t isNegative)
 {
     return {
-        stAmountUnchecked(kind, mValue, mOffset, isNegative),
-        LeanSTAmount{kind, mValue, mOffset, isNegative}};
+        stAmountUnchecked(nt, mValue, mOffset, isNegative),
+        LeanSTAmount{nt, mValue, mOffset, isNegative}};
 }
 
 // When uint64_t to int64 and then negate, we need to prevent -INT64_MIN (-2^63)
@@ -214,41 +215,34 @@ canSign(uint64_t mv) noexcept
     return mv != 0 && mv != (uint64_t{1} << 63);
 }
 
-// Broad per-kind STAmountPair: XRP/MPT span the full uint64 mantissa range
-// (offset 0); IOU is 10% canonical zero plus full-uint64 mantissa over
-// [kMinOffset-100, kMaxOffset+100].
+// Broad STAmountPair: integral spans the full uint64 mantissa range (offset 0),
+// fractional is 10% canonical zero plus full-uint64 mantissa over [kMinOffset-100, kMaxOffset+100].
 inline STAmountPair
-randomSTAmountPair(std::mt19937_64& rng, uint8_t kind)
+randomSTAmountPair(std::mt19937_64& rng, uint8_t nt)
 {
     std::bernoulli_distribution sign(0.5);
     std::uniform_int_distribution<uint64_t> mant(0, std::numeric_limits<uint64_t>::max());
-    switch (kind)
+    if (nt == kFractional)
     {
-        case kKindIOU: {
-            if (std::uniform_int_distribution<int>{0, 9}(rng) == 0)
-                return makeSTAmountPair(kKindIOU, 0, -100, 0);
-            std::uniform_int_distribution<int> exp(
-                STAmount::kMinOffset - 100, STAmount::kMaxOffset + 100);
-            uint64_t const mv = mant(rng);
-            return makeSTAmountPair(
-                kKindIOU,
-                mv,
-                static_cast<int64_t>(exp(rng)),
-                static_cast<uint8_t>(canSign(mv) && sign(rng)));
-        }
-        case kKindXRP:
-        case kKindMPT:
-        default: {
-            uint64_t const mv = mant(rng);
-            return makeSTAmountPair(kind, mv, 0, static_cast<uint8_t>(canSign(mv) && sign(rng)));
-        }
+        if (std::uniform_int_distribution<int>{0, 9}(rng) == 0)
+            return makeSTAmountPair(kFractional, 0, -100, 0);
+        std::uniform_int_distribution<int> exp(
+            STAmount::kMinOffset - 100, STAmount::kMaxOffset + 100);
+        uint64_t const mv = mant(rng);
+        return makeSTAmountPair(
+            kFractional,
+            mv,
+            static_cast<int64_t>(exp(rng)),
+            static_cast<uint8_t>(canSign(mv) && sign(rng)));
     }
+    uint64_t const mv = mant(rng);
+    return makeSTAmountPair(kIntegral, mv, 0, static_cast<uint8_t>(canSign(mv) && sign(rng)));
 }
 
 inline STAmountPair
 randomSTAmountPair(std::mt19937_64& rng)
 {
-    return randomSTAmountPair(rng, randomKind(rng));
+    return randomSTAmountPair(rng, randomNumericType(rng));
 }
 
 }  // namespace xrpl::test::formal_verification

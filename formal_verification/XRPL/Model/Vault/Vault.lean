@@ -1,20 +1,19 @@
-import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
--- Assets are modeled in the vault, but might be abstracted in the future
--- to remove the coupling with xrpld
+-- The vault tracks only the asset's `numericType` (integral vs fractional), not its account or
+-- currency. Shares are always integral (an MPT), so they need no field.
 structure Vault where
   assetsTotal : Number
   assetsAvailable : Number
-  asset : Asset -- modeled for now
+  numericType : NumericType
   scale : UInt8
   sharesTotal : Number -- shares MPT sfOutstandingAmount
-  sharesAsset : Asset -- modeled for now
   interestUnrealized : Number
   lossUnrealized : Number
 

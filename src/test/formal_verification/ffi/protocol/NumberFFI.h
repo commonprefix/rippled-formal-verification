@@ -13,6 +13,8 @@ extern "C" {
 lean_object*
 lean_number_build(uint8_t negative, uint64_t mantissa, int64_t exponent);
 uint8_t
+lean_rounding_mode_build(uint8_t mode);
+uint8_t
 lean_number_negative(lean_object* number);
 uint64_t
 lean_number_mantissa(lean_object* number);
@@ -50,22 +52,30 @@ public:
 
 static_assert(LeanWrapper<NumberFFI>);
 
-// Number::RoundingMode -> the uint8 encoding the Lean number FFI expects.
+// Number::RoundingMode -> a Lean `rounding_mode` value, constructed by lean_rounding_mode_build
+// (the ops take a `rounding_mode`, not a raw byte). rounding_mode is a uint8 tag at the ABI.
 inline uint8_t
 toLeanMode(Number::RoundingMode mode)
 {
+    uint8_t tag;
     switch (mode)
     {
         case Number::RoundingMode::ToNearest:
-            return 0;
+            tag = 0;
+            break;
         case Number::RoundingMode::TowardsZero:
-            return 1;
+            tag = 1;
+            break;
         case Number::RoundingMode::Downward:
-            return 2;
+            tag = 2;
+            break;
         case Number::RoundingMode::Upward:
-            return 3;
+            tag = 3;
+            break;
+        default:
+            throw std::logic_error("toLeanMode: unknown Number::RoundingMode");
     }
-    throw std::logic_error("toLeanMode: unknown Number::RoundingMode");
+    return lean_rounding_mode_build(tag);
 }
 
 }  // namespace xrpl::test::formal_verification

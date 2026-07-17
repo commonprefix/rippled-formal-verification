@@ -1,5 +1,5 @@
-import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
@@ -18,13 +18,13 @@ def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrea
   let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
 
   if netAssetValue.mantissa_ == 0 then
-    return STAmount.ofAsset vault.asset
+    return STAmount.zero vault.numericType
 
   let sharesNumber ← shares.toNumber .to_nearest
   let NAVShares ← netAssetValue.operator_mul sharesNumber .to_nearest
   let assetsNumber ← NAVShares.operator_div vault.sharesTotal .to_nearest
   -- (waiting the C++ fix) round the payout down so a withdrawer never receives more than the shares are worth
-  let assets ← STAmount.ofNumber vault.asset assetsNumber .downward
+  let assets ← STAmount.ofNumber vault.numericType assetsNumber .downward
   return assets
 
 
@@ -44,7 +44,7 @@ def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares w
   let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
 
   if netAssetValue.mantissa_ == 0 then
-    return STAmount.ofAsset vault.sharesAsset
+    return STAmount.zero .int64
 
   let assetsNumber ← assets.toNumber .to_nearest
   let sharesAssets ← vault.sharesTotal.operator_mul assetsNumber .to_nearest
@@ -53,7 +53,7 @@ def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares w
   | true => sharesNumber.truncate
   | false => pure sharesNumber
 
-  STAmount.ofNumber vault.sharesAsset sharesNumber .to_nearest
+  STAmount.ofNumber .int64 sharesNumber .to_nearest
 
 
 structure ComputeWithdrawResult where
@@ -65,7 +65,7 @@ structure ComputeWithdrawResult where
 
 def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
-    let result : ComputeWithdrawResult := ⟨none, assets, STAmount.ofAsset vault.sharesAsset⟩
+    let result : ComputeWithdrawResult := ⟨none, assets, STAmount.zero .int64⟩
     -- truncateShares = false in fn call
     let shares ← assetsToSharesWithdraw vault assets false waiveUnrealizedLoss
     if shares.isZero then
@@ -77,21 +77,21 @@ def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealized
       sharesRedeemed := shares}
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, assets, STAmount.ofAsset vault.sharesAsset⟩
+      return ⟨.some .tecPATH_DRY, assets, STAmount.zero .int64⟩
     else
       throw e
 
 
 def computeWithdrawByShares (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
-    let result : ComputeWithdrawResult := ⟨none, STAmount.ofAsset vault.asset, shares⟩
+    let result : ComputeWithdrawResult := ⟨none, STAmount.zero vault.numericType, shares⟩
     let assets ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
     return {result with
       assets' := assets,
       sharesRedeemed := shares}
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, STAmount.ofAsset vault.asset, shares⟩
+      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, shares⟩
     else
       throw e
 
@@ -114,11 +114,11 @@ def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLos
   if vault.assetsAvailable.operator_lt assetsNumber' then
     return ⟨.some .tecINSUFFICIENT_FUNDS, vault, result.assets', result.sharesRedeemed⟩
 
-  let sharesTotalAmount ← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest
+  let sharesTotalAmount ← STAmount.ofNumber .int64 vault.sharesTotal .to_nearest
   if result.sharesRedeemed.operator_eq sharesTotalAmount then -- isFinalWithdrawal
     if vault.lossUnrealized.operator_ne Number.zero then
       return ⟨.some .tefINTERNAL, vault, result.assets', result.sharesRedeemed⟩
-    let allAvailable ← STAmount.ofNumber vault.asset vault.assetsAvailable .to_nearest
+    let allAvailable ← STAmount.ofNumber vault.numericType vault.assetsAvailable .to_nearest
     let assets' := allAvailable
     let vault' := {vault with
       assetsAvailable := Number.zero,
@@ -130,8 +130,8 @@ def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLos
   let assetsTotal' ← vault.assetsTotal.operator_sub assetsNumber' .to_nearest
 
   -- (waiting the C++ fix) reject a payout too small to reduce the stored assetsTotal
-  let assetsTotalRounded ← STAmount.ofNumber vault.asset vault.assetsTotal .to_nearest
-  let assetsTotalRounded' ← STAmount.ofNumber vault.asset assetsTotal' .to_nearest
+  let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
+  let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
   if assetsNumber'.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
     return ⟨.some .tecPRECISION_LOSS, vault, result.assets', result.sharesRedeemed⟩
 

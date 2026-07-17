@@ -1,5 +1,5 @@
-import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 
@@ -8,8 +8,8 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 -- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
-def exponent (amount : Number) (asset : Asset) : Except String Int := do
-  let a ← STAmount.ofNumber asset amount .to_nearest
+def exponent (amount : Number) (nt : NumericType) : Except String Int := do
+  let a ← STAmount.ofNumber nt amount .to_nearest
   return a.exponent
 
 -- model of `roundToVaultScale` from xrpld
@@ -18,7 +18,7 @@ def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Exc
     return amountDeposit
   let amountNumber ← amountDeposit.toNumber .to_nearest
   let assetsTotal' ← Number.operator_add assetsTotal amountNumber .to_nearest
-  let postScale ← exponent assetsTotal' amountDeposit.asset
+  let postScale ← exponent assetsTotal' amountDeposit.numericType
   let rounded ← STAmount.roundToExponent amountDeposit postScale .downward
   return rounded
 
@@ -45,26 +45,26 @@ def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except St
   if vault.assetsTotal.mantissa_ = 0 then
     let sharesNumber ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + vault.scale.toNat) largeRange.min largeRange.max .to_nearest
     let sharesNumber ← sharesNumber.truncate
-    let shares ← STAmount.ofNumber vault.sharesAsset sharesNumber .to_nearest
+    let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
     return shares
   let amountDepositNumber ← amountDeposit.toNumber .to_nearest
   let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let sharesAssets ← vault.sharesTotal.operator_mul amountDepositNumber .to_nearest
   let sharesNumber ← sharesAssets.operator_div netAssetValue .to_nearest
   let sharesNumber ← sharesNumber.truncate
-  let shares ← STAmount.ofNumber vault.sharesAsset sharesNumber .to_nearest
+  let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
   return shares
 
 def sharesToAssetsDeposit (vault : Vault) (shares : STAmount) : Except String STAmount := do
   if vault.assetsTotal.mantissa_ = 0 then
-    let assets ← STAmount.checked vault.asset shares.mantissa (shares.exponent - vault.scale.toNat) false .to_nearest
+    let assets ← STAmount.checked vault.numericType shares.mantissa (shares.exponent - vault.scale.toNat) false .to_nearest
     return assets
   let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let sharesNumber ← shares.toNumber .to_nearest
   let assetsShares ← netAssetValue.operator_mul sharesNumber .to_nearest
   let amountDepositNumber ← assetsShares.operator_div vault.sharesTotal .to_nearest
   -- (waiting the C++ fix) round the charge up so a depositor never pays less than the issued shares are worth
-  let amountDeposit ← STAmount.ofNumber vault.asset amountDepositNumber .upward
+  let amountDeposit ← STAmount.ofNumber vault.numericType amountDepositNumber .upward
   return amountDeposit
 
 inductive ComputeDepositResult where
@@ -88,12 +88,12 @@ def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String Co
 
 def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
-  let result : DepositResult := ⟨none, vault, amount, STAmount.ofAsset vault.asset⟩
+  let result : DepositResult := ⟨none, vault, amount, STAmount.zero vault.numericType⟩
   if amount.isZero then
     return {result with error := some .tecINTERNAL}
   let (assetDeposited, sharesCreated) ←
     if isDonation then
-      pure (amount, STAmount.ofAsset vault.sharesAsset)
+      pure (amount, STAmount.zero .int64)
     else
       match ← computeDeposit vault amount with
       | .error e => return {result with error := some e}

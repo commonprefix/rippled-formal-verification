@@ -83,15 +83,13 @@ set_option maxHeartbeats 3200000 in
 reference `±10^15·10^s` is the record `(10^15 + k)·10^s` with `k` the
 per-mode rounding of `|value|/10^s`. -/
 theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : rounding_mode)
-    (iss : Issue)
-    (h_asset : value.mAsset = .issue iss) (h_not_xrp : iss.isXRP = false)
     (hc : value.IOUCanonical) (h_ev : value.mOffset < s)
     (h_s : (-96 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
     (sum : STAmount)
-    (hok : STAmount.operator_add value ⟨value.mAsset, kMinValue, s, value.mIsNegative⟩ mode
+    (hok : STAmount.operator_add value ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ mode
       = .ok sum) :
     ∃ k : ℕ, k ≤ 10 ^ 15 ∧
-      sum.mAsset = value.mAsset ∧
+      sum.mNumericType = value.mNumericType ∧
       sum.mValue.toNat = 10 ^ 15 + k ∧
       sum.mOffset = s ∧
       sum.mIsNegative = value.mIsNegative ∧
@@ -102,18 +100,16 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         else ⌊|value.toRat| / 10 ^ s⌋) ∧
       (mode = .upward → (k : ℤ) = if value.mIsNegative then ⌊|value.toRat| / 10 ^ s⌋
         else ⌈|value.toRat| / 10 ^ s⌉) := by
-  set refA : STAmount := ⟨value.mAsset, kMinValue, s, value.mIsNegative⟩ with hrefA_def
+  set refA : STAmount := ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ with hrefA_def
   have h_kMin_toNat : kMinValue.toNat = 10 ^ 15 := by decide
   have hcr : refA.IOUCanonical :=
-    { iou_asset := by rw [hrefA_def]; show value.mAsset.holdsIssue = true; exact hc.iou_asset
-      not_xrp := by rw [hrefA_def]; show value.mAsset.isNative = false; exact hc.not_xrp
+    { is_fractional := by rw [hrefA_def]; show value.mNumericType = .fractional; exact hc.is_fractional
       mant_lo := by show 10 ^ 15 ≤ kMinValue.toNat; rw [h_kMin_toNat]
       mant_hi := by show kMinValue.toNat < 10 ^ 16; rw [h_kMin_toNat]; norm_num
       exp_lo := h_s
       exp_hi := h_s_hi }
   -- Reduce the STAmount add to the Number pipeline.
-  rw [STAmount.operator_add_iou_unfold value refA mode iss h_asset
-      (by rw [hrefA_def]; exact h_asset) h_not_xrp hc hcr] at hok
+  rw [STAmount.operator_add_iou_unfold value refA mode hc hcr] at hok
   set neg : Bool := value.mIsNegative with hneg_def
   set v1n : Number := ⟨value.mIsNegative, value.mValue * 10 * 10 * 10, value.mOffset - 3⟩
     with hv1n_def
@@ -123,14 +119,14 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
   obtain ⟨n₁, h_add, hok₂⟩ : ∃ n₁, Number.operator_add v1n v2n mode = .ok n₁ ∧
       (match IOUAmount.ofNumber n₁ mode with
        | .error e => (Except.error e : Except String STAmount)
-       | .ok sumI => STAmount.ofIOUAmount sumI iss mode) = .ok sum := by
+       | .ok sumI => STAmount.ofIOUAmount sumI mode) = .ok sum := by
     match h_add : Number.operator_add v1n v2n mode with
     | .error e => rw [h_add] at hok; exact absurd hok (by intro h; cases h)
     | .ok n₁ =>
       rw [h_add] at hok
       exact ⟨n₁, rfl, hok⟩
   obtain ⟨sumI, h_of, h_pack⟩ : ∃ sumI, IOUAmount.ofNumber n₁ mode = .ok sumI ∧
-      STAmount.ofIOUAmount sumI iss mode = .ok sum := by
+      STAmount.ofIOUAmount sumI mode = .ok sum := by
     match h_of : IOUAmount.ofNumber n₁ mode with
     | .error e => rw [h_of] at hok₂; exact absurd hok₂ (by intro h; cases h)
     | .ok sumI =>
@@ -515,7 +511,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         if_neg (by show ¬ s < cMinOffset; unfold cMinOffset; omega)]
   have h_sumI : sumI = ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ :=
     Except.ok.inj (h_of.symm.trans h_of_explicit)
-  -- Repack via ofIOUAmount.
+  -- Repack via ofIOU.
   have h_m₁₆_lo : 10 ^ 15 ≤ m₁₆.toNat := by
     rcases mode with _ | _ | _ | _
     · rcases h_m₁₆_tn rfl with h | h <;> rw [h, h_n₁_mant] <;> omega
@@ -527,8 +523,8 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       = (if n₁.negative_ then -1 else 1) * (m₁₆.toNat : ℤ) :=
     signed_mantissa_toInt n₁.negative_ m₁₆ h_m₁₆_fit
   have h_pack_explicit : STAmount.ofIOUAmount
-      ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ iss mode
-      = .ok ⟨.issue iss, m₁₆, s, n₁.negative_⟩ := by
+      ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ mode
+      = .ok ⟨.fractional, m₁₆, s, n₁.negative_⟩ := by
     have hr : IOUAmount.InRange16 ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ :=
       { mant_lo := by
           show 10 ^ 15 ≤ (if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64).toInt.natAbs
@@ -540,8 +536,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           rcases hb : n₁.negative_ with _ | _ <;> simp <;> omega
         exp_lo := h_s
         exp_hi := h_s_hi }
-    have h_not_xrp' : (Asset.issue iss).isNative = false := h_not_xrp
-    rw [STAmount.ofIOUAmount_canonical _ iss mode h_not_xrp' hr]
+    rw [STAmount.ofIOU_canonical _ mode hr]
     congr 1
     have h_abs_eq : ((if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64).toInt.natAbs
         : ℕ).toUInt64 = m₁₆ := by
@@ -554,7 +549,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         = n₁.negative_ :=
       signed_mantissa_decide_neg n₁.negative_ m₁₆ h_m₁₆_fit (by omega)
     rw [h_abs_eq, h_dec]
-  have h_sum : sum = ⟨.issue iss, m₁₆, s, n₁.negative_⟩ := by
+  have h_sum : sum = ⟨.fractional, m₁₆, s, n₁.negative_⟩ := by
     rw [h_sumI] at h_pack
     exact Except.ok.inj (h_pack.symm.trans h_pack_explicit)
   -- Cast and composition prework for the k-characterization.
@@ -766,7 +761,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           push_cast
           linarith
         omega
-  · rw [h_sum, h_asset]
+  · rw [h_sum]; exact hc.is_fractional.symm
   · rw [h_sum]
     show m₁₆.toNat = 10 ^ 15 + (m₁₆.toNat - 10 ^ 15)
     omega

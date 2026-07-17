@@ -1,6 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
-import XRPL.Properties.Protocol.STAmount.Common.STAmountCommonProps
 
 namespace XRPL.Model.Protocol
 
@@ -41,29 +40,13 @@ structure STAmount.CmpFaithful (lhs rhs : STAmount) : Prop where
   rhs_zero_sign : rhs.mValue = 0 → rhs.mIsNegative = false
   offset_or_band : lhs.mOffset = rhs.mOffset ∨ (STAmount.Banded lhs ∧ STAmount.Banded rhs)
 
-/-- `areComparable` is symmetric. -/
+/-- `areComparable` is symmetric. Now just `NumericType` equality, so `beq_comm`. -/
 lemma STAmount.areComparable_comm (a b : STAmount) :
     STAmount.areComparable a b = STAmount.areComparable b a := by
-  -- the wrapper types lack `LawfulBEq`, so drop each `==` to its `BitVec` field.
-  have hcur : ∀ c1 c2 : Currency, (c1 == c2) = (c2 == c1) := by
-    intro c1 c2; obtain ⟨v1⟩ := c1; obtain ⟨v2⟩ := c2
-    show (v1 == v2) = (v2 == v1); exact Bool.beq_comm
-  have hmpt : ∀ m1 m2 : MPTIssue, (m1 == m2) = (m2 == m1) := by
-    intro m1 m2; obtain ⟨⟨v1⟩⟩ := m1; obtain ⟨⟨v2⟩⟩ := m2
-    show (v1 == v2) = (v2 == v1); exact Bool.beq_comm
-  unfold STAmount.areComparable Asset.areComparable
-  cases a.mAsset with
-  | issue i1 =>
-    cases b.mAsset with
-    | issue i2 =>
-      show (i1.native == i2.native && i1.currency == i2.currency)
-         = (i2.native == i1.native && i2.currency == i1.currency)
-      rw [Bool.beq_comm (a := i1.native), hcur i1.currency i2.currency]
-    | mptIssue m2 => rfl
-  | mptIssue m1 =>
-    cases b.mAsset with
-    | issue i2 => rfl
-    | mptIssue m2 => show (m1 == m2) = (m2 == m1); exact hmpt m1 m2
+  unfold STAmount.areComparable
+  by_cases h : a.mNumericType = b.mNumericType
+  · rw [h]
+  · rw [beq_eq_false_iff_ne.mpr h, beq_eq_false_iff_ne.mpr (Ne.symm h)]
 
 /-- `CmpFaithful` is symmetric. -/
 lemma STAmount.CmpFaithful.symm {lhs rhs : STAmount} (h : STAmount.CmpFaithful lhs rhs) :
@@ -313,18 +296,17 @@ theorem STAmount.operator_ge_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
   rw [← decide_not]
   exact congrArg Except.ok (decide_eq_decide.mpr not_lt)
 
-/-- **Correctness of `operator_eq`.** On well-formed comparable operands of the **same
-asset**, field equality decides rational equality (canonical representations are
-unique per value). -/
-theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs)
-    (hasset : lhs.mAsset = rhs.mAsset) :
+/-- **Correctness of `operator_eq`.** On well-formed comparable operands, field
+equality decides rational equality (canonical representations are unique per value;
+the shared numericType is part of `CmpFaithful.comparable`). -/
+theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) := by
   apply bool_eq_decide_of_iff
   unfold STAmount.operator_eq
   rw [h.comparable]
   simp only [Bool.true_and, Bool.and_eq_true, beq_iff_eq]
   constructor
-  · rintro ⟨⟨⟨hsg, hof⟩, hva⟩, _⟩
+  · rintro ⟨⟨hsg, hof⟩, hva⟩
     unfold STAmount.toRat
     rw [hsg, hof, hva]
   · intro htoRat
@@ -358,14 +340,13 @@ theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
       have hpow : (10 : ℚ) ^ rhs.mOffset ≠ 0 := ne_of_gt (zpow_pos (by norm_num) _)
       rw [← UInt64.toNat_inj]
       exact_mod_cast mul_right_cancel₀ hpow hmul
-    exact ⟨⟨⟨hsigneq, hoffeq⟩, hvaleq⟩, hasset⟩
+    exact ⟨⟨hsigneq, hoffeq⟩, hvaleq⟩
 
 /-- **Correctness of `operator_ne`.** -/
-theorem STAmount.operator_ne_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs)
-    (hasset : lhs.mAsset = rhs.mAsset) :
+theorem STAmount.operator_ne_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_ne lhs rhs = decide (lhs.toRat ≠ rhs.toRat) := by
   unfold STAmount.operator_ne
-  rw [STAmount.operator_eq_eq_proof lhs rhs h hasset, ← decide_not]
+  rw [STAmount.operator_eq_eq_proof lhs rhs h, ← decide_not]
 
 /-! ## Per-asset adapters for `CmpFaithful`
 
@@ -383,24 +364,14 @@ lemma STAmount.CmpFaithful.ofIOU (lhs rhs : STAmount)
   rhs_zero_sign := fun h0 => by have := hc2.mant_lo; rw [h0] at this; simp at this
   offset_or_band := Or.inr ⟨⟨hc1.mant_lo, hc1.mant_hi⟩, ⟨hc2.mant_lo, hc2.mant_hi⟩⟩
 
-/-- Two canonical MPT amounts of comparable assets are comparison-faithful (both have
-`mOffset = 0` and sign-cleared zeros). -/
-lemma STAmount.CmpFaithful.ofMPT (lhs rhs : STAmount)
-    (hc1 : lhs.MPTCanonical) (hc2 : rhs.MPTCanonical)
-    (hcmp : STAmount.areComparable lhs rhs = true) : STAmount.CmpFaithful lhs rhs where
-  comparable := hcmp
-  lhs_zero_sign := hc1.zero_sign_cleared
-  rhs_zero_sign := hc2.zero_sign_cleared
-  offset_or_band := Or.inl (by rw [hc1.offset_zero, hc2.offset_zero])
-
-/-- Two canonical native (XRP) amounts with sign-cleared zeros are comparison-faithful
-(both are XRP, hence comparable, with `mOffset = 0`). -/
-lemma STAmount.CmpFaithful.ofNative (lhs rhs : STAmount)
-    (hc1 : lhs.NativeCanonical) (hc2 : rhs.NativeCanonical)
+/-- Two canonical integral (XRP/MPT) amounts of comparable numericTypes, with sign-cleared
+zeros, are comparison-faithful (both have `mOffset = 0`). -/
+lemma STAmount.CmpFaithful.ofIntegral (lhs rhs : STAmount)
+    (hc1 : lhs.IntegralCanonical) (hc2 : rhs.IntegralCanonical)
+    (hcmp : STAmount.areComparable lhs rhs = true)
     (h0l : lhs.mValue = 0 → lhs.mIsNegative = false)
     (h0r : rhs.mValue = 0 → rhs.mIsNegative = false) : STAmount.CmpFaithful lhs rhs where
-  comparable := by
-    unfold STAmount.areComparable; rw [hc1.is_xrp, hc2.is_xrp]; decide
+  comparable := hcmp
   lhs_zero_sign := h0l
   rhs_zero_sign := h0r
   offset_or_band := Or.inl (by rw [hc1.offset_zero, hc2.offset_zero])

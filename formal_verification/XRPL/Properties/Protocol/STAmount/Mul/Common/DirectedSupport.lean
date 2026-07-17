@@ -12,14 +12,15 @@ and avoids the magnitude-based sign flip in `STAmount.ofNumber`, which rounds `|
 
 namespace XRPL.Model.Protocol
 
-lemma STAmount.ofNumber_iou_rounds_within (asset : Asset) (r : Number) (mode : rounding_mode)
+lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode : rounding_mode)
     (result : STAmount)
-    (h_iou : asset.holdsIssue = true) (h_not_xrp : asset.isNative = false)
+    (hnt : nt = .fractional)
     (h_nonneg : r.negative_ = false)
     (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
     (hre_lo : minExponent ≤ r.exponent_) (hre_hi : r.exponent_ + 4 ≤ maxExponent)
-    (hok : STAmount.ofNumber asset r mode = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.ofNumber nt r mode = .ok result) (hresult : result.mValue ≠ 0) :
     RoundsWithin result r.toRat mode ((10 : ℚ) ^ (-15 : ℤ)) := by
+  subst hnt
   have hr_ne : r.mantissa_ ≠ 0 := by
     intro h; rw [h] at hr_lo; simp at hr_lo
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
@@ -57,12 +58,8 @@ lemma STAmount.ofNumber_iou_rounds_within (asset : Asset) (r : Number) (mode : r
     · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
     · rw [if_neg hn, if_neg hn]; ring
   -- `asset` is non-integral, so `ofNumber` reduces to `checked` on the `normalizeToRange` output.
-  have h_asset_int : asset.integral = false := by
-    rcases ha : asset with i | m
-    · rw [ha] at h_not_xrp; exact h_not_xrp
-    · rw [ha] at h_iou; exact Bool.noConfusion h_iou
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by rw [h_asset_int]; decide), ← hneg_def, ← hw_def] at hok
+  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -106,7 +103,7 @@ lemma STAmount.ofNumber_iou_rounds_within (asset : Asset) (r : Number) (mode : r
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
-    have hcc := STAmount.checked_iou_cases asset mant.toUInt64 exp neg mode h_iou h_not_xrp
+    have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
     -- value transport.
@@ -167,12 +164,13 @@ lemma STAmount.ofNumber_iou_rounds_within (asset : Asset) (r : Number) (mode : r
 rounds the magnitude `|r|` toward zero, so `|result| ≤ |r|`. (Unlike the *signed*
 directional clause of `ofNumber_iou_rounds_within`, this magnitude statement needs no
 non-negativity hypothesis.) -/
-lemma STAmount.ofNumber_iou_abs_le_towards_zero (asset : Asset) (r : Number) (result : STAmount)
-    (h_iou : asset.holdsIssue = true) (h_not_xrp : asset.isNative = false)
+lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) (result : STAmount)
+    (hnt : nt = .fractional)
     (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
     (hre_lo : minExponent ≤ r.exponent_) (hre_hi : r.exponent_ + 4 ≤ maxExponent)
-    (hok : STAmount.ofNumber asset r .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.ofNumber nt r .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
     |result.toRat| ≤ |r.toRat| := by
+  subst hnt
   have hr_ne : r.mantissa_ ≠ 0 := by intro h; rw [h] at hr_lo; simp at hr_lo
   have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
   have hneg_eq : decide (r.signum < 0) = r.negative_ := by
@@ -205,12 +203,8 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (asset : Asset) (r : Number) (re
     by_cases hn : neg = true
     · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
     · rw [if_neg hn, if_neg hn]; ring
-  have h_asset_int : asset.integral = false := by
-    rcases ha : asset with i | m
-    · rw [ha] at h_not_xrp; exact h_not_xrp
-    · rw [ha] at h_iou; exact Bool.noConfusion h_iou
   unfold STAmount.ofNumber at hok
-  rw [if_neg (by rw [h_asset_int]; decide), ← hneg_def, ← hw_def] at hok
+  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue .towards_zero with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -250,7 +244,7 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (asset : Asset) (r : Number) (re
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
-    have hcc := STAmount.checked_iou_cases asset mant.toUInt64 exp neg .towards_zero h_iou h_not_xrp
+    have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg .towards_zero rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
     have hres_toRat : result.toRat = (if neg then (-1 : ℚ) else 1) * ((mant.toInt : ℚ) * 10 ^ exp) := by
@@ -404,28 +398,26 @@ lemma operator_mul_exponent_hi_anyMode (n1 n2 r : Number) (E : Int) (mode : roun
 /-- **STAmount IOU multiplication of non-negative operands rounds within the directed
 relative-error bound, every mode.** `Number`-multiply (`10/(2⁶³+2)`) composed with the
 16-digit re-round (`10⁻¹⁵`) via `RoundsWithin_trans`. -/
-theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue) (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (nt : NumericType)
+    (mode : rounding_mode)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
-    (hok : STAmount.multiply v1 v2 asset mode = .ok result)
+    (hok : STAmount.multiply v1 v2 nt mode = .ok result)
     (hresult : result.mValue ≠ 0) :
     RoundsWithin result (v1.toRat * v2.toRat) mode
       (10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ)
         + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) := by
+  subst hnt
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hv1nat : v1.native = false := by
-    unfold STAmount.native; rw [hv1]; show iss.native = false; rw [← h_xrp]; rfl
-  have hv1mpt : v1.holdsMPTIssue = false := by unfold STAmount.holdsMPTIssue; rw [hv1]; rfl
+  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
   unfold STAmount.multiply at hok
   rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.native && v2.native && asset.isNative) = true from by simp [hv1nat]),
-      if_neg (show ¬ (v1.holdsMPTIssue && v2.holdsMPTIssue && asset.holdsMPTIssue) = true from by simp [hv1mpt]),
-      STAmount.toNumber_iou_canonical v1 iss mode hv1 h_xrp hc1,
-      STAmount.toNumber_iou_canonical v2 iss mode hv2 h_xrp hc2] at hok
+      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
+        rw [hint1]; simp),
+      STAmount.toNumber_iou_canonical v1 mode hc1,
+      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
   simp only at hok
   set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
   set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
@@ -434,7 +426,7 @@ theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (ass
   | ok r =>
     rw [hmul] at hok
     simp only at hok
-    have hofn : STAmount.ofNumber asset r mode = .ok result := hok
+    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
     have hn1_norm : n1.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
     have hn2_norm : n2.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
     have hn1_ne : n1.mantissa_ ≠ 0 := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
@@ -442,7 +434,7 @@ theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (ass
     have hn1_val : n1.toRat = v1.toRat := STAmount.toNumber_iou_canonical_toRat v1 hc1
     have hn2_val : n2.toRat = v2.toRat := STAmount.toNumber_iou_canonical_toRat v2 hc2
     have hr_ne : r.mantissa_ ≠ 0 :=
-      STAmount.ofNumber_iou_mantissa_ne_zero asset r mode result ha_iou ha_not_xrp hofn hresult
+      STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl hofn hresult
     have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
     have hr_mant := hr_norm.mantissaBounds_nat hr_ne
     have hr_exp_lo : minExponent ≤ r.exponent_ := by
@@ -458,7 +450,7 @@ theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (ass
       show (v1.mIsNegative != v2.mIsNegative) = false
       rw [hn1, hn2]; rfl
     have hmb := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-    have hre := STAmount.ofNumber_iou_rounds_within asset r mode result ha_iou ha_not_xrp hr_neg
+    have hre := STAmount.ofNumber_iou_rounds_within .fractional r mode result rfl hr_neg
       hr_mant.1 hr_mant.2 hr_exp_lo hr_exp_hi hofn hresult
     have htrans := RoundsWithin_trans result r (n1.toRat * n2.toRat) (10 / (2 ^ 63 + 2 : ℚ))
       ((10 : ℚ) ^ (-15 : ℤ)) mode hmb
@@ -469,29 +461,26 @@ theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (ass
 /-- **IOU multiply pipeline decomposition (any mode, non-negative operands).** Exposes
 the 19-digit `Number` product `r`, its range/sign, and the mode-generic `Number`-multiply
 `RoundsWithin` bound. Feeds the directed ULP/repr headlines. -/
-lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue) (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (nt : NumericType)
+    (mode : rounding_mode)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
-    (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
-    ∃ r : Number, STAmount.ofNumber asset r mode = .ok result ∧
+    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
+    ∃ r : Number, STAmount.ofNumber nt r mode = .ok result ∧
       10 ^ 18 ≤ r.mantissa_.toNat ∧ r.mantissa_.toNat < 10 ^ 19 ∧
       minExponent ≤ r.exponent_ ∧ r.exponent_ + 4 ≤ maxExponent ∧ r.negative_ = false ∧
       RoundsWithin r (v1.toRat * v2.toRat) mode (10 / (2 ^ 63 + 2 : ℚ)) := by
+  subst hnt
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hv1nat : v1.native = false := by
-    unfold STAmount.native; rw [hv1]; show iss.native = false; rw [← h_xrp]; rfl
-  have hv1mpt : v1.holdsMPTIssue = false := by unfold STAmount.holdsMPTIssue; rw [hv1]; rfl
+  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
   unfold STAmount.multiply at hok
   rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.native && v2.native && asset.isNative) = true from by simp [hv1nat]),
-      if_neg (show ¬ (v1.holdsMPTIssue && v2.holdsMPTIssue && asset.holdsMPTIssue) = true from by
-        simp [hv1mpt]),
-      STAmount.toNumber_iou_canonical v1 iss mode hv1 h_xrp hc1,
-      STAmount.toNumber_iou_canonical v2 iss mode hv2 h_xrp hc2] at hok
+      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
+        rw [hint1]; simp),
+      STAmount.toNumber_iou_canonical v1 mode hc1,
+      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
   simp only at hok
   set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
   set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
@@ -499,14 +488,14 @@ lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (ass
   | error e => rw [hmul] at hok; simp at hok
   | ok r =>
     rw [hmul] at hok; simp only at hok
-    have hofn : STAmount.ofNumber asset r mode = .ok result := hok
+    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
     have hn1_norm := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
     have hn2_norm := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
     have hn1_ne := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
     have hn2_ne := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
     have hn1_val := STAmount.toNumber_iou_canonical_toRat v1 hc1
     have hn2_val := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero asset r mode result ha_iou ha_not_xrp
+    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl
       hofn hresult
     have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne
       hmul hr_ne
@@ -531,29 +520,26 @@ Like `operator_mul_iou_decompose_anyMode` but with no non-negativity assumption:
 exposes the 19-digit `Number` product `r`, its range, and the *magnitude* relative-error
 bound (rather than the one-sided directional `RoundsWithin`, whose signed direction the
 `STAmount.ofNumber` magnitude re-round flips for negative products). -/
-lemma STAmount.operator_mul_iou_decompose_mag (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue) (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+lemma STAmount.operator_mul_iou_decompose_mag (v1 v2 result : STAmount) (nt : NumericType)
+    (mode : rounding_mode)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
-    ∃ r : Number, STAmount.ofNumber asset r mode = .ok result ∧
+    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
+    ∃ r : Number, STAmount.ofNumber nt r mode = .ok result ∧
       10 ^ 18 ≤ r.mantissa_.toNat ∧ r.mantissa_.toNat < 10 ^ 19 ∧
       minExponent ≤ r.exponent_ ∧ r.exponent_ + 4 ≤ maxExponent ∧
       |r.toRat - v1.toRat * v2.toRat| ≤ |v1.toRat * v2.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) ∧
       RoundsWithin r (v1.toRat * v2.toRat) mode (10 / (2 ^ 63 + 2 : ℚ)) := by
+  subst hnt
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hv1nat : v1.native = false := by
-    unfold STAmount.native; rw [hv1]; show iss.native = false; rw [← h_xrp]; rfl
-  have hv1mpt : v1.holdsMPTIssue = false := by unfold STAmount.holdsMPTIssue; rw [hv1]; rfl
+  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
   unfold STAmount.multiply at hok
   rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.native && v2.native && asset.isNative) = true from by simp [hv1nat]),
-      if_neg (show ¬ (v1.holdsMPTIssue && v2.holdsMPTIssue && asset.holdsMPTIssue) = true from by
-        simp [hv1mpt]),
-      STAmount.toNumber_iou_canonical v1 iss mode hv1 h_xrp hc1,
-      STAmount.toNumber_iou_canonical v2 iss mode hv2 h_xrp hc2] at hok
+      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
+        rw [hint1]; simp),
+      STAmount.toNumber_iou_canonical v1 mode hc1,
+      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
   simp only at hok
   set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
   set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
@@ -561,14 +547,14 @@ lemma STAmount.operator_mul_iou_decompose_mag (v1 v2 result : STAmount) (asset :
   | error e => rw [hmul] at hok; simp at hok
   | ok r =>
     rw [hmul] at hok; simp only at hok
-    have hofn : STAmount.ofNumber asset r mode = .ok result := hok
+    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
     have hn1_norm := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
     have hn2_norm := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
     have hn1_ne := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
     have hn2_ne := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
     have hn1_val := STAmount.toNumber_iou_canonical_toRat v1 hc1
     have hn2_val := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero asset r mode result ha_iou ha_not_xrp
+    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl
       hofn hresult
     have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne
       hmul hr_ne

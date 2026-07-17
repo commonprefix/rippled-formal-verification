@@ -1,7 +1,11 @@
 #pragma once
 
-#include <test/formal_verification/ffi/protocol/AssetFFI.h>
+#include <test/formal_verification/ffi/LeanObjectFFI.h>
+#include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
 
+#include <xrpl/protocol/Asset.h>
+#include <xrpl/protocol/Issue.h>
+#include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/STAmount.h>
 
 #include <lean/lean.h>
@@ -10,9 +14,9 @@
 
 extern "C" {
 lean_object*
-lean_st_amount_build(lean_object* asset, uint64_t mantissa, int64_t offset, uint8_t negative);
+lean_st_amount_build(lean_object* numericType, uint64_t mantissa, int64_t offset, uint8_t negative);
 lean_object*
-lean_st_amount_asset(lean_object* amount);
+lean_st_amount_numeric_type(lean_object* amount);
 uint64_t
 lean_st_amount_mantissa(lean_object* amount);
 int64_t
@@ -34,7 +38,7 @@ public:
     {
         return STAmountFFI(leanCall(
             lean_st_amount_build,
-            AssetFFI::build(s.asset()),
+            NumericTypeFFI::fromAsset(s.asset()),
             s.mantissa(),
             s.exponent(),
             static_cast<std::uint8_t>(s.negative() ? 1 : 0)));
@@ -43,14 +47,12 @@ public:
     STAmount
     read() const
     {
-        Asset asset = leanGetObj<AssetFFI>(lean_st_amount_asset);
-        std::uint64_t mantissa = leanGet<std::uint64_t>(lean_st_amount_mantissa);
-        int exponent = static_cast<int>(leanGet<std::int64_t>(lean_st_amount_offset));
-        bool negative = leanGet<std::uint8_t>(lean_st_amount_negative) != 0;
-        // C++ stores native drops raw via set(), not canonicalized.
-        if (asset.native() && exponent == 0)
-            return STAmount{mantissa, negative};
-        return STAmount{asset, mantissa, exponent, negative};
+        bool const integral = leanGetObj<NumericTypeFFI>(lean_st_amount_numeric_type);
+        std::uint64_t const mantissa = leanGet<std::uint64_t>(lean_st_amount_mantissa);
+        int const exponent = static_cast<int>(leanGet<std::int64_t>(lean_st_amount_offset));
+        bool const negative = leanGet<std::uint8_t>(lean_st_amount_negative) != 0;
+        Asset const placeholder = integral ? Asset{noMPT()} : Asset{noIssue()};
+        return STAmount{placeholder, mantissa, exponent, negative};
     }
 };
 

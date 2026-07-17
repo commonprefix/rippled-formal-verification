@@ -50,16 +50,22 @@ class LeanVaultDeposit_test : public LeanSuite
             rounded.threw ? std::optional<TER>{tefEXCEPTION} : rounded.error;
         std::optional<TER> const expectedError =
             expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
-        std::optional<STAmount> const expectedAmount =
-            expected == tesSUCCESS ? std::optional<STAmount>{amount} : std::nullopt;
+        // The model result carries no asset, so compare the rounded value (a Number), not the
+        // STAmount (whose operator== also checks currency).
+        std::optional<Number> const leanAmount = rounded.amount
+            ? std::optional<Number>{static_cast<Number>(*rounded.amount)}
+            : std::nullopt;
+        std::optional<Number> const expectedAmount = expected == tesSUCCESS
+            ? std::optional<Number>{static_cast<Number>(amount)}
+            : std::nullopt;
         BEAST_EXPECTS(
             leanError == expectedError,
             std::string("error lean=") + (leanError ? transToken(*leanError) : "none") +
                 " expected " + (expectedError ? transToken(*expectedError) : "none"));
         BEAST_EXPECTS(
-            rounded.amount == expectedAmount,
-            std::string("amount lean=") + (rounded.amount ? rounded.amount->getText() : "none") +
-                " expected " + (expectedAmount ? expectedAmount->getText() : "none"));
+            leanAmount == expectedAmount,
+            std::string("amount lean=") + (leanAmount ? to_string(*leanAmount) : "none") +
+                " expected " + (expectedAmount ? to_string(*expectedAmount) : "none"));
     }
 
     // Model of doApply: leanVaultDeposit computes shares and the new vault state.

@@ -1,5 +1,5 @@
-import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Vault.VaultWithdraw
@@ -26,7 +26,7 @@ structure ClawbackResult where
 def Vault.canClawbackVaultShares (vault : Vault) : Except String CanClawbackVaultSharesResult := do
   if vault.sharesTotal.mantissa_ == 0 || (vault.assetsTotal.mantissa_ != 0 || vault.assetsAvailable.mantissa_ != 0) then do
     return .error .tecNO_PERMISSION
-  return .assets (← STAmount.ofNumber vault.sharesAsset vault.sharesTotal .to_nearest)
+  return .assets (← STAmount.ofNumber .int64 vault.sharesTotal .to_nearest)
 
 
 def Vault.burnShares (vault : Vault) (sharesDestroyed : STAmount) : Except String Vault := do
@@ -39,7 +39,7 @@ def Vault.burnShares (vault : Vault) (sharesDestroyed : STAmount) : Except Strin
 
 
 def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeClawbackResult := do
-  let result : ComputeClawbackResult := ⟨none, STAmount.ofAsset vault.asset, STAmount.ofAsset vault.sharesAsset⟩
+  let result : ComputeClawbackResult := ⟨none, STAmount.zero vault.numericType, STAmount.zero .int64⟩
   if assets.negative then
     return {result with error := some .tecINTERNAL}
   try
@@ -48,7 +48,7 @@ def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeC
 
     let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
     if assetsRecoveredNumber.operator_gt vault.assetsAvailable then
-      let assetsRecovered ← STAmount.ofNumber vault.asset vault.assetsAvailable .to_nearest
+      let assetsRecovered ← STAmount.ofNumber vault.numericType vault.assetsAvailable .to_nearest
       let sharesDestroyed ← assetsToSharesWithdraw vault assetsRecovered true false
       let assetsRecovered ← Vault.sharesToAssetsWithdraw vault sharesDestroyed false
 
@@ -59,7 +59,7 @@ def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeC
     return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, STAmount.ofAsset vault.asset, STAmount.ofAsset vault.sharesAsset⟩
+      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, STAmount.zero .int64⟩
     else
       throw e
 

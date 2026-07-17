@@ -11,14 +11,16 @@ instance : RatValued STAmount where
 instance : RatValued IOUAmount where
   toRat := IOUAmount.toRat
 
-/-- A well-formed native (XRP) STAmount: XRP asset, stored canonically with
-`mOffset = 0`, and within the legal drops range (`isLegalNet`). The model's
-native arithmetic reads `signedDrops` (which ignores `mOffset`), so these are the
-preconditions under which it is faithful. -/
-structure STAmount.NativeCanonical (s : STAmount) : Prop where
-  is_xrp : s.mAsset = xrpAsset
+/-- A well-formed integral (XRP or MPT) STAmount: stored canonically with
+`mOffset = 0`, and within the numericType's own carried bound (`maxValue`). XRP
+(`NumericType.native`) and MPT (`NumericType.int64`) differ only in the carried
+bound *value*, so this single predicate (parameterized by `s.mNumericType`) covers
+both. The model's integral arithmetic reads `signedDrops` (which ignores `mOffset`),
+so these are the preconditions under which it is faithful. -/
+structure STAmount.IntegralCanonical (s : STAmount) : Prop where
+  is_integral : s.mNumericType.isIntegral = true
   offset_zero : s.mOffset = 0
-  in_range : s.mValue.toNat ≤ kMaxNativeN
+  in_range : s.mValue.toNat ≤ s.mNumericType.maxValue.toNat
 
 /-- `result` is the value `truth` correctly rounded onto the scale grid
 `10^s·ℤ` (faithfully for `.to_nearest`: one of the two enclosing grid

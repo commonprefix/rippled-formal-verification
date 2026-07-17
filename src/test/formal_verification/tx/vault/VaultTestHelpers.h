@@ -36,11 +36,10 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
     return VaultState{
         .assetsTotal = vaultSle->at(sfAssetsTotal),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
-        .asset = asset,
+        .numericType = NumericTypeFFI::tagOf(asset),
         .scale = vaultSle->at(sfScale),
         .sharesTotal = Number{static_cast<std::int64_t>(
             env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount))},
-        .sharesAsset = MPTIssue{shareMptId},
         .interestUnrealized = vaultSle->at(sfInterestUnrealized),
         .lossUnrealized = vaultSle->at(sfLossUnrealized)};
 }

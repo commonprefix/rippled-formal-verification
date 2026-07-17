@@ -2,7 +2,7 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 
-#include <xrpl/basics/IOUAmount.h>
+#include <xrpl/protocol/IOUAmount.h>
 
 #include <lean/lean.h>
 

@@ -17,8 +17,7 @@ round-trip plus the reference-amount construction. -/
 
 /-- A canonical (post-`canonicalize`) nonzero IOU STAmount. -/
 structure STAmount.IOUCanonical (s : STAmount) : Prop where
-  iou_asset : s.mAsset.holdsIssue = true
-  not_xrp : s.mAsset.isNative = false
+  is_fractional : s.mNumericType = .fractional
   mant_lo : 10 ^ 15 ≤ s.mValue.toNat
   mant_hi : s.mValue.toNat < 10 ^ 16
   exp_lo : (-96 : ℤ) ≤ s.mOffset
@@ -79,18 +78,9 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     rw [h_sd_signed]
     rcases hneg : s.mIsNegative with _ | _ <;> simp
   have h_int : ¬ s.integral = true := by
-    intro h
-    unfold STAmount.integral at h
-    rcases ha : s.mAsset with i | m
-    · have h_native := hc.not_xrp
-      rw [ha] at h_native
-      rw [ha] at h
-      -- `Asset.integral (.issue i)` and `Asset.isNative (.issue i)` both reduce to `i.native`.
-      exact Bool.noConfusion (h_native.symm.trans
-        (show (Asset.issue i).isNative = true from h))
-    · have h_iss := hc.iou_asset
-      rw [ha] at h_iss
-      exact Bool.noConfusion h_iss
+    unfold STAmount.integral
+    rw [hc.is_fractional]
+    decide
   unfold STAmount.iou
   rw [if_neg h_int]
   -- ofMantissaExp → normalize: mantissa ≠ 0.
@@ -203,17 +193,9 @@ theorem STAmount.canonicalize_canonical_id (s : STAmount) (mode : rounding_mode)
     have := hc.mant_hi
     omega
   have h_int : ¬ s.integral = true := by
-    intro h
-    unfold STAmount.integral at h
-    rcases ha : s.mAsset with i | m
-    · have h_native := hc.not_xrp
-      rw [ha] at h_native
-      rw [ha] at h
-      exact Bool.noConfusion (h_native.symm.trans
-        (show (Asset.issue i).isNative = true from h))
-    · have h_iss := hc.iou_asset
-      rw [ha] at h_iss
-      exact Bool.noConfusion h_iss
+    unfold STAmount.integral
+    rw [hc.is_fractional]
+    decide
   have h_sd_val : s.signedDrops.toInt64.toInt = s.signedDrops :=
     STAmount.signedDrops_toInt64_toInt s hc.mant_hi
   set sd : Int64 := s.signedDrops.toInt64 with hsd_def
@@ -296,17 +278,15 @@ theorem STAmount.canonicalize_canonical_id (s : STAmount) (mode : rounding_mode)
     simp only at hneg
     rw [hneg]
 
-/-- The reference amount `±10^15 · 10^s` constructs exactly, for any IOU asset
-and any scale `s ∈ [−96, 80]`. -/
-theorem STAmount.checked_reference (asset : Asset) (s : ℤ) (neg : Bool)
+/-- The reference amount `±10^15 · 10^s` constructs exactly, for any scale
+`s ∈ [−96, 80]`. -/
+theorem STAmount.checked_reference (s : ℤ) (neg : Bool)
     (mode : rounding_mode)
-    (h_iou : asset.holdsIssue = true) (h_not_xrp : asset.isNative = false)
     (hs_lo : (-96 : ℤ) ≤ s) (hs_hi : s ≤ 80) :
-    STAmount.checked asset kMinValue s neg mode
-      = .ok ⟨asset, kMinValue, s, neg⟩ := by
-  have hc : STAmount.IOUCanonical ⟨asset, kMinValue, s, neg⟩ :=
-    { iou_asset := h_iou
-      not_xrp := h_not_xrp
+    STAmount.checked .fractional kMinValue s neg mode
+      = .ok ⟨.fractional, kMinValue, s, neg⟩ := by
+  have hc : STAmount.IOUCanonical ⟨.fractional, kMinValue, s, neg⟩ :=
+    { is_fractional := rfl
       mant_lo := by show 10 ^ 15 ≤ kMinValue.toNat; rw [(by decide : kMinValue.toNat = 10 ^ 15)]
       mant_hi := by show kMinValue.toNat < 10 ^ 16; rw [(by decide : kMinValue.toNat = 10 ^ 15)]; norm_num
       exp_lo := hs_lo

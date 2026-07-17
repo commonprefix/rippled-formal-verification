@@ -1,15 +1,16 @@
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
-import XRPL.Properties.Protocol.STAmount.Common.STAmountCommonProps
+import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 
 namespace XRPL.Model.Protocol
 
 /-! ## `operator_neg` value and field invariants
 
 `operator_neg` flips the sign flag (or is the identity on zero); it preserves the
-asset, offset, and magnitude, and negates the exact value. These let the
+numericType, offset, and magnitude, and negates the exact value. These let the
 subtraction theorems reuse the addition engine via `v1 - v2 = v1 + (-v2)`. -/
 
-lemma STAmount.operator_neg_mAsset (s : STAmount) : s.operator_neg.mAsset = s.mAsset := by
+lemma STAmount.operator_neg_mNumericType (s : STAmount) :
+    s.operator_neg.mNumericType = s.mNumericType := by
   unfold STAmount.operator_neg; split <;> rfl
 
 lemma STAmount.operator_neg_mOffset (s : STAmount) : s.operator_neg.mOffset = s.mOffset := by
@@ -44,29 +45,32 @@ lemma STAmount.operator_neg_toRat (s : STAmount) : s.operator_neg.toRat = -s.toR
       have h2 : s.toRat = (s.mValue.toNat : ℚ) * 10 ^ s.mOffset := STAmount.toRat_of_nonneg s hf
       rw [h1, h2]
 
-/-- A `NativeCanonical` amount stays `NativeCanonical` under negation. -/
-lemma STAmount.NativeCanonical.operator_neg {s : STAmount} (h : s.NativeCanonical) :
-    s.operator_neg.NativeCanonical where
-  is_xrp := by rw [STAmount.operator_neg_mAsset]; exact h.is_xrp
-  offset_zero := by rw [STAmount.operator_neg_mOffset]; exact h.offset_zero
-  in_range := by rw [STAmount.operator_neg_mValue]; exact h.in_range
+/-- `operator_neg` negates the signed-drops view. -/
+lemma STAmount.operator_neg_signedDrops (s : STAmount) :
+    s.operator_neg.signedDrops = -s.signedDrops := by
+  unfold STAmount.signedDrops
+  rw [STAmount.operator_neg_mValue]
+  by_cases h : s.mValue = 0
+  · have hz : s.mValue.toNat = 0 := by rw [h]; rfl
+    rw [hz]; simp
+  · have hne : ¬ (s.mValue == 0) = true := by rw [beq_iff_eq]; exact h
+    have hneg : s.operator_neg.mIsNegative = !s.mIsNegative := by
+      unfold STAmount.operator_neg; rw [if_neg hne]
+    rw [hneg]
+    rcases hn : s.mIsNegative <;> simp
 
-/-- A `MPTCanonical` amount stays `MPTCanonical` under negation. -/
-lemma STAmount.MPTCanonical.operator_neg {s : STAmount} (h : s.MPTCanonical) :
-    s.operator_neg.MPTCanonical where
+/-- An `IntegralCanonical` amount stays `IntegralCanonical` under negation. -/
+lemma STAmount.IntegralCanonical.operator_neg {s : STAmount} (h : s.IntegralCanonical) :
+    s.operator_neg.IntegralCanonical where
+  is_integral := by rw [STAmount.operator_neg_mNumericType]; exact h.is_integral
   offset_zero := by rw [STAmount.operator_neg_mOffset]; exact h.offset_zero
-  value_in_range := by rw [STAmount.operator_neg_mValue]; exact h.value_in_range
-  zero_sign_cleared := by
-    intro hmv
-    rw [STAmount.operator_neg_mValue] at hmv
-    have : s.operator_neg = s := by unfold STAmount.operator_neg; rw [if_pos (by rw [beq_iff_eq]; exact hmv)]
-    rw [this]; exact h.zero_sign_cleared hmv
+  in_range := by
+    rw [STAmount.operator_neg_mNumericType, STAmount.operator_neg_mValue]; exact h.in_range
 
 /-- An `IOUCanonical` amount stays `IOUCanonical` under negation (sign-flip only). -/
 lemma STAmount.IOUCanonical.operator_neg {s : STAmount} (h : s.IOUCanonical) :
     s.operator_neg.IOUCanonical where
-  iou_asset := by rw [STAmount.operator_neg_mAsset]; exact h.iou_asset
-  not_xrp := by rw [STAmount.operator_neg_mAsset]; exact h.not_xrp
+  is_fractional := by rw [STAmount.operator_neg_mNumericType]; exact h.is_fractional
   mant_lo := by rw [STAmount.operator_neg_mValue]; exact h.mant_lo
   mant_hi := by rw [STAmount.operator_neg_mValue]; exact h.mant_hi
   exp_lo := by rw [STAmount.operator_neg_mOffset]; exact h.exp_lo

@@ -1,5 +1,5 @@
-import XRPL.Properties.Properties
 import Lean
+import XRPL.Properties.Properties
 
 open Lean Elab Command PrettyPrinter
 

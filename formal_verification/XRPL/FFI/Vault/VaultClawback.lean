@@ -1,5 +1,5 @@
-import XRPL.Model.Vault.VaultClawback
 import XRPL.Model.Protocol.STAmount
+import XRPL.Model.Vault.VaultClawback
 
 open XRPL.Model.Protocol (STAmount)
 open XRPL.Model.SingleAssetVault

@@ -7,16 +7,15 @@ headlines. The thin headlines live in `Mul.RoundsToRepresentable`. -/
 namespace XRPL.Model.Protocol
 
 /-- Proof of `operator_mul_repr_iou` (IOU multiply within 1 ULP, `to_nearest`). -/
-theorem STAmount.operator_mul_repr_iou_proof (v1 v2 result : STAmount) (asset : Asset) (iss : Issue)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+theorem STAmount.operator_mul_repr_iou_proof (v1 v2 result : STAmount) (nt : NumericType)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 asset .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
     STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .to_nearest := by
   obtain ⟨r, hofn, hr_lo, hr_hi, hr_exp_lo, hr_exp_hi, hop⟩ :=
-    STAmount.operator_mul_iou_decompose v1 v2 result asset iss hv1 hv2 h_xrp ha_iou ha_not_xrp
+    STAmount.operator_mul_iou_decompose v1 v2 result nt hnt
       hc1 hc2 hok hresult
-  obtain ⟨hsnap_r, hexp⟩ := STAmount.ofNumber_iou_within_half_ulp asset r result ha_iou ha_not_xrp
+  obtain ⟨hsnap_r, hexp⟩ := STAmount.ofNumber_iou_within_half_ulp nt r result hnt
     hr_lo hr_hi hr_exp_lo hr_exp_hi hofn hresult
   have hsnap : |result.toRat - r.toRat| ≤ (1 / 2) * (10 : ℚ) ^ result.exponent := by
     refine le_trans hsnap_r ?_
@@ -44,67 +43,61 @@ modes, non-negative operands). The directed double rounding does not compound: b
 directed rounding of the exact product, hence lands within one ULP. The `to_nearest` case
 reuses the dedicated half-ULP snap (`operator_mul_repr_iou_proof`); the three directed modes
 use the `Number.upper`/`lower` minimality collapse (`operator_mul_repr_iou_directed_core`). -/
-theorem STAmount.operator_mul_repr_iou_directed_proof (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue) (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+theorem STAmount.operator_mul_repr_iou_directed_proof (v1 v2 result : STAmount) (nt : NumericType)
+    (mode : rounding_mode)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
-    (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
     STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 mode := by
   cases mode with
   | to_nearest =>
-    exact STAmount.operator_mul_repr_iou_proof v1 v2 result asset iss hv1 hv2 h_xrp ha_iou
-      ha_not_xrp hc1 hc2 hok hresult
+    exact STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
   | upward =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result asset iss .upward
-      (Or.inl rfl) hv1 hv2 h_xrp ha_iou ha_not_xrp hc1 hc2 hn1 hn2 hok hresult
+    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .upward
+      (Or.inl rfl) hnt hc1 hc2 hn1 hn2 hok hresult
   | downward =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result asset iss .downward
-      (Or.inr (Or.inl rfl)) hv1 hv2 h_xrp ha_iou ha_not_xrp hc1 hc2 hn1 hn2 hok hresult
+    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .downward
+      (Or.inr (Or.inl rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
   | towards_zero =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result asset iss .towards_zero
-      (Or.inr (Or.inr rfl)) hv1 hv2 h_xrp ha_iou ha_not_xrp hc1 hc2 hn1 hn2 hok hresult
+    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .towards_zero
+      (Or.inr (Or.inr rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
 
 /-- Proof of `operator_mul_iou_within_1ulp` (IOU multiply accuracy **1** ULP, any sign/mode).
 Dispatches to the half-ULP `to_nearest` snap, the magnitude `towards_zero` collapse, and the
 `upward`/`downward` mixed-direction magnitude bound; each lands within one ULP. -/
-theorem STAmount.operator_mul_iou_within_1ulp_proof (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue) (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+theorem STAmount.operator_mul_iou_within_1ulp_proof (v1 v2 result : STAmount) (nt : NumericType)
+    (mode : rounding_mode)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 asset mode = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
     |result.toRat - v1.toRat * v2.toRat| ≤ 1 * (10 : ℚ) ^ result.exponent := by
   rw [one_mul]
   cases mode with
   | to_nearest =>
-    have h := STAmount.operator_mul_repr_iou_proof v1 v2 result asset iss hv1 hv2 h_xrp ha_iou
-      ha_not_xrp hc1 hc2 hok hresult
+    have h := STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
     have := h.2; rwa [Nat.cast_one, one_mul] at this
   | upward =>
-    exact STAmount.operator_mul_iou_directed_mag_one v1 v2 result asset iss .upward (Or.inl rfl)
-      hv1 hv2 h_xrp ha_iou ha_not_xrp hc1 hc2 hok hresult
+    exact STAmount.operator_mul_iou_directed_mag_one v1 v2 result nt .upward (Or.inl rfl)
+      hnt hc1 hc2 hok hresult
   | downward =>
-    exact STAmount.operator_mul_iou_directed_mag_one v1 v2 result asset iss .downward (Or.inr rfl)
-      hv1 hv2 h_xrp ha_iou ha_not_xrp hc1 hc2 hok hresult
+    exact STAmount.operator_mul_iou_directed_mag_one v1 v2 result nt .downward (Or.inr rfl)
+      hnt hc1 hc2 hok hresult
   | towards_zero =>
-    exact STAmount.operator_mul_iou_towards_zero_one v1 v2 result asset iss hv1 hv2 h_xrp ha_iou
-      ha_not_xrp hc1 hc2 hok hresult
+    exact STAmount.operator_mul_iou_towards_zero_one v1 v2 result nt hnt
+      hc1 hc2 hok hresult
 
 /-- Proof of `operator_mul_iou_abs_le_towards_zero` (magnitude never increases). -/
-theorem STAmount.operator_mul_iou_abs_le_towards_zero_proof (v1 v2 result : STAmount) (asset : Asset)
-    (iss : Issue)
-    (hv1 : v1.mAsset = .issue iss) (hv2 : v2.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
-    (ha_iou : asset.holdsIssue = true) (ha_not_xrp : asset.isNative = false)
+theorem STAmount.operator_mul_iou_abs_le_towards_zero_proof (v1 v2 result : STAmount) (nt : NumericType)
+    (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 asset .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 nt .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
     |result.toRat| ≤ |v1.toRat * v2.toRat| := by
   obtain ⟨r, hofn, hr_lo, hr_hi, hr_exp_lo, hr_exp_hi, _, hmb⟩ :=
-    STAmount.operator_mul_iou_decompose_mag v1 v2 result asset iss .towards_zero hv1 hv2 h_xrp
-      ha_iou ha_not_xrp hc1 hc2 hok hresult
+    STAmount.operator_mul_iou_decompose_mag v1 v2 result nt .towards_zero hnt
+      hc1 hc2 hok hresult
   exact le_trans
-    (STAmount.ofNumber_iou_abs_le_towards_zero asset r result ha_iou ha_not_xrp hr_lo hr_hi
+    (STAmount.ofNumber_iou_abs_le_towards_zero nt r result hnt hr_lo hr_hi
       hr_exp_lo hr_exp_hi hofn hresult)
     hmb.1
 
