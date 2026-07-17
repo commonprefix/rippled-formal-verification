@@ -99,7 +99,7 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
   if isDonation && vault.sharesTotal.mantissa_ == 0 then
     return {result with error := some .tecNO_PERMISSION}
 
-  if vault.isInsolvent then
+  if vault.isInsolvent && !isDonation then
     return {result with error := some .tecNO_PERMISSION}
   
   let (assetDeposited, sharesCreated) ←
