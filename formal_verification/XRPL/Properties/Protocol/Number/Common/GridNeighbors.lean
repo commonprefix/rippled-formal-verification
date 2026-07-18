@@ -9,7 +9,7 @@ them admissible witnesses for the `Number.lower`/`upper` tightness lemmas, which
 quantify over normalized `Number`s only: if a double-rounded result were more than
 one ULP from the target, its far-side neighbor would be a representable value
 between the correctly-rounded `Number` and the target — contradicting tightness.
-Shared by the `Mul` and `Add` `DirectedTight` collapse proofs. -/
+Shared by the `Mul` and `Add` `DirectedTight` proofs. -/
 
 namespace XRPL.Model.Protocol
 
@@ -119,6 +119,19 @@ lemma exists_normalized_grid_above (Mr : ℕ) (ec : ℤ)
       have hcast : (((Mr + 1) * 1000 : ℕ) : ℚ) = ((Mr : ℚ) + 1) * 1000 := by push_cast; ring
       rw [hcast]; ring
 
+/-- Flip the sign bit of a positive normalized `Number`: it stays normalized and its
+rational value negates. Shared tail of the two `_neg` grid-neighbor lemmas. -/
+private lemma exists_grid_neg_of {m0 : Number} {t : ℚ} (hnorm : m0.isNormalized)
+    (hneg0 : m0.negative_ = false) (hval : m0.toRat = t) (ht : 0 < t) :
+    ∃ m : Number, m.isNormalized ∧ m.negative_ = true ∧ m.toRat = -t := by
+  refine ⟨⟨true, m0.mantissa_, m0.exponent_⟩, ?_, rfl, ?_⟩
+  · rcases hnorm with hz | hfields
+    · rw [hz, Number.toRat_zero] at hval
+      exact absurd hval.symm ht.ne'
+    · exact Or.inr hfields
+  · rw [Number.toRat_of_neg _ rfl]
+    exact congrArg Neg.neg ((Number.toRat_of_nonneg m0 hneg0).symm.trans hval)
+
 /-- `-((Mr − 1)·10^ec)` is a negative normalized `Number`. -/
 lemma exists_normalized_grid_below_neg (Mr : ℕ) (ec : ℤ)
     (hlo : 10 ^ 15 ≤ Mr) (hhi : Mr < 10 ^ 16)
@@ -126,20 +139,10 @@ lemma exists_normalized_grid_below_neg (Mr : ℕ) (ec : ℤ)
     ∃ m : Number, m.isNormalized ∧ m.negative_ = true ∧
       m.toRat = -(((Mr : ℚ) - 1) * (10 : ℚ) ^ ec) := by
   obtain ⟨m0, hnorm, hneg0, hval⟩ := exists_normalized_grid_below Mr ec hlo hhi hec_lo hec_hi
-  have hzp : (0 : ℚ) < (10 : ℚ) ^ ec := zpow_pos (by norm_num) _
-  have hMr1 : (1 : ℚ) < (Mr : ℚ) := by exact_mod_cast (by omega : 1 < Mr)
-  refine ⟨⟨true, m0.mantissa_, m0.exponent_⟩, ?_, rfl, ?_⟩
-  · rcases hnorm with hz | hfields
-    · exfalso
-      rw [hz, Number.toRat_zero] at hval
-      nlinarith [hval, hzp, hMr1]
-    · exact Or.inr hfields
-  · rw [Number.toRat_of_neg _ rfl]
-    have hprod : (m0.mantissa_.toNat : ℚ) * (10 : ℚ) ^ m0.exponent_
-        = ((Mr : ℚ) - 1) * (10 : ℚ) ^ ec := by
-      rw [← Number.toRat_of_nonneg m0 hneg0, hval]
-    show -((m0.mantissa_.toNat : ℚ) * (10 : ℚ) ^ m0.exponent_) = -(((Mr : ℚ) - 1) * (10 : ℚ) ^ ec)
-    rw [hprod]
+  have hMr1 : (0 : ℚ) < (Mr : ℚ) - 1 := by
+    have : (1 : ℚ) < (Mr : ℚ) := by exact_mod_cast (show (1 : ℕ) < Mr by omega)
+    linarith
+  exact exists_grid_neg_of hnorm hneg0 hval (mul_pos hMr1 (zpow_pos (by norm_num) _))
 
 /-- `-((Mr + 1)·10^ec)` is a negative normalized `Number`. -/
 lemma exists_normalized_grid_above_neg (Mr : ℕ) (ec : ℤ)
@@ -148,19 +151,6 @@ lemma exists_normalized_grid_above_neg (Mr : ℕ) (ec : ℤ)
     ∃ m : Number, m.isNormalized ∧ m.negative_ = true ∧
       m.toRat = -(((Mr : ℚ) + 1) * (10 : ℚ) ^ ec) := by
   obtain ⟨m0, hnorm, hneg0, hval⟩ := exists_normalized_grid_above Mr ec hlo hhi hec_lo hec_hi
-  have hzp : (0 : ℚ) < (10 : ℚ) ^ ec := zpow_pos (by norm_num) _
-  have hMr1 : (0 : ℚ) < (Mr : ℚ) + 1 := by positivity
-  refine ⟨⟨true, m0.mantissa_, m0.exponent_⟩, ?_, rfl, ?_⟩
-  · rcases hnorm with hz | hfields
-    · exfalso
-      rw [hz, Number.toRat_zero] at hval
-      nlinarith [hval, hzp, hMr1]
-    · exact Or.inr hfields
-  · rw [Number.toRat_of_neg _ rfl]
-    have hprod : (m0.mantissa_.toNat : ℚ) * (10 : ℚ) ^ m0.exponent_
-        = ((Mr : ℚ) + 1) * (10 : ℚ) ^ ec := by
-      rw [← Number.toRat_of_nonneg m0 hneg0, hval]
-    show -((m0.mantissa_.toNat : ℚ) * (10 : ℚ) ^ m0.exponent_) = -(((Mr : ℚ) + 1) * (10 : ℚ) ^ ec)
-    rw [hprod]
+  exact exists_grid_neg_of hnorm hneg0 hval (by positivity)
 
 end XRPL.Model.Protocol

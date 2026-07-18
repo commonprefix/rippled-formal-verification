@@ -46,8 +46,8 @@ theorem STAmount.operator_add_repr_iou_to_nearest_proof (v1 v2 result : STAmount
     .to_nearest 1 (1 / 2) (11 / (2 ^ 63 - 18 : ℚ)) trivial hsnap hr_ulp hop (by positivity)
     (by norm_num) (by norm_num)
 
-/-- Proof of `operator_add_repr_iou`: half-ULP snap for `to_nearest`;
-sign-dispatched minimality collapse for the directed modes. -/
+/-- Proof of `operator_add_repr_iou`: half-ULP re-rounding bound for `to_nearest`;
+sign-split minimality argument for the directed modes. -/
 theorem STAmount.operator_add_repr_iou_proof (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

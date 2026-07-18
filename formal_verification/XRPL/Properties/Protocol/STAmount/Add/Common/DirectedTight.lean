@@ -8,10 +8,10 @@ import XRPL.Properties.Protocol.Number.Common.GridNeighbors
 /-! # IOU addition is within **1 ULP** for the directed modes
 
 The directed double rounding (19-digit `Number` sum, then the 16-digit
-`IOUAmount.ofNumber` snap) does not compound: the sum is correctly rounded
-(`operator_add_rounded_*`), the snap is an exact fixed-scale ceiling/floor, and
-`Number.upper`/`lower` minimality pins `result` to within one ULP of the exact sum.
-Same engine as `STAmount.Mul.Common.DirectedTight`, split by the sign of the sum. -/
+`IOUAmount.ofNumber` re-round) does not compound: the sum is correctly rounded
+(`operator_add_rounded_*`), the re-round is an exact fixed-scale ceiling/floor, and
+`Number.upper`/`lower` minimality bounds `result` to within one ULP of the exact sum.
+Same argument as `STAmount.Mul.Common.DirectedTight`, split by the sign of the sum. -/
 
 namespace XRPL.Model.Protocol
 
@@ -79,8 +79,48 @@ lemma Number.RoundsToRepresentable.nonneg_of_pos (s : Number) (t : ℚ) (mode : 
       linarith
     linarith
 
-set_option maxHeartbeats 1200000 in
--- per-mode snap + minimality algebra exceeds the default heartbeat budget
+/-- From a non-negative value and the 16-digit mantissa range: `mant.toInt` casts to a
+natural `Mr` with `10^15 ≤ Mr < 10^16`. -/
+private lemma directed_grid_facts_pos (mant : Int64) (exp : ℤ)
+    (hval_nn : 0 ≤ (mant.toInt : ℚ) * (10 : ℚ) ^ exp)
+    (hmr : cMinValue.toNat ≤ mant.toInt.natAbs ∧ mant.toInt.natAbs ≤ cMaxValue.toNat) :
+    ∃ Mr : ℕ, (mant.toInt : ℚ) = (Mr : ℚ) ∧ 10 ^ 15 ≤ Mr ∧ Mr < 10 ^ 16 := by
+  have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
+  have hmant_nn : 0 ≤ mant.toInt := by
+    by_contra hcon
+    push_neg at hcon
+    have h1 : (mant.toInt : ℚ) < 0 := by exact_mod_cast hcon
+    have h2 : (mant.toInt : ℚ) * (10:ℚ) ^ exp < 0 := mul_neg_of_neg_of_pos h1 hpec
+    linarith [hval_nn]
+  have hnatAbs : mant.toInt.natAbs = mant.toInt.toNat := by omega
+  refine ⟨mant.toInt.toNat, ?_, ?_, ?_⟩
+  · exact_mod_cast (Int.toNat_of_nonneg hmant_nn).symm
+  · have h := hmr.1
+    rw [show cMinValue.toNat = 10 ^ 15 from by decide, hnatAbs] at h; exact h
+  · have h := hmr.2
+    rw [show cMaxValue.toNat = 10 ^ 16 - 1 from by decide, hnatAbs] at h; omega
+
+/-- From a non-positive value and the 16-digit mantissa range: `mant.toInt` casts to
+`-Mr` for a natural `Mr` with `10^15 ≤ Mr < 10^16`. -/
+private lemma directed_grid_facts_neg (mant : Int64) (exp : ℤ)
+    (hval_np : (mant.toInt : ℚ) * (10 : ℚ) ^ exp ≤ 0)
+    (hmr : cMinValue.toNat ≤ mant.toInt.natAbs ∧ mant.toInt.natAbs ≤ cMaxValue.toNat) :
+    ∃ Mr : ℕ, (mant.toInt : ℚ) = -(Mr : ℚ) ∧ 10 ^ 15 ≤ Mr ∧ Mr < 10 ^ 16 := by
+  have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
+  have hmant_np : mant.toInt ≤ 0 := by
+    by_contra hcon
+    push_neg at hcon
+    have h1 : (0:ℚ) < (mant.toInt : ℚ) := by exact_mod_cast hcon
+    linarith [mul_pos h1 hpec, hval_np]
+  refine ⟨mant.toInt.natAbs, ?_, ?_, ?_⟩
+  · have h : mant.toInt = -(mant.toInt.natAbs : ℤ) := by omega
+    exact_mod_cast h
+  · rw [← show cMinValue.toNat = 10 ^ 15 from by decide]; exact hmr.1
+  · have h := hmr.2
+    rw [show cMaxValue.toNat = 10 ^ 16 - 1 from by decide] at h; omega
+
+set_option maxHeartbeats 400000 in
+-- the per-mode re-rounding and minimality algebra exceeds the default heartbeat budget
 /-- **Directed IOU addition of a non-negative exact sum is within 1 ULP.** -/
 lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     (mode : rounding_mode)
@@ -121,17 +161,14 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
   set mant : Int64 := sumI.mantissa_ with hmant_def
   set exp : ℤ := sumI.exponent_ with hexp_def
   have hp : (0:ℚ) < (10:ℚ) ^ sum.exponent_ := zpow_pos (by norm_num) _
-  have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
   have h1000 : (10:ℚ) ^ (sum.exponent_ + 3) = (10:ℚ) ^ sum.exponent_ * 1000 := by
     rw [zpow_add₀ (by norm_num : (10:ℚ)≠0)]; norm_num
   have hgb_lo : minExponent + 4 ≤ exp := by
     have h := h96; unfold cMinOffset at h; unfold minExponent; omega
   have hgb_hi : exp + 3 ≤ maxExponent := by
     have h := h80; unfold cMaxOffset at h; unfold maxExponent; omega
-  have hcMin15 : cMinValue.toNat = 10 ^ 15 := by decide
-  have hcMax16 : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
   rcases hmode with hm | hm | hm
-  · -- upward: exact ceiling snap
+  · -- upward: exact ceiling re-round
     subst hm
     obtain ⟨hval, hEle⟩ := normalizeToRange_16_ceil_pos sum mant exp hs_neg h_lo h_hi
       he_lo he_hi hnorm_r
@@ -159,21 +196,8 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     have htruth_le_r : truth ≤ sum.toRat := by
       rw [hsum_eq]; exact Number.le_upper truth nUp hup_eq
     have htruth_le_res : truth ≤ result.toRat := le_trans htruth_le_r hr_le_res
-    have hmant_nn : 0 ≤ mant.toInt := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (mant.toInt : ℚ) < 0 := by exact_mod_cast hcon
-      have h2 : (mant.toInt : ℚ) * (10:ℚ)^exp < 0 := mul_neg_of_neg_of_pos h1 hpec
-      rw [hval] at h2
-      exact absurd h2 (not_lt.mpr (by positivity))
-    set Mr : ℕ := mant.toInt.toNat with hMr_def
-    have hcast : (mant.toInt : ℚ) = (Mr : ℚ) := by
-      rw [hMr_def]; exact_mod_cast (Int.toNat_of_nonneg hmant_nn).symm
-    have hnatAbs : mant.toInt.natAbs = Mr := by rw [hMr_def]; omega
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by
-      have h := hmr.1; rw [hcMin15, hnatAbs] at h; exact h
-    have hmtu_hi : Mr < 10 ^ 16 := by
-      have h := hmr.2; rw [hcMax16, hnatAbs] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_pos mant exp (by rw [hval]; positivity) hmr
     have hres_grid : result.toRat = (Mr:ℚ) * (10:ℚ)^exp := by rw [hres_grid0, hcast]
     have hid : ((Mr:ℚ) - 1) * (10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp - (10:ℚ)^exp := by ring
     obtain ⟨m0, hm0_norm, _hm0_neg, hm0_val⟩ :=
@@ -190,7 +214,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     refine ⟨htruth_le_res, ?_⟩
     rw [hres_exp, Nat.cast_one, one_mul, abs_of_nonneg (by linarith [htruth_le_res])]
     rw [hres_grid]; linarith [hbelow, hid]
-  · -- downward: exact floor snap
+  · -- downward: exact floor re-round
     subst hm
     obtain ⟨hval, hEeq⟩ := normalizeToRange_16_floor_pos sum mant exp .downward (Or.inl rfl)
       hs_neg h_lo h_hi he_lo he_hi hnorm_r
@@ -209,21 +233,8 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     have hr_le_truth : sum.toRat ≤ truth := by
       rw [hsum_eq]; exact Number.lower_le truth nLo hlo_eq
     have hres_le_truth : result.toRat ≤ truth := le_trans hres_le_r hr_le_truth
-    have hmant_nn : 0 ≤ mant.toInt := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (mant.toInt : ℚ) < 0 := by exact_mod_cast hcon
-      have h2 : (mant.toInt : ℚ) * (10:ℚ)^exp < 0 := mul_neg_of_neg_of_pos h1 hpec
-      rw [hval] at h2
-      exact absurd h2 (not_lt.mpr (by positivity))
-    set Mr : ℕ := mant.toInt.toNat with hMr_def
-    have hcast : (mant.toInt : ℚ) = (Mr : ℚ) := by
-      rw [hMr_def]; exact_mod_cast (Int.toNat_of_nonneg hmant_nn).symm
-    have hnatAbs : mant.toInt.natAbs = Mr := by rw [hMr_def]; omega
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by
-      have h := hmr.1; rw [hcMin15, hnatAbs] at h; exact h
-    have hmtu_hi : Mr < 10 ^ 16 := by
-      have h := hmr.2; rw [hcMax16, hnatAbs] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_pos mant exp (by rw [hval]; positivity) hmr
     have hres_grid : result.toRat = (Mr:ℚ) * (10:ℚ)^exp := by rw [hres_grid0, hcast]
     have hida : ((Mr:ℚ) + 1) * (10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp + (10:ℚ)^exp := by ring
     obtain ⟨m0, hm0_norm, _hm0_neg, hm0_val⟩ :=
@@ -260,21 +271,8 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     have hr_le_truth : sum.toRat ≤ truth := by
       rw [hsum_eq]; exact Number.lower_le truth nLo hlo_eq
     have hres_le_truth : result.toRat ≤ truth := le_trans hres_le_r hr_le_truth
-    have hmant_nn : 0 ≤ mant.toInt := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (mant.toInt : ℚ) < 0 := by exact_mod_cast hcon
-      have h2 : (mant.toInt : ℚ) * (10:ℚ)^exp < 0 := mul_neg_of_neg_of_pos h1 hpec
-      rw [hval] at h2
-      exact absurd h2 (not_lt.mpr (by positivity))
-    set Mr : ℕ := mant.toInt.toNat with hMr_def
-    have hcast : (mant.toInt : ℚ) = (Mr : ℚ) := by
-      rw [hMr_def]; exact_mod_cast (Int.toNat_of_nonneg hmant_nn).symm
-    have hnatAbs : mant.toInt.natAbs = Mr := by rw [hMr_def]; omega
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by
-      have h := hmr.1; rw [hcMin15, hnatAbs] at h; exact h
-    have hmtu_hi : Mr < 10 ^ 16 := by
-      have h := hmr.2; rw [hcMax16, hnatAbs] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_pos mant exp (by rw [hval]; positivity) hmr
     have hres_grid : result.toRat = (Mr:ℚ) * (10:ℚ)^exp := by rw [hres_grid0, hcast]
     have hida : ((Mr:ℚ) + 1) * (10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp + (10:ℚ)^exp := by ring
     obtain ⟨m0, hm0_norm, _hm0_neg, hm0_val⟩ :=
@@ -328,7 +326,7 @@ lemma Number.RoundsToRepresentable.neg_of_neg (s : Number) (t : ℚ) (mode : rou
       exact mul_pos hm (zpow_pos (by norm_num) s.exponent_)
     linarith
 
-set_option maxHeartbeats 1200000 in
+set_option maxHeartbeats 400000 in
 -- negative mirror: `downward` = magnitude ceiling, `upward`/`towards_zero` = magnitude floor
 /-- **Directed IOU addition of a non-positive exact sum is within 1 ULP.** -/
 lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
@@ -370,15 +368,12 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
   set mant : Int64 := sumI.mantissa_ with hmant_def
   set exp : ℤ := sumI.exponent_ with hexp_def
   have hp : (0:ℚ) < (10:ℚ) ^ sum.exponent_ := zpow_pos (by norm_num) _
-  have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
   have h1000 : (10:ℚ) ^ (sum.exponent_ + 3) = (10:ℚ) ^ sum.exponent_ * 1000 := by
     rw [zpow_add₀ (by norm_num : (10:ℚ)≠0)]; norm_num
   have hgb_lo : minExponent + 4 ≤ exp := by
     have h := h96; unfold cMinOffset at h; unfold minExponent; omega
   have hgb_hi : exp + 3 ≤ maxExponent := by
     have h := h80; unfold cMaxOffset at h; unfold maxExponent; omega
-  have hcMin15 : cMinValue.toNat = 10 ^ 15 := by decide
-  have hcMax16 : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
   rcases hmode with hm | hm | hm
   · -- upward: magnitude floor
     subst hm
@@ -391,19 +386,8 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     have hfleq : ((M/1000 : ℕ):ℚ)*1000 ≤ (M:ℚ) := by exact_mod_cast hf_le
     have hfltq : (M:ℚ) < ((M/1000 : ℕ):ℚ)*1000 + 1000 := by exact_mod_cast hf_lt
     have hexpeq : (10:ℚ)^exp = (10:ℚ)^sum.exponent_ * 1000 := by rw [hEeq, h1000]
-    have hval_np : (mant.toInt : ℚ) * (10:ℚ)^exp ≤ 0 := by
-      rw [hval, neg_nonpos]; positivity
-    have hmant_np : mant.toInt ≤ 0 := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (0:ℚ) < (mant.toInt : ℚ) := by exact_mod_cast hcon
-      linarith [mul_pos h1 hpec, hval_np]
-    set Mr : ℕ := mant.toInt.natAbs with hMr_def
-    have hcast : (mant.toInt : ℚ) = -(Mr : ℚ) := by
-      have h : mant.toInt = -(Mr : ℤ) := by rw [hMr_def]; omega
-      rw [h]; push_cast; ring
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by rw [← hcMin15]; exact hmr.1
-    have hmtu_hi : Mr < 10 ^ 16 := by have h := hmr.2; rw [hcMax16] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_neg mant exp (by rw [hval, neg_nonpos]; positivity) hmr
     have hres_grid : result.toRat = -((Mr:ℚ) * (10:ℚ)^exp) := by
       rw [hres_grid0, hcast]; ring
     have hr_le_res : sum.toRat ≤ result.toRat := by
@@ -446,19 +430,8 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
       · rw [if_pos (by omega)]; omega
     have hcgeq : (M:ℚ) ≤ (c:ℚ)*1000 := by exact_mod_cast hc_ge
     have hcltq : (c:ℚ)*1000 < (M:ℚ) + 1000 := by exact_mod_cast hc_lt
-    have hval_np : (mant.toInt : ℚ) * (10:ℚ)^exp ≤ 0 := by
-      rw [hval, neg_nonpos]; positivity
-    have hmant_np : mant.toInt ≤ 0 := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (0:ℚ) < (mant.toInt : ℚ) := by exact_mod_cast hcon
-      linarith [mul_pos h1 hpec, hval_np]
-    set Mr : ℕ := mant.toInt.natAbs with hMr_def
-    have hcast : (mant.toInt : ℚ) = -(Mr : ℚ) := by
-      have h : mant.toInt = -(Mr : ℤ) := by rw [hMr_def]; omega
-      rw [h]; push_cast; ring
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by rw [← hcMin15]; exact hmr.1
-    have hmtu_hi : Mr < 10 ^ 16 := by have h := hmr.2; rw [hcMax16] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_neg mant exp (by rw [hval, neg_nonpos]; positivity) hmr
     have hres_grid : result.toRat = -((Mr:ℚ) * (10:ℚ)^exp) := by
       rw [hres_grid0, hcast]; ring
     have hres_le_r : result.toRat ≤ sum.toRat := by
@@ -498,19 +471,8 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     have hfleq : ((M/1000 : ℕ):ℚ)*1000 ≤ (M:ℚ) := by exact_mod_cast hf_le
     have hfltq : (M:ℚ) < ((M/1000 : ℕ):ℚ)*1000 + 1000 := by exact_mod_cast hf_lt
     have hexpeq : (10:ℚ)^exp = (10:ℚ)^sum.exponent_ * 1000 := by rw [hEeq, h1000]
-    have hval_np : (mant.toInt : ℚ) * (10:ℚ)^exp ≤ 0 := by
-      rw [hval, neg_nonpos]; positivity
-    have hmant_np : mant.toInt ≤ 0 := by
-      by_contra hcon
-      push_neg at hcon
-      have h1 : (0:ℚ) < (mant.toInt : ℚ) := by exact_mod_cast hcon
-      linarith [mul_pos h1 hpec, hval_np]
-    set Mr : ℕ := mant.toInt.natAbs with hMr_def
-    have hcast : (mant.toInt : ℚ) = -(Mr : ℚ) := by
-      have h : mant.toInt = -(Mr : ℤ) := by rw [hMr_def]; omega
-      rw [h]; push_cast; ring
-    have hmtu_lo : 10 ^ 15 ≤ Mr := by rw [← hcMin15]; exact hmr.1
-    have hmtu_hi : Mr < 10 ^ 16 := by have h := hmr.2; rw [hcMax16] at h; omega
+    obtain ⟨Mr, hcast, hmtu_lo, hmtu_hi⟩ :=
+      directed_grid_facts_neg mant exp (by rw [hval, neg_nonpos]; positivity) hmr
     have hres_grid : result.toRat = -((Mr:ℚ) * (10:ℚ)^exp) := by
       rw [hres_grid0, hcast]; ring
     have hr_le_res : sum.toRat ≤ result.toRat := by
