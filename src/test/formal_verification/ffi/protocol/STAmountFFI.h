@@ -2,6 +2,7 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 #include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
+#include <test/formal_verification/numbers/helpers/NumberTypes.h>
 
 #include <xrpl/protocol/Asset.h>
 #include <xrpl/protocol/Issue.h>
@@ -53,6 +54,44 @@ public:
         bool const negative = leanGet<std::uint8_t>(lean_st_amount_negative) != 0;
         Asset const placeholder = integral ? Asset{noMPT()} : Asset{noIssue()};
         return STAmount{placeholder, mantissa, exponent, negative};
+    }
+
+    // A fresh owned STAmount object built from raw model fields.
+    static lean_object*
+    buildOwned(std::uint8_t tag, std::uint64_t mValue, std::int64_t mOffset, std::uint8_t isNeg)
+    {
+        return lean_st_amount_build(NumericTypeFFI::buildOwned(tag), mValue, mOffset, isNeg);
+    }
+
+    // Read the raw model fields into a LeanSTAmountResult. Deliberately not read(): that rebuilds a
+    // rippled STAmount and would throw/normalize on the extreme raw fields the number tests stage.
+    LeanSTAmountResult
+    readResult() const
+    {
+        LeanSTAmountResult r{};
+        r.ok = true;
+        r.numericType = static_cast<std::uint8_t>(
+            NumericTypeFFI(lean_st_amount_numeric_type(borrow())).isIntegral() ? 1 : 0);
+        r.mValue = lean_st_amount_mantissa(borrow());
+        r.mOffset = lean_st_amount_offset(borrow());
+        r.isNegative = lean_st_amount_negative(borrow());
+        return r;
+    }
+
+    // Decode an `Except String STAmount` (erroring op)
+    static LeanSTAmountResult
+    fromExcept(lean_object* exceptOwned)
+    {
+        LeanExcept<STAmountFFI> const e = readExcept<STAmountFFI>(exceptOwned);
+        if (!e.value)
+            return LeanSTAmountResult{{}, false, e.error};
+        return e.value->readResult();
+    }
+
+    static LeanSTAmountResult
+    fromObject(lean_object* objOwned)
+    {
+        return STAmountFFI(objOwned).readResult();
     }
 };
 

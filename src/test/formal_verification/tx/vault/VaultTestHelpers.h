@@ -36,6 +36,7 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
     return VaultState{
         .assetsTotal = vaultSle->at(sfAssetsTotal),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
+        .assetsMaximum = vaultSle->at(sfAssetsMaximum),
         .numericType = NumericTypeFFI::tagOf(asset),
         .scale = vaultSle->at(sfScale),
         .sharesTotal = Number{static_cast<std::int64_t>(
@@ -52,7 +53,8 @@ updateVaultState(
     Keylet const& vaultKeylet,
     Number const& assetsTotal,
     Number const& assetsAvailable,
-    std::uint64_t sharesTotal)
+    std::uint64_t sharesTotal,
+    Number const& assetsMaximum = Number{0})
 {
     return env.app().getOpenLedger().modify(  //
         [&](OpenView& view, beast::Journal) -> bool {
@@ -65,6 +67,7 @@ updateVaultState(
                 return false;
             v->at(sfAssetsTotal) = assetsTotal;
             v->at(sfAssetsAvailable) = assetsAvailable;
+            v->at(sfAssetsMaximum) = assetsMaximum;
             iss->setFieldU64(sfOutstandingAmount, sharesTotal);
             sb.update(v);
             sb.update(iss);

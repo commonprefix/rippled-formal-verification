@@ -17,6 +17,7 @@ struct VaultState
 {
     Number assetsTotal;
     Number assetsAvailable;
+    Number assetsMaximum;
     // 3-way tag from the underlying asset: 0 = native (XRP), 1 = int64 (MPT), 2 = fractional (IOU).
     std::uint8_t numericType{};
     std::uint8_t scale{};
@@ -30,6 +31,7 @@ lean_object*
 lean_vault_state_build(
     lean_object* assetsTotal,
     lean_object* assetsAvailable,
+    lean_object* assetsMaximum,
     lean_object* numericType,
     uint8_t scale,
     lean_object* sharesTotal,
@@ -39,6 +41,8 @@ lean_object*
 lean_vault_state_assets_total(lean_object* vs);
 lean_object*
 lean_vault_state_assets_available(lean_object* vs);
+lean_object*
+lean_vault_state_assets_maximum(lean_object* vs);
 lean_object*
 lean_vault_state_numeric_type(lean_object* vs);
 uint8_t
@@ -64,6 +68,7 @@ public:
             lean_vault_state_build,
             NumberFFI::build(state.assetsTotal),
             NumberFFI::build(state.assetsAvailable),
+            NumberFFI::build(state.assetsMaximum),
             NumericTypeFFI::build(state.numericType),
             state.scale,
             NumberFFI::build(state.sharesTotal),
@@ -77,6 +82,7 @@ public:
         return VaultState{
             .assetsTotal = leanGetObj<NumberFFI>(lean_vault_state_assets_total),
             .assetsAvailable = leanGetObj<NumberFFI>(lean_vault_state_assets_available),
+            .assetsMaximum = leanGetObj<NumberFFI>(lean_vault_state_assets_maximum),
             .numericType = static_cast<std::uint8_t>(
                 leanGetObj<NumericTypeFFI>(lean_vault_state_numeric_type) ? 1 : 0),
             .scale = leanGet<std::uint8_t>(lean_vault_state_scale),

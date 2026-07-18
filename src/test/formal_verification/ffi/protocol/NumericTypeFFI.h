@@ -44,6 +44,13 @@ public:
         return build(tagOf(a));
     }
 
+    // A fresh owned NumericType object for one consuming FFI call.
+    static lean_object*
+    buildOwned(std::uint8_t tag)
+    {
+        return build(tag).give();
+    }
+
     bool
     isIntegral() const
     {

@@ -100,7 +100,7 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     return {result with error := some .tecNO_PERMISSION}
 
   if vault.isInsolvent && !isDonation then
-    return {result with error := some .tecNO_PERMISSION}
+    return {result with error := some .tecLOCKED}
 
   let (assetDeposited, sharesCreated) ←
     if isDonation then
@@ -117,7 +117,7 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
 
-  if vault'.assetsTotal.operator_gt vault.assetsMaximum then
+  if vault.assetsMaximum.operator_ne Number.zero && vault'.assetsTotal.operator_gt vault.assetsMaximum then
     return { result with error := some .tecLIMIT_EXCEEDED }
 
   return { result with vault' := vault', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }
