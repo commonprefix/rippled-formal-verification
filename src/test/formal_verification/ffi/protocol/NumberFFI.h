@@ -7,6 +7,7 @@
 #include <lean/lean.h>
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 
 extern "C" {
@@ -23,6 +24,18 @@ lean_number_exponent(lean_object* number);
 }
 
 namespace xrpl::test::formal_verification {
+
+struct LeanNumber
+{
+    uint8_t negative;
+    uint64_t mantissa;
+    uint64_t exponent;
+};
+
+struct LeanNumberResult : LeanNumber
+{
+    bool ok;
+};
 
 class NumberFFI : public LeanObjectFFI
 {
@@ -47,6 +60,46 @@ public:
         bool const negative = leanGet<std::uint8_t>(lean_number_negative) != 0;
         int const exponent = static_cast<int>(leanGet<std::int64_t>(lean_number_exponent));
         return Number{negative, magnitude, exponent, Number::Normalized{}};
+    }
+
+    LeanNumberResult
+    readResult() const
+    {
+        uint64_t mantissa = leanGet<std::uint64_t>(lean_number_mantissa);
+        int64_t exponent = leanGet<std::int64_t>(lean_number_exponent);
+        uint8_t const negative = leanGet<std::uint8_t>(lean_number_negative);
+        if (mantissa > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+        {
+            mantissa /= 10;
+            ++exponent;
+        }
+        LeanNumberResult r;
+        r.negative = negative;
+        r.mantissa = mantissa;
+        r.exponent = static_cast<uint64_t>(exponent);
+        r.ok = true;
+        return r;
+    }
+
+    // Erroring op: `Except String Number`. ok mirrors the Except being `.ok`.
+    static LeanNumberResult
+    fromExcept(lean_object* exceptOwned)
+    {
+        LeanExcept<NumberFFI> const e = readExcept<NumberFFI>(exceptOwned);
+        if (!e.value)
+        {
+            LeanNumberResult r{};
+            r.ok = false;
+            return r;
+        }
+        return e.value->readResult();
+    }
+
+    // Pure op (e.g. neg): the Number object directly (never raises), so ok is always true.
+    static LeanNumberResult
+    fromObject(lean_object* objOwned)
+    {
+        return NumberFFI(objOwned).readResult();
     }
 };
 

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/numbers/helpers/NumberTypes.h>
+#include <test/formal_verification/ffi/protocol/IOUAmountFFI.h>
+#include <test/formal_verification/ffi/protocol/NumberFFI.h>
+#include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/Asset.h>
@@ -33,17 +35,10 @@ struct MPTAmountPair
     int64_t leanMpt;
 };
 
-struct XRPAmountPair
-{
-    XRPAmount cppXrp;
-    int64_t leanDrops;
-};
-
 struct IOUAmountPair
 {
     IOUAmount cppIou;
-    int64_t leanMant;
-    int64_t leanExp;
+    LeanIOUAmount leanIou;
 };
 
 struct STAmountPair
@@ -127,41 +122,16 @@ makeMPTAmountPair(int64_t value)
 }
 
 inline MPTAmountPair
-randomMPTAmountPair(int64_t min, int64_t max)
-{
-    std::uniform_int_distribution<int64_t> dist(min, max);
-    return makeMPTAmountPair(dist(nextRng()));
-}
-
-inline MPTAmountPair
 randomMPTAmountPair()
 {
     return makeMPTAmountPair(randomInt64(nextRng()));
-}
-
-inline XRPAmountPair
-makeXRPAmountPair(int64_t drops)
-{
-    return {XRPAmount{drops}, drops};
-}
-
-inline XRPAmountPair
-randomXRPAmountPair(std::mt19937_64& rng)
-{
-    return makeXRPAmountPair(randomInt64(rng));
-}
-
-inline XRPAmountPair
-randomXRPAmountPair()
-{
-    return randomXRPAmountPair(nextRng());
 }
 
 // Throws on out-of-canonical-range (m, e); use raw fields for edge fuzz.
 inline IOUAmountPair
 makeIOUAmountPair(int64_t mantissa, int64_t exponent)
 {
-    return {IOUAmount{mantissa, static_cast<int>(exponent)}, mantissa, exponent};
+    return {IOUAmount{mantissa, static_cast<int>(exponent)}, {mantissa, exponent}};
 }
 
 // Canonical-range IOUAmountPair — never throws at construction.

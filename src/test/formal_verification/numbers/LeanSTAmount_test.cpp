@@ -1,10 +1,12 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/BoolFFI.h>
+#include <test/formal_verification/ffi/Int64FFI.h>
+#include <test/formal_verification/ffi/protocol/IOUAmountFFI.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
-#include <test/formal_verification/numbers/helpers/NumberTypes.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -176,8 +178,8 @@ class LeanSTAmount_test : public LeanSuite
         bool ok = true;
 
         {
-            auto lean = readExceptI64(
-                lean_stamount_int_amount(STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg)));
+            auto lean = readExcept<Int64FFI>(
+                leanCall(lean_stamount_int_amount, STAmountFFI::build(nt, mValue, mOffset, isNeg)));
             bool cppThrew = false;
             int64_t cppVal = 0;
             try
@@ -193,7 +195,7 @@ class LeanSTAmount_test : public LeanSuite
                 fail(tag + ".intAmount: error mismatch");
                 ok = false;
             }
-            else if (lean.value.has_value() && *lean.value != cppVal)
+            else if (lean.value.has_value() && lean.value->read() != cppVal)
             {
                 fail(tag + ".intAmount: value mismatch");
                 ok = false;
@@ -203,8 +205,8 @@ class LeanSTAmount_test : public LeanSuite
         }
         {
             NumberRoundModeGuard mg(mode);
-            auto lean = readIOUExcept(
-                lean_stamount_iou(STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg), leanMode));
+            auto lean = IOUAmountFFI::fromExcept(leanCall(
+                lean_stamount_iou, STAmountFFI::build(nt, mValue, mOffset, isNeg), leanMode));
             bool cppThrew = false;
             IOUAmount cppIou;
             try
@@ -232,8 +234,8 @@ class LeanSTAmount_test : public LeanSuite
         }
         {
             NumberRoundModeGuard mg(mode);
-            auto lean = readNumberExcept(lean_stamount_to_number(
-                STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg), leanMode));
+            auto lean = NumberFFI::fromExcept(leanCall(
+                lean_stamount_to_number, STAmountFFI::build(nt, mValue, mOffset, isNeg), leanMode));
             bool cppThrew = false;
             Number cppN;
             try
@@ -270,8 +272,9 @@ class LeanSTAmount_test : public LeanSuite
         // Use the checked ctor to match Lean's error path.
         return runSTAmountOp(
             label("checked", s.numericType, s.mValue, s.mOffset, s.isNegative),
-            STAmountFFI::fromExcept(lean_stamount_checked(
-                NumericTypeFFI::buildOwned(s.numericType),
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_checked,
+                NumericTypeFFI::build(s.numericType),
                 s.mValue,
                 s.mOffset,
                 s.isNegative,
@@ -293,8 +296,12 @@ class LeanSTAmount_test : public LeanSuite
         tag << "ofInt64(nt=" << static_cast<int>(nt) << "," << mantissa << "e" << exponent << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(lean_stamount_of_int64(
-                NumericTypeFFI::buildOwned(nt), mantissa, exponent, toLeanMode(mode))),
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_of_int64,
+                NumericTypeFFI::build(nt),
+                mantissa,
+                exponent,
+                toLeanMode(mode))),
             [&] {
                 return assetForNumericType(nt).visit(
                     [&](Issue const& iss) {
@@ -321,10 +328,11 @@ class LeanSTAmount_test : public LeanSuite
             << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(leanFn(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                leanFn,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
                 toLeanMode(mode))),
             [&] { return isAdd ? (a.cppSt + b.cppSt) : (a.cppSt - b.cppSt); });
@@ -344,12 +352,13 @@ class LeanSTAmount_test : public LeanSuite
             << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(lean_stamount_multiply(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_multiply,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                NumericTypeFFI::buildOwned(nt),
+                NumericTypeFFI::build(nt),
                 toLeanMode(mode))),
             [&] { return multiply(a.cppSt, b.cppSt, assetForNumericType(nt)); });
     }
@@ -368,18 +377,19 @@ class LeanSTAmount_test : public LeanSuite
             << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(lean_stamount_divide(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_divide,
+                STAmountFFI::build(
                     num.leanSt.numericType,
                     num.leanSt.mValue,
                     num.leanSt.mOffset,
                     num.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     den.leanSt.numericType,
                     den.leanSt.mValue,
                     den.leanSt.mOffset,
                     den.leanSt.isNegative),
-                NumericTypeFFI::buildOwned(nt),
+                NumericTypeFFI::build(nt),
                 toLeanMode(mode))),
             [&] { return divide(num.cppSt, den.cppSt, assetForNumericType(nt)); });
     }
@@ -403,12 +413,13 @@ class LeanSTAmount_test : public LeanSuite
             << ",ru=" << roundUp << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(leanFn(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                leanFn,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                NumericTypeFFI::buildOwned(nt),
+                NumericTypeFFI::build(nt),
                 roundUp ? 1u : 0u,
                 toLeanMode(mode))),
             [&] { return cppFn(a.cppSt, b.cppSt, assetForNumericType(nt), roundUp); });
@@ -433,18 +444,19 @@ class LeanSTAmount_test : public LeanSuite
             << ",ru=" << roundUp << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(leanFn(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                leanFn,
+                STAmountFFI::build(
                     num.leanSt.numericType,
                     num.leanSt.mValue,
                     num.leanSt.mOffset,
                     num.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     den.leanSt.numericType,
                     den.leanSt.mValue,
                     den.leanSt.mOffset,
                     den.leanSt.isNegative),
-                NumericTypeFFI::buildOwned(nt),
+                NumericTypeFFI::build(nt),
                 roundUp ? 1u : 0u,
                 toLeanMode(mode))),
             [&] { return cppFn(num.cppSt, den.cppSt, assetForNumericType(nt), roundUp); });
@@ -455,10 +467,11 @@ class LeanSTAmount_test : public LeanSuite
     {
         uint8_t const leanMode = toLeanMode(mode);
         NumberRoundModeGuard mg(mode);
-        auto lean = readExceptBool(lean_stamount_can_add(
-            STAmountFFI::buildOwned(
+        auto lean = readExcept<BoolFFI>(leanCall(
+            lean_stamount_can_add,
+            STAmountFFI::build(
                 a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-            STAmountFFI::buildOwned(
+            STAmountFFI::build(
                 b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
             leanMode));
         bool cppThrew = false;
@@ -479,10 +492,10 @@ class LeanSTAmount_test : public LeanSuite
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.value.has_value() && *lean.value != cppRet)
+        if (lean.value.has_value() && lean.value->read() != cppRet)
         {
             std::stringstream ss;
-            ss << tag.str() << ": value mismatch lean=" << *lean.value << " cpp=" << cppRet;
+            ss << tag.str() << ": value mismatch lean=" << lean.value->read() << " cpp=" << cppRet;
             fail(ss.str());
             return false;
         }
@@ -493,10 +506,11 @@ class LeanSTAmount_test : public LeanSuite
     bool
     checkCanSub(STAmountPair const& a, STAmountPair const& b)
     {
-        auto lean = readExceptBool(lean_stamount_can_subtract(
-            STAmountFFI::buildOwned(
+        auto lean = readExcept<BoolFFI>(leanCall(
+            lean_stamount_can_subtract,
+            STAmountFFI::build(
                 a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-            STAmountFFI::buildOwned(
+            STAmountFFI::build(
                 b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)));
         bool cppThrew = false;
         bool cppRet = false;
@@ -516,7 +530,7 @@ class LeanSTAmount_test : public LeanSuite
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.value.has_value() && *lean.value != cppRet)
+        if (lean.value.has_value() && lean.value->read() != cppRet)
         {
             fail(tag.str() + ": value mismatch");
             return false;
@@ -534,8 +548,9 @@ class LeanSTAmount_test : public LeanSuite
             << ")";
         return runSTAmountOp(
             tag.str(),
-            STAmountFFI::fromExcept(lean_stamount_round_to_exponent(
-                STAmountFFI::buildOwned(
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_round_to_exponent,
+                STAmountFFI::build(
                     p.leanSt.numericType, p.leanSt.mValue, p.leanSt.mOffset, p.leanSt.isNegative),
                 scale,
                 toLeanMode(mode))),
@@ -550,13 +565,14 @@ class LeanSTAmount_test : public LeanSuite
     {
         uint8_t const leanMode = toLeanMode(mode);
         NumberRoundModeGuard mg(mode);
-        uint64_t const lean = lean_stamount_get_rate(
-            STAmountFFI::buildOwned(
+        uint64_t const lean = leanCall(
+            lean_stamount_get_rate,
+            STAmountFFI::build(
                 offerOut.leanSt.numericType,
                 offerOut.leanSt.mValue,
                 offerOut.leanSt.mOffset,
                 offerOut.leanSt.isNegative),
-            STAmountFFI::buildOwned(
+            STAmountFFI::build(
                 offerIn.leanSt.numericType,
                 offerIn.leanSt.mValue,
                 offerIn.leanSt.mOffset,
@@ -595,10 +611,11 @@ class LeanSTAmount_test : public LeanSuite
     {
         return expectBool(
             "eq",
-            lean_stamount_eq(
-                STAmountFFI::buildOwned(
+            leanCall(
+                lean_stamount_eq,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.cppSt == b.cppSt);
     }
@@ -608,10 +625,11 @@ class LeanSTAmount_test : public LeanSuite
     {
         return expectBool(
             "ne",
-            lean_stamount_ne(
-                STAmountFFI::buildOwned(
+            leanCall(
+                lean_stamount_ne,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.cppSt != b.cppSt);
     }
@@ -625,10 +643,11 @@ class LeanSTAmount_test : public LeanSuite
         STAmountPair const& a,
         STAmountPair const& b)
     {
-        auto lean = readExceptBool(leanFn(
-            STAmountFFI::buildOwned(
+        auto lean = readExcept<BoolFFI>(leanCall(
+            leanFn,
+            STAmountFFI::build(
                 a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-            STAmountFFI::buildOwned(
+            STAmountFFI::build(
                 b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)));
         std::stringstream tag;
         tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
@@ -638,7 +657,7 @@ class LeanSTAmount_test : public LeanSuite
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.value.has_value() && *lean.value != cppRet)
+        if (lean.value.has_value() && lean.value->read() != cppRet)
         {
             fail(tag.str() + ": value mismatch");
             return false;
@@ -713,10 +732,11 @@ class LeanSTAmount_test : public LeanSuite
         // For the sentinel assets, comparability reduces to matching numericType.
         return expectBool(
             "areComparable",
-            lean_stamount_are_comparable(
-                STAmountFFI::buildOwned(
+            leanCall(
+                lean_stamount_are_comparable,
+                STAmountFFI::build(
                     a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::buildOwned(
+                STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.leanSt.numericType == b.leanSt.numericType);
     }
@@ -727,8 +747,9 @@ class LeanSTAmount_test : public LeanSuite
         auto const& s = p.leanSt;
         return runSTAmountOp(
             label("neg", s.numericType, s.mValue, s.mOffset, s.isNegative),
-            STAmountFFI::fromObject(lean_stamount_neg(
-                STAmountFFI::buildOwned(s.numericType, s.mValue, s.mOffset, s.isNegative))),
+            STAmountFFI::fromObject(leanCall(
+                lean_stamount_neg,
+                STAmountFFI::build(s.numericType, s.mValue, s.mOffset, s.isNegative))),
             [&] { return -p.cppSt; });
     }
 
@@ -741,7 +762,7 @@ class LeanSTAmount_test : public LeanSuite
         return runSTAmountOp(
             tag.str(),
             STAmountFFI::fromObject(
-                lean_stamount_unchecked_from_int64(NumericTypeFFI::buildOwned(nt), v, offset)),
+                leanCall(lean_stamount_unchecked_from_int64, NumericTypeFFI::build(nt), v, offset)),
             [&] { return stAmountUnchecked(nt, magnitude(v), offset, neg ? 1 : 0); });
     }
 
@@ -832,8 +853,11 @@ public:
             {
                 NumberRoundModeGuard mg(m);
                 uint8_t const leanMode = toLeanMode(m);
-                auto lean = STAmountFFI::fromExcept(lean_stamount_of_number(
-                    NumericTypeFFI::buildOwned(nt), lean_number_build(neg, mant, exp_), leanMode));
+                auto lean = STAmountFFI::fromExcept(leanCall(
+                    lean_stamount_of_number,
+                    NumericTypeFFI::build(nt),
+                    lean_number_build(neg, mant, exp_),
+                    leanMode));
                 STAmount cpp;
                 bool cppThrew = false;
                 try
