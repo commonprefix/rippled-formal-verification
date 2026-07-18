@@ -184,23 +184,20 @@ surrender it, and never calls `lean_inc` / `lean_dec` itself. A typed wrapper
 builds on this so a test sees only ordinary C++ values, which is what
 `NumberFFI::build` / `read` above do.
 
-An operation's result structure isn't kept as a handle. A RAII guard `LeanObjOwner` frees it when the fields have been copied out:
+An operation returns the model's regular type directly, `Except String T` on the error path.
+The C++ side reads the returned handle: `readExcept<W>`unpacks an `Except String W` object into the wrapped value
+(or the error message).
 
 ```cpp
-struct LeanNumberResult : LeanNumber
+// An `Except String W` unpacked: the wrapped value on ok, the message on error.
+template <class W>
+LeanExcept<W> readExcept(lean_object* exceptOwned)
 {
-    bool ok;
-    static LeanNumberResult fromLean(lean_object* obj)
-    {
-        LeanObjOwner const guard{obj}; // lean_dec(obj) on scope exit
-        LeanNumberResult r;
-        r.mantissa = lean_ctor_get_uint64(obj, 0);
-        r.exponent = lean_ctor_get_uint64(obj, 8);
-        r.negative = lean_ctor_get_uint8(obj, 17);
-        r.ok       = lean_ctor_get_uint8(obj, 16) == 0;
-        return r;
-    }
-};
+    LeanObjectFFI e(exceptOwned);  // lean_dec on scope exit
+    if (exceptOk(e.raw()))
+        return {W(retain(exceptVal(e.raw()))), {}};
+    return {std::nullopt, lean_string_cstr(exceptVal(e.raw()))};
+}
 ```
 
 ### Number example
@@ -236,32 +233,17 @@ public:
 
 A function export takes the operands' fields, calls the matching model function, and returns the result as a Lean4 structure.
 
-For example, `lean_number_mul` decodes its arguments into `Number` values, calls `Number.operator_mul`, and encodes the outcome:
+For example, `lean_number_mul` calls `Number.operator_mul` and returns its `Except String Number` result unchanged:
 
 ```lean
-structure FFINumberResult where
-  mantissa : UInt64
-  exponent : Int64
-  status   : UInt8  -- 0 = ok, 1 = error
-  negative : UInt8
-
-def decodeNumber (neg : UInt8) (mant : UInt64) (exp : Int64) : Number :=
-  Number.unchecked (neg != 0) mant exp.toInt
-
-def encodeResult (r : Except String Number) : FFINumberResult :=
-  match r with
-  | .ok n     => encodeNumber n
-  | .error _  => ⟨0, 0, 1, 0⟩
-
 @[export lean_number_mul]
-def lean_number_mul (neg1 : UInt8) (mant1 : UInt64) (exp1 : Int64)
-    (neg2 : UInt8) (mant2 : UInt64) (exp2 : Int64) (mode : UInt8) : FFINumberResult :=
-  encodeResult (Number.operator_mul (decodeNumber neg1 mant1 exp1)
-                                    (decodeNumber neg2 mant2 exp2)
-                                    (decodeMode mode))
+def lean_number_mul (a b : Number) (mode : rounding_mode) : Except String Number :=
+  Number.operator_mul a b mode
 ```
 
-The returned structure is a `lean_object*`.
+The returned `Except String Number` is a `lean_object*`. C++ reads it with `readExcept<NumberFFI>`
+(and `readExceptBool` / `readExceptI64` for the `Bool` / `Int64` results), then compares the
+model's raw fields to the C++ oracle.
 
 ---
 

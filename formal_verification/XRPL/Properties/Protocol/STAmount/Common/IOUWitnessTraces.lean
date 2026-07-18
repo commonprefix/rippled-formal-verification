@@ -277,67 +277,66 @@ lemma ofnum_trace :
 
 /-- `STAmount.ofNumber` re-round of the mul result, via the canonical-`checked` identity. -/
 lemma ofnum_st_trace :
-    STAmount.ofNumber (.issue noIssue) ⟨false, 1000000000000000500, -2⟩ .to_nearest
-      = .ok ⟨.issue noIssue, 1000000000000000, 1, false⟩ := by
-  have hc_result : (⟨.issue noIssue, (1000000000000000:Int64).toUInt64, 1, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
+    STAmount.ofNumber .fractional ⟨false, 1000000000000000500, -2⟩ .to_nearest
+      = .ok ⟨.fractional, 1000000000000000, 1, false⟩ := by
+  have hc_result : (⟨.fractional, (1000000000000000:Int64).toUInt64, 1, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
   unfold STAmount.ofNumber
   simp only []
   rw [show decide ((⟨false, 1000000000000000500, -2⟩ : Number).signum < 0) = false from by decide]
-  rw [if_neg (show ¬ ((Asset.issue noIssue).integral = true) by decide)]
+  rw [if_neg (show ¬ (NumericType.fractional.isIntegral = true) by decide)]
   simp only [Bool.false_eq_true, if_false]
   rw [show kMinValue = cMinValue from rfl, show kMaxValue = cMaxValue from rfl, reround_trace]
   simp only []
   rw [STAmount.checked,
-      show STAmount.unchecked (.issue noIssue) ((1000000000000000:Int64).toUInt64) 1 false
-        = (⟨.issue noIssue, (1000000000000000:Int64).toUInt64, 1, false⟩ : STAmount) from rfl,
+      show STAmount.unchecked .fractional ((1000000000000000:Int64).toUInt64) 1 false
+        = (⟨.fractional, (1000000000000000:Int64).toUInt64, 1, false⟩ : STAmount) from rfl,
       STAmount.canonicalize_canonical_id _ .to_nearest hc_result]
   rfl
 
 /-- **Full `STAmount.operator_add` evaluation on the add/sub witness operands.** -/
 theorem STAmount.operator_add_iou_witness_eq :
-    STAmount.operator_add ⟨.issue noIssue, 5000000000000003, 0, false⟩
-        ⟨.issue noIssue, 5000000000000002, 0, false⟩ .to_nearest
-      = .ok ⟨.issue noIssue, 1000000000000000, 1, false⟩ := by
-  have hc1 : (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hc2 : (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hiou1 := STAmount.iou_canonical_id ⟨.issue noIssue, 5000000000000003, 0, false⟩ .to_nearest hc1
-  have hiou2 := STAmount.iou_canonical_id ⟨.issue noIssue, 5000000000000002, 0, false⟩ .to_nearest hc2
-  have htn1 : (⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-      (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber .to_nearest
+    STAmount.operator_add ⟨.fractional, 5000000000000003, 0, false⟩
+        ⟨.fractional, 5000000000000002, 0, false⟩ .to_nearest
+      = .ok ⟨.fractional, 1000000000000000, 1, false⟩ := by
+  have hc1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hc2 : (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hiou1 := STAmount.iou_canonical_id ⟨.fractional, 5000000000000003, 0, false⟩ .to_nearest hc1
+  have hiou2 := STAmount.iou_canonical_id ⟨.fractional, 5000000000000002, 0, false⟩ .to_nearest hc2
+  have htn1 : (⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+      (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber .to_nearest
       = .ok ⟨false, 5000000000000003000, -3⟩ :=
-    STAmount.iou_toNumber_canonical ⟨.issue noIssue, 5000000000000003, 0, false⟩ .to_nearest hc1
-  have htn2 : (⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-      (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber .to_nearest
+    STAmount.iou_toNumber_canonical ⟨.fractional, 5000000000000003, 0, false⟩ .to_nearest hc1
+  have htn2 : (⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+      (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber .to_nearest
       = .ok ⟨false, 5000000000000002000, -3⟩ :=
-    STAmount.iou_toNumber_canonical ⟨.issue noIssue, 5000000000000002, 0, false⟩ .to_nearest hc2
+    STAmount.iou_toNumber_canonical ⟨.fractional, 5000000000000002, 0, false⟩ .to_nearest hc2
   have hsumI_range : (⟨1000000000000000, 1⟩ : IOUAmount).InRange16 :=
     ⟨by decide, by decide, by decide, by decide⟩
-  have hofiou := STAmount.ofIOUAmount_canonical ⟨1000000000000000, 1⟩ noIssue .to_nearest (by decide) hsumI_range
+  have hofiou := STAmount.ofIOU_canonical ⟨1000000000000000, 1⟩ .to_nearest hsumI_range
   have hadd_inner : IOUAmount.operator_add
-      ⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-        (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩
-      ⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-        (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ .to_nearest
+      ⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+        (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩
+      ⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+        (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ .to_nearest
       = .ok ⟨1000000000000000, 1⟩ := by
     unfold IOUAmount.operator_add
-    rw [if_neg (by decide : ¬ (((⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-          (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true)),
-        if_neg (by decide : ¬ (((⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-          (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true))]
+    rw [if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+          (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true)),
+        if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+          (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true))]
     rw [htn1]; simp only []
     rw [htn2]; simp only []
     rw [add_lift_trace]; simp only []
     rw [ofnum_trace]
   unfold STAmount.operator_add
-  rw [if_neg (by decide : ¬ ((!STAmount.areComparable ⟨.issue noIssue, 5000000000000003, 0, false⟩
-        ⟨.issue noIssue, 5000000000000002, 0, false⟩) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true))]
-  simp only []
-  rw [if_neg (by decide : ¬ ((noIssue.isXRP) = true))]
+  rw [if_neg (by decide : ¬ ((!STAmount.areComparable ⟨.fractional, 5000000000000003, 0, false⟩
+        ⟨.fractional, 5000000000000002, 0, false⟩) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).integral) = true))]
   rw [hiou1]; simp only []
   rw [hiou2]; simp only []
   rw [hadd_inner]; simp only []
@@ -345,28 +344,25 @@ theorem STAmount.operator_add_iou_witness_eq :
 
 /-- **Full `STAmount.multiply` evaluation on the mul witness operands.** -/
 theorem STAmount.multiply_iou_witness_eq :
-    STAmount.multiply ⟨.issue noIssue, 2000000000000001, 0, false⟩
-        ⟨.issue noIssue, 5000000000000000, -15, false⟩ (.issue noIssue) .to_nearest
-      = .ok ⟨.issue noIssue, 1000000000000000, 1, false⟩ := by
-  have hc1 : (⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hc2 : (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have htn1 : (⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).toNumber .to_nearest
+    STAmount.multiply ⟨.fractional, 2000000000000001, 0, false⟩
+        ⟨.fractional, 5000000000000000, -15, false⟩ .fractional .to_nearest
+      = .ok ⟨.fractional, 1000000000000000, 1, false⟩ := by
+  have hc1 : (⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hc2 : (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have htn1 : (⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).toNumber .to_nearest
       = .ok ⟨false, 2000000000000001000, -3⟩ :=
-    STAmount.toNumber_iou_canonical ⟨.issue noIssue, 2000000000000001, 0, false⟩ noIssue .to_nearest rfl (by decide) hc1
-  have htn2 : (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).toNumber .to_nearest
+    STAmount.toNumber_iou_canonical ⟨.fractional, 2000000000000001, 0, false⟩ .to_nearest hc1
+  have htn2 : (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).toNumber .to_nearest
       = .ok ⟨false, 5000000000000000000, -18⟩ :=
-    STAmount.toNumber_iou_canonical ⟨.issue noIssue, 5000000000000000, -15, false⟩ noIssue .to_nearest rfl (by decide) hc2
+    STAmount.toNumber_iou_canonical ⟨.fractional, 5000000000000000, -15, false⟩ .to_nearest hc2
   unfold STAmount.multiply
-  rw [if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).isZero
-        || (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).isZero) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).native
-        && (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).native
-        && (Asset.issue noIssue).isNative) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).holdsMPTIssue
-        && (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).holdsMPTIssue
-        && (Asset.issue noIssue).holdsMPTIssue) = true))]
+  rw [if_neg (by decide : ¬ (((⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).isZero
+        || (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).isZero) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).integral
+        && (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).integral
+        && NumericType.fractional.isIntegral) = true))]
   rw [htn1]; simp only []
   rw [htn2]; simp only []
   rw [mul_lift_trace]; simp only []

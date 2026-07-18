@@ -24,17 +24,15 @@ theorem STAmount.operator_ge_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful l
     STAmount.operator_ge lhs rhs = .ok (decide (rhs.toRat ≤ lhs.toRat)) :=
   STAmount.operator_ge_eq_proof lhs rhs h
 
-/-- **Correctness of `operator_eq`.** On comparable operands of the **same asset**, field
-equality decides rational equality. -/
-theorem STAmount.operator_eq_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs)
-    (hasset : lhs.mAsset = rhs.mAsset) :
+/-- **Correctness of `operator_eq`.** On comparable operands, field equality decides
+rational equality (the shared numericType is part of `CmpFaithful`). -/
+theorem STAmount.operator_eq_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) :=
-  STAmount.operator_eq_eq_proof lhs rhs h hasset
+  STAmount.operator_eq_eq_proof lhs rhs h
 
 /-- **Correctness of `operator_ne`.** -/
-theorem STAmount.operator_ne_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs)
-    (hasset : lhs.mAsset = rhs.mAsset) :
+theorem STAmount.operator_ne_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_ne lhs rhs = decide (lhs.toRat ≠ rhs.toRat) :=
-  STAmount.operator_ne_eq_proof lhs rhs h hasset
+  STAmount.operator_ne_eq_proof lhs rhs h
 
 end XRPL.Model.Protocol

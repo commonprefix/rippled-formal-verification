@@ -1,7 +1,7 @@
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
 import XRPL.Properties.Protocol.Number.Common.Rounding.BitVec
 import XRPL.Properties.Protocol.STAmount.Add.Common.DirectedSupport
-import XRPL.Properties.Protocol.STAmount.Add.Common.Native
+import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 import XRPL.Properties.Protocol.Number.Constructors.Constructors
 import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
 
@@ -162,8 +162,8 @@ lemma IOUAmount.absMant_toNat (i : IOUAmount) (h_fit : i.mantissa_.toInt.natAbs 
 /-- **The canonicalize IOU pack preserves value.** The `STAmount` record built from a
 canonical 16-digit `IOUAmount` `i` (magnitude `|i.mantissa_|`, exponent `i.exponent_`,
 sign from `i.signum`) has rational value `i.toRat`. -/
-lemma STAmount.iou_pack_toRat (iss : Issue) (i : IOUAmount) (hr : i.InRange16) :
-    (⟨.issue iss, (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
+lemma STAmount.iou_pack_toRat (i : IOUAmount) (hr : i.InRange16) :
+    (⟨.fractional, (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
        i.exponent_, decide (i.signum < 0)⟩ : STAmount).toRat = i.toRat := by
   have h_fit : i.mantissa_.toInt.natAbs < 2 ^ 63 := by have := hr.mant_hi; omega
   have h_absToNat := IOUAmount.absMant_toNat i h_fit
@@ -195,19 +195,20 @@ lemma STAmount.iou_pack_toRat (iss : Issue) (i : IOUAmount) (hr : i.InRange16) :
 /-- **`STAmount.checked` rel-error on a 17-to-18-digit IOU mantissa** (divide step a).
 The `checked`/`canonicalize` re-round of `±mant·10^exp` (an IOU asset) lands within the
 keystone relative error of that value, where the result mantissa is nonzero. -/
-lemma STAmount.checked_iou_rounds_within (iss : Issue) (mant : UInt64) (exp : Int) (neg : Bool)
+lemma STAmount.checked_iou_rounds_within (nt : NumericType) (mant : UInt64) (exp : Int) (neg : Bool)
     (mode : rounding_mode)
-    (h_not_xrp : (Asset.issue iss).isNative = false)
+    (hnt : nt = .fractional)
     (h_lo : 10 ^ 16 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 18)
     (he_hi : exp + 4 ≤ maxExponent)
     (result : STAmount)
-    (hok : STAmount.checked (.issue iss) mant exp neg mode = .ok result) (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.checked nt mant exp neg mode = .ok result) (hresult : result.mValue ≠ 0) :
     RoundsWithin result ((if neg then -(mant.toNat : ℚ) else (mant.toNat : ℚ)) * 10 ^ exp) mode
       (10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ) + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) := by
+  subst hnt
   have h_fit : mant.toNat < 2 ^ 63 := by omega
-  set s : STAmount := STAmount.unchecked (.issue iss) mant exp neg with hs_def
+  set s : STAmount := STAmount.unchecked .fractional mant exp neg with hs_def
   have h_int : ¬ s.integral = true := by
-    intro h; exact Bool.noConfusion (h_not_xrp.symm.trans h)
+    rw [hs_def]; simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
   set sd : Int64 := s.signedDrops.toInt64 with hsd_def
   have hsd_int : sd.toInt = if neg then -(mant.toNat : ℤ) else (mant.toNat : ℤ) := by
     rw [hsd_def, STAmount.signedDrops_toInt64_toInt_of_lt s (show s.mValue.toNat < 2 ^ 63 from h_fit)]
@@ -223,7 +224,7 @@ lemma STAmount.checked_iou_rounds_within (iss : Issue) (mant : UInt64) (exp : In
   | error e => rw [h_norm] at hok; simp at hok
   | ok i =>
     rw [h_norm] at hok; simp only at hok
-    have hres_eq : result = ⟨.issue iss,
+    have hres_eq : result = ⟨.fractional,
         (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
         i.exponent_, decide (i.signum < 0)⟩ := (Except.ok.inj hok).symm
     have hi_ne : i.mantissa_ ≠ 0 := by
@@ -236,7 +237,7 @@ lemma STAmount.checked_iou_rounds_within (iss : Issue) (mant : UInt64) (exp : In
         (by rw [hsd_natAbs]; exact h_hi) he_hi h_norm hi_ne
     have hkey := IOUAmount.normalize_rounds_within sd exp mode i (by rw [hsd_natAbs]; exact h_lo)
       (by rw [hsd_natAbs]; exact h_hi) he_hi h_norm hi_ne
-    have hval : result.toRat = i.toRat := by rw [hres_eq]; exact STAmount.iou_pack_toRat iss i hi_range
+    have hval : result.toRat = i.toRat := by rw [hres_eq]; exact STAmount.iou_pack_toRat i hi_range
     have htruth : (sd.toInt : ℚ) * 10 ^ exp
         = (if neg then -(mant.toNat : ℚ) else (mant.toNat : ℚ)) * 10 ^ exp := by
       rw [hsd_int]; rcases neg <;> push_cast <;> ring

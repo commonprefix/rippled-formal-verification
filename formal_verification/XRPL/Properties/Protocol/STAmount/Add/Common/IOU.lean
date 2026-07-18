@@ -519,32 +519,29 @@ lemma STAmount.iou_canonical_toRat (s : STAmount) (hc : s.IOUCanonical) :
 /-- A nonzero `ofIOUAmount` result forces a nonzero source mantissa: a zero-mantissa
 `IOUAmount` canonicalizes (via the IOU branch) to `IOUAmount.zero`, hence a zero-value
 STAmount. -/
-lemma STAmount.ofIOUAmount_mantissa_ne_zero (a : IOUAmount) (iss : Issue) (mode : rounding_mode)
-    (h_not_xrp : (Asset.issue iss).isNative = false) (res : STAmount)
-    (hpack : STAmount.ofIOUAmount a iss mode = .ok res) (hres : res.mValue ≠ 0) :
+lemma STAmount.ofIOU_mantissa_ne_zero (a : IOUAmount) (mode : rounding_mode) (res : STAmount)
+    (hpack : STAmount.ofIOUAmount a mode = .ok res) (hres : res.mValue ≠ 0) :
     a.mantissa_ ≠ 0 := by
   intro hm
   apply hres
-  have hsig : ¬ (IOUAmount.signum a < 0) := by unfold IOUAmount.signum; rw [hm]; decide
-  have hint : (Asset.issue iss).integral = false := h_not_xrp
   have hti : Int.toInt64 0 = 0 := by decide
   have htu : Int64.toUInt64 0 = 0 := by decide
-  have hcompute : STAmount.ofIOUAmount a iss mode = .ok ⟨.issue iss, 0, -100, false⟩ := by
+  have hcompute : STAmount.ofIOUAmount a mode = .ok ⟨.fractional, 0, -100, false⟩ := by
     unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
-    simp [hm, STAmount.unchecked, STAmount.integral, STAmount.signedDrops,
-      IOUAmount.ofMantissaExp, IOUAmount.normalize, hint, hti, htu,
+    simp [hm, STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
+      STAmount.signedDrops, IOUAmount.ofMantissaExp, IOUAmount.normalize, hti, htu,
       IOUAmount.signum, IOUAmount.zero]
   rw [hpack] at hcompute
   rw [Except.ok.inj hcompute]
 
 /-- The `IOUAmount → STAmount` conversion (`ofIOUAmount`) is value-exact on in-range
 16-digit inputs. -/
-lemma STAmount.ofIOUAmount_canonical_toRat (a : IOUAmount) (iss : Issue) (mode : rounding_mode)
-    (h_not_xrp : (Asset.issue iss).isNative = false) (hr : a.InRange16) (res : STAmount)
-    (hpack : STAmount.ofIOUAmount a iss mode = .ok res) :
+lemma STAmount.ofIOU_canonical_toRat (a : IOUAmount) (mode : rounding_mode)
+    (hr : a.InRange16) (res : STAmount)
+    (hpack : STAmount.ofIOUAmount a mode = .ok res) :
     res.toRat = a.toRat := by
-  rw [STAmount.ofIOUAmount_canonical a iss mode h_not_xrp hr] at hpack
-  have hres : res = ⟨.issue iss, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
+  rw [STAmount.ofIOU_canonical a mode hr] at hpack
+  have hres : res = ⟨.fractional, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
       decide (a.mantissa_ < 0)⟩ := (Except.ok.inj hpack).symm
   have h_fit : a.mantissa_.toInt.natAbs < 2 ^ 64 := by have := hr.mant_hi; omega
   have h_toNat : (a.mantissa_.toInt.natAbs.toUInt64).toNat = a.mantissa_.toInt.natAbs :=
@@ -588,11 +585,10 @@ lemma STAmount.iou_canonical_mantissa_natAbs (s : STAmount) (hc : s.IOUCanonical
   rcases s.mIsNegative <;> simp
 
 /-- **STAmount IOU addition rel-error engine (`to_nearest`).** Both operands are
-canonical 16-digit IOU amounts of the same issue; the result rounds within the
-composed double-rounding relative error. Converts exactly on both ends
-(`iou_canonical_id`/`ofIOUAmount_canonical`) around the `IOUAmount`-level bound. -/
-theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount) (iss : Issue)
-    (hv1 : v1.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
+canonical 16-digit IOU amounts (`mNumericType = .fractional`); the result rounds
+within the composed double-rounding relative error. Converts exactly on both ends
+(`iou_canonical_id`/`ofIOU_canonical`) around the `IOUAmount`-level bound. -/
+theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (hok : STAmount.operator_add v1 v2 .to_nearest = .ok result)
@@ -601,7 +597,6 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount) (iss : Iss
       ≤ |v1.toRat + v2.toRat| *
         (6 / (2 ^ 63 - 3 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
           + 6 / (2 ^ 63 - 3 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))) := by
-  have h_not_xrp : (Asset.issue iss).isNative = false := h_xrp
   -- comparability is forced by `hok` succeeding
   have hcmp : STAmount.areComparable v1 v2 = true := by
     rcases hb : STAmount.areComparable v1 v2 with _ | _
@@ -613,9 +608,9 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount) (iss : Iss
     intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hv1ne : v1.mValue ≠ 0 := by
     intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), hv1] at hok
-  simp only at hok
-  rw [if_neg (show ¬ (iss.isXRP = true) from by rw [h_xrp]; decide)] at hok
+  have hint1 : ¬ v1.integral = true := by
+    unfold STAmount.integral; rw [hc1.is_fractional]; decide
+  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1] at hok
   rw [STAmount.iou_canonical_id v1 .to_nearest hc1,
       STAmount.iou_canonical_id v2 .to_nearest hc2] at hok
   simp only at hok
@@ -637,7 +632,7 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount) (iss : Iss
     have hi2e : i2.exponent_ = v2.mOffset := rfl
     -- `sumI` is nonzero (else `ofIOUAmount` ⟹ zero STAmount, contradicting `hresult`)
     have hsumI_ne : sumI.mantissa_ ≠ 0 :=
-      STAmount.ofIOUAmount_mantissa_ne_zero sumI iss .to_nearest h_not_xrp result hok hresult
+      STAmount.ofIOU_mantissa_ne_zero sumI .to_nearest result hok hresult
     -- `sumI` is in 16-digit range, so `ofIOUAmount` is value-exact
     have hsumI_range : sumI.InRange16 :=
       IOUAmount.operator_add_InRange16 i1 i2 sumI
@@ -649,7 +644,7 @@ theorem STAmount.operator_add_iou_rel_error (v1 v2 result : STAmount) (iss : Iss
         (by rw [hi2e]; have := hc2.exp_hi; unfold maxExponent; omega)
         (by rw [hi1v, hi2v]; exact h_truth_ne) hadd hsumI_ne
     have hrv : result.toRat = sumI.toRat :=
-      STAmount.ofIOUAmount_canonical_toRat sumI iss .to_nearest h_not_xrp hsumI_range result hok
+      STAmount.ofIOU_canonical_toRat sumI .to_nearest hsumI_range result hok
     -- the `IOUAmount`-level rel-error bound, transported to `v1`, `v2`
     have hbound := IOUAmount.operator_add_rounds_to_nearest i1 i2 sumI
       (by rw [hi1n]; exact hc1.mant_lo) (by rw [hi1n]; exact hc1.mant_hi)

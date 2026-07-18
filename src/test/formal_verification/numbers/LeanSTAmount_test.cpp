@@ -1,5 +1,7 @@
 #include <test/formal_verification/common/LeanSuite.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
+#include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
+#include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
 #include <test/formal_verification/numbers/helpers/NumberTypes.h>
@@ -11,10 +13,7 @@
 #include <xrpl/protocol/Issue.h>
 #include <xrpl/protocol/MPTAmount.h>
 #include <xrpl/protocol/MPTIssue.h>
-#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/STAmount.h>
-#include <xrpl/protocol/UintTypes.h>
-#include <xrpl/protocol/XRPAmount.h>
 
 #include <cstdint>
 #include <exception>
@@ -23,192 +22,64 @@
 #include <sstream>
 #include <string>
 #include <tuple>
-#include <utility>
 
-// Lean STAmount FFI exports (xrpl-lean4/XRPL/STAmount/FFI.lean).
 extern "C" {
 lean_object*
-lean_stamount_xrp(uint8_t, uint64_t, int64_t, uint8_t);
+lean_st_amount_build(lean_object* numericType, uint64_t mantissa, int64_t offset, uint8_t negative);
 lean_object*
-lean_stamount_iou(uint8_t, uint64_t, int64_t, uint8_t, uint8_t);
+lean_stamount_int_amount(lean_object*);
 lean_object*
-lean_stamount_mpt(uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_iou(lean_object*, uint8_t);
 lean_object*
-lean_stamount_to_number(uint8_t, uint64_t, int64_t, uint8_t, uint8_t);
+lean_stamount_to_number(lean_object*, uint8_t);
 lean_object*
-lean_stamount_checked(uint8_t, uint64_t, int64_t, uint8_t, uint8_t);
+lean_stamount_checked(lean_object*, uint64_t, int64_t, uint8_t, uint8_t);
 lean_object*
-lean_stamount_of_int64(uint8_t, int64_t, int64_t, uint8_t);
+lean_stamount_of_int64(lean_object*, int64_t, int64_t, uint8_t);
 lean_object*
-lean_stamount_of_iou_amount(int64_t, int64_t, uint8_t);
+lean_stamount_of_number(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_of_xrp_amount(int64_t, uint8_t);
+lean_stamount_lt(lean_object*, lean_object*);
 lean_object*
-lean_stamount_of_mpt_amount(int64_t, uint8_t);
+lean_stamount_add(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_of_number(uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_sub(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_lt(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_multiply(lean_object*, lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_add(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_divide(lean_object*, lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_sub(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_mul_round(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
 lean_object*
-lean_stamount_multiply(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_mul_round_strict(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
 lean_object*
-lean_stamount_divide(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_div_round(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
 lean_object*
-lean_stamount_mul_round(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_div_round_strict(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
 lean_object*
-lean_stamount_mul_round_strict(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_can_add(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_div_round(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_can_subtract(lean_object*, lean_object*);
 lean_object*
-lean_stamount_div_round_strict(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint8_t,
-    uint8_t);
-lean_object*
-lean_stamount_can_add(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t);
-lean_object*
-lean_stamount_can_subtract(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t);
-lean_object*
-lean_stamount_round_to_scale(uint8_t, uint64_t, int64_t, uint8_t, int64_t, uint8_t);
+lean_stamount_round_to_exponent(lean_object*, int64_t, uint8_t);
 uint64_t
-lean_stamount_get_rate(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t);
+lean_stamount_get_rate(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_neg(uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_neg(lean_object*);
 lean_object*
-lean_stamount_of_native_int64(int64_t);
-lean_object*
-lean_stamount_unchecked_from_int64(uint8_t, int64_t, int64_t);
+lean_stamount_unchecked_from_int64(lean_object*, int64_t, int64_t);
 uint8_t
-lean_stamount_eq(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_eq(lean_object*, lean_object*);
 uint8_t
-lean_stamount_ne(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_ne(lean_object*, lean_object*);
 lean_object*
-lean_stamount_le(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_le(lean_object*, lean_object*);
 lean_object*
-lean_stamount_gt(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_gt(lean_object*, lean_object*);
 lean_object*
-lean_stamount_ge(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_ge(lean_object*, lean_object*);
 uint8_t
-lean_stamount_are_comparable(
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t,
-    uint8_t,
-    uint64_t,
-    int64_t,
-    uint8_t);
-uint8_t
-lean_stamount_is_legal_net(uint8_t, uint64_t, int64_t, uint8_t);
+lean_stamount_are_comparable(lean_object*, lean_object*);
 }
 
 namespace xrpl::test {
@@ -217,19 +88,18 @@ using namespace formal_verification;
 
 namespace {
 
-// Mirrors FFI_Common.lean's encodeAsset.
+// 3-way model tag from the asset: native (0) / int64 for MPT (1) / fractional for IOU (2).
 uint8_t
-kindFromAsset(Asset const& asset)
+numericTypeFromAsset(STAmount const& s)
 {
-    return asset.visit(
-        [](Issue const& iss) -> uint8_t { return iss.native() ? kKindXRP : kKindIOU; },
-        [](MPTIssue const&) -> uint8_t { return kKindMPT; });
+    return s.native() ? kNative : s.asset().holds<MPTIssue>() ? kIntegral : kFractional;
 }
 
 bool
 stAmountFieldsEqual(LeanSTAmountResult const& lean, STAmount const& cpp)
 {
-    return lean.assetKind == kindFromAsset(cpp.asset()) && lean.mValue == cpp.mantissa() &&
+    bool const cppIntegral = numericTypeFromAsset(cpp) != kFractional;
+    return (lean.numericType != 0) == cppIntegral && lean.mValue == cpp.mantissa() &&
         lean.mOffset == cpp.exponent() && (lean.isNegative != 0) == cpp.negative();
 }
 
@@ -238,11 +108,11 @@ stAmountFieldsEqual(LeanSTAmountResult const& lean, STAmount const& cpp)
 class LeanSTAmount_test : public LeanSuite
 {
     static std::string
-    label(char const* op, uint8_t kind, uint64_t mValue, int64_t mOffset, uint8_t isNeg)
+    label(char const* op, uint8_t nt, uint64_t mValue, int64_t mOffset, uint8_t isNeg)
     {
         std::stringstream ss;
-        ss << op << "(kind=" << static_cast<int>(kind) << "," << (isNeg ? "-" : "+") << mValue
-           << "e" << mOffset << ")";
+        ss << op << "(nt=" << static_cast<int>(nt) << "," << (isNeg ? "-" : "+") << mValue << "e"
+           << mOffset << ")";
         return ss.str();
     }
 
@@ -276,13 +146,10 @@ class LeanSTAmount_test : public LeanSuite
         return true;
     }
 
-    // Differential wrapper for STAmount-producing ops: decode the Lean result,
-    // invoke cppFn in try/catch, hand both to checkStAmountResult.
     template <typename CppFn>
     bool
-    runSTAmountOp(std::string const& tag, lean_object* leanRaw, CppFn&& cppFn)
+    runSTAmountOp(std::string const& tag, LeanSTAmountResult const& lean, CppFn&& cppFn)
     {
-        auto lean = LeanSTAmountResult::from_lean(leanRaw);
         STAmount cpp;
         bool cppThrew = false;
         try
@@ -296,39 +163,39 @@ class LeanSTAmount_test : public LeanSuite
         return checkStAmountResult(tag, lean, cpp, cppThrew);
     }
 
-    // Cross-kind accessor calls (e.g. xrp() on IOU) must error on both sides.
     bool
     checkAccessors(STAmountPair const& p, Number::RoundingMode mode)
     {
-        uint8_t const kind = p.leanSt.assetKind;
+        uint8_t const nt = p.leanSt.numericType;
         uint64_t const mValue = p.leanSt.mValue;
         int64_t const mOffset = p.leanSt.mOffset;
         uint8_t const isNeg = p.leanSt.isNegative;
         STAmount const& cpp = p.cppSt;
-        std::string const tag = label("accessor", kind, mValue, mOffset, isNeg);
+        std::string const tag = label("accessor", nt, mValue, mOffset, isNeg);
         uint8_t const leanMode = toLeanMode(mode);
         bool ok = true;
 
         {
-            auto lean = LeanXRPResult::from_lean(lean_stamount_xrp(kind, mValue, mOffset, isNeg));
+            auto lean = readExceptI64(
+                lean_stamount_int_amount(STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg)));
             bool cppThrew = false;
-            int64_t cppDrops = 0;
+            int64_t cppVal = 0;
             try
             {
-                cppDrops = cpp.xrp().drops();
+                cppVal = cpp.mpt().value();
             }
             catch (std::exception const&)
             {
                 cppThrew = true;
             }
-            if (lean.ok == cppThrew)
+            if (lean.value.has_value() == cppThrew)
             {
-                fail(tag + ".xrp: error mismatch");
+                fail(tag + ".intAmount: error mismatch");
                 ok = false;
             }
-            else if (lean.ok && lean.drops != cppDrops)
+            else if (lean.value.has_value() && *lean.value != cppVal)
             {
-                fail(tag + ".xrp: drops mismatch");
+                fail(tag + ".intAmount: value mismatch");
                 ok = false;
             }
             else
@@ -336,8 +203,8 @@ class LeanSTAmount_test : public LeanSuite
         }
         {
             NumberRoundModeGuard mg(mode);
-            auto lean =
-                LeanIOUResult::from_lean(lean_stamount_iou(kind, mValue, mOffset, isNeg, leanMode));
+            auto lean = readIOUExcept(
+                lean_stamount_iou(STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg), leanMode));
             bool cppThrew = false;
             IOUAmount cppIou;
             try
@@ -364,35 +231,9 @@ class LeanSTAmount_test : public LeanSuite
                 pass();
         }
         {
-            auto lean =
-                LeanMPTAmountResult::from_lean(lean_stamount_mpt(kind, mValue, mOffset, isNeg));
-            bool cppThrew = false;
-            int64_t cppVal = 0;
-            try
-            {
-                cppVal = cpp.mpt().value();
-            }
-            catch (std::exception const&)
-            {
-                cppThrew = true;
-            }
-            if (lean.ok == cppThrew)
-            {
-                fail(tag + ".mpt: error mismatch");
-                ok = false;
-            }
-            else if (lean.ok && lean.value != cppVal)
-            {
-                fail(tag + ".mpt: value mismatch");
-                ok = false;
-            }
-            else
-                pass();
-        }
-        {
             NumberRoundModeGuard mg(mode);
-            auto lean = LeanNumberResult::from_lean(
-                lean_stamount_to_number(kind, mValue, mOffset, isNeg, leanMode));
+            auto lean = readNumberExcept(lean_stamount_to_number(
+                STAmountFFI::buildOwned(nt, mValue, mOffset, isNeg), leanMode));
             bool cppThrew = false;
             Number cppN;
             try
@@ -428,11 +269,16 @@ class LeanSTAmount_test : public LeanSuite
         NumberRoundModeGuard mg(mode);
         // Use the checked ctor to match Lean's error path.
         return runSTAmountOp(
-            label("checked", s.assetKind, s.mValue, s.mOffset, s.isNegative),
-            lean_stamount_checked(s.assetKind, s.mValue, s.mOffset, s.isNegative, toLeanMode(mode)),
+            label("checked", s.numericType, s.mValue, s.mOffset, s.isNegative),
+            STAmountFFI::fromExcept(lean_stamount_checked(
+                NumericTypeFFI::buildOwned(s.numericType),
+                s.mValue,
+                s.mOffset,
+                s.isNegative,
+                toLeanMode(mode))),
             [&] {
                 return STAmount{
-                    assetForKind(s.assetKind),
+                    assetForNumericType(s.numericType),
                     s.mValue,
                     static_cast<int>(s.mOffset),
                     s.isNegative != 0};
@@ -440,15 +286,17 @@ class LeanSTAmount_test : public LeanSuite
     }
 
     bool
-    checkOfInt64(uint8_t kind, int64_t mantissa, int64_t exponent, Number::RoundingMode mode)
+    checkOfInt64(uint8_t nt, int64_t mantissa, int64_t exponent, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << "ofInt64(kind=" << static_cast<int>(kind) << "," << mantissa << "e" << exponent
-            << ")";
+        tag << "ofInt64(nt=" << static_cast<int>(nt) << "," << mantissa << "e" << exponent << ")";
         return runSTAmountOp(
-            tag.str(), lean_stamount_of_int64(kind, mantissa, exponent, toLeanMode(mode)), [&] {
-                return assetForKind(kind).visit(
+            tag.str(),
+            STAmountFFI::fromExcept(lean_stamount_of_int64(
+                NumericTypeFFI::buildOwned(nt), mantissa, exponent, toLeanMode(mode))),
+            [&] {
+                return assetForNumericType(nt).visit(
                     [&](Issue const& iss) {
                         return STAmount{iss, mantissa, static_cast<int>(exponent)};
                     },
@@ -469,20 +317,16 @@ class LeanSTAmount_test : public LeanSuite
         NumberRoundModeGuard mg(mode);
         auto leanFn = isAdd ? lean_stamount_add : lean_stamount_sub;
         std::stringstream tag;
-        tag << op << "(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind) << ")";
+        tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
         return runSTAmountOp(
             tag.str(),
-            leanFn(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative,
-                toLeanMode(mode)),
+            STAmountFFI::fromExcept(leanFn(
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
+                toLeanMode(mode))),
             [&] { return isAdd ? (a.cppSt + b.cppSt) : (a.cppSt - b.cppSt); });
     }
 
@@ -490,56 +334,54 @@ class LeanSTAmount_test : public LeanSuite
     checkMultiply(
         STAmountPair const& a,
         STAmountPair const& b,
-        uint8_t assetKind,
+        uint8_t nt,
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << "multiply(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind)
-            << ",ak=" << static_cast<int>(assetKind) << ")";
+        tag << "multiply(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
+            << ")";
         return runSTAmountOp(
             tag.str(),
-            lean_stamount_multiply(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative,
-                assetKind,
-                toLeanMode(mode)),
-            [&] { return multiply(a.cppSt, b.cppSt, assetForKind(assetKind)); });
+            STAmountFFI::fromExcept(lean_stamount_multiply(
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
+                NumericTypeFFI::buildOwned(nt),
+                toLeanMode(mode))),
+            [&] { return multiply(a.cppSt, b.cppSt, assetForNumericType(nt)); });
     }
 
     bool
     checkDivide(
         STAmountPair const& num,
         STAmountPair const& den,
-        uint8_t assetKind,
+        uint8_t nt,
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << "divide(kn=" << static_cast<int>(num.leanSt.assetKind)
-            << ",kd=" << static_cast<int>(den.leanSt.assetKind)
-            << ",ak=" << static_cast<int>(assetKind) << ")";
+        tag << "divide(ntN=" << static_cast<int>(num.leanSt.numericType)
+            << ",ntD=" << static_cast<int>(den.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
+            << ")";
         return runSTAmountOp(
             tag.str(),
-            lean_stamount_divide(
-                num.leanSt.assetKind,
-                num.leanSt.mValue,
-                num.leanSt.mOffset,
-                num.leanSt.isNegative,
-                den.leanSt.assetKind,
-                den.leanSt.mValue,
-                den.leanSt.mOffset,
-                den.leanSt.isNegative,
-                assetKind,
-                toLeanMode(mode)),
-            [&] { return divide(num.cppSt, den.cppSt, assetForKind(assetKind)); });
+            STAmountFFI::fromExcept(lean_stamount_divide(
+                STAmountFFI::buildOwned(
+                    num.leanSt.numericType,
+                    num.leanSt.mValue,
+                    num.leanSt.mOffset,
+                    num.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    den.leanSt.numericType,
+                    den.leanSt.mValue,
+                    den.leanSt.mOffset,
+                    den.leanSt.isNegative),
+                NumericTypeFFI::buildOwned(nt),
+                toLeanMode(mode))),
+            [&] { return divide(num.cppSt, den.cppSt, assetForNumericType(nt)); });
     }
 
     template <typename LeanFn, typename CppFn>
@@ -550,30 +392,26 @@ class LeanSTAmount_test : public LeanSuite
         CppFn cppFn,
         STAmountPair const& a,
         STAmountPair const& b,
-        uint8_t assetKind,
+        uint8_t nt,
         bool roundUp,
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << op << "(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind)
-            << ",ak=" << static_cast<int>(assetKind) << ",ru=" << roundUp << ")";
+        tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
+            << ",ru=" << roundUp << ")";
         return runSTAmountOp(
             tag.str(),
-            leanFn(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative,
-                assetKind,
+            STAmountFFI::fromExcept(leanFn(
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
+                NumericTypeFFI::buildOwned(nt),
                 roundUp ? 1u : 0u,
-                toLeanMode(mode)),
-            [&] { return cppFn(a.cppSt, b.cppSt, assetForKind(assetKind), roundUp); });
+                toLeanMode(mode))),
+            [&] { return cppFn(a.cppSt, b.cppSt, assetForNumericType(nt), roundUp); });
     }
 
     template <typename LeanFn, typename CppFn>
@@ -584,30 +422,32 @@ class LeanSTAmount_test : public LeanSuite
         CppFn cppFn,
         STAmountPair const& num,
         STAmountPair const& den,
-        uint8_t assetKind,
+        uint8_t nt,
         bool roundUp,
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << op << "(kn=" << static_cast<int>(num.leanSt.assetKind)
-            << ",kd=" << static_cast<int>(den.leanSt.assetKind)
-            << ",ak=" << static_cast<int>(assetKind) << ",ru=" << roundUp << ")";
+        tag << op << "(ntN=" << static_cast<int>(num.leanSt.numericType)
+            << ",ntD=" << static_cast<int>(den.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
+            << ",ru=" << roundUp << ")";
         return runSTAmountOp(
             tag.str(),
-            leanFn(
-                num.leanSt.assetKind,
-                num.leanSt.mValue,
-                num.leanSt.mOffset,
-                num.leanSt.isNegative,
-                den.leanSt.assetKind,
-                den.leanSt.mValue,
-                den.leanSt.mOffset,
-                den.leanSt.isNegative,
-                assetKind,
+            STAmountFFI::fromExcept(leanFn(
+                STAmountFFI::buildOwned(
+                    num.leanSt.numericType,
+                    num.leanSt.mValue,
+                    num.leanSt.mOffset,
+                    num.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    den.leanSt.numericType,
+                    den.leanSt.mValue,
+                    den.leanSt.mOffset,
+                    den.leanSt.isNegative),
+                NumericTypeFFI::buildOwned(nt),
                 roundUp ? 1u : 0u,
-                toLeanMode(mode)),
-            [&] { return cppFn(num.cppSt, den.cppSt, assetForKind(assetKind), roundUp); });
+                toLeanMode(mode))),
+            [&] { return cppFn(num.cppSt, den.cppSt, assetForNumericType(nt), roundUp); });
     }
 
     bool
@@ -615,15 +455,11 @@ class LeanSTAmount_test : public LeanSuite
     {
         uint8_t const leanMode = toLeanMode(mode);
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanBoolResult::from_lean(lean_stamount_can_add(
-            a.leanSt.assetKind,
-            a.leanSt.mValue,
-            a.leanSt.mOffset,
-            a.leanSt.isNegative,
-            b.leanSt.assetKind,
-            b.leanSt.mValue,
-            b.leanSt.mOffset,
-            b.leanSt.isNegative,
+        auto lean = readExceptBool(lean_stamount_can_add(
+            STAmountFFI::buildOwned(
+                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+            STAmountFFI::buildOwned(
+                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
             leanMode));
         bool cppThrew = false;
         bool cppRet = false;
@@ -636,17 +472,17 @@ class LeanSTAmount_test : public LeanSuite
             cppThrew = true;
         }
         std::stringstream tag;
-        tag << "canAdd(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind) << ")";
-        if (lean.ok == cppThrew)
+        tag << "canAdd(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
+        if (lean.value.has_value() == cppThrew)
         {
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.ok && lean.value != cppRet)
+        if (lean.value.has_value() && *lean.value != cppRet)
         {
             std::stringstream ss;
-            ss << tag.str() << ": value mismatch lean=" << lean.value << " cpp=" << cppRet;
+            ss << tag.str() << ": value mismatch lean=" << *lean.value << " cpp=" << cppRet;
             fail(ss.str());
             return false;
         }
@@ -657,15 +493,11 @@ class LeanSTAmount_test : public LeanSuite
     bool
     checkCanSub(STAmountPair const& a, STAmountPair const& b)
     {
-        auto lean = LeanBoolResult::from_lean(lean_stamount_can_subtract(
-            a.leanSt.assetKind,
-            a.leanSt.mValue,
-            a.leanSt.mOffset,
-            a.leanSt.isNegative,
-            b.leanSt.assetKind,
-            b.leanSt.mValue,
-            b.leanSt.mOffset,
-            b.leanSt.isNegative));
+        auto lean = readExceptBool(lean_stamount_can_subtract(
+            STAmountFFI::buildOwned(
+                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+            STAmountFFI::buildOwned(
+                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)));
         bool cppThrew = false;
         bool cppRet = false;
         try
@@ -677,14 +509,14 @@ class LeanSTAmount_test : public LeanSuite
             cppThrew = true;
         }
         std::stringstream tag;
-        tag << "canSub(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind) << ")";
-        if (lean.ok == cppThrew)
+        tag << "canSub(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
+        if (lean.value.has_value() == cppThrew)
         {
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.ok && lean.value != cppRet)
+        if (lean.value.has_value() && *lean.value != cppRet)
         {
             fail(tag.str() + ": value mismatch");
             return false;
@@ -694,21 +526,19 @@ class LeanSTAmount_test : public LeanSuite
     }
 
     bool
-    checkRoundToScale(STAmountPair const& p, int32_t scale, Number::RoundingMode mode)
+    checkRoundToExponent(STAmountPair const& p, int32_t scale, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
         std::stringstream tag;
-        tag << "roundToScale(kind=" << static_cast<int>(p.leanSt.assetKind) << ",scale=" << scale
+        tag << "roundToExponent(nt=" << static_cast<int>(p.leanSt.numericType) << ",scale=" << scale
             << ")";
         return runSTAmountOp(
             tag.str(),
-            lean_stamount_round_to_scale(
-                p.leanSt.assetKind,
-                p.leanSt.mValue,
-                p.leanSt.mOffset,
-                p.leanSt.isNegative,
+            STAmountFFI::fromExcept(lean_stamount_round_to_exponent(
+                STAmountFFI::buildOwned(
+                    p.leanSt.numericType, p.leanSt.mValue, p.leanSt.mOffset, p.leanSt.isNegative),
                 scale,
-                toLeanMode(mode)),
+                toLeanMode(mode))),
             [&] { return roundToScale(p.cppSt, scale, mode); });
     }
 
@@ -721,21 +551,23 @@ class LeanSTAmount_test : public LeanSuite
         uint8_t const leanMode = toLeanMode(mode);
         NumberRoundModeGuard mg(mode);
         uint64_t const lean = lean_stamount_get_rate(
-            offerOut.leanSt.assetKind,
-            offerOut.leanSt.mValue,
-            offerOut.leanSt.mOffset,
-            offerOut.leanSt.isNegative,
-            offerIn.leanSt.assetKind,
-            offerIn.leanSt.mValue,
-            offerIn.leanSt.mOffset,
-            offerIn.leanSt.isNegative,
+            STAmountFFI::buildOwned(
+                offerOut.leanSt.numericType,
+                offerOut.leanSt.mValue,
+                offerOut.leanSt.mOffset,
+                offerOut.leanSt.isNegative),
+            STAmountFFI::buildOwned(
+                offerIn.leanSt.numericType,
+                offerIn.leanSt.mValue,
+                offerIn.leanSt.mOffset,
+                offerIn.leanSt.isNegative),
             leanMode);
         uint64_t const cpp = getRate(offerOut.cppSt, offerIn.cppSt);
         if (lean != cpp)
         {
             std::stringstream ss;
-            ss << "getRate(kOut=" << static_cast<int>(offerOut.leanSt.assetKind)
-               << ",kIn=" << static_cast<int>(offerIn.leanSt.assetKind) << "): lean=" << lean
+            ss << "getRate(ntOut=" << static_cast<int>(offerOut.leanSt.numericType)
+               << ",ntIn=" << static_cast<int>(offerIn.leanSt.numericType) << "): lean=" << lean
                << " cpp=" << cpp;
             fail(ss.str());
             return false;
@@ -764,14 +596,10 @@ class LeanSTAmount_test : public LeanSuite
         return expectBool(
             "eq",
             lean_stamount_eq(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.cppSt == b.cppSt);
     }
 
@@ -781,45 +609,36 @@ class LeanSTAmount_test : public LeanSuite
         return expectBool(
             "ne",
             lean_stamount_ne(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.cppSt != b.cppSt);
     }
 
     bool
     checkOrdering(
         char const* op,
-        lean_object* (
-            *leanFn)(uint8_t, uint64_t, int64_t, uint8_t, uint8_t, uint64_t, int64_t, uint8_t),
+        lean_object* (*leanFn)(lean_object*, lean_object*),
         bool cppRet,
         bool cppThrew,
         STAmountPair const& a,
         STAmountPair const& b)
     {
-        auto lean = LeanBoolResult::from_lean(leanFn(
-            a.leanSt.assetKind,
-            a.leanSt.mValue,
-            a.leanSt.mOffset,
-            a.leanSt.isNegative,
-            b.leanSt.assetKind,
-            b.leanSt.mValue,
-            b.leanSt.mOffset,
-            b.leanSt.isNegative));
+        auto lean = readExceptBool(leanFn(
+            STAmountFFI::buildOwned(
+                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+            STAmountFFI::buildOwned(
+                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)));
         std::stringstream tag;
-        tag << op << "(k1=" << static_cast<int>(a.leanSt.assetKind)
-            << ",k2=" << static_cast<int>(b.leanSt.assetKind) << ")";
-        if (lean.ok == cppThrew)
+        tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
+            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
+        if (lean.value.has_value() == cppThrew)
         {
             fail(tag.str() + ": error mismatch");
             return false;
         }
-        if (lean.ok && (lean.value != 0) != cppRet)
+        if (lean.value.has_value() && *lean.value != cppRet)
         {
             fail(tag.str() + ": value mismatch");
             return false;
@@ -891,29 +710,15 @@ class LeanSTAmount_test : public LeanSuite
     bool
     checkAreComparable(STAmountPair const& a, STAmountPair const& b)
     {
-        // C++ areComparable is file-static; for sentinel assets kind ⇔ asset.
+        // For the sentinel assets, comparability reduces to matching numericType.
         return expectBool(
             "areComparable",
             lean_stamount_are_comparable(
-                a.leanSt.assetKind,
-                a.leanSt.mValue,
-                a.leanSt.mOffset,
-                a.leanSt.isNegative,
-                b.leanSt.assetKind,
-                b.leanSt.mValue,
-                b.leanSt.mOffset,
-                b.leanSt.isNegative),
-            a.leanSt.assetKind == b.leanSt.assetKind);
-    }
-
-    bool
-    checkIsLegalNet(STAmountPair const& p)
-    {
-        return expectBool(
-            "isLegalNet",
-            lean_stamount_is_legal_net(
-                p.leanSt.assetKind, p.leanSt.mValue, p.leanSt.mOffset, p.leanSt.isNegative),
-            isLegalNet(p.cppSt));
+                STAmountFFI::buildOwned(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::buildOwned(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
+            a.leanSt.numericType == b.leanSt.numericType);
     }
 
     bool
@@ -921,33 +726,23 @@ class LeanSTAmount_test : public LeanSuite
     {
         auto const& s = p.leanSt;
         return runSTAmountOp(
-            label("neg", s.assetKind, s.mValue, s.mOffset, s.isNegative),
-            lean_stamount_neg(s.assetKind, s.mValue, s.mOffset, s.isNegative),
+            label("neg", s.numericType, s.mValue, s.mOffset, s.isNegative),
+            STAmountFFI::fromObject(lean_stamount_neg(
+                STAmountFFI::buildOwned(s.numericType, s.mValue, s.mOffset, s.isNegative))),
             [&] { return -p.cppSt; });
     }
 
-    // Lean's ofNativeInt64 / uncheckedFromInt64 route through unchecked construction
     bool
-    checkOfNativeInt64(int64_t drops)
-    {
-        bool const neg = drops < 0;
-        std::stringstream tag;
-        tag << "ofNativeInt64(" << drops << ")";
-        return runSTAmountOp(tag.str(), lean_stamount_of_native_int64(drops), [&] {
-            return stAmountUnchecked(kKindXRP, magnitude(drops), 0, neg ? 1 : 0);
-        });
-    }
-
-    bool
-    checkUncheckedFromInt64(uint8_t kind, int64_t v, int64_t offset)
+    checkUncheckedFromInt64(uint8_t nt, int64_t v, int64_t offset)
     {
         bool const neg = v < 0;
         std::stringstream tag;
-        tag << "uncheckedFromInt64(kind=" << static_cast<int>(kind) << "," << v << "e" << offset
-            << ")";
-        return runSTAmountOp(tag.str(), lean_stamount_unchecked_from_int64(kind, v, offset), [&] {
-            return stAmountUnchecked(kind, magnitude(v), offset, neg ? 1 : 0);
-        });
+        tag << "uncheckedFromInt64(nt=" << static_cast<int>(nt) << "," << v << "e" << offset << ")";
+        return runSTAmountOp(
+            tag.str(),
+            STAmountFFI::fromObject(
+                lean_stamount_unchecked_from_int64(NumericTypeFFI::buildOwned(nt), v, offset)),
+            [&] { return stAmountUnchecked(nt, magnitude(v), offset, neg ? 1 : 0); });
     }
 
 public:
@@ -962,7 +757,10 @@ public:
         constexpr uint64_t kMax = STAmount::kMaxValue;
         constexpr int eMin = STAmount::kMinOffset;
         constexpr int eMax = STAmount::kMaxOffset;
-        constexpr uint64_t xrpMax = STAmount::kMaxNativeN;
+        // int64 (MPT) ceiling = INT64_MAX; native (XRP) ceiling = 10^17, offset 17.
+        constexpr uint64_t kMaxIntegral =
+            static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        constexpr uint64_t kMaxNative = 100'000'000'000'000'000ULL;
 
         for (auto mode :
              {Number::RoundingMode::ToNearest,
@@ -970,127 +768,60 @@ public:
               Number::RoundingMode::Downward,
               Number::RoundingMode::Upward})
         {
-            checkAccessors(makeSTAmountPair(kKindXRP, 0, 0, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindXRP, 1, 0, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindXRP, 1, 0, 1), mode);
-            checkAccessors(makeSTAmountPair(kKindXRP, xrpMax, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kIntegral, 0, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kIntegral, 1, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kIntegral, 1, 0, 1), mode);
+            checkAccessors(makeSTAmountPair(kIntegral, 1'000, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0), mode);
 
-            checkAccessors(makeSTAmountPair(kKindIOU, 0, -100, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindIOU, kMin, 0, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindIOU, kMax, eMax, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindIOU, kMin, eMin, 1), mode);
-
-            checkAccessors(makeSTAmountPair(kKindMPT, 0, 0, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindMPT, 1'000, 0, 0), mode);
-            checkAccessors(makeSTAmountPair(kKindMPT, kMaxMpTokenAmount, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kFractional, 0, -100, 0), mode);
+            checkAccessors(makeSTAmountPair(kFractional, kMin, 0, 0), mode);
+            checkAccessors(makeSTAmountPair(kFractional, kMax, eMax, 0), mode);
+            checkAccessors(makeSTAmountPair(kFractional, kMin, eMin, 1), mode);
         }
 
-        // checked ctor: in-range happy paths per kind
-        checkChecked(makeSTAmountPair(kKindXRP, 1'000, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindXRP, 0, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindXRP, xrpMax, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, 0, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, 1, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, kMax, eMax, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, kMin, eMin, 0), m);
-        checkChecked(makeSTAmountPair(kKindMPT, 1'000'000'000ULL, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindMPT, kMaxMpTokenAmount, 0, 0), m);
+        // checked ctor: in-range happy paths per numericType.
+        checkChecked(makeSTAmountPair(kIntegral, 1'000, 0, 0), m);
+        checkChecked(makeSTAmountPair(kIntegral, 0, 0, 0), m);
+        checkChecked(makeSTAmountPair(kIntegral, 1'000'000'000ULL, 0, 0), m);
+        checkChecked(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0), m);
+        // native (XRP): in-range, at 10^17 via mantissa and via offset 17.
+        checkChecked(makeSTAmountPair(kNative, 1'000'000, 0, 0), m);
+        checkChecked(makeSTAmountPair(kNative, kMaxNative, 0, 0), m);
+        checkChecked(makeSTAmountPair(kNative, 1, 17, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, 0, 0, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, 1, 0, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, kMax, eMax, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, kMin, eMin, 0), m);
 
-        // Unchecked-from-int64 entry: STAmount can store raw fields without
-        // canonicalization. Cover each kind with zero, ±1, and the kind's
-        // semantic max. Out-of-range field extremes live in test_extreme_values.
-        for (uint8_t kind : {kKindXRP, kKindIOU, kKindMPT})
+        // Unchecked-from-int64 entry: STAmount stores raw fields without
+        // canonicalization. Cover each numericType with zero, ±1, and semantic
+        // extremes. Out-of-range field extremes live in test_extreme_values.
+        for (uint8_t nt : {kIntegral, kFractional})
         {
-            checkUncheckedFromInt64(kind, 0, 0);
-            checkUncheckedFromInt64(kind, 1, 0);
-            checkUncheckedFromInt64(kind, -1, 0);
+            checkUncheckedFromInt64(nt, 0, 0);
+            checkUncheckedFromInt64(nt, 1, 0);
+            checkUncheckedFromInt64(nt, -1, 0);
         }
-        checkUncheckedFromInt64(kKindXRP, static_cast<int64_t>(xrpMax), 0);
-        checkUncheckedFromInt64(kKindXRP, -static_cast<int64_t>(xrpMax), 0);
-        checkUncheckedFromInt64(kKindMPT, static_cast<int64_t>(kMaxMpTokenAmount), 0);
-        checkUncheckedFromInt64(kKindIOU, static_cast<int64_t>(kMin), eMin);
-        checkUncheckedFromInt64(kKindIOU, static_cast<int64_t>(kMax), eMax);
-        checkUncheckedFromInt64(kKindIOU, -static_cast<int64_t>(kMax), eMax);
+        checkUncheckedFromInt64(kIntegral, static_cast<int64_t>(kMaxIntegral), 0);
+        checkUncheckedFromInt64(kIntegral, -static_cast<int64_t>(kMaxIntegral), 0);
+        checkUncheckedFromInt64(kNative, static_cast<int64_t>(kMaxNative), 0);
+        checkUncheckedFromInt64(kNative, -static_cast<int64_t>(kMaxNative), 0);
+        checkUncheckedFromInt64(kFractional, static_cast<int64_t>(kMin), eMin);
+        checkUncheckedFromInt64(kFractional, static_cast<int64_t>(kMax), eMax);
+        checkUncheckedFromInt64(kFractional, -static_cast<int64_t>(kMax), eMax);
 
-        // ofNativeInt64: routes through unchecked, no throw — sanity at ±1, max.
-        checkOfNativeInt64(0);
-        checkOfNativeInt64(1);
-        checkOfNativeInt64(-1);
-        checkOfNativeInt64(static_cast<int64_t>(xrpMax));
-        checkOfNativeInt64(-static_cast<int64_t>(xrpMax));
+        checkOfInt64(kIntegral, 1'000'000, 0, m);
+        checkOfInt64(kIntegral, -1'000'000, 0, m);
+        checkOfInt64(kNative, 1'000'000, 0, m);
+        checkOfInt64(kNative, -1'000'000, 0, m);
+        checkOfInt64(kIntegral, 999'999'999LL, 0, m);
+        checkOfInt64(kIntegral, -999'999'999LL, 0, m);
+        checkOfInt64(kFractional, 1'234'567'890LL, 0, m);
+        checkOfInt64(kFractional, -1'234'567'890LL, 0, m);
 
-        checkOfInt64(kKindXRP, 1'000'000, 0, m);
-        checkOfInt64(kKindXRP, -1'000'000, 0, m);
-        checkOfInt64(kKindIOU, 1'234'567'890LL, 0, m);
-        checkOfInt64(kKindIOU, -1'234'567'890LL, 0, m);
-        checkOfInt64(kKindMPT, 999'999'999LL, 0, m);
-        checkOfInt64(kKindMPT, -999'999'999LL, 0, m);
-
-        // ofIOUAmount always uses noIssue() on the C++ side.
-        for (auto [m_, e_] : std::initializer_list<std::pair<int64_t, int64_t>>{
-                 {0, 0}, {1'234'567'890'123'456LL, -10}, {-1'234'567'890'123'456LL, -10}})
-        {
-            NumberRoundModeGuard mg(m);
-            uint8_t const leanMode = toLeanMode(m);
-            auto lean =
-                LeanSTAmountResult::from_lean(lean_stamount_of_iou_amount(m_, e_, leanMode));
-            STAmount cpp;
-            bool cppThrew = false;
-            try
-            {
-                cpp = STAmount{IOUAmount{m_, static_cast<int>(e_)}, noIssue()};
-            }
-            catch (std::exception const&)
-            {
-                cppThrew = true;
-            }
-            std::stringstream tag;
-            tag << "ofIOUAmount(" << m_ << "e" << e_ << ")";
-            checkStAmountResult(tag.str(), lean, cpp, cppThrew);
-        }
-
-        for (int64_t v : {int64_t{0}, int64_t{1}, int64_t{-1}, int64_t{1'000'000'000LL}})
-        {
-            NumberRoundModeGuard mg(m);
-            uint8_t const leanMode = toLeanMode(m);
-            auto lean = LeanSTAmountResult::from_lean(lean_stamount_of_xrp_amount(v, leanMode));
-            STAmount cpp;
-            bool cppThrew = false;
-            try
-            {
-                cpp = STAmount{XRPAmount{v}};
-            }
-            catch (std::exception const&)
-            {
-                cppThrew = true;
-            }
-            std::stringstream tag;
-            tag << "ofXRPAmount(" << v << ")";
-            checkStAmountResult(tag.str(), lean, cpp, cppThrew);
-        }
-
-        for (int64_t v : {int64_t{0}, int64_t{1}, int64_t{-1}, int64_t{1'000'000'000'000LL}})
-        {
-            NumberRoundModeGuard mg(m);
-            uint8_t const leanMode = toLeanMode(m);
-            auto lean = LeanSTAmountResult::from_lean(lean_stamount_of_mpt_amount(v, leanMode));
-            STAmount cpp;
-            bool cppThrew = false;
-            try
-            {
-                cpp = STAmount{MPTAmount{v}, ffiMPTIssue()};
-            }
-            catch (std::exception const&)
-            {
-                cppThrew = true;
-            }
-            std::stringstream tag;
-            tag << "ofMPTAmount(" << v << ")";
-            checkStAmountResult(tag.str(), lean, cpp, cppThrew);
-        }
-
-        for (auto kind : {kKindXRP, kKindIOU, kKindMPT})
+        for (auto nt : {kIntegral, kFractional})
         {
             for (auto [neg, mant, exp_] :
                  std::initializer_list<std::tuple<uint8_t, uint64_t, int64_t>>{
@@ -1101,15 +832,14 @@ public:
             {
                 NumberRoundModeGuard mg(m);
                 uint8_t const leanMode = toLeanMode(m);
-                auto lean = LeanSTAmountResult::from_lean(
-                    lean_stamount_of_number(kind, neg, mant, exp_, leanMode));
+                auto lean = STAmountFFI::fromExcept(lean_stamount_of_number(
+                    NumericTypeFFI::buildOwned(nt), lean_number_build(neg, mant, exp_), leanMode));
                 STAmount cpp;
                 bool cppThrew = false;
                 try
                 {
-                    Asset const a = assetForKind(kind);
                     Number const n{neg != 0, mant, static_cast<int>(exp_), Number::Unchecked{}};
-                    cpp = a.visit(
+                    cpp = assetForNumericType(nt).visit(
                         [&](Issue const& iss) { return STAmount{iss, n}; },
                         [&](MPTIssue const& mpt) { return STAmount{mpt, n}; });
                 }
@@ -1118,8 +848,8 @@ public:
                     cppThrew = true;
                 }
                 std::stringstream tag;
-                tag << "ofNumber(kind=" << static_cast<int>(kind) << "," << (neg ? "-" : "+")
-                    << mant << "e" << exp_ << ")";
+                tag << "ofNumber(nt=" << static_cast<int>(nt) << "," << (neg ? "-" : "+") << mant
+                    << "e" << exp_ << ")";
                 checkStAmountResult(tag.str(), lean, cpp, cppThrew);
             }
         }
@@ -1130,28 +860,27 @@ public:
     {
         beginCase("LeanSTAmount.known_comparison");
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        checkLt(makeSTAmountPair(kKindXRP, 1, 0, 0), makeSTAmountPair(kKindXRP, 2, 0, 0));
-        checkLt(makeSTAmountPair(kKindXRP, 2, 0, 0), makeSTAmountPair(kKindXRP, 1, 0, 0));
-        checkLt(makeSTAmountPair(kKindXRP, 1, 0, 1), makeSTAmountPair(kKindXRP, 1, 0, 0));
+        checkLt(makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 2, 0, 0));
+        checkLt(makeSTAmountPair(kIntegral, 2, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0));
+        checkLt(makeSTAmountPair(kIntegral, 1, 0, 1), makeSTAmountPair(kIntegral, 1, 0, 0));
+        checkLt(makeSTAmountPair(kIntegral, 100, 0, 0), makeSTAmountPair(kIntegral, 200, 0, 0));
+        checkLt(makeSTAmountPair(kIntegral, 100, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
         checkLt(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 1, 0));
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 1, 0));
         checkLt(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'001ULL, 0, 0));
-        checkLt(makeSTAmountPair(kKindMPT, 100, 0, 0), makeSTAmountPair(kKindMPT, 200, 0, 0));
-        checkLt(makeSTAmountPair(kKindXRP, 100, 0, 0), makeSTAmountPair(kKindXRP, 100, 0, 0));
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'001ULL, 0, 0));
         checkLt(
-            makeSTAmountPair(kKindIOU, 0, -100, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0));
-        // Cross-asset is incomparable: C++ throws, Lean returns error.
+            makeSTAmountPair(kFractional, 0, -100, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0));
+        // Cross-type (integral vs fractional) is incomparable: C++ throws, Lean errors.
         checkLt(
-            makeSTAmountPair(kKindXRP, 100, 0, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0));
+            makeSTAmountPair(kIntegral, 100, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0));
         checkLt(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindMPT, 100, 0, 0));
-        checkLt(makeSTAmountPair(kKindXRP, 100, 0, 0), makeSTAmountPair(kKindMPT, 100, 0, 0));
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kIntegral, 100, 0, 0));
     }
 
     void
@@ -1164,69 +893,51 @@ public:
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            makeSTAmountPair(kKindXRP, 2'000, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
+            makeSTAmountPair(kIntegral, 2'000, 0, 0),
             m);
         checkAddSub(
             "sub",
             false,
-            makeSTAmountPair(kKindXRP, 5'000, 0, 0),
-            makeSTAmountPair(kKindXRP, 2'000, 0, 0),
+            makeSTAmountPair(kIntegral, 5'000, 0, 0),
+            makeSTAmountPair(kIntegral, 2'000, 0, 0),
             m);
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindXRP, 0, 0, 0),
-            makeSTAmountPair(kKindXRP, 2'000, 0, 0),
+            makeSTAmountPair(kIntegral, 0, 0, 0),
+            makeSTAmountPair(kIntegral, 2'000, 0, 0),
             m);
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindXRP, 5'000, 0, 0),
-            makeSTAmountPair(kKindXRP, 0, 0, 0),
+            makeSTAmountPair(kIntegral, 5'000, 0, 0),
+            makeSTAmountPair(kIntegral, 0, 0, 0),
             m);
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
             m);
         checkAddSub(
             "sub",
             false,
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
             m);
+        // Cross-type add/sub must error on both sides.
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindMPT, 1'000'000, 0, 0),
-            makeSTAmountPair(kKindMPT, 2'000'000, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
             m);
         checkAddSub(
             "sub",
             false,
-            makeSTAmountPair(kKindMPT, 5'000'000, 0, 0),
-            makeSTAmountPair(kKindMPT, 2'000'000, 0, 0),
-            m);
-        // Cross-asset add/sub must error on both sides.
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            m);
-        checkAddSub(
-            "sub",
-            false,
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindMPT, 1'000'000, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            makeSTAmountPair(kKindMPT, 1'000, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
             m);
 
         // Mode sweep on a non-trivial IOU sum.
@@ -1239,66 +950,64 @@ public:
             checkAddSub(
                 "add",
                 true,
-                makeSTAmountPair(kKindIOU, 1'234'567'890'123'456ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 9'876'543'210'987'654ULL, -3, 1),
+                makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, 0, 0),
+                makeSTAmountPair(kFractional, 9'876'543'210'987'654ULL, -3, 1),
                 mode);
         }
 
         checkMultiply(
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            kKindXRP,
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
+            kIntegral,
             m);
         checkMultiply(
-            makeSTAmountPair(kKindMPT, 1'000ULL, 0, 0),
-            makeSTAmountPair(kKindMPT, 1'000ULL, 0, 0),
-            kKindMPT,
+            makeSTAmountPair(kFractional, 2'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+            kFractional,
+            m);
+        // IOU × IOU result rounded into an integral (MPT) target — the ofNumber integral path.
+        checkMultiply(
+            makeSTAmountPair(kFractional, 2'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+            kIntegral,
             m);
         checkMultiply(
-            makeSTAmountPair(kKindIOU, 2'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-            kKindIOU,
-            m);
-        // IOU × IOU result rounded into XRP — exercises the ofNumber XRP path.
-        checkMultiply(
-            makeSTAmountPair(kKindIOU, 2'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-            kKindXRP,
+            makeSTAmountPair(kIntegral, 0, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000, 0, 0),
+            kIntegral,
             m);
         checkMultiply(
-            makeSTAmountPair(kKindXRP, 0, 0, 0),
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-            kKindXRP,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kKindIOU, 0, -100, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, 0, -100, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            kFractional,
             m);
 
         checkDivide(
-            makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+            kFractional,
             m);
         // den = 0 errors on both sides; num = 0 short-circuits to zero.
         checkDivide(
-            makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 0, -100, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 0, -100, 0),
+            kFractional,
             m);
         checkDivide(
-            makeSTAmountPair(kKindIOU, 0, -100, 0),
-            makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, 0, -100, 0),
+            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+            kFractional,
             m);
-        // 1 drop / 1 drop into noIssue() — the kURateOne recipe.
+        // 1 / 1 (integral) into a fractional target — the kURateOne recipe.
         checkDivide(
-            makeSTAmountPair(kKindXRP, 1, 0, 0), makeSTAmountPair(kKindXRP, 1, 0, 0), kKindIOU, m);
+            makeSTAmountPair(kIntegral, 1, 0, 0),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
+            kFractional,
+            m);
         checkDivide(
-            makeSTAmountPair(kKindMPT, 100, 0, 0),
-            makeSTAmountPair(kKindMPT, 200, 0, 0),
-            kKindIOU,
+            makeSTAmountPair(kIntegral, 100, 0, 0),
+            makeSTAmountPair(kIntegral, 200, 0, 0),
+            kFractional,
             m);
 
         for (auto mode :
@@ -1308,9 +1017,9 @@ public:
               Number::RoundingMode::Upward})
         {
             checkDivide(
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 7'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 7'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 mode);
         }
     }
@@ -1329,25 +1038,25 @@ public:
             static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
                 &mulRoundStrict);
 
-        // mulRound and mulRoundStrict, both roundUp values, across kinds.
+        // mulRound and mulRoundStrict, both roundUp values, across numericTypes.
         for (bool ru : {false, true})
         {
             checkMulRoundLike(
                 "mulRound",
                 lean_stamount_mul_round,
                 mulRoundFn,
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
             checkMulRoundLike(
                 "mulRoundStrict",
                 lean_stamount_mul_round_strict,
                 mulRoundStrictFn,
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
             // Tiny non-negative input: roundUp=true rescues to smallest-above-zero.
@@ -1355,28 +1064,28 @@ public:
                 "mulRound",
                 lean_stamount_mul_round,
                 mulRoundFn,
-                makeSTAmountPair(kKindIOU, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                makeSTAmountPair(kKindIOU, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
+                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
+                kFractional,
                 ru,
                 m);
-            // XRP × XRP → XRP integral fast path.
+            // integral × integral → integral fast path.
             checkMulRoundLike(
                 "mulRound",
                 lean_stamount_mul_round,
                 mulRoundFn,
-                makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-                makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-                kKindXRP,
+                makeSTAmountPair(kIntegral, 1'000, 0, 0),
+                makeSTAmountPair(kIntegral, 1'000, 0, 0),
+                kIntegral,
                 ru,
                 m);
             checkMulRoundLike(
                 "mulRoundStrict",
                 lean_stamount_mul_round_strict,
                 mulRoundStrictFn,
-                makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-                makeSTAmountPair(kKindXRP, 1'000, 0, 0),
-                kKindXRP,
+                makeSTAmountPair(kIntegral, 1'000, 0, 0),
+                makeSTAmountPair(kIntegral, 1'000, 0, 0),
+                kIntegral,
                 ru,
                 m);
             // Zero short-circuit.
@@ -1384,9 +1093,9 @@ public:
                 "mulRound",
                 lean_stamount_mul_round,
                 mulRoundFn,
-                makeSTAmountPair(kKindIOU, 0, -100, 0),
-                makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 0, -100, 0),
+                makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
         }
@@ -1396,9 +1105,9 @@ public:
             "mulRound",
             lean_stamount_mul_round,
             mulRoundFn,
-            makeSTAmountPair(kKindIOU, 1'234'567'890'123'456ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 9'876'543'210'987'654ULL, 0, 1),
-            kKindIOU,
+            makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, 0, 0),
+            makeSTAmountPair(kFractional, 9'876'543'210'987'654ULL, 0, 1),
+            kFractional,
             true,
             m);
 
@@ -1415,18 +1124,18 @@ public:
                 "divRound",
                 lean_stamount_div_round,
                 divRoundFn,
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
             checkDivRoundLike(
                 "divRoundStrict",
                 lean_stamount_div_round_strict,
                 divRoundStrictFn,
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
             // Tiny positive numerator with large denominator: roundUp=true rescues.
@@ -1434,9 +1143,9 @@ public:
                 "divRound",
                 lean_stamount_div_round,
                 divRoundFn,
-                makeSTAmountPair(kKindIOU, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                makeSTAmountPair(kKindIOU, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
+                makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
+                kFractional,
                 ru,
                 m);
             // den = 0 errors on both sides; num = 0 short-circuits.
@@ -1444,18 +1153,18 @@ public:
                 "divRound",
                 lean_stamount_div_round,
                 divRoundFn,
-                makeSTAmountPair(kKindIOU, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kKindIOU, 0, -100, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, 0, -100, 0),
+                kFractional,
                 ru,
                 m);
             checkDivRoundLike(
                 "divRound",
                 lean_stamount_div_round,
                 divRoundFn,
-                makeSTAmountPair(kKindIOU, 0, -100, 0),
-                makeSTAmountPair(kKindIOU, 3'000'000'000'000'000ULL, 0, 0),
-                kKindIOU,
+                makeSTAmountPair(kFractional, 0, -100, 0),
+                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
+                kFractional,
                 ru,
                 m);
         }
@@ -1468,83 +1177,71 @@ public:
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
 
-        // canAdd at the native max ± 1 (overflow on both signs), zero
-        // short-circuit, and an in-range happy path.
-        checkCanAdd(
-            makeSTAmountPair(kKindXRP, STAmount::kMaxNativeN, 0, 0),
-            makeSTAmountPair(kKindXRP, 1, 0, 0),
-            m);
-        checkCanAdd(
-            makeSTAmountPair(kKindXRP, STAmount::kMaxNativeN, 0, 1),
-            makeSTAmountPair(kKindXRP, 1, 0, 1),
-            m);
-        checkCanAdd(makeSTAmountPair(kKindXRP, 0, 0, 0), makeSTAmountPair(kKindXRP, 1, 0, 0), m);
-        checkCanAdd(makeSTAmountPair(kKindXRP, 1, 0, 0), makeSTAmountPair(kKindXRP, 0, 0, 0), m);
-        checkCanAdd(
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0), makeSTAmountPair(kKindXRP, 2'000, 0, 0), m);
+        constexpr uint64_t kMaxIntegral =
+            static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
 
-        // MPT: INT64_MAX + 1 overflow + happy path.
+        // canAdd at INT64_MAX ± 1 (overflow on both signs), zero short-circuit, happy path.
         checkCanAdd(
-            makeSTAmountPair(kKindMPT, kMaxMpTokenAmount, 0, 0),
-            makeSTAmountPair(kKindMPT, 1, 0, 0),
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
             m);
         checkCanAdd(
-            makeSTAmountPair(kKindMPT, 1'000, 0, 0), makeSTAmountPair(kKindMPT, 2'000, 0, 0), m);
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
+            makeSTAmountPair(kIntegral, 1, 0, 1),
+            m);
+        checkCanAdd(makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
+        checkCanAdd(makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 0, 0, 0), m);
+        checkCanAdd(
+            makeSTAmountPair(kIntegral, 1'000, 0, 0), makeSTAmountPair(kIntegral, 2'000, 0, 0), m);
 
         // IOU precision-loss path: equal magnitudes vs vastly different magnitudes.
         checkCanAdd(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
             m);
         checkCanAdd(
-            makeSTAmountPair(kKindIOU, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, STAmount::kMinOffset, 0),
+            makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
             m);
 
-        // Cross-asset canAdd → false on both sides.
+        // Cross-type canAdd → false on both sides.
         checkCanAdd(
-            makeSTAmountPair(kKindXRP, 100, 0, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-            m);
-        checkCanAdd(
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kKindMPT, 100, 0, 0),
+            makeSTAmountPair(kIntegral, 100, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
             m);
 
-        // canSubtract: XRP/MPT underflow, in-range, IOU always true, zero shortcut.
-        checkCanSub(makeSTAmountPair(kKindXRP, 100, 0, 0), makeSTAmountPair(kKindXRP, 200, 0, 0));
-        checkCanSub(makeSTAmountPair(kKindXRP, 1'000, 0, 0), makeSTAmountPair(kKindXRP, 100, 0, 0));
-        checkCanSub(makeSTAmountPair(kKindMPT, 100, 0, 0), makeSTAmountPair(kKindMPT, 200, 0, 0));
+        // canSubtract: integral underflow, in-range, IOU always true, zero shortcut.
+        checkCanSub(makeSTAmountPair(kIntegral, 100, 0, 0), makeSTAmountPair(kIntegral, 200, 0, 0));
         checkCanSub(
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMaxValue, STAmount::kMaxOffset, 0));
-        checkCanSub(makeSTAmountPair(kKindMPT, 0, 0, 0), makeSTAmountPair(kKindMPT, 1'000, 0, 0));
+            makeSTAmountPair(kIntegral, 1'000, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
         checkCanSub(
-            makeSTAmountPair(kKindXRP, 100, 0, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0));
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0));
+        checkCanSub(makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 1'000, 0, 0));
+        checkCanSub(
+            makeSTAmountPair(kIntegral, 100, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0));
     }
 
     void
-    test_known_round_to_scale()
+    test_known_round_to_exponent()
     {
-        beginCase("LeanSTAmount.known_round_to_scale");
+        beginCase("LeanSTAmount.known_round_to_exponent");
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
 
-        // XRP / MPT / IOU-zero: no-op short-circuits.
-        checkRoundToScale(
-            makeSTAmountPair(kKindXRP, 1'000, 0, 0), 0, Number::RoundingMode::ToNearest);
-        checkRoundToScale(
-            makeSTAmountPair(kKindMPT, 1'000, 0, 0), 0, Number::RoundingMode::ToNearest);
-        checkRoundToScale(
-            makeSTAmountPair(kKindIOU, 0, -100, 0), 0, Number::RoundingMode::ToNearest);
+        // integral / fractional-zero: no-op short-circuits.
+        checkRoundToExponent(
+            makeSTAmountPair(kIntegral, 1'000, 0, 0), 0, Number::RoundingMode::ToNearest);
+        checkRoundToExponent(
+            makeSTAmountPair(kFractional, 0, -100, 0), 0, Number::RoundingMode::ToNearest);
         // IOU exponent >= scale: no-op.
-        checkRoundToScale(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, 0, 0),
+        checkRoundToExponent(
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
             -1,
             Number::RoundingMode::ToNearest);
         // Scale equal to exponent: no-op (boundary).
-        checkRoundToScale(
-            makeSTAmountPair(kKindIOU, 5'000'000'000'000'000ULL, -5, 0),
+        checkRoundToExponent(
+            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, -5, 0),
             -5,
             Number::RoundingMode::ToNearest);
         // IOU exponent < scale: rounds via the add-then-sub trick.
@@ -1554,10 +1251,10 @@ public:
               Number::RoundingMode::Downward,
               Number::RoundingMode::Upward})
         {
-            checkRoundToScale(
-                makeSTAmountPair(kKindIOU, 1'234'567'890'123'456ULL, -10, 0), -5, mode);
-            checkRoundToScale(
-                makeSTAmountPair(kKindIOU, 1'234'567'890'123'456ULL, -10, 1), -5, mode);
+            checkRoundToExponent(
+                makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, -10, 0), -5, mode);
+            checkRoundToExponent(
+                makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, -10, 1), -5, mode);
         }
     }
 
@@ -1569,23 +1266,26 @@ public:
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
 
         // offerOut == 0 → 0.
-        checkGetRate(makeSTAmountPair(kKindXRP, 0, 0, 0), makeSTAmountPair(kKindXRP, 100, 0, 0), m);
-        // 1 drop / 1 drop — the kURateOne recipe.
-        checkGetRate(makeSTAmountPair(kKindXRP, 1, 0, 0), makeSTAmountPair(kKindXRP, 1, 0, 0), m);
-        checkGetRate(makeSTAmountPair(kKindXRP, 1, 0, 0), makeSTAmountPair(kKindXRP, 10, 0, 0), m);
-        checkGetRate(makeSTAmountPair(kKindXRP, 10, 0, 0), makeSTAmountPair(kKindXRP, 1, 0, 0), m);
         checkGetRate(
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 1, 0),
+            makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0), m);
+        // 1 / 1 — the kURateOne recipe.
+        checkGetRate(makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
+        checkGetRate(
+            makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 10, 0, 0), m);
+        checkGetRate(
+            makeSTAmountPair(kIntegral, 10, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
+        checkGetRate(
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 1, 0),
             m);
-        // Mixed-kind: both sides go through divide(in, out, noIssue).
+        // Mixed-type: both sides go through divide(in, out, fractional).
         checkGetRate(
-            makeSTAmountPair(kKindXRP, 1, 0, 0),
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
             m);
         checkGetRate(
-            makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kKindXRP, 1, 0, 0),
+            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
             m);
 
         for (auto mode :
@@ -1595,8 +1295,8 @@ public:
               Number::RoundingMode::Upward})
         {
             checkGetRate(
-                makeSTAmountPair(kKindIOU, STAmount::kMinValue, 0, 0),
-                makeSTAmountPair(kKindIOU, 7'000'000'000'000'000ULL, 0, 0),
+                makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
+                makeSTAmountPair(kFractional, 7'000'000'000'000'000ULL, 0, 0),
                 mode);
         }
     }
@@ -1631,17 +1331,17 @@ public:
               Number::RoundingMode::Upward})
         {
             SaveNumberRoundMode save{Number::setround(mode)};
-            // checked: hits canonicalization + boundary errors per kind.
+            // checked: hits canonicalization + boundary errors per numericType.
             runFuzz(10'000, [&] { return checkChecked(randomSTAmountPair(rng), mode); });
-            // ofInt64: mantissa drawn as signed int64, kind picked uniformly.
+            // ofInt64: mantissa drawn as signed int64, numericType picked uniformly.
             std::uniform_int_distribution<int64_t> mDist(
                 std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
             std::uniform_int_distribution<int> eDist(-10, 10);
             runFuzz(10'000, [&] {
-                uint8_t const kind = randomKind(rng);
+                uint8_t const nt = randomNumericType(rng);
                 int64_t const mant = mDist(rng);
                 int64_t const exp_ = eDist(rng);
-                return checkOfInt64(kind, mant, exp_, mode);
+                return checkOfInt64(nt, mant, exp_, mode);
             });
         }
     }
@@ -1685,14 +1385,14 @@ public:
             runFuzz(10'000, [&] {
                 auto a = randomSTAmountPair(rng);
                 auto b = randomSTAmountPair(rng);
-                uint8_t const k = randomKind(rng);
-                return checkMultiply(a, b, k, mode);
+                uint8_t const nt = randomNumericType(rng);
+                return checkMultiply(a, b, nt, mode);
             });
             runFuzz(10'000, [&] {
                 auto a = randomSTAmountPair(rng);
                 auto b = randomSTAmountPair(rng);
-                uint8_t const k = randomKind(rng);
-                return checkDivide(a, b, k, mode);
+                uint8_t const nt = randomNumericType(rng);
+                return checkDivide(a, b, nt, mode);
             });
         }
     }
@@ -1722,7 +1422,7 @@ public:
                 auto a = randomSTAmountPair(rng);
                 auto b = randomSTAmountPair(rng);
                 bool const strict = strictDist(rng);
-                uint8_t const k = randomKind(rng);
+                uint8_t const nt = randomNumericType(rng);
                 bool const ru = ruDist(rng);
                 if (strict)
                     return checkMulRoundLike(
@@ -1731,11 +1431,11 @@ public:
                         mulRoundStrictFn,
                         a,
                         b,
-                        k,
+                        nt,
                         ru,
                         mode);
                 return checkMulRoundLike(
-                    "mulRound", lean_stamount_mul_round, mulRoundFn, a, b, k, ru, mode);
+                    "mulRound", lean_stamount_mul_round, mulRoundFn, a, b, nt, ru, mode);
             });
         }
     }
@@ -1765,7 +1465,7 @@ public:
                 auto num = randomSTAmountPair(rng);
                 auto den = randomSTAmountPair(rng);
                 bool const strict = strictDist(rng);
-                uint8_t const k = randomKind(rng);
+                uint8_t const nt = randomNumericType(rng);
                 bool const ru = ruDist(rng);
                 if (strict)
                     return checkDivRoundLike(
@@ -1774,11 +1474,11 @@ public:
                         divRoundStrictFn,
                         num,
                         den,
-                        k,
+                        nt,
                         ru,
                         mode);
                 return checkDivRoundLike(
-                    "divRound", lean_stamount_div_round, divRoundFn, num, den, k, ru, mode);
+                    "divRound", lean_stamount_div_round, divRoundFn, num, den, nt, ru, mode);
             });
         }
     }
@@ -1810,9 +1510,9 @@ public:
     }
 
     void
-    test_fuzz_round_to_scale()
+    test_fuzz_round_to_exponent()
     {
-        beginCase("LeanSTAmount.fuzz_round_to_scale", true);
+        beginCase("LeanSTAmount.fuzz_round_to_exponent", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
         std::uniform_int_distribution<int32_t> scaleDist(-110, 10);
@@ -1826,7 +1526,7 @@ public:
             runFuzz(10'000, [&] {
                 auto p = randomSTAmountPair(rng);
                 int32_t const scale = scaleDist(rng);
-                return checkRoundToScale(p, scale, mode);
+                return checkRoundToExponent(p, scale, mode);
             });
         }
     }
@@ -1874,31 +1574,12 @@ public:
     }
 
     void
-    test_fuzz_is_legal_net()
-    {
-        beginCase("LeanSTAmount.fuzz_is_legal_net", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        runFuzz(20'000, [&] { return checkIsLegalNet(randomSTAmountPair(rng)); });
-    }
-
-    void
     test_fuzz_neg()
     {
         beginCase("LeanSTAmount.fuzz_neg", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
         runFuzz(20'000, [&] { return checkNeg(randomSTAmountPair(rng)); });
-    }
-
-    void
-    test_fuzz_of_native_int64()
-    {
-        beginCase("LeanSTAmount.fuzz_of_native_int64", true);
-        auto& rng = nextRng();
-        std::uniform_int_distribution<int64_t> dist(
-            std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
-        runFuzz(20'000, [&] { return checkOfNativeInt64(dist(rng)); });
     }
 
     void
@@ -1910,10 +1591,10 @@ public:
             std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
         std::uniform_int_distribution<int64_t> offDist(-100, 100);
         runFuzz(20'000, [&] {
-            uint8_t const k = randomKind(rng);
+            uint8_t const nt = randomNumericType(rng);
             int64_t const v = vDist(rng);
             int64_t const off = offDist(rng);
-            return checkUncheckedFromInt64(k, v, off);
+            return checkUncheckedFromInt64(nt, v, off);
         });
     }
 
@@ -1924,135 +1605,131 @@ public:
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
 
-        constexpr uint64_t xrpMax = STAmount::kMaxNativeN;
-        constexpr uint64_t mptMax = kMaxMpTokenAmount;
+        // int64 (MPT) ceiling is INT64_MAX (== kMaxMpTokenAmount); native (XRP) ceiling is 10^17.
+        constexpr uint64_t kMaxIntegral =
+            static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        constexpr uint64_t kMaxNative = 100'000'000'000'000'000ULL;
         constexpr uint64_t iouMax = static_cast<uint64_t>(STAmount::kMaxValue);
         constexpr uint64_t iouMin = static_cast<uint64_t>(STAmount::kMinValue);
         constexpr int64_t eMax = STAmount::kMaxOffset;
         constexpr int64_t eMin = STAmount::kMinOffset;
 
         // checked ctor at the out-of-range corners — both sides must error.
-        checkChecked(makeSTAmountPair(kKindXRP, xrpMax + 1, 0, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, iouMax, eMax + 1, 0), m);
-        checkChecked(makeSTAmountPair(kKindIOU, iouMin, eMin - 1, 0), m);
-        checkChecked(makeSTAmountPair(kKindMPT, 1, 19, 0), m);
+        checkChecked(makeSTAmountPair(kIntegral, kMaxIntegral + 1, 0, 0), m);
+        checkChecked(makeSTAmountPair(kIntegral, 1, 19, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, iouMax, eMax + 1, 0), m);
+        checkChecked(makeSTAmountPair(kFractional, iouMin, eMin - 1, 0), m);
 
-        // XRP: max + max = 2·kMaxNativeN → over native cap → both error.
+        // native (XRP) ceiling is 10^17, well under INT64_MAX: exactly max is ok, and each of
+        // (max+1), an int64-max mantissa (valid for MPT), and offset 18 must error on both sides.
+        checkChecked(makeSTAmountPair(kNative, kMaxNative, 0, 0), m);
+        checkChecked(makeSTAmountPair(kNative, kMaxNative + 1, 0, 0), m);
+        checkChecked(makeSTAmountPair(kNative, kMaxIntegral, 0, 0), m);
+        checkChecked(makeSTAmountPair(kNative, 1, 18, 0), m);
+        // native operator+ (STAmount(SField, int64)) does not canonicalize, so 10^17 + 10^17 is the
+        // exact 2*10^17 with only an int64 guard (well within range).
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
+            makeSTAmountPair(kNative, kMaxNative, 0, 0),
+            makeSTAmountPair(kNative, kMaxNative, 0, 0),
             m);
+        // neg is sign-magnitude and never overflows.
+        checkNeg(makeSTAmountPair(kNative, kMaxNative, 0, 0));
+        checkNeg(makeSTAmountPair(kNative, kMaxNative, 0, 1));
+        // Cross-kind native vs int64 (MPT) is incomparable: both sides error.
+        checkLt(makeSTAmountPair(kNative, 100, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
+
+        // MPT operator+ (STAmount(Asset, int64)) canonicalizes: INT64_MAX + 1 wraps to INT64_MIN,
+        // then rounds to -9223372036854775800 (under the 2^63-1 ceiling). Both sides agree.
+        checkAddSub(
+            "add",
+            true,
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
+            m);
+        // -INT64_MAX - 1 == INT64_MIN (no int64 wrap). MPT operator+ canonicalizes, rounding the
+        // out-of-range magnitude to -9223372036854775800. Both sides agree.
         checkAddSub(
             "sub",
             false,
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 1),
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
+            makeSTAmountPair(kIntegral, 1, 0, 0),
             m);
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 1),
-            m);
-
-        // MPT: INT64_MAX + 1 → overflow; both signs.
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kKindMPT, mptMax, 0, 0),
-            makeSTAmountPair(kKindMPT, 1, 0, 0),
-            m);
-        checkAddSub(
-            "sub",
-            false,
-            makeSTAmountPair(kKindMPT, mptMax, 0, 1),
-            makeSTAmountPair(kKindMPT, 1, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kKindMPT, mptMax, 0, 0),
-            makeSTAmountPair(kKindMPT, mptMax, 0, 1),
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
             m);
 
         // IOU exponent overflow at kMaxOffset; smallest ± smallest at kMinOffset.
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
             m);
         checkAddSub(
             "sub",
             false,
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 1),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 1),
             m);
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kKindIOU, iouMin, eMin, 0),
-            makeSTAmountPair(kKindIOU, iouMin, eMin, 1),
+            makeSTAmountPair(kFractional, iouMin, eMin, 0),
+            makeSTAmountPair(kFractional, iouMin, eMin, 1),
             m);
 
         // multiply at the maxima.
         checkMultiply(
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0),
-            kKindXRP,
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            kIntegral,
             m);
         checkMultiply(
-            makeSTAmountPair(kKindMPT, mptMax, 0, 0),
-            makeSTAmountPair(kKindMPT, mptMax, 0, 0),
-            kKindMPT,
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            kFractional,
+            m);
+        // Integral multiplication precheck overflows (MPT bounds).
+        checkMultiply(
+            makeSTAmountPair(kIntegral, 3'037'000'500ULL, 0, 0),
+            makeSTAmountPair(kIntegral, 3'037'000'500ULL, 0, 0),
+            kIntegral,
             m);
         checkMultiply(
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            kKindIOU,
-            m);
-        // XRP/MPT multiplication precheck overflows.
-        checkMultiply(
-            makeSTAmountPair(kKindXRP, 3'000'000'001ULL, 0, 0),
-            makeSTAmountPair(kKindXRP, 3'000'000'001ULL, 0, 0),
-            kKindXRP,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kKindXRP, 9'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kKindXRP, 1'000'000ULL, 0, 0),
-            kKindXRP,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kKindMPT, 3'037'000'500ULL, 0, 0),
-            makeSTAmountPair(kKindMPT, 3'037'000'500ULL, 0, 0),
-            kKindMPT,
+            makeSTAmountPair(kIntegral, 9'000'000'000'000'000ULL, 0, 0),
+            makeSTAmountPair(kIntegral, 1'000'000ULL, 0, 0),
+            kIntegral,
             m);
 
         // divide at the IOU extremes: huge / tiny quotients.
         checkDivide(
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            makeSTAmountPair(kKindIOU, iouMin, eMin, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            makeSTAmountPair(kFractional, iouMin, eMin, 0),
+            kFractional,
             m);
         checkDivide(
-            makeSTAmountPair(kKindIOU, iouMin, eMin, 0),
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0),
-            kKindIOU,
+            makeSTAmountPair(kFractional, iouMin, eMin, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0),
+            kFractional,
             m);
 
         // neg is sign-magnitude → never overflows.
-        checkNeg(makeSTAmountPair(kKindXRP, xrpMax, 0, 0));
-        checkNeg(makeSTAmountPair(kKindMPT, mptMax, 0, 1));
-        checkNeg(makeSTAmountPair(kKindIOU, iouMax, eMax, 0));
+        checkNeg(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0));
+        checkNeg(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1));
+        checkNeg(makeSTAmountPair(kFractional, iouMax, eMax, 0));
 
-        // Cross-kind compare → error; same-kind ordering -max < +max.
+        // Cross-type compare → error; same-type ordering -max < +max.
         checkLt(
-            makeSTAmountPair(kKindXRP, xrpMax, 0, 0), makeSTAmountPair(kKindIOU, iouMax, eMax, 0));
+            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0));
         checkLt(
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 1),
-            makeSTAmountPair(kKindIOU, iouMax, eMax, 0));
+            makeSTAmountPair(kFractional, iouMax, eMax, 1),
+            makeSTAmountPair(kFractional, iouMax, eMax, 0));
 
         // Raw field extremes via the Unchecked path: both sides decode these
         // verbatim, so we see how each operation copes at the field limits.
@@ -2061,60 +1738,77 @@ public:
         constexpr int64_t intMin = std::numeric_limits<int>::min();
         for (uint8_t neg : {uint8_t{0}, uint8_t{1}})
         {
-            for (uint8_t kind : {kKindXRP, kKindIOU, kKindMPT})
+            for (uint8_t nt : {kIntegral, kFractional})
             {
-                checkNeg(makeSTAmountPair(kind, u64Max, 0, neg));
-                checkNeg(makeSTAmountPair(kind, 0, 0, neg));
+                checkNeg(makeSTAmountPair(nt, u64Max, 0, neg));
+                checkNeg(makeSTAmountPair(nt, 0, 0, neg));
+                // u64Max as an integral operand reads back int64-wrapped (mpt() -> -1); the add
+                // then canonicalizes like C++, so both kinds agree.
                 checkAddSub(
                     "add",
                     true,
-                    makeSTAmountPair(kind, u64Max, 0, neg),
-                    makeSTAmountPair(kind, u64Max, 0, neg),
+                    makeSTAmountPair(nt, u64Max, 0, neg),
+                    makeSTAmountPair(nt, u64Max, 0, neg),
                     m);
-                checkLt(makeSTAmountPair(kind, u64Max, 0, neg), makeSTAmountPair(kind, 0, 0, neg));
+                checkLt(makeSTAmountPair(nt, u64Max, 0, neg), makeSTAmountPair(nt, 0, 0, neg));
             }
-            // IOU additionally spans the int-exponent extremes (Number-mediated
+            // Fractional additionally spans the int-exponent extremes (Number-mediated
             // out-of-range offsets surface as errors on both sides).
-            checkNeg(makeSTAmountPair(kKindIOU, u64Max, intMax, neg));
-            checkNeg(makeSTAmountPair(kKindIOU, u64Max, intMin, neg));
+            checkNeg(makeSTAmountPair(kFractional, u64Max, intMax, neg));
+            checkNeg(makeSTAmountPair(kFractional, u64Max, intMin, neg));
             checkAddSub(
                 "add",
                 true,
-                makeSTAmountPair(kKindIOU, u64Max, intMax, neg),
-                makeSTAmountPair(kKindIOU, 1, intMin, neg),
+                makeSTAmountPair(kFractional, u64Max, intMax, neg),
+                makeSTAmountPair(kFractional, 1, intMin, neg),
                 m);
             checkLt(
-                makeSTAmountPair(kKindIOU, u64Max, intMax, neg),
-                makeSTAmountPair(kKindIOU, u64Max, intMin, neg));
+                makeSTAmountPair(kFractional, u64Max, intMax, neg),
+                makeSTAmountPair(kFractional, u64Max, intMin, neg));
         }
+    }
+
+    // Integral values staged above INT64_MAX read back as int64 (wrapping) on both sides: C++ via
+    // mpt()/getMPTValue, the model via IntAmount (toNumber/canAdd/canSubtract). u64Max -> -1.
+    void
+    test_integral_int64_wrap()
+    {
+        beginCase("LeanSTAmount.integral_int64_wrap");
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        Number::RoundingMode const m = Number::RoundingMode::ToNearest;
+        constexpr uint64_t u64Max = std::numeric_limits<uint64_t>::max();
+
+        // u64Max reads back as int64 -1: canAdd(-1, 1) fits, and toNumber wraps identically.
+        checkCanAdd(
+            makeSTAmountPair(kIntegral, u64Max, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
+        checkAccessors(makeSTAmountPair(kIntegral, u64Max, 0, 0), m);
     }
 
 private:
     void
     runTests() override
     {
-        test_fuzz_accessors();
-        test_fuzz_constructors();
-        // test_fuzz_add_sub();
-        test_fuzz_multiply_divide();
         test_fuzz_mul_round();
-        test_fuzz_div_round();
-        // test_fuzz_predicates();
-        // test_fuzz_round_to_scale();
+        test_fuzz_round_to_exponent();
         test_fuzz_get_rate();
         test_fuzz_compare();
-        test_fuzz_is_legal_net();
         test_fuzz_neg();
-        test_fuzz_of_native_int64();
         test_fuzz_unchecked_from_int64();
+        test_fuzz_add_sub();
+        test_fuzz_accessors();
+        test_fuzz_predicates();
+        test_fuzz_constructors();
+        test_fuzz_multiply_divide();
+        test_fuzz_div_round();
         test_known_construction();
         test_known_comparison();
         test_known_arithmetic();
         test_known_rounding();
         test_known_predicates();
-        test_known_round_to_scale();
+        test_known_round_to_exponent();
         test_known_get_rate();
         test_extreme_values();
+        test_integral_int64_wrap();
     }
 };
 

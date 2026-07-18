@@ -1,7 +1,6 @@
-import XRPL.Properties.Protocol.MPTAmount.Properties
 import XRPL.Properties.Protocol.IOUAmount.Properties
 import XRPL.Properties.Protocol.Number.Properties
-import XRPL.Properties.Protocol.XRPAmount.Properties
+import XRPL.Properties.Protocol.IntAmount.Properties
 import XRPL.Properties.Protocol.STAmount.Add.RoundsWithin
 import XRPL.Properties.Protocol.STAmount.Add.RoundsToRepresentable
 import XRPL.Properties.Protocol.STAmount.Sub.RoundsWithin

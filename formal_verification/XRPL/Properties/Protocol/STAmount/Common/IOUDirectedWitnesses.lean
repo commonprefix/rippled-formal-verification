@@ -83,44 +83,43 @@ lemma ofnum_dir (mode : rounding_mode) (m16 : UInt64)
 
 lemma operator_add_dir_eq (mode : rounding_mode) (sumI : IOUAmount)
     (hofn : IOUAmount.ofNumber ⟨false, 1000000000000000500, -2⟩ mode = .ok sumI) :
-    STAmount.operator_add ⟨.issue noIssue, 5000000000000003, 0, false⟩
-        ⟨.issue noIssue, 5000000000000002, 0, false⟩ mode
-      = STAmount.ofIOUAmount sumI noIssue mode := by
-  have hc1 : (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hc2 : (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hiou1 := STAmount.iou_canonical_id ⟨.issue noIssue, 5000000000000003, 0, false⟩ mode hc1
-  have hiou2 := STAmount.iou_canonical_id ⟨.issue noIssue, 5000000000000002, 0, false⟩ mode hc2
-  have htn1 : (⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-      (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber mode
+    STAmount.operator_add ⟨.fractional, 5000000000000003, 0, false⟩
+        ⟨.fractional, 5000000000000002, 0, false⟩ mode
+      = STAmount.ofIOUAmount sumI mode := by
+  have hc1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hc2 : (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hiou1 := STAmount.iou_canonical_id ⟨.fractional, 5000000000000003, 0, false⟩ mode hc1
+  have hiou2 := STAmount.iou_canonical_id ⟨.fractional, 5000000000000002, 0, false⟩ mode hc2
+  have htn1 : (⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+      (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber mode
       = .ok ⟨false, 5000000000000003000, -3⟩ :=
-    STAmount.iou_toNumber_canonical ⟨.issue noIssue, 5000000000000003, 0, false⟩ mode hc1
-  have htn2 : (⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-      (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber mode
+    STAmount.iou_toNumber_canonical ⟨.fractional, 5000000000000003, 0, false⟩ mode hc1
+  have htn2 : (⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+      (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).toNumber mode
       = .ok ⟨false, 5000000000000002000, -3⟩ :=
-    STAmount.iou_toNumber_canonical ⟨.issue noIssue, 5000000000000002, 0, false⟩ mode hc2
+    STAmount.iou_toNumber_canonical ⟨.fractional, 5000000000000002, 0, false⟩ mode hc2
   have hadd_inner : IOUAmount.operator_add
-      ⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-        (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩
-      ⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-        (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ mode = .ok sumI := by
+      ⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+        (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩
+      ⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+        (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ mode = .ok sumI := by
     unfold IOUAmount.operator_add
-    rw [if_neg (by decide : ¬ (((⟨(⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
-          (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true)),
-        if_neg (by decide : ¬ (((⟨(⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
-          (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true))]
+    rw [if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).signedDrops.toInt64,
+          (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true)),
+        if_neg (by decide : ¬ (((⟨(⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).signedDrops.toInt64,
+          (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mOffset⟩ : IOUAmount).mantissa_ == 0) = true))]
     rw [htn1]; simp only []
     rw [htn2]; simp only []
     rw [add_lift_trace_g mode]; simp only []
     exact hofn
   unfold STAmount.operator_add
-  rw [if_neg (by decide : ¬ ((!STAmount.areComparable ⟨.issue noIssue, 5000000000000003, 0, false⟩
-        ⟨.issue noIssue, 5000000000000002, 0, false⟩) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true))]
-  simp only []
-  rw [if_neg (by decide : ¬ ((noIssue.isXRP) = true))]
+  rw [if_neg (by decide : ¬ ((!STAmount.areComparable ⟨.fractional, 5000000000000003, 0, false⟩
+        ⟨.fractional, 5000000000000002, 0, false⟩) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).mValue == 0) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).mValue == 0) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).integral) = true))]
   rw [hiou1]; simp only []
   rw [hiou2]; simp only []
   rw [hadd_inner]
@@ -129,8 +128,7 @@ lemma operator_add_dir_eq (mode : rounding_mode) (sumI : IOUAmount)
 lemma add_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
-    ∃ (v1 v2 result : STAmount) (iss : Issue),
-      v1.mAsset = .issue iss ∧ v2.mAsset = .issue iss ∧ iss.isXRP = false ∧
+    ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
       STAmount.operator_add v1 v2 mode = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) := by
@@ -143,25 +141,25 @@ lemma add_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
      by show (m16.toInt64).toInt.natAbs < 10 ^ 16; rw [hnat, hmv]; split <;> decide,
      by show (-96 : ℤ) ≤ 1; decide, by show (1 : ℤ) ≤ 80; decide⟩
   have hop := operator_add_dir_eq mode ⟨m16.toInt64, 1⟩ hofn
-  rw [STAmount.ofIOUAmount_canonical ⟨m16.toInt64, 1⟩ noIssue mode (by decide) hsr] at hop
+  rw [STAmount.ofIOU_canonical ⟨m16.toInt64, 1⟩ mode hsr] at hop
   have hmv_uint : (m16.toInt64).toInt.natAbs.toUInt64 = m16 := by rw [hm16]; split <;> decide
   have hneg : decide ((m16.toInt64) < 0) = false := by rw [hm16]; split <;> decide
   rw [hmv_uint, hneg] at hop
-  have h1 : (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
+  have h1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
     rw [STAmount.toRat_signed]; norm_num [show ((5000000000000003 : UInt64).toNat : ℚ) = 5000000000000003 by norm_cast]
-  have h2 : (⟨.issue noIssue, 5000000000000002, 0, false⟩ : STAmount).toRat = 5000000000000002 := by
+  have h2 : (⟨.fractional, 5000000000000002, 0, false⟩ : STAmount).toRat = 5000000000000002 := by
     rw [STAmount.toRat_signed]; norm_num [show ((5000000000000002 : UInt64).toNat : ℚ) = 5000000000000002 by norm_cast]
-  have hr : (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
+  have hr : (⟨.fractional, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
     rw [STAmount.toRat_signed]; push_cast; ring
-  refine ⟨⟨.issue noIssue, 5000000000000003, 0, false⟩, ⟨.issue noIssue, 5000000000000002, 0, false⟩,
-          ⟨.issue noIssue, m16, 1, false⟩, noIssue, rfl, rfl, by decide,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
+  refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, false⟩,
+          ⟨.fractional, m16, 1, false⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
   · rw [h1, h2]; norm_num
   · show m16 ≠ 0; rw [hm16]; split <;> decide
   · unfold RoundsWithinWitness
-    rw [show RatValued.toRat (⟨.issue noIssue, m16, 1, false⟩ : STAmount)
-          = (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
+    rw [show RatValued.toRat (⟨.fractional, m16, 1, false⟩ : STAmount)
+          = (⟨.fractional, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
     split <;> norm_num
 
 lemma mul_lift_trace_g (mode : rounding_mode) :
@@ -309,8 +307,8 @@ lemma mul_lift_trace_g (mode : rounding_mode) :
 lemma ofnum_st_dir (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
-    STAmount.ofNumber (.issue noIssue) ⟨false, 1000000000000000500, -2⟩ mode
-      = .ok ⟨.issue noIssue, m16, 1, false⟩ := by
+    STAmount.ofNumber .fractional ⟨false, 1000000000000000500, -2⟩ mode
+      = .ok ⟨.fractional, m16, 1, false⟩ := by
   obtain ⟨k, hnorm, _, _, htz, hdown, hup, _⟩ :=
     normalizeToRange_16_per_mode ⟨false, 1000000000000000500, -2⟩ mode (by decide) (by decide) (by decide) (by decide)
   have hk : k = m16 := by
@@ -320,46 +318,43 @@ lemma ofnum_st_dir (mode : rounding_mode) (m16 : UInt64)
     · apply UInt64.toNat_inj.mp; simpa using htz rfl
   subst hk
   have hktu : (k.toInt64).toUInt64 = k := by rcases hmode with h | h | h <;> subst h <;> simp only [hm16] <;> decide
-  have hcr : (⟨.issue noIssue, (k.toInt64).toUInt64, 1, false⟩ : STAmount).IOUCanonical := by
+  have hcr : (⟨.fractional, (k.toInt64).toUInt64, 1, false⟩ : STAmount).IOUCanonical := by
     rw [hktu]; rcases hmode with h | h | h <;> subst h <;> simp only [hm16] <;>
-      exact ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
+      exact ⟨by decide, by decide, by decide, by decide, by decide⟩
   unfold STAmount.ofNumber
   simp only []
   rw [show decide ((⟨false, 1000000000000000500, -2⟩ : Number).signum < 0) = false from by decide]
-  rw [if_neg (show ¬ ((Asset.issue noIssue).integral = true) by decide)]
+  rw [if_neg (show ¬ (NumericType.fractional.isIntegral = true) by decide)]
   simp only [Bool.false_eq_true, if_false]
   rw [show kMinValue = cMinValue from rfl, show kMaxValue = cMaxValue from rfl]
   rw [show (⟨false, 1000000000000000500, -2⟩ : Number).normalizeToRange cMinValue cMaxValue mode
         = .ok (k.toInt64, 1) by rw [hnorm]; norm_num]
   simp only []
   rw [STAmount.checked,
-      show STAmount.unchecked (.issue noIssue) ((k.toInt64).toUInt64) 1 false
-        = (⟨.issue noIssue, (k.toInt64).toUInt64, 1, false⟩ : STAmount) from rfl,
+      show STAmount.unchecked .fractional ((k.toInt64).toUInt64) 1 false
+        = (⟨.fractional, (k.toInt64).toUInt64, 1, false⟩ : STAmount) from rfl,
       STAmount.canonicalize_canonical_id _ mode hcr, hktu]
 
 lemma operator_mul_dir_eq (mode : rounding_mode) :
-    STAmount.multiply ⟨.issue noIssue, 2000000000000001, 0, false⟩
-        ⟨.issue noIssue, 5000000000000000, -15, false⟩ (.issue noIssue) mode
-      = STAmount.ofNumber (.issue noIssue) ⟨false, 1000000000000000500, -2⟩ mode := by
-  have hc1 : (⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have hc2 : (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).IOUCanonical :=
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩
-  have htn1 : (⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).toNumber mode
+    STAmount.multiply ⟨.fractional, 2000000000000001, 0, false⟩
+        ⟨.fractional, 5000000000000000, -15, false⟩ .fractional mode
+      = STAmount.ofNumber .fractional ⟨false, 1000000000000000500, -2⟩ mode := by
+  have hc1 : (⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have hc2 : (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).IOUCanonical :=
+    ⟨by decide, by decide, by decide, by decide, by decide⟩
+  have htn1 : (⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).toNumber mode
       = .ok ⟨false, 2000000000000001000, -3⟩ :=
-    STAmount.toNumber_iou_canonical ⟨.issue noIssue, 2000000000000001, 0, false⟩ noIssue mode rfl (by decide) hc1
-  have htn2 : (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).toNumber mode
+    STAmount.toNumber_iou_canonical ⟨.fractional, 2000000000000001, 0, false⟩ mode hc1
+  have htn2 : (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).toNumber mode
       = .ok ⟨false, 5000000000000000000, -18⟩ :=
-    STAmount.toNumber_iou_canonical ⟨.issue noIssue, 5000000000000000, -15, false⟩ noIssue mode rfl (by decide) hc2
+    STAmount.toNumber_iou_canonical ⟨.fractional, 5000000000000000, -15, false⟩ mode hc2
   unfold STAmount.multiply
-  rw [if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).isZero
-        || (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).isZero) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).native
-        && (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).native
-        && (Asset.issue noIssue).isNative) = true)),
-      if_neg (by decide : ¬ (((⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).holdsMPTIssue
-        && (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).holdsMPTIssue
-        && (Asset.issue noIssue).holdsMPTIssue) = true))]
+  rw [if_neg (by decide : ¬ (((⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).isZero
+        || (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).isZero) = true)),
+      if_neg (by decide : ¬ (((⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).integral
+        && (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).integral
+        && NumericType.fractional.isIntegral) = true))]
   rw [htn1]; simp only []
   rw [htn2]; simp only []
   rw [mul_lift_trace_g mode]
@@ -367,31 +362,29 @@ lemma operator_mul_dir_eq (mode : rounding_mode) :
 theorem mul_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
-    ∃ (v1 v2 result : STAmount) (iss : Issue),
-      v1.mAsset = .issue iss ∧ v2.mAsset = .issue iss ∧ iss.isXRP = false ∧
-      (Asset.issue iss).holdsIssue = true ∧ (Asset.issue iss).isNative = false ∧
+    ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧
-      STAmount.multiply v1 v2 (.issue iss) mode = .ok result ∧ result.mValue ≠ 0 ∧
+      STAmount.multiply v1 v2 .fractional mode = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat * v2.toRat) (4 / 10 ^ 16 : ℚ) := by
   have hmv : m16.toNat = (if mode = .upward then 1000000000000001 else 1000000000000000) := by
     rw [hm16]; split <;> decide
-  have hop : STAmount.multiply ⟨.issue noIssue, 2000000000000001, 0, false⟩
-      ⟨.issue noIssue, 5000000000000000, -15, false⟩ (.issue noIssue) mode = .ok ⟨.issue noIssue, m16, 1, false⟩ := by
+  have hop : STAmount.multiply ⟨.fractional, 2000000000000001, 0, false⟩
+      ⟨.fractional, 5000000000000000, -15, false⟩ .fractional mode = .ok ⟨.fractional, m16, 1, false⟩ := by
     rw [operator_mul_dir_eq mode, ofnum_st_dir mode m16 hm16 hmode]
-  have h1 : (⟨.issue noIssue, 2000000000000001, 0, false⟩ : STAmount).toRat = 2000000000000001 := by
+  have h1 : (⟨.fractional, 2000000000000001, 0, false⟩ : STAmount).toRat = 2000000000000001 := by
     rw [STAmount.toRat_signed]; norm_num [show ((2000000000000001 : UInt64).toNat : ℚ) = 2000000000000001 by norm_cast]
-  have h2 : (⟨.issue noIssue, 5000000000000000, -15, false⟩ : STAmount).toRat = 5 := by
+  have h2 : (⟨.fractional, 5000000000000000, -15, false⟩ : STAmount).toRat = 5 := by
     rw [STAmount.toRat_signed]; norm_num [show ((5000000000000000 : UInt64).toNat : ℚ) = 5000000000000000 by norm_cast]
-  have hr : (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
+  have hr : (⟨.fractional, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
     rw [STAmount.toRat_signed]; push_cast; ring
-  refine ⟨⟨.issue noIssue, 2000000000000001, 0, false⟩, ⟨.issue noIssue, 5000000000000000, -15, false⟩,
-          ⟨.issue noIssue, m16, 1, false⟩, noIssue, rfl, rfl, by decide, by decide, by decide,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, hop, ?_, ?_⟩
+  refine ⟨⟨.fractional, 2000000000000001, 0, false⟩, ⟨.fractional, 5000000000000000, -15, false⟩,
+          ⟨.fractional, m16, 1, false⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩, hop, ?_, ?_⟩
   · show m16 ≠ 0; rw [hm16]; split <;> decide
   · unfold RoundsWithinWitness
-    rw [show RatValued.toRat (⟨.issue noIssue, m16, 1, false⟩ : STAmount)
-          = (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
+    rw [show RatValued.toRat (⟨.fractional, m16, 1, false⟩ : STAmount)
+          = (⟨.fractional, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
     split <;> norm_num
 
 /-- Directed-mode IOU subtraction witness core: `v1 − v2 = v1 + (−v2)` with `−v2` the
@@ -399,8 +392,7 @@ addition witness operand, so the addition chain applies. -/
 theorem sub_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
-    ∃ (v1 v2 result : STAmount) (iss : Issue),
-      v1.mAsset = .issue iss ∧ v2.mAsset = .issue iss ∧ iss.isXRP = false ∧
+    ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
       STAmount.operator_sub v1 v2 mode = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) := by
@@ -413,29 +405,29 @@ theorem sub_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
      by show (m16.toInt64).toInt.natAbs < 10 ^ 16; rw [hnat, hmv]; split <;> decide,
      by show (-96 : ℤ) ≤ 1; decide, by show (1 : ℤ) ≤ 80; decide⟩
   -- operator_sub v1 v2 = operator_add v1 (−v2); −v2 is the addition witness operand
-  have hop : STAmount.operator_sub ⟨.issue noIssue, 5000000000000003, 0, false⟩
-      ⟨.issue noIssue, 5000000000000002, 0, true⟩ mode
-      = .ok ⟨.issue noIssue, (m16.toInt64).toInt.natAbs.toUInt64, 1, decide ((m16.toInt64) < 0)⟩ := by
+  have hop : STAmount.operator_sub ⟨.fractional, 5000000000000003, 0, false⟩
+      ⟨.fractional, 5000000000000002, 0, true⟩ mode
+      = .ok ⟨.fractional, (m16.toInt64).toInt.natAbs.toUInt64, 1, decide ((m16.toInt64) < 0)⟩ := by
     have hadd := operator_add_dir_eq mode ⟨m16.toInt64, 1⟩ hofn
-    rw [STAmount.ofIOUAmount_canonical ⟨m16.toInt64, 1⟩ noIssue mode (by decide) hsr] at hadd
+    rw [STAmount.ofIOU_canonical ⟨m16.toInt64, 1⟩ mode hsr] at hadd
     exact hadd
   rw [show (m16.toInt64).toInt.natAbs.toUInt64 = m16 by rw [hm16]; split <;> decide,
       show decide ((m16.toInt64) < 0) = false by rw [hm16]; split <;> decide] at hop
-  have h1 : (⟨.issue noIssue, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
+  have h1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
     rw [STAmount.toRat_signed]; norm_num [show ((5000000000000003 : UInt64).toNat : ℚ) = 5000000000000003 by norm_cast]
-  have h2 : (⟨.issue noIssue, 5000000000000002, 0, true⟩ : STAmount).toRat = -5000000000000002 := by
+  have h2 : (⟨.fractional, 5000000000000002, 0, true⟩ : STAmount).toRat = -5000000000000002 := by
     rw [STAmount.toRat_signed]; norm_num [show ((5000000000000002 : UInt64).toNat : ℚ) = 5000000000000002 by norm_cast]
-  have hr : (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
+  have hr : (⟨.fractional, m16, 1, false⟩ : STAmount).toRat = 10 * (m16.toNat : ℚ) := by
     rw [STAmount.toRat_signed]; push_cast; ring
-  refine ⟨⟨.issue noIssue, 5000000000000003, 0, false⟩, ⟨.issue noIssue, 5000000000000002, 0, true⟩,
-          ⟨.issue noIssue, m16, 1, false⟩, noIssue, rfl, rfl, by decide,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
+  refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, true⟩,
+          ⟨.fractional, m16, 1, false⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
   · rw [h1, h2]; norm_num
   · show m16 ≠ 0; rw [hm16]; split <;> decide
   · unfold RoundsWithinWitness
-    rw [show RatValued.toRat (⟨.issue noIssue, m16, 1, false⟩ : STAmount)
-          = (⟨.issue noIssue, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
+    rw [show RatValued.toRat (⟨.fractional, m16, 1, false⟩ : STAmount)
+          = (⟨.fractional, m16, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2, hmv]
     split <;> norm_num
 
 end XRPL.Model.Protocol

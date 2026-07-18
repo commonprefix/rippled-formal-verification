@@ -18,12 +18,11 @@ structure IOUAmount.InRange16 (a : IOUAmount) : Prop where
   exp_hi : a.exponent_ ≤ 80
 
 /-- `ofIOUAmount` packs an in-range 16-digit IOUAmount exactly. -/
-theorem STAmount.ofIOUAmount_canonical (a : IOUAmount) (issue : Issue)
+theorem STAmount.ofIOU_canonical (a : IOUAmount)
     (mode : rounding_mode)
-    (h_not_xrp : (Asset.issue issue).isNative = false)
     (hr : a.InRange16) :
-    STAmount.ofIOUAmount a issue mode
-      = .ok ⟨.issue issue, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
+    STAmount.ofIOUAmount a mode
+      = .ok ⟨.fractional, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
              decide (a.mantissa_ < 0)⟩ := by
   have h_fit : a.mantissa_.toInt.natAbs < 2 ^ 63 := by
     have := hr.mant_hi
@@ -93,20 +92,19 @@ theorem STAmount.ofIOUAmount_canonical (a : IOUAmount) (issue : Issue)
       have hsz : UInt64.size = 18446744073709551616 := uint64_size_val
       omega)).symm
   have hc : STAmount.IOUCanonical
-      ⟨.issue issue, absMant.toUInt64, a.exponent_, neg⟩ :=
-    { iou_asset := rfl
-      not_xrp := h_not_xrp
-      mant_lo := by rw [show (⟨.issue issue, absMant.toUInt64, a.exponent_, neg⟩
+      ⟨.fractional, absMant.toUInt64, a.exponent_, neg⟩ :=
+    { is_fractional := rfl
+      mant_lo := by rw [show (⟨.fractional, absMant.toUInt64, a.exponent_, neg⟩
           : STAmount).mValue = absMant.toUInt64 from rfl, h_abs_toNat]; exact hr.mant_lo
-      mant_hi := by rw [show (⟨.issue issue, absMant.toUInt64, a.exponent_, neg⟩
+      mant_hi := by rw [show (⟨.fractional, absMant.toUInt64, a.exponent_, neg⟩
           : STAmount).mValue = absMant.toUInt64 from rfl, h_abs_toNat]; exact hr.mant_hi
       exp_lo := hr.exp_lo
       exp_hi := hr.exp_hi }
   unfold STAmount.ofIOUAmount
-  calc (STAmount.unchecked (.issue issue) absMant.toUInt64 a.exponent_ neg).canonicalize mode
-      = .ok ⟨.issue issue, absMant.toUInt64, a.exponent_, neg⟩ :=
+  calc (STAmount.unchecked .fractional absMant.toUInt64 a.exponent_ neg).canonicalize mode
+      = .ok ⟨.fractional, absMant.toUInt64, a.exponent_, neg⟩ :=
         STAmount.canonicalize_canonical_id _ mode hc
-    _ = .ok ⟨.issue issue, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
+    _ = .ok ⟨.fractional, a.mantissa_.toInt.natAbs.toUInt64, a.exponent_,
              decide (a.mantissa_ < 0)⟩ := by
         rw [h_abs_eq, h_neg_lt]
 
@@ -181,9 +179,6 @@ theorem STAmount.iou_toNumber_canonical (s : STAmount) (mode : rounding_mode)
 /-- The IOU branch of `STAmount.operator_add` on canonical operands reduces to
 the Number-level pipeline: 19-digit add, 16-digit renormalize, repack. -/
 theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mode)
-    (iss : Issue)
-    (h_asset1 : v1.mAsset = .issue iss) (h_asset2 : v2.mAsset = .issue iss)
-    (h_not_xrp : iss.isXRP = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical) :
     STAmount.operator_add v1 v2 mode
       = match Number.operator_add
@@ -193,7 +188,7 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
         | .ok n =>
           match IOUAmount.ofNumber n mode with
           | .error e => .error e
-          | .ok sumI => STAmount.ofIOUAmount sumI iss mode := by
+          | .ok sumI => STAmount.ofIOUAmount sumI mode := by
   have h_mv1 : v1.mValue ≠ 0 := by
     intro h0
     have h1 : v1.mValue.toNat = 0 := by rw [h0]; rfl
@@ -205,20 +200,20 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
     have := hc2.mant_lo
     omega
   have h_cmp : STAmount.areComparable v1 v2 = true := by
-    unfold STAmount.areComparable Asset.areComparable
-    rw [h_asset1, h_asset2]
-    simp only [Bool.and_eq_true]
-    exact ⟨beq_self_eq_true' iss.native, beq_self_eq_true' iss.currency.val⟩
+    unfold STAmount.areComparable
+    rw [hc1.is_fractional, hc2.is_fractional]
+    decide
+  have h_int1 : ¬ v1.integral = true := by
+    unfold STAmount.integral
+    rw [hc1.is_fractional]
+    decide
   unfold STAmount.operator_add
   rw [h_cmp]
   simp only [Bool.not_true, Bool.false_eq_true, if_false]
   rw [show (v2.mValue == 0) = false from beq_eq_false_iff_ne.mpr h_mv2,
       show (v1.mValue == 0) = false from beq_eq_false_iff_ne.mpr h_mv1]
   simp only [Bool.false_eq_true, if_false]
-  rw [h_asset1]
-  simp only []
-  rw [show iss.isXRP = false from h_not_xrp]
-  simp only [Bool.false_eq_true, if_false]
+  rw [if_neg h_int1]
   rw [STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2]
   simp only []
   -- IOUAmount.operator_add unfold.

@@ -1,5 +1,5 @@
-import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Model.Protocol.STAmount
+import XRPL.Model.Vault.VaultWithdraw
 
 open XRPL.Model.Protocol (STAmount)
 open XRPL.Model.SingleAssetVault

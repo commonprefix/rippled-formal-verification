@@ -26,14 +26,11 @@ private lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mod
   rfl
 
 /-- `ofIOUAmount` of the zero `IOUAmount` is the canonical zero record. -/
-private lemma STAmount.ofIOUAmount_zero (issue : Issue) (mode : rounding_mode)
-    (h_not_xrp : (Asset.issue issue).isNative = false) :
-    STAmount.ofIOUAmount IOUAmount.zero issue mode
-      = .ok ⟨.issue issue, 0, -100, false⟩ := by
-  have h_nat : issue.native = false := h_not_xrp
+private lemma STAmount.ofIOU_zero (mode : rounding_mode) :
+    STAmount.ofIOUAmount IOUAmount.zero mode = .ok ⟨.fractional, 0, -100, false⟩ := by
   unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
-  simp only [STAmount.unchecked, STAmount.integral, Asset.integral, Issue.integral,
-    h_nat, Bool.false_eq_true, if_false]
+  simp only [STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
+    Bool.false_eq_true, if_false]
   rfl
 
 /-- Convert the per-mode magnitude characterization into `RoundsToRepresentableAt`. -/
@@ -173,21 +170,8 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
     (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
     (hok : STAmount.roundToExponent value s mode = .ok result) :
     RoundsToRepresentableAt result value.toRat s mode := by
-  obtain ⟨iss, ha⟩ : ∃ iss, value.mAsset = .issue iss := by
-    rcases h : value.mAsset with iss | m
-    · exact ⟨iss, rfl⟩
-    · exfalso
-      have h_iss := hc.iou_asset
-      rw [h] at h_iss
-      exact Bool.noConfusion h_iss
-  have h_not_xrp : iss.isXRP = false := by
-    have h_native := hc.not_xrp
-    rw [ha] at h_native
-    exact h_native
   have h_int : value.integral = false := by
-    unfold STAmount.integral
-    rw [ha]
-    exact h_not_xrp
+    unfold STAmount.integral; rw [hc.is_fractional]; rfl
   have h_mv_ne : value.mValue ≠ 0 := by
     intro h0
     have h1 : value.mValue.toNat = 0 := by rw [h0]; rfl
@@ -223,12 +207,12 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
     rw [if_neg h_exp] at hok
     push_neg at h_exp
     have h_ev : value.mOffset < s := h_exp
-    rw [show STAmount.checked value.asset kMinValue s value.negative mode
-          = .ok ⟨value.mAsset, kMinValue, s, value.mIsNegative⟩ from
-        STAmount.checked_reference value.mAsset s value.mIsNegative mode
-          hc.iou_asset hc.not_xrp (by omega) h_s_hi] at hok
+    rw [show STAmount.checked value.mNumericType kMinValue s value.negative mode
+          = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ from by
+        rw [hc.is_fractional]
+        exact STAmount.checked_reference s value.mIsNegative mode (by omega) h_s_hi] at hok
     simp only [] at hok
-    set refA : STAmount := ⟨value.mAsset, kMinValue, s, value.mIsNegative⟩ with hrefA_def
+    set refA : STAmount := ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ with hrefA_def
     obtain ⟨sum, h_sum_ok, h_sub_ok⟩ : ∃ sum,
         STAmount.operator_add value refA mode = .ok sum ∧
         STAmount.operator_sub sum refA mode = .ok result := by
@@ -239,32 +223,29 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         exact ⟨sum, rfl, hok⟩
     obtain ⟨k, hk_le, h_sum_asset, h_sum_mv, h_sum_off, h_sum_neg,
         h_tn, h_tz, h_dn, h_up⟩ :=
-      STAmount.roundToExponent_sum_spec value s mode iss ha h_not_xrp hc h_ev
+      STAmount.roundToExponent_sum_spec value s mode hc h_ev
         (by omega) h_s_hi sum h_sum_ok
     -- Stage B: subtract the reference exactly.
     unfold STAmount.operator_sub at h_sub_ok
-    have h_negRef : refA.operator_neg = ⟨value.mAsset, kMinValue, s, !value.mIsNegative⟩ := by
+    have h_negRef : refA.operator_neg = ⟨value.mNumericType, kMinValue, s, !value.mIsNegative⟩ := by
       rw [STAmount.operator_neg_of_ne refA (by show kMinValue ≠ 0; decide)]
     rw [h_negRef] at h_sub_ok
-    set negRef : STAmount := ⟨value.mAsset, kMinValue, s, !value.mIsNegative⟩
+    set negRef : STAmount := ⟨value.mNumericType, kMinValue, s, !value.mIsNegative⟩
       with hnegRef_def
     have h_kMin_toNat : kMinValue.toNat = 10 ^ 15 := by decide
     have hc_sum : sum.IOUCanonical :=
-      { iou_asset := by rw [h_sum_asset]; exact hc.iou_asset
-        not_xrp := by rw [h_sum_asset]; exact hc.not_xrp
+      { is_fractional := by rw [h_sum_asset]; exact hc.is_fractional
         mant_lo := by omega
         mant_hi := by omega
         exp_lo := by rw [h_sum_off]; omega
         exp_hi := by rw [h_sum_off]; exact h_s_hi }
     have hc_negRef : negRef.IOUCanonical :=
-      { iou_asset := hc.iou_asset
-        not_xrp := hc.not_xrp
+      { is_fractional := by rw [hnegRef_def]; exact hc.is_fractional
         mant_lo := by show 10 ^ 15 ≤ kMinValue.toNat; omega
         mant_hi := by show kMinValue.toNat < 10 ^ 16; omega
         exp_lo := by show (-96 : ℤ) ≤ s; omega
         exp_hi := h_s_hi }
-    rw [STAmount.operator_add_iou_unfold sum negRef mode iss
-        (by rw [h_sum_asset]; exact ha) (by exact ha) h_not_xrp hc_sum hc_negRef]
+    rw [STAmount.operator_add_iou_unfold sum negRef mode hc_sum hc_negRef]
       at h_sub_ok
     set s1n : Number := ⟨sum.mIsNegative, sum.mValue * 10 * 10 * 10, sum.mOffset - 3⟩
       with hs1n_def
@@ -273,14 +254,14 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
     obtain ⟨n₂, h_add₂, hok₃⟩ : ∃ n₂, Number.operator_add s1n s2n mode = .ok n₂ ∧
         (match IOUAmount.ofNumber n₂ mode with
          | .error e => (Except.error e : Except String STAmount)
-         | .ok sumI => STAmount.ofIOUAmount sumI iss mode) = .ok result := by
+         | .ok sumI => STAmount.ofIOUAmount sumI mode) = .ok result := by
       match h1 : Number.operator_add s1n s2n mode with
       | .error e => rw [h1] at h_sub_ok; exact absurd h_sub_ok (by intro h; cases h)
       | .ok n₂ =>
         rw [h1] at h_sub_ok
         exact ⟨n₂, rfl, h_sub_ok⟩
     obtain ⟨sumI₂, h_of₂, h_pack₂⟩ : ∃ sumI₂, IOUAmount.ofNumber n₂ mode = .ok sumI₂ ∧
-        STAmount.ofIOUAmount sumI₂ iss mode = .ok result := by
+        STAmount.ofIOUAmount sumI₂ mode = .ok result := by
       match h1 : IOUAmount.ofNumber n₂ mode with
       | .error e => rw [h1] at hok₃; exact absurd hok₃ (by intro h; cases h)
       | .ok sumI₂ =>
@@ -366,8 +347,8 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         have h_n₂_mant : n₂.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp h_n₂_val
         rw [IOUAmount.ofNumber_zero_mantissa n₂ mode h_n₂_mant] at h_of₂
         have h_sumI₂ : sumI₂ = IOUAmount.zero := Except.ok.inj h_of₂.symm
-        rw [h_sumI₂, STAmount.ofIOUAmount_zero iss mode h_not_xrp] at h_pack₂
-        have h_result : result = ⟨.issue iss, 0, -100, false⟩ :=
+        rw [h_sumI₂, STAmount.ofIOU_zero mode] at h_pack₂
+        have h_result : result = ⟨.fractional, 0, -100, false⟩ :=
           Except.ok.inj h_pack₂.symm
         rw [h_result, STAmount.toRat_of_nonneg _ rfl]
         show ((0 : UInt64).toNat : ℚ) * 10 ^ (-100 : ℤ) = _
@@ -494,8 +475,8 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           signed_mantissa_toInt w.negative_ (w.mantissa_ / 10 / 10 / 10) h_q3_fit
         have h_pack_explicit : STAmount.ofIOUAmount
             ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
-              else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ iss mode
-            = .ok ⟨.issue iss, w.mantissa_ / 10 / 10 / 10, w.exponent_ + 3,
+              else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ mode
+            = .ok ⟨.fractional, w.mantissa_ / 10 / 10 / 10, w.exponent_ + 3,
                    w.negative_⟩ := by
           have hr : IOUAmount.InRange16
               ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
@@ -518,7 +499,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
                 show w.exponent_ + 3 ≤ 80
                 rw [hw_exp]
                 omega }
-          rw [STAmount.ofIOUAmount_canonical _ iss mode h_not_xrp hr]
+          rw [STAmount.ofIOU_canonical _ mode hr]
           congr 1
           have h_abs_eq : ((if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
               else (w.mantissa_ / 10 / 10 / 10).toInt64).toInt.natAbs : ℕ).toUInt64
@@ -534,7 +515,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
             signed_mantissa_decide_neg w.negative_ (w.mantissa_ / 10 / 10 / 10) h_q3_fit
               (by omega)
           rw [h_abs_eq, h_dec]
-        have h_result : result = ⟨.issue iss, w.mantissa_ / 10 / 10 / 10,
+        have h_result : result = ⟨.fractional, w.mantissa_ / 10 / 10 / 10,
             w.exponent_ + 3, w.negative_⟩ := by
           rw [h_sumI₂_eq] at h_pack₂
           exact Except.ok.inj (h_pack₂.symm.trans h_pack_explicit)

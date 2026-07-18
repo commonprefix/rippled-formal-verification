@@ -18,33 +18,33 @@
 
 extern "C" {
 lean_object*
-lean_number_mul(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_mul(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_number_div(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_div(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_number_add(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_add(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_number_sub(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_sub(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_number_neg(uint8_t, uint64_t, uint64_t);
+lean_number_neg(lean_object*);
 int64_t
-lean_number_signum(uint8_t, uint64_t, uint64_t);
+lean_number_signum(lean_object*);
 lean_object*
-lean_number_to_rep(uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_to_rep(lean_object*, uint8_t);
 lean_object*
-lean_number_normalize(uint8_t, uint64_t, uint64_t, uint8_t);
+lean_number_normalize(lean_object*, uint8_t);
 uint8_t
-lean_number_eq(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_eq(lean_object*, lean_object*);
 uint8_t
-lean_number_ne(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_ne(lean_object*, lean_object*);
 uint8_t
-lean_number_lt(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_lt(lean_object*, lean_object*);
 uint8_t
-lean_number_le(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_le(lean_object*, lean_object*);
 uint8_t
-lean_number_gt(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_gt(lean_object*, lean_object*);
 uint8_t
-lean_number_ge(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+lean_number_ge(lean_object*, lean_object*);
 }
 
 namespace xrpl::test {
@@ -105,9 +105,8 @@ class LeanNumber_test : public LeanSuite
         return true;
     }
 
-    using LeanBinOp =
-        lean_object* (*)(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t, uint8_t);
-    using LeanUnaryOp = lean_object* (*)(uint8_t, uint64_t, uint64_t);
+    using LeanBinOp = lean_object* (*)(lean_object*, lean_object*, uint8_t);
+    using LeanUnaryOp = lean_object* (*)(lean_object*);
     using CppBinOp = std::function<Number(Number const&, Number const&)>;
     using CppUnaryOp = std::function<Number(Number const&)>;
 
@@ -120,13 +119,11 @@ class LeanNumber_test : public LeanSuite
         NumberPair const& b,
         Number::RoundingMode mode)
     {
-        auto lean = LeanNumberResult::from_lean(leanOp(
-            a.leanNum.negative,
-            a.leanNum.mantissa,
-            a.leanNum.exponent,
-            b.leanNum.negative,
-            b.leanNum.mantissa,
-            b.leanNum.exponent,
+        auto lean = readNumberExcept(leanOp(
+            lean_number_build(
+                a.leanNum.negative, a.leanNum.mantissa, static_cast<int64_t>(a.leanNum.exponent)),
+            lean_number_build(
+                b.leanNum.negative, b.leanNum.mantissa, static_cast<int64_t>(b.leanNum.exponent)),
             toLeanMode(mode)));
         bool cppThrew = false;
         Number cpp;
@@ -144,8 +141,8 @@ class LeanNumber_test : public LeanSuite
     bool
     checkUnary(std::string const& label, LeanUnaryOp leanOp, CppUnaryOp cppOp, NumberPair const& x)
     {
-        auto lean = LeanNumberResult::from_lean(
-            leanOp(x.leanNum.negative, x.leanNum.mantissa, x.leanNum.exponent));
+        auto lean = readNumberObject(leanOp(lean_number_build(
+            x.leanNum.negative, x.leanNum.mantissa, static_cast<int64_t>(x.leanNum.exponent))));
         bool cppThrew = false;
         Number cpp;
         try
@@ -168,8 +165,8 @@ class LeanNumber_test : public LeanSuite
         Number::RoundingMode mode)
     {
         uint8_t leanMode = toLeanMode(mode);
-        auto lean = LeanNumberResult::from_lean(
-            lean_number_normalize(neg ? 1 : 0, mant, static_cast<uint64_t>(exp), leanMode));
+        auto lean = readNumberExcept(lean_number_normalize(
+            lean_number_build(neg ? 1 : 0, mant, static_cast<int64_t>(exp)), leanMode));
         bool cppThrew = false;
         Number cpp;
         try
@@ -489,8 +486,8 @@ class LeanNumber_test : public LeanSuite
     bool
     checkSignum(std::string const& label, NumberPair const& x)
     {
-        int64_t lean =
-            lean_number_signum(x.leanNum.negative, x.leanNum.mantissa, x.leanNum.exponent);
+        int64_t lean = lean_number_signum(lean_number_build(
+            x.leanNum.negative, x.leanNum.mantissa, static_cast<int64_t>(x.leanNum.exponent)));
         int cpp = x.cppNum.signum();
         if (lean != cpp)
         {
@@ -503,7 +500,7 @@ class LeanNumber_test : public LeanSuite
         return true;
     }
 
-    using LeanCmpOp = uint8_t (*)(uint8_t, uint64_t, uint64_t, uint8_t, uint64_t, uint64_t);
+    using LeanCmpOp = uint8_t (*)(lean_object*, lean_object*);
 
     // Verify Lean and C++ agree on every relational operator for one pair.
     // Comparisons can't error, so we compare the raw bool results directly.
@@ -511,12 +508,14 @@ class LeanNumber_test : public LeanSuite
     checkCompare(std::string const& label, NumberPair const& a, NumberPair const& b)
     {
         auto leanCmp = [&](LeanCmpOp op) {
-            return op(a.leanNum.negative,
-                      a.leanNum.mantissa,
-                      a.leanNum.exponent,
-                      b.leanNum.negative,
-                      b.leanNum.mantissa,
-                      b.leanNum.exponent) != 0;
+            return op(lean_number_build(
+                          a.leanNum.negative,
+                          a.leanNum.mantissa,
+                          static_cast<int64_t>(a.leanNum.exponent)),
+                      lean_number_build(
+                          b.leanNum.negative,
+                          b.leanNum.mantissa,
+                          static_cast<int64_t>(b.leanNum.exponent))) != 0;
         };
         struct Case
         {
@@ -649,13 +648,10 @@ public:
         // Only the canonical zero (Number{}, exp=INT_MIN) is a zero divisor in
         // C++ operator/=; it is the one divisor the non-zero sweeps cannot reach.
         {
-            auto lean = LeanNumberResult::from_lean(lean_number_div(
-                false,
-                1'000'000'000'000'000'000ULL,
-                0,
-                false,
-                0,
-                static_cast<uint64_t>(std::numeric_limits<int>::lowest()),
+            auto lean = readNumberExcept(lean_number_div(
+                lean_number_build(false, 1'000'000'000'000'000'000ULL, 0),
+                lean_number_build(
+                    false, 0, static_cast<int64_t>(std::numeric_limits<int>::lowest())),
                 0));
             bool cppThrew = false;
             Number cpp;
@@ -835,12 +831,14 @@ public:
 
         auto lt = [](NumberPair const& l, NumberPair const& r) {
             return lean_number_lt(
-                       l.leanNum.negative,
-                       l.leanNum.mantissa,
-                       l.leanNum.exponent,
-                       r.leanNum.negative,
-                       r.leanNum.mantissa,
-                       r.leanNum.exponent) != 0;
+                       lean_number_build(
+                           l.leanNum.negative,
+                           l.leanNum.mantissa,
+                           static_cast<int64_t>(l.leanNum.exponent)),
+                       lean_number_build(
+                           r.leanNum.negative,
+                           r.leanNum.mantissa,
+                           static_cast<int64_t>(r.leanNum.exponent))) != 0;
         };
 
         BEAST_EXPECT(!lt(a, b) && !(a.cppNum < b.cppNum));  // -3e18 < -7e18 is false
@@ -1018,8 +1016,10 @@ public:
     bool
     checkToRep(std::string const& label, NumberPair const& x, Number::RoundingMode mode)
     {
-        auto const lean = LeanXRPResult::from_lean(lean_number_to_rep(
-            x.leanNum.negative, x.leanNum.mantissa, x.leanNum.exponent, toLeanMode(mode)));
+        auto const lean = readExceptI64(lean_number_to_rep(
+            lean_number_build(
+                x.leanNum.negative, x.leanNum.mantissa, static_cast<int64_t>(x.leanNum.exponent)),
+            toLeanMode(mode)));
         bool cppThrew = false;
         std::int64_t cpp = 0;
         try
@@ -1030,20 +1030,20 @@ public:
         {
             cppThrew = true;
         }
-        if (lean.ok == cppThrew)
+        if (lean.value.has_value() == cppThrew)
         {
             fail(label + ": error mismatch");
             return false;
         }
-        if (!lean.ok)
+        if (!lean.value.has_value())
         {
             pass();
             return true;
         }
-        if (lean.drops != cpp)
+        if (*lean.value != cpp)
         {
             std::stringstream ss;
-            ss << label << ": lean=" << lean.drops << " cpp=" << cpp;
+            ss << label << ": lean=" << *lean.value << " cpp=" << cpp;
             fail(ss.str());
             return false;
         }

@@ -318,9 +318,8 @@ lemma IOUAmount.operator_add_InRange16_anyMode (x y result : IOUAmount) (mode : 
 /-- **STAmount IOU addition rounds within the directed relative-error bound, every
 mode.** The `STAmount → IOUAmount → STAmount` round-trip is value-exact; the bound
 is inherited from `IOUAmount.operator_add_rounds_directed`. -/
-theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount) (iss : Issue)
+theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount)
     (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (hok : STAmount.operator_add v1 v2 mode = .ok result)
@@ -328,7 +327,6 @@ theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount) (iss
     RoundsWithin result (v1.toRat + v2.toRat) mode
       (11 / (2 ^ 63 - 18 : ℚ) + (10 : ℚ) ^ (-15 : ℤ)
         + 11 / (2 ^ 63 - 18 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) := by
-  have h_not_xrp : (Asset.issue iss).isNative = false := h_xrp
   have hcmp : STAmount.areComparable v1 v2 = true := by
     rcases hb : STAmount.areComparable v1 v2 with _ | _
     · rw [STAmount.operator_add, hb] at hok; simp at hok
@@ -336,9 +334,9 @@ theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount) (iss
   rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), hv1] at hok
-  simp only at hok
-  rw [if_neg (show ¬ (iss.isXRP = true) from by rw [h_xrp]; decide)] at hok
+  have hint1 : ¬ v1.integral = true := by
+    unfold STAmount.integral; rw [hc1.is_fractional]; decide
+  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1] at hok
   rw [STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2] at hok
   simp only at hok
   set i1 : IOUAmount := ⟨v1.signedDrops.toInt64, v1.mOffset⟩ with hi1
@@ -355,7 +353,7 @@ theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount) (iss
     have hi1e : i1.exponent_ = v1.mOffset := rfl
     have hi2e : i2.exponent_ = v2.mOffset := rfl
     have hsumI_ne : sumI.mantissa_ ≠ 0 :=
-      STAmount.ofIOUAmount_mantissa_ne_zero sumI iss mode h_not_xrp result hok hresult
+      STAmount.ofIOU_mantissa_ne_zero sumI mode result hok hresult
     have hsumI_range : sumI.InRange16 :=
       IOUAmount.operator_add_InRange16_anyMode i1 i2 sumI mode
         (by rw [hi1n]; exact hc1.mant_lo) (by rw [hi1n]; exact hc1.mant_hi)
@@ -366,7 +364,7 @@ theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount) (iss
         (by rw [hi2e]; have := hc2.exp_hi; unfold maxExponent; omega)
         (by rw [hi1v, hi2v]; exact h_truth_ne) hadd hsumI_ne
     have hrv : result.toRat = sumI.toRat :=
-      STAmount.ofIOUAmount_canonical_toRat sumI iss mode h_not_xrp hsumI_range result hok
+      STAmount.ofIOU_canonical_toRat sumI mode hsumI_range result hok
     have hbound := IOUAmount.operator_add_rounds_directed i1 i2 sumI mode
       (by rw [hi1n]; exact hc1.mant_lo) (by rw [hi1n]; exact hc1.mant_hi)
       (by rw [hi2n]; exact hc2.mant_lo) (by rw [hi2n]; exact hc2.mant_hi)
@@ -385,9 +383,8 @@ the value/exponent bridge `result.toRat = sumI.toRat`, `result.exponent = sumI.e
 (the `STAmount → IOUAmount → STAmount` round-trip is value- and exponent-exact), the
 closing snap `IOUAmount.ofNumber sum = sumI`, the 19-digit range of `sum`, and the
 `Number`-add reduction. -/
-lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount) (iss : Issue)
+lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount)
     (mode : rounding_mode)
-    (hv1 : v1.mAsset = .issue iss) (h_xrp : iss.isXRP = false)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (hok : STAmount.operator_add v1 v2 mode = .ok result)
@@ -401,7 +398,6 @@ lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount) (iss
       xn.isNormalized ∧ yn.isNormalized ∧ xn.mantissa_ ≠ 0 ∧ yn.mantissa_ ≠ 0 ∧
       ¬ xn.operator_eq yn.operator_neg ∧ sum.mantissa_ ≠ 0 ∧
       Number.operator_add xn yn mode = .ok sum := by
-  have h_not_xrp : (Asset.issue iss).isNative = false := h_xrp
   have hcmp : STAmount.areComparable v1 v2 = true := by
     rcases hb : STAmount.areComparable v1 v2 with _ | _
     · rw [STAmount.operator_add, hb] at hok; simp at hok
@@ -409,9 +405,9 @@ lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount) (iss
   rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), hv1] at hok
-  simp only at hok
-  rw [if_neg (show ¬ (iss.isXRP = true) from by rw [h_xrp]; decide)] at hok
+  have hint1 : ¬ v1.integral = true := by
+    unfold STAmount.integral; rw [hc1.is_fractional]; decide
+  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1] at hok
   rw [STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2] at hok
   simp only at hok
   set i1 : IOUAmount := ⟨v1.signedDrops.toInt64, v1.mOffset⟩ with hi1
@@ -428,7 +424,7 @@ lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount) (iss
     have hi1e : i1.exponent_ = v1.mOffset := rfl
     have hi2e : i2.exponent_ = v2.mOffset := rfl
     have hsumI_ne : sumI.mantissa_ ≠ 0 :=
-      STAmount.ofIOUAmount_mantissa_ne_zero sumI iss mode h_not_xrp result hok hresult
+      STAmount.ofIOU_mantissa_ne_zero sumI mode result hok hresult
     have hsumI_range : sumI.InRange16 :=
       IOUAmount.operator_add_InRange16_anyMode i1 i2 sumI mode
         (by rw [hi1n]; exact hc1.mant_lo) (by rw [hi1n]; exact hc1.mant_hi)
@@ -439,11 +435,11 @@ lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount) (iss
         (by rw [hi2e]; have := hc2.exp_hi; unfold maxExponent; omega)
         (by rw [hi1v, hi2v]; exact h_truth_ne) hadd hsumI_ne
     have hrv : result.toRat = sumI.toRat :=
-      STAmount.ofIOUAmount_canonical_toRat sumI iss mode h_not_xrp hsumI_range result hok
+      STAmount.ofIOU_canonical_toRat sumI mode hsumI_range result hok
     -- exponent bridge: `ofIOUAmount` packs `sumI.exponent_` into `result.mOffset`.
-    have hpack := STAmount.ofIOUAmount_canonical sumI iss mode h_not_xrp hsumI_range
+    have hpack := STAmount.ofIOU_canonical sumI mode hsumI_range
     rw [hok] at hpack
-    have hres_eq : result = ⟨.issue iss, sumI.mantissa_.toInt.natAbs.toUInt64, sumI.exponent_,
+    have hres_eq : result = ⟨.fractional, sumI.mantissa_.toInt.natAbs.toUInt64, sumI.exponent_,
         decide (sumI.mantissa_ < 0)⟩ := Except.ok.inj hpack
     have hexp_br : result.exponent = sumI.exponent_ := by rw [hres_eq]; rfl
     -- the IOUAmount-level decomposition gives the `Number` summands and sum.

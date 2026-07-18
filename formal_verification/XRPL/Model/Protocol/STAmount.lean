@@ -1,9 +1,7 @@
-import XRPL.Model.Protocol.Asset
-
+import XRPL.Model.Protocol.IntAmount
 import XRPL.Model.Protocol.IOUAmount
-import XRPL.Model.Protocol.MPTAmount
 import XRPL.Model.Protocol.Number
-import XRPL.Model.Protocol.XRPAmount
+import XRPL.Model.Protocol.NumericType
 
 
 namespace XRPL.Model.Protocol
@@ -12,7 +10,6 @@ def kMinOffset : Int := -96
 def kMaxOffset : Int := 80
 def kMinValue : UInt64 := 1000000000000000
 def kMaxValue : UInt64 := 9999999999999999
-def kMaxNativeN : Nat := 10^17
 def kTen_TO17 : UInt64 := 100000000000000000
 def kTen_TO14 : UInt64 := 100000000000000
 def kTen_TO14M1 : UInt64 := 99999999999999
@@ -21,7 +18,7 @@ def int64Max : Int := Int64.maxValue.toInt
 def int64Min : Int := Int64.minValue.toInt
 
 structure STAmount where
-  mAsset : Asset
+  mNumericType : NumericType
   mValue : UInt64
   mOffset : Int
   mIsNegative : Bool
@@ -32,13 +29,9 @@ def STAmount.iouMaxLoss : IOUAmount := { mantissa_ := 1, exponent_ := -4 }
 
 def STAmount.exponent (s : STAmount) : Int := s.mOffset
 def STAmount.mantissa (s : STAmount) : UInt64 := s.mValue
-def STAmount.integral (s : STAmount) : Bool := s.mAsset.integral
-def STAmount.native (s : STAmount) : Bool := s.mAsset.isNative
+def STAmount.integral (s : STAmount) : Bool := s.mNumericType.isIntegral
 def STAmount.negative (s : STAmount) : Bool := s.mIsNegative
-def STAmount.asset (s : STAmount) : Asset := s.mAsset
-def STAmount.getIssuer (s : STAmount) : AccountID := s.mAsset.getIssuer
-def STAmount.holdsIssue (s : STAmount) : Bool := s.mAsset.holdsIssue
-def STAmount.holdsMPTIssue (s : STAmount) : Bool := s.mAsset.holdsMPTIssue
+def STAmount.numericType (s : STAmount) : NumericType := s.mNumericType
 def STAmount.isZero (s : STAmount) : Bool := s.mValue == 0
 
 def STAmount.signum (s : STAmount) : Int :=
@@ -48,21 +41,9 @@ def STAmount.signum (s : STAmount) : Int :=
 def STAmount.signedDrops (s : STAmount) : Int :=
   if s.mIsNegative then -(s.mValue.toNat : Int) else (s.mValue.toNat : Int)
 
-def STAmount.isLegalNet (s : STAmount) : Bool :=
-  !s.native || s.mValue.toNat ≤ kMaxNativeN
-
+-- Two amounts are comparable when they share a representation.
 def STAmount.areComparable (lhs rhs : STAmount) : Bool :=
-  Asset.areComparable lhs.mAsset rhs.mAsset
-
--- C++ STAmount::clear(Asset): zero of the given asset; offset -100 for IOU so that
--- zero sorts below small positive values with negative exponents
-def STAmount.clear (asset : Asset) : STAmount :=
-  { mAsset := asset
-  , mValue := 0
-  , mOffset := if asset.integral then 0 else -100
-  , mIsNegative := false }
-
-def STAmount.zeroed (s : STAmount) : STAmount := STAmount.clear s.mAsset
+  lhs.mNumericType == rhs.mNumericType
 
 def STAmount.toRat (s : STAmount) : ℚ :=
   let sign : Int := if s.mIsNegative then -1 else 1
@@ -72,62 +53,49 @@ def STAmount.toRat (s : STAmount) : ℚ :=
   else
     mkRat (sign * m) ((10 : Nat) ^ (-s.mOffset).toNat)
 
-def STAmount.xrp (s : STAmount) : Except String XRPAmount :=
-  if s.native then .ok { drops_ := s.signedDrops.toInt64 }
-  else .error "Cannot return non-native STAmount as XRPAmount"
+def STAmount.clear (nt : NumericType) : STAmount :=
+  { mNumericType := nt
+  , mValue := 0
+  , mOffset := if nt.isIntegral then 0 else -100
+  , mIsNegative := false }
 
+def STAmount.zeroed (s : STAmount) : STAmount := STAmount.clear s.mNumericType
+
+-- Integral (XRP/MPT) as a plain int64 amount.
+def STAmount.intAmount (s : STAmount) : Except String IntAmount :=
+  if s.integral then .ok { value := s.signedDrops.toInt64 }
+  else .error "Cannot return fractional STAmount as IntAmount"
+
+-- Fractional (IOU).
 def STAmount.iou (s : STAmount) (mode : rounding_mode) : Except String IOUAmount :=
   if s.integral then
-    .error "Cannot return non-IOU STAmount as IOUAmount"
+    .error "Cannot return integral STAmount as IOUAmount"
   else IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode
 
-def STAmount.mpt (s : STAmount) : Except String MPTAmount :=
-  if s.holdsMPTIssue then .ok { value_ := s.signedDrops.toInt64 }
-  else .error "Cannot return STAmount as MPTAmount"
-
 def STAmount.toNumber (s : STAmount) (mode : rounding_mode) : Except String Number :=
-  match s.mAsset with
-  | .issue iss =>
-    if iss.isXRP then
-      match s.xrp with
-      | .error e => .error e
-      | .ok x => x.toNumber mode
-    else
-      match s.iou mode with
-      | .error e => .error e
-      | .ok i => i.toNumber mode
-  | .mptIssue _ =>
-    match s.mpt with
+  if s.integral then
+    match s.intAmount with
     | .error e => .error e
-    | .ok m => m.toNumber mode
+    | .ok i => i.toNumber mode
+  else
+    match s.iou mode with
+    | .error e => .error e
+    | .ok i => i.toNumber mode
 
 def STAmount.canonicalize (s : STAmount) (mode : rounding_mode) : Except String STAmount :=
   if s.integral then
-    -- XRP or MPT
     if s.mValue == 0 || s.mOffset ≤ -20 then
       .ok { s with mValue := 0, mOffset := 0, mIsNegative := false }
-    else if s.native && s.mOffset > 17 then
-      .error "Native currency amount out of range"
-    else if !s.native && s.mOffset > 18 then
-      .error "MPT amount out of range"
+    else if s.mOffset > s.mNumericType.maxOffset then
+      .error "Integral amount out of range"
     else
       let num : Number := Number.unchecked s.mIsNegative s.mValue s.mOffset
-      if s.native then
-        match XRPAmount.ofNumber num mode with
-        | .error e => .error e
-        | .ok xrp =>
-          let value : Int64 := xrp.value
-          let absVal : Nat := value.toInt.natAbs
-          if absVal > kMaxNativeN then .error "Native currency amount out of range"
-          else .ok { s with mValue := absVal.toUInt64, mOffset := 0, mIsNegative := value < 0 }
-      else
-        match MPTAmount.ofNumber num mode with
-        | .error e => .error e
-        | .ok mpt =>
-          let value : Int64 := mpt.value_
-          let absVal : Nat := value.toInt.natAbs
-          if absVal > maxMPTokenAmount then .error "MPT amount out of range"
-          else .ok { s with mValue := absVal.toUInt64, mOffset := 0, mIsNegative :=  value < 0 }
+      match IntAmount.ofNumber num mode with
+      | .error e => .error e
+      | .ok i =>
+        let v : UInt64 := i.value.toInt.natAbs.toUInt64
+        if v > s.mNumericType.maxValue then .error "Integral amount out of range"
+        else .ok { s with mValue := v, mOffset := 0, mIsNegative := i.value < 0 }
   else
     match s.iou mode with
     | .error e => .error e
@@ -138,72 +106,52 @@ def STAmount.canonicalize (s : STAmount) (mode : rounding_mode) : Except String 
                  , mOffset := i.exponent_
                  , mIsNegative := neg }
 
-def STAmount.unchecked (mAsset : Asset) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool) : STAmount :=
-  { mAsset, mValue, mOffset, mIsNegative }
+def STAmount.unchecked (mNumericType : NumericType) (mValue : UInt64) (mOffset : Int)
+    (mIsNegative : Bool) : STAmount :=
+  { mNumericType, mValue, mOffset, mIsNegative }
 
-def STAmount.uncheckedFromInt64 (asset : Asset) (v : Int64) (offset : Int) : STAmount :=
-  if v < 0 then STAmount.unchecked asset (-v).toUInt64 offset true
-  else STAmount.unchecked asset v.toUInt64 offset false
+def STAmount.uncheckedFromInt64 (nt : NumericType) (v : Int64) (offset : Int) : STAmount :=
+  if v < 0 then STAmount.unchecked nt (-v).toUInt64 offset true
+  else STAmount.unchecked nt v.toUInt64 offset false
 
-def STAmount.checked (asset : Asset) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool)
+def STAmount.checked (nt : NumericType) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool)
     (mode : rounding_mode) : Except String STAmount :=
-  let n : STAmount := STAmount.unchecked asset mValue mOffset mIsNegative
-  n.canonicalize mode
+  (STAmount.unchecked nt mValue mOffset mIsNegative).canonicalize mode
 
--- C++ `STAmount(Asset)`: a zero amount, canonicalized. A zero never rounds or overflows,
--- so the mode is irrelevant and the error branch is unreachable.
-def STAmount.ofAsset (asset : Asset) : STAmount :=
-  match STAmount.checked asset 0 0 false rounding_mode.to_nearest with
+-- Zero amount of a numericType (C++ `STAmount(Asset)`), canonicalized; zero never rounds/overflows.
+def STAmount.zero (nt : NumericType) : STAmount :=
+  match STAmount.checked nt 0 0 false rounding_mode.to_nearest with
   | .ok s => s
-  | .error _ => STAmount.unchecked asset 0 0 false
+  | .error _ => STAmount.unchecked nt 0 0 false
 
-def STAmount.ofInt64 (asset : Asset) (mantissa : Int64) (exponent : Int)
-    (mode : rounding_mode) : Except String STAmount :=
-  let n : STAmount := STAmount.uncheckedFromInt64 asset mantissa exponent
-  n.canonicalize mode
-
-def STAmount.ofNativeInt64 (drops : Int64) : STAmount :=
-  STAmount.uncheckedFromInt64 xrpAsset drops 0
-
-def STAmount.ofIOUAmount (a : IOUAmount) (issue : Issue) (mode : rounding_mode) : Except String STAmount :=
+def STAmount.ofIOUAmount (a : IOUAmount) (mode : rounding_mode) : Except String STAmount :=
   let neg := a.signum < 0
   let absMant : Int64 := if neg then -a.mantissa_ else a.mantissa_
-  let n : STAmount := STAmount.unchecked (.issue issue) absMant.toUInt64 a.exponent_ neg
-  n.canonicalize mode
+  (STAmount.unchecked .fractional absMant.toUInt64 a.exponent_ neg).canonicalize mode
 
-def STAmount.ofXRPAmount (a : XRPAmount) (mode : rounding_mode) : Except String STAmount :=
-  let neg := a.signum < 0
-  let absDrops : Int64 := if neg then -a.value else a.value
-  let n : STAmount := STAmount.unchecked xrpAsset absDrops.toUInt64 0 neg
-  n.canonicalize mode
+def STAmount.ofInt64 (nt : NumericType) (mantissa : Int64) (exponent : Int)
+    (mode : rounding_mode) : Except String STAmount :=
+  (STAmount.uncheckedFromInt64 nt mantissa exponent).canonicalize mode
 
-def STAmount.ofMPTAmount (a : MPTAmount) (issue : MPTIssue) (mode : rounding_mode) : Except String STAmount :=
-  let neg := a.signum < 0
-  let absVal : Int64 := if neg then -a.value else a.value
-  let n : STAmount := STAmount.unchecked (.mptIssue issue) absVal.toUInt64 0 neg
-  n.canonicalize mode
-
-def STAmount.ofNumber (asset : Asset) (n : Number) (mode : rounding_mode)
+def STAmount.ofNumber (nt : NumericType) (n : Number) (mode : rounding_mode)
     : Except String STAmount :=
   let neg : Bool := n.signum < 0
   let working : Number := if neg then n.operator_neg else n
-  if asset.integral then
+  if nt.isIntegral then
     match working.to_rep mode with
     | .error e => .error e
-    | .ok intValue =>
-      STAmount.checked asset intValue.toUInt64 0 neg mode
+    | .ok intValue => STAmount.checked nt intValue.toUInt64 0 neg mode
   else
     match working.normalizeToRange kMinValue kMaxValue mode with
     | .error e => .error e
     | .ok (mantissa, exponent) =>
-      STAmount.checked asset mantissa.toUInt64 exponent neg mode
+      STAmount.checked nt mantissa.toUInt64 exponent neg mode
 
 def STAmount.operator_eq (lhs rhs : STAmount) : Bool :=
   STAmount.areComparable lhs rhs &&
     lhs.mIsNegative == rhs.mIsNegative &&
     lhs.mOffset == rhs.mOffset &&
-    lhs.mValue == rhs.mValue &&
-    lhs.mAsset == rhs.mAsset
+    lhs.mValue == rhs.mValue
 
 def STAmount.operator_ne (lhs rhs : STAmount) : Bool :=
   !lhs.operator_eq rhs
@@ -245,30 +193,38 @@ def STAmount.operator_add (v1 v2 : STAmount) (mode : rounding_mode)
     .error "Can't add amounts that are't comparable!"
   else if v2.mValue == 0 then .ok v1
   else if v1.mValue == 0 then
-    STAmount.checked v1.mAsset v2.mValue v2.mOffset v2.mIsNegative mode
+    STAmount.checked v1.mNumericType v2.mValue v2.mOffset v2.mIsNegative mode
+  else if v1.integral then
+    let sum := STAmount.uncheckedFromInt64 v1.mNumericType
+      (v1.signedDrops.toInt64 + v2.signedDrops.toInt64) 0
+    if v1.mNumericType == .native then .ok sum else sum.canonicalize mode
   else
-    match v1.mAsset with
-    | .issue iss =>
-      if iss.isXRP then
-        let sumDrops : Int64 := v1.signedDrops.toInt64 + v2.signedDrops.toInt64
-        .ok (STAmount.ofNativeInt64 sumDrops)
-      else
-        match v1.iou mode with
+    match v1.iou mode with
+    | .error e => .error e
+    | .ok i1 =>
+      match v2.iou mode with
+      | .error e => .error e
+      | .ok i2 =>
+        match IOUAmount.operator_add i1 i2 mode with
         | .error e => .error e
-        | .ok i1 =>
-          match v2.iou mode with
-          | .error e => .error e
-          | .ok i2 =>
-            match IOUAmount.operator_add i1 i2 mode with
-            | .error e => .error e
-            | .ok sumI => STAmount.ofIOUAmount sumI iss mode
-    | .mptIssue _ =>
-      let sumDrops : Int64 := v1.signedDrops.toInt64 + v2.signedDrops.toInt64
-      STAmount.ofInt64 v1.mAsset sumDrops 0 mode
+        | .ok sumI => STAmount.ofIOUAmount sumI mode
 
 def STAmount.operator_sub (v1 v2 : STAmount) (mode : rounding_mode)
     : Except String STAmount :=
   STAmount.operator_add v1 v2.operator_neg mode
+
+def STAmount.roundToExponent (value : STAmount) (scale : Int) (rounding : rounding_mode)
+    : Except String STAmount :=
+  if value.integral then .ok value
+  else if value.isZero then .ok value
+  else if value.exponent ≥ scale then .ok value
+  else
+    match STAmount.checked value.mNumericType kMinValue scale value.negative rounding with
+    | .error e => .error e
+    | .ok referenceValue =>
+      match STAmount.operator_add value referenceValue rounding with
+      | .error e => .error e
+      | .ok sum => STAmount.operator_sub sum referenceValue rounding
 
 def STAmount.muldiv (multiplier multiplicand divisor : UInt64) : Except String UInt64 :=
   let prod : UInt128 := toUInt128 multiplier * toUInt128 multiplicand
@@ -353,8 +309,7 @@ decreasing_by
   rw [hdiv]; omega
 
 -- Legacy XRPL rounding (pre-2022). `_roundUp` is unused on this path; the
--- integral addend is `loops≥2 ? 9 : 10`, which gives drops-conversion the
--- documented "≥0.1 rounds up, <0.1 rounds down" behavior.
+-- integral addend is `loops≥2 ? 9 : 10`, matching drops-conversion rounding.
 def STAmount.canonicalizeRound (integral : Bool) (value : UInt64) (offset : Int) (_roundUp : Bool)
     : UInt64 × Int :=
   if integral then
@@ -386,10 +341,10 @@ def STAmount.canonicalizeRoundStrict (integral : Bool) (value : UInt64) (offset 
     (v1 / 10, o0 + 1)
   else (value, offset)
 
-def STAmount.divide (num den : STAmount) (asset : Asset) (mode : rounding_mode)
+def STAmount.divide (num den : STAmount) (nt : NumericType) (mode : rounding_mode)
     : Except String STAmount :=
   if den.isZero then .error "division by zero"
-  else if num.isZero then STAmount.checked asset 0 0 false mode
+  else if num.isZero then STAmount.checked nt 0 0 false mode
   else
     let (numVal, numOffset) :=
       if num.integral then
@@ -405,38 +360,24 @@ def STAmount.divide (num den : STAmount) (asset : Asset) (mode : rounding_mode)
       let mant : UInt64 := q + 5
       let exp : Int := numOffset - denOffset - 17
       let neg : Bool := num.negative != den.negative
-      STAmount.checked asset mant exp neg mode
+      STAmount.checked nt mant exp neg mode
 
-def STAmount.multiply (v1 v2 : STAmount) (asset : Asset) (mode : rounding_mode)
+def STAmount.multiply (v1 v2 : STAmount) (nt : NumericType) (mode : rounding_mode)
     : Except String STAmount :=
   if v1.isZero || v2.isZero then
-    STAmount.checked asset 0 0 false mode
-  else if v1.native && v2.native && asset.isNative then
+    STAmount.checked nt 0 0 false mode
+  else if v1.integral && v2.integral && nt.isIntegral then
     let aS : Int64 := v1.signedDrops.toInt64
     let bS : Int64 := v2.signedDrops.toInt64
     let minV : UInt64 := (if aS ≤ bS then aS else bS).toUInt64
     let maxV : UInt64 := (if aS ≤ bS then bS else aS).toUInt64
-    if minV > 3000000000 then  -- sqrt(cMaxNative)
-      .error "Native value overflow"
-    else if (maxV >>> 32) * minV > 2095475792 then  -- cMaxNative / 2^32
-      .error "Native value overflow"
+    if minV > nt.mulSqrt then
+      .error "Integer value overflow"
+    else if (maxV >>> 32) * minV > nt.mulShift then
+      .error "Integer value overflow"
     else
-      -- C++ `STAmount(SField, uint64_t)` does NOT canonicalize.
       let prod : UInt64 := minV * maxV
-      .ok (STAmount.unchecked xrpAsset prod 0 false)
-  else if v1.holdsMPTIssue && v2.holdsMPTIssue && asset.holdsMPTIssue then
-    let aS : Int64 := v1.signedDrops.toInt64
-    let bS : Int64 := v2.signedDrops.toInt64
-    let minV : UInt64 := (if aS ≤ bS then aS else bS).toUInt64
-    let maxV : UInt64 := (if aS ≤ bS then bS else aS).toUInt64
-    if minV > 3037000499 then  -- sqrt(maxMPTokenAmount) ~ 3037000499.98
-      .error "MPT value overflow"
-    else if (maxV >>> 32) * minV > 2147483648 then  -- maxMPTokenAmount / 2^32
-      .error "MPT value overflow"
-    else
-      -- C++ `STAmount(Asset, uint64_t)` canonicalizes
-      let prod : UInt64 := minV * maxV
-      STAmount.checked asset prod 0 false mode
+      STAmount.checked nt prod 0 false mode
   else
     match v1.toNumber mode with
     | .error e => .error e
@@ -446,42 +387,28 @@ def STAmount.multiply (v1 v2 : STAmount) (asset : Asset) (mode : rounding_mode)
       | .ok n2 =>
         match Number.operator_mul n1 n2 mode with
         | .error e => .error e
-        | .ok r => STAmount.ofNumber asset r mode
+        | .ok r => STAmount.ofNumber nt r mode
 
--- `canonFn` selects legacy vs strict canonicalization
+-- `canonFn` selects legacy vs strict canonicalization.
 def STAmount.mulRoundImpl
-    (v1 v2 : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+    (v1 v2 : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     (canonFn : Bool → UInt64 → Int → Bool → UInt64 × Int)
     (saveRound : Bool)
     : Except String STAmount :=
   if v1.isZero || v2.isZero then
-    STAmount.checked asset 0 0 false mode
-  else if v1.native && v2.native && asset.isNative then
+    STAmount.checked nt 0 0 false mode
+  else if v1.integral && v2.integral && nt.isIntegral then
     let aS : Int64 := v1.signedDrops.toInt64
     let bS : Int64 := v2.signedDrops.toInt64
     let minV : UInt64 := (if aS ≤ bS then aS else bS).toUInt64
     let maxV : UInt64 := (if aS ≤ bS then bS else aS).toUInt64
-    if minV > 3000000000 then
-      .error "Native value overflow"
-    else if (maxV >>> 32) * minV > 2095475792 then
-      .error "Native value overflow"
+    if minV > nt.mulSqrt then
+      .error "Integer value overflow"
+    else if (maxV >>> 32) * minV > nt.mulShift then
+      .error "Integer value overflow"
     else
       let prod : UInt64 := minV * maxV
-      .ok (STAmount.unchecked xrpAsset prod 0 false)
-  else if v1.holdsMPTIssue && v2.holdsMPTIssue && asset.holdsMPTIssue then
-    let aS : Int64 := v1.signedDrops.toInt64
-    let bS : Int64 := v2.signedDrops.toInt64
-    let minV : UInt64 := (if aS ≤ bS then aS else bS).toUInt64
-    let maxV : UInt64 := (if aS ≤ bS then bS else aS).toUInt64
-    if minV > 3037000499 then
-      .error "MPT value overflow"
-    else if (maxV >>> 32) * minV > 2147483648 then
-      .error "MPT value overflow"
-    else
-      -- MPT branch returns before C++'s MightSaveRound scope opens, so ambient
-      -- `mode` applies regardless of `saveRound`.
-      let prod : UInt64 := minV * maxV
-      STAmount.checked asset prod 0 false mode
+      STAmount.checked nt prod 0 false mode
   else
     let (value1, offset1) :=
       if v1.integral then STAmount.normalizeIntegralMantissa v1.mantissa v1.exponent
@@ -496,35 +423,34 @@ def STAmount.mulRoundImpl
     | .ok amt0 =>
       let offset0 : Int := offset1 + offset2 + 14
       let (amount, offset) :=
-        if resultNegative != roundUp then canonFn asset.integral amt0 offset0 roundUp
+        if resultNegative != roundUp then canonFn nt.isIntegral amt0 offset0 roundUp
         else (amt0, offset0)
-      -- C++ `MightSaveRound(TowardsZero)`: hardcoded mode, applied only when
-      -- `saveRound = true` (NumberRoundModeGuard variant).
+      -- C++ `MightSaveRound(TowardsZero)`: hardcoded mode, applied only when `saveRound = true`.
       let createMode : rounding_mode := if saveRound then .towards_zero else mode
-      match STAmount.checked asset amount offset resultNegative createMode with
+      match STAmount.checked nt amount offset resultNegative createMode with
       | .error e => .error e
       | .ok result =>
         if roundUp && !resultNegative && result.isZero then
-          if asset.integral then
-            STAmount.checked asset 1 0 resultNegative mode
+          if nt.isIntegral then
+            STAmount.checked nt 1 0 resultNegative mode
           else
-            STAmount.checked asset kMinValue kMinOffset resultNegative mode
+            STAmount.checked nt kMinValue kMinOffset resultNegative mode
         else .ok result
 
-def STAmount.mulRound (v1 v2 : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+def STAmount.mulRound (v1 v2 : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     : Except String STAmount :=
-  STAmount.mulRoundImpl v1 v2 asset roundUp mode STAmount.canonicalizeRound (saveRound := false)
+  STAmount.mulRoundImpl v1 v2 nt roundUp mode STAmount.canonicalizeRound (saveRound := false)
 
-def STAmount.mulRoundStrict (v1 v2 : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+def STAmount.mulRoundStrict (v1 v2 : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     : Except String STAmount :=
-  STAmount.mulRoundImpl v1 v2 asset roundUp mode STAmount.canonicalizeRoundStrict (saveRound := true)
+  STAmount.mulRoundImpl v1 v2 nt roundUp mode STAmount.canonicalizeRoundStrict (saveRound := true)
 
 def STAmount.divRoundImpl
-    (num den : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+    (num den : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     (saveRound : Bool)
     : Except String STAmount :=
   if den.isZero then .error "division by zero"
-  else if num.isZero then STAmount.checked asset 0 0 false mode
+  else if num.isZero then STAmount.checked nt 0 0 false mode
   else
     let (numVal, numOffset) :=
       if num.integral then STAmount.normalizeIntegralMantissa num.mantissa num.exponent
@@ -540,58 +466,44 @@ def STAmount.divRoundImpl
       let offset0 : Int := numOffset - denOffset - 17
       let (amount, offset) :=
         if resultNegative != roundUp then
-          STAmount.canonicalizeRound asset.integral amt0 offset0 roundUp
+          STAmount.canonicalizeRound nt.isIntegral amt0 offset0 roundUp
         else (amt0, offset0)
-      -- C++ `MightSaveRound(roundUp ^ resultNegative ? Upward : Downward)`:
-      -- hardcoded formula, applied only when `saveRound = true`.
+      -- C++ `MightSaveRound(roundUp ^ resultNegative ? Upward : Downward)`, when `saveRound = true`.
       let createMode : rounding_mode :=
         if saveRound then (if roundUp != resultNegative then .upward else .downward)
         else mode
-      match STAmount.checked asset amount offset resultNegative createMode with
+      match STAmount.checked nt amount offset resultNegative createMode with
       | .error e => .error e
       | .ok result =>
         if roundUp && !resultNegative && result.isZero then
-          if asset.integral then
-            STAmount.checked asset 1 0 resultNegative mode
+          if nt.isIntegral then
+            STAmount.checked nt 1 0 resultNegative mode
           else
-            STAmount.checked asset kMinValue kMinOffset resultNegative mode
+            STAmount.checked nt kMinValue kMinOffset resultNegative mode
         else .ok result
 
-def STAmount.divRound (num den : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+def STAmount.divRound (num den : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     : Except String STAmount :=
-  STAmount.divRoundImpl num den asset roundUp mode (saveRound := false)
+  STAmount.divRoundImpl num den nt roundUp mode (saveRound := false)
 
-def STAmount.divRoundStrict (num den : STAmount) (asset : Asset) (roundUp : Bool) (mode : rounding_mode)
+def STAmount.divRoundStrict (num den : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
     : Except String STAmount :=
-  STAmount.divRoundImpl num den asset roundUp mode (saveRound := true)
+  STAmount.divRoundImpl num den nt roundUp mode (saveRound := true)
 
 def STAmount.canAdd (a b : STAmount) (mode : rounding_mode) : Except String Bool :=
   if !STAmount.areComparable a b then .ok false
   else if a.isZero || b.isZero then .ok true
-  else if a.native && b.native then
-    match a.xrp, b.xrp with
-    | .error e, _ => .error e
-    | _, .error e => .error e
-    | .ok aXrp, .ok bXrp =>
-      let aVal : Int := aXrp.value.toInt
-      let bVal : Int := bXrp.value.toInt
-      .ok (!((bVal > 0 && aVal > int64Max - bVal) ||
-             (bVal < 0 && aVal < int64Min - bVal)))
-  else if a.holdsMPTIssue && b.holdsMPTIssue then
-    match a.mpt, b.mpt with
-    | .error e, _ => .error e
-    | _, .error e => .error e
-    | .ok aMpt, .ok bMpt =>
-      let aVal : Int := aMpt.value.toInt
-      let bVal : Int := bMpt.value.toInt
-      .ok (!((bVal > 0 && aVal > int64Max - bVal) ||
-             (bVal < 0 && aVal < int64Min - bVal)))
+  else if a.integral && b.integral then
+    let aVal : Int := a.signedDrops.toInt64.toInt
+    let bVal : Int := b.signedDrops.toInt64.toInt
+    .ok (!((bVal > 0 && aVal > int64Max - bVal) ||
+           (bVal < 0 && aVal < int64Min - bVal)))
   else
     -- IOU precision check: |divide((a-b)+b, a) - 1| + |divide((b-a)+a, b) - 1| ≤ 1e-4.
-    match STAmount.ofIOUAmount STAmount.iouOne noIssue mode with
+    match STAmount.ofIOUAmount STAmount.iouOne mode with
     | .error e => .error e
     | .ok kOne =>
-      match STAmount.ofIOUAmount STAmount.iouMaxLoss noIssue mode with
+      match STAmount.ofIOUAmount STAmount.iouMaxLoss mode with
       | .error e => .error e
       | .ok kMaxLoss =>
         match STAmount.operator_sub a b mode with
@@ -600,7 +512,7 @@ def STAmount.canAdd (a b : STAmount) (mode : rounding_mode) : Except String Bool
           match STAmount.operator_add aSubB b mode with
           | .error e => .error e
           | .ok aSubBAddB =>
-            match STAmount.divide aSubBAddB a (.issue noIssue) mode with
+            match STAmount.divide aSubBAddB a .fractional mode with
             | .error e => .error e
             | .ok dl =>
               match STAmount.operator_sub dl kOne mode with
@@ -612,7 +524,7 @@ def STAmount.canAdd (a b : STAmount) (mode : rounding_mode) : Except String Bool
                   match STAmount.operator_add bSubA a mode with
                   | .error e => .error e
                   | .ok bSubAAddA =>
-                    match STAmount.divide bSubAAddA b (.issue noIssue) mode with
+                    match STAmount.divide bSubAAddA b .fractional mode with
                     | .error e => .error e
                     | .ok dr =>
                       match STAmount.operator_sub dr kOne mode with
@@ -627,44 +539,19 @@ def STAmount.canAdd (a b : STAmount) (mode : rounding_mode) : Except String Bool
 def STAmount.canSubtract (a b : STAmount) : Except String Bool :=
   if !STAmount.areComparable a b then .ok false
   else if b.isZero then .ok true
-  else if a.native && b.native then
-    match a.xrp, b.xrp with
-    | .error e, _ => .error e
-    | _, .error e => .error e
-    | .ok aXrp, .ok bXrp =>
-      let aVal : Int := aXrp.value.toInt
-      let bVal : Int := bXrp.value.toInt
-      .ok (!(bVal > 0 && aVal < bVal) && !(bVal < 0 && aVal > int64Max + bVal))
-  else if a.holdsMPTIssue && b.holdsMPTIssue then
-    match a.mpt, b.mpt with
-    | .error e, _ => .error e
-    | _, .error e => .error e
-    | .ok aMpt, .ok bMpt =>
-      let aVal : Int := aMpt.value.toInt
-      let bVal : Int := bMpt.value.toInt
-      .ok (!(bVal > 0 && aVal < bVal) && !(bVal < 0 && aVal > int64Max + bVal))
+  else if a.integral && b.integral then
+    let aVal : Int := a.signedDrops.toInt64.toInt
+    let bVal : Int := b.signedDrops.toInt64.toInt
+    .ok (!(bVal > 0 && aVal < bVal) && !(bVal < 0 && aVal > int64Max + bVal))
   else
     -- IOU subtraction can never underflow.
     .ok true
 
-def STAmount.roundToExponent (value : STAmount) (scale : Int) (rounding : rounding_mode)
-    : Except String STAmount :=
-  if value.integral then .ok value
-  else if value.isZero then .ok value
-  else if value.exponent ≥ scale then .ok value
-  else
-    match STAmount.checked value.asset kMinValue scale value.negative rounding with
-    | .error e => .error e
-    | .ok referenceValue =>
-      match STAmount.operator_add value referenceValue rounding with
-      | .error e => .error e
-      | .ok sum => STAmount.operator_sub sum referenceValue rounding
-
 -- Unifies the two C++ `roundToAsset` overloads: `scale = none` is the in-place
 -- 2-arg form (no IOU truncation), `scale = some s` is the 4-arg form.
-def STAmount.roundToAsset (asset : Asset) (value : Number) (rounding : rounding_mode)
+def STAmount.roundToNumericType (nt : NumericType) (value : Number) (rounding : rounding_mode)
     (scale : Option Int := none) : Except String Number :=
-  match STAmount.ofNumber asset value rounding with
+  match STAmount.ofNumber nt value rounding with
   | .error e => .error e
   | .ok ret =>
     match scale with
@@ -679,7 +566,7 @@ def STAmount.roundToAsset (asset : Asset) (value : Number) (rounding : rounding_
 def STAmount.getRate (offerOut offerIn : STAmount) (rounding : rounding_mode) : UInt64 :=
   if offerOut.isZero then 0
   else
-    match STAmount.divide offerIn offerOut (.issue noIssue) rounding with
+    match STAmount.divide offerIn offerOut .fractional rounding with
     | .error _ => 0
     | .ok r =>
       if r.isZero then 0
@@ -688,7 +575,7 @@ def STAmount.getRate (offerOut offerIn : STAmount) (rounding : rounding_mode) : 
         (ret <<< 56) ||| r.mantissa
 
 def kURateOne : UInt64 :=
-  let one : STAmount := STAmount.unchecked xrpAsset 1 0 false
+  let one : STAmount := STAmount.unchecked .int64 1 0 false
   STAmount.getRate one one .to_nearest
 
 end XRPL.Model.Protocol

@@ -50,16 +50,22 @@ class LeanVaultDeposit_test : public LeanSuite
             rounded.threw ? std::optional<TER>{tefEXCEPTION} : rounded.error;
         std::optional<TER> const expectedError =
             expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
-        std::optional<STAmount> const expectedAmount =
-            expected == tesSUCCESS ? std::optional<STAmount>{amount} : std::nullopt;
+        // The model result carries no asset, so compare the rounded value (a Number), not the
+        // STAmount (whose operator== also checks currency).
+        std::optional<Number> const leanAmount = rounded.amount
+            ? std::optional<Number>{static_cast<Number>(*rounded.amount)}
+            : std::nullopt;
+        std::optional<Number> const expectedAmount = expected == tesSUCCESS
+            ? std::optional<Number>{static_cast<Number>(amount)}
+            : std::nullopt;
         BEAST_EXPECTS(
             leanError == expectedError,
             std::string("error lean=") + (leanError ? transToken(*leanError) : "none") +
                 " expected " + (expectedError ? transToken(*expectedError) : "none"));
         BEAST_EXPECTS(
-            rounded.amount == expectedAmount,
-            std::string("amount lean=") + (rounded.amount ? rounded.amount->getText() : "none") +
-                " expected " + (expectedAmount ? expectedAmount->getText() : "none"));
+            leanAmount == expectedAmount,
+            std::string("amount lean=") + (leanAmount ? to_string(*leanAmount) : "none") +
+                " expected " + (expectedAmount ? to_string(*expectedAmount) : "none"));
     }
 
     // Model of doApply: leanVaultDeposit computes shares and the new vault state.
@@ -70,14 +76,18 @@ class LeanVaultDeposit_test : public LeanSuite
         jtx::Account const& depositor,
         Asset const& asset,
         STAmount const& amount,
-        TER expected)
+        TER expected,
+        bool isDonation = false)
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
-        LeanDepositResult const deposit = leanVaultDeposit(state, amount, false);
+        LeanDepositResult const deposit = leanVaultDeposit(state, amount, isDonation);
 
-        env(Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
-            jtx::Ter(std::ignore));
+        Vault::DepositArgs depositArgs{
+            .depositor = depositor, .id = vaultKeylet.key, .amount = amount};
+        if (isDonation)
+            depositArgs.flags = tfVaultDonate;
+        env(Vault::deposit(depositArgs), jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         env.close();
 
@@ -414,47 +424,6 @@ class LeanVaultDeposit_test : public LeanSuite
             env, vaultKeylet, depositor, asset.raw(), asset(Number{1, -4}), tecPRECISION_LOSS);
     }
 
-    // Discrepancy (out of scope): a deposit that rounds to zero at the depositor's trust-line scale
-    // is rejected by C++ (tecPRECISION_LOSS), but the model rounds only to the vault scale so
-    // leanRoundedDepositAmount accepts it (no per-account balance in the model).
-    void
-    testRoundedDepositTrustLineScale()
-    {
-        using namespace jtx;
-        testcase("deposit below depositor trust-line scale");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        // A large holder balance gives a coarse trust-line scale (ULP ~1e-3), so a 1e-6 deposit is
-        // zero there but not at the empty vault's scale.
-        env(trust(holder, asset(1'000'000'000'000'000LL)));
-        env.close();
-        env(pay(issuer, holder, asset(Number{1, 12})));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        compareRoundedDepositAmount(
-            env, vaultKeylet, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
-    }
-
-    // Discrepancy: the model does not model the MPT mint ceiling. A deposit that would push
-    // outstanding shares past INT64_MAX succeeds where C++ returns tecPATH_DRY.
-    void
-    testVaultDepositMptCeiling()
-    {
-        testVaultDepositUpdatedStateMPT(
-            Number{static_cast<std::int64_t>(kMaxMpTokenAmount)},
-            kMaxMpTokenAmount,
-            1'000,
-            tecPATH_DRY);
-    }
-
     // AssetsTotal + amount near the IOU maximum overflows.
     void
     testRoundedDepositOverflow()
@@ -493,6 +462,80 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         compareVaultDeposit(env, vaultKeylet, bob, xrpIssue(), drops(4), tesSUCCESS);
+    }
+
+    // Donating to a vault with no outstanding shares is rejected
+    void
+    testVaultDonationEmptyVault()
+    {
+        using namespace jtx;
+        testcase("donation to empty vault");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        env.fund(XRP(1'000'000), vaultOwner);
+        env.close();
+
+        auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
+        compareVaultDeposit(
+            env, vaultKeylet, vaultOwner, xrpIssue(), XRP(100), tecNO_PERMISSION, true);
+    }
+
+    // A deposit that pushes AssetsTotal past a non-zero AssetsMaximum is rejected with
+    // tecLIMIT_EXCEEDED (a zero maximum means unlimited).
+    void
+    testVaultDepositLimitExceeded()
+    {
+        using namespace jtx;
+        testcase("deposit exceeds assetsMaximum");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = holder});
+        env.close();
+        env(pay(issuer, holder, asset(10'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
+        // Cap the vault at 1000 with 1000 already in; a further 1000 deposit reaches 2000 > 1000.
+        BEAST_EXPECT(
+            updateVaultState(env, vaultKeylet, Number{1'000}, Number{1'000}, 1'000, Number{1'000}));
+        compareVaultDeposit(env, vaultKeylet, holder, asset.raw(), asset(1'000), tecLIMIT_EXCEEDED);
+    }
+
+    // A donation to an insolvent vault (assetsTotal=0, sharesTotal>0) is NOT blocked
+    void
+    testVaultDonationInsolvent()
+    {
+        using namespace jtx;
+        testcase("donation to insolvent vault");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = vaultOwner});
+        env.close();
+        env(pay(issuer, vaultOwner, asset(10'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, Number{0}, Number{0}, 1'000'000));
+        compareVaultDeposit(
+            env, vaultKeylet, vaultOwner, asset.raw(), asset(1'000), tesSUCCESS, true);
     }
 
     void
@@ -566,10 +609,16 @@ class LeanVaultDeposit_test : public LeanSuite
         // IOU AssetsTotal + amount overflows
         testRoundedDepositOverflow();
 
-        // Known discrepancies: each fails until the Lean model or C++ code is fixed
-        // testVaultDepositMptCeiling();  // model tesSUCCESS where C++ gives tecPATH_DRY
-        // testRoundedDepositTrustLineScale();  // model tesSUCCESS, C++ tecPRECISION_LOSS
+        // Insolvent vault (assetsTotal=0, sharesTotal>0): deposits are blocked with tecLOCKED.
+        testVaultDepositUpdatedStateMPT(Number{0}, 1'000'000, 1'000, tecLOCKED);
+        // Donation to an empty vault is blocked with tecNO_PERMISSION
+        testVaultDonationEmptyVault();
+        // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
+        testVaultDepositLimitExceeded();
+
+        // Known discrepancies: each fails until the C++ code is fixed
         // testVaultDepositOvervaluedShares();  // model rounds up, C++ undercharges
+        // testVaultDonationInsolvent();  // model tesSUCCESS, c++ tecLOCKED
     }
 };
 

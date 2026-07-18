@@ -18,31 +18,33 @@
 // Lean IOUAmount ops (exported by xrpl-lean4/XRPL/IOUAmount/FFI.lean).
 extern "C" {
 lean_object*
+lean_iou_amount_build(int64_t mantissa, int64_t exponent);
+lean_object*
 lean_iou_of_mantissa_exp(int64_t, int64_t, uint8_t);
 lean_object*
-lean_iou_of_number(uint8_t, uint64_t, int64_t, uint8_t);
+lean_iou_of_number(lean_object*, uint8_t);
 lean_object*
-lean_iou_to_number(int64_t, int64_t, uint8_t);
+lean_iou_to_number(lean_object*, uint8_t);
 uint8_t
-lean_iou_eq(int64_t, int64_t, int64_t, int64_t);
+lean_iou_eq(lean_object*, lean_object*);
 uint8_t
-lean_iou_ne(int64_t, int64_t, int64_t, int64_t);
+lean_iou_ne(lean_object*, lean_object*);
 lean_object*
-lean_iou_lt(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_lt(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_le(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_le(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_gt(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_gt(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_ge(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_ge(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_neg(int64_t, int64_t, uint8_t);
+lean_iou_neg(lean_object*, uint8_t);
 lean_object*
-lean_iou_add(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_add(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_sub(int64_t, int64_t, int64_t, int64_t, uint8_t);
+lean_iou_sub(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_iou_mul_ratio(int64_t, int64_t, uint32_t, uint32_t, uint8_t, uint8_t);
+lean_iou_mul_ratio(lean_object*, uint32_t, uint32_t, uint8_t, uint8_t);
 }
 
 namespace xrpl::test {
@@ -110,7 +112,7 @@ class LeanIOUAmount_test : public LeanSuite
     checkOfMantissaExp(int64_t m, int64_t e, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(lean_iou_of_mantissa_exp(m, e, toLeanMode(mode)));
+        auto lean = readIOUExcept(lean_iou_of_mantissa_exp(m, e, toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
         try
@@ -129,10 +131,9 @@ class LeanIOUAmount_test : public LeanSuite
     checkOfNumber(NumberPair const& p, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(lean_iou_of_number(
-            p.leanNum.negative,
-            p.leanNum.mantissa,
-            static_cast<int64_t>(p.leanNum.exponent),
+        auto lean = readIOUExcept(lean_iou_of_number(
+            lean_number_build(
+                p.leanNum.negative, p.leanNum.mantissa, static_cast<int64_t>(p.leanNum.exponent)),
             toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
@@ -155,8 +156,8 @@ class LeanIOUAmount_test : public LeanSuite
     checkToNumber(IOUAmountPair const& p, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanNumberResult::from_lean(
-            lean_iou_to_number(p.leanMant, p.leanExp, toLeanMode(mode)));
+        auto lean = readNumberExcept(
+            lean_iou_to_number(lean_iou_amount_build(p.leanMant, p.leanExp), toLeanMode(mode)));
         Number cpp;
         bool cppThrew = false;
         try
@@ -200,21 +201,19 @@ class LeanIOUAmount_test : public LeanSuite
     {
         NumberRoundModeGuard mg(mode);
         // First normalize via Lean ofMantissaExp so we test the canonical form.
-        auto canonical = LeanIOUResult::from_lean(lean_iou_of_mantissa_exp(m, e, toLeanMode(mode)));
+        auto canonical = readIOUExcept(lean_iou_of_mantissa_exp(m, e, toLeanMode(mode)));
         bool ok1 = BEAST_EXPECT(canonical.ok);
         if (!ok1)
             return false;
         // toNumber
-        auto asNum = LeanNumberResult::from_lean(
-            lean_iou_to_number(canonical.mantissa, canonical.exponent, toLeanMode(mode)));
+        auto asNum = readNumberExcept(lean_iou_to_number(
+            lean_iou_amount_build(canonical.mantissa, canonical.exponent), toLeanMode(mode)));
         bool ok2 = BEAST_EXPECT(asNum.ok);
         if (!ok2)
             return false;
         // back via ofNumber
-        auto back = LeanIOUResult::from_lean(lean_iou_of_number(
-            asNum.negative,
-            asNum.mantissa,
-            static_cast<int64_t>(asNum.exponent),
+        auto back = readIOUExcept(lean_iou_of_number(
+            lean_number_build(asNum.negative, asNum.mantissa, static_cast<int64_t>(asNum.exponent)),
             toLeanMode(mode)));
         bool ok3 = BEAST_EXPECT(back.ok);
         if (!ok3)
@@ -235,16 +234,18 @@ class LeanIOUAmount_test : public LeanSuite
     bool
     checkOrdering(
         char const* op,
-        lean_object* (*leanFn)(int64_t, int64_t, int64_t, int64_t, uint8_t),
+        lean_object* (*leanFn)(lean_object*, lean_object*, uint8_t),
         IOUAmountPair const& a,
         IOUAmountPair const& b,
         bool cppRet,
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanBoolResult::from_lean(
-            leanFn(a.leanMant, a.leanExp, b.leanMant, b.leanExp, toLeanMode(mode)));
-        if (!lean.ok)
+        auto lean = readExceptBool(leanFn(
+            lean_iou_amount_build(a.leanMant, a.leanExp),
+            lean_iou_amount_build(b.leanMant, b.leanExp),
+            toLeanMode(mode)));
+        if (!lean.value.has_value())
         {
             std::stringstream ss;
             ss << op << "(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou)
@@ -252,11 +253,11 @@ class LeanIOUAmount_test : public LeanSuite
             fail(ss.str());
             return false;
         }
-        if ((lean.value != 0) != cppRet)
+        if (*lean.value != cppRet)
         {
             std::stringstream ss;
             ss << op << "(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou)
-               << "): lean=" << (lean.value != 0) << " cpp=" << cppRet;
+               << "): lean=" << *lean.value << " cpp=" << cppRet;
             fail(ss.str());
             return false;
         }
@@ -292,7 +293,9 @@ class LeanIOUAmount_test : public LeanSuite
     bool
     checkEq(IOUAmountPair const& a, IOUAmountPair const& b)
     {
-        bool const lean = lean_iou_eq(a.leanMant, a.leanExp, b.leanMant, b.leanExp) != 0;
+        bool const lean = lean_iou_eq(
+                              lean_iou_amount_build(a.leanMant, a.leanExp),
+                              lean_iou_amount_build(b.leanMant, b.leanExp)) != 0;
         bool const cpp = a.cppIou == b.cppIou;
         if (lean != cpp)
         {
@@ -309,7 +312,9 @@ class LeanIOUAmount_test : public LeanSuite
     bool
     checkNe(IOUAmountPair const& a, IOUAmountPair const& b)
     {
-        bool const lean = lean_iou_ne(a.leanMant, a.leanExp, b.leanMant, b.leanExp) != 0;
+        bool const lean = lean_iou_ne(
+                              lean_iou_amount_build(a.leanMant, a.leanExp),
+                              lean_iou_amount_build(b.leanMant, b.leanExp)) != 0;
         bool const cpp = a.cppIou != b.cppIou;
         if (lean != cpp)
         {
@@ -340,7 +345,8 @@ class LeanIOUAmount_test : public LeanSuite
     checkNeg(IOUAmountPair const& p, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(lean_iou_neg(p.leanMant, p.leanExp, toLeanMode(mode)));
+        auto lean = readIOUExcept(
+            lean_iou_neg(lean_iou_amount_build(p.leanMant, p.leanExp), toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
         try
@@ -358,8 +364,10 @@ class LeanIOUAmount_test : public LeanSuite
     checkAdd(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(
-            lean_iou_add(a.leanMant, a.leanExp, b.leanMant, b.leanExp, toLeanMode(mode)));
+        auto lean = readIOUExcept(lean_iou_add(
+            lean_iou_amount_build(a.leanMant, a.leanExp),
+            lean_iou_amount_build(b.leanMant, b.leanExp),
+            toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
         try
@@ -378,8 +386,10 @@ class LeanIOUAmount_test : public LeanSuite
     checkSub(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(
-            lean_iou_sub(a.leanMant, a.leanExp, b.leanMant, b.leanExp, toLeanMode(mode)));
+        auto lean = readIOUExcept(lean_iou_sub(
+            lean_iou_amount_build(a.leanMant, a.leanExp),
+            lean_iou_amount_build(b.leanMant, b.leanExp),
+            toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
         try
@@ -403,8 +413,12 @@ class LeanIOUAmount_test : public LeanSuite
         Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
-        auto lean = LeanIOUResult::from_lean(
-            lean_iou_mul_ratio(p.leanMant, p.leanExp, num, den, roundUp ? 1 : 0, toLeanMode(mode)));
+        auto lean = readIOUExcept(lean_iou_mul_ratio(
+            lean_iou_amount_build(p.leanMant, p.leanExp),
+            num,
+            den,
+            roundUp ? 1 : 0,
+            toLeanMode(mode)));
         IOUAmount cpp;
         bool cppThrew = false;
         try
@@ -875,13 +889,13 @@ private:
         // NumberSO const so{true};
         test_fuzz_construction();
         test_fuzz_conversion();
-        // test_fuzz_comparison();
-        // test_fuzz_arithmetic();
+        test_fuzz_comparison();
+        test_fuzz_arithmetic();
         test_fuzz_mul_ratio();
         test_known_construction();
         test_known_comparison();
         test_known_arithmetic();
-        // test_extreme_values();
+        test_extreme_values();
     }
 };
 
