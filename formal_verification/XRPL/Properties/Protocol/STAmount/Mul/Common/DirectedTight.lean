@@ -2,6 +2,7 @@ import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangePos
 import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
+import XRPL.Properties.Protocol.Number.Common.GridNeighbors
 
 /-! # IOU multiplication is within **1 ULP** for directed modes (non-negative operands).
 
@@ -17,116 +18,6 @@ an exact fixed-scale ceiling/floor. The adjacent 16-digit grid point on the far 
 of `truth`. -/
 
 namespace XRPL.Model.Protocol
-
-/-- The 16-digit grid point one ULP **below** `Mr·10^ec` is a non-negative normalized
-`Number` (the 16-digit grid embeds in the 19-digit `Number` grid). Used as the witness
-that pins the `upward` result to within one ULP. -/
-lemma exists_normalized_grid_below (Mr : ℕ) (ec : ℤ)
-    (hlo : 10 ^ 15 ≤ Mr) (hhi : Mr < 10 ^ 16)
-    (hec_lo : minExponent + 4 ≤ ec) (hec_hi : ec + 3 ≤ maxExponent) :
-    ∃ m : Number, m.isNormalized ∧ m.negative_ = false ∧
-      m.toRat = ((Mr : ℚ) - 1) * (10 : ℚ) ^ ec := by
-  have hlgmin : largeRange.min.toNat = 10 ^ 18 := by decide
-  have hlgmax : largeRange.max.toNat = 10 ^ 19 - 1 := by decide
-  by_cases hM : Mr = 10 ^ 15
-  · -- bottom of the mantissa range: represent at exponent `ec-4`, mantissa `(10¹⁵-1)·10⁴`.
-    set k : ℕ := (Mr - 1) * 10000 with hk_def
-    have hk_val : k = 10 ^ 19 - 10 ^ 4 := by rw [hk_def, hM]; norm_num
-    have hk_lt : k < UInt64.size := by rw [uint64_size_val, hk_val]; omega
-    have hk_toNat : (Nat.toUInt64 k).toNat = k := UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hk_lt)
-    refine ⟨⟨false, Nat.toUInt64 k, ec - 4⟩, ?_, rfl, ?_⟩
-    · right
-      refine ⟨?_, ?_, Or.inr ?_, (by show minExponent ≤ ec - 4; omega),
-        (by show ec - 4 ≤ maxExponent; omega)⟩
-      · rw [UInt64.le_iff_toNat_le, hlgmin, hk_toNat, hk_val]; omega
-      · rw [UInt64.le_iff_toNat_le, hlgmax, hk_toNat, hk_val]; omega
-      · rw [hk_toNat, hk_val]; omega
-    · rw [Number.toRat_of_nonneg _ rfl]
-      show ((Nat.toUInt64 k).toNat : ℚ) * (10 : ℚ) ^ (ec - 4) = ((Mr : ℚ) - 1) * (10 : ℚ) ^ ec
-      rw [hk_toNat, hk_def, hM]
-      have hpow : (10 : ℚ) ^ ec = (10 : ℚ) ^ (ec - 4) * 10000 := by
-        rw [show ec = (ec - 4) + 4 by ring, zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (ec - 4) 4]
-        push_cast; norm_num
-      rw [hpow]; push_cast; ring
-  · -- generic: represent at exponent `ec-3`, mantissa `(Mr-1)·1000`.
-    set k : ℕ := (Mr - 1) * 1000 with hk_def
-    have hMr1 : 10 ^ 15 < Mr := by omega
-    have hk_lo : 10 ^ 18 ≤ k := by rw [hk_def]; omega
-    have hk_hi : k < 10 ^ 19 := by rw [hk_def]; omega
-    have hk_lt : k < UInt64.size := by rw [uint64_size_val]; omega
-    have hk_toNat : (Nat.toUInt64 k).toNat = k := UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hk_lt)
-    refine ⟨⟨false, Nat.toUInt64 k, ec - 3⟩, ?_, rfl, ?_⟩
-    · right
-      refine ⟨?_, ?_, Or.inr ?_, (by show minExponent ≤ ec - 3; omega),
-        (by show ec - 3 ≤ maxExponent; omega)⟩
-      · rw [UInt64.le_iff_toNat_le, hlgmin, hk_toNat]; omega
-      · rw [UInt64.le_iff_toNat_le, hlgmax, hk_toNat]; omega
-      · rw [hk_toNat, hk_def]; omega
-    · rw [Number.toRat_of_nonneg _ rfl]
-      show ((Nat.toUInt64 k).toNat : ℚ) * (10 : ℚ) ^ (ec - 3) = ((Mr : ℚ) - 1) * (10 : ℚ) ^ ec
-      rw [hk_toNat, hk_def]
-      have hpow : (10 : ℚ) ^ ec = (10 : ℚ) ^ (ec - 3) * 1000 := by
-        rw [show ec = (ec - 3) + 3 by ring, zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (ec - 3) 3]
-        push_cast; norm_num
-      rw [hpow]
-      have hcast : (((Mr - 1) * 1000 : ℕ) : ℚ) = ((Mr : ℚ) - 1) * 1000 := by
-        rw [Nat.cast_mul, Nat.cast_sub (by omega)]; push_cast; ring
-      rw [hcast]; ring
-
-/-- The 16-digit grid point one ULP **above** `Mr·10^ec` is a non-negative normalized
-`Number`. Used as the witness that pins the `downward`/`towards_zero` result to within
-one ULP. -/
-lemma exists_normalized_grid_above (Mr : ℕ) (ec : ℤ)
-    (hlo : 10 ^ 15 ≤ Mr) (hhi : Mr < 10 ^ 16)
-    (hec_lo : minExponent + 4 ≤ ec) (hec_hi : ec + 3 ≤ maxExponent) :
-    ∃ m : Number, m.isNormalized ∧ m.negative_ = false ∧
-      m.toRat = ((Mr : ℚ) + 1) * (10 : ℚ) ^ ec := by
-  have hlgmin : largeRange.min.toNat = 10 ^ 18 := by decide
-  have hlgmax : largeRange.max.toNat = 10 ^ 19 - 1 := by decide
-  by_cases hM : Mr + 1 = 10 ^ 16
-  · -- top of the mantissa range: represent at exponent `ec-2`, mantissa `10¹⁸`.
-    set k : ℕ := 10 ^ 18 with hk_def
-    have hk_lt : k < UInt64.size := by rw [uint64_size_val, hk_def]; omega
-    have hk_toNat : (Nat.toUInt64 k).toNat = k := UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hk_lt)
-    refine ⟨⟨false, Nat.toUInt64 k, ec - 2⟩, ?_, rfl, ?_⟩
-    · right
-      refine ⟨?_, ?_, Or.inr ?_, (by show minExponent ≤ ec - 2; omega),
-        (by show ec - 2 ≤ maxExponent; omega)⟩
-      · rw [UInt64.le_iff_toNat_le, hlgmin, hk_toNat, hk_def]
-      · rw [UInt64.le_iff_toNat_le, hlgmax, hk_toNat, hk_def]; omega
-      · rw [hk_toNat, hk_def]; omega
-    · rw [Number.toRat_of_nonneg _ rfl]
-      show ((Nat.toUInt64 k).toNat : ℚ) * (10 : ℚ) ^ (ec - 2) = ((Mr : ℚ) + 1) * (10 : ℚ) ^ ec
-      rw [hk_toNat, hk_def]
-      have hMq : (Mr : ℚ) + 1 = (10 : ℚ) ^ 16 := by exact_mod_cast hM
-      rw [hMq]
-      have hpow : (10 : ℚ) ^ ec = (10 : ℚ) ^ (ec - 2) * 100 := by
-        rw [show ec = (ec - 2) + 2 by ring, zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (ec - 2) 2]
-        push_cast; norm_num
-      rw [hpow]; push_cast; ring
-  · -- generic: represent at exponent `ec-3`, mantissa `(Mr+1)·1000`.
-    set k : ℕ := (Mr + 1) * 1000 with hk_def
-    have hMr1 : Mr + 1 < 10 ^ 16 := by omega
-    have hk_lo : 10 ^ 18 ≤ k := by rw [hk_def]; omega
-    have hk_hi : k < 10 ^ 19 := by rw [hk_def]; omega
-    have hk_lt : k < UInt64.size := by rw [uint64_size_val]; omega
-    have hk_toNat : (Nat.toUInt64 k).toNat = k := UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hk_lt)
-    refine ⟨⟨false, Nat.toUInt64 k, ec - 3⟩, ?_, rfl, ?_⟩
-    · right
-      refine ⟨?_, ?_, Or.inr ?_, (by show minExponent ≤ ec - 3; omega),
-        (by show ec - 3 ≤ maxExponent; omega)⟩
-      · rw [UInt64.le_iff_toNat_le, hlgmin, hk_toNat]; omega
-      · rw [UInt64.le_iff_toNat_le, hlgmax, hk_toNat]; omega
-      · rw [hk_toNat, hk_def]; omega
-    · rw [Number.toRat_of_nonneg _ rfl]
-      show ((Nat.toUInt64 k).toNat : ℚ) * (10 : ℚ) ^ (ec - 3) = ((Mr : ℚ) + 1) * (10 : ℚ) ^ ec
-      rw [hk_toNat, hk_def]
-      have hpow : (10 : ℚ) ^ ec = (10 : ℚ) ^ (ec - 3) * 1000 := by
-        rw [show ec = (ec - 3) + 3 by ring, zpow_add₀ (by norm_num : (10:ℚ) ≠ 0) (ec - 3) 3]
-        push_cast; norm_num
-      rw [hpow]
-      have hcast : (((Mr + 1) * 1000 : ℕ) : ℚ) = ((Mr : ℚ) + 1) * 1000 := by push_cast; ring
-      rw [hcast]; ring
 
 /-- **Raw `ofNumber` snap facts for a non-negative 19-digit `Number` `r`.** Exposes the
 `normalizeToRange` output `(mant, exp)`, the grid form of `result`, and the exponent
