@@ -19,6 +19,17 @@ lean_iou_amount_exponent(lean_object* amount);
 
 namespace xrpl::test::formal_verification {
 
+struct LeanIOUAmount
+{
+    int64_t mantissa;
+    int64_t exponent;
+};
+
+struct LeanIOUResult : LeanIOUAmount
+{
+    bool ok;
+};
+
 class IOUAmountFFI : public LeanObjectFFI
 {
 public:
@@ -37,6 +48,26 @@ public:
         std::int64_t mantissa = leanGet<std::int64_t>(lean_iou_amount_mantissa);
         int exponent = static_cast<int>(leanGet<std::int64_t>(lean_iou_amount_exponent));
         return IOUAmount{mantissa, exponent};
+    }
+
+    LeanIOUResult
+    readResult() const
+    {
+        LeanIOUResult r;
+        r.mantissa = leanGet<std::int64_t>(lean_iou_amount_mantissa);
+        r.exponent = leanGet<std::int64_t>(lean_iou_amount_exponent);
+        r.ok = true;
+        return r;
+    }
+
+    // `Except String IOUAmount`: the model IOUAmount fields (a.mantissa/a.exponent) on ok.
+    static LeanIOUResult
+    fromExcept(lean_object* exceptOwned)
+    {
+        LeanExcept<IOUAmountFFI> const e = readExcept<IOUAmountFFI>(exceptOwned);
+        if (!e.value)
+            return LeanIOUResult{{}, false};
+        return e.value->readResult();
     }
 };
 

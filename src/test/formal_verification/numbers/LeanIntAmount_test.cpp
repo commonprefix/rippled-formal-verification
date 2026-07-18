@@ -1,4 +1,5 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/Int64FFI.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
@@ -71,7 +72,7 @@ class LeanIntAmount_test : public LeanSuite
     bool
     checkOfNumber(NumberPair const& p, Number::RoundingMode mode)
     {
-        auto lean = readExceptI64(lean_int_amount_of_number(
+        auto lean = readExcept<Int64FFI>(lean_int_amount_of_number(
             lean_number_build(
                 p.leanNum.negative, p.leanNum.mantissa, static_cast<int64_t>(p.leanNum.exponent)),
             toLeanMode(mode)));
@@ -103,10 +104,10 @@ class LeanIntAmount_test : public LeanSuite
             pass();
             return true;
         }
-        if (*lean.value != cpp)
+        if (lean.value->read() != cpp)
         {
             std::stringstream ss;
-            ss << label() << ": value mismatch lean=" << *lean.value << " cpp=" << cpp;
+            ss << label() << ": value mismatch lean=" << lean.value->read() << " cpp=" << cpp;
             fail(ss.str());
             return false;
         }
@@ -118,7 +119,7 @@ class LeanIntAmount_test : public LeanSuite
     bool
     checkToNumber(MPTAmountPair const& p, Number::RoundingMode mode)
     {
-        auto lean = readNumberExcept(lean_int_amount_to_number(p.leanMpt, toLeanMode(mode)));
+        auto lean = NumberFFI::fromExcept(lean_int_amount_to_number(p.leanMpt, toLeanMode(mode)));
         Number cpp = static_cast<Number>(p.cppMpt);
         if (!lean.ok)
         {
@@ -347,7 +348,7 @@ class LeanIntAmount_test : public LeanSuite
     checkMulRatio(MPTAmountPair const& v, uint32_t num, uint32_t den, bool roundUp)
     {
         auto lean =
-            readExceptI64(lean_int_amount_mul_ratio(v.leanMpt, num, den, roundUp ? 1u : 0u));
+            readExcept<Int64FFI>(lean_int_amount_mul_ratio(v.leanMpt, num, den, roundUp ? 1u : 0u));
         bool cppThrew = false;
         int64_t cpp = 0;
         try
@@ -377,10 +378,10 @@ class LeanIntAmount_test : public LeanSuite
             pass();
             return true;
         }
-        if (*lean.value != cpp)
+        if (lean.value->read() != cpp)
         {
             std::stringstream ss;
-            ss << label() << ": value mismatch lean=" << *lean.value << " cpp=" << cpp;
+            ss << label() << ": value mismatch lean=" << lean.value->read() << " cpp=" << cpp;
             fail(ss.str());
             return false;
         }
@@ -661,11 +662,11 @@ public:
         // -2^62 * 2 / 1 == INT64_MIN exactly - boundary without saturation.
         {
             int64_t v = -(int64_t{1} << 62);
-            auto lean = readExceptI64(lean_int_amount_mul_ratio(v, 2, 1, 0));
+            auto lean = readExcept<Int64FFI>(lean_int_amount_mul_ratio(v, 2, 1, 0));
             int64_t cpp = mulRatio(MPTAmount{v}, 2, 1, false).value();
             BEAST_EXPECT(lean.value.has_value());
-            BEAST_EXPECT(*lean.value == int64Min);
-            BEAST_EXPECT(*lean.value == cpp);
+            BEAST_EXPECT(lean.value->read() == int64Min);
+            BEAST_EXPECT(lean.value->read() == cpp);
         }
 
         // Full UInt32 num/den - exercises the int128 path.

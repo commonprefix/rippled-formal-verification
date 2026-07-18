@@ -1,4 +1,5 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/Int64FFI.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
@@ -119,7 +120,7 @@ class LeanNumber_test : public LeanSuite
         NumberPair const& b,
         Number::RoundingMode mode)
     {
-        auto lean = readNumberExcept(leanOp(
+        auto lean = NumberFFI::fromExcept(leanOp(
             lean_number_build(
                 a.leanNum.negative, a.leanNum.mantissa, static_cast<int64_t>(a.leanNum.exponent)),
             lean_number_build(
@@ -141,7 +142,7 @@ class LeanNumber_test : public LeanSuite
     bool
     checkUnary(std::string const& label, LeanUnaryOp leanOp, CppUnaryOp cppOp, NumberPair const& x)
     {
-        auto lean = readNumberObject(leanOp(lean_number_build(
+        auto lean = NumberFFI::fromObject(leanOp(lean_number_build(
             x.leanNum.negative, x.leanNum.mantissa, static_cast<int64_t>(x.leanNum.exponent))));
         bool cppThrew = false;
         Number cpp;
@@ -165,7 +166,7 @@ class LeanNumber_test : public LeanSuite
         Number::RoundingMode mode)
     {
         uint8_t leanMode = toLeanMode(mode);
-        auto lean = readNumberExcept(lean_number_normalize(
+        auto lean = NumberFFI::fromExcept(lean_number_normalize(
             lean_number_build(neg ? 1 : 0, mant, static_cast<int64_t>(exp)), leanMode));
         bool cppThrew = false;
         Number cpp;
@@ -648,7 +649,7 @@ public:
         // Only the canonical zero (Number{}, exp=INT_MIN) is a zero divisor in
         // C++ operator/=; it is the one divisor the non-zero sweeps cannot reach.
         {
-            auto lean = readNumberExcept(lean_number_div(
+            auto lean = NumberFFI::fromExcept(lean_number_div(
                 lean_number_build(false, 1'000'000'000'000'000'000ULL, 0),
                 lean_number_build(
                     false, 0, static_cast<int64_t>(std::numeric_limits<int>::lowest())),
@@ -1016,7 +1017,7 @@ public:
     bool
     checkToRep(std::string const& label, NumberPair const& x, Number::RoundingMode mode)
     {
-        auto const lean = readExceptI64(lean_number_to_rep(
+        auto const lean = readExcept<Int64FFI>(lean_number_to_rep(
             lean_number_build(
                 x.leanNum.negative, x.leanNum.mantissa, static_cast<int64_t>(x.leanNum.exponent)),
             toLeanMode(mode)));
@@ -1040,10 +1041,10 @@ public:
             pass();
             return true;
         }
-        if (*lean.value != cpp)
+        if (lean.value->read() != cpp)
         {
             std::stringstream ss;
-            ss << label << ": lean=" << *lean.value << " cpp=" << cpp;
+            ss << label << ": lean=" << lean.value->read() << " cpp=" << cpp;
             fail(ss.str());
             return false;
         }

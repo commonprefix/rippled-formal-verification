@@ -2,7 +2,6 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 #include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
-#include <test/formal_verification/numbers/helpers/NumberTypes.h>
 
 #include <xrpl/protocol/Asset.h>
 #include <xrpl/protocol/Issue.h>
@@ -28,6 +27,19 @@ lean_st_amount_negative(lean_object* amount);
 
 namespace xrpl::test::formal_verification {
 
+struct LeanSTAmount
+{
+    uint8_t numericType;
+    uint64_t mValue;
+    int64_t mOffset;
+    uint8_t isNegative;
+};
+
+struct LeanSTAmountResult : LeanSTAmount
+{
+    bool ok;
+};
+
 class STAmountFFI : public LeanObjectFFI
 {
 public:
@@ -45,6 +57,13 @@ public:
             static_cast<std::uint8_t>(s.negative() ? 1 : 0)));
     }
 
+    static STAmountFFI
+    build(std::uint8_t tag, std::uint64_t mValue, std::int64_t mOffset, std::uint8_t isNeg)
+    {
+        return STAmountFFI(
+            leanCall(lean_st_amount_build, NumericTypeFFI::build(tag), mValue, mOffset, isNeg));
+    }
+
     STAmount
     read() const
     {
@@ -56,13 +75,6 @@ public:
         return STAmount{placeholder, mantissa, exponent, negative};
     }
 
-    // A fresh owned STAmount object built from raw model fields.
-    static lean_object*
-    buildOwned(std::uint8_t tag, std::uint64_t mValue, std::int64_t mOffset, std::uint8_t isNeg)
-    {
-        return lean_st_amount_build(NumericTypeFFI::buildOwned(tag), mValue, mOffset, isNeg);
-    }
-
     // Read the raw model fields into a LeanSTAmountResult. Deliberately not read(): that rebuilds a
     // rippled STAmount and would throw/normalize on the extreme raw fields the number tests stage.
     LeanSTAmountResult
@@ -71,10 +83,10 @@ public:
         LeanSTAmountResult r{};
         r.ok = true;
         r.numericType = static_cast<std::uint8_t>(
-            NumericTypeFFI(lean_st_amount_numeric_type(borrow())).isIntegral() ? 1 : 0);
-        r.mValue = lean_st_amount_mantissa(borrow());
-        r.mOffset = lean_st_amount_offset(borrow());
-        r.isNegative = lean_st_amount_negative(borrow());
+            leanGetObj<NumericTypeFFI>(lean_st_amount_numeric_type) ? 1 : 0);
+        r.mValue = leanGet<std::uint64_t>(lean_st_amount_mantissa);
+        r.mOffset = leanGet<std::int64_t>(lean_st_amount_offset);
+        r.isNegative = leanGet<std::uint8_t>(lean_st_amount_negative);
         return r;
     }
 
@@ -84,7 +96,7 @@ public:
     {
         LeanExcept<STAmountFFI> const e = readExcept<STAmountFFI>(exceptOwned);
         if (!e.value)
-            return LeanSTAmountResult{{}, false, e.error};
+            return LeanSTAmountResult{{}, false};
         return e.value->readResult();
     }
 
