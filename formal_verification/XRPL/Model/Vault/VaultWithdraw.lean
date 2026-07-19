@@ -34,6 +34,11 @@ structure WithdrawResult where
   assets' : STAmount
   sharesBurned : STAmount
 
+-- A rejection changes nothing and reports nothing: the vault is returned
+-- unchanged and both amount fields are zero.
+def WithdrawResult.rejected (vault : Vault) (ter : TER) : WithdrawResult :=
+  ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
+
 
 def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares waiveUnrealizedLoss : Bool) : Except String STAmount := do
   let lossUnrealized := match waiveUnrealizedLoss with
@@ -65,33 +70,27 @@ structure ComputeWithdrawResult where
 
 def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
-    let result : ComputeWithdrawResult := ⟨none, assets, STAmount.zero .int64⟩
     -- truncateShares = false in fn call
     let shares ← assetsToSharesWithdraw vault assets false waiveUnrealizedLoss
     if shares.isZero then
-      return {result with error := some .tecPRECISION_LOSS}
+      return ⟨some .tecPRECISION_LOSS, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
     let assets' ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
-    return {result with
-      assets' := assets',
-      sharesRedeemed := shares}
+    return ⟨none, assets', shares⟩
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, assets, STAmount.zero .int64⟩
+      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, STAmount.zero .int64⟩
     else
       throw e
 
 
 def computeWithdrawByShares (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
   try
-    let result : ComputeWithdrawResult := ⟨none, STAmount.zero vault.numericType, shares⟩
     let assets ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
-    return {result with
-      assets' := assets,
-      sharesRedeemed := shares}
+    return ⟨none, assets, shares⟩
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, shares⟩
+      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, STAmount.zero .int64⟩
     else
       throw e
 
@@ -108,16 +107,16 @@ def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLos
     | .vaultAssets assets => computeWithdrawByAssets vault assets waiveUnrealizedLoss
     | .vaultShares shares => computeWithdrawByShares vault shares waiveUnrealizedLoss
   if result.error.isSome then
-    return ⟨result.error, vault, result.assets', result.sharesRedeemed⟩
+    return ⟨result.error, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
   let assetsNumber' ← result.assets'.toNumber .to_nearest
   if vault.assetsAvailable.operator_lt assetsNumber' then
-    return ⟨.some .tecINSUFFICIENT_FUNDS, vault, result.assets', result.sharesRedeemed⟩
+    return .rejected vault .tecINSUFFICIENT_FUNDS
 
   let sharesTotalAmount ← STAmount.ofNumber .int64 vault.sharesTotal .to_nearest
   if result.sharesRedeemed.operator_eq sharesTotalAmount then -- isFinalWithdrawal
     if vault.lossUnrealized.operator_ne Number.zero then
-      return ⟨.some .tefINTERNAL, vault, result.assets', result.sharesRedeemed⟩
+      return .rejected vault .tefINTERNAL
     let allAvailable ← STAmount.ofNumber vault.numericType vault.assetsAvailable .to_nearest
     let assets' := allAvailable
     let vault' := {vault with
@@ -133,7 +132,7 @@ def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLos
   let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
   let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
   if assetsNumber'.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
-    return ⟨.some .tecPRECISION_LOSS, vault, result.assets', result.sharesRedeemed⟩
+    return .rejected vault .tecPRECISION_LOSS
 
   let vault' := {vault with
     assetsAvailable := ← vault.assetsAvailable.operator_sub assetsNumber' .to_nearest,

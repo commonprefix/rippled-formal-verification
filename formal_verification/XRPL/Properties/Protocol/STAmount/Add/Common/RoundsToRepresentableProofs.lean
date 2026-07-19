@@ -6,7 +6,8 @@ headlines. The thin headlines live in `Add.RoundsToRepresentable`. -/
 
 namespace XRPL.Model.Protocol
 
-/-- Half-ULP snap route for the `to_nearest` case of `operator_add_repr_iou`. -/
+/-- The `to_nearest` case of `operator_add_repr_iou`, via the half-ULP re-rounding
+bound. -/
 theorem STAmount.operator_add_repr_iou_to_nearest_proof (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)

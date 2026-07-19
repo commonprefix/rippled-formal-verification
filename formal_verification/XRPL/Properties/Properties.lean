@@ -9,3 +9,16 @@ import XRPL.Properties.Protocol.STAmount.Mul.RoundsWithin
 import XRPL.Properties.Protocol.STAmount.Mul.RoundsToRepresentable
 import XRPL.Properties.Protocol.STAmount.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
+import XRPL.Properties.Vault.Defs
+import XRPL.Properties.Vault.Vault
+import XRPL.Properties.Vault.Lawful
+import XRPL.Properties.Vault.Reachable
+import XRPL.Properties.Vault.VaultBurn
+import XRPL.Properties.Vault.VaultCreate
+import XRPL.Properties.Vault.VaultSet
+import XRPL.Properties.Vault.VaultDelete
+import XRPL.Properties.Vault.Unchanged
+import XRPL.Properties.Vault.VaultDepositReturn
+import XRPL.Properties.Vault.VaultWithdrawReturn
+import XRPL.Properties.Vault.VaultClawbackReturn
+import XRPL.Properties.Vault.VaultBurnReturn

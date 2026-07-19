@@ -36,6 +36,7 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
     return VaultState{
         .assetsTotal = vaultSle->at(sfAssetsTotal),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
+        .hasMaximum = vaultSle->isFieldPresent(sfAssetsMaximum),
         .assetsMaximum = vaultSle->at(sfAssetsMaximum),
         .numericType = NumericTypeFFI::tagOf(asset),
         .scale = vaultSle->at(sfScale),

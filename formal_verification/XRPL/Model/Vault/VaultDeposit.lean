@@ -28,6 +28,11 @@ inductive RoundedDepositResult where
   | rejected (ter : TER)
   | rounded (amount : STAmount)
 
+/-- The preclaim check on a deposit amount. An IOU vault cannot track digits
+below the exponent its `assetsTotal` will have after the deposit, so any such
+digits in `amountDeposit` are dropped before the deposit runs (integral assets
+pass through unchanged). Returns the amount the deposit will actually use, or
+`tecPRECISION_LOSS` when nothing of it survives. -/
 def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
     : Except String RoundedDepositResult := do
   let roundedAmount ← roundToVaultExponent amountDeposit vault.assetsTotal
@@ -35,14 +40,16 @@ def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
     return .rejected .tecPRECISION_LOSS
   return .rounded roundedAmount
 
-def Vault.isInsolvent (vault : Vault) : Bool :=
-  vault.assetsTotal.mantissa_ = 0 && vault.sharesTotal.signum = 1
-
 structure DepositResult where
   error : Option TER
   vault' : Vault
   amountDeposit' : STAmount
   sharesIssued : STAmount
+
+-- A rejection changes nothing and reports nothing: the vault is returned
+-- unchanged and both amount fields are zero.
+def DepositResult.rejected (vault : Vault) (ter : TER) : DepositResult :=
+  ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
 def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except String STAmount := do
   if vault.assetsTotal.mantissa_ = 0 then
@@ -91,23 +98,22 @@ def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String Co
 
 def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
-  let result : DepositResult := ⟨none, vault, amount, STAmount.zero vault.numericType⟩
 
   if amount.isZero then
-    return {result with error := some .tecINTERNAL}
+    return .rejected vault .tecINTERNAL
 
   if isDonation && vault.sharesTotal.mantissa_ == 0 then
-    return {result with error := some .tecNO_PERMISSION}
+    return .rejected vault .tecNO_PERMISSION
 
   if vault.isInsolvent && !isDonation then
-    return {result with error := some .tecLOCKED}
+    return .rejected vault .tecLOCKED
 
   let (assetDeposited, sharesCreated) ←
     if isDonation then
       pure (amount, STAmount.zero .int64)
     else
       match ← computeDeposit vault amount with
-      | .error e => return {result with error := some e}
+      | .error e => return .rejected vault e
       | .success a s => pure (a, s)
 
   let vault' : Vault := {
@@ -117,9 +123,10 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
 
-  if vault.assetsMaximum.operator_ne Number.zero && vault'.assetsTotal.operator_gt vault.assetsMaximum then
-    return { result with error := some .tecLIMIT_EXCEEDED }
+  -- C++: if (maximum != 0 && assetsTotal > maximum)
+  if vault.assetsMaximum.any (fun m => vault'.assetsTotal.operator_gt m) then
+    return .rejected vault .tecLIMIT_EXCEEDED
 
-  return { result with vault' := vault', amountDeposit' := assetDeposited, sharesIssued := sharesCreated }
+  return ⟨none, vault', assetDeposited, sharesCreated⟩
 
 end XRPL.Model.SingleAssetVault

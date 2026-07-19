@@ -8,10 +8,6 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-inductive CanClawbackVaultSharesResult where
-  | error (error : TER)
-  | assets (amount : STAmount)
-
 structure ComputeClawbackResult where
   error : Option TER
   assetsRecovered : STAmount
@@ -23,20 +19,10 @@ structure ClawbackResult where
   assetsRecovered : STAmount
   sharesDestroyed : STAmount
 
-def Vault.canClawbackVaultShares (vault : Vault) : Except String CanClawbackVaultSharesResult := do
-  if vault.sharesTotal.mantissa_ == 0 || (vault.assetsTotal.mantissa_ != 0 || vault.assetsAvailable.mantissa_ != 0) then do
-    return .error .tecNO_PERMISSION
-  return .assets (← STAmount.ofNumber .int64 vault.sharesTotal .to_nearest)
-
-
-def Vault.burnShares (vault : Vault) (sharesDestroyed : STAmount) : Except String Vault := do
-  let sharesDestroyedNumber ← sharesDestroyed.toNumber .to_nearest
-  let vault' := {
-    vault with
-      sharesTotal := ← vault.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest
-  }
-  return vault'
-
+-- A rejection changes nothing and reports nothing: the vault is returned
+-- unchanged and both amount fields are zero.
+def ClawbackResult.rejected (vault : Vault) (ter : TER) : ClawbackResult :=
+  ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
 def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.zero vault.numericType, STAmount.zero .int64⟩
@@ -67,19 +53,27 @@ def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeC
 def Vault.clawback (vault : Vault) (assets : STAmount) : Except String ClawbackResult := do
   let result ← computeClawback vault assets
   if result.error.isSome then
-    return {result with vault' := vault}
+    return ⟨result.error, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
   if result.sharesDestroyed.isZero then
-    return {result with error := .some .tecPRECISION_LOSS, vault' := vault}
+    return .rejected vault .tecPRECISION_LOSS
 
   let sharesDestroyedNumber ← result.sharesDestroyed.toNumber .to_nearest
   let assetsRecoveredNumber ← result.assetsRecovered.toNumber .to_nearest
+  let assetsTotal' ← vault.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest
+
+  -- (waiting the C++ fix) reject a recovery too small to reduce the stored assetsTotal
+  let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
+  let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
+  if assetsRecoveredNumber.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
+    return .rejected vault .tecPRECISION_LOSS
+
   let vault' := {
     vault with
       sharesTotal := ← vault.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest
       assetsAvailable := ← vault.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest
-      assetsTotal := ← vault.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest
+      assetsTotal := assetsTotal'
   }
-  return {result with vault' := vault'}
+  return ⟨none, vault', result.assetsRecovered, result.sharesDestroyed⟩
 
 end XRPL.Model.SingleAssetVault

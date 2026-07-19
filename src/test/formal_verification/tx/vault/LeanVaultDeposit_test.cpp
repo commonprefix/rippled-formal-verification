@@ -616,9 +616,11 @@ class LeanVaultDeposit_test : public LeanSuite
         // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
         testVaultDepositLimitExceeded();
 
+
         // Known discrepancies: each fails until the C++ code is fixed
         // testVaultDepositOvervaluedShares();  // model rounds up, C++ undercharges
         // testVaultDonationInsolvent();  // model tesSUCCESS, c++ tecLOCKED
+        // testVaultDepositIOU(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, true, tesSUCCESS);  // model keeps the exact 17-digit sum, C++ rounds (associateAsset)
     }
 };
 

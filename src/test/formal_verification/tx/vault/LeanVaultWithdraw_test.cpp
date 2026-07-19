@@ -463,10 +463,12 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Overflow: sharesTotal * assets / NAV exceeds the MPT domain (by assets).
         testWithdrawAssetsShareOverflow(tecPATH_DRY);
 
+
         // Known discrepancies: each fails until the C++ code is fixed
         // testWithdrawOvervaluedShares();  // model rounds the payout down where C++ overpays
         // testWithdrawPrecisionLoss();  // model tecPRECISION_LOSS where C++ hits the invariant
         // testWithdrawWaiveLoss();  // model waives the loss where C++ applies it
+        // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);  // model keeps the exact 17-digit difference, C++ rounds (associateAsset)
     }
 };
 
