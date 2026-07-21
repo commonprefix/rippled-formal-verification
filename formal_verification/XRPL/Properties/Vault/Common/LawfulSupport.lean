@@ -397,7 +397,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
             have := UInt64.toNat_lt_size rv.toUInt64
             omega
           exact UInt64.toNat_ofNat_of_lt hlt
-          
+
         rw [if_neg (show ¬ (r2.toInt.natAbs.toUInt64 >
             (STAmount.unchecked .int64 rv.toUInt64 0 false).mNumericType.maxValue)
             from by
@@ -405,7 +405,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
           rw [UInt64.lt_iff_toNat_lt, hvNat, hna,
             show (9223372036854775807 : UInt64).toNat = 9223372036854775807 from by decide]
           omega)] at hok
-          
+
         have hnegr2 : decide (r2 < 0) = false := by
           rw [decide_eq_false_iff_not]
           intro hlt

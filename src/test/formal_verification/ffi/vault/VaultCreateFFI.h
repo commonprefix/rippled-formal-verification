@@ -31,11 +31,11 @@ leanVaultCreate(
     std::uint8_t scale)
 {
     return VaultStateFFI(leanCall(
-               lean_vault_create,
-               static_cast<std::uint8_t>(hasMaximum),
-               NumberFFI::build(assetsMaximum),
-               NumericTypeFFI::build(numericType),
-               scale))
+                             lean_vault_create,
+                             static_cast<std::uint8_t>(hasMaximum),
+                             NumberFFI::build(assetsMaximum),
+                             NumericTypeFFI::build(numericType),
+                             scale))
         .read();
 }
 

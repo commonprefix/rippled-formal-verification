@@ -16,4 +16,3 @@ def lean_clawback_result_shares (r : ClawbackResult) : STAmount := r.sharesDestr
 def lean_clawback_result_vault (r : ClawbackResult) : Vault := r.vault'
 @[export lean_clawback_result_error]
 def lean_clawback_result_error (r : ClawbackResult) : Option Int32 := r.error.map (·.code)
-

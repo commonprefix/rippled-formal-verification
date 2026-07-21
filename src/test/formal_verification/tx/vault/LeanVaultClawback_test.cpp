@@ -411,7 +411,6 @@ class LeanVaultClawback_test : public LeanSuite
         testUpdatedStateClawback(iouMax, iouMax, kMaxMpTokenAmount, 1, tecPRECISION_LOSS);
         testUpdatedStateClawback(Number{1'000}, Number{0}, 1'000, 400, tecPRECISION_LOSS);
 
-
         // Known discrepancies: each fails until the C++ code is fixed
         // testClawbackOvervaluedShares();  // model rounds down, C++ over-recovers
         // testClawbackPrecisionLoss();  // model tecPRECISION_LOSS, C++ pays without debiting

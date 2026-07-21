@@ -129,8 +129,8 @@ public:
 inline LeanCanBurnResult
 leanCanBurnShares(VaultState const& state)
 {
-    LeanExcept<CanBurnResultFFI> const e = readExcept<CanBurnResultFFI>(
-        leanCall(lean_can_burn_shares, VaultStateFFI::build(state)));
+    LeanExcept<CanBurnResultFFI> const e =
+        readExcept<CanBurnResultFFI>(leanCall(lean_can_burn_shares, VaultStateFFI::build(state)));
     if (!e.value)
         return {.threw = true, .error = std::nullopt, .assets = std::nullopt};
     return e.value->read();
