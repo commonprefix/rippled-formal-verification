@@ -72,6 +72,14 @@ theorem operator_sub_zero_right (x : Number) (mode : rounding_mode) :
 theorem ok_tryCatch {ε α} (a : α) (h : ε → Except ε α) :
     (tryCatch (Except.ok a) h) = Except.ok a := rfl
 
+/-- `Except.bind` on an `.ok` value, definitional with the continuation
+abstract (so instantiating it never forces the continuation's body). An
+`| .error e => .error e | .ok a => f a` match is definitionally this `bind`,
+so a `show` in bind form followed by this lemma steps such a match without the
+kernel whnf-ing the scrutinee's well-founded internals. -/
+theorem okE_bind {ε α β} (a : α) (f : α → Except ε β) :
+    Except.bind (Except.ok a) f = f a := rfl
+
 /-- One firing step of `Number.truncateAux` (a fractional digit is dropped). -/
 theorem truncateAux_step (m : UInt64) (e : Int) (he : e < 0) (hm : m ≠ 0) :
     Number.truncateAux m e = Number.truncateAux (m / 10) (e + 1) := by

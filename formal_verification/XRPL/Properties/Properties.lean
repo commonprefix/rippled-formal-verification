@@ -22,3 +22,8 @@ import XRPL.Properties.Vault.VaultDepositReturn
 import XRPL.Properties.Vault.VaultWithdrawReturn
 import XRPL.Properties.Vault.VaultClawbackReturn
 import XRPL.Properties.Vault.VaultBurnReturn
+import XRPL.Properties.Vault.VaultDeposit
+import XRPL.Properties.Vault.VaultWithdraw
+import XRPL.Properties.Vault.VaultClawback
+import XRPL.Properties.Vault.Dilution
+import XRPL.Properties.Vault.Roundtrip

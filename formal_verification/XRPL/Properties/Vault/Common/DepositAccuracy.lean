@@ -1325,8 +1325,7 @@ theorem Vault.deposit_vault_updates_integral_proof (v : Vault) (amountDeposit : 
 /-- Proof body of `Vault.roundedDepositAmount_bounds`: the rounded amount is
 `amountDeposit` floored onto a `10 ^ s` grid no coarser than the amount itself. -/
 theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
-    (hcanon : amountDeposit.integral = false →
-      amountDeposit.IOUCanonical ∧ (-81 : ℤ) ≤ amountDeposit.exponent)
+    (hcanon : amountDeposit.integral = false → amountDeposit.IOUCanonical)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
     (∃ s : ℤ, RoundsToRepresentableAt roundedAmount amountDeposit.toRat s .downward ∧
       (10 : ℚ) ^ s ≤ |roundedAmount.toRat|) ∧
@@ -1353,7 +1352,7 @@ theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit round
       rcases hb : amountDeposit.integral with _ | _
       · rfl
       · exact absurd hb hint
-    obtain ⟨hc, hexp81⟩ := hcanon hfr
+    have hc := hcanon hfr
     unfold roundToVaultExponent at hround
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hround
     obtain ⟨_, _, hround⟩ := bind_ok_peel _ _ _ hround
@@ -1391,11 +1390,12 @@ theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit round
         rcases exponent_fractional_offset assetsTotal' postScale hps_nt with h100 | hr
         · exfalso
           have := hc.exp_lo
+          have hem : amountDeposit.exponent = amountDeposit.mOffset := rfl
           have hlt := not_le.mp hge
           omega
         · exact hr
       have hgrid := STAmount.roundToExponent_rounded amountDeposit roundedAmount postScale
-        .downward hc (by have hlt := not_le.mp hge; omega) hps_range.2 hrx
+        .downward hc hps_range.1 hps_range.2 hmv hrx
       refine ⟨postScale, hgrid, ?_⟩
       have hval : roundedAmount.toRat
           = (⌊amountDeposit.toRat / 10 ^ postScale⌋ : ℚ) * 10 ^ postScale := hgrid
@@ -1403,7 +1403,7 @@ theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit round
       have hk : ⌊amountDeposit.toRat / 10 ^ postScale⌋ ≠ 0 := by
         intro h0
         rw [h0] at hval
-        simp at hval
+        simp only [Int.cast_zero, zero_mul] at hval
         exact hne hval
       have hpow_pos : (0 : ℚ) < 10 ^ postScale := zpow_pos (by norm_num) _
       have habs : |roundedAmount.toRat|
@@ -1441,5 +1441,78 @@ theorem Vault.deposit_donation_proof (v : Vault) (amountDeposit roundedAmount : 
   split at hok
   · injection hok with h; rw [← h] at herr; exact absurd (show some _ = none from herr) (Option.some_ne_none _)
   · injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+
+/-! ## Net-asset-value subtraction facts (shared by the shares and charge sides) -/
+
+/-- **`operator_sub` of `assetsTotal - interestUnrealized` on a nonempty lawful
+vault, keyed on the rounded result being nonzero.** The rounded net asset value
+is normalized and within the `to_nearest` subtraction budget of the exact
+`depositNav`, which is itself positive. The `hnavm` witness (that the difference
+did not round to zero) is available from any success that divides by it. -/
+lemma Vault.depositNav_facts (v : Vault) (hv : v.Lawful) (navN : Number)
+    (hmz : v.assetsTotal.mantissa_ ≠ 0)
+    (hnavm : navN.mantissa_ ≠ 0)
+    (hnavN : v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok navN) :
+    navN.isNormalized ∧
+      |navN.toRat - v.depositNav| ≤ v.depositNav * (6 / (2 ^ 63 - 3)) ∧
+      0 < v.depositNav ∧ 0 < navN.toRat := by
+  have hApos : 0 < v.toExact.assetsTotal := by
+    rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
+    · exact h
+    · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
+  have hnav_def : v.depositNav = v.assetsTotal.toRat - v.interestUnrealized.toRat := rfl
+  have hnav_pos : 0 < v.depositNav := by
+    have := hv.valid.deposit_nav_pos hApos
+    unfold Vault.depositNav; linarith
+  have hnavN_facts : navN.isNormalized ∧
+      |navN.toRat - v.depositNav| ≤ v.depositNav * (6 / (2 ^ 63 - 3)) := by
+    by_cases hIm : v.interestUnrealized.mantissa_ = 0
+    · have hI0 : v.interestUnrealized.toRat = 0 :=
+        Number.toRat_eq_zero_of_mantissa_zero _ hIm
+      have hneg0 : v.interestUnrealized.operator_neg = Number.zero := by
+        unfold Number.operator_neg
+        rw [if_pos (by rw [hIm]; rfl)]
+      have hnavN_eq : navN = v.assetsTotal := by
+        unfold Number.operator_sub at hnavN
+        rw [hneg0] at hnavN
+        unfold Number.operator_add at hnavN
+        rw [if_pos (by decide : Number.zero.operator_eq Number.zero = true)] at hnavN
+        exact (Except.ok.inj (show Except.ok v.assetsTotal = .ok navN from hnavN)).symm
+      refine ⟨by rw [hnavN_eq]; exact hv.wf.assetsTotal_norm, ?_⟩
+      rw [hnavN_eq, hnav_def, hI0]
+      have hz : |v.assetsTotal.toRat - (v.assetsTotal.toRat - 0)| = 0 := by norm_num
+      rw [hz]
+      have hApos' : 0 < v.assetsTotal.toRat - 0 := by
+        have : 0 < v.toExact.assetsTotal := hApos
+        norm_num; exact this
+      positivity
+    · have hInorm := hv.wf.interestUnrealized_norm
+      have hI_nonneg : (0 : ℚ) ≤ v.interestUnrealized.toRat :=
+        hv.valid.interestUnrealized_nonneg
+      have hne_rec : ¬ v.assetsTotal.operator_eq v.interestUnrealized = true := by
+        intro hcon
+        unfold Number.operator_eq at hcon
+        simp only [Bool.and_eq_true, beq_iff_eq] at hcon
+        have hveq : v.assetsTotal.toRat = v.interestUnrealized.toRat := by
+          unfold Number.toRat
+          rw [hcon.1.1, hcon.1.2, hcon.2]
+        have h0 : v.depositNav = 0 := by rw [hnav_def, hveq]; ring
+        exact absurd h0 hnav_pos.ne'
+      have hnavnorm : navN.isNormalized :=
+        operator_sub_isNormalized_to_nearest _ _ _ hv.wf.assetsTotal_norm hInorm hnavN hnavm
+      have hbound := operator_sub_rounds_to_nearest v.assetsTotal v.interestUnrealized navN
+        hv.wf.assetsTotal_norm hInorm hmz hIm hne_rec hnavN hnavm
+      refine ⟨hnavnorm, ?_⟩
+      have h1 : |navN.toRat - (v.assetsTotal.toRat - v.interestUnrealized.toRat)|
+          ≤ |v.assetsTotal.toRat - v.interestUnrealized.toRat| * (6 / (2 ^ 63 - 3)) := hbound
+      rw [show v.assetsTotal.toRat - v.interestUnrealized.toRat = v.depositNav
+        from hnav_def.symm, abs_of_pos hnav_pos] at h1
+      exact h1
+  obtain ⟨hnavnorm, hnavbound⟩ := hnavN_facts
+  have hnavN_pos : 0 < navN.toRat := by
+    have := abs_le.mp hnavbound
+    have hεsub_lt : (6 : ℚ) / (2 ^ 63 - 3) < 1 := by norm_num
+    nlinarith [hnav_pos]
+  exact ⟨hnavnorm, hnavbound, hnav_pos, hnavN_pos⟩
 
 end XRPL.Model.SingleAssetVault

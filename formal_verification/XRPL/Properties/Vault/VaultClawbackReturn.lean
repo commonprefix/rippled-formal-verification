@@ -14,16 +14,8 @@ variable (v : Vault)
 and nothing is recovered. -/
 theorem Vault.clawback_negative_amount (assets : STAmount)
     (hneg : assets.negative = true) :
-    v.clawback assets = .ok (.rejected v .tecINTERNAL) := by
-  have hcc : computeClawback v assets =
-      .ok ⟨some .tecINTERNAL, STAmount.zero v.numericType, STAmount.zero .int64⟩ := by
-    unfold computeClawback
-    simp only []
-    rw [if_pos hneg]
-    rfl
-  unfold Vault.clawback
-  rw [hcc, ok_bind]
-  rfl
+    v.clawback assets = .ok (.rejected v .tecINTERNAL) :=
+  Vault.clawback_negative_amount_proof v assets hneg
 
 /-- The exchange computation destroys zero shares: `some .tecPRECISION_LOSS`
 and the vault is unchanged. -/
@@ -31,13 +23,8 @@ theorem Vault.clawback_zero_shares (assets : STAmount) (result : ComputeClawback
     (hcomp : computeClawback v assets = .ok result)
     (herr : result.error = none)
     (hz : result.sharesDestroyed.isZero = true) :
-    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) := by
-  unfold Vault.clawback
-  rw [hcomp, ok_bind]
-  rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-  try simp only [pure_bind]
-  rw [if_pos hz]
-  rfl
+    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) :=
+  Vault.clawback_zero_shares_proof v assets result hcomp herr hz
 
 /-- A nonzero recovery whose subtraction does not change `assetsTotal` rounded
 into the vault's `numericType`: `some .tecPRECISION_LOSS`. The guard is marked
@@ -60,16 +47,10 @@ theorem Vault.clawback_recovery_too_small (assets : STAmount)
     -- the guard fires: the recovery is nonzero yet the rounded totals are equal
     (hguard : (assetsRecoveredNumber.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
-    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) := by
-  unfold Vault.clawback
-  rw [hcomp, ok_bind]
-  rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-  try simp only [pure_bind]
-  rw [if_neg (by rw [hz]; exact Bool.false_ne_true)]
-  try simp only [pure_bind]
-  simp only [hsN, haN, hat, hrt, hrt', ok_bind]
-  rw [if_pos hguard]
-  rfl
+    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) :=
+  Vault.clawback_recovery_too_small_proof v assets result sharesDestroyedNumber
+    assetsRecoveredNumber at' assetsTotalRounded assetsTotalRounded'
+    hcomp herr hz hsN haN hat hrt hrt' hguard
 
 /-- Every guard passes: the clawback returns the exact updated vault, the
 recovered assets, and the destroyed shares. The updated vault stores the
@@ -95,17 +76,10 @@ theorem Vault.clawback_success (assets : STAmount) (result : ComputeClawbackResu
     (hav : v.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest = .ok av') :
     v.clawback assets =
       .ok ⟨none, { v with sharesTotal := st', assetsAvailable := av', assetsTotal := at' },
-        result.assetsRecovered, result.sharesDestroyed⟩ := by
-  unfold Vault.clawback
-  rw [hcomp, ok_bind]
-  rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-  try simp only [pure_bind]
-  rw [if_neg (by rw [hz]; exact Bool.false_ne_true)]
-  try simp only [pure_bind]
-  simp only [hsN, haN, hat, hrt, hrt', ok_bind]
-  rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
-  simp only [hst, hav, ok_bind]
-  rfl
+        result.assetsRecovered, result.sharesDestroyed⟩ :=
+  Vault.clawback_success_proof v assets result sharesDestroyedNumber assetsRecoveredNumber
+    st' av' at' assetsTotalRounded assetsTotalRounded'
+    hcomp herr hz hsN haN hat hrt hrt' hguard hst hav
 
 /-- Every outcome of a clawback that runs without a throw.
 

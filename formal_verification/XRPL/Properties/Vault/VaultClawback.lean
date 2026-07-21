@@ -25,10 +25,8 @@ variable (v : Vault)
 identity only by rounding. -/
 theorem Vault.idealAssetsClawback_idealSharesClawback (assets : ℚ)
     (hnav : v.withdrawNav ≠ 0) (hsh : v.toExact.sharesTotal ≠ 0) :
-    v.idealAssetsClawback (v.idealSharesClawback assets) = assets := by
-  unfold Vault.idealAssetsClawback Vault.idealSharesClawback
-  have hsh' : ((v.toExact.sharesTotal : ℕ) : ℚ) ≠ 0 := Nat.cast_ne_zero.mpr hsh
-  field_simp
+    v.idealAssetsClawback (v.idealSharesClawback assets) = assets :=
+  Vault.idealAssetsClawback_idealSharesClawback_proof v assets hnav hsh
 
 
 /-! ## `Vault.clawback` -/

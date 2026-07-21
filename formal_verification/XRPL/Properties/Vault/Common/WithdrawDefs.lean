@@ -1,7 +1,6 @@
 import XRPL.Properties.Vault.Defs
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.DepositDefs
-import XRPL.Properties.Vault.Dilution
 
 /-! # Exact-arithmetic reference values for `Vault.withdraw`
 
@@ -13,6 +12,11 @@ both the headline file and its proof files can see them. -/
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+
+/-- Net asset value backing the shares for withdrawal:
+`assetsTotal - interestUnrealized - lossUnrealized`. -/
+def Vault.withdrawNav (v : Vault) : ℚ :=
+  v.toExact.assetsTotal - v.toExact.interestUnrealized - v.toExact.lossUnrealized
 
 /-- The exact `assets'` for redeeming `shares`, before any rounding. The XLS-0065
 exchange formula `nav * shares / sharesTotal`, where the pricing `nav` is

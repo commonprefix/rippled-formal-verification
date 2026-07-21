@@ -1,7 +1,7 @@
 import XRPL.Properties.Vault.Defs
 import XRPL.Model.Vault.VaultClawback
 import XRPL.Properties.Vault.Common.DepositDefs
-import XRPL.Properties.Vault.Dilution
+import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Exact-arithmetic reference values for `Vault.clawback`
 

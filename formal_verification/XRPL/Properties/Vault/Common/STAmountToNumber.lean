@@ -94,4 +94,51 @@ lemma STAmount.toNumber_integral_exact (s : STAmount) (mode : rounding_mode)
   show (s.signedDrops.toInt64.toInt : ℚ) = s.toRat
   rw [hsd_toInt, STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
 
+/-! ## Combined canonical exactness -/
+
+/-- The canonical storage shapes `toNumber` is value-exact on: the fractional
+canonical form, or the integral canonical form with the stored magnitude within
+`Int64`. -/
+def STAmount.ExactCanonical (s : STAmount) : Prop :=
+  s.IOUCanonical ∨ (s.IntegralCanonical ∧ s.mValue.toNat ≤ 2 ^ 63 - 1)
+
+/-- `toNumber` exactness on a small canonical integral amount (the size bound on
+the stored magnitude replaces the type-level `maxValue` bound). -/
+lemma STAmount.toNumber_integral_small_exact (s : STAmount) (mode : rounding_mode)
+    (hc : s.IntegralCanonical) (hsz : s.mValue.toNat ≤ 2 ^ 63 - 1) :
+    ∃ sn : Number, s.toNumber mode = .ok sn ∧ sn.toRat = s.toRat ∧ sn.isNormalized := by
+  have hint : s.integral = true := hc.is_integral
+  have hmin : Int64.minValue.toInt = (-9223372036854775808 : ℤ) := by decide
+  have hmax' : Int64.maxValue.toInt = (9223372036854775807 : ℤ) := by decide
+  have hsd_lo : Int64.minValue.toInt ≤ s.signedDrops := by
+    unfold STAmount.signedDrops; rw [hmin]; split <;> omega
+  have hsd_hi : s.signedDrops ≤ Int64.maxValue.toInt := by
+    unfold STAmount.signedDrops; rw [hmax']; split <;> omega
+  have hsd_toInt : s.signedDrops.toInt64.toInt = s.signedDrops :=
+    AmountArith.toInt_toInt64_self hsd_lo hsd_hi
+  have h_ne_min : s.signedDrops.toInt64 ≠ Int64.minValue := by
+    intro h
+    have heq : s.signedDrops.toInt64.toInt = Int64.minValue.toInt := by rw [h]
+    rw [hsd_toInt, hmin] at heq
+    revert heq
+    unfold STAmount.signedDrops
+    split <;> omega
+  have hroute : s.toNumber mode = IntAmount.toNumber ⟨s.signedDrops.toInt64⟩ mode := by
+    unfold STAmount.toNumber STAmount.intAmount
+    rw [if_pos hint, if_pos hint]
+  obtain ⟨xn, hok, hval, hnorm⟩ :=
+    IntAmount.toNumber_exact ⟨s.signedDrops.toInt64⟩ mode h_ne_min
+  refine ⟨xn, by rw [hroute]; exact hok, ?_, hnorm⟩
+  rw [hval]
+  show (s.signedDrops.toInt64.toInt : ℚ) = s.toRat
+  rw [hsd_toInt, STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
+
+/-- `toNumber` is value-exact and normalized on any `ExactCanonical` amount. -/
+lemma STAmount.toNumber_exact_canonical (s : STAmount) (mode : rounding_mode)
+    (hc : s.ExactCanonical) :
+    ∃ sn : Number, s.toNumber mode = .ok sn ∧ sn.toRat = s.toRat ∧ sn.isNormalized := by
+  rcases hc with hiou | ⟨hint, hsz⟩
+  · exact STAmount.toNumber_iou_exact s mode hiou
+  · exact STAmount.toNumber_integral_small_exact s mode hint hsz
+
 end XRPL.Model.Protocol

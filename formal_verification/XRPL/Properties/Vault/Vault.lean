@@ -1,6 +1,11 @@
 import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.Common.State
 
+/-! # `Vault.isInsolvent`
+
+On a lawful state, the insolvency query characterizes exactly one situation:
+shares are outstanding while the vault holds no assets. -/
+
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol

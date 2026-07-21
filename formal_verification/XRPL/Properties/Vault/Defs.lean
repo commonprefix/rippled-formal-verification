@@ -66,10 +66,10 @@ theorem Vault.WF.hasCap_iff (v : Vault) :
   | none => simp
   | some m => simp
 
-/-- The vault invariant (XLS-0065 §4.5, `VaultInvariant.cpp` L442-536;
-`lossUnrealized_nonneg` is intended per spec, absent from the C++ checker).
-The fact that the modeled operations keep `lossUnrealized`/`interestUnrealized`
-at zero is a reachability corollary (`Vault.Reachable`), not a validity clause. -/
+/-- The vault invariant (XLS-0065 §4.5). The `lossUnrealized_nonneg` clause is
+included as intended by the spec. The fact that the modeled operations keep
+`lossUnrealized`/`interestUnrealized` at zero is a reachability corollary
+(`Vault.Reachable`), not a validity clause. -/
 structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   assetsTotal_nonneg : 0 ≤ s.assetsTotal
   assetsAvailable_nonneg : 0 ≤ s.assetsAvailable

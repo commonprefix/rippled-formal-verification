@@ -361,6 +361,14 @@ theorem Vault.clawback_vault_updates_integral_proof (v : Vault) (assets : STAmou
 
 /-! ## `clawback_assetsRecovered` / `clawback_vault_updates` support -/
 
+/-- **Proof body of `idealAssetsClawback_idealSharesClawback`.** -/
+theorem Vault.idealAssetsClawback_idealSharesClawback_proof (v : Vault) (assets : ℚ)
+    (hnav : v.withdrawNav ≠ 0) (hsh : v.toExact.sharesTotal ≠ 0) :
+    v.idealAssetsClawback (v.idealSharesClawback assets) = assets := by
+  unfold Vault.idealAssetsClawback Vault.idealSharesClawback
+  have hsh' : ((v.toExact.sharesTotal : ℕ) : ℚ) ≠ 0 := Nat.cast_ne_zero.mpr hsh
+  field_simp
+
 /-- The clawback recovery ideal coincides with the withdraw ideal at
 `waiveUnrealizedLoss = false`: both price shares at `withdrawNav`. -/
 lemma Vault.idealAssetsClawback_eq_withdraw (v : Vault) (shares : ℚ) :

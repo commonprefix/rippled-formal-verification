@@ -2,6 +2,8 @@ import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 import XRPL.Properties.Vault.Common.DepositReduction
+import XRPL.Properties.Vault.Common.WithdrawReduction
+import XRPL.Properties.Vault.Common.ClawbackReduction
 import XRPL.Properties.Vault.Common.WitnessSupport
 import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.ToRep.ToRep
@@ -262,52 +264,11 @@ lemma operator_sub_isNormalized_to_nearest' (x y result : Number)
     exact Or.inl rfl
   · exact operator_sub_isNormalized_to_nearest x y result hx hy hok h0
 
-/-! ## STAmount canonical-shape exactness -/
+/-! ## STAmount canonical-shape exactness
 
-/-- The canonical storage shapes `toNumber` is value-exact on: the fractional
-canonical form, or the integral canonical form with the stored magnitude within
-`Int64`. -/
-def STAmount.ExactCanonical (s : STAmount) : Prop :=
-  s.IOUCanonical ∨ (s.IntegralCanonical ∧ s.mValue.toNat ≤ 2 ^ 63 - 1)
-
-/-- `toNumber` exactness on a small canonical integral amount (the size bound on
-the stored magnitude replaces the type-level `maxValue` bound). -/
-lemma STAmount.toNumber_integral_small_exact (s : STAmount) (mode : rounding_mode)
-    (hc : s.IntegralCanonical) (hsz : s.mValue.toNat ≤ 2 ^ 63 - 1) :
-    ∃ sn : Number, s.toNumber mode = .ok sn ∧ sn.toRat = s.toRat ∧ sn.isNormalized := by
-  have hint : s.integral = true := hc.is_integral
-  have hmin : Int64.minValue.toInt = (-9223372036854775808 : ℤ) := by decide
-  have hmax' : Int64.maxValue.toInt = (9223372036854775807 : ℤ) := by decide
-  have hsd_lo : Int64.minValue.toInt ≤ s.signedDrops := by
-    unfold STAmount.signedDrops; rw [hmin]; split <;> omega
-  have hsd_hi : s.signedDrops ≤ Int64.maxValue.toInt := by
-    unfold STAmount.signedDrops; rw [hmax']; split <;> omega
-  have hsd_toInt : s.signedDrops.toInt64.toInt = s.signedDrops :=
-    AmountArith.toInt_toInt64_self hsd_lo hsd_hi
-  have h_ne_min : s.signedDrops.toInt64 ≠ Int64.minValue := by
-    intro h
-    have heq : s.signedDrops.toInt64.toInt = Int64.minValue.toInt := by rw [h]
-    rw [hsd_toInt, hmin] at heq
-    revert heq
-    unfold STAmount.signedDrops
-    split <;> omega
-  have hroute : s.toNumber mode = IntAmount.toNumber ⟨s.signedDrops.toInt64⟩ mode := by
-    unfold STAmount.toNumber STAmount.intAmount
-    rw [if_pos hint, if_pos hint]
-  obtain ⟨xn, hok, hval, hnorm⟩ :=
-    IntAmount.toNumber_exact ⟨s.signedDrops.toInt64⟩ mode h_ne_min
-  refine ⟨xn, by rw [hroute]; exact hok, ?_, hnorm⟩
-  rw [hval]
-  show (s.signedDrops.toInt64.toInt : ℚ) = s.toRat
-  rw [hsd_toInt, STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
-
-/-- `toNumber` is value-exact and normalized on any `ExactCanonical` amount. -/
-lemma STAmount.toNumber_exact_canonical (s : STAmount) (mode : rounding_mode)
-    (hc : s.ExactCanonical) :
-    ∃ sn : Number, s.toNumber mode = .ok sn ∧ sn.toRat = s.toRat ∧ sn.isNormalized := by
-  rcases hc with hiou | ⟨hint, hsz⟩
-  · exact STAmount.toNumber_iou_exact s mode hiou
-  · exact STAmount.toNumber_integral_small_exact s mode hint hsz
+The `ExactCanonical` shape and its `toNumber` exactness lemmas
+(`toNumber_integral_small_exact`, `toNumber_exact_canonical`) live upstream in
+`STAmountToNumber`; this section adds the integral-magnitude facts on top. -/
 
 /-- On a non-negative canonical integral amount the stored magnitude is the
 value. -/
@@ -476,143 +437,6 @@ end XRPL.Model.Protocol
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
-
-/-! ## Success-path reductions for `withdraw` / `clawback` -/
-
-/-- **Withdraw guard extraction.** A withdrawal that runs without a throw and
-returns no error code exposes the exchange result, the passed funds guard, and
-either the final-withdrawal record (all three totals zeroed) or the partial
-record with its three `operator_sub` field updates. -/
-theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
-    (waive : Bool) (r : WithdrawResult)
-    (hok : v.withdraw amount waive = .ok r) (herr : r.error = none) :
-    ∃ result : ComputeWithdrawResult,
-      (match amount with
-       | .vaultAssets a => computeWithdrawByAssets v a waive
-       | .vaultShares sh => computeWithdrawByShares v sh waive) = .ok result ∧
-      ∃ (aN : Number) (sta : STAmount),
-        result.assets'.toNumber .to_nearest = .ok aN ∧
-        v.assetsAvailable.operator_lt aN = false ∧
-        STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sta ∧
-        ((result.sharesRedeemed.operator_eq sta = true ∧
-          ∃ allAvail : STAmount,
-            STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok allAvail ∧
-            r = ⟨none, { v with assetsAvailable := Number.zero,
-                                assetsTotal := Number.zero,
-                                sharesTotal := Number.zero },
-                 allAvail, result.sharesRedeemed⟩) ∨
-         (result.sharesRedeemed.operator_eq sta = false ∧
-          ∃ (sN at' av' st' : Number),
-            result.sharesRedeemed.toNumber .to_nearest = .ok sN ∧
-            v.assetsTotal.operator_sub aN .to_nearest = .ok at' ∧
-            v.assetsAvailable.operator_sub aN .to_nearest = .ok av' ∧
-            v.sharesTotal.operator_sub sN .to_nearest = .ok st' ∧
-            r = ⟨none, { v with assetsAvailable := av',
-                                assetsTotal := at',
-                                sharesTotal := st' },
-                 result.assets', result.sharesRedeemed⟩)) := by
-  unfold Vault.withdraw at hok
-  cases amount
-  all_goals {
-    simp only [] at hok
-    obtain ⟨result, hres, hok⟩ := bind_ok_peel _ _ _ hok
-    refine ⟨result, hres, ?_⟩
-    by_cases h1 : result.error.isSome = true
-    · rw [if_pos h1] at hok
-      injection hok with h
-      rw [← h] at herr
-      simp only [] at herr
-      rw [herr] at h1
-      simp at h1
-    · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
-      obtain ⟨aN, haN, hok⟩ := bind_ok_peel _ _ _ hok
-      by_cases h2 : v.assetsAvailable.operator_lt aN = true
-      · rw [if_pos h2] at hok
-        injection hok with h
-        rw [← h] at herr
-        simp [WithdrawResult.rejected] at herr
-      · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
-        obtain ⟨sta, hsta, hok⟩ := bind_ok_peel _ _ _ hok
-        refine ⟨aN, sta, haN, by simpa using h2, hsta, ?_⟩
-        by_cases h3 : result.sharesRedeemed.operator_eq sta = true
-        · rw [if_pos h3] at hok
-          by_cases h4 : v.lossUnrealized.operator_ne Number.zero = true
-          · rw [if_pos h4] at hok
-            injection hok with h
-            rw [← h] at herr
-            simp [WithdrawResult.rejected] at herr
-          · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
-            obtain ⟨allAvail, hall, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h
-            exact Or.inl ⟨h3, allAvail, hall, h.symm⟩
-        · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
-          obtain ⟨sN, hsN, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr, hatr, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr', hatr', hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases h5 : (aN.mantissa_ != 0 && atr.operator_eq atr') = true
-          · rw [if_pos h5] at hok
-            injection hok with h
-            rw [← h] at herr
-            simp [WithdrawResult.rejected] at herr
-          · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
-            obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h
-            exact Or.inr ⟨by simpa using h3, sN, at', av', st', hsN, hat, hav, hst, h.symm⟩
-  }
-
-/-- **Clawback guard extraction.** A clawback that runs without a throw and
-returns no error code exposes the exchange result (nonzero shares) and the
-three `operator_sub` field updates behind the success record. -/
-theorem Vault.clawback_success_reduces (v : Vault) (assets : STAmount) (r : ClawbackResult)
-    (hok : v.clawback assets = .ok r) (herr : r.error = none) :
-    ∃ result : ComputeClawbackResult,
-      computeClawback v assets = .ok result ∧
-      result.sharesDestroyed.isZero = false ∧
-      ∃ (sdn arn at' st' av' : Number),
-        result.sharesDestroyed.toNumber .to_nearest = .ok sdn ∧
-        result.assetsRecovered.toNumber .to_nearest = .ok arn ∧
-        v.assetsTotal.operator_sub arn .to_nearest = .ok at' ∧
-        v.sharesTotal.operator_sub sdn .to_nearest = .ok st' ∧
-        v.assetsAvailable.operator_sub arn .to_nearest = .ok av' ∧
-        r = ⟨none, { v with sharesTotal := st',
-                            assetsAvailable := av',
-                            assetsTotal := at' },
-             result.assetsRecovered, result.sharesDestroyed⟩ := by
-  unfold Vault.clawback at hok
-  obtain ⟨result, hres, hok⟩ := bind_ok_peel _ _ _ hok
-  refine ⟨result, hres, ?_⟩
-  by_cases h1 : result.error.isSome = true
-  · rw [if_pos h1] at hok
-    injection hok with h
-    rw [← h] at herr
-    simp only [] at herr
-    rw [herr] at h1
-    simp at h1
-  · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
-    by_cases h2 : result.sharesDestroyed.isZero = true
-    · rw [if_pos h2] at hok
-      injection hok with h
-      rw [← h] at herr
-      simp [ClawbackResult.rejected] at herr
-    · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
-      refine ⟨by simpa using h2, ?_⟩
-      obtain ⟨sdn, hsdn, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨arn, harn, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨atr, hatr, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨atr', hatr', hok⟩ := bind_ok_peel _ _ _ hok
-      by_cases h3 : (arn.mantissa_ != 0 && atr.operator_eq atr') = true
-      · rw [if_pos h3] at hok
-        injection hok with h
-        rw [← h] at herr
-        simp [ClawbackResult.rejected] at herr
-      · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
-        obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-        obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
-        injection hok with h
-        exact ⟨sdn, arn, at', st', av', hsdn, harn, hat, hst, hav, h.symm⟩
 
 /-! ## Asset parity (`assetsAvailable = assetsTotal`) preservation -/
 

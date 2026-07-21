@@ -140,4 +140,154 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
               injection hok with h; rw [← h]
               exact .inl rfl
 
+/-- **Proof body of `roundedDepositAmount_rejected_code`.** -/
+theorem Vault.roundedDepositAmount_rejected_code_proof (v : Vault) (amountDeposit : STAmount)
+    (ter : TER) (hok : v.roundedDepositAmount amountDeposit = .ok (.rejected ter)) :
+    ter = .tecPRECISION_LOSS := by
+  obtain ⟨ra, _, _, h⟩ := roundedDepositAmount_rejected v amountDeposit ter hok
+  exact h
+
+/-- **Proof body of `deposit_rejected_request`.** -/
+theorem Vault.deposit_rejected_request_proof (v : Vault) (amountDeposit : STAmount)
+    (isDonation : Bool) (ter : TER)
+    (hrej : v.roundedDepositAmount amountDeposit = .ok (.rejected ter)) :
+    v.deposit amountDeposit isDonation = .ok (.rejected v .tecINTERNAL) := by
+  obtain ⟨ra, hround, hz, _⟩ := roundedDepositAmount_rejected v amountDeposit ter hrej
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_pos hz]
+  rfl
+
+/-- **Proof body of `deposit_rounded_zero`.** -/
+theorem Vault.deposit_rounded_zero_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (isDonation : Bool)
+    (hround : roundToVaultExponent amountDeposit v.assetsTotal = .ok roundedAmount)
+    (hz : roundedAmount.isZero = true) :
+    v.deposit amountDeposit isDonation = .ok (.rejected v .tecINTERNAL) := by
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_pos hz]
+  rfl
+
+/-- **Proof body of `deposit_donation_no_shares`.** -/
+theorem Vault.deposit_donation_no_shares_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hsh : v.sharesTotal.mantissa_ = 0) :
+    v.deposit amountDeposit true = .ok (.rejected v .tecNO_PERMISSION) := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_pos (by rw [Bool.true_and]; exact beq_iff_eq.mpr hsh)]
+  rfl
+
+/-- **Proof body of `deposit_insolvent`.** -/
+theorem Vault.deposit_insolvent_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hins : v.isInsolvent = true) :
+    v.deposit amountDeposit false = .ok (.rejected v .tecLOCKED) := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [Bool.false_and]; exact Bool.false_ne_true)]
+  rw [if_pos (by rw [hins]; rfl)]
+  rfl
+
+/-- **Proof body of `deposit_maximum_exceeded`.** -/
+theorem Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedAmount c s : STAmount)
+    (cN sN at' av' st' : Number)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hins : v.isInsolvent = false)
+    (hcomp : computeDeposit v roundedAmount = .ok (.success c s))
+    (hcN : c.toNumber .to_nearest = .ok cN)
+    (hsN : s.toNumber .to_nearest = .ok sN)
+    (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
+    (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
+    (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
+    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    v.deposit amountDeposit false = .ok (.rejected v .tecLIMIT_EXCEEDED) := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [Bool.false_and]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [hins, Bool.false_and]; exact Bool.false_ne_true)]
+  simp only [pure_bind]
+  rw [if_neg Bool.false_ne_true]
+  rw [hcomp, ok_bind]
+  simp only [hcN, hsN, hat, hav, hst, ok_bind]
+  rw [if_pos hmax]
+  rfl
+
+/-- **Proof body of `deposit_donation_maximum`.** -/
+theorem Vault.deposit_donation_maximum_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (aN zN at' av' st' : Number)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hsh : v.sharesTotal.mantissa_ ≠ 0)
+    (haN : roundedAmount.toNumber .to_nearest = .ok aN)
+    (hzN : (STAmount.zero .int64).toNumber .to_nearest = .ok zN)
+    (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
+    (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
+    (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
+    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    v.deposit amountDeposit true = .ok (.rejected v .tecLIMIT_EXCEEDED) := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [Bool.true_and]; exact fun h => hsh (beq_iff_eq.mp h))]
+  rw [if_neg (by rw [Bool.not_true, Bool.and_false]; exact Bool.false_ne_true)]
+  simp only [pure_bind]
+  rw [if_pos trivial]
+  simp only [haN, hzN, hat, hav, hst, ok_bind]
+  rw [if_pos hmax]
+  rfl
+
+/-- **Proof body of `deposit_success`.** -/
+theorem Vault.deposit_success_proof (v : Vault) (amountDeposit roundedAmount c s : STAmount)
+    (cN sN at' av' st' : Number)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hins : v.isInsolvent = false)
+    (hcomp : computeDeposit v roundedAmount = .ok (.success c s))
+    (hcN : c.toNumber .to_nearest = .ok cN)
+    (hsN : s.toNumber .to_nearest = .ok sN)
+    (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
+    (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
+    (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
+    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    v.deposit amountDeposit false =
+      .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
+        c, s⟩ := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [Bool.false_and]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [hins, Bool.false_and]; exact Bool.false_ne_true)]
+  simp only [pure_bind]
+  rw [if_neg Bool.false_ne_true]
+  rw [hcomp, ok_bind]
+  simp only [hcN, hsN, hat, hav, hst, ok_bind]
+  rw [if_neg (by rw [hmax]; exact Bool.false_ne_true)]
+  rfl
+
+/-- **Proof body of `deposit_donation_success`.** -/
+theorem Vault.deposit_donation_success_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (aN zN at' av' st' : Number)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hsh : v.sharesTotal.mantissa_ ≠ 0)
+    (haN : roundedAmount.toNumber .to_nearest = .ok aN)
+    (hzN : (STAmount.zero .int64).toNumber .to_nearest = .ok zN)
+    (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
+    (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
+    (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
+    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    v.deposit amountDeposit true =
+      .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
+        roundedAmount, STAmount.zero .int64⟩ := by
+  obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  unfold Vault.deposit
+  rw [hround, ok_bind, if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  rw [if_neg (by rw [Bool.true_and]; exact fun h => hsh (beq_iff_eq.mp h))]
+  rw [if_neg (by rw [Bool.not_true, Bool.and_false]; exact Bool.false_ne_true)]
+  simp only [pure_bind]
+  rw [if_pos trivial]
+  simp only [haN, hzN, hat, hav, hst, ok_bind]
+  rw [if_neg (by rw [hmax]; exact Bool.false_ne_true)]
+  rfl
+
 end XRPL.Model.SingleAssetVault

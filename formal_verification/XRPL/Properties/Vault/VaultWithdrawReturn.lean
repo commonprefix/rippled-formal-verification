@@ -25,16 +25,9 @@ theorem Vault.sharesToAssetsWithdraw_zero_nav (shares : STAmount) (waiveUnrealiz
     -- and it rounded to a zero mantissa
     (hz : netAssetValue'.mantissa_ = 0) :
     v.sharesToAssetsWithdraw shares waiveUnrealizedLoss =
-      .ok (STAmount.zero v.numericType) := by
-  cases waiveUnrealizedLoss
-  all_goals {
-    simp only [] at hnav'
-    unfold Vault.sharesToAssetsWithdraw
-    simp only []
-    rw [hnav, ok_bind, hnav', ok_bind]
-    rw [if_pos (beq_iff_eq.mpr hz)]
-    rfl
-  }
+      .ok (STAmount.zero v.numericType) :=
+  Vault.sharesToAssetsWithdraw_zero_nav_proof v shares waiveUnrealizedLoss
+    netAssetValue netAssetValue' hnav hnav' hz
 
 /-! ## `Vault.withdraw` -/
 
@@ -53,17 +46,9 @@ theorem Vault.withdraw_insufficient_funds (amount : WithdrawAmount)
     -- assets' exceeds assetsAvailable
     (hins : v.assetsAvailable.operator_lt assetsNumber' = true) :
     v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tecINSUFFICIENT_FUNDS) := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_pos hins]
-    rfl
-  }
+      .ok (.rejected v .tecINSUFFICIENT_FUNDS) :=
+  Vault.withdraw_insufficient_funds_proof v amount waiveUnrealizedLoss cw assetsNumber'
+    hcomp herr haN hins
 
 /-- The withdrawal redeems the whole share total while `lossUnrealized` is
 nonzero: `some .tefINTERNAL`. -/
@@ -87,19 +72,9 @@ theorem Vault.withdraw_final_nonzero_loss (amount : WithdrawAmount)
     -- and lossUnrealized is nonzero
     (hloss : v.lossUnrealized.operator_ne Number.zero = true) :
     v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tefINTERNAL) := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_pos hfin, if_pos hloss]
-    rfl
-  }
+      .ok (.rejected v .tefINTERNAL) :=
+  Vault.withdraw_final_nonzero_loss_proof v amount waiveUnrealizedLoss cw assetsNumber'
+    sharesTotalAmount hcomp herr haN hins hst hfin hloss
 
 /-- The withdrawal redeems the whole share total with `lossUnrealized` zero:
 the withdrawal pays all of `assetsAvailable`, rounded once into the vault's
@@ -130,21 +105,9 @@ theorem Vault.withdraw_final (amount : WithdrawAmount) (waiveUnrealizedLoss : Bo
       .ok ⟨none,
         { v with assetsAvailable := Number.zero, assetsTotal := Number.zero,
                  sharesTotal := Number.zero },
-        allAvailable, cw.sharesRedeemed⟩ := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_pos hfin, if_neg (by rw [hloss]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hall, ok_bind]
-    rfl
-  }
+        allAvailable, cw.sharesRedeemed⟩ :=
+  Vault.withdraw_final_proof v amount waiveUnrealizedLoss cw assetsNumber'
+    sharesTotalAmount allAvailable hcomp herr haN hins hst hfin hloss hall
 
 /-- A nonzero `assets'` whose subtraction does not change `assetsTotal` rounded
 into the vault's `numericType`: `some .tecPRECISION_LOSS`. The guard is marked
@@ -178,22 +141,10 @@ theorem Vault.withdraw_payout_too_small (amount : WithdrawAmount)
     (hguard : (assetsNumber'.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
     v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tecPRECISION_LOSS) := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    simp only [hsN, hat, hrt, hrt', ok_bind]
-    rw [if_pos hguard]
-    rfl
-  }
+      .ok (.rejected v .tecPRECISION_LOSS) :=
+  Vault.withdraw_payout_too_small_proof v amount waiveUnrealizedLoss cw
+    assetsNumber' sharesBurnedNumber assetsTotal' sharesTotalAmount assetsTotalRounded
+    assetsTotalRounded' hcomp herr haN hins hst hfin hsN hat hrt hrt' hguard
 
 /-- Every guard passes: the withdrawal returns the exact updated vault, the
 withdrawn `assets'`, and the redeemed shares. -/
@@ -233,23 +184,11 @@ theorem Vault.withdraw_success (amount : WithdrawAmount) (waiveUnrealizedLoss : 
       .ok ⟨none,
         { v with assetsAvailable := assetsAvailable', assetsTotal := assetsTotal',
                  sharesTotal := sharesTotal' },
-        cw.assets', cw.sharesRedeemed⟩ := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    simp only [hsN, hat, hrt, hrt', ok_bind]
-    rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
-    simp only [hav, hshares, ok_bind]
-    rfl
-  }
+        cw.assets', cw.sharesRedeemed⟩ :=
+  Vault.withdraw_success_proof v amount waiveUnrealizedLoss cw
+    assetsNumber' sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal'
+    sharesTotalAmount assetsTotalRounded assetsTotalRounded'
+    hcomp herr haN hins hst hfin hsN hat hrt hrt' hguard hav hshares
 
 /-- Every outcome of a withdrawal that runs without a throw. -/
 theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)

@@ -211,7 +211,9 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
         have h1 : (r.toInt : ℚ) = (if s.mIsNegative then (-1 : ℚ) else 1) * s.mValue.toNat := hkey
         have h2 : r.toInt.natAbs = ((if s.mIsNegative then (-1 : ℤ) else 1) * s.mValue.toNat).natAbs := by
           congr 1
-          exact_mod_cast (by rcases hn : s.mIsNegative <;> simp [hn] at h1 ⊢ <;> exact_mod_cast h1)
+          exact_mod_cast (by rcases hn : s.mIsNegative <;>
+            simp only [hn, Bool.false_eq_true, ↓reduceIte, Int.reduceNegSucc, neg_mul, one_mul] at h1 ⊢ <;>
+            exact_mod_cast h1)
         rw [h2]
         rcases s.mIsNegative <;> simp
       by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
@@ -533,6 +535,22 @@ lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
   obtain ⟨w, hw_norm, _, hw_val⟩ := Number.exists_normalized_scaled J eA
     (by omega) (by rw [hJ_def]; omega) hsticky heA_ge heA_le
   exact ⟨w, hw_norm, by rw [hw_val, hJ_val]⟩
+
+/-! ## `withdraw_sharesBurned_exact` proof body -/
+
+/-- **Proof body of `withdraw_sharesBurned_exact`.** A successful share-denominated
+withdrawal burns exactly the named shares: the reduction echoes the named amount
+through `computeWithdrawByShares`. -/
+theorem Vault.withdraw_sharesBurned_exact_proof (v : Vault) (shares : STAmount)
+    (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
+    (hok : v.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
+    (herr : r.error = none) :
+    r.sharesBurned = shares := by
+  obtain ⟨cw, an, sta, hcomp, herr2, -, -, -, hsb, -⟩ :=
+    Vault.withdraw_success_reduces v (.vaultShares shares) waiveUnrealizedLoss r hok herr
+  obtain ⟨-, hshares⟩ :=
+    computeWithdrawByShares_none_reduces v shares waiveUnrealizedLoss cw hcomp herr2
+  rw [hsb, hshares]
 
 /-! ## `withdraw_vault_updates_integral` proof body -/
 
