@@ -54,6 +54,7 @@ libxrpl.tx > xrpl.protocol
 libxrpl.tx > xrpl.server
 libxrpl.tx > xrpl.tx
 test.app > test.jtx
+test.app > test.toplevel
 test.app > test.unit_test
 test.app > xrpl.basics
 test.app > xrpl.config
@@ -106,7 +107,11 @@ test.csf > xrpld.consensus
 test.csf > xrpl.json
 test.csf > xrpl.ledger
 test.csf > xrpl.protocol
+test.formal_verification > test.jtx
+test.formal_verification > test.toplevel
 test.formal_verification > xrpl.basics
+test.formal_verification > xrpl.ledger
+test.formal_verification > xrpl.protocol
 test.json > test.jtx
 test.json > xrpl.json
 test.jtx > xrpl.basics
