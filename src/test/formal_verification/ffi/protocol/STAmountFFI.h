@@ -76,7 +76,7 @@ public:
     }
 
     // Read the raw model fields into a LeanSTAmountResult. Deliberately not read(): that rebuilds a
-    // rippled STAmount and would throw/normalize on the extreme raw fields the number tests stage.
+    // xrpld STAmount and would throw/normalize on the extreme raw fields the number tests stage.
     LeanSTAmountResult
     readResult() const
     {
