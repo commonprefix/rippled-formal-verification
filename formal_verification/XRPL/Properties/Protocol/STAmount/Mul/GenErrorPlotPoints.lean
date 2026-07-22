@@ -10,10 +10,10 @@ def epsTN : Rat :=
 def iouAsset : Asset := .issue noIssue
 
 /-- Evaluate v1 = v2 = ⟨m, e, neg⟩ through the real model; emit
-    `bracket,v1num,v1den,errnum,errden,envnum,envden` (exact rationals).
+    `truthnum,truthden,errnum,errden,envnum,envden` (exact rationals).
     Skips overflow (`.error`) and underflow (`result = 0`): both are outside the
     ≤1-ULP theorem, whose hypothesis is `result.mValue ≠ 0`. -/
-def emit (bracket : Nat) (m : UInt64) (e : Int) : IO Unit := do
+def emit (m : UInt64) (e : Int) : IO Unit := do
   let v1 : STAmount := ⟨.issue noIssue, m, e, false⟩
   match STAmount.multiply v1 v1 iouAsset .to_nearest with
   | .error _ => pure ()
@@ -24,31 +24,40 @@ def emit (bracket : Nat) (m : UInt64) (e : Int) : IO Unit := do
       let truth : Rat := v1r * v1r
       let err   : Rat := |result.toRat - truth|
       let env   : Rat := truth * epsTN
-      IO.println s!"{bracket},{truth.num},{truth.den},{err.num},{err.den},{env.num},{env.den}"
+      IO.println s!"{truth.num},{truth.den},{err.num},{err.den},{env.num},{env.den}"
 
-/-- Exponent-field sweep: `eLo .. eHi` (inclusive), `perExp` mantissa samples across the
-    16-digit band `[10^15, 10^16)`. Log-scale in value (each exponent = one decade).
-    `signed` also emits negative operands (v1=v2 ⇒ same err/env; shows both sides).
+/-- Single continuous sweep of the exponent field `eLo .. eHi` (inclusive) with
+    `perExp` mantissa samples per exponent. Each exponent is one decade of `|v1|`,
+    so this spans the whole positive value range in log scale, from the tiniest
+    representable square up to the largest, with no gaps between decades.
 
-    Mantissas are `10^15 + (i·P mod 9·10^15)` with `P` coprime to `9·10^15` — this spreads
-    *full-precision* 16-digit mantissas across the band. (A plain arithmetic step from 10^15
-    lands on multiples of a power of ten, whose squares have few significant digits and are
-    representable exactly, giving a spurious zero rounding error.) -/
-def sweepExp (bracket : Nat) (eLo eHi : Int) (perExp : Nat) : IO Unit := do
+    Mantissas are drawn from the full-precision 16-digit band `[10^15, 10^16)` by a
+    single *global* low-discrepancy counter `k`: `m = 10^15 + (k·P mod 9·10^15)` with
+    `P` coprime to `9·10^15`. Two things matter here:
+    * `P` coprime to the band width spreads mantissas evenly and, being coprime to
+      2/3/5, keeps every mantissa full-precision. (A plain arithmetic step from 10^15
+      lands on multiples of a power of ten, whose squares are representable exactly,
+      giving a spurious zero rounding error — a misleading sub-pattern.)
+    * `k` is *not* reset per exponent. If it were, every decade would reuse the same
+      mantissa grid and the scatter would show one repeating decade-pattern aliased
+      across the whole range. Advancing `k` continuously decorrelates the sampling
+      grid from the decade boundaries. -/
+def sweep (eLo eHi : Int) (perExp : Nat) : IO Unit := do
   let base : Nat := 1000000000000000        -- 10^15
   let span : Nat := 9000000000000000        -- 9·10^15  (band width)
   let p    : Nat := 7477777777777783        -- coprime to 9·10^15 (not div. by 2, 3, 5)
+  let mut k : Nat := 0
   let mut e : Int := eLo
   while e ≤ eHi do
-    for i in [0:perExp] do
-      let m : UInt64 := (base + i * p % span).toUInt64
-      emit bracket m e
+    for _ in [0:perExp] do
+      let m : UInt64 := (base + k * p % span).toUInt64
+      emit m e
+      k := k + 1
     e := e + 1
 
 def main : IO Unit := do
-  -- Bracket 0: two-sided log sweep of |v1| from ~10^-40 (square-underflow floor, e=-56)
-  -- up to ~10^-6 (e=-22). Log, not linear: only log spacing can approach 0 to 10^-40.
-  sweepExp 0 (-56) (-22) 200
-  sweepExp 1 1     3     300      -- exponent_field ∈ [1, 3]
-  sweepExp 2 6     10    300      -- exponent_field ∈ [6, 10]
-  sweepExp 3 22    32    300      -- exponent_field ∈ [22, 32]
+  -- One log-scale sweep over the entire range of exponent fields that yield a
+  -- representable, non-underflowing square. `emit` silently skips the ends where the
+  -- square overflows (large e) or underflows to zero (small e), so a generous span
+  -- covers the whole positive value range without hand-tuned brackets.
+  sweep (-58) 35 800
