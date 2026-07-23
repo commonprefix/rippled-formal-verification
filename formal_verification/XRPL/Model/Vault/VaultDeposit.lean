@@ -124,7 +124,8 @@ def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool)
   }
 
   -- C++: if (maximum != 0 && assetsTotal > maximum)
-  if vault.assetsMaximum.any (fun m => vault'.assetsTotal.operator_gt m) then
+  let assetsMaximum := vault.assetsMaximum.getD Number.zero
+  if assetsMaximum.operator_ne Number.zero && vault'.assetsTotal.operator_gt assetsMaximum then
     return .rejected vault .tecLIMIT_EXCEEDED
 
   return ⟨none, vault', assetDeposited, sharesCreated⟩
