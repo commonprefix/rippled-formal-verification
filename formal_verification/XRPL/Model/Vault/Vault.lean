@@ -15,7 +15,6 @@ structure Vault where
   numericType : NumericType
   scale : UInt8
   sharesTotal : Number
-  interestUnrealized : Number
   lossUnrealized : Number
 
 def Vault.hasCap (vault : Vault) : Bool :=
