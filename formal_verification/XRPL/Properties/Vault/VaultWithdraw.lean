@@ -36,8 +36,8 @@ theorem Vault.sharesToAssetsWithdraw_bounds (shares assets : STAmount)
     (waiveUnrealizedLoss : Bool)
     (hnn : 0 ≤ shares.toRat) -- nonnegative shares, negative ones price negatively
     (hc : shares.Canonical) -- shares stored canonically, so `shares.toNumber` is value-exact
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
     0 ≤ assets.toRat ∧
@@ -65,8 +65,8 @@ theorem Vault.sharesToAssetsWithdraw_attained :
   Vault.sharesToAssetsWithdraw_witness
 
 /-- `sharesToAssetsWithdraw_bounds` without the `WithdrawNavExact` hypothesis,
-so it also holds when computing `assetsTotal - interestUnrealized -
-lossUnrealized` rounds. That rounding moves the price of every share, and the
+so it also holds when computing assetsTotal minus lossUnrealized rounds. That
+rounding moves the price of every share, and the
 worst case is `navSlack * shares / sharesTotal`, which is added to both
 bounds. When `WithdrawNavExact` holds, `sharesToAssetsWithdraw_bounds` gives
 the tighter bounds without the slack term. -/
@@ -107,8 +107,8 @@ theorem Vault.withdraw_sharesBurned (assets : STAmount) (waiveUnrealizedLoss : B
     (r : WithdrawResult)
     (hpos : 0 < assets.toRat) -- the withdrawn amount is positive, the preflight guard
     (hc : assets.Canonical) -- assets stored canonically, so `assets.toNumber` is value-exact
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw (.vaultAssets assets) waiveUnrealizedLoss = .ok r)
     (herr : r.error = none) :
@@ -137,8 +137,8 @@ theorem Vault.withdraw_payout (amount : WithdrawAmount) (waiveUnrealizedLoss : B
     (sharesTotalAmount : STAmount) (r : WithdrawResult)
     (hnn : 0 ≤ r.sharesBurned.toRat) -- nonnegative shares, negative ones price negatively
     (hc : r.sharesBurned.Canonical) -- burned shares canonical, so their `toNumber` is value-exact
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     -- not the final withdrawal, which pays all of assetsAvailable instead
@@ -179,8 +179,8 @@ theorem Vault.withdraw_payout_integral (amount : WithdrawAmount) (waiveUnrealize
     (hint : v.numericType.isIntegral = true) -- the vault holds an integral asset
     (hnn : 0 ≤ r.sharesBurned.toRat) -- nonnegative shares, negative ones price negatively
     (hc : r.sharesBurned.Canonical) -- burned shares canonical, so their `toNumber` is value-exact
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     -- not the final withdrawal, which pays all of assetsAvailable instead
@@ -198,8 +198,8 @@ conversion is monotone. -/
 theorem Vault.withdraw_payout_monotone (amount₁ amount₂ : WithdrawAmount)
     (hv : v.Lawful) -- the starting vault is lawful
     (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r₁ r₂ : WithdrawResult)
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     -- the burned shares are stored canonically and are nonnegative
     (hcb₁ : r₁.sharesBurned.Canonical) (hcb₂ : r₂.sharesBurned.Canonical)
@@ -309,8 +309,8 @@ theorem Vault.withdraw_under_available (shares : STAmount) (waiveUnrealizedLoss 
     (hv : v.Lawful) -- the starting vault is lawful
     (hpos : 0 < shares.toRat) -- the withdrawn shares are positive, the preflight guard
     (hc : shares.Canonical) -- shares stored canonically, so `shares.toNumber` is value-exact
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
     -- the named shares' worth fits under assetsAvailable with margin
@@ -351,8 +351,8 @@ theorem Vault.withdraw_final_payout (amount : WithdrawAmount) (waiveUnrealizedLo
     (hpos : 0 < r.sharesBurned.toRat) -- a positive burn (the meaningful by-shares input class)
     (hc : r.sharesBurned.Canonical) -- burned shares canonical, so their `toNumber` is value-exact
     (hSnt : r.sharesBurned.mNumericType = .int64) -- burned shares are the `int64` share amount
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     -- the run was final: only the final branch zeroes the share total

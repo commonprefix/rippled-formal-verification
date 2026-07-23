@@ -23,7 +23,7 @@ def cwv : Vault :=
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The clamped-run vault: the same vault with only `0.0001` available. -/
 def cwvB : Vault :=
@@ -53,7 +53,7 @@ def cwv1' : Vault :=
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The `cwv` clawback result. -/
 def cwr1 : ClawbackResult := ⟨none, cwv1', cwar1, cwsh1⟩
@@ -64,7 +64,7 @@ def cwvB' : Vault :=
   , assetsAvailable := ⟨false, 1428600000000000000, -34⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6999766666666667000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The `cwvB` clawback result. -/
 def cwr2 : ClawbackResult := ⟨none, cwvB', cwar2, cwsh2⟩

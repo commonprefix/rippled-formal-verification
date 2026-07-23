@@ -30,10 +30,10 @@ computation below chains more than three stages, so `10 ^ (-17)` covers every
 composition. -/
 def depositε : ℚ := (10 : ℚ) ^ (-17 : ℤ)
 
-/-- Net asset value used to price a deposit: `assetsTotal - interestUnrealized`.
+/-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
 def Vault.depositNav (v : Vault) : ℚ :=
-  v.toExact.assetsTotal - v.toExact.interestUnrealized
+  v.toExact.assetsTotal
 
 /-- The exact share amount for a deposit, before any rounding. The XLS-0065
 exchange formula: an empty vault issues `amount * 10 ^ scale` shares, otherwise

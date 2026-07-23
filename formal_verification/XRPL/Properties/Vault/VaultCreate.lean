@@ -17,7 +17,7 @@ theorem Vault.create_toExact (nt : NumericType) (scale : UInt8)
     (Vault.create nt scale assetsMaximum).toExact =
       { assetsTotal := 0, assetsAvailable := 0,
         assetsMaximum := assetsMaximum.map Number.toRat,
-        sharesTotal := 0, interestUnrealized := 0, lossUnrealized := 0 } := by
+        sharesTotal := 0, lossUnrealized := 0 } := by
   unfold Vault.toExact Vault.create
   simp only [Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
 

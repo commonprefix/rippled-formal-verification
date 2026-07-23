@@ -39,8 +39,8 @@ theorem Vault.clawback_sharesDestroyed
     (assets sharesDestroyed assetsRecovered : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
     -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
     -- (a non-canonical input rounds ~5e-16 and the bound below would be false)
@@ -84,8 +84,8 @@ theorem Vault.clawback_sharesDestroyed_clamped
     (assets sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
     -- the first exchange computation
     (hshares : assetsToSharesWithdraw v assets false false = .ok sharesDestroyed)
@@ -136,8 +136,8 @@ ideal itself below the smallest positive representable of the vault's numeric
 type (one whole unit for an integral asset, `10⁻⁸¹` for a fractional one). -/
 theorem Vault.clawback_assetsRecovered (assets : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
     -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
     (hc : assets.Canonical)
@@ -177,8 +177,8 @@ theorem Vault.clawback_assetsRecovered_attained :
 stays below one whole unit plus the stage error. -/
 theorem Vault.clawback_assetsRecovered_integral (assets : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
     (hint : v.numericType.isIntegral = true) -- the vault holds an integral asset
     -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
@@ -195,8 +195,8 @@ up to the `depositε` relative error of the `Number` subtraction, and the
 domain. -/
 theorem Vault.clawback_vault_updates (assets : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the two subtractions computing assetsTotal - interestUnrealized - lossUnrealized
-    -- do not round (automatic when interest and loss are both zero)
+    -- the subtraction computing assetsTotal minus lossUnrealized
+    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
     -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
     (hc : assets.Canonical)

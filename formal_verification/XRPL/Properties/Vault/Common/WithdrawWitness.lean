@@ -36,7 +36,7 @@ def wvW : Vault :=
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The asset-denominated witness amount, `1` of the IOU. -/
 def waW : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
@@ -57,7 +57,7 @@ def wvW' : Vault :=
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness result of the asset-denominated run. -/
 def wrW : WithdrawResult := ⟨none, wvW', wpW, wshW⟩
@@ -77,7 +77,7 @@ def wv4W' : Vault :=
   , assetsAvailable := ⟨false, 2999000000000000143, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6997666666666667000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness result of the vault-updates run. -/
 def wr4W : WithdrawResult := ⟨none, wv4W', wp4W, wsh4W⟩

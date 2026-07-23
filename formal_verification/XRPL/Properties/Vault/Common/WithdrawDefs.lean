@@ -14,9 +14,9 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 /-- Net asset value backing the shares for withdrawal:
-`assetsTotal - interestUnrealized - lossUnrealized`. -/
+assetsTotal minus lossUnrealized. -/
 def Vault.withdrawNav (v : Vault) : ℚ :=
-  v.toExact.assetsTotal - v.toExact.interestUnrealized - v.toExact.lossUnrealized
+  v.toExact.assetsTotal - v.toExact.lossUnrealized
 
 /-- The exact `assets'` for redeeming `shares`, before any rounding. The XLS-0065
 exchange formula `nav * shares / sharesTotal`, where the pricing `nav` is
@@ -41,20 +41,17 @@ every modeled operation preserves. Without it the first subtraction can round
 away digits that the second subtraction cancels, and no relative accuracy
 bound against the exact stored fields exists. -/
 def Vault.WithdrawNavExact (v : Vault) (waiveUnrealizedLoss : Bool) : Prop :=
-  ∃ netAssetValue netAssetValue' : Number,
-    v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok netAssetValue ∧
-    netAssetValue.operator_sub
+  ∃ netAssetValue : Number,
+    v.assetsTotal.operator_sub
       (match waiveUnrealizedLoss with
         | true => Number.zero
-        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue' ∧
-    netAssetValue'.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav)
+        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue ∧
+    netAssetValue.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav)
 
 /-- Bound on how far the computed pricing value can sit from the exact
-`assetsTotal - interestUnrealized - lossUnrealized`: each of the two
-subtractions is correctly rounded, so each contributes at most `depositε`
-relative to its exact operand magnitudes. -/
+assetsTotal minus lossUnrealized: the single subtraction is correctly rounded,
+contributing at most `depositε` relative to its exact operand magnitude. -/
 def Vault.navSlack (v : Vault) : ℚ :=
-  depositε * (|v.toExact.assetsTotal| +
-    |v.toExact.assetsTotal - v.toExact.interestUnrealized|)
+  depositε * |v.toExact.assetsTotal - v.toExact.lossUnrealized|
 
 end XRPL.Model.SingleAssetVault
