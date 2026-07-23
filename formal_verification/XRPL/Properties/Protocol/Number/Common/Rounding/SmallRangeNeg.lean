@@ -2,11 +2,11 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeBound
 
 /-! # Exact 16-digit re-round of a negative `Number`
 
-Mirror of `SmallRangePos`: on the negative side the magnitude roles swap —
+Mirror of `SmallRangePos`: on the negative side the magnitude roles swap.
 `.downward` is the exact magnitude ceiling, `.upward`/`.towards_zero` the exact
 magnitude floor. -/
 
-gt namespace XRPL.Model.Protocol
+namespace XRPL.Model.Protocol
 
 /-- **`.downward` on a negative `Number`: exact magnitude ceiling**
 `-(⌈M/1000⌉·10^(e+3))`, with `exp = e+3` except a `+1` cusp carry. -/

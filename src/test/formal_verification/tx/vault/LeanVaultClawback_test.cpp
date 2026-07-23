@@ -198,9 +198,9 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(clawAmount), expected);
     }
 
-    // canClawbackVaultShares preclaim
+    // canBurnShares preclaim
     void
-    compareCanClawbackShares(
+    compareCanBurnShares(
         jtx::Env& env,
         Keylet const& vaultKeylet,
         jtx::Account const& owner,
@@ -210,8 +210,8 @@ class LeanVaultClawback_test : public LeanSuite
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
-        LeanCanClawbackResult const lean = leanCanClawbackVaultShares(state);
-        BEAST_EXPECTS(!lean.threw, "lean canClawbackVaultShares raised");
+        LeanCanBurnResult const lean = leanCanBurnShares(state);
+        BEAST_EXPECTS(!lean.threw, "lean canBurnShares raised");
 
         env(Vault::clawback({.issuer = owner, .id = vaultKeylet.key, .holder = holder}),
             jtx::Ter(std::ignore));
@@ -230,7 +230,7 @@ class LeanVaultClawback_test : public LeanSuite
     }
 
     void
-    testCanClawback(
+    testCanBurnShares(
         Number const& assetsTotal,
         Number const& assetsAvailable,
         std::uint64_t sharesTotal,
@@ -238,7 +238,7 @@ class LeanVaultClawback_test : public LeanSuite
     {
         using namespace jtx;
         testcase(
-            "canClawbackVaultShares total=" + to_string(assetsTotal) +
+            "canBurnShares total=" + to_string(assetsTotal) +
             " avail=" + to_string(assetsAvailable) + " shares=" + std::to_string(sharesTotal));
 
         Env env(*this);
@@ -251,7 +251,7 @@ class LeanVaultClawback_test : public LeanSuite
         PrettyAsset const asset = issuer["USD"];
         auto const vaultKeylet = createVault(env, owner, asset.raw());
         BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsAvailable, sharesTotal));
-        compareCanClawbackShares(env, vaultKeylet, owner, holder, asset.raw(), expected);
+        compareCanBurnShares(env, vaultKeylet, owner, holder, asset.raw(), expected);
     }
 
     // Vault.burnShares models the owner burning a holder's shares
@@ -321,6 +321,49 @@ class LeanVaultClawback_test : public LeanSuite
         testClawbackDrifted(3, 2, 2, tesSUCCESS);
     }
 
+    // Discrepancy (C++ bug): a clawback too small to debit assetsTotal (the debit rounds back
+    // to the old value) still pays the issuer and burns the holder's shares. Same finding as
+    // testWithdrawPrecisionLoss in LeanVaultWithdraw_test.cpp, the model rejects with
+    // tecPRECISION_LOSS.
+    void
+    testClawbackPrecisionLoss()
+    {
+        using namespace jtx;
+        testcase("clawback below assetsTotal precision");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(20'000'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(11'000'000'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        // Move assetsTotal to ~1e10 (ULP 1e-5): deposit 9,999,999,999.999999, then 0.00001.
+        env(Vault::deposit(
+                {.depositor = holder,
+                 .id = vaultKeylet.key,
+                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, -5})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Clawback 1e-6, below the vault's 1e-5 ULP: the recovery cannot debit assetsTotal.
+        compareClawbackAsset(
+            env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
+    }
+
     void
     runTests() override
     {
@@ -333,18 +376,18 @@ class LeanVaultClawback_test : public LeanSuite
         testClawbackAsset(1'000, 1'000, tesSUCCESS);
         testClawbackAsset(1'000, 1'001, tesSUCCESS);
 
-        // canClawbackVaultShares: every (assetsTotal, assetsAvailable, sharesTotal) combination
-        testCanClawback(Number{0}, Number{0}, 0, tecNO_PERMISSION);
-        testCanClawback(Number{0}, Number{0}, 1'000, tesSUCCESS);
-        testCanClawback(Number{1'000}, Number{0}, 0, tecNO_PERMISSION);
-        testCanClawback(Number{1'000}, Number{0}, 1'000, tecNO_PERMISSION);
-        testCanClawback(Number{1'000}, Number{1'000}, 0, tecNO_PERMISSION);
-        testCanClawback(Number{1'000}, Number{1'000}, 1'000, tecNO_PERMISSION);
-        testCanClawback(Number{0}, Number{0}, kMaxMpTokenAmount, tesSUCCESS);
+        // canBurnShares: every (assetsTotal, assetsAvailable, sharesTotal) combination
+        testCanBurnShares(Number{0}, Number{0}, 0, tecNO_PERMISSION);
+        testCanBurnShares(Number{0}, Number{0}, 1'000, tesSUCCESS);
+        testCanBurnShares(Number{1'000}, Number{0}, 0, tecNO_PERMISSION);
+        testCanBurnShares(Number{1'000}, Number{0}, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(Number{1'000}, Number{1'000}, 0, tecNO_PERMISSION);
+        testCanBurnShares(Number{1'000}, Number{1'000}, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(Number{0}, Number{0}, kMaxMpTokenAmount, tesSUCCESS);
         // Per-field extremes: huge assets deny
-        testCanClawback(iouMax, iouMax, 1'000, tecNO_PERMISSION);
-        testCanClawback(iouMax, Number{0}, 1'000, tecNO_PERMISSION);
-        testCanClawback(Number{0}, Number{0}, UINT64_MAX, tesSUCCESS);
+        testCanBurnShares(iouMax, iouMax, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(iouMax, Number{0}, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(Number{0}, Number{0}, UINT64_MAX, tesSUCCESS);
 
         // Vault.burnShares
         testBurnShares(1'000'000'000, 1'000'000'000);
@@ -370,6 +413,7 @@ class LeanVaultClawback_test : public LeanSuite
 
         // Known discrepancies: each fails until the C++ code is fixed
         // testClawbackOvervaluedShares();  // model rounds down, C++ over-recovers
+        // testClawbackPrecisionLoss();  // model tecPRECISION_LOSS, C++ pays without debiting
     }
 };
 

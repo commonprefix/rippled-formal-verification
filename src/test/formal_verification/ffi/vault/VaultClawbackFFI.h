@@ -18,7 +18,7 @@ lean_vault_clawback(lean_object* state, lean_object* assets);
 lean_object*
 lean_vault_burn_shares(lean_object* state, lean_object* sharesDestroyed);
 lean_object*
-lean_can_clawback_vault_shares(lean_object* state);
+lean_can_burn_shares(lean_object* state);
 
 lean_object*
 lean_clawback_result_assets(lean_object* r);
@@ -30,9 +30,9 @@ lean_object*
 lean_clawback_result_error(lean_object* r);
 
 lean_object*
-lean_can_clawback_result_assets(lean_object* r);
+lean_can_burn_result_assets(lean_object* r);
 lean_object*
-lean_can_clawback_result_code(lean_object* r);
+lean_can_burn_result_code(lean_object* r);
 }
 
 namespace xrpl::test::formal_verification {
@@ -101,36 +101,36 @@ leanBurnShares(VaultState const& state, STAmount const& sharesDestroyed)
     return {.threw = false, .vault = e.value->read()};
 }
 
-struct LeanCanClawbackResult
+struct LeanCanBurnResult
 {
     bool threw{};
     std::optional<TER> error;
     std::optional<STAmount> assets;
 };
 
-class CanClawbackResultFFI : public LeanObjectFFI
+class CanBurnResultFFI : public LeanObjectFFI
 {
 public:
     using LeanObjectFFI::LeanObjectFFI;
 
-    LeanCanClawbackResult
+    LeanCanBurnResult
     read() const
     {
-        auto const code = leanGetOptU32(lean_can_clawback_result_code);
+        auto const code = leanGetOptU32(lean_can_burn_result_code);
         return {
             .threw = false,
             .error = code ? std::optional<TER>{TER::fromInt(static_cast<std::int32_t>(*code))}
                           : std::nullopt,
-            .assets = leanGetOpt<STAmountFFI>(lean_can_clawback_result_assets),
+            .assets = leanGetOpt<STAmountFFI>(lean_can_burn_result_assets),
         };
     }
 };
 
-inline LeanCanClawbackResult
-leanCanClawbackVaultShares(VaultState const& state)
+inline LeanCanBurnResult
+leanCanBurnShares(VaultState const& state)
 {
-    LeanExcept<CanClawbackResultFFI> const e = readExcept<CanClawbackResultFFI>(
-        leanCall(lean_can_clawback_vault_shares, VaultStateFFI::build(state)));
+    LeanExcept<CanBurnResultFFI> const e =
+        readExcept<CanBurnResultFFI>(leanCall(lean_can_burn_shares, VaultStateFFI::build(state)));
     if (!e.value)
         return {.threw = true, .error = std::nullopt, .assets = std::nullopt};
     return e.value->read();

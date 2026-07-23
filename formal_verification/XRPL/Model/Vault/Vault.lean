@@ -11,12 +11,18 @@ open XRPL.Model.Protocol
 structure Vault where
   assetsTotal : Number
   assetsAvailable : Number
-  assetsMaximum : Number
+  assetsMaximum : Option Number
   numericType : NumericType
   scale : UInt8
-  sharesTotal : Number -- shares MPT sfOutstandingAmount
+  sharesTotal : Number
   interestUnrealized : Number
   lossUnrealized : Number
+
+def Vault.hasCap (vault : Vault) : Bool :=
+  vault.assetsMaximum.isSome
+
+def Vault.isInsolvent (vault : Vault) : Bool :=
+  vault.assetsTotal.mantissa_ = 0 && vault.sharesTotal.signum = 1
 
 -- Detect an overflow exception surfaced as a String error from arithmetic ops.
 def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2

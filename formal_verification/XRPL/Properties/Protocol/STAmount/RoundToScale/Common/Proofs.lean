@@ -161,13 +161,17 @@ set_option maxHeartbeats 3200000 in
 /-- **`roundToExponent` is correctly rounded onto the grid `10^s·ℤ`** (faithfully
 for `.to_nearest`): the result is the floor/ceiling of the value at scale `s`
 per the directed mode, or one of the two enclosing grid points for
-`.to_nearest`. Hypotheses: a canonical nonzero IOU value and a scale in
-`[-81, 80]` (below `-81` the 16-digit exponent clamp can flush nonzero
-results; above `80` the reference construction overflows). -/
+`.to_nearest`. Hypotheses: a canonical IOU value, a scale in the full IOU range
+`[-96, 80]`, and a nonzero result (`result.mValue ≠ 0`). Below `-81` the 16-digit
+exponent clamp can flush a grid coefficient of small magnitude to zero; the
+nonzero-result hypothesis rules that flush out, so the exact grid point survives
+across the whole `[-96, 80]` range (above `80` the reference construction
+overflows). -/
 theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : ℤ)
     (mode : rounding_mode)
     (hc : value.IOUCanonical)
-    (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
+    (h_s : (-96 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
+    (hnz : result.mValue ≠ 0)
     (hok : STAmount.roundToExponent value s mode = .ok result) :
     RoundsToRepresentableAt result value.toRat s mode := by
   have h_int : value.integral = false := by
@@ -438,6 +442,27 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           (by rw [hw_mant]; exact hw₀_mod)
           (by rw [hw_exp]; have := hw₀_exp_lo; unfold minExponent; omega)
           (by rw [hw_exp]; have := hw₀_exp_hi; unfold maxExponent; omega)
+        -- The 16-digit repack keeps `w`'s exponent within the IOU floor `cMinOffset`.
+        -- Below `-81` the coefficient `k·10^s` could underflow that floor, in which
+        -- case the repack flushes to the canonical zero; the nonzero-result
+        -- hypothesis `hnz` rules that flush out, so the floor bound holds.
+        have h_no_over : ¬ w.exponent_ + 3 > cMaxOffset := by
+          rw [hw_exp]; unfold cMaxOffset; have := hw₀_exp_hi; omega
+        have hexp_ge : cMinOffset ≤ w.exponent_ + 3 := by
+          by_contra hlt
+          push_neg at hlt
+          have h_of_zero : IOUAmount.ofNumber n₂ mode = .ok IOUAmount.zero := by
+            rw [h_n₂_eq_w]
+            unfold IOUAmount.ofNumber IOUAmount.fromNumber
+            rw [h_ntr]
+            simp only []
+            rw [if_neg h_no_over, if_pos hlt]
+          have h_sumI_zero : sumI₂ = IOUAmount.zero :=
+            Except.ok.inj (h_of₂.symm.trans h_of_zero)
+          rw [h_sumI_zero, STAmount.ofIOU_zero mode] at h_pack₂
+          have hres0 : result = ⟨.fractional, 0, -100, false⟩ :=
+            Except.ok.inj h_pack₂.symm
+          exact hnz (by rw [hres0])
         have h_of_explicit : IOUAmount.ofNumber n₂ mode
             = .ok ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
                    else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ := by
@@ -445,16 +470,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           unfold IOUAmount.ofNumber IOUAmount.fromNumber
           rw [h_ntr]
           simp only []
-          rw [if_neg (by
-              show ¬ w.exponent_ + 3 > cMaxOffset
-              rw [hw_exp]
-              unfold cMaxOffset
-              omega),
-            if_neg (by
-              show ¬ w.exponent_ + 3 < cMinOffset
-              rw [hw_exp]
-              unfold cMinOffset
-              omega)]
+          rw [if_neg h_no_over, if_neg (not_lt.mpr hexp_ge)]
         have h_sumI₂_eq : sumI₂ = ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
             else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ :=
           Except.ok.inj (h_of₂.symm.trans h_of_explicit)
@@ -493,7 +509,8 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
                 rcases hb : w.negative_ with _ | _ <;> simp <;> omega
               exp_lo := by
                 show (-96 : ℤ) ≤ w.exponent_ + 3
-                rw [hw_exp]
+                have := hexp_ge
+                unfold cMinOffset at this
                 omega
               exp_hi := by
                 show w.exponent_ + 3 ≤ 80
