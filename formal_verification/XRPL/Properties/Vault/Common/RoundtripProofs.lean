@@ -135,7 +135,6 @@ private lemma roundtrip_charge_Q (v : Vault) (hv : v.Lawful)
     (shares c : STAmount)
     (hshc : shares.IntegralCanonical) (hshnt : shares.mNumericType = .int64)
     (hshpos : 0 < shares.toRat)
-    (hI : v.toExact.interestUnrealized = 0)
     (hmz : v.assetsTotal.mantissa_ ≠ 0)
     (hcnz : c.isZero = false)
     (hsad : sharesToAssetsDeposit v shares = .ok c) :
@@ -151,22 +150,12 @@ private lemma roundtrip_charge_Q (v : Vault) (hv : v.Lawful)
     rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
     · exact h
     · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
-  have hI0 : v.interestUnrealized = Number.zero := by
-    have hmzI : v.interestUnrealized.mantissa_ = 0 := by
-      by_contra h
-      exact (Number.toRat_ne_zero_of_mantissa_ne_zero v.interestUnrealized h) hI
-    exact Number.eq_zero_of_mantissa_zero v.interestUnrealized hv.wf.interestUnrealized_norm hmzI
-  have hnavm_sub : ∀ nvN, v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nvN →
-      nvN.mantissa_ ≠ 0 := by
-    intro nvN hnvN
-    rw [hI0, operator_sub_zero_right] at hnvN
-    rw [← Except.ok.inj hnvN]; exact hmz
   have hideal_eq : v.idealChargeDeposit shares.toRat =
       v.toExact.assetsTotal * shares.toRat / (v.toExact.sharesTotal : ℚ) := by
     unfold Vault.idealChargeDeposit Vault.depositNav
-    rw [if_neg (ne_of_gt hApos), hI, sub_zero]
+    rw [if_neg (ne_of_gt hApos)]
   obtain ⟨Q, hcQ, hidpos, hQnz, hQz⟩ :=
-    sharesToAssetsDeposit_charge_nonempty_raw v hv shares c hshc hshnt hshpos hmz hnavm_sub hsad
+    sharesToAssetsDeposit_charge_nonempty_raw v hv shares c hshc hshnt hshpos hmz hsad
   have hc0 : c.mValue ≠ 0 := ne_of_beq_false (by rw [STAmount.isZero] at hcnz; exact hcnz)
   have hQm : Q.mantissa_ ≠ 0 := by
     by_cases hint : v.numericType.isIntegral = true
@@ -322,7 +311,6 @@ underflow (`isZero`) corners discharged separately. -/
 theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAmount)
     (r₁ : DepositResult) (r₂ : WithdrawResult)
     (hv : v.Lawful)
-    (hI : v.toExact.interestUnrealized = 0)
     (hL : v.toExact.lossUnrealized = 0)
     (hpos : 0 < amountDeposit.toRat)
     (hcanon : amountDeposit.Canonical)
@@ -345,7 +333,7 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
     hcomp, hcN, hsN, hat, hav, hst, hmax, hr⟩ :=
     Vault.deposit_success_reduces v amountDeposit false r₁ hok₁ herr₁
   have hLawful₁ : r₁.vault'.Lawful :=
-    Vault.deposit_lawful_proof v amountDeposit false hv hI hL hAV hcanon (le_of_lt hpos) r₁ hok₁ hSsz
+    Vault.deposit_lawful_proof v amountDeposit false hv hL hAV hcanon (le_of_lt hpos) r₁ hok₁ hSsz
   subst hr
   set V' : Vault := { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } with hV'def
   have hinsolv' : v.isInsolvent = false := hinsolv rfl
@@ -366,22 +354,16 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
   have hshnt' : sC.mNumericType = .int64 := hseq ▸ hshnt
   obtain ⟨hcN_val, hcN_norm⟩ := sharesToAssetsDeposit_toNumber_exact v hv sC aD cN hshc' hshnt' hsad' hcN
   have hcN_nn : 0 ≤ cN.toRat := by rw [hcN_val]; exact hDnn
-  have hI0 : v.interestUnrealized = Number.zero := by
-    have hmzI : v.interestUnrealized.mantissa_ = 0 := by
-      by_contra h; exact (Number.toRat_ne_zero_of_mantissa_ne_zero v.interestUnrealized h) hI
-    exact Number.eq_zero_of_mantissa_zero v.interestUnrealized hv.wf.interestUnrealized_norm hmzI
   have hL0 : v.lossUnrealized = Number.zero := by
     have hmzL : v.lossUnrealized.mantissa_ = 0 := by
       by_contra h; exact (Number.toRat_ne_zero_of_mantissa_ne_zero v.lossUnrealized h) hL
     exact Number.eq_zero_of_mantissa_zero v.lossUnrealized hv.wf.lossUnrealized_norm hmzL
   have hNav₁ : V'.WithdrawNavExact false := by
-    refine ⟨at', at', ?_, ?_, ?_⟩
-    · show at'.operator_sub v.interestUnrealized .to_nearest = .ok at'
-      rw [hI0]; exact operator_sub_zero_right _ _
+    refine ⟨at', ?_, ?_⟩
     · show at'.operator_sub v.lossUnrealized .to_nearest = .ok at'
       rw [hL0]; exact operator_sub_zero_right _ _
-    · show at'.toRat = at'.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI, show v.lossUnrealized.toRat = 0 from hL]; ring
+    · show at'.toRat = at'.toRat - v.lossUnrealized.toRat
+      rw [show v.lossUnrealized.toRat = 0 from hL]; ring
   obtain ⟨cw, aN', sta, hcomp2, herr_cw, haN', hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces V' (.vaultShares sC) false r₂ hok₂ herr₂
   obtain ⟨hstw, hsr⟩ := computeWithdrawByShares_none_reduces V' sC false cw hcomp2 herr_cw
@@ -407,10 +389,10 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
       = at'.toRat * sC.toRat / ((v.toExact.sharesTotal : ℚ) + sC.toRat) := by
     unfold Vault.idealAssetsWithdraw Vault.withdrawNav
     rw [if_neg (by decide), hSharesEq]
-    have hwn : V'.toExact.assetsTotal - V'.toExact.interestUnrealized - V'.toExact.lossUnrealized
+    have hwn : V'.toExact.assetsTotal - V'.toExact.lossUnrealized
         = at'.toRat := by
-      show at'.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat = at'.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI, show v.lossUnrealized.toRat = 0 from hL]; ring
+      show at'.toRat - v.lossUnrealized.toRat = at'.toRat
+      rw [show v.lossUnrealized.toRat = 0 from hL]; ring
     rw [hwn]
   have hUAnn : (0:ℚ) ≤ (10:ℚ) ^ r₂.assets'.exponent := le_of_lt (zpow_pos (by norm_num) _)
   have hUCnn : (0:ℚ) ≤ (10:ℚ) ^ aD.exponent := le_of_lt (zpow_pos (by norm_num) _)
@@ -520,15 +502,12 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
         have hC0 : aD.toRat = 0 := (STAmount.toRat_eq_zero_iff aD).mpr haD0
         have hApos : 0 < v.toExact.assetsTotal :=
           lt_of_le_of_ne hAnn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz))
-        have hnavm_sub : ∀ nvN, v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nvN →
-            nvN.mantissa_ ≠ 0 := by
-          intro nvN hnvN; rw [hI0, operator_sub_zero_right] at hnvN; rw [← Except.ok.inj hnvN]; exact hmz
         obtain ⟨Q, hcQ, hidpos, hQnz, hQz⟩ :=
-          sharesToAssetsDeposit_charge_nonempty_raw v hv sC aD hshc' hshnt' hSCpos hmz hnavm_sub hsad'
+          sharesToAssetsDeposit_charge_nonempty_raw v hv sC aD hshc' hshnt' hSCpos hmz hsad'
         have hIC_eq' : v.idealChargeDeposit sC.toRat
             = v.toExact.assetsTotal * sC.toRat / (v.toExact.sharesTotal : ℚ) := by
           unfold Vault.idealChargeDeposit Vault.depositNav
-          rw [if_neg (ne_of_gt hApos), hI, sub_zero]
+          rw [if_neg (ne_of_gt hApos)]
         have hmvne : cw.assets'.mValue ≠ 0 := ne_of_beq_false (by rw [STAmount.isZero] at hAnz; exact hAnz)
         have hA_lo : (10 : ℚ) ^ (-81 : ℤ) ≤ cw.assets'.toRat := by
           have hcanon := Vault.sharesToAssetsWithdraw_disj_canonical V' hLawful₁ sC cw.assets' false hSC_canon hstw hmvne
@@ -577,7 +556,7 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
         have h := STAmount.toRat_ne_zero aD (ne_of_beq_false (by rw [STAmount.isZero] at hCnz; exact hCnz))
         exact lt_of_le_of_ne hDnn (Ne.symm h)
       obtain ⟨Q, hQlo, hQhi, hQClo, hQChi, hICpos, hIC_eq⟩ :=
-        roundtrip_charge_Q v hv sC aD hshc' hshnt' hSCpos hI hmz hCnz hsad'
+        roundtrip_charge_Q v hv sC aD hshc' hshnt' hSCpos hmz hCnz hsad'
       have hicid : v.toExact.assetsTotal * sC.toRat
           = v.idealChargeDeposit sC.toRat * (v.toExact.sharesTotal : ℚ) := by
         rw [hIC_eq]; field_simp
@@ -629,14 +608,11 @@ private theorem wvF_lawful' : wvF.Lawful := by
     rw [show wvF.sharesTotal = (⟨false, 7000000000000000000, -3⟩ : Number) from rfl, wvF_shares_toRat']
     norm_num
     rfl
-  have wvF_exact_interest : wvF.toExact.interestUnrealized = 0 := by
-    simp only [Vault.toExact]; exact Number.toRat_eq_zero_of_mantissa_zero _ rfl
-  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_⟩
   · show (⟨false, 3000000000000000000, -18⟩ : Number).isNormalized; norm_isNormalized
   · show (⟨false, 3000000000000000000, -18⟩ : Number).isNormalized; norm_isNormalized
   · intro m hm; rw [show wvF.assetsMaximum = none from rfl] at hm; exact absurd hm (by simp)
   · show (⟨false, 7000000000000000000, -3⟩ : Number).isNormalized; norm_isNormalized
-  · exact Or.inl rfl
   · exact Or.inl rfl
   · show (0 : ℚ) ≤ (⟨false, 7000000000000000000, -3⟩ : Number).toRat
     rw [wvF_shares_toRat']; positivity
@@ -651,10 +627,9 @@ private theorem wvF_lawful' : wvF.Lawful := by
           show ((3000000000000000000 : UInt64).toNat) = 3000000000000000000 from by decide]
       norm_num
     have hST := wvF_exact_sharesTotal
-    have hI := wvF_exact_interest
     have hL : wvF.toExact.lossUnrealized = 0 := by
       simp only [Vault.toExact]; exact Number.toRat_eq_zero_of_mantissa_zero _ rfl
-    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [hAT]; norm_num
     · rw [hAA]; norm_num
     · rw [hAT, hAA]
@@ -663,11 +638,7 @@ private theorem wvF_lawful' : wvF.Lawful := by
     · intro m hm; rw [show wvF.toExact.assetsMaximum = none from rfl] at hm; exact absurd hm (by simp)
     · rw [hL]
     · rw [hL, hAT, hAA]; norm_num
-    · rw [hI]
-    · rw [hI, hAT, hAA]; norm_num
-    · intro _; rw [hI, hAT]; norm_num
-    · rw [hAT, hI, hL]; norm_num
-    · intro h; rw [hI] at h; exact absurd h (by norm_num)
+    · rw [hAT, hL]; norm_num
 
 set_option linter.style.nativeDecide false in
 /-- **Proof body of `Vault.deposit_withdraw_roundtrip_attained`.** Instantiates the
@@ -679,15 +650,14 @@ per the approved witness policy). -/
 theorem Vault.deposit_withdraw_roundtrip_attained_proof :
     ∃ (v : Vault) (amountDeposit : STAmount) (r₁ : DepositResult) (r₂ : WithdrawResult),
       v.Lawful ∧ 0 < amountDeposit.toRat ∧
-      v.toExact.interestUnrealized = 0 ∧ v.toExact.lossUnrealized = 0 ∧
+      v.toExact.lossUnrealized = 0 ∧
       v.deposit amountDeposit false = .ok r₁ ∧ r₁.error = none ∧
       r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂ ∧
       r₂.error = none ∧
       RoundsWithinWitness r₂.assets' r₁.amountDeposit'.toRat (2 * depositε) := by
   refine ⟨wvF, waF, wrF,
     (wvF'.withdraw (.vaultShares wsF) false).toOption.getD ⟨none, wvF', wcF, wsF⟩,
-    wvF_lawful', ?_, ?_, ?_, ?_, rfl, ?_, ?_, ?_⟩
-  · native_decide
+    wvF_lawful', ?_, ?_, ?_, rfl, ?_, ?_, ?_⟩
   · native_decide
   · native_decide
   · native_decide

@@ -108,7 +108,7 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
           obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+          by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok
             injection hok with h; rw [← h]
             exact .inr (.inr (.inr (.inr (.inr (.inr rfl)))))
@@ -132,7 +132,7 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok
               injection hok with h; rw [← h]
               exact .inr (.inr (.inr (.inr (.inr (.inr rfl)))))
@@ -201,7 +201,7 @@ theorem Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedA
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true) :
     v.deposit amountDeposit false = .ok (.rejected v .tecLIMIT_EXCEEDED) := by
   obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   unfold Vault.deposit
@@ -225,7 +225,7 @@ theorem Vault.deposit_donation_maximum_proof (v : Vault) (amountDeposit roundedA
     (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true) :
     v.deposit amountDeposit true = .ok (.rejected v .tecLIMIT_EXCEEDED) := by
   obtain ⟨hround, hz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   unfold Vault.deposit
@@ -249,7 +249,7 @@ theorem Vault.deposit_success_proof (v : Vault) (amountDeposit roundedAmount c s
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false) :
     v.deposit amountDeposit false =
       .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
         c, s⟩ := by
@@ -275,7 +275,7 @@ theorem Vault.deposit_donation_success_proof (v : Vault) (amountDeposit roundedA
     (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false) :
     v.deposit amountDeposit true =
       .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
         roundedAmount, STAmount.zero .int64⟩ := by

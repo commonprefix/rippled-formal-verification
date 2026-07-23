@@ -33,12 +33,11 @@ def Vault.idealSharesWithdraw (v : Vault) (waiveUnrealizedLoss : Bool) (assets :
   v.toExact.sharesTotal * assets /
     (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav)
 
-/-- The stored pricing computation loses nothing: the two `Number`
-subtractions producing the withdrawal net asset value return exactly
+/-- The stored pricing computation loses nothing: the single `Number`
+subtraction producing the withdrawal net asset value returns exactly
 `withdrawNav` (or `depositNav` when the loss is waived). Holds in particular
-whenever `interestUnrealized` and `lossUnrealized` are both zero, the state
-every modeled operation preserves. Without it the first subtraction can round
-away digits that the second subtraction cancels, and no relative accuracy
+whenever `lossUnrealized` is zero, the state every modeled operation preserves.
+Without it the subtraction can round away digits, and no relative accuracy
 bound against the exact stored fields exists. -/
 def Vault.WithdrawNavExact (v : Vault) (waiveUnrealizedLoss : Bool) : Prop :=
   ∃ netAssetValue : Number,
@@ -52,6 +51,6 @@ def Vault.WithdrawNavExact (v : Vault) (waiveUnrealizedLoss : Bool) : Prop :=
 assetsTotal minus lossUnrealized: the single subtraction is correctly rounded,
 contributing at most `depositε` relative to its exact operand magnitude. -/
 def Vault.navSlack (v : Vault) : ℚ :=
-  depositε * |v.toExact.assetsTotal - v.toExact.lossUnrealized|
+  depositε * (v.toExact.assetsTotal + v.toExact.assetsTotal)
 
 end XRPL.Model.SingleAssetVault

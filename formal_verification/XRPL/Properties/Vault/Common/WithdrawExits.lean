@@ -152,21 +152,19 @@ theorem Vault.withdraw_error_codes_proof (v : Vault) (amount : WithdrawAmount)
 
 /-- **Proof body of `sharesToAssetsWithdraw_zero_nav`.** -/
 theorem Vault.sharesToAssetsWithdraw_zero_nav_proof (v : Vault) (shares : STAmount)
-    (waiveUnrealizedLoss : Bool) (netAssetValue netAssetValue' : Number)
-    (hnav : v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok netAssetValue)
-    (hnav' : netAssetValue.operator_sub
+    (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
+    (hnav : v.assetsTotal.operator_sub
       (match waiveUnrealizedLoss with
         | true => Number.zero
-        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue')
-    (hz : netAssetValue'.mantissa_ = 0) :
+        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue)
+    (hz : netAssetValue.mantissa_ = 0) :
     v.sharesToAssetsWithdraw shares waiveUnrealizedLoss =
       .ok (STAmount.zero v.numericType) := by
   cases waiveUnrealizedLoss
   all_goals {
-    simp only [] at hnav'
     unfold Vault.sharesToAssetsWithdraw
     simp only []
-    rw [hnav, ok_bind, hnav', ok_bind]
+    rw [hnav, ok_bind]
     rw [if_pos (beq_iff_eq.mpr hz)]
     rfl
   }

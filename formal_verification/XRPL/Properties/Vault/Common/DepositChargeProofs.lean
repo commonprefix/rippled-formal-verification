@@ -162,8 +162,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
       · exact h
       · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
     have hnav_pos : 0 < nav := by
-      have := hv.valid.deposit_nav_pos hApos
-      rw [hnav_def]; unfold Vault.depositNav; linarith
+      rw [hnav_def]; unfold Vault.depositNav; exact hApos
     have hST_pos : 0 < ST := by
       have hne : v.toExact.sharesTotal ≠ 0 := by
         intro h0
@@ -184,11 +183,11 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
     -- reduce the charge pipeline
     rw [if_neg hmz] at hsad
     obtain ⟨_, _, hsad⟩ := bind_ok_peel _ _ _ hsad
-    obtain ⟨navN, hnavN, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨shN, hshN, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨P, hP, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨Q, hQ, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hsad
+    set navN := v.assetsTotal with hnavN_eq
     have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
     rw [hceq] at hc
     by_cases hc0 : c.mValue = 0
@@ -203,9 +202,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
     · -- genuine charge: run the relative composition
       have hQm : Q.mantissa_ ≠ 0 :=
         STAmount.ofNumber_integral_source_ne_zero v.numericType Q .upward c hint hc hc0
-      have hnavnorm : navN.isNormalized :=
-        operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-          hv.wf.interestUnrealized_norm hnavN
+      have hnavnorm : navN.isNormalized := by rw [hnavN_eq]; exact hv.wf.assetsTotal_norm
       obtain ⟨sn, hsn, hsnval, hsnnorm, _⟩ :=
         STAmount.toNumber_integral_exact shares .to_nearest hshc (by rw [hshnt]; decide)
       have hshNeq : sn = shN := by rw [hsn] at hshN; exact Except.ok.inj hshN
@@ -223,7 +220,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
       obtain ⟨hnavm, _⟩ :=
         operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
       obtain ⟨_, hnavbound, _, hnavN_pos⟩ :=
-        Vault.depositNav_facts v hv navN hmz hnavm hnavN
+        Vault.depositNav_facts v hv navN hmz hnavm hnavN_eq
       have hPnorm : P.isNormalized :=
         operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
       have hQnorm : Q.isNormalized :=

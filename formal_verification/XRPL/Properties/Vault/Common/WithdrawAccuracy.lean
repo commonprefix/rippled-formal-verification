@@ -563,7 +563,7 @@ lemma Vault.sharesToAssetsWithdraw_integral_shape (v : Vault) (sh assets : STAmo
     (hok : v.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok assets) :
     assets.mNumericType = v.numericType ∧ assets.mOffset = 0 ∧
     assets.mValue.toNat ≤ maxRep.toNat := by
-  obtain ⟨nav1, nav2, -, -, hcase⟩ :=
+  obtain ⟨nav, -, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v sh assets waiveUnrealizedLoss hok
   rcases hcase with ⟨-, hzero⟩ | ⟨-, sn, nv, an, -, -, -, hof⟩
   · subst hzero

@@ -133,29 +133,20 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
   have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hεlt : depositε < 1 := by rw [depositε_eq]; norm_num
   -- reduce the run and collapse the two subtractions to the exact `nav`
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
-  -- the second subtraction's operand is a `match` on `waiveUnrealizedLoss` that the
-  -- reduction recorded with a spurious proof discriminant, so resolve it under `cases`
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1 : nav1 = nv1 := Except.ok.inj (hn1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waiveUnrealizedLoss with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   -- `nav` is non-negative on a lawful vault
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
@@ -168,9 +159,7 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
       rw [if_pos rfl]
       show 0 ≤ v.depositNav
       unfold Vault.depositNav
-      have h1 := hv.valid.interestUnrealized_le
-      have h2 := hv.valid.assetsAvailable_nonneg
-      linarith
+      exact hv.valid.assetsTotal_nonneg
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   rcases hcase with ⟨hnav2m, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
@@ -209,10 +198,10 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
         cases waiveUnrealizedLoss with
         | true =>
           rw [if_pos rfl]; show v.depositNav ≤ _; unfold Vault.depositNav
-          linarith [hv.valid.interestUnrealized_nonneg]
+          linarith
         | false =>
           rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold Vault.withdrawNav
-          linarith [hv.valid.interestUnrealized_nonneg, hv.valid.lossUnrealized_nonneg]
+          linarith [hv.valid.lossUnrealized_nonneg]
       linarith
     have hST_pos : 0 < ST := by
       rw [hST_def]
@@ -353,29 +342,20 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
   have hεnn : (0 : ℚ) ≤ (12 / (2 ^ 63 - 3)) := by norm_num
   have hεlt : (12 / (2 ^ 63 - 3)) < 1 := by norm_num
   -- reduce the run and collapse the two subtractions to the exact `nav`
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
-  -- the second subtraction's operand is a `match` on `waiveUnrealizedLoss` that the
-  -- reduction recorded with a spurious proof discriminant, so resolve it under `cases`
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1 : nav1 = nv1 := Except.ok.inj (hn1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waiveUnrealizedLoss with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   -- `nav` is non-negative on a lawful vault
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
@@ -388,9 +368,7 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
       rw [if_pos rfl]
       show 0 ≤ v.depositNav
       unfold Vault.depositNav
-      have h1 := hv.valid.interestUnrealized_le
-      have h2 := hv.valid.assetsAvailable_nonneg
-      linarith
+      exact hv.valid.assetsTotal_nonneg
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   rcases hcase with ⟨hnav2m, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
@@ -429,10 +407,10 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
         cases waiveUnrealizedLoss with
         | true =>
           rw [if_pos rfl]; show v.depositNav ≤ _; unfold Vault.depositNav
-          linarith [hv.valid.interestUnrealized_nonneg]
+          linarith
         | false =>
           rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold Vault.withdrawNav
-          linarith [hv.valid.interestUnrealized_nonneg, hv.valid.lossUnrealized_nonneg]
+          linarith [hv.valid.lossUnrealized_nonneg]
       linarith
     have hST_pos : 0 < ST := by
       rw [hST_def]
@@ -584,28 +562,20 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     |shares.toRat - v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat|
       ≤ v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * depositε + 1 / 2 := by
   have hmv : shares.mValue ≠ 0 := ne_of_beq_false (show (shares.mValue == 0) = false from hnz)
-  obtain ⟨nav1, nav2, h1, h2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     assetsToSharesWithdraw_ok_reduces v assets shares false waiveUnrealizedLoss hok
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz v.assetsTotal v.interestUnrealized nav1
-      hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm h1
-  -- second subtraction: the value is uniform, the operand's normalization is per-branch
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1eq : nav1 = nv1 := Except.ok.inj (h1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waiveUnrealizedLoss with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm h2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← h2, hnav1eq]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) h2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← h2, hnav1eq]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
     cases waiveUnrealizedLoss with
     | false =>
@@ -614,7 +584,7 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     | true =>
       rw [if_pos rfl]; show 0 ≤ v.depositNav
       unfold Vault.depositNav
-      linarith [hv.valid.interestUnrealized_le, hv.valid.assetsAvailable_nonneg]
+      exact hv.valid.assetsTotal_nonneg
   set navval : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnavval_def
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   rcases hcase with ⟨hzm, hzero⟩ | ⟨hnz2, assetsNumber, sharesAssets, sharesNumber, sharesNumber',
@@ -637,10 +607,9 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
         cases waiveUnrealizedLoss with
         | false =>
           rw [if_neg (by decide)]; unfold Vault.withdrawNav; rw [hAT]
-          linarith [hv.valid.interestUnrealized_nonneg, hv.valid.lossUnrealized_nonneg]
+          linarith [hv.valid.lossUnrealized_nonneg]
         | true =>
           rw [if_pos rfl]; unfold Vault.depositNav; rw [hAT]
-          linarith [hv.valid.interestUnrealized_nonneg]
       rw [hnav2val] at hnav2_pos; linarith
   have hS_one : 1 ≤ v.sharesTotal.toRat := by
     have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hS_pos
@@ -812,27 +781,20 @@ lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
           aN.toRat + v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat * depositε) ∧
       (aN.mantissa_ = 0 →
         v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat ≤ (10 : ℚ) ^ (-32700 : ℤ)) := by
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hprice
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1eq : nav1 = nv1 := Except.ok.inj (hn1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waiveUnrealizedLoss with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1eq]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1eq]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   set navval : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnavval_def
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   have hnav2_pos : 0 < nav2.toRat := by rw [hnav2val]; exact hnav_pos
@@ -848,10 +810,9 @@ lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
         cases waiveUnrealizedLoss with
         | false =>
           rw [if_neg (by decide)]; unfold Vault.withdrawNav; rw [hAT]
-          linarith [hv.valid.interestUnrealized_nonneg, hv.valid.lossUnrealized_nonneg]
+          linarith [hv.valid.lossUnrealized_nonneg]
         | true =>
           rw [if_pos rfl]; unfold Vault.depositNav; rw [hAT]
-          linarith [hv.valid.interestUnrealized_nonneg]
       rw [hnav2val] at hnav2_pos; linarith
   have hST_one : 1 ≤ v.sharesTotal.toRat := by
     have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hST_pos
@@ -979,7 +940,7 @@ theorem Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmoun
           rw [if_neg (by decide)]; unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
         | true =>
           rw [if_pos rfl]; unfold Vault.depositNav
-          linarith [hv.valid.interestUnrealized_le, hv.valid.assetsAvailable_nonneg]
+          exact hv.valid.assetsTotal_nonneg
       have hnavpos : 0 < (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
         rcases lt_or_eq_of_le hnav_nonneg with h | h
         · exact h
@@ -1040,217 +1001,71 @@ private lemma wb_eq_intCast_of_den_one {q : ℚ} (h : q.den = 1) : q = (q.num : 
   conv_lhs => rw [← Rat.num_div_den q]
   rw [h]; simp
 
-/-- **`navSlack` budget of the two pricing subtractions.** On a lawful vault, the
-computed net asset value `nav2` (`assetsTotal - interestUnrealized - lossUnrealized`,
-or with the loss waived) sits within `depositε · assetsTotal` of the exact pricing
-value. Each subtraction is correctly rounded within `6 / (2⁶³ - 3)` relative to its
-operands (about `15×` under `depositε`), and the flush-to-zero degeneracies are ruled
-out by lawfulness: a first subtraction that underflows forces `interestUnrealized`
-and `lossUnrealized` to zero, so the genuine (nonzero-`nav2`) branch never rounds the
-first stage to zero. This is the `navSlack` half of `sharesToAssetsWithdraw_total`;
-`v.navSlack = depositε · (|assetsTotal| + |assetsTotal - interestUnrealized|)`
+/-- **`navSlack` budget of the pricing subtraction.** On a lawful vault, the
+computed net asset value `nav2` (`assetsTotal - lossUnrealized`, or `assetsTotal`
+with the loss waived) sits within `depositε · assetsTotal` of the exact pricing
+value. The single subtraction is correctly rounded within `6 / (2⁶³ - 3)` relative to
+its operands (about `15×` under `depositε`), and the flush-to-zero degeneracy is ruled
+out by lawfulness: an underflow to zero forces `lossUnrealized = 0` with a zero
+`assetsTotal`, contradicting the nonzero-`nav2` branch. This is the `navSlack` half of
+`sharesToAssetsWithdraw_total`; `v.navSlack = depositε · (assetsTotal + assetsTotal)`
 dominates `depositε · assetsTotal` since `assetsTotal ≥ 0`. -/
 lemma Vault.withdraw_nav_within (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
-    (nav1 nav2 : Number)
-    (hn1 : v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nav1)
-    (hn2 : nav1.operator_sub
+    (nav2 : Number)
+    (hsub : v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized)
         .to_nearest = .ok nav2)
     (hgen : nav2.mantissa_ ≠ 0) :
     |nav2.toRat - (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav)|
       ≤ depositε * v.assetsTotal.toRat := by
   set a := v.assetsTotal.toRat with ha_def
-  set i := v.interestUnrealized.toRat with hi_def
   set l := v.lossUnrealized.toRat with hl_def
   have ha_nn : 0 ≤ a := hv.valid.assetsTotal_nonneg
-  have hi_nn : 0 ≤ i := hv.valid.interestUnrealized_nonneg
   have hl_nn : 0 ≤ l := hv.valid.lossUnrealized_nonneg
-  have hAA_nn : 0 ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hi_le : i ≤ a - v.assetsAvailable.toRat := hv.valid.interestUnrealized_le
-  have hai_nn : 0 ≤ a - i := by linarith
-  have hwd_nn : 0 ≤ a - i - l := hv.valid.withdraw_nav_nonneg
-  have hl_le : l ≤ a - i := by linarith
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
-  have hε'nn : (0 : ℚ) ≤ 6 / (2 ^ 63 - 3 : ℚ) := by norm_num
+  have hwd_nn : 0 ≤ a - l := hv.valid.withdraw_nav_nonneg
+  have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hε'le : (6 / (2 ^ 63 - 3 : ℚ)) ≤ depositε := by rw [depositε_eq]; norm_num
-  -- ε' * (2 + ε') ≤ depositε  (headroom)
-  have hε'sq : (6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ)) ≤ depositε := by
-    rw [depositε_eq]; norm_num
-  -- the e1 bound holds whenever nav1 is nonzero
-  have he1_of : nav1.mantissa_ ≠ 0 →
-      |nav1.toRat - (a - i)| ≤ (a - i) * (6 / (2 ^ 63 - 3 : ℚ)) := by
-    intro hnav1m
-    by_cases him : v.interestUnrealized.mantissa_ = 0
-    · have hz : nav1 = v.assetsTotal :=
-        Number.operator_sub_zero_right v.assetsTotal v.interestUnrealized nav1 him hn1
-      have hi0 : i = 0 := Number.toRat_eq_zero_of_mantissa_zero v.interestUnrealized him
-      rw [hz]
-      show |a - (a - i)| ≤ (a - i) * (6 / (2 ^ 63 - 3 : ℚ))
-      rw [hi0, sub_zero, sub_self, abs_zero]
-      exact mul_nonneg ha_nn hε'nn
-    · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-        intro ha0
-        have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-        have hi0 : i = 0 := by linarith
-        exact him (Number.toRat_eq_zero_iff.mp hi0)
-      have hne : ¬ v.assetsTotal.operator_eq v.interestUnrealized = true := by
-        intro heq
-        have : nav1 = Number.zero :=
-          Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal v.interestUnrealized nav1
-            ham him heq hn1
-        rw [this] at hnav1m; exact hnav1m rfl
-      have hr := operator_sub_rounds_to_nearest v.assetsTotal v.interestUnrealized nav1
-        hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm ham him hne hn1 hnav1m
-      have habs : |a - i| = a - i := abs_of_nonneg hai_nn
-      show |nav1.toRat - (a - i)| ≤ (a - i) * (6 / (2 ^ 63 - 3 : ℚ))
-      have hr' : |nav1.toRat - (a - i)| ≤ |a - i| * (6 / (2 ^ 63 - 3 : ℚ)) := hr
-      rw [habs] at hr'; exact hr'
   cases waiveUnrealizedLoss with
   | true =>
     rw [if_pos rfl]
-    have hz : nav2 = nav1 :=
-      Number.operator_sub_zero_right nav1 Number.zero nav2 rfl hn2
-    have hnav1m : nav1.mantissa_ ≠ 0 := by rw [← hz] at *; exact hgen
-    have he1 := he1_of hnav1m
-    show |nav2.toRat - v.depositNav| ≤ depositε * a
-    unfold Vault.depositNav
-    show |nav2.toRat - (a - i)| ≤ depositε * a
-    rw [hz]
-    calc |nav1.toRat - (a - i)| ≤ (a - i) * (6 / (2 ^ 63 - 3 : ℚ)) := he1
-      _ ≤ a * depositε := by
-          have : (a - i) * (6 / (2 ^ 63 - 3 : ℚ)) ≤ a * (6 / (2 ^ 63 - 3 : ℚ)) := by
-            apply mul_le_mul_of_nonneg_right (by linarith) hε'nn
-          calc (a - i) * (6 / (2 ^ 63 - 3 : ℚ)) ≤ a * (6 / (2 ^ 63 - 3 : ℚ)) := this
-            _ ≤ a * depositε := mul_le_mul_of_nonneg_left hε'le ha_nn
-      _ = depositε * a := by ring
+    have hz : nav2 = v.assetsTotal :=
+      Number.operator_sub_zero_right v.assetsTotal Number.zero nav2 rfl hsub
+    have hnav2a : nav2.toRat = a := by rw [hz, ha_def]
+    have hdep : v.depositNav = a := by rw [ha_def]; rfl
+    rw [hnav2a, hdep, sub_self, abs_zero]
+    exact mul_nonneg hεnn ha_nn
   | false =>
     rw [if_neg (by decide)]
-    -- nav1.mantissa ≠ 0 (flush exclusion)
-    have hnav1m : nav1.mantissa_ ≠ 0 := by
-      intro h0
-      have hnav1z : nav1 = Number.zero := Number.eq_zero_of_mantissa_zero nav1 hnav1norm h0
-      by_cases hlm : v.lossUnrealized.mantissa_ = 0
-      · have hz : nav2 = nav1 :=
-          Number.operator_sub_zero_right nav1 v.lossUnrealized nav2 hlm hn2
-        rw [hz, hnav1z] at hgen; exact hgen rfl
-      · -- l ≥ τ
-        have hl_ge : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ l := by
-          have habs := abs_toRat_eq v.lossUnrealized
-          have hmb := hv.wf.lossUnrealized_norm.mantissaBounds_nat hlm
-          have hexp : minExponent ≤ v.lossUnrealized.exponent_ := by
-            rcases hv.wf.lossUnrealized_norm with h | ⟨_, _, _, he, _⟩
-            · exact absurd (show v.lossUnrealized.mantissa_ = 0 by rw [h]; rfl) hlm
-            · exact he
-          rw [abs_of_nonneg hl_nn] at habs
-          have h1 : (10 : ℚ) ^ (18 : ℕ) ≤ (v.lossUnrealized.mantissa_.toNat : ℚ) := by
-            exact_mod_cast hmb.1
-          have h2 : (10 : ℚ) ^ (minExponent : ℤ) ≤ (10 : ℚ) ^ v.lossUnrealized.exponent_ :=
-            zpow_le_zpow_right₀ (by norm_num) hexp
-          calc (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
-              ≤ (v.lossUnrealized.mantissa_.toNat : ℚ) * (10 : ℚ) ^ v.lossUnrealized.exponent_ := by
-                apply mul_le_mul h1 h2 (by positivity) (by positivity)
-            _ = l := by rw [← habs]
-        -- a - i < τ
-        have hai_lt : a - i < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
-          by_cases him : v.interestUnrealized.mantissa_ = 0
-          · have hz : nav1 = v.assetsTotal :=
-              Number.operator_sub_zero_right v.assetsTotal v.interestUnrealized nav1 him hn1
-            have ha0 : a = 0 := by
-              have : v.assetsTotal = Number.zero := by rw [← hz]; exact hnav1z
-              rw [ha_def, this, Number.toRat_zero]
-            have hi0 : i = 0 := Number.toRat_eq_zero_of_mantissa_zero v.interestUnrealized him
-            rw [ha0, hi0, sub_zero]; positivity
-          · by_cases heq : v.assetsTotal.operator_eq v.interestUnrealized = true
-            · have hval : v.assetsTotal.toRat = v.interestUnrealized.toRat :=
-                (operator_eq_iff v.assetsTotal v.interestUnrealized hv.wf.assetsTotal_norm
-                  hv.wf.interestUnrealized_norm).mp heq
-              have : a - i = 0 := by rw [ha_def, hi_def, hval]; ring
-              rw [this]; positivity
-            · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-                intro ha0
-                have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-                have hi0 : i = 0 := by linarith
-                exact him (Number.toRat_eq_zero_iff.mp hi0)
-              have hy_norm := Number.operator_neg_isNormalized v.interestUnrealized
-                hv.wf.interestUnrealized_norm
-              have hy_mant : v.interestUnrealized.operator_neg.mantissa_ ≠ 0 := by
-                rw [Number.operator_neg_mantissa_of_ne v.interestUnrealized him]; exact him
-              have ha_neg : v.assetsTotal.negative_ = false :=
-                wb_neg_false_of_norm_nonneg v.assetsTotal hv.wf.assetsTotal_norm ha_nn
-              have hi_neg0 : v.interestUnrealized.negative_ = false :=
-                wb_neg_false_of_norm_nonneg v.interestUnrealized hv.wf.interestUnrealized_norm hi_nn
-              have hi_neg_sign : v.interestUnrealized.operator_neg.negative_ = true := by
-                rw [Number.operator_neg_negative_of_ne v.interestUnrealized him, hi_neg0]; decide
-              have hdiff : v.assetsTotal.negative_ ≠ v.interestUnrealized.operator_neg.negative_ := by
-                rw [ha_neg, hi_neg_sign]; decide
-              have hnz : ¬ v.assetsTotal.operator_eq v.interestUnrealized.operator_neg.operator_neg = true := by
-                rw [neg_neg_of_mant_ne him]; exact heq
-              have hu := operator_add_underflow_truth_small v.assetsTotal
-                v.interestUnrealized.operator_neg nav1 .to_nearest
-                hv.wf.assetsTotal_norm hy_norm ham hy_mant hdiff hnz hn1 h0
-              rw [Number.toRat_neg] at hu
-              have : v.assetsTotal.toRat + -v.interestUnrealized.toRat = a - i := by
-                rw [ha_def, hi_def]; ring
-              rw [this] at hu
-              calc a - i = |a - i| := (abs_of_nonneg hai_nn).symm
-                _ < _ := hu
+    have hwith : v.withdrawNav = a - l := by rw [ha_def, hl_def]; rfl
+    rw [hwith]
+    by_cases hlm : v.lossUnrealized.mantissa_ = 0
+    · have hz : nav2 = v.assetsTotal :=
+        Number.operator_sub_zero_right v.assetsTotal v.lossUnrealized nav2 hlm hsub
+      have hl0 : l = 0 := by rw [hl_def]; exact Number.toRat_eq_zero_of_mantissa_zero v.lossUnrealized hlm
+      have hnav2a : nav2.toRat = a := by rw [hz, ha_def]
+      rw [hnav2a, hl0, sub_zero, sub_self, abs_zero]
+      exact mul_nonneg hεnn ha_nn
+    · have hlne : l ≠ 0 := by
+        rw [hl_def]; exact Number.toRat_ne_zero_of_mantissa_ne_zero v.lossUnrealized hlm
+      have ham : v.assetsTotal.mantissa_ ≠ 0 := by
+        intro ha0
+        have haz : a = 0 := by rw [ha_def]; exact Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
+        have : 0 < l := lt_of_le_of_ne hl_nn (Ne.symm hlne)
         linarith
-    have he1 := he1_of hnav1m
-    -- e2 bound
-    have he2 : |nav2.toRat - (nav1.toRat - l)| ≤ (a - i) * (1 + 6 / (2 ^ 63 - 3 : ℚ)) * (6 / (2 ^ 63 - 3 : ℚ)) := by
-      have hbound_nav1l : |nav1.toRat - l| ≤ (a - i) * (1 + 6 / (2 ^ 63 - 3 : ℚ)) := by
-        have h1 : nav1.toRat - l = (a - i - l) + (nav1.toRat - (a - i)) := by ring
-        obtain ⟨hlo, hhi⟩ := abs_le.mp he1
-        rw [h1]
-        rw [abs_le]
-        constructor
-        · have : (a - i) * (6 / (2 ^ 63 - 3 : ℚ)) ≤ (a - i) := by
-            nlinarith [hai_nn, hε'nn]
-          nlinarith [hwd_nn, hlo, hai_nn]
-        · nlinarith [hwd_nn, hhi, hl_nn, hai_nn]
-      by_cases hlm : v.lossUnrealized.mantissa_ = 0
-      · have hz : nav2 = nav1 :=
-          Number.operator_sub_zero_right nav1 v.lossUnrealized nav2 hlm hn2
-        have hl0 : l = 0 := Number.toRat_eq_zero_of_mantissa_zero v.lossUnrealized hlm
-        rw [hz, hl0, sub_zero, sub_self, abs_zero]
-        positivity
-      · have hne : ¬ nav1.operator_eq v.lossUnrealized = true := by
-          intro heq
-          have : nav2 = Number.zero :=
-            Number.operator_sub_eq_zero_of_operator_eq nav1 v.lossUnrealized nav2
-              hnav1m hlm heq hn2
-          rw [this] at hgen; exact hgen rfl
-        have hr := operator_sub_rounds_to_nearest nav1 v.lossUnrealized nav2
-          hnav1norm hv.wf.lossUnrealized_norm hnav1m hlm hne hn2 hgen
-        have hr' : |nav2.toRat - (nav1.toRat - l)| ≤ |nav1.toRat - l| * (6 / (2 ^ 63 - 3 : ℚ)) := hr
-        calc |nav2.toRat - (nav1.toRat - l)|
-            ≤ |nav1.toRat - l| * (6 / (2 ^ 63 - 3 : ℚ)) := hr'
-          _ ≤ (a - i) * (1 + 6 / (2 ^ 63 - 3 : ℚ)) * (6 / (2 ^ 63 - 3 : ℚ)) :=
-              mul_le_mul_of_nonneg_right hbound_nav1l hε'nn
-    -- combine
-    show |nav2.toRat - v.withdrawNav| ≤ depositε * a
-    unfold Vault.withdrawNav
-    show |nav2.toRat - (a - i - l)| ≤ depositε * a
-    have hdelta : nav2.toRat - (a - i - l)
-        = (nav1.toRat - (a - i)) + (nav2.toRat - (nav1.toRat - l)) := by ring
-    rw [hdelta]
-    calc |(nav1.toRat - (a - i)) + (nav2.toRat - (nav1.toRat - l))|
-        ≤ |nav1.toRat - (a - i)| + |nav2.toRat - (nav1.toRat - l)| := abs_add_le _ _
-      _ ≤ (a - i) * (6 / (2 ^ 63 - 3 : ℚ))
-          + (a - i) * (1 + 6 / (2 ^ 63 - 3 : ℚ)) * (6 / (2 ^ 63 - 3 : ℚ)) := by
-            apply add_le_add he1 he2
-      _ = (a - i) * ((6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ))) := by ring
-      _ ≤ a * depositε := by
-            have hstep1 : (a - i) * ((6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ)))
-                ≤ a * ((6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ))) := by
-              apply mul_le_mul_of_nonneg_right (by linarith)
-              positivity
-            calc (a - i) * ((6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ)))
-                ≤ a * ((6 / (2 ^ 63 - 3 : ℚ)) * (2 + 6 / (2 ^ 63 - 3 : ℚ))) := hstep1
-              _ ≤ a * depositε := mul_le_mul_of_nonneg_left hε'sq ha_nn
-      _ = depositε * a := by ring
+      have hne : ¬ v.assetsTotal.operator_eq v.lossUnrealized = true := by
+        intro heq
+        have : nav2 = Number.zero :=
+          Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal v.lossUnrealized nav2
+            ham hlm heq hsub
+        rw [this] at hgen; exact hgen rfl
+      have hr := operator_sub_rounds_to_nearest v.assetsTotal v.lossUnrealized nav2
+        hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm ham hlm hne hsub hgen
+      have hr' : |nav2.toRat - (a - l)| ≤ |a - l| * (6 / (2 ^ 63 - 3 : ℚ)) := hr
+      rw [abs_of_nonneg hwd_nn] at hr'
+      calc |nav2.toRat - (a - l)| ≤ (a - l) * (6 / (2 ^ 63 - 3 : ℚ)) := hr'
+        _ ≤ (a - l) * depositε := mul_le_mul_of_nonneg_left hε'le hwd_nn
+        _ ≤ a * depositε := mul_le_mul_of_nonneg_right (by linarith) hεnn
+        _ = depositε * a := by ring
 
 /-! ## Weak monotonicity of the `to_nearest` subtraction -/
 
@@ -1324,169 +1139,41 @@ lemma Number.operator_sub_nonneg_le (x y result : Number)
       (by linarith [hynn])
 
 lemma Vault.withdraw_nav2_nonneg (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
-    (nav1 nav2 : Number)
-    (hn1 : v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nav1)
-    (hn2 : nav1.operator_sub
+    (nav2 : Number)
+    (hsub : v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized)
         .to_nearest = .ok nav2) :
     0 ≤ nav2.toRat := by
-  set a := v.assetsTotal.toRat with ha_def
-  set i := v.interestUnrealized.toRat with hi_def
-  set l := v.lossUnrealized.toRat with hl_def
-  have ha_nn : 0 ≤ a := hv.valid.assetsTotal_nonneg
-  have hi_nn : 0 ≤ i := hv.valid.interestUnrealized_nonneg
-  have hl_nn : 0 ≤ l := hv.valid.lossUnrealized_nonneg
-  have hAA_nn : 0 ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hi_le : i ≤ a - v.assetsAvailable.toRat := hv.valid.interestUnrealized_le
-  have hai_nn : 0 ≤ a - i := by linarith
-  have hwd_nn : 0 ≤ a - i - l := hv.valid.withdraw_nav_nonneg
-  have hl_le_ai : l ≤ a - i := by linarith
-  have hnav1norm : nav1.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm hn1
-  -- 0 ≤ nav1.toRat
-  have hnav1_nn : 0 ≤ nav1.toRat := by
-    by_cases hn1m : nav1.mantissa_ = 0
-    · rw [Number.toRat_eq_zero_of_mantissa_zero nav1 hn1m]
-    · by_cases him : v.interestUnrealized.mantissa_ = 0
-      · have hz : nav1 = v.assetsTotal :=
-          Number.operator_sub_zero_right v.assetsTotal v.interestUnrealized nav1 him hn1
-        rw [hz]; exact ha_nn
-      · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-          intro ha0
-          have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-          exact him (Number.toRat_eq_zero_iff.mp (by linarith))
-        have hne : ¬ v.assetsTotal.operator_eq v.interestUnrealized := by
-          intro heq
-          have : nav1 = Number.zero :=
-            Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal v.interestUnrealized nav1
-              ham him heq hn1
-          rw [this] at hn1m; exact hn1m rfl
-        have := Number.operator_sub_to_nearest_ge v.assetsTotal v.interestUnrealized Number.zero nav1
-          hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm (Or.inl rfl)
-          ham him hne hn1 hn1m (by rw [Number.toRat_zero]; exact hai_nn)
-        rwa [Number.toRat_zero] at this
-  -- l ≤ nav1.toRat  (only needed for waive=false)
-  have hlval_le_nav1 : (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized).toRat ≤ nav1.toRat := by
+  set lv := (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized) with hlv_def
+  have hlv_norm : lv.isNormalized := by
     cases waiveUnrealizedLoss with
-    | true => show (Number.zero : Number).toRat ≤ nav1.toRat; rw [Number.toRat_zero]; exact hnav1_nn
-    | false =>
-      show l ≤ nav1.toRat
-      by_cases hn1m : nav1.mantissa_ = 0
-      · -- underflow corner: a - i < τ forces l = 0
-        by_cases him : v.interestUnrealized.mantissa_ = 0
-        · have hz : nav1 = v.assetsTotal :=
-            Number.operator_sub_zero_right v.assetsTotal v.interestUnrealized nav1 him hn1
-          have hi0 : i = 0 := Number.toRat_eq_zero_of_mantissa_zero v.interestUnrealized him
-          rw [hz]; show l ≤ a; linarith
-        · by_cases heq : v.assetsTotal.operator_eq v.interestUnrealized = true
-          · have hval : a = i :=
-              (operator_eq_iff v.assetsTotal v.interestUnrealized hv.wf.assetsTotal_norm
-                hv.wf.interestUnrealized_norm).mp heq
-            rw [Number.toRat_eq_zero_of_mantissa_zero nav1 hn1m]; linarith
-          · -- genuine operands, but nav1 flushed to zero
-            have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-              intro ha0
-              have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-              exact him (Number.toRat_eq_zero_iff.mp (by linarith))
-            have hy_norm := Number.operator_neg_isNormalized v.interestUnrealized hv.wf.interestUnrealized_norm
-            have hy_mant : v.interestUnrealized.operator_neg.mantissa_ ≠ 0 := by
-              rw [Number.operator_neg_mantissa_of_ne v.interestUnrealized him]; exact him
-            have ha_neg : v.assetsTotal.negative_ = false :=
-              wb_neg_false_of_norm_nonneg v.assetsTotal hv.wf.assetsTotal_norm ha_nn
-            have hi_neg0 : v.interestUnrealized.negative_ = false :=
-              wb_neg_false_of_norm_nonneg v.interestUnrealized hv.wf.interestUnrealized_norm hi_nn
-            have hi_neg_sign : v.interestUnrealized.operator_neg.negative_ = true := by
-              rw [Number.operator_neg_negative_of_ne v.interestUnrealized him, hi_neg0]; decide
-            have hdiff : v.assetsTotal.negative_ ≠ v.interestUnrealized.operator_neg.negative_ := by
-              rw [ha_neg, hi_neg_sign]; decide
-            have hnz : ¬ v.assetsTotal.operator_eq v.interestUnrealized.operator_neg.operator_neg = true := by
-              rw [neg_neg_of_mant_ne him]; exact heq
-            have hu := operator_add_underflow_truth_small v.assetsTotal
-              v.interestUnrealized.operator_neg nav1 .to_nearest
-              hv.wf.assetsTotal_norm hy_norm ham hy_mant hdiff hnz hn1 hn1m
-            rw [Number.toRat_neg] at hu
-            have hai_eq : v.assetsTotal.toRat + -v.interestUnrealized.toRat = a - i := by
-              rw [ha_def, hi_def]; ring
-            rw [hai_eq] at hu
-            have hai_lt : a - i < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
-              calc a - i = |a - i| := (abs_of_nonneg hai_nn).symm
-                _ < _ := hu
-            -- l < τ and l a grid point ≥ 0 forces l = 0
-            have hl0 : l = 0 := by
-              by_contra hlne
-              have hlm : v.lossUnrealized.mantissa_ ≠ 0 :=
-                Number.mantissa_ne_zero_of_toRat_ne_zero hlne
-              have hmb := hv.wf.lossUnrealized_norm.mantissaBounds_nat hlm
-              have hexp : minExponent ≤ v.lossUnrealized.exponent_ := by
-                rcases hv.wf.lossUnrealized_norm with h | ⟨_, _, _, he, _⟩
-                · exact absurd (show v.lossUnrealized.mantissa_ = 0 by rw [h]; rfl) hlm
-                · exact he
-              have habs := abs_toRat_eq v.lossUnrealized
-              rw [abs_of_nonneg hl_nn] at habs
-              have h1 : (10 : ℚ) ^ (18 : ℕ) ≤ (v.lossUnrealized.mantissa_.toNat : ℚ) := by
-                exact_mod_cast hmb.1
-              have h2 : (10 : ℚ) ^ (minExponent : ℤ) ≤ (10 : ℚ) ^ v.lossUnrealized.exponent_ :=
-                zpow_le_zpow_right₀ (by norm_num) hexp
-              have hl_ge : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ l := by
-                calc (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
-                    ≤ (v.lossUnrealized.mantissa_.toNat : ℚ) * (10 : ℚ) ^ v.lossUnrealized.exponent_ := by
-                      apply mul_le_mul h1 h2 (by positivity) (by positivity)
-                  _ = l := by rw [← habs]
-              linarith [hl_le_ai, hai_lt, hl_ge]
-            rw [Number.toRat_eq_zero_of_mantissa_zero nav1 hn1m, hl0]
-      · by_cases him : v.interestUnrealized.mantissa_ = 0
-        · have hz : nav1 = v.assetsTotal :=
-            Number.operator_sub_zero_right v.assetsTotal v.interestUnrealized nav1 him hn1
-          have hi0 : i = 0 := Number.toRat_eq_zero_of_mantissa_zero v.interestUnrealized him
-          rw [hz]; show l ≤ a; linarith
-        · by_cases heq : v.assetsTotal.operator_eq v.interestUnrealized = true
-          · have hval : a = i :=
-              (operator_eq_iff v.assetsTotal v.interestUnrealized hv.wf.assetsTotal_norm
-                hv.wf.interestUnrealized_norm).mp heq
-            have hz : nav1 = Number.zero := by
-              have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-                intro ha0
-                have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-                exact him (Number.toRat_eq_zero_iff.mp (by linarith))
-              exact Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal v.interestUnrealized nav1
-                ham him heq hn1
-            rw [hz, Number.toRat_zero]; linarith
-          · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
-              intro ha0
-              have haz : a = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-              exact him (Number.toRat_eq_zero_iff.mp (by linarith))
-            have hne : ¬ v.assetsTotal.operator_eq v.interestUnrealized := heq
-            exact Number.operator_sub_to_nearest_ge v.assetsTotal v.interestUnrealized v.lossUnrealized nav1
-              hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm hv.wf.lossUnrealized_norm
-              ham him hne hn1 hn1m hl_le_ai
-  -- 0 ≤ nav2 from lossValue ≤ nav1
+    | true => exact Or.inl rfl
+    | false => exact hv.wf.lossUnrealized_norm
+  have hlv_nn : 0 ≤ lv.toRat := by
+    cases waiveUnrealizedLoss with
+    | true => rw [show lv = Number.zero from rfl, Number.toRat_zero]
+    | false => exact hv.valid.lossUnrealized_nonneg
+  have hsub_nn : 0 ≤ v.assetsTotal.toRat - lv.toRat := by
+    cases waiveUnrealizedLoss with
+    | true => rw [show lv = Number.zero from rfl, Number.toRat_zero, sub_zero]; exact hv.valid.assetsTotal_nonneg
+    | false => rw [show lv = v.lossUnrealized from rfl]; exact hv.valid.withdraw_nav_nonneg
   by_cases hn2m : nav2.mantissa_ = 0
   · rw [Number.toRat_eq_zero_of_mantissa_zero nav2 hn2m]
-  · set lv := (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized) with hlv_def
-    have hlv_norm : lv.isNormalized := by
-      cases waiveUnrealizedLoss with
-      | true => exact Or.inl rfl
-      | false => exact hv.wf.lossUnrealized_norm
-    have hlv_nn : 0 ≤ lv.toRat := by
-      cases waiveUnrealizedLoss with
-      | true => rw [show lv = Number.zero from rfl, Number.toRat_zero]
-      | false => exact hl_nn
-    by_cases hlvm : lv.mantissa_ = 0
-    · have hz : nav2 = nav1 := Number.operator_sub_zero_right nav1 lv nav2 hlvm hn2
-      rw [hz]; exact hnav1_nn
-    · have hnav1m : nav1.mantissa_ ≠ 0 := by
-        intro h0
-        have : nav1.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero nav1 h0
-        have hlv0 : lv.toRat ≤ 0 := by rw [← this]; exact hlval_le_nav1
-        exact hlvm (Number.toRat_eq_zero_iff.mp (le_antisymm hlv0 hlv_nn))
-      have hne : ¬ nav1.operator_eq lv := by
-        intro heq
-        have : nav2 = Number.zero :=
-          Number.operator_sub_eq_zero_of_operator_eq nav1 lv nav2 hnav1m hlvm heq hn2
-        rw [this] at hn2m; exact hn2m rfl
-      have := Number.operator_sub_to_nearest_ge nav1 lv Number.zero nav2
-        hnav1norm hlv_norm (Or.inl rfl) hnav1m hlvm hne hn2 hn2m
-        (by rw [Number.toRat_zero]; linarith [hlval_le_nav1])
-      rwa [Number.toRat_zero] at this
+  · by_cases hlvm : lv.mantissa_ = 0
+    · have hz : nav2 = v.assetsTotal := Number.operator_sub_zero_right v.assetsTotal lv nav2 hlvm hsub
+      rw [hz]; exact hv.valid.assetsTotal_nonneg
+    · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
+        intro ha0
+        have haz : v.assetsTotal.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
+        exact hlvm (Number.toRat_eq_zero_iff.mp (by linarith))
+      by_cases heq : v.assetsTotal.operator_eq lv = true
+      · have hz0 : nav2 = Number.zero :=
+          Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal lv nav2 ham hlvm heq hsub
+        rw [hz0, Number.toRat_zero]
+      · have := Number.operator_sub_to_nearest_ge v.assetsTotal lv Number.zero nav2
+          hv.wf.assetsTotal_norm hlv_norm (Or.inl rfl) ham hlvm heq hsub hn2m
+          (by rw [Number.toRat_zero]; linarith)
+        rwa [Number.toRat_zero] at this
 
 
 /-- **Proof body of `Vault.sharesToAssetsWithdraw_total`.** Drops the exact-pricing
@@ -1508,41 +1195,32 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
           2 * (10 : ℚ) ^ assets.exponent) := by
   have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hεlt : depositε < 1 := by rw [depositε_eq]; norm_num
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
   -- exact-pricing net asset value facts
   set a := v.assetsTotal.toRat with ha_def
-  set i := v.interestUnrealized.toRat with hi_def
   set l := v.lossUnrealized.toRat with hl_def
   have ha_nn : 0 ≤ a := hv.valid.assetsTotal_nonneg
-  have hi_nn : 0 ≤ i := hv.valid.interestUnrealized_nonneg
   have hl_nn : 0 ≤ l := hv.valid.lossUnrealized_nonneg
-  have hAA_nn : 0 ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hi_le : i ≤ a - v.assetsAvailable.toRat := hv.valid.interestUnrealized_le
-  have hai_nn : 0 ≤ a - i := by linarith
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   have hnav_nonneg : 0 ≤ nav := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false => rw [if_neg (by decide)]; show 0 ≤ v.withdrawNav
                unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
-    | true => rw [if_pos rfl]
-              have hdn : v.depositNav = a - i := rfl
-              rw [hdn]; exact hai_nn
-  have hnav_le_ai : nav ≤ a - i := by
+    | true => rw [if_pos rfl]; show 0 ≤ v.depositNav
+              unfold Vault.depositNav; exact hv.valid.assetsTotal_nonneg
+  have hnav_le_a : nav ≤ a := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false => rw [if_neg (by decide)]
-               have hwn : v.withdrawNav = a - i - l := rfl
+               have hwn : v.withdrawNav = a - l := rfl
                rw [hwn]; linarith
     | true => rw [if_pos rfl]
-              have hdn : v.depositNav = a - i := rfl
+              have hdn : v.depositNav = a := rfl
               rw [hdn]
-  -- navSlack = depositε · (a + (a - i))
-  have hnavSlack_eq : v.navSlack = depositε * (a + (a - i)) := by
-    unfold Vault.navSlack
-    show depositε * (|a| + |a - i|) = depositε * (a + (a - i))
-    rw [abs_of_nonneg ha_nn, abs_of_nonneg hai_nn]
+  have hnavSlack_eq : v.navSlack = depositε * (a + a) := by
+    unfold Vault.navSlack Vault.toExact; rw [ha_def]
   have hnavSlack_nn : 0 ≤ v.navSlack := by rw [hnavSlack_eq]; positivity
-  have hda_le_slack : depositε * a ≤ v.navSlack := by rw [hnavSlack_eq]; nlinarith [hai_nn, hεnn]
+  have hda_le_slack : depositε * a ≤ v.navSlack := by rw [hnavSlack_eq]; nlinarith [ha_nn, hεnn]
   set ST : ℚ := (v.toExact.sharesTotal : ℚ) with hST_def
   have hST_eq : ST = v.sharesTotal.toRat := Vault.WF.toExact_sharesTotal v hv.wf
   have hideal_eq : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat = nav * shares.toRat / ST := rfl
@@ -1563,22 +1241,19 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
   · -- genuine pricing: run the pipeline against the computed nav2
     have hnav2_nn : 0 ≤ nav2.toRat := by
       cases waiveUnrealizedLoss with
-      | true => exact Vault.withdraw_nav2_nonneg v hv true nav1 nav2 hn1 hn2
-      | false => exact Vault.withdraw_nav2_nonneg v hv false nav1 nav2 hn1 hn2
+      | true => exact Vault.withdraw_nav2_nonneg v hv true nav2 hsub
+      | false => exact Vault.withdraw_nav2_nonneg v hv false nav2 hsub
     have hnav2_pos : 0 < nav2.toRat :=
       lt_of_le_of_ne hnav2_nn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero nav2 hnav2m))
     have hnav_within : |nav2.toRat - nav| ≤ depositε * a := by
       cases waiveUnrealizedLoss with
-      | true => exact Vault.withdraw_nav_within v hv true nav1 nav2 hn1 hn2 hnav2m
-      | false => exact Vault.withdraw_nav_within v hv false nav1 nav2 hn1 hn2 hnav2m
+      | true => exact Vault.withdraw_nav_within v hv true nav2 hsub hnav2m
+      | false => exact Vault.withdraw_nav_within v hv false nav2 hsub hnav2m
     obtain ⟨hw_lo, hw_hi⟩ := abs_le.mp hnav_within
-    have hnav1norm : nav1.isNormalized :=
-      operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.interestUnrealized_norm hn1
     have hnav2norm : nav2.isNormalized := by
       cases waiveUnrealizedLoss with
-      | false => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm hv.wf.lossUnrealized_norm hn2
-      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2
+      | false => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
+      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub
     obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsn_eq : sn0 = sharesNumber := by rw [hsn0ok] at hsn; exact Except.ok.inj hsn
     have hsnnorm : sharesNumber.isNormalized := by rw [← hsn_eq]; exact hsn0norm
@@ -1654,11 +1329,11 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
         have hscalar : nav - nav2.toRat + nav2.toRat * depositε ≤ v.navSlack * (1 + depositε) := by
           have e1 : (0 : ℚ) ≤ (nav2.toRat - nav + depositε * a) * (1 - depositε) :=
             mul_nonneg (by linarith [hw_lo]) (by linarith [hεlt])
-          have e2 : (0 : ℚ) ≤ depositε * (a - i - nav) :=
-            mul_nonneg hεnn (by linarith [hnav_le_ai])
-          have e3 : (0 : ℚ) ≤ depositε * depositε * (3 * a - i) :=
-            mul_nonneg (mul_nonneg hεnn hεnn) (by linarith [hai_nn, ha_nn])
-          rw [hnavSlack_eq]; nlinarith [e1, e2, e3]
+          have e2 : (0 : ℚ) ≤ depositε * (a - nav) :=
+            mul_nonneg hεnn (by linarith [hnav_le_a])
+          have e3 : (0 : ℚ) ≤ depositε * depositε * (3 * a) :=
+            mul_nonneg (mul_nonneg hεnn hεnn) (by linarith [ha_nn])
+          rw [hnavSlack_eq]; nlinarith [e1, e2, e3, hw_lo, hw_hi, hnav_le_a, ha_nn]
         -- multiply by k = shares/ST ≥ 0 and combine
         have hmul_slack : (nav - nav2.toRat + nav2.toRat * depositε) * (shares.toRat / ST)
             ≤ v.navSlack * (1 + depositε) * (shares.toRat / ST) :=
@@ -1695,19 +1370,16 @@ lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault) (hv : v.Lawful)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
     (hne : assets.mValue ≠ 0) :
     assets.IOUCanonical ∨ assets.IntegralCanonical := by
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
   rcases hcase with ⟨-, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · exfalso; rw [hzero, STAmount.zero_mValue] at hne; exact hne rfl
-  · have hnav1norm : nav1.isNormalized :=
-      operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.interestUnrealized_norm hn1
-    have hnav2norm : nav2.isNormalized := by
+  · have hnav2norm : nav2.isNormalized := by
       cases waiveUnrealizedLoss with
       | false =>
-        exact operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm hv.wf.lossUnrealized_norm hn2
-      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2
+        exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
+      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub
     obtain ⟨sn0, hsn0ok, -, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsnnorm : sharesNumber.isNormalized := by
       rw [show sharesNumber = sn0 from (Except.ok.inj (hsn0ok.symm.trans hsn)).symm]; exact hsn0norm
@@ -2318,7 +1990,7 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
     rw [hne'] at hloss; exact absurd hloss (by decide)
   -- the pricing `nav` and the collapsed ideal
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
-  have hnav_eq_ai : nav = v.toExact.assetsTotal - v.toExact.interestUnrealized := by
+  have hnav_eq_ai : nav = v.toExact.assetsTotal := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false =>
       rw [if_neg (by decide)]; unfold Vault.withdrawNav
@@ -2330,7 +2002,7 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
   -- `nav` is non-negative and dominates `assetsAvailable`
   have hAA_nn : 0 ≤ v.toExact.assetsAvailable := hv.valid.assetsAvailable_nonneg
   have hAA_le_nav : v.toExact.assetsAvailable ≤ nav := by
-    rw [hnav_eq_ai]; linarith [hv.valid.interestUnrealized_le]
+    rw [hnav_eq_ai]; exact hv.valid.assetsAvailable_le
   have hnav_nn : 0 ≤ nav := le_trans hAA_nn hAA_le_nav
   -- the paid amount is exactly `assetsAvailable`
   have haa_val : allAvail.toRat = v.toExact.assetsAvailable := hAAc allAvail hallAvail

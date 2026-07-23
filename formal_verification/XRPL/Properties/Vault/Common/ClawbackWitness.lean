@@ -88,8 +88,8 @@ theorem Vault.clawback_sharesDestroyed_witness :
         (v.idealSharesClawback assets.toRat) depositε := by
   refine ⟨cwv, cwa1, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
-  exact ⟨⟨false, 3000000000000000000, -18⟩, ⟨false, 3000000000000000000, -18⟩,
-    by native_decide, by native_decide, by native_decide⟩
+  exact ⟨⟨false, 3000000000000000000, -18⟩,
+    by native_decide, by native_decide⟩
 
 /-- Witness for `Vault.clawback_sharesDestroyed_clamped_attained`: the `cwvB`
 run reprices from `assetsAvailable` and its truncation error `1/3` exceeds the
@@ -108,8 +108,8 @@ theorem Vault.clawback_sharesDestroyed_clamped_witness :
         (v.idealSharesClawback assetsRecovered'.toRat) depositε := by
   refine ⟨cwvB, cwa1, cwsh1, cwar1, cwclamp, ⟨false, 9999999999999998000, -19⟩, cwr2,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
-  exact ⟨⟨false, 3000000000000000000, -18⟩, ⟨false, 3000000000000000000, -18⟩,
-    by native_decide, by native_decide, by native_decide⟩
+  exact ⟨⟨false, 3000000000000000000, -18⟩,
+    by native_decide, by native_decide⟩
 
 /-- Witness for `Vault.clawback_assetsRecovered_attained`: the `cwv` run's
 recovery misses the destroyed shares' exact worth by more than the relative
@@ -121,8 +121,8 @@ theorem Vault.clawback_assetsRecovered_witness :
         (v.idealAssetsClawback r.sharesDestroyed.toRat) depositε := by
   refine ⟨cwv, cwa1, cwr1,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
-  exact ⟨⟨false, 3000000000000000000, -18⟩, ⟨false, 3000000000000000000, -18⟩,
-    by native_decide, by native_decide, by native_decide⟩
+  exact ⟨⟨false, 3000000000000000000, -18⟩,
+    by native_decide, by native_decide⟩
 
 /-- Witness for `Vault.clawback_vault_updates_attained`: the `cwvB` run's
 stored total is not the exact difference. -/

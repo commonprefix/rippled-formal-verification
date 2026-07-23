@@ -276,36 +276,27 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
       nav2.operator_mul sn .to_nearest = .ok NV ∧ NV.isNormalized ∧ NV.mantissa_ ≠ 0 ∧
       NV.operator_div v.sharesTotal .to_nearest = .ok aN ∧ aN.isNormalized ∧ aN.mantissa_ ≠ 0 ∧
       0 < aN.toRat ∧ STAmount.ofNumber v.numericType aN .downward = .ok assets := by
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1 : nav1 = nv1 := Except.ok.inj (hn1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waiveUnrealizedLoss with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
     cases waiveUnrealizedLoss with
     | false => rw [if_neg (by decide)]; exact hv.valid.withdraw_nav_nonneg
     | true =>
       rw [if_pos rfl]; show 0 ≤ v.depositNav; unfold Vault.depositNav
-      have h1 := hv.valid.interestUnrealized_le
-      have h2 := hv.valid.assetsAvailable_nonneg
-      linarith
+      exact hv.valid.assetsTotal_nonneg
   rcases hcase with ⟨_, hzero⟩ | ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · rw [hzero, STAmount.zero_isZero] at hnz; exact absurd hnz (by decide)
   · have hres_ne : assets.mValue ≠ 0 := ne_of_beq_false hnz
@@ -370,27 +361,20 @@ lemma withdraw_nav_pricing_reduces (v : Vault) (hv : v.Lawful) (waive : Bool)
          nav2.operator_mul sn .to_nearest = .ok NV ∧
          NV.operator_div v.sharesTotal .to_nearest = .ok aN ∧
          STAmount.ofNumber v.numericType aN .downward = .ok assets)) := by
-  obtain ⟨nav1, nav2, hn1, hn2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waive hok
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hn1
   have hnav2facts : nav2.isNormalized ∧
       nav2.toRat = (if waive then v.depositNav else v.withdrawNav) := by
-    obtain ⟨nv1, nv2, he1, he2, heval⟩ := hnav
-    have hnav1 : nav1 = nv1 := Except.ok.inj (hn1.symm.trans he1)
+    obtain ⟨nv, he, heval⟩ := hnav
     cases waive with
     | false =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm
-        hv.wf.lossUnrealized_norm hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
+        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
-      refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hnav1norm (Or.inl rfl) hn2, ?_⟩
-      have hval : nav2 = nv2 := Except.ok.inj
-        (show (Except.ok nav2 : Except String Number) = Except.ok nv2 by rw [← hn2, hnav1]; exact he2)
-      rw [hval]; exact heval
+      have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+        by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
   refine ⟨nav2, sn0, hnav2norm, hnav2val, hsn0ok, hsn0norm, hsn0val, ?_⟩

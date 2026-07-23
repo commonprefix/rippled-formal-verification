@@ -68,7 +68,7 @@ theorem Vault.deposit_maximum_exceeded (amountDeposit roundedAmount c s : STAmou
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true) :
     v.deposit amountDeposit false = .ok (.rejected v .tecLIMIT_EXCEEDED) :=
   Vault.deposit_maximum_exceeded_proof v amountDeposit roundedAmount c s cN sN at' av' st'
     hrounded hins hcomp hcN hsN hat hav hst hmax
@@ -83,7 +83,7 @@ theorem Vault.deposit_donation_maximum (amountDeposit roundedAmount : STAmount)
     (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = true) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true) :
     v.deposit amountDeposit true = .ok (.rejected v .tecLIMIT_EXCEEDED) :=
   Vault.deposit_donation_maximum_proof v amountDeposit roundedAmount aN zN at' av' st'
     hrounded hsh haN hzN hat hav hst hmax
@@ -100,7 +100,7 @@ theorem Vault.deposit_success (amountDeposit roundedAmount c s : STAmount)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false) :
     v.deposit amountDeposit false =
       .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
         c, s⟩ :=
@@ -118,7 +118,7 @@ theorem Vault.deposit_donation_success (amountDeposit roundedAmount : STAmount)
     (hat : v.assetsTotal.operator_add aN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add aN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add zN .to_nearest = .ok st')
-    (hmax : v.assetsMaximum.any (fun m => at'.operator_gt m) = false) :
+    (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false) :
     v.deposit amountDeposit true =
       .ok ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
         roundedAmount, STAmount.zero .int64⟩ :=

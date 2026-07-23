@@ -49,12 +49,10 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
         | false => |shares.toRat - q| ≤ 1 / 2) ∧
       shares.toRat.den = 1 ∧ 0 ≤ shares.toRat := by
   have hmv : shares.mValue ≠ 0 := ne_of_beq_false (show (shares.mValue == 0) = false from hnz)
-  obtain ⟨nav1, nav2, h1, h2, hcase⟩ :=
+  obtain ⟨nav2, hsub, hcase⟩ :=
     assetsToSharesWithdraw_ok_reduces v assets shares truncateShares false hok
-  obtain ⟨netAssetValue, netAssetValue', hs1, hs2, hnavval⟩ := hnav
-  have hnav1eq : nav1 = netAssetValue := by rw [hs1] at h1; exact (Except.ok.inj h1).symm
-  have hnav2eq : nav2 = netAssetValue' := by
-    rw [hnav1eq] at h2; exact Except.ok.inj (h2.symm.trans hs2)
+  obtain ⟨netAssetValue, hs, hnavval⟩ := hnav
+  have hnav2eq : nav2 = netAssetValue := Except.ok.inj (hsub.symm.trans hs)
   have hnav2val : nav2.toRat = v.withdrawNav := by rw [hnav2eq]; exact hnavval
   rcases hcase with ⟨hzm, hzero⟩ | ⟨hnz2, assetsNumber, sharesAssets, sharesNumber, sharesNumber',
       han, hmul, hdiv, htrunc, hofn⟩
@@ -77,7 +75,6 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
       have hle0 : v.withdrawNav ≤ 0 := by
         unfold Vault.withdrawNav
         rw [hAT]
-        have hi := hv.valid.interestUnrealized_nonneg
         have hl := hv.valid.lossUnrealized_nonneg
         linarith
       linarith [hnav_pos]
@@ -91,12 +88,9 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
   obtain ⟨an', han', hanval, hannorm⟩ := hanexact
   have haneq : an' = assetsNumber := by rw [han'] at han; exact Except.ok.inj han
   rw [haneq] at hanval hannorm
-  have hnav1norm : nav1.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz v.assetsTotal v.interestUnrealized nav1
-      hv.wf.assetsTotal_norm hv.wf.interestUnrealized_norm h1
   have hnav2norm : nav2.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz nav1 v.lossUnrealized nav2 hnav1norm
-      hv.wf.lossUnrealized_norm h2
+    operator_sub_isNormalized_to_nearest_sz v.assetsTotal v.lossUnrealized nav2
+      hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
   have hQm : sharesNumber.mantissa_ ≠ 0 := by
     have hsn' : sharesNumber'.mantissa_ ≠ 0 :=
       STAmount.ofNumber_integral_source_ne_zero .int64 sharesNumber' .to_nearest shares

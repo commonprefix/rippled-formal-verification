@@ -73,7 +73,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (hv : v.Lawful) (amount shares : STA
     rw [if_neg hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨navN, hnavN, hok⟩ := bind_ok_peel _ _ _ hok
+    set navN := v.assetsTotal with hnavN_eq
     obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨T0, hT0, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨T, hT, hok⟩ := bind_ok_peel _ _ _ hok
@@ -84,9 +84,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (hv : v.Lawful) (amount shares : STA
     have hTm : T.mantissa_ ≠ 0 :=
       STAmount.ofNumber_integral_source_ne_zero .int64 T .to_nearest shares (by decide) hsh hmv
     have hT0m : T0.mantissa_ ≠ 0 := Number.truncate_source_ne_zero T0 T hT hTm
-    have hnavnorm : navN.isNormalized :=
-      operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.interestUnrealized_norm hnavN
+    have hnavnorm : navN.isNormalized := hv.wf.assetsTotal_norm
     have hnavm : navN.mantissa_ ≠ 0 :=
       operator_div_divisor_ne_zero P navN T0 .to_nearest hnavnorm hT0
     have hPm : P.mantissa_ ≠ 0 :=
@@ -113,7 +111,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (hv : v.Lawful) (amount shares : STA
       rw [abs_of_nonneg (mul_nonneg hSTnn hann)] at hb
       have hab := abs_le.mp hb
       nlinarith [mul_nonneg hSTnn hann]
-    obtain ⟨_, _, _, hnavpos⟩ := Vault.depositNav_facts v hv navN hmz hnavm hnavN
+    obtain ⟨_, _, _, hnavpos⟩ := Vault.depositNav_facts v hv navN hmz hnavm hnavN_eq
     have hPNnn : 0 ≤ P.toRat / navN.toRat := div_nonneg hPnn (le_of_lt hnavpos)
     have hT0nn : 0 ≤ T0.toRat := by
       have hb : |T0.toRat - P.toRat / navN.toRat|
@@ -159,7 +157,6 @@ lemma sharesToAssetsDeposit_disj_canonical (v : Vault) (hv : v.Lawful)
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨Q, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hok
       have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
@@ -184,7 +181,7 @@ lemma sharesToAssetsDeposit_disj_canonical (v : Vault) (hv : v.Lawful)
       · exact absurd hzero hc0
     · rw [if_neg hmz] at hok
       obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-      obtain ⟨navN, hnavN, hok⟩ := bind_ok_peel _ _ _ hok
+      set navN := v.assetsTotal with hnavN_eq
       obtain ⟨shN, hshN, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨Q, hQ, hok⟩ := bind_ok_peel _ _ _ hok
@@ -205,9 +202,7 @@ lemma sharesToAssetsDeposit_disj_canonical (v : Vault) (hv : v.Lawful)
         refine Number.mantissa_ne_zero_of_toRat_ne_zero ?_
         rw [← Vault.WF.toExact_sharesTotal v hv.wf]
         exact_mod_cast hSTne
-      have hnavnorm : navN.isNormalized :=
-        operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-          hv.wf.interestUnrealized_norm hnavN
+      have hnavnorm : navN.isNormalized := hv.wf.assetsTotal_norm
       obtain ⟨sn, hsn, hsnval, hsnnorm, _⟩ :=
         STAmount.toNumber_integral_exact shares .to_nearest hshc (by rw [hshnt]; decide)
       have hshNeq : sn = shN := by rw [hsn] at hshN; exact Except.ok.inj hshN
@@ -318,7 +313,6 @@ lemma sharesToAssetsDeposit_mNumericType (v : Vault) (shares c : STAmount)
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨Q, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨c', hcx, hlast⟩ := bind_ok_peel _ _ _ hok
     have hceq : c' = c := Except.ok.inj (show Except.ok c' = .ok c from hlast)
@@ -354,7 +348,6 @@ lemma sharesToAssetsDeposit_le_maxRep (v : Vault) (hv : v.Lawful) (shares c : ST
         (shares.exponent - (v.scale.toNat : ℤ)) false).integral = true from hint) hoff hval hcx
     exact hle
   · rw [if_neg hmz] at hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -426,23 +419,31 @@ lemma deposit_maximum_guard_false (v : Vault) (hv : v.Lawful) (cN at' : Number)
     (hcNnorm : cN.isNormalized)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hbound : ∀ m ∈ v.assetsMaximum, v.assetsTotal.toRat + cN.toRat ≤ m.toRat) :
-    v.assetsMaximum.any (fun m => at'.operator_gt m) = false := by
+    ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+      at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false := by
   have hatnorm : at'.isNormalized := by
     by_cases h0 : at'.mantissa_ = 0
     · rw [Number.operator_add_zero_shape_sz v.assetsTotal cN at' hv.wf.assetsTotal_norm hcNnorm hat h0]
       exact Or.inl rfl
     · exact operator_add_isNormalized_to_nearest v.assetsTotal cN at'
         hv.wf.assetsTotal_norm hcNnorm hat h0
-  rw [Bool.eq_false_iff]
-  intro hany
-  rw [Option.any_eq_true] at hany
-  obtain ⟨m, hmem, hgt⟩ := hany
-  have hmnorm : m.isNormalized := hv.wf.assetsMaximum_norm m hmem
-  have hle : v.assetsTotal.toRat + cN.toRat ≤ m.toRat := hbound m hmem
-  have hat_le : at'.toRat ≤ m.toRat :=
-    operator_add_le_of_le_normalized v.assetsTotal cN at' m hv.wf.assetsTotal_norm hcNnorm hat hmnorm hle
-  have hlt := (operator_gt_iff at' m hatnorm hmnorm).mp hgt
-  linarith
+  cases hm : v.assetsMaximum with
+  | none =>
+    simp only [Option.getD_none]
+    rw [show Number.zero.operator_ne Number.zero = false from by decide, Bool.false_and]
+  | some m =>
+    have hmem : m ∈ v.assetsMaximum := by rw [hm]; exact Option.mem_some_self m
+    have hmnorm : m.isNormalized := hv.wf.assetsMaximum_norm m hmem
+    have hle : v.assetsTotal.toRat + cN.toRat ≤ m.toRat := hbound m hmem
+    have hat_le : at'.toRat ≤ m.toRat :=
+      operator_add_le_of_le_normalized v.assetsTotal cN at' m hv.wf.assetsTotal_norm hcNnorm hat hmnorm hle
+    have hgt_false : at'.operator_gt m = false := by
+      by_contra h
+      rw [Bool.not_eq_false] at h
+      have := (operator_gt_iff at' m hatnorm hmnorm).mp h
+      linarith
+    simp only [Option.getD_some]
+    rw [hgt_false, Bool.and_false]
 
 /-- **Charge-side bound for the limit guard.** On a real deposit the charge's
 `Number` never pushes `assetsTotal + charge` over a maximum the rounded deposit
@@ -527,7 +528,7 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
           obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+          by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · have hcanon_amt : amount.Canonical := by rw [hameq]; exact hcanonR
             obtain ⟨an, han, hval, hnorm⟩ := STAmount.toNumber_exact_canonical amount .to_nearest
               (STAmount.Canonical.exactCanonical amount hcanon_amt)
@@ -556,7 +557,7 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · have hbound := deposit_real_charge_bound v hv amount roundedAmount a sh n1
                 hcanonR hnzR hameq hcd hn1 hmargin
               have hn1norm : n1.isNormalized := by
@@ -692,7 +693,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (hv : v.Lawful) (shares c : STAmo
     -- Reusing that pipeline walk here is the remaining step.
     rw [if_neg hmz] at hsad
     obtain ⟨_, _, hsad⟩ := bind_ok_peel _ _ _ hsad
-    obtain ⟨navN, hnavN, hsad⟩ := bind_ok_peel _ _ _ hsad
+    set navN := v.assetsTotal with hnavN_eq
     obtain ⟨shN, hshN, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨P, hP, hsad⟩ := bind_ok_peel _ _ _ hsad
     obtain ⟨Q, hQ, hsad⟩ := bind_ok_peel _ _ _ hsad
@@ -721,9 +722,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (hv : v.Lawful) (shares c : STAmo
             | fractional => rfl
             | integral mv mo ms msh => rw [hnt] at hint; simp [NumericType.isIntegral] at hint
           exact STAmount.ofNumber_iou_mantissa_ne_zero v.numericType Q .upward c hfrac hc hc0
-      have hnavnorm : navN.isNormalized :=
-        operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-          hv.wf.interestUnrealized_norm hnavN
+      have hnavnorm : navN.isNormalized := hv.wf.assetsTotal_norm
       obtain ⟨sn, hsn, hsnval, hsnnorm, _⟩ :=
         STAmount.toNumber_integral_exact shares .to_nearest hshc (by rw [hshnt]; decide)
       have hshNeq : sn = shN := by rw [hsn] at hshN; exact Except.ok.inj hshN
@@ -735,7 +734,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (hv : v.Lawful) (shares c : STAmo
         operator_div_numerator_ne_zero_sz P v.sharesTotal Q .to_nearest
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hQ hQm
       obtain ⟨hnavm, _⟩ := operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
-      obtain ⟨_, _, _, hnavN_pos⟩ := Vault.depositNav_facts v hv navN hmz hnavm hnavN
+      obtain ⟨_, _, _, hnavN_pos⟩ := Vault.depositNav_facts v hv navN hmz hnavm hnavN_eq
       have hPnorm : P.isNormalized :=
         operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
       have hQnorm : Q.isNormalized :=
