@@ -27,3 +27,4 @@ import XRPL.Properties.Vault.VaultWithdraw
 import XRPL.Properties.Vault.VaultClawback
 import XRPL.Properties.Vault.Dilution
 import XRPL.Properties.Vault.Roundtrip
+import XRPL.Properties.Vault.CanEmpty
