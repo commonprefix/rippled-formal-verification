@@ -470,7 +470,7 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
           have hn21 : n2 = n1 := by rw [hn1] at hn2; exact (Except.ok.inj hn2).symm
           rw [hn21, hAV, hat] at hav
           have hae : av' = at' := (Except.ok.inj hav).symm
-          by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+          by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
           · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact hae
         · rw [if_neg hd] at hok
@@ -488,7 +488,7 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
             have hn21 : n2 = n1 := by rw [hn1] at hn2; exact (Except.ok.inj hn2).symm
             rw [hn21, hAV, hat] at hav
             have hae : av' = at' := (Except.ok.inj hav).symm
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
             · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact hae
 

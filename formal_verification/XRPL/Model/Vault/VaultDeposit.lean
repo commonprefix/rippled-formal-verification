@@ -58,9 +58,8 @@ def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except St
     let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
     return shares
   let amountDepositNumber ← amountDeposit.toNumber .to_nearest
-  let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let sharesAssets ← vault.sharesTotal.operator_mul amountDepositNumber .to_nearest
-  let sharesNumber ← sharesAssets.operator_div netAssetValue .to_nearest
+  let sharesNumber ← sharesAssets.operator_div vault.assetsTotal .to_nearest
   let sharesNumber ← sharesNumber.truncate
   let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
   return shares
@@ -69,9 +68,8 @@ def sharesToAssetsDeposit (vault : Vault) (shares : STAmount) : Except String ST
   if vault.assetsTotal.mantissa_ = 0 then
     let assets ← STAmount.checked vault.numericType shares.mantissa (shares.exponent - vault.scale.toNat) false .to_nearest
     return assets
-  let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
   let sharesNumber ← shares.toNumber .to_nearest
-  let assetsShares ← netAssetValue.operator_mul sharesNumber .to_nearest
+  let assetsShares ← vault.assetsTotal.operator_mul sharesNumber .to_nearest
   let amountDepositNumber ← assetsShares.operator_div vault.sharesTotal .to_nearest
   -- (waiting the C++ fix) round the charge up so a depositor never pays less than the issued shares are worth
   let amountDeposit ← STAmount.ofNumber vault.numericType amountDepositNumber .upward

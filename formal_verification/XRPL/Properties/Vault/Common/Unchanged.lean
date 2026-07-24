@@ -44,7 +44,7 @@ theorem Vault.deposit_error_rejected_proof (v : Vault) (amountDeposit : STAmount
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
             · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact .inr rfl
           · rw [if_neg hd] at hok
@@ -60,7 +60,7 @@ theorem Vault.deposit_error_rejected_proof (v : Vault) (amountDeposit : STAmount
               obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-              by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+              by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
               · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
               · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact .inr rfl
   rcases key with h | h

@@ -14,7 +14,6 @@ def Vault.create (nt : NumericType) (scale : UInt8) (assetsMaximum : Option Numb
   numericType := nt
   scale := scale
   sharesTotal := Number.zero
-  interestUnrealized := Number.zero
   lossUnrealized := Number.zero
 
 end XRPL.Model.SingleAssetVault

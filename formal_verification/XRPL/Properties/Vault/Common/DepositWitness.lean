@@ -37,7 +37,7 @@ def wvF : Vault :=
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness deposit amount, `1` of the IOU. -/
 def waF : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
@@ -55,7 +55,7 @@ def wvF' : Vault :=
   , assetsAvailable := ⟨false, 3999999999999999900, -18⟩
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 9333333333333333000, -3⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness deposit result. -/
 def wrF : DepositResult := ⟨none, wvF', wcF, wsF⟩
@@ -81,7 +81,7 @@ def wvDVU : Vault :=
   , assetsAvailable := ⟨false, 9000000000000000007, 0⟩
   , assetsMaximum := none, numericType := .int64, scale := 0
   , sharesTotal := ⟨false, 1000000000000000000, 0⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness donation amount, `9000000000000000006` int64. -/
 def waDVU : STAmount := STAmount.unchecked .int64 9000000000000000006 0 false
@@ -93,7 +93,7 @@ def wvDVU' : Vault :=
   , assetsAvailable := ⟨false, 1800000000000000001, 1⟩
   , assetsMaximum := none, numericType := .int64, scale := 0
   , sharesTotal := ⟨false, 1000000000000000000, 0⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- The witness deposit result. -/
 def wrDVU : DepositResult := ⟨none, wvDVU', waDVU, STAmount.zero .int64⟩

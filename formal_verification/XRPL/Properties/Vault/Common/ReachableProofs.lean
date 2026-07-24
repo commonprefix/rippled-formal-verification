@@ -22,35 +22,16 @@ theorem Vault.Reachable.lossUnrealized_zero_proof (v : Vault) (hr : Vault.Reacha
     simp only [Vault.toExact, Vault.create, Number.toRat_zero]
   | deposit v amount isDonation r hrv hdep _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.deposit_preserves_unrealized v amount isDonation r hdep).1]; exact ih
+    rw [(Vault.deposit_preserves_unrealized v amount isDonation r hdep)]; exact ih
   | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.withdraw_preserves_unrealized v amount waive r hwd).1]; exact ih
+    rw [(Vault.withdraw_preserves_unrealized v amount waive r hwd)]; exact ih
   | clawback v assets r hrv hcb _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.clawback_preserves_unrealized v assets r hcb).1]; exact ih
+    rw [(Vault.clawback_preserves_unrealized v assets r hcb)]; exact ih
   | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
     show v'.lossUnrealized.toRat = 0
-    rw [(Vault.burnShares_preserves_unrealized v sharesDestroyed v' hburn).1]; exact ih
-
-/-- No operation changes `interestUnrealized`. -/
-theorem Vault.Reachable.interestUnrealized_zero_proof (v : Vault) (hr : Vault.Reachable v) :
-    v.toExact.interestUnrealized = 0 := by
-  induction hr with
-  | create nt scale am hn hp hi hl =>
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  | deposit v amount isDonation r hrv hdep _ _ _ ih =>
-    show r.vault'.interestUnrealized.toRat = 0
-    rw [(Vault.deposit_preserves_unrealized v amount isDonation r hdep).2]; exact ih
-  | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
-    show r.vault'.interestUnrealized.toRat = 0
-    rw [(Vault.withdraw_preserves_unrealized v amount waive r hwd).2]; exact ih
-  | clawback v assets r hrv hcb _ _ _ ih =>
-    show r.vault'.interestUnrealized.toRat = 0
-    rw [(Vault.clawback_preserves_unrealized v assets r hcb).2]; exact ih
-  | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
-    show v'.interestUnrealized.toRat = 0
-    rw [(Vault.burnShares_preserves_unrealized v sharesDestroyed v' hburn).2]; exact ih
+    rw [(Vault.burnShares_preserves_unrealized v sharesDestroyed v' hburn)]; exact ih
 
 /-- Every operation writes both asset fields with the identical update, so
 record-level asset parity holds on all reachable states. -/
@@ -77,17 +58,14 @@ theorem Vault.Reachable.lawful_proof (v : Vault) (hr : Vault.Reachable v) : v.La
     exact Vault.create_lawful nt scale am hn hp hi hl
   | deposit v amount isDonation r hrv hdep hcanon hnn hSsz ih =>
     exact Vault.deposit_lawful v amount isDonation ih
-      (Vault.Reachable.interestUnrealized_zero_proof v hrv)
       (Vault.Reachable.lossUnrealized_zero_proof v hrv)
       (Vault.Reachable.asset_parity_proof v hrv) hcanon hnn r hdep hSsz
   | withdraw v amount waive r hrv hwd hSc hSnt hSnn hsle hfit ih =>
     exact Vault.withdraw_lawful v amount waive ih
-      (Vault.Reachable.interestUnrealized_zero_proof v hrv)
       (Vault.Reachable.lossUnrealized_zero_proof v hrv)
       (Vault.Reachable.asset_parity_proof v hrv) r hwd hSc hSnt hSnn hsle hfit
   | clawback v assets r hrv hcb hcanon hslt hfit ih =>
     exact Vault.clawback_lawful v assets ih
-      (Vault.Reachable.interestUnrealized_zero_proof v hrv)
       (Vault.Reachable.lossUnrealized_zero_proof v hrv)
       (Vault.Reachable.asset_parity_proof v hrv) hcanon r hcb hslt hfit
   | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>

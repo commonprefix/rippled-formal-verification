@@ -12,7 +12,6 @@ structure Vault.Exact where
   assetsAvailable : ℚ
   assetsMaximum : Option ℚ
   sharesTotal : ℕ
-  interestUnrealized : ℚ
   lossUnrealized : ℚ
 
 /-- The exact value of a vault state. Total: `sharesTotal` falls back to `0`-like
@@ -23,7 +22,6 @@ def Vault.toExact (v : Vault) : Vault.Exact where
   assetsAvailable := v.assetsAvailable.toRat
   assetsMaximum := v.assetsMaximum.map Number.toRat
   sharesTotal := v.sharesTotal.toRat.num.toNat
-  interestUnrealized := v.interestUnrealized.toRat
   lossUnrealized := v.lossUnrealized.toRat
 
 /-- Representation well-formedness of the raw record: every `Number` field
@@ -35,7 +33,6 @@ structure Vault.WF (v : Vault) : Prop where
   assetsAvailable_norm : v.assetsAvailable.isNormalized
   assetsMaximum_norm : ∀ m ∈ v.assetsMaximum, m.isNormalized
   sharesTotal_norm : v.sharesTotal.isNormalized
-  interestUnrealized_norm : v.interestUnrealized.isNormalized
   lossUnrealized_norm : v.lossUnrealized.isNormalized
   sharesTotal_nonneg : 0 ≤ v.sharesTotal.toRat
   sharesTotal_int : v.sharesTotal.toRat.den = 1
@@ -68,8 +65,8 @@ theorem Vault.WF.hasCap_iff (v : Vault) :
 
 /-- The vault invariant (XLS-0065 §4.5). The `lossUnrealized_nonneg` clause is
 included as intended by the spec. The fact that the modeled operations keep
-`lossUnrealized`/`interestUnrealized` at zero is a reachability corollary
-(`Vault.Reachable`), not a validity clause. -/
+`lossUnrealized` at zero is a reachability corollary (`Vault.Reachable`), not a
+validity clause. -/
 structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   assetsTotal_nonneg : 0 ≤ s.assetsTotal
   assetsAvailable_nonneg : 0 ≤ s.assetsAvailable
@@ -79,11 +76,7 @@ structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   cap : ∀ m ∈ s.assetsMaximum, s.assetsTotal ≤ m
   lossUnrealized_nonneg : 0 ≤ s.lossUnrealized
   lossUnrealized_le : s.lossUnrealized ≤ s.assetsTotal - s.assetsAvailable
-  interestUnrealized_nonneg : 0 ≤ s.interestUnrealized
-  interestUnrealized_le : s.interestUnrealized ≤ s.assetsTotal - s.assetsAvailable
-  deposit_nav_pos : 0 < s.assetsTotal → s.interestUnrealized < s.assetsTotal
-  withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.interestUnrealized - s.lossUnrealized
-  interest_shares : 0 < s.interestUnrealized → 0 < s.sharesTotal
+  withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.lossUnrealized
 
 /-- A lawful vault is a well-formed representation whose exact value satisfies
 the invariant. -/

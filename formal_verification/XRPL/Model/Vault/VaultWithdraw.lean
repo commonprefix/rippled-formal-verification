@@ -14,8 +14,7 @@ def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrea
   | true => Number.zero
   | false => vault.lossUnrealized
 
-  let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
-  let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
+  let netAssetValue ← vault.assetsTotal.operator_sub lossUnrealized .to_nearest
 
   if netAssetValue.mantissa_ == 0 then
     return STAmount.zero vault.numericType
@@ -45,8 +44,7 @@ def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares w
   | true => Number.zero
   | false => vault.lossUnrealized
 
-  let netAssetValue ← vault.assetsTotal.operator_sub vault.interestUnrealized .to_nearest
-  let netAssetValue ← netAssetValue.operator_sub lossUnrealized .to_nearest
+  let netAssetValue ← vault.assetsTotal.operator_sub lossUnrealized .to_nearest
 
   if netAssetValue.mantissa_ == 0 then
     return STAmount.zero .int64

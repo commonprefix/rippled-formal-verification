@@ -10,24 +10,21 @@ variable (v : Vault)
 
 /-! ## `Vault.sharesToAssetsWithdraw` -/
 
-/-- When `assetsTotal - interestUnrealized - lossUnrealized` rounds to a zero
-mantissa, any `shares` are paid exactly zero. This is the only early exit of
-`sharesToAssetsWithdraw`. -/
+/-- When assetsTotal minus lossUnrealized rounds to a zero mantissa, any `shares`
+are paid exactly zero. This is the only early exit of `sharesToAssetsWithdraw`. -/
 theorem Vault.sharesToAssetsWithdraw_zero_nav (shares : STAmount) (waiveUnrealizedLoss : Bool)
-    (netAssetValue netAssetValue' : Number)
-    -- the pricing value: assetsTotal - interestUnrealized, then minus
-    -- lossUnrealized (or minus zero when the loss is waived)
-    (hnav : v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok netAssetValue)
-    (hnav' : netAssetValue.operator_sub
+    (netAssetValue : Number)
+    -- the pricing value: assetsTotal minus lossUnrealized (or minus zero when the loss is waived)
+    (hnav : v.assetsTotal.operator_sub
       (match waiveUnrealizedLoss with
         | true => Number.zero
-        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue')
+        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue)
     -- and it rounded to a zero mantissa
-    (hz : netAssetValue'.mantissa_ = 0) :
+    (hz : netAssetValue.mantissa_ = 0) :
     v.sharesToAssetsWithdraw shares waiveUnrealizedLoss =
       .ok (STAmount.zero v.numericType) :=
   Vault.sharesToAssetsWithdraw_zero_nav_proof v shares waiveUnrealizedLoss
-    netAssetValue netAssetValue' hnav hnav' hz
+    netAssetValue hnav hz
 
 /-! ## `Vault.withdraw` -/
 

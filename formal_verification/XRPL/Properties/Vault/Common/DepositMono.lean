@@ -31,7 +31,7 @@ lemma deposit_nonempty_chain_facts (hv : v.Lawful) (hne : v.assetsTotal.mantissa
     (hok : assetsToSharesDeposit v amount = .ok shares) (hnz : shares.isZero = false) :
     ∃ (amountN navN P T0 T : Number),
       amountN.toRat = amount.toRat ∧ amountN.isNormalized ∧ amountN.mantissa_ ≠ 0 ∧
-      v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok navN ∧
+      navN = v.assetsTotal ∧
       navN.isNormalized ∧ navN.mantissa_ ≠ 0 ∧ 0 < navN.toRat ∧
       v.sharesTotal.mantissa_ ≠ 0 ∧
       v.sharesTotal.operator_mul amountN .to_nearest = .ok P ∧
@@ -45,7 +45,6 @@ lemma deposit_nonempty_chain_facts (hv : v.Lawful) (hne : v.assetsTotal.mantissa
   rw [if_neg hne] at hok
   obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨amountN, hamN, hok⟩ := bind_ok_peel _ _ _ hok
-  obtain ⟨navN, hnavN, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨P, hP, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨T0, hT0, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨T, hT, hok⟩ := bind_ok_peel _ _ _ hok
@@ -55,9 +54,8 @@ lemma deposit_nonempty_chain_facts (hv : v.Lawful) (hne : v.assetsTotal.mantissa
   have hTm : T.mantissa_ ≠ 0 :=
     STAmount.ofNumber_integral_source_ne_zero .int64 T .to_nearest shares (by decide) hsh hmv
   have hT0m : T0.mantissa_ ≠ 0 := Number.truncate_source_ne_zero T0 T hT hTm
-  have hnavnorm : navN.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-      hv.wf.interestUnrealized_norm hnavN
+  set navN := v.assetsTotal with hnavN_eq
+  have hnavnorm : navN.isNormalized := hv.wf.assetsTotal_norm
   have hnavm : navN.mantissa_ ≠ 0 :=
     operator_div_divisor_ne_zero P navN T0 .to_nearest hnavnorm hT0
   have hPm : P.mantissa_ ≠ 0 :=
@@ -83,7 +81,7 @@ lemma deposit_nonempty_chain_facts (hv : v.Lawful) (hne : v.assetsTotal.mantissa
     rw [abs_of_nonneg (mul_nonneg hSTnn hann)] at hb
     have hab := abs_le.mp hb
     nlinarith [mul_nonneg hSTnn hann]
-  obtain ⟨_, _, _, hnavpos⟩ := Vault.depositNav_facts v hv navN hne hnavm hnavN
+  obtain ⟨_, _, _, hnavpos⟩ := Vault.depositNav_facts v hv navN hne hnavm hnavN_eq
   have hPNnn : 0 ≤ P.toRat / navN.toRat := div_nonneg hPnn (le_of_lt hnavpos)
   have hT0nn : 0 ≤ T0.toRat := by
     have hb : |T0.toRat - P.toRat / navN.toRat|
@@ -96,7 +94,7 @@ lemma deposit_nonempty_chain_facts (hv : v.Lawful) (hne : v.assetsTotal.mantissa
     lt_of_le_of_ne hT0nn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero T0 hT0m))
   obtain ⟨hTval, hTnorm⟩ :=
     Number.truncate_floor T0 T hT0norm (Number.negative_false_of_pos T0 hT0pos) hT
-  exact ⟨amountN, navN, P, T0, T, hanval, hannorm, hanm, hnavN, hnavnorm, hnavm, hnavpos,
+  exact ⟨amountN, navN, P, T0, T, hanval, hannorm, hanm, hnavN_eq, hnavnorm, hnavm, hnavpos,
     hSTm, hP, hPnorm, hPm, hT0, hT0norm, hT0m, hT0pos, hT, hTnorm hTm, hTm,
     (by rw [hTval]; exact Rat.den_intCast _), hsh⟩
 
@@ -215,7 +213,7 @@ lemma assetsToSharesDeposit_mono (hv : v.Lawful)
   obtain ⟨aN₂, navN₂, P₂, T0₂, T₂, hav₂, haN₂, ham₂, hnav₂, hnavn₂, hnavm₂, hnavp₂, hSTm₂,
       hP₂, hPn₂, hPm₂, hT0₂, hT0n₂, hT0m₂, hT0p₂, hT₂, hTn₂, hTm₂, hTden₂, hsh₂⟩ :=
     deposit_nonempty_chain_facts v hv hne amount₂ shares₂ hc₂ hpos₂ hok₂ hnz₂
-  have hnaveq : navN₁ = navN₂ := Except.ok.inj (hnav₁.symm.trans hnav₂)
+  have hnaveq : navN₁ = navN₂ := hnav₁.trans hnav₂.symm
   subst hnaveq
   have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne hv.wf.sharesTotal_nonneg
     (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.sharesTotal hSTm₁))

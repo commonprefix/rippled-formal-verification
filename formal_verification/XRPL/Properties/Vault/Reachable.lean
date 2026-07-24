@@ -17,7 +17,7 @@ that does not require a prior reachability proof, so every proof of
 therefore has exactly one base case, `create`, and one step case per operation,
 which is how `Reachable.lawful` covers every possible history: `create_lawful`
 discharges the creation case and the preservation theorems discharge the
-operation cases. The two zero-corollaries and the asset-parity corollary supply
+operation cases. The zero-loss corollary and the asset-parity corollary supply
 the state hypotheses those preservation theorems take.
 -/
 
@@ -30,11 +30,6 @@ theorem Vault.Reachable.lossUnrealized_zero (v : Vault) (hr : Vault.Reachable v)
     v.toExact.lossUnrealized = 0 :=
   Vault.Reachable.lossUnrealized_zero_proof v hr
 
-/-- No operation changes `interestUnrealized`. -/
-theorem Vault.Reachable.interestUnrealized_zero (v : Vault) (hr : Vault.Reachable v) :
-    v.toExact.interestUnrealized = 0 :=
-  Vault.Reachable.interestUnrealized_zero_proof v hr
-
 /-- Every operation writes both asset fields with the identical update, so
 record-level asset parity holds on all reachable states. -/
 theorem Vault.Reachable.asset_parity (v : Vault) (hr : Vault.Reachable v) :
@@ -44,7 +39,7 @@ theorem Vault.Reachable.asset_parity (v : Vault) (hr : Vault.Reachable v) :
 /-- All reachable states are lawful. Base case `create` is `Vault.create_lawful`;
 each operation case is the matching preservation theorem applied to the
 induction hypothesis (the prior state is lawful) and the reachability
-corollaries (both unrealized fields zero, asset parity). -/
+corollaries (unrealized loss zero, asset parity). -/
 theorem Vault.Reachable.lawful (v : Vault) (hr : Vault.Reachable v) : v.Lawful :=
   Vault.Reachable.lawful_proof v hr
 
