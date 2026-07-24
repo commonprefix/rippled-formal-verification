@@ -34,11 +34,10 @@ theorem Vault.deposit_no_dilution (amountDeposit : STAmount) (r : DepositResult)
     (hv : v.Lawful) -- the starting vault is lawful
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
-    -- the vault carries no unrealized interest or loss (so `withdrawNav = assetsTotal`; the
-    -- state every modeled operation preserves). Without it the 19-digit stored-total rounding of
+    -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`; the state every
+    -- modeled operation preserves). Without it the 19-digit stored-total rounding of
     -- `assetsTotal` is unbounded relative to a tiny `withdrawNav` and one deposit can dilute far
     -- past `depositε`, so this hypothesis is necessary, not merely convenient.
-    (hI : v.toExact.interestUnrealized = 0)
     (hL : v.toExact.lossUnrealized = 0)
     -- the taken amount does not underflow to the canonical zero (the `isZero = false`
     -- precondition class of `deposit_charge`; a deep fractional charge underflow issues shares
@@ -48,7 +47,7 @@ theorem Vault.deposit_no_dilution (amountDeposit : STAmount) (r : DepositResult)
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.deposit_no_dilution_proof v amountDeposit r hv hcanon hpos hI hL hcnz hSsz hok herr
+  Vault.deposit_no_dilution_proof v amountDeposit r hv hcanon hpos hL hcnz hSsz hok herr
 
 /-- Witness: the `1 - depositε` factor in `deposit_no_dilution` cannot be
 dropped, a deposit exists that strictly decreases per-share value. -/
@@ -107,11 +106,10 @@ concentrates the tiny overpay onto the few remaining shares and can exceed the
 `depositε` window. -/
 theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the vault carries no unrealized interest or loss (so `withdrawNav = assetsTotal`; the
-    -- state every modeled operation preserves), as in `deposit_no_dilution`
-    (hI : v.toExact.interestUnrealized = 0)
+    -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`; the state every
+    -- modeled operation preserves), as in `deposit_no_dilution`
     (hL : v.toExact.lossUnrealized = 0)
-    -- the two pricing subtractions do not round (automatic under `hI`/`hL`)
+    -- the pricing subtraction does not round (automatic under `hL`)
     (hnav : v.WithdrawNavExact false)
     -- the payout does not underflow to the canonical zero (mirrors `deposit_no_dilution`'s `hcnz`)
     (hcnz : r.assets'.isZero = false)
@@ -126,7 +124,7 @@ theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult
     (hok : v.withdraw amount false = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.withdraw_no_dilution_proof v amount r hv hI hL hnav hcnz hnn hc hSnt hmargin hSfit hok herr
+  Vault.withdraw_no_dilution_proof v amount r hv hL hnav hcnz hnn hc hSnt hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `withdraw_no_dilution` cannot be
 dropped, a withdrawal exists that strictly decreases per-share value. -/
@@ -149,10 +147,9 @@ always partial (no final exit), and the recovery pricing already forces `0 <
 withdrawNav`, so no nonzero-recovery hypothesis is needed. -/
 theorem Vault.clawback_no_dilution (assets : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- the vault carries no unrealized interest or loss (so `withdrawNav = assetsTotal`)
-    (hI : v.toExact.interestUnrealized = 0)
+    -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`)
     (hL : v.toExact.lossUnrealized = 0)
-    -- the two pricing subtractions do not round (automatic under `hI`/`hL`)
+    -- the pricing subtraction does not round (automatic under `hL`)
     (hnav : v.WithdrawNavExact false)
     (hc : assets.Canonical) -- the clawed-back amount is stored canonically
     -- near-final margin: at least half the shares remain to absorb the interior overpay
@@ -161,7 +158,7 @@ theorem Vault.clawback_no_dilution (assets : STAmount) (r : ClawbackResult)
     (hok : v.clawback assets = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.clawback_no_dilution_proof v assets r hv hI hL hnav hc hmargin hSfit hok herr
+  Vault.clawback_no_dilution_proof v assets r hv hL hnav hc hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `clawback_no_dilution` cannot be
 dropped, a clawback exists that strictly decreases per-share value. -/
@@ -174,21 +171,21 @@ theorem Vault.clawback_dilution_attained :
   clawback_dilution_witness
 
 /-- Along any margin-respecting history of `n` operations from a lawful vault with no
-unrealized interest or loss, per-share value decreases by at most the compounded factor
+unrealized loss, per-share value decreases by at most the compounded factor
 `(1 - depositε) ^ n`.
 
-The two `interest = loss = 0` base hypotheses are an induction invariant (every modeled
-operation preserves them, and each step's `no_dilution` needs them). The near-final
-margins live in the withdraw/clawback constructors of `ReachableFromIn`, so every step
-satisfies its per-op `no_dilution`/strict-increase theorem. The proof is the compounding
-induction: `refl` is the base `(1 - depositε)^0 = 1`; each step composes the prior
-factor with its single-op factor via `deposit_no_dilution` (#1), the donation
-strict-increase (#3), `withdraw_no_dilution` (#4), `clawback_no_dilution` (#6), and the
-`burnShares` share-only decrease, carrying `Lawful` and `interest = loss = 0` forward by
-the field preservation the success reductions expose. -/
+The `loss = 0` base hypothesis is an induction invariant (every modeled operation
+preserves it, and each step's `no_dilution` needs it). The near-final margins live in
+the withdraw/clawback constructors of `ReachableFromIn`, so every step satisfies its
+per-op `no_dilution`/strict-increase theorem. The proof is the compounding induction:
+`refl` is the base `(1 - depositε)^0 = 1`; each step composes the prior factor with its
+single-op factor via `deposit_no_dilution` (#1), the donation strict-increase (#3),
+`withdraw_no_dilution` (#4), `clawback_no_dilution` (#6), and the `burnShares` share-only
+decrease, carrying `Lawful` and `loss = 0` forward by the field preservation the success
+reductions expose. -/
 theorem Vault.ReachableFromIn.no_dilution (w : Vault) (n : ℕ)
     (hw : w.Lawful)
-    (hwI : w.toExact.interestUnrealized = 0) (hwL : w.toExact.lossUnrealized = 0)
+    (hwL : w.toExact.lossUnrealized = 0)
     -- vault-only operations keep both asset fields identical (no lending), the same record-level
     -- parity `Vault.Reachable` gets from `create`; it is preserved by every step and is needed to
     -- carry `Lawful` forward through the compounding induction (each `*_lawful` step consumes it)
@@ -196,7 +193,7 @@ theorem Vault.ReachableFromIn.no_dilution (w : Vault) (n : ℕ)
     (h : Vault.ReachableFromIn w v n) :
     v.withdrawNav * (w.toExact.sharesTotal : ℚ) ≥
       w.withdrawNav * (v.toExact.sharesTotal : ℚ) * (1 - depositε) ^ n :=
-  Vault.ReachableFromIn.no_dilution_proof v w n hw hwI hwL hwAV h
+  Vault.ReachableFromIn.no_dilution_proof v w n hw hwL hwAV h
 
 /-- Witness: dilution compounds, a history of more than one operation exists
 whose total per-share value decrease is strict. -/

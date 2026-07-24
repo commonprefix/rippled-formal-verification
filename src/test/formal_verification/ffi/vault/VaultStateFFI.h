@@ -25,7 +25,6 @@ struct VaultState
     std::uint8_t numericType{};
     std::uint8_t scale{};
     Number sharesTotal;
-    Number interestUnrealized;
     Number lossUnrealized;
 };
 
@@ -39,7 +38,6 @@ lean_vault_state_build(
     lean_object* numericType,
     uint8_t scale,
     lean_object* sharesTotal,
-    lean_object* interestUnrealized,
     lean_object* lossUnrealized);
 uint8_t
 lean_vault_state_has_maximum(lean_object* vs);
@@ -57,8 +55,6 @@ uint8_t
 lean_vault_state_scale(lean_object* vs);
 lean_object*
 lean_vault_state_shares_total(lean_object* vs);
-lean_object*
-lean_vault_state_interest_unrealized(lean_object* vs);
 lean_object*
 lean_vault_state_loss_unrealized(lean_object* vs);
 }
@@ -81,7 +77,6 @@ public:
             NumericTypeFFI::build(state.numericType),
             state.scale,
             NumberFFI::build(state.sharesTotal),
-            NumberFFI::build(state.interestUnrealized),
             NumberFFI::build(state.lossUnrealized)));
     }
 
@@ -96,7 +91,6 @@ public:
             .numericType = leanGet<std::uint8_t>(lean_vault_state_numeric_tag),
             .scale = leanGet<std::uint8_t>(lean_vault_state_scale),
             .sharesTotal = leanGetObj<NumberFFI>(lean_vault_state_shares_total),
-            .interestUnrealized = leanGetObj<NumberFFI>(lean_vault_state_interest_unrealized),
             .lossUnrealized = leanGetObj<NumberFFI>(lean_vault_state_loss_unrealized)};
     }
 };

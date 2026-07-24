@@ -25,18 +25,17 @@ open XRPL.Model.Protocol
 theorem Vault.deposit_preserves_unrealized (v : Vault) (amountDeposit : STAmount)
     (isDonation : Bool) (r : DepositResult)
     (hok : v.deposit amountDeposit isDonation = .ok r) :
-    r.vault'.lossUnrealized = v.lossUnrealized ∧
-    r.vault'.interestUnrealized = v.interestUnrealized := by
+    r.vault'.lossUnrealized = v.lossUnrealized := by
   unfold Vault.deposit at hok
   obtain ⟨amount, _, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases h1 : amount.isZero = true
-  · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+  · rw [if_pos h1] at hok; injection hok with h; rw [← h]; rfl
   · rw [if_neg h1] at hok
     by_cases h2 : (isDonation && v.sharesTotal.mantissa_ == 0) = true
-    · rw [if_pos h2] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+    · rw [if_pos h2] at hok; injection hok with h; rw [← h]; rfl
     · rw [if_neg h2] at hok
       by_cases h3 : (v.isInsolvent && !isDonation) = true
-      · rw [if_pos h3] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+      · rw [if_pos h3] at hok; injection hok with h; rw [← h]; rfl
       · rw [if_neg h3] at hok
         simp only [pure_bind] at hok
         by_cases hd : isDonation = true
@@ -47,13 +46,13 @@ theorem Vault.deposit_preserves_unrealized (v : Vault) (amountDeposit : STAmount
           obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
-          · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
-          · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+          by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
+          · rw [if_pos hm] at hok; injection hok with h; rw [← h]; rfl
+          · rw [if_neg hm] at hok; injection hok with h; rw [← h]
         · rw [if_neg hd] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           cases cres with
-          | error e => injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+          | error e => injection hok with h; rw [← h]; rfl
           | success a s =>
             simp only [] at hok
             obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -62,61 +61,59 @@ theorem Vault.deposit_preserves_unrealized (v : Vault) (amountDeposit : STAmount
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
-            · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
-            · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
+            · rw [if_pos hm] at hok; injection hok with h; rw [← h]; rfl
+            · rw [if_neg hm] at hok; injection hok with h; rw [← h]
 
 /-- A withdrawal keeps both unrealized fields at their starting values. -/
 theorem Vault.withdraw_preserves_unrealized (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) :
-    r.vault'.lossUnrealized = v.lossUnrealized ∧
-    r.vault'.interestUnrealized = v.interestUnrealized := by
+    r.vault'.lossUnrealized = v.lossUnrealized := by
   unfold Vault.withdraw at hok
   cases amount
   all_goals {
     simp only [] at hok
     obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok
     by_cases h1 : result.error.isSome = true
-    · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+    · rw [if_pos h1] at hok; injection hok with h; rw [← h]
     · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
       obtain ⟨assetsNumber', _, hok⟩ := bind_ok_peel _ _ _ hok
       by_cases h2 : v.assetsAvailable.operator_lt assetsNumber' = true
-      · rw [if_pos h2] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+      · rw [if_pos h2] at hok; injection hok with h; rw [← h]; rfl
       · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
         obtain ⟨sta, _, hok⟩ := bind_ok_peel _ _ _ hok
         by_cases h3 : result.sharesRedeemed.operator_eq sta = true
         · rw [if_pos h3] at hok
           by_cases h4 : v.lossUnrealized.operator_ne Number.zero = true
-          · rw [if_pos h4] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+          · rw [if_pos h4] at hok; injection hok with h; rw [← h]; rfl
           · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
             obtain ⟨allAvail, _, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+            injection hok with h; rw [← h]
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
           obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨atr, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨atr', _, hok⟩ := bind_ok_peel _ _ _ hok
           by_cases h5 : (assetsNumber'.mantissa_ != 0 && atr.operator_eq atr') = true
-          · rw [if_pos h5] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+          · rw [if_pos h5] at hok; injection hok with h; rw [← h]; rfl
           · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+            injection hok with h; rw [← h]
   }
 
 /-- A clawback keeps both unrealized fields at their starting values. -/
 theorem Vault.clawback_preserves_unrealized (v : Vault) (assets : STAmount)
     (r : ClawbackResult) (hok : v.clawback assets = .ok r) :
-    r.vault'.lossUnrealized = v.lossUnrealized ∧
-    r.vault'.interestUnrealized = v.interestUnrealized := by
+    r.vault'.lossUnrealized = v.lossUnrealized := by
   unfold Vault.clawback at hok
   obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases h1 : result.error.isSome = true
-  · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+  · rw [if_pos h1] at hok; injection hok with h; rw [← h]
   · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
     by_cases h2 : result.sharesDestroyed.isZero = true
-    · rw [if_pos h2] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+    · rw [if_pos h2] at hok; injection hok with h; rw [← h]; rfl
     · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
       obtain ⟨sdn, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨arn, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -124,22 +121,21 @@ theorem Vault.clawback_preserves_unrealized (v : Vault) (assets : STAmount)
       obtain ⟨atr, _, hok⟩ := bind_ok_peel _ _ _ hok
       obtain ⟨atr', _, hok⟩ := bind_ok_peel _ _ _ hok
       by_cases h3 : (arn.mantissa_ != 0 && atr.operator_eq atr') = true
-      · rw [if_pos h3] at hok; injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+      · rw [if_pos h3] at hok; injection hok with h; rw [← h]; rfl
       · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
         obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
         obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
-        injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+        injection hok with h; rw [← h]
 
 /-- `burnShares` writes only `sharesTotal`, so both unrealized fields carry
 over unchanged. -/
 theorem Vault.burnShares_preserves_unrealized (v : Vault) (sharesDestroyed : STAmount)
     (v' : Vault) (hok : v.burnShares sharesDestroyed = .ok v') :
-    v'.lossUnrealized = v.lossUnrealized ∧
-    v'.interestUnrealized = v.interestUnrealized := by
+    v'.lossUnrealized = v.lossUnrealized := by
   unfold Vault.burnShares at hok
   obtain ⟨sdn, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-  injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
+  injection hok with h; rw [← h]
 
 /-- On a vault with no unrealized interest or loss, both withdrawal pricing
 subtractions return exactly the net asset value: the first subtracts the zero
@@ -148,27 +144,20 @@ subtractions return exactly the net asset value: the first subtracts the zero
 `WithdrawNavExact` hypothesis the payout accuracy lemmas take, from the
 `interest = loss = 0` state every modeled operation preserves. -/
 theorem Vault.withdrawNavExact_of_zero (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
-    (hI : v.toExact.interestUnrealized = 0) (hL : v.toExact.lossUnrealized = 0) :
+    (hL : v.toExact.lossUnrealized = 0) :
     v.WithdrawNavExact waiveUnrealizedLoss := by
-  have hI0 : v.interestUnrealized = Number.zero := by
-    have hmz : v.interestUnrealized.mantissa_ = 0 := by
-      by_contra h; exact (Number.toRat_ne_zero_of_mantissa_ne_zero v.interestUnrealized h) hI
-    exact Number.eq_zero_of_mantissa_zero v.interestUnrealized hv.wf.interestUnrealized_norm hmz
   have hL0 : v.lossUnrealized = Number.zero := by
     have hmz : v.lossUnrealized.mantissa_ = 0 := by
       by_contra h; exact (Number.toRat_ne_zero_of_mantissa_ne_zero v.lossUnrealized h) hL
     exact Number.eq_zero_of_mantissa_zero v.lossUnrealized hv.wf.lossUnrealized_norm hmz
-  refine ⟨v.assetsTotal, v.assetsTotal, ?_, ?_, ?_⟩
-  · rw [hI0]; exact operator_sub_zero_right _ _
+  refine ⟨v.assetsTotal, ?_, ?_⟩
   · cases waiveUnrealizedLoss with
     | true => exact operator_sub_zero_right _ _
     | false => rw [hL0]; exact operator_sub_zero_right _ _
   · split
     · simp only [Vault.depositNav, Vault.toExact]
-      rw [show v.interestUnrealized.toRat = 0 from hI]; ring
     · simp only [Vault.withdrawNav, Vault.toExact]
-      rw [show v.interestUnrealized.toRat = 0 from hI, show v.lossUnrealized.toRat = 0 from hL]
-      ring
+      rw [show v.lossUnrealized.toRat = 0 from hL]; ring
 
 /-- The amount taken and the shares issued by a deposit are both nonnegative,
 whether the run succeeds or is rejected (a rejection reports zero amounts). On the
@@ -220,7 +209,7 @@ rejected. On a rejection the payout is zero; on the final withdrawal it is the
 the `sharesToAssetsWithdraw` payout of the (nonnegative canonical) burned shares. -/
 theorem Vault.withdraw_assets_nonneg (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (hv : v.Lawful)
-    (hI : v.toExact.interestUnrealized = 0) (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.toExact.lossUnrealized = 0)
     (r : WithdrawResult) (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
     (hSc : r.sharesBurned.IntegralCanonical) (hSnt : r.sharesBurned.mNumericType = .int64)
     (hSnn : r.sharesBurned.negative = false) :
@@ -254,13 +243,12 @@ theorem Vault.withdraw_assets_nonneg (v : Vault) (amount : WithdrawAmount)
             from rfl, hSnt'] at hf
           exact absurd hf (by decide)
       have hnavE : v.WithdrawNavExact waiveUnrealizedLoss :=
-        Vault.withdrawNavExact_of_zero v hv waiveUnrealizedLoss hI hL
+        Vault.withdrawNavExact_of_zero v hv waiveUnrealizedLoss hL
       exact (Vault.sharesToAssetsWithdraw_spec v hv result.sharesRedeemed result.assets'
         waiveUnrealizedLoss hSnn_val hSC_canon hnavE hprice).1
 
 theorem Vault.deposit_lawful_proof (v : Vault) (amount : STAmount) (isDonation : Bool)
     (hv : v.Lawful)
-    (hI : v.toExact.interestUnrealized = 0)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanon : amount.Canonical)
@@ -386,9 +374,9 @@ theorem Vault.deposit_lawful_proof (v : Vault) (amount : STAmount) (isDonation :
     show ({ v with assetsTotal := at', assetsAvailable := at', sharesTotal := st' }
       : Vault).Lawful
     refine ⟨⟨hat_norm, hat_norm, hv.wf.assetsMaximum_norm, hst_norm,
-      hv.wf.interestUnrealized_norm, hv.wf.lossUnrealized_norm, hst_nn, hst_den,
+      hv.wf.lossUnrealized_norm, hst_nn, hst_den,
       hv.wf.scale_integral, hv.wf.scale_le⟩,
-      ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+      ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_⟩⟩
     · -- empty_shares: the new share total is nonzero
       intro h0
       exfalso
@@ -403,7 +391,13 @@ theorem Vault.deposit_lawful_proof (v : Vault) (amount : STAmount) (isDonation :
       obtain ⟨n, hn, rfl⟩ := hm'
       have hn' : v.assetsMaximum = some n := hn
       rw [hn'] at hmax
-      have hgt : at'.operator_gt n = false := by simpa using hmax
+      have hnpos : 0 < n.toRat :=
+        hv.valid.assetsMaximum_pos n.toRat (Option.mem_map.mpr ⟨n, hn, rfl⟩)
+      have hne0 : n.operator_ne Number.zero = true :=
+        (operator_ne_iff n Number.zero (hv.wf.assetsMaximum_norm n hn) (Or.inl rfl)).mpr
+          (by rw [Number.toRat_zero]; exact ne_of_gt hnpos)
+      have hgt : at'.operator_gt n = false := by
+        simp only [Option.getD_some, hne0, Bool.true_and] at hmax; exact hmax
       have := (operator_gt_iff at' n hat_norm (hv.wf.assetsMaximum_norm n hn)).not.mp
         (by rw [hgt]; simp)
       exact le_of_not_gt (fun hc => this hc)
@@ -411,28 +405,12 @@ theorem Vault.deposit_lawful_proof (v : Vault) (amount : STAmount) (isDonation :
     · show v.lossUnrealized.toRat ≤ at'.toRat - at'.toRat
       rw [show v.lossUnrealized.toRat = 0 from hL]
       linarith
-    · exact le_of_eq hI.symm
-    · show v.interestUnrealized.toRat ≤ at'.toRat - at'.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI]
+    · show 0 ≤ at'.toRat - v.lossUnrealized.toRat
+      rw [show v.lossUnrealized.toRat = 0 from hL]
       linarith
-    · intro h
-      have h' : (0 : ℚ) < at'.toRat := h
-      show v.interestUnrealized.toRat < at'.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI]
-      exact h'
-    · show 0 ≤ at'.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI,
-        show v.lossUnrealized.toRat = 0 from hL]
-      linarith
-    · intro h
-      exfalso
-      have h' : (0 : ℚ) < v.interestUnrealized.toRat := h
-      rw [show v.interestUnrealized.toRat = 0 from hI] at h'
-      exact absurd h' (lt_irrefl 0)
 
 theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     (hv : v.Lawful)
-    (hI : v.toExact.interestUnrealized = 0)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (r : WithdrawResult) (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
@@ -462,11 +440,10 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
                       sharesTotal := Number.zero } : Vault).Lawful
       have hz : Number.zero.isNormalized := Or.inl rfl
       have hLU0 : v.lossUnrealized.toRat = 0 := hL
-      have hIU0 : v.interestUnrealized.toRat = 0 := hI
       refine ⟨⟨hz, hz, hv.wf.assetsMaximum_norm, hz,
-        hv.wf.interestUnrealized_norm, hv.wf.lossUnrealized_norm,
+        hv.wf.lossUnrealized_norm,
         ?_, ?_, hv.wf.scale_integral, hv.wf.scale_le⟩,
-        ⟨?_, ?_, ?_, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩⟩
+        ⟨?_, ?_, ?_, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_⟩⟩
       · simp only [Number.toRat_zero, le_refl]
       · simp only [Number.toRat_zero]; rfl
       · simp only [Vault.toExact, Number.toRat_zero, le_refl]
@@ -487,21 +464,9 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
       · simp only [Vault.toExact, Number.toRat_zero]
         rw [hLU0]
         linarith
-      · simp only [Vault.toExact]
-        rw [hIU0]
       · simp only [Vault.toExact, Number.toRat_zero]
-        rw [hIU0]
+        rw [hLU0]
         linarith
-      · simp only [Vault.toExact, Number.toRat_zero]
-        intro h
-        exact absurd h (lt_irrefl 0)
-      · simp only [Vault.toExact, Number.toRat_zero]
-        rw [hIU0, hLU0]
-        linarith
-      · simp only [Vault.toExact]
-        intro h
-        rw [hIU0] at h
-        exact absurd h (lt_irrefl 0)
     · -- partial withdrawal
       -- the payout is priced from the burned shares (the non-final guard `hne`)
       have hfin : r.sharesBurned.operator_eq sta = false := by rw [hr]; exact hne
@@ -525,7 +490,7 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
           exact absurd hf (by decide)
       -- the paid amount is a nonnegative payout (formerly hypothesized)
       have hnavE : v.WithdrawNavExact waiveUnrealizedLoss :=
-        Vault.withdrawNavExact_of_zero v hv waiveUnrealizedLoss hI hL
+        Vault.withdrawNavExact_of_zero v hv waiveUnrealizedLoss hL
       have hDnn' : 0 ≤ result.assets'.toRat :=
         (Vault.sharesToAssetsWithdraw_spec v hv result.sharesRedeemed result.assets'
           waiveUnrealizedLoss hSnn_val hSC_canon hnavE hprice).1
@@ -632,10 +597,9 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
       show ({ v with assetsAvailable := at', assetsTotal := at', sharesTotal := st' }
         : Vault).Lawful
       refine ⟨⟨hat_norm, hat_norm, hv.wf.assetsMaximum_norm, hst_norm,
-        hv.wf.interestUnrealized_norm, hv.wf.lossUnrealized_norm, hst_nn, hst_den,
+        hv.wf.lossUnrealized_norm, hst_nn, hst_den,
         hv.wf.scale_integral, hv.wf.scale_le⟩,
-        ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_, ?_,
-        ?_, ?_, ?_⟩⟩
+        ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_⟩⟩
       · -- empty_shares
         intro h0
         have h0' : st'.toRat.num.toNat = 0 := h0
@@ -656,28 +620,12 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
       · show v.lossUnrealized.toRat ≤ at'.toRat - at'.toRat
         rw [show v.lossUnrealized.toRat = 0 from hL]
         linarith
-      · exact le_of_eq hI.symm
-      · show v.interestUnrealized.toRat ≤ at'.toRat - at'.toRat
-        rw [show v.interestUnrealized.toRat = 0 from hI]
+      · show 0 ≤ at'.toRat - v.lossUnrealized.toRat
+        rw [show v.lossUnrealized.toRat = 0 from hL]
         linarith
-      · intro h
-        have h' : (0 : ℚ) < at'.toRat := h
-        show v.interestUnrealized.toRat < at'.toRat
-        rw [show v.interestUnrealized.toRat = 0 from hI]
-        exact h'
-      · show 0 ≤ at'.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat
-        rw [show v.interestUnrealized.toRat = 0 from hI,
-          show v.lossUnrealized.toRat = 0 from hL]
-        linarith
-      · intro h
-        exfalso
-        have h' : (0 : ℚ) < v.interestUnrealized.toRat := h
-        rw [show v.interestUnrealized.toRat = 0 from hI] at h'
-        exact absurd h' (lt_irrefl 0)
 
 theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
     (hv : v.Lawful)
-    (hI : v.toExact.interestUnrealized = 0)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanon : assets.Canonical)
@@ -693,7 +641,7 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
     -- (formerly hypothesized) from the run: the recovery prices the destroyed
     -- shares through `sharesToAssetsWithdraw` and the guard already forced it
     -- under `assetsAvailable`
-    have hnavE : v.WithdrawNavExact false := Vault.withdrawNavExact_of_zero v hv false hI hL
+    have hnavE : v.WithdrawNavExact false := Vault.withdrawNavExact_of_zero v hv false hL
     obtain ⟨hSnn_r, hcanon_sd_r, hprice_r, hDle_r, -, -⟩ :=
       Vault.clawback_recovery_priced v assets r hv hnavE hcanon hok herr'
     have hSc_r : r.sharesDestroyed.IntegralCanonical :=
@@ -774,10 +722,9 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
     show ({ v with sharesTotal := st', assetsAvailable := at', assetsTotal := at' }
       : Vault).Lawful
     refine ⟨⟨hat_norm, hat_norm, hv.wf.assetsMaximum_norm, hst_norm,
-      hv.wf.interestUnrealized_norm, hv.wf.lossUnrealized_norm, hst_nn, hst_den,
+      hv.wf.lossUnrealized_norm, hst_nn, hst_den,
       hv.wf.scale_integral, hv.wf.scale_le⟩,
-      ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_, ?_,
-      ?_, ?_, ?_⟩⟩
+      ⟨hat_nn, hat_nn, le_refl _, hv.valid.assetsMaximum_pos, ?_, ?_, ?_, ?_, ?_⟩⟩
     · -- empty_shares: the strict share bound keeps the remainder positive
       intro h0
       exfalso
@@ -798,24 +745,9 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
     · show v.lossUnrealized.toRat ≤ at'.toRat - at'.toRat
       rw [show v.lossUnrealized.toRat = 0 from hL]
       linarith
-    · exact le_of_eq hI.symm
-    · show v.interestUnrealized.toRat ≤ at'.toRat - at'.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI]
+    · show 0 ≤ at'.toRat - v.lossUnrealized.toRat
+      rw [show v.lossUnrealized.toRat = 0 from hL]
       linarith
-    · intro h
-      have h' : (0 : ℚ) < at'.toRat := h
-      show v.interestUnrealized.toRat < at'.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI]
-      exact h'
-    · show 0 ≤ at'.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat
-      rw [show v.interestUnrealized.toRat = 0 from hI,
-        show v.lossUnrealized.toRat = 0 from hL]
-      linarith
-    · intro h
-      exfalso
-      have h' : (0 : ℚ) < v.interestUnrealized.toRat := h
-      rw [show v.interestUnrealized.toRat = 0 from hI] at h'
-      exact absurd h' (lt_irrefl 0)
 
 theorem Vault.burnShares_lawful_proof (v : Vault)
     (sharesDestroyed sharesTotalAmount : STAmount) (v' : Vault)
@@ -858,14 +790,6 @@ theorem Vault.burnShares_lawful_proof (v : Vault)
   have hAT0 : v.assetsTotal.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero _ hAT_m0
   have hAV0 : v.assetsAvailable.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero _ hAV_m0
   -- both unrealized fields are zero on this state
-  have hIU0 : v.interestUnrealized.toRat = 0 :=
-    le_antisymm (by
-      have h1 := hv.valid.interestUnrealized_le
-      have h2 : v.toExact.assetsTotal - v.toExact.assetsAvailable = 0 := by
-        show v.assetsTotal.toRat - v.assetsAvailable.toRat = 0
-        rw [hAT0, hAV0]; ring
-      rw [h2] at h1
-      exact h1) hv.valid.interestUnrealized_nonneg
   have hLU0 : v.lossUnrealized.toRat = 0 :=
     le_antisymm (by
       have h1 := hv.valid.lossUnrealized_le
@@ -911,11 +835,11 @@ theorem Vault.burnShares_lawful_proof (v : Vault)
   have hst_norm : st'.isNormalized :=
     operator_sub_isNormalized_to_nearest' _ _ _ hv.wf.sharesTotal_norm hsdn_norm hst
   refine ⟨⟨hv.wf.assetsTotal_norm, hv.wf.assetsAvailable_norm, hv.wf.assetsMaximum_norm,
-    hst_norm, hv.wf.interestUnrealized_norm, hv.wf.lossUnrealized_norm, hst_nn, hst_den,
+    hst_norm, hv.wf.lossUnrealized_norm, hst_nn, hst_den,
     hv.wf.scale_integral, hv.wf.scale_le⟩,
     ⟨hv.valid.assetsTotal_nonneg, hv.valid.assetsAvailable_nonneg,
     hv.valid.assetsAvailable_le, hv.valid.assetsMaximum_pos, ?_, hv.valid.cap, ?_, ?_,
-    ?_, ?_, ?_, ?_, ?_⟩⟩
+    ?_⟩⟩
   · -- empty_shares: both totals are zero on a burnable state
     intro _
     exact ⟨hAT0, hAV0⟩
@@ -923,22 +847,8 @@ theorem Vault.burnShares_lawful_proof (v : Vault)
   · show v.lossUnrealized.toRat ≤ v.assetsTotal.toRat - v.assetsAvailable.toRat
     rw [hLU0, hAT0, hAV0]
     linarith
-  · exact le_of_eq hIU0.symm
-  · show v.interestUnrealized.toRat ≤ v.assetsTotal.toRat - v.assetsAvailable.toRat
-    rw [hIU0, hAT0, hAV0]
+  · show 0 ≤ v.assetsTotal.toRat - v.lossUnrealized.toRat
+    rw [hLU0, hAT0]
     linarith
-  · intro h
-    exfalso
-    have h' : (0 : ℚ) < v.assetsTotal.toRat := h
-    rw [hAT0] at h'
-    exact absurd h' (lt_irrefl 0)
-  · show 0 ≤ v.assetsTotal.toRat - v.interestUnrealized.toRat - v.lossUnrealized.toRat
-    rw [hIU0, hLU0, hAT0]
-    linarith
-  · intro h
-    exfalso
-    have h' : (0 : ℚ) < v.interestUnrealized.toRat := h
-    rw [hIU0] at h'
-    exact absurd h' (lt_irrefl 0)
 
 end XRPL.Model.SingleAssetVault

@@ -39,7 +39,6 @@ class LeanVaultCreate_test : public LeanSuite
         BEAST_EXPECT(lean.numericType == cpp.numericType);
         BEAST_EXPECT(lean.scale == cpp.scale);
         BEAST_EXPECT(lean.sharesTotal == cpp.sharesTotal);
-        BEAST_EXPECT(lean.interestUnrealized == cpp.interestUnrealized);
         BEAST_EXPECT(lean.lossUnrealized == cpp.lossUnrealized);
     }
 

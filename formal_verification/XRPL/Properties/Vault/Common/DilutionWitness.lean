@@ -74,11 +74,11 @@ instance Vault.instDecidableWF (v : Vault) : Decidable v.WF :=
   decidable_of_iff
     (v.assetsTotal.isNormalized ∧ v.assetsAvailable.isNormalized ∧
      (∀ m ∈ v.assetsMaximum, m.isNormalized) ∧ v.sharesTotal.isNormalized ∧
-     v.interestUnrealized.isNormalized ∧ v.lossUnrealized.isNormalized ∧
+     v.lossUnrealized.isNormalized ∧
      0 ≤ v.sharesTotal.toRat ∧ v.sharesTotal.toRat.den = 1 ∧
      (v.numericType.isIntegral = true → v.scale = 0) ∧ v.scale.toNat ≤ 18)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j⟩ => ⟨a, b, c, d, e, f, g, h, i, j⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j⟩ => ⟨a, b, c, d, e, f, g, h, i, j⟩⟩
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩⟩
 
 instance Vault.Exact.instDecidableValid (s : Vault.Exact) : Decidable s.Valid :=
   decidable_of_iff
@@ -87,12 +87,9 @@ instance Vault.Exact.instDecidableValid (s : Vault.Exact) : Decidable s.Valid :=
      (s.sharesTotal = 0 → s.assetsTotal = 0 ∧ s.assetsAvailable = 0) ∧
      (∀ m ∈ s.assetsMaximum, s.assetsTotal ≤ m) ∧
      0 ≤ s.lossUnrealized ∧ s.lossUnrealized ≤ s.assetsTotal - s.assetsAvailable ∧
-     0 ≤ s.interestUnrealized ∧ s.interestUnrealized ≤ s.assetsTotal - s.assetsAvailable ∧
-     (0 < s.assetsTotal → s.interestUnrealized < s.assetsTotal) ∧
-     0 ≤ s.assetsTotal - s.interestUnrealized - s.lossUnrealized ∧
-     (0 < s.interestUnrealized → 0 < s.sharesTotal))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m⟩⟩
+     0 ≤ s.assetsTotal - s.lossUnrealized)
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩⟩
 
 instance Vault.instDecidableLawful (v : Vault) : Decidable v.Lawful :=
   decidable_of_iff (v.WF ∧ v.toExact.Valid) ⟨fun ⟨a, b⟩ => ⟨a, b⟩, fun ⟨a, b⟩ => ⟨a, b⟩⟩
@@ -107,7 +104,7 @@ def baseV : Vault :=
   , assetsAvailable := ⟨false, 9000001233333321000, -10⟩
   , assetsMaximum := none, numericType := .fractional, scale := 6
   , sharesTotal := ⟨false, 8999999998765430000, -4⟩
-  , interestUnrealized := Number.zero, lossUnrealized := Number.zero }
+  , lossUnrealized := Number.zero }
 
 /-- Witness deposit amount `1587.0335`: the stored-total update rounds against the
 vault by more than the charge's upward surplus. -/

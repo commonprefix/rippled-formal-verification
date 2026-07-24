@@ -48,31 +48,29 @@ theorem STAmount.zero_toRat (nt : NumericType) : (STAmount.zero nt).toRat = 0 :=
 
 /-! ## `Vault.sharesToAssetsWithdraw` -/
 
-/-- **`sharesToAssetsWithdraw` success reduction.** Exposes the two pricing
-subtractions, then either the zero-NAV early exit or the full
+/-- **`sharesToAssetsWithdraw` success reduction.** Exposes the pricing
+subtraction, then either the zero-NAV early exit or the full
 `toNumber`/`operator_mul`/`operator_div`/`ofNumber` chain. -/
 theorem Vault.sharesToAssetsWithdraw_ok_reduces (v : Vault) (shares assets : STAmount)
     (waiveUnrealizedLoss : Bool)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
-    ∃ nav1 nav2 : Number,
-      v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nav1 ∧
-      nav1.operator_sub
+    ∃ nav : Number,
+      v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with
           | true => Number.zero
-          | false => v.lossUnrealized) .to_nearest = .ok nav2 ∧
-      ((nav2.mantissa_ = 0 ∧ assets = STAmount.zero v.numericType) ∨
-       (nav2.mantissa_ ≠ 0 ∧ ∃ sharesNumber NAVShares assetsNumber : Number,
+          | false => v.lossUnrealized) .to_nearest = .ok nav ∧
+      ((nav.mantissa_ = 0 ∧ assets = STAmount.zero v.numericType) ∨
+       (nav.mantissa_ ≠ 0 ∧ ∃ sharesNumber NAVShares assetsNumber : Number,
          shares.toNumber .to_nearest = .ok sharesNumber ∧
-         nav2.operator_mul sharesNumber .to_nearest = .ok NAVShares ∧
+         nav.operator_mul sharesNumber .to_nearest = .ok NAVShares ∧
          NAVShares.operator_div v.sharesTotal .to_nearest = .ok assetsNumber ∧
          STAmount.ofNumber v.numericType assetsNumber .downward = .ok assets)) := by
   cases waiveUnrealizedLoss <;>
   · unfold Vault.sharesToAssetsWithdraw at hok
     simp only [pure_bind, bind_pure] at hok
-    obtain ⟨nav1, h1, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨nav2, h2, hok⟩ := bind_ok_peel _ _ _ hok
-    refine ⟨nav1, nav2, h1, h2, ?_⟩
-    by_cases hz : (nav2.mantissa_ == 0) = true
+    obtain ⟨nav, h1, hok⟩ := bind_ok_peel _ _ _ hok
+    refine ⟨nav, h1, ?_⟩
+    by_cases hz : (nav.mantissa_ == 0) = true
     · rw [if_pos hz] at hok
       exact Or.inl ⟨beq_iff_eq.mp hz, (Except.ok.inj hok).symm⟩
     · rw [if_neg hz] at hok
@@ -89,17 +87,16 @@ then either the zero-NAV early exit or the mirrored
 theorem assetsToSharesWithdraw_ok_reduces (v : Vault) (assets shares : STAmount)
     (truncateShares waiveUnrealizedLoss : Bool)
     (hok : assetsToSharesWithdraw v assets truncateShares waiveUnrealizedLoss = .ok shares) :
-    ∃ nav1 nav2 : Number,
-      v.assetsTotal.operator_sub v.interestUnrealized .to_nearest = .ok nav1 ∧
-      nav1.operator_sub
+    ∃ nav : Number,
+      v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with
           | true => Number.zero
-          | false => v.lossUnrealized) .to_nearest = .ok nav2 ∧
-      ((nav2.mantissa_ = 0 ∧ shares = STAmount.zero .int64) ∨
-       (nav2.mantissa_ ≠ 0 ∧ ∃ assetsNumber sharesAssets sharesNumber sharesNumber' : Number,
+          | false => v.lossUnrealized) .to_nearest = .ok nav ∧
+      ((nav.mantissa_ = 0 ∧ shares = STAmount.zero .int64) ∨
+       (nav.mantissa_ ≠ 0 ∧ ∃ assetsNumber sharesAssets sharesNumber sharesNumber' : Number,
          assets.toNumber .to_nearest = .ok assetsNumber ∧
          v.sharesTotal.operator_mul assetsNumber .to_nearest = .ok sharesAssets ∧
-         sharesAssets.operator_div nav2 .to_nearest = .ok sharesNumber ∧
+         sharesAssets.operator_div nav .to_nearest = .ok sharesNumber ∧
          (match truncateShares with
            | true => sharesNumber.truncate
            | false => pure sharesNumber) = .ok sharesNumber' ∧
@@ -107,10 +104,9 @@ theorem assetsToSharesWithdraw_ok_reduces (v : Vault) (assets shares : STAmount)
   cases truncateShares <;> cases waiveUnrealizedLoss <;>
   · unfold assetsToSharesWithdraw at hok
     simp only [pure_bind] at hok
-    obtain ⟨nav1, h1, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨nav2, h2, hok⟩ := bind_ok_peel _ _ _ hok
-    refine ⟨nav1, nav2, h1, h2, ?_⟩
-    by_cases hz : (nav2.mantissa_ == 0) = true
+    obtain ⟨nav, h1, hok⟩ := bind_ok_peel _ _ _ hok
+    refine ⟨nav, h1, ?_⟩
+    by_cases hz : (nav.mantissa_ == 0) = true
     · rw [if_pos hz] at hok
       exact Or.inl ⟨beq_iff_eq.mp hz, (Except.ok.inj hok).symm⟩
     · rw [if_neg hz] at hok

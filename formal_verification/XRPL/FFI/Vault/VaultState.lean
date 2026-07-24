@@ -8,11 +8,11 @@ open XRPL.Model.SingleAssetVault
 @[export lean_vault_state_build]
 def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number)
     (hasMaximum : UInt8) (assetsMaximum : Number)
-    (numericType : NumericType) (scale : UInt8) (sharesTotal : Number) (interestUnrealized lossUnrealized : Number)
+    (numericType : NumericType) (scale : UInt8) (sharesTotal : Number) (lossUnrealized : Number)
     : Vault :=
   { assetsTotal, assetsAvailable,
     assetsMaximum := if hasMaximum != 0 then some assetsMaximum else none,
-    numericType, scale, sharesTotal, interestUnrealized, lossUnrealized }
+    numericType, scale, sharesTotal, lossUnrealized }
 
 @[export lean_vault_state_assets_total]
 def lean_vault_state_assets_total (vault : Vault) : Number := vault.assetsTotal
@@ -36,7 +36,5 @@ def lean_vault_state_numeric_tag (vault : Vault) : UInt8 :=
 def lean_vault_state_scale (vault : Vault) : UInt8 := vault.scale
 @[export lean_vault_state_shares_total]
 def lean_vault_state_shares_total (vault : Vault) : Number := vault.sharesTotal
-@[export lean_vault_state_interest_unrealized]
-def lean_vault_state_interest_unrealized (vault : Vault) : Number := vault.interestUnrealized
 @[export lean_vault_state_loss_unrealized]
 def lean_vault_state_loss_unrealized (vault : Vault) : Number := vault.lossUnrealized

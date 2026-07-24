@@ -26,17 +26,15 @@ theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
     simp only [Vault.toExact, Vault.create, Number.toRat_zero]
   have hST : (Vault.create nt scale assetsMaximum).toExact.sharesTotal = 0 := by
     simp only [Vault.toExact, Vault.create, Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
-  have hIU : (Vault.create nt scale assetsMaximum).toExact.interestUnrealized = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
   have hLU : (Vault.create nt scale assetsMaximum).toExact.lossUnrealized = 0 := by
     simp only [Vault.toExact, Vault.create, Number.toRat_zero]
   have hAM : (Vault.create nt scale assetsMaximum).toExact.assetsMaximum
       = assetsMaximum.map Number.toRat := rfl
-  refine ⟨⟨hz, hz, ?_, hz, hz, hz, ?_, ?_, hscale_int, hscale_le⟩, ?_⟩
+  refine ⟨⟨hz, hz, ?_, hz, hz, ?_, ?_, hscale_int, hscale_le⟩, ?_⟩
   · intro m hm; exact hmax_norm m hm
   · simp only [Vault.create, Number.toRat_zero, le_refl]
   · simp only [Vault.create, Number.toRat_zero]; rfl
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [hAT]
     · rw [hAV]
     · rw [hAV, hAT]
@@ -47,10 +45,6 @@ theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
       obtain ⟨n, hn, rfl⟩ := hm; exact le_of_lt (hmax_pos n hn)
     · rw [hLU]
     · rw [hLU, hAT, hAV]; norm_num
-    · rw [hIU]
-    · rw [hIU, hAT, hAV]; norm_num
-    · rw [hAT]; intro h; exact absurd h (lt_irrefl 0)
-    · rw [hAT, hIU, hLU]; norm_num
-    · rw [hIU]; intro h; exact absurd h (lt_irrefl 0)
+    · rw [hAT, hLU]; norm_num
 
 end XRPL.Model.SingleAssetVault

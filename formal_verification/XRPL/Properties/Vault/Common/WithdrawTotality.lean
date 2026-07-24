@@ -875,13 +875,12 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- **Pricing prefix collapse on a zero-interest, zero-loss vault.** When both the
-interest and loss `Number`s carry a zero mantissa (the reachable, loss-free case),
-the two net-asset-value subtractions of `sharesToAssetsWithdraw` are identities, so
-the exchange reduces to the raw `assetsTotal` guard and the mul/div/ofNumber
-pricing chain. -/
+/-- **Pricing prefix collapse on a zero-loss vault.** When the loss `Number`
+carries a zero mantissa (the reachable, loss-free case), the net-asset-value
+subtraction of `sharesToAssetsWithdraw` is an identity, so the exchange reduces
+to the raw `assetsTotal` guard and the mul/div/ofNumber pricing chain. -/
 theorem Vault.sharesToAssetsWithdraw_zeroLoss_reduces (v : Vault) (shares : STAmount)
-    (hI : v.interestUnrealized.mantissa_ = 0) (hL : v.lossUnrealized.mantissa_ = 0) :
+    (hL : v.lossUnrealized.mantissa_ = 0) :
     v.sharesToAssetsWithdraw shares false =
       (if v.assetsTotal.mantissa_ == 0 then
         (pure (STAmount.zero v.numericType) : Except String STAmount)
@@ -893,8 +892,7 @@ theorem Vault.sharesToAssetsWithdraw_zeroLoss_reduces (v : Vault) (shares : STAm
         return assets) := by
   unfold Vault.sharesToAssetsWithdraw
   simp only []
-  rw [Number.operator_sub_of_mantissa_zero v.assetsTotal v.interestUnrealized _ hI, ok_bind,
-      Number.operator_sub_of_mantissa_zero v.assetsTotal v.lossUnrealized _ hL, ok_bind]
+  rw [Number.operator_sub_of_mantissa_zero v.assetsTotal v.lossUnrealized _ hL, ok_bind]
   rfl
 
 /-- **`computeWithdrawByShares` forwards a successful exchange.** If the exchange

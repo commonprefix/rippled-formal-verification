@@ -19,10 +19,9 @@ result may still carry a TER, and a rejected operation returns the starting vaul
 unchanged.
 
 The three mutating operations additionally hypothesize the reachability
-invariants of the vault-only model (`interestUnrealized = 0`,
-`lossUnrealized = 0`, and record-level `assetsAvailable = assetsTotal`: every
-vault operation writes both asset fields with the identical update, and lending
-is out of scope). Canonical-storage and sign facts are hypothesized only on the
+invariants of the vault-only model (`lossUnrealized = 0`, and record-level
+`assetsAvailable = assetsTotal`: every vault operation writes both asset fields
+with the identical update, and lending is out of scope). Canonical-storage and sign facts are hypothesized only on the
 user-supplied inputs (`amount.Canonical` and nonnegativity for a deposit,
 `assets.Canonical` for a clawback, the burned-share shape for a withdrawal); the
 corresponding facts about the amounts the run computes are derived. -/
@@ -43,10 +42,9 @@ variable (v : Vault)
 
 theorem Vault.deposit_lawful (amount : STAmount) (isDonation : Bool)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- no unrealized interest or loss: with lossUnrealized equal to the stored
-    -- gap exactly, the two independent additions can shrink the gap and break
-    -- Valid, so preservation only holds on states with both fields zero
-    (hI : v.toExact.interestUnrealized = 0)
+    -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
+    -- the two independent additions can shrink the gap and break Valid, so
+    -- preservation only holds on the zero-loss state
     (hL : v.toExact.lossUnrealized = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
@@ -57,14 +55,13 @@ theorem Vault.deposit_lawful (amount : STAmount) (isDonation : Bool)
     -- the new share total fits the share domain (int64)
     (hSsz : (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
-  Vault.deposit_lawful_proof v amount isDonation hv hI hL hAV hcanon hnn r hok hSsz
+  Vault.deposit_lawful_proof v amount isDonation hv hL hAV hcanon hnn r hok hSsz
 
 theorem Vault.withdraw_lawful (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- no unrealized interest or loss: with lossUnrealized equal to the stored
-    -- gap exactly, the two independent additions can shrink the gap and break
-    -- Valid, so preservation only holds on states with both fields zero
-    (hI : v.toExact.interestUnrealized = 0)
+    -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
+    -- the two independent additions can shrink the gap and break Valid, so
+    -- preservation only holds on the zero-loss state
     (hL : v.toExact.lossUnrealized = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
@@ -79,15 +76,14 @@ theorem Vault.withdraw_lawful (amount : WithdrawAmount) (waiveUnrealizedLoss : B
     -- the share total fits the share domain (int64)
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
-  Vault.withdraw_lawful_proof v amount waiveUnrealizedLoss hv hI hL hAV r hok
+  Vault.withdraw_lawful_proof v amount waiveUnrealizedLoss hv hL hAV r hok
     hSc hSnt hSnn hsle hfit
 
 theorem Vault.clawback_lawful (assets : STAmount)
     (hv : v.Lawful) -- the starting vault is lawful
-    -- no unrealized interest or loss: with lossUnrealized equal to the stored
-    -- gap exactly, the two independent additions can shrink the gap and break
-    -- Valid, so preservation only holds on states with both fields zero
-    (hI : v.toExact.interestUnrealized = 0)
+    -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
+    -- the two independent additions can shrink the gap and break Valid, so
+    -- preservation only holds on the zero-loss state
     (hL : v.toExact.lossUnrealized = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
@@ -101,7 +97,7 @@ theorem Vault.clawback_lawful (assets : STAmount)
     -- the share total fits the share domain (int64)
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
-  Vault.clawback_lawful_proof v assets hv hI hL hAV hcanon r hok hslt hfit
+  Vault.clawback_lawful_proof v assets hv hL hAV hcanon r hok hslt hfit
 
 theorem Vault.burnShares_lawful (sharesDestroyed sharesTotalAmount : STAmount) (v' : Vault)
     (hv : v.Lawful) -- the starting vault is lawful

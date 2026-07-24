@@ -127,7 +127,8 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
       v.assetsTotal.operator_add cN .to_nearest = .ok at' ∧
       v.assetsAvailable.operator_add cN .to_nearest = .ok av' ∧
       v.sharesTotal.operator_add sN .to_nearest = .ok st' ∧
-      v.assetsMaximum.any (fun m => at'.operator_gt m) = false ∧
+      ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+        at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false ∧
       r = ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
              assetDeposited, sharesCreated⟩ := by
   unfold Vault.deposit at hok
@@ -153,7 +154,8 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
           obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+          by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+            at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
           · rw [if_neg hm] at hok
             have hn12 : n2 = n1 := by rw [hn2] at hn1; exact Except.ok.inj hn1
@@ -181,7 +183,8 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : v.assetsMaximum.any (fun m => at'.operator_gt m) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+            at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
             · rw [if_neg hm] at hok
               have hn12 : n2 = n1 := by rw [hn2] at hn1; exact Except.ok.inj hn1

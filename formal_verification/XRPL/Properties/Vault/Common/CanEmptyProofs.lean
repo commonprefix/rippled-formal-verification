@@ -246,8 +246,6 @@ theorem withdraw_oneShare_exchange (v : Vault) (hr : Vault.Reachable v)
       0 ≤ assets.toRat ∧ assets.toRat ≤ v.assetsTotal.toRat ∧
       assets.toRat ≤ v.assetsTotal.toRat / v.sharesTotal.toRat * (1 + 6 / (2 ^ 63 - 3)) := by
   have hv : v.Lawful := Vault.Reachable.lawful v hr
-  have hI0 : v.interestUnrealized.mantissa_ = 0 :=
-    Number.toRat_eq_zero_iff.mp (Vault.Reachable.interestUnrealized_zero v hr)
   have hL0 : v.lossUnrealized.mantissa_ = 0 :=
     Number.toRat_eq_zero_iff.mp (Vault.Reachable.lossUnrealized_zero v hr)
   have hAnorm : v.assetsTotal.isNormalized := hv.wf.assetsTotal_norm
@@ -270,7 +268,7 @@ theorem withdraw_oneShare_exchange (v : Vault) (hr : Vault.Reachable v)
   have hSTexp_lo : (-99 : ℤ) ≤ v.sharesTotal.exponent_ :=
     Number.exponent_ge_of_abs_toRat_ge v.sharesTotal hSTnorm hSTm
       (by rw [abs_of_nonneg (by linarith)]; linarith [h81, hST1])
-  rw [Vault.sharesToAssetsWithdraw_zeroLoss_reduces v oneShare hI0 hL0]
+  rw [Vault.sharesToAssetsWithdraw_zeroLoss_reduces v oneShare hL0]
   by_cases hAm0 : v.assetsTotal.mantissa_ = 0
   · -- insolvent: the exchange returns the canonical zero
     rw [if_pos (by rw [hAm0]; rfl)]
@@ -621,7 +619,6 @@ theorem withdraw_oneShare_assetsTotal_le (v : Vault) (hr : Vault.Reachable v)
     (hok : v.withdraw (.vaultShares oneShare) false = .ok r) (herr : r.error = none) :
     r.vault'.assetsTotal.toRat ≤ v.assetsTotal.toRat := by
   have hv : v.Lawful := Vault.Reachable.lawful v hr
-  have hI : v.toExact.interestUnrealized = 0 := Vault.Reachable.interestUnrealized_zero v hr
   have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
   have hsb : r.sharesBurned = oneShare :=
     Vault.withdraw_sharesBurned_exact v oneShare false r hok herr
@@ -637,7 +634,7 @@ theorem withdraw_oneShare_assetsTotal_le (v : Vault) (hr : Vault.Reachable v)
   · -- non-final: assetsTotal' = operator_sub assetsTotal payout, payout ≥ 0
     have hfin : r.sharesBurned.operator_eq sta = false := by rw [hsbeq]; exact hfineq
     have hpnn : 0 ≤ r.assets'.toRat :=
-      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hI hL r hok
+      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hL r hok
         (by rw [hsb]; exact oneShare_integralCanonical)
         (by rw [hsb]; exact oneShare_numericType)
         (by rw [hsb]; exact oneShare_negative)
@@ -695,11 +692,10 @@ theorem withdraw_one_share_step (v : Vault) (hr : Vault.Reachable v)
     rw [hzz]; exact hpos
   · -- non-final withdrawal: the stored total drops by exactly one share
     have hv : v.Lawful := Vault.Reachable.lawful v hr
-    have hI : v.toExact.interestUnrealized = 0 := Vault.Reachable.interestUnrealized_zero v hr
     have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
     have hfin : r.sharesBurned.operator_eq sta = false := by rw [hsbeq]; exact hfineq
     have hpnn : 0 ≤ r.assets'.toRat :=
-      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hI hL r hok
+      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hL r hok
         (by rw [hsb]; exact oneShare_integralCanonical)
         (by rw [hsb]; exact oneShare_numericType)
         (by rw [hsb]; exact oneShare_negative)
@@ -732,7 +728,6 @@ theorem withdraw_oneShare_result_int64 (v : Vault) (hr : Vault.Reachable v)
     (hok : v.withdraw (.vaultShares oneShare) false = .ok r) (herr : r.error = none) :
     r.vault'.numericType = .int64 ∧ r.vault'.assetsTotal.toRat.den = 1 := by
   have hv : v.Lawful := Vault.Reachable.lawful v hr
-  have hI : v.toExact.interestUnrealized = 0 := Vault.Reachable.interestUnrealized_zero v hr
   have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
   have hpar : v.assetsAvailable = v.assetsTotal := Vault.Reachable.asset_parity v hr
   have hsb : r.sharesBurned = oneShare :=
@@ -751,7 +746,7 @@ theorem withdraw_oneShare_result_int64 (v : Vault) (hr : Vault.Reachable v)
     have hr_assets : r.assets' = cw.assets' := by rw [hr']
     have hnum_r : r.assets'.toNumber .to_nearest = .ok aN := by rw [hr_assets]; exact haN
     have hpnn : 0 ≤ r.assets'.toRat :=
-      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hI hL r hok
+      Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hL r hok
         (by rw [hsb]; exact oneShare_integralCanonical)
         (by rw [hsb]; exact oneShare_numericType)
         (by rw [hsb]; exact oneShare_negative)
