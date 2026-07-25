@@ -1808,6 +1808,140 @@ public:
         checkAccessors(makeSTAmountPair(kIntegral, u64Max, 0, 0), m);
     }
 
+    // Finding (FV_M2_1): XRP operator+ adds one drop to an INT64_MAX wraps to INT64_MIN, no guard.
+    void
+    test_add_xrp_overflow()
+    {
+        beginCase("LeanSTAmount.add_xrp_overflow");
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        Number::RoundingMode const m = Number::RoundingMode::ToNearest;
+
+        constexpr uint64_t kIntMax = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+        STAmountPair const a = makeSTAmountPair(kNative, kIntMax, 0, 0);  // INT64_MAX drops
+        STAmountPair const b = makeSTAmountPair(kNative, 1, 0, 0);        // + 1 drop
+
+        bool cppThrew = false;
+        STAmount cppSum;
+        try
+        {
+            cppSum = a.cppSt + b.cppSt;
+        }
+        catch (std::exception const&)
+        {
+            cppThrew = true;
+        }
+
+        NumberRoundModeGuard mg(m);
+        auto const lean = STAmountFFI::fromExcept(leanCall(
+            lean_stamount_add,
+            STAmountFFI::build(
+                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+            STAmountFFI::build(
+                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
+            toLeanMode(m)));
+
+        BEAST_EXPECTS(
+            cppThrew || cppSum.signum() > 0,
+            "C++ XRP add at INT64_MAX wrapped to a negative value");
+        BEAST_EXPECTS(
+            !lean.ok || lean.isNegative == 0,
+            "Lean XRP add at INT64_MAX wrapped to a negative value");
+    }
+
+    // Finding (FV_M2_2): multiply()/divide() drop the sign before Downward/Upward rounding, so a
+    // negative result rounds toward zero instead of toward the correct infinity.
+    void
+    test_mul_div_negative_rounding()
+    {
+        beginCase("LeanSTAmount.mul_div_negative_rounding");
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        using M = Number::RoundingMode;
+
+        auto cppSigned = [](STAmount const& s) -> std::int64_t {
+            return s.negative() ? -static_cast<std::int64_t>(s.mantissa())
+                                : static_cast<std::int64_t>(s.mantissa());
+        };
+        auto leanSigned = [](LeanSTAmountResult const& r) -> std::int64_t {
+            return r.isNegative ? -static_cast<std::int64_t>(r.mValue)
+                                : static_cast<std::int64_t>(r.mValue);
+        };
+        auto oneCase = [&](char const* tag,
+                           bool isDiv,
+                           STAmountPair const& a,
+                           STAmountPair const& b,
+                           std::uint8_t nt,
+                           M mode,
+                           std::int64_t want) {
+            Asset const asset = assetForNumericType(nt);
+            NumberRoundModeGuard mg(mode);
+            STAmount const cpp =
+                isDiv ? divide(a.cppSt, b.cppSt, asset) : multiply(a.cppSt, b.cppSt, asset);
+            auto const lean = STAmountFFI::fromExcept(leanCall(
+                isDiv ? lean_stamount_divide : lean_stamount_multiply,
+                STAmountFFI::build(
+                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
+                STAmountFFI::build(
+                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
+                NumericTypeFFI::build(nt),
+                toLeanMode(mode)));
+            BEAST_EXPECTS(
+                cppSigned(cpp) == want,
+                std::string(tag) + " C++ got " + std::to_string(cppSigned(cpp)) + " want " +
+                    std::to_string(want));
+            BEAST_EXPECTS(
+                lean.ok && leanSigned(lean) == want,
+                std::string(tag) + " Lean got " + std::to_string(leanSigned(lean)) + " want " +
+                    std::to_string(want));
+        };
+
+        // IOU. -0.4444444444444444 * 11 = -4.8888888888888884, only Downward reaches ...889.
+        STAmountPair const a4 = makeSTAmountPair(kFractional, 4'444'444'444'444'444ULL, -16, 1);
+        STAmountPair const eleven = makeSTAmountPair(kFractional, 11ULL, 0, 0);
+        STAmountPair const negFour = makeSTAmountPair(kFractional, 4ULL, 0, 1);
+        STAmountPair const negSix = makeSTAmountPair(kFractional, 6ULL, 0, 1);
+        STAmountPair const nine = makeSTAmountPair(kFractional, 9ULL, 0, 0);
+        oneCase(
+            "iou mul .4 Near",
+            false,
+            a4,
+            eleven,
+            kFractional,
+            M::ToNearest,
+            -4'888'888'888'888'888LL);
+        oneCase(
+            "iou mul .4 Down",
+            false,
+            a4,
+            eleven,
+            kFractional,
+            M::Downward,
+            -4'888'888'888'888'889LL);
+        oneCase(
+            "iou mul .4 Up", false, a4, eleven, kFractional, M::Upward, -4'888'888'888'888'888LL);
+        oneCase(
+            "iou div .4 Down",
+            true,
+            negFour,
+            nine,
+            kFractional,
+            M::Downward,
+            -4'444'444'444'444'445LL);
+        oneCase(
+            "iou div .6 Down",
+            true,
+            negSix,
+            nine,
+            kFractional,
+            M::Downward,
+            -6'666'666'666'666'667LL);
+
+        // MPT (integral) and XRP (native) targets: -6.2 * 2 = -12.4, only Downward reaches -13.
+        STAmountPair const m62 = makeSTAmountPair(kFractional, 62ULL, -1, 1);
+        STAmountPair const two = makeSTAmountPair(kFractional, 2ULL, 0, 0);
+        oneCase("mpt mul .4 Down", false, m62, two, kIntegral, M::Downward, -13);
+        oneCase("xrp mul .4 Down", false, m62, two, kNative, M::Downward, -13);
+    }
+
 private:
     void
     runTests() override
@@ -1833,6 +1967,12 @@ private:
         test_known_get_rate();
         test_extreme_values();
         test_integral_int64_wrap();
+
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // test_add_xrp_overflow();          // FV_M2_1: XRP operator+ at INT64_MAX wraps negative
+        // test_mul_div_negative_rounding(); // FV_M2_2: negative mul/div rounds the wrong way
+        // clang-format on
     }
 };
 
