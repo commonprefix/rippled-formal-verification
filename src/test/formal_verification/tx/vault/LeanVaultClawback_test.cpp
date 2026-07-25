@@ -364,6 +364,183 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
+    // Finding (FV_M2_12): a clawback too small to change the stored assetsTotal still burns
+    // a share (c++ -> tecINVARIANT_FAILED, Lean -> tecPRECISION_LOSS)
+    void
+    testClawbackDustDebit(Number const& assetsTotal, std::uint64_t sharesTotal)
+    {
+        using namespace jtx;
+        testcase("clawback one dust share (total " + to_string(assetsTotal) + ")");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(Number{1, 15})));
+        env.close();
+        env(pay(issuer, holder, asset(Number{1, 12})));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Stage so one share is worth less than the assetsTotal precision step
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        compareClawbackAsset(
+            env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{2, -6}), tecPRECISION_LOSS);
+    }
+
+    // Finding (FV_M2_10, regression vs develop): an issuer VaultClawback with amount 0 should claw
+    // the holder's full balance, but this branch does not.
+    // C++-only: the model treats amount 0 literally (tecPRECISION_LOSS), so there is no Lean bug.
+    void
+    testClawbackZeroAmountFullBalance()
+    {
+        using namespace jtx;
+        testcase("issuer clawback with amount 0 claws the full balance");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer | tfMPTCanClawback});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = holder});
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Amount 0 should mean "claw the holder's entire balance"
+        env(Vault::clawback(
+                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = asset(0)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        auto const shareMptId = env.le(vaultKeylet)->at(sfShareMPTID);
+        BEAST_EXPECT(env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount) == 0);
+    }
+
+    // Finding (FV_M2_11, both sides): an issuer clawback recovers more than requested because the
+    // share count rounds up. On a 7-asset / 5-share vault, clawing 4 burns 3 shares worth 4.2 > 4.
+    // Both C++ and the model over-recover, so assert the recovery does not exceed the request.
+    void
+    testClawbackOverRecover()
+    {
+        using namespace jtx;
+        testcase("issuer clawback recovers more than requested");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(1'000)));
+        env(trust(owner, asset(1'000)));
+        env.close();
+        env(pay(issuer, holder, asset(5)));
+        env(pay(issuer, owner, asset(2)));
+        env.close();
+
+        // Scale 0: 1 share == 1 asset. Holder deposits 5 (5 shares), owner donates 2, so the vault
+        // holds 7 assets against 5 shares.
+        Vault vault{env};
+        auto [createTx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
+        createTx[sfScale] = 0;
+        env(createTx);
+        env.close();
+        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = asset(5)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(Vault::deposit(
+                {.depositor = owner,
+                 .id = vaultKeylet.key,
+                 .amount = asset(2),
+                 .flags = tfVaultDonate}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Claw 4: both burn 3 shares (5*4/7 = 2.857 rounds up) and recover 7*3/5 = 4.2 > 4.
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        STAmount const request = asset(4);
+        LeanClawbackResult const lean = leanVaultClawback(before, request);
+        BEAST_EXPECTS(!lean.threw, "lean clawback raised");
+
+        env(Vault::clawback(
+                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = request}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        BEAST_EXPECTS(
+            before.assetsTotal - after.assetsTotal <= Number{4},
+            "C++ clawback recovered more than requested");
+        BEAST_EXPECTS(
+            static_cast<Number>(lean.assets) <= Number{4},
+            "model clawback recovered more than requested");
+    }
+
+    // Finding (FV_M2_8, both sides): clawback pricing rounds in the vault's favor, but the
+    // sfAssetsTotal -= update rounds again, dropping the exact difference's low digits from the
+    // vault and lowering the share price. Both C++ and the model dilute.
+    void
+    testClawbackDilution()
+    {
+        using namespace jtx;
+        testcase("clawback lowers the share price (dilution)");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset);
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        STAmount const amount = asset(Number{1'000'917, -3});  // 1000.917
+        LeanClawbackResult const lean = leanVaultClawback(before, amount);
+        BEAST_EXPECTS(!lean.threw, "lean clawback raised");
+
+        env(Vault::clawback(
+                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = amount}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        BEAST_EXPECTS(
+            priceNotBelow(
+                after.assetsTotal, after.sharesTotal, before.assetsTotal, before.sharesTotal),
+            "C++ clawback lowered the share price");
+        BEAST_EXPECTS(
+            priceNotBelow(
+                lean.vault.assetsTotal,
+                lean.vault.sharesTotal,
+                before.assetsTotal,
+                before.sharesTotal),
+            "model clawback lowered the share price");
+    }
+
     void
     runTests() override
     {
@@ -411,9 +588,16 @@ class LeanVaultClawback_test : public LeanSuite
         testUpdatedStateClawback(iouMax, iouMax, kMaxMpTokenAmount, 1, tecPRECISION_LOSS);
         testUpdatedStateClawback(Number{1'000}, Number{0}, 1'000, 400, tecPRECISION_LOSS);
 
-        // Known discrepancies: each fails until the C++ code is fixed
-        // testClawbackOvervaluedShares();  // model rounds down, C++ over-recovers
-        // testClawbackPrecisionLoss();  // model tecPRECISION_LOSS, C++ pays without debiting
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // testClawbackOvervaluedShares();  // FV_M2_3: model rounds down, C++ over-recovers
+        // testClawbackPrecisionLoss();     // FV_M2_12: model tecPRECISION_LOSS, C++ invariant
+        // testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
+        // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
+        // testClawbackDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
+        // testClawbackDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
+        // testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 should claw the full balance
+        // clang-format on
     }
 };
 

@@ -415,6 +415,199 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, lender, asset.raw(), shares, tesSUCCESS, true);
     }
 
+    // Finding (FV_M2_9, both sides): a sole shareholder witdrawing all outstanding shares is
+    // rejected tecINSUFFICIENT_FUNDS because the interior mul/div overshoots the payout one ULP
+    // above assetsAvailable.
+    void
+    testWithdrawOvershoot()
+    {
+        using namespace jtx;
+        testcase("withdraw all shares overshoots assetsAvailable");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = holder});
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Stage assetsTotal = assetsAvailable = INT64_MAX - 1 with 3 outstanding shares. Redeeming
+        // all 3: (2^63-2)*3 rounds up at 19 digits, then /3 rounds up to 2^63-1 > assetsAvailable.
+        std::int64_t const nearMax = 9'223'372'036'854'775'806LL;
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, Number{nearMax}, Number{nearMax}, 3));
+        STAmount const allShares{shareIssue(env, vaultKeylet), 3};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), allShares, tesSUCCESS);
+    }
+
+    // Finding (FV_M2_13, regression): a sole shareholder's full withdrawal while the vault carries
+    // an unrealized loss is priced without the waiver, so the payout equals assetsAvailable and the
+    // final-withdrawal branch fires -> tefINTERNAL, where the funds guard should return
+    // tecINSUFFICIENT_FUNDS.
+    void
+    testWithdrawFinalWithLoss(Number const& assetsTotal, Number const& loss)
+    {
+        using namespace jtx;
+        testcase("full withdrawal of " + to_string(assetsTotal) + " with loss " + to_string(loss));
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(1'000'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(assetsTotal)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(assetsTotal)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        std::int64_t const shares = outstandingShares(env, vaultKeylet);
+        BEAST_EXPECT(updateVaultState(
+            env,
+            vaultKeylet,
+            assetsTotal,
+            assetsTotal - loss,
+            static_cast<std::uint64_t>(shares),
+            Number{0},
+            loss));
+
+        STAmount const allShares{shareIssue(env, vaultKeylet), shares};
+        compareWithdraw(
+            env, vaultKeylet, holder, asset.raw(), allShares, tecINSUFFICIENT_FUNDS, true);
+    }
+
+    // Finding (FV_M2_16): on a scale-0 IOU vault where one share is worth less than the assetsTotal
+    // ULP, withdrawing all but one share rounds the payout up to the whole balance, draining
+    // assetsTotal to 0 while a share stays outstanding (the vault then locks).
+    void
+    testWithdrawDrainsVault()
+    {
+        using namespace jtx;
+        testcase("partial withdrawal drains a scale-0 vault to zero");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(Number{1, 18})));
+        env.close();
+        env(pay(issuer, holder, asset(Number{1, 17})));
+        env.close();
+
+        // Scale 0: 1 share == 1 asset unit, so sharesTotal == assetsTotal == 10^17 (16-digit
+        // storage, ULP 100).
+        Vault vault{env};
+        auto [createTx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
+        createTx[sfScale] = 0;
+        env(createTx);
+        env.close();
+        env(Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 17})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Withdraw all but one share: C++ overpays to the whole balance (assetsTotal -> 0), the
+        // model rounds the payout down (assetsTotal stays positive), so the stored total diverges.
+        STAmount const allButOne{shareIssue(env, vaultKeylet), 100'000'000'000'000'000LL - 1};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), allButOne, tesSUCCESS);
+    }
+
+    // Finding (FV_M2_8, both sides): withdraw pricing rounds in the vault's favor, but the
+    // sfAssetsTotal -= update rounds again, dropping the exact difference's low digits from the
+    // vault and lowering the share price. Both C++ and the model dilute.
+    void
+    testWithdrawDilution()
+    {
+        using namespace jtx;
+        testcase("withdraw lowers the share price (dilution)");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset);
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        STAmount const shares{shareIssue(env, vaultKeylet), 1'003'103'695};
+        LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true, false);
+        BEAST_EXPECTS(!lean.threw, "lean withdraw raised");
+
+        env(Vault::withdraw({.depositor = holder, .id = vaultKeylet.key, .amount = shares}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        BEAST_EXPECTS(
+            priceNotBelow(
+                after.assetsTotal, after.sharesTotal, before.assetsTotal, before.sharesTotal),
+            "C++ withdraw lowered the share price");
+        BEAST_EXPECTS(
+            priceNotBelow(
+                lean.vault.assetsTotal,
+                lean.vault.sharesTotal,
+                before.assetsTotal,
+                before.sharesTotal),
+            "model withdraw lowered the share price");
+    }
+
+    // Finding (FV_M2_12): a withdrawal too small to change the stored assetsTotal still burns
+    // a share (c++ -> tecINVARIANT_FAILED, Lean -> tecPRECISION_LOSS)
+    void
+    testWithdrawDustDebit(Number const& assetsTotal, std::uint64_t sharesTotal)
+    {
+        using namespace jtx;
+        testcase("withdraw one dust share (total " + to_string(assetsTotal) + ")");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(Number{1, 15})));
+        env.close();
+        env(pay(issuer, holder, asset(Number{1, 6})));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Stage so one share is worth less than the assetsTotal precision step. Withdrawing it
+        // debits an amount that rounds the stored total back unchanged.
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        STAmount const oneShare{shareIssue(env, vaultKeylet), 1};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), oneShare, tecPRECISION_LOSS);
+    }
+
     void
     runTests() override
     {
@@ -463,12 +656,20 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Overflow: sharesTotal * assets / NAV exceeds the MPT domain (by assets).
         testWithdrawAssetsShareOverflow(tecPATH_DRY);
 
-        // Known discrepancies: each fails until the C++ code is fixed
-        // testWithdrawOvervaluedShares();  // model rounds the payout down where C++ overpays
-        // testWithdrawPrecisionLoss();  // model tecPRECISION_LOSS where C++ hits the invariant
-        // testWithdrawWaiveLoss();  // model waives the loss where C++ applies it
-        // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);  //
-        // model keeps the exact 17-digit difference, C++ rounds (associateAsset)
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
+        // testWithdrawPrecisionLoss();     // FV_M2_4: model tecPRECISION_LOSS, C++ hits invariant
+        // testWithdrawWaiveLoss();         // FV_M2_6: model waives the loss, C++ applies it
+        // testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
+        // testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
+        // testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit -> tefINTERNAL
+        // testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
+        // testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
+        // testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
+        // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
+        // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
+        // clang-format on
     }
 };
 

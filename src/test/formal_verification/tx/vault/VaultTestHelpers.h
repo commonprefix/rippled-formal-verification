@@ -54,7 +54,8 @@ updateVaultState(
     Number const& assetsTotal,
     Number const& assetsAvailable,
     std::uint64_t sharesTotal,
-    Number const& assetsMaximum = Number{0})
+    Number const& assetsMaximum = Number{0},
+    Number const& lossUnrealized = Number{0})
 {
     return env.app().getOpenLedger().modify(  //
         [&](OpenView& view, beast::Journal) -> bool {
@@ -68,12 +69,70 @@ updateVaultState(
             v->at(sfAssetsTotal) = assetsTotal;
             v->at(sfAssetsAvailable) = assetsAvailable;
             v->at(sfAssetsMaximum) = assetsMaximum;
+            v->at(sfLossUnrealized) = lossUnrealized;
             iss->setFieldU64(sfOutstandingAmount, sharesTotal);
             sb.update(v);
             sb.update(iss);
             sb.apply(view);
             return true;
         });
+}
+
+// True iff totalA / sharesA >= totalB / sharesB, compared exactly via an int128 cross-multiply
+// (a Number multiply would re-round and hide a sub-ULP dilution).
+[[nodiscard]] inline bool
+priceNotBelow(
+    Number const& totalA,
+    Number const& sharesA,
+    Number const& totalB,
+    Number const& sharesB)
+{
+    __int128 lhs = static_cast<__int128>(totalA.mantissa()) * sharesB.mantissa();
+    __int128 rhs = static_cast<__int128>(totalB.mantissa()) * sharesA.mantissa();
+    int const eL = totalA.exponent() + sharesB.exponent();
+    int const eR = totalB.exponent() + sharesA.exponent();
+    int const e = eL < eR ? eL : eR;
+    for (int i = e; i < eL; ++i)
+        lhs *= 10;
+    for (int i = e; i < eR; ++i)
+        rhs *= 10;
+    return lhs >= rhs;
+}
+
+// Build a NAV-drifted IOU vault by real deposits: the holder deposits 899999999.876543 (minting
+// 899999999876543 shares at the default scale 6) and the owner donates 123.4567891 (no shares), so
+// assetsTotal = 900000123.3333321 and the share price is a non-terminating decimal.
+[[nodiscard]] inline Keylet
+createDilutionVault(
+    jtx::Env& env,
+    jtx::Account const& owner,
+    jtx::Account const& issuer,
+    jtx::Account const& holder,
+    jtx::PrettyAsset const& asset,
+    Number const& holderExtra = Number{0})
+{
+    using namespace jtx;
+    env.fund(XRP(1'000'000), owner, issuer, holder);
+    env.close();
+    env(fset(issuer, asfAllowTrustLineClawback));  // for the clawback variant
+    env.close();
+    env(trust(owner, asset(1'000'000)));
+    env(trust(holder, asset(2'000'000'000)));
+    env.close();
+
+    Number const seed{899'999'999'876'543LL, -6};
+    Number const donation{1'234'567'891LL, -7};
+    env(pay(issuer, holder, asset(seed + holderExtra)));
+    env(pay(issuer, owner, asset(donation)));
+    env.close();
+
+    auto const keylet = createVault(env, owner, asset.raw());
+    env(Vault::deposit({.depositor = holder, .id = keylet.key, .amount = asset(seed)}));
+    env.close();
+    env(Vault::deposit(
+        {.depositor = owner, .id = keylet.key, .amount = asset(donation), .flags = tfVaultDonate}));
+    env.close();
+    return keylet;
 }
 
 }  // namespace xrpl::test::formal_verification

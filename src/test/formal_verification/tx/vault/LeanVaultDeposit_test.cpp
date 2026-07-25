@@ -538,6 +538,121 @@ class LeanVaultDeposit_test : public LeanSuite
             env, vaultKeylet, vaultOwner, asset.raw(), asset(1'000), tesSUCCESS, true);
     }
 
+    // Finding (FV_M2_8, both sides): deposit pricing rounds in the vault's favor, but the
+    // sfAssetsTotal += update rounds again, dropping the exact sum's low digits from the vault and
+    // lowering the share price. Both C++ and the model dilute, so assert the price does not fall.
+    void
+    testDepositDilution()
+    {
+        using namespace jtx;
+        testcase("deposit lowers the share price (dilution)");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        Number const depositN{15'870'335, -4};  // 1587.0335
+        auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset, depositN);
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        STAmount const amount = asset(depositN);
+        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        BEAST_EXPECTS(!lean.threw, "lean deposit raised");
+
+        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        BEAST_EXPECTS(
+            priceNotBelow(
+                after.assetsTotal, after.sharesTotal, before.assetsTotal, before.sharesTotal),
+            "C++ deposit lowered the share price");
+        BEAST_EXPECTS(
+            priceNotBelow(
+                lean.vault.assetsTotal,
+                lean.vault.sharesTotal,
+                before.assetsTotal,
+                before.sharesTotal),
+            "model deposit lowered the share price");
+    }
+
+    // Finding (FV_M2_14): a donation adds the same amount to assetsTotal and assetsAvailable, but
+    // each rounds independently, so their difference can decrease below lossUnrealized and the
+    // invariant fires -> tecINVARIANT_FAILED.
+    void
+    testDonationLossInvariant()
+    {
+        using namespace jtx;
+        testcase("donation shrinks the loss gap and trips the invariant");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(vaultOwner, asset(1'000'000)));
+        env.close();
+        env(pay(issuer, vaultOwner, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
+        env(Vault::deposit(
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{100})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // Valid state: lossUnrealized == assetsTotal - assetsAvailable == 0.999999999999995.
+        Number const total{2'000'000'000'000'001LL, -15};      // 2.000000000000001
+        Number const available{1'000'000'000'000'006LL, -15};  // 1.000000000000006
+        Number const loss{999'999'999'999'995LL, -15};         // 0.999999999999995
+        BEAST_EXPECT(
+            updateVaultState(env, vaultKeylet, total, available, 100'000'000, Number{0}, loss));
+
+        // Donating 50 rounds the two totals in opposite directions, decreasing the gap below the
+        // loss. The donation is valid and should succeed, but the invariant fires.
+        env(Vault::deposit(
+                {.depositor = vaultOwner,
+                 .id = vaultKeylet.key,
+                 .amount = asset(Number{50}),
+                 .flags = tfVaultDonate}),
+            jtx::Ter(tesSUCCESS));
+    }
+
+    // Finding (FV_M2_15): an IOU deposit whose exact new total needs 17 significant digits is
+    // rounded up when stored, so the vault (sfAssetsTotal) is credited more than the depositor
+    // paid.
+    void
+    testDepositOvercredit(Number const& seed, Number const& deposit, int vaultScale)
+    {
+        using namespace jtx;
+        testcase(
+            "deposit overcredit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
+            std::to_string(vaultScale));
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        Vault vault{env};
+        auto [tx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
+        tx[sfScale] = vaultScale;
+        env(tx);
+        env.close();
+        env(Vault::deposit({.depositor = issuer, .id = vaultKeylet.key, .amount = asset(seed)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        // The exact new total needs 17 digits, C++ rounds sfAssetsTotal up, the model keeps it.
+        compareVaultDeposit(env, vaultKeylet, issuer, asset.raw(), asset(deposit), tesSUCCESS);
+    }
+
     void
     runTests() override
     {
@@ -616,11 +731,16 @@ class LeanVaultDeposit_test : public LeanSuite
         // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
         testVaultDepositLimitExceeded();
 
-        // Known discrepancies: each fails until the C++ code is fixed
-        // testVaultDepositOvervaluedShares();  // model rounds up, C++ undercharges
-        // testVaultDonationInsolvent();  // model tesSUCCESS, c++ tecLOCKED
-        // testVaultDepositIOU(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, true,
-        // tesSUCCESS);  // model keeps the exact 17-digit sum, C++ rounds (associateAsset)
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
+        // testVaultDonationInsolvent();        // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
+        // testDepositDilution();               // FV_M2_8: deposit lowers the share price (both)
+        // testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
+        // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
+        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
+        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);
+        // clang-format on
     }
 };
 
