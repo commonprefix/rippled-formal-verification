@@ -466,7 +466,7 @@ leanOptList(std::optional<std::vector<C>> const& o)
     return o ? leanSome(leanList<W>(*o)) : leanNone();
 }
 
-// Except String a: tag 0 = error (String @0), 1 = ok (value @0)
+// Except Error a: tag 0 = error (Error @0), 1 = ok (value @0)
 inline bool
 exceptOk(lean_object* e)
 {
@@ -478,12 +478,26 @@ exceptVal(lean_object* e)
     return lean_ctor_get(e, 0);
 }
 
-// An `Except String W` unpacked: the wrapped value on ok, the message on error.
+// Model error kind. Ordinals MUST match the constructor order of
+// `XRPL.Model.Protocol.Error` in
+// formal_verification/XRPL/Model/Protocol/Errors.lean.
+enum class LeanError : uint8_t {
+    overflow = 0,
+    divByZero,
+    outOfRange,
+    normalize1,
+    normalize1_5,
+    normalize2,
+    notComparable,
+    cannotConvert,
+};
+
+// An `Except Error W` unpacked: the wrapped value on ok, the error kind on error.
 template <class W>
 struct LeanExcept
 {
     std::optional<W> value;
-    std::string error;
+    std::optional<LeanError> error;
 };
 template <class W>
 inline LeanExcept<W>
@@ -491,8 +505,10 @@ readExcept(lean_object* exceptOwned)
 {
     LeanObjectFFI e(exceptOwned);
     if (exceptOk(e.raw()))
-        return {W(retain(exceptVal(e.raw()))), {}};
-    return {std::nullopt, lean_string_cstr(exceptVal(e.raw()))};
+        return {W(retain(exceptVal(e.raw()))), std::nullopt};
+    // The error payload is a nullary constructor, so Lean represents it as an
+    // unboxed scalar whose tag is the enum ordinal.
+    return {std::nullopt, static_cast<LeanError>(lean_obj_tag(exceptVal(e.raw())))};
 }
 
 // Bool: false = tag 0, true = tag 1

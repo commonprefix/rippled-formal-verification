@@ -4,18 +4,18 @@ import XRPL.Model.Protocol.IntAmount
 
 namespace XRPL.FFI
 
-open XRPL.Model.Protocol (IntAmount Number rounding_mode)
+open XRPL.Model.Protocol (IntAmount Number rounding_mode Error)
 
 @[export lean_int_amount_of_int64]
 def lean_int_amount_of_int64 (v : Int64) : Int64 :=
   (IntAmount.ofInt64 v).value
 
 @[export lean_int_amount_of_number]
-def lean_int_amount_of_number (n : Number) (mode : rounding_mode) : Except String Int64 :=
+def lean_int_amount_of_number (n : Number) (mode : rounding_mode) : Except Error Int64 :=
   (IntAmount.ofNumber n mode).map (·.value)
 
 @[export lean_int_amount_to_number]
-def lean_int_amount_to_number (v : Int64) (mode : rounding_mode) : Except String Number :=
+def lean_int_amount_to_number (v : Int64) (mode : rounding_mode) : Except Error Number :=
   (IntAmount.ofInt64 v).toNumber mode
 
 @[export lean_int_amount_eq]
@@ -76,7 +76,7 @@ def lean_int_amount_sub_int (v : Int64) (n : Int64) : Int64 :=
 
 @[export lean_int_amount_mul_ratio]
 def lean_int_amount_mul_ratio (v : Int64) (num den : UInt32) (roundUp : UInt8)
-    : Except String Int64 :=
+    : Except Error Int64 :=
   (IntAmount.mulRatio (IntAmount.ofInt64 v) num den (roundUp != 0)).map (·.value)
 
 end XRPL.FFI

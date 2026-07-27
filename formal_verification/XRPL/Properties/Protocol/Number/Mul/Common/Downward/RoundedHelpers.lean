@@ -21,7 +21,7 @@ theorem operator_mul_no_inbetween_below_downward (x y result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_g_sbit, hzm_succ⟩ :=
     operator_mul_algorithmic_facts_downward x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_below_downward_frame result (x.toRat * y.toRat) zm ze' f g res_pos
-    "Number::multiplication overflow" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h => represents_pos_of_shouldRoundUp_downward g f hf_rep h)
     (fun hd hxb => represents_eq_zero_of_digits_zero_xbit_false hd hxb hf_rep)
@@ -44,7 +44,7 @@ theorem operator_mul_rounded_downward_proof (x y result : Number)
     unfold Number.operator_mul at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult
     rw [h_result, hx_zero]
     rfl
@@ -59,7 +59,7 @@ theorem operator_mul_rounded_downward_proof (x y result : Number)
     rw [if_neg hx_guard,
         if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
     have h_result : result = y :=
-      (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     apply hresult
     rw [h_result, hy_zero]
     rfl

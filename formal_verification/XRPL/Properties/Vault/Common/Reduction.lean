@@ -2,7 +2,7 @@ import XRPL.Model.Vault.VaultDeposit
 
 /-! # Monadic reduction toolkit for `Vault.deposit`
 
-Building blocks for stepping the `Except String` do-blocks of the deposit
+Building blocks for stepping the `Except Error` do-blocks of the deposit
 pipeline: the two `Except` bind identities (both `rfl`), a clean `if`-form
 characterization of `roundedDepositAmount` once `roundToVaultExponent` is known,
 and the two bridges that read that characterization back. -/
@@ -24,7 +24,7 @@ theorem tryCatch_error {ε α} (e : ε) (h : ε → Except ε α) :
 
 /-- Peel one `Except`-bind out of an `.ok` result: the head succeeded and the
 continuation reached the same `.ok`. -/
-theorem bind_ok_peel {α β} (x : Except String α) (f : α → Except String β) (r : β)
+theorem bind_ok_peel {α β} (x : Except Error α) (f : α → Except Error β) (r : β)
     (h : (x >>= f) = .ok r) : ∃ a, x = .ok a ∧ f a = .ok r := by
   cases hx : x with
   | error e => rw [hx, err_bind] at h; exact absurd h (by simp)
@@ -39,7 +39,7 @@ theorem roundedDepositAmount_ok (v : Vault) (amountDeposit ra' : STAmount)
   rw [hr]; rfl
 
 /-- `roundedDepositAmount` propagates a `roundToVaultExponent` error. -/
-theorem roundedDepositAmount_err (v : Vault) (amountDeposit : STAmount) (e : String)
+theorem roundedDepositAmount_err (v : Vault) (amountDeposit : STAmount) (e : Error)
     (hr : roundToVaultExponent amountDeposit v.assetsTotal = .error e) :
     v.roundedDepositAmount amountDeposit = .error e := by
   unfold Vault.roundedDepositAmount

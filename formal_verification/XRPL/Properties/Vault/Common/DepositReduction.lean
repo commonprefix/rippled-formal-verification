@@ -44,8 +44,8 @@ theorem computeDeposit_success_reduces (v : Vault) (amount c s : STAmount)
   unfold computeDeposit at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
   -- The handler can only yield `.error` codes, so a `.success` forces the body path.
-  have handler_absurd : ∀ (e : String),
-      tryCatch (Except.error e : Except String (DoResultPR ComputeDepositResult ComputeDepositResult PUnit))
+  have handler_absurd : ∀ (e : Error),
+      tryCatch (Except.error e : Except Error (DoResultPR ComputeDepositResult ComputeDepositResult PUnit))
         (fun e => if isOverflow e = true then
             pure (DoResultPR.return (ComputeDepositResult.error TER.tecPATH_DRY) PUnit.unit)
           else throw e >>= fun y => pure (DoResultPR.pure y PUnit.unit)) = Except.ok rr → False := by

@@ -29,7 +29,7 @@ theorem operator_div_no_inbetween_below_to_nearest (x y result : Number)
   have h_truth_abs : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
     htruth.trans h_value
   exact no_inbetween_below_to_nearest_frame result (x.toRat / y.toRat) zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt
     (fun hfl => absurd hfl (by omega)) h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h_ru => h_pos_transfer (by
@@ -64,7 +64,7 @@ theorem operator_div_no_inbetween_above (x y result : Number)
   have h_truth_abs : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
     htruth.trans h_value
   exact no_inbetween_above_to_nearest_frame result (x.toRat / y.toRat) zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt
     (fun hfl => absurd hfl (by omega)) h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h_ru => h_pos_transfer (by
@@ -100,7 +100,7 @@ theorem operator_div_rounded_to_nearest_proof (x y result : Number)
     rw [if_neg hy_guard,
         if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat / y.toRat = 0 := by
       rw [hx_zero, Number.toRat_zero, zero_div]
     rw [h_truth0]

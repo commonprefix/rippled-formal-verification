@@ -260,7 +260,7 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
       (zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f) ∧
       (maxRep.toNat < zm.toNat → f = 0 ∧ g.empty = true) ∧
       |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze ∧
-      g.doRoundUp false zm ze largeRange.min largeRange.max mode "Number::normalize 2" = .ok res_pos ∧
+      g.doRoundUp false zm ze largeRange.min largeRange.max mode .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       represents g f ∧
@@ -305,8 +305,8 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
     rw [hcap] at hok
     simp only at hok
     obtain ⟨res, hrup⟩ : ∃ res,
-        g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode "Number::normalize 2" = .ok res := by
-      match hrup : g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode "Number::normalize 2" with
+        g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode .normalize2 = .ok res := by
+      match hrup : g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode .normalize2 with
       | .error e => rw [hrup] at hok; exact absurd hok (by intro h; cases h)
       | .ok res => exact ⟨res, rfl⟩
     rw [hrup] at hok
@@ -435,14 +435,14 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
       rw [hresult_eq] at hresult; exact hresult
     set res_pos : RoundResult :=
       { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ } with hres_pos_def
-    have hrup_pos : g3.doRoundUp false m3 e3 largeRange.min largeRange.max mode "Number::normalize 2"
+    have hrup_pos : g3.doRoundUp false m3 e3 largeRange.min largeRange.max mode .normalize2
         = .ok res_pos :=
-      doRoundUp_false_from_ok g3 n.negative_ m3 e3 mode "Number::normalize 2" res hrup
+      doRoundUp_false_from_ok g3 n.negative_ m3 e3 mode .normalize2 res hrup
     have h_result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [hresult_eq, abs_toRat_eq res.toNumber]; rfl
     have h_res_neg : result.negative_ = n.negative_ := by
       rw [hresult_eq]
-      exact doRoundUp_negative_of_mant_ne g3 n.negative_ m3 e3 _ _ _ "Number::normalize 2" res hrup hres_mant_ne
+      exact doRoundUp_negative_of_mant_ne g3 n.negative_ m3 e3 _ _ _ .normalize2 res hrup hres_mant_ne
     have h_g_sbit : g3.sbit_ = n.negative_ := by
       have h_g0_sbit : g0.sbit_ = n.negative_ := by
         rw [hg0_def]; by_cases hn : n.negative_
@@ -484,7 +484,7 @@ theorem normalize_algorithmic_facts_to_nearest (n result : Number)
       zm.toNat ≤ maxRepUp.toNat ∧
       (zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f) ∧
       |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze ∧
-      g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest "Number::normalize 2" = .ok res_pos ∧
+      g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       represents g f ∧

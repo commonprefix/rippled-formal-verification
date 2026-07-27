@@ -37,7 +37,7 @@ lemma doNormalize_upward_addwitness :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   rw [show Guard.new.doRoundUp false (1000000000000000001 : UInt64) (20 : Int)
-        largeRange.min largeRange.max .upward "Number::normalize 2" =
+        largeRange.min largeRange.max .upward .normalize2 =
         .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl]
   rfl
@@ -72,7 +72,7 @@ lemma operator_add_upward_witness :
   rw [show toUInt64 (1000000000000000000 : UInt128) = (1000000000000000000 : UInt64) from by decide]
   rw [show ({ digits_ := 72057594037927936, xbit_ := false, sbit_ := false } : Guard).doRoundUp
         false (1000000000000000000 : UInt64) (20 : Int) largeRange.min largeRange.max .upward
-        "Number::addition overflow" =
+        .overflow =
         .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
     rfl]

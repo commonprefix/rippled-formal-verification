@@ -50,7 +50,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
     have h_zm_gt_rep : maxRep.toNat < zm.toNat := by omega
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
-      h_zm_gt_rep hzm_le_maxRep "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+      h_zm_gt_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     have hzm_q_gt : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
       have : (maxRepNat : ℕ) < zm.toNat := by rw [← maxRep_val]; exact h_zm_gt_rep
       exact_mod_cast this
@@ -270,7 +270,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     by_cases h_cusp : zm = maxRep
     · -- ===== CUSP =====
       have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
-        "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+        .overflow res_pos h_rup_pos hres_pos_mant_ne
       simp only at h_cusp_val
       have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
         rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
@@ -318,7 +318,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
         omega
       have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
       have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
-        "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+        .overflow res_pos h_rup_pos hres_pos_mant_ne
       simp only at h_nc_val
       have h_truth_signed : x.toRat * y.toRat
           = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
@@ -348,7 +348,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
         exact releps_lift h_inner h10ze'_pos
       exact ⟨h_direction, h_magnitude⟩
   · -- ===== NO ROUND UP (truncate) =====
-    have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+    have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
     simp only at h_tr_val
     -- shouldRoundUp_upward fails: sbit=true OR (digits=0 ∧ xbit=false).
     -- Direction depends on truth sign.

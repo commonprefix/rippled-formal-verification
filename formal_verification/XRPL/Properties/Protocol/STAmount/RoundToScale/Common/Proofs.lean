@@ -257,7 +257,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
       negRef.mOffset - 3⟩ with hs2n_def
     obtain ⟨n₂, h_add₂, hok₃⟩ : ∃ n₂, Number.operator_add s1n s2n mode = .ok n₂ ∧
         (match IOUAmount.ofNumber n₂ mode with
-         | .error e => (Except.error e : Except String STAmount)
+         | .error e => (Except.error e : Except Error STAmount)
          | .ok sumI => STAmount.ofIOUAmount sumI mode) = .ok result := by
       match h1 : Number.operator_add s1n s2n mode with
       | .error e => rw [h1] at h_sub_ok; exact absurd h_sub_ok (by intro h; cases h)

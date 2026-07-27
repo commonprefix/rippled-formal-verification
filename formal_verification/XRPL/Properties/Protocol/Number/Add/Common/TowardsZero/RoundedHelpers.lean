@@ -27,7 +27,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
       operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     exact no_inbetween_below_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::addition overflow" hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
+      .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne hzm_succ
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
@@ -49,7 +49,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
     have h_truth_abs : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
       htruth.trans h_value
     exact no_inbetween_below_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+      .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
       h_result_abs hres_pos_mant_ne hzm_succ
       (fun h_pos => by
         have hzn_false : zn = false := zn_eq_false_of_pos hsign.1 h_pos
@@ -71,7 +71,7 @@ theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
       operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     exact no_inbetween_above_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::addition overflow" hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
+      .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne hzm_succ
       (fun h_neg => Number.toRat_nonpos_of_negative result
         (h_sign.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_neg)))
@@ -92,7 +92,7 @@ theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
     have h_truth_abs : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
       htruth.trans h_value
     exact no_inbetween_above_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+      .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
       h_result_abs hres_pos_mant_ne hzm_succ
       (fun h_negT => by
         have hzn_true : zn = true := zn_eq_true_of_neg hsign.2 h_negT
@@ -112,7 +112,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
     have h_result : result = x := by
       unfold Number.operator_add at hok
       rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [hy0, add_zero]
     by_cases hx_mant : x.mantissa_ = 0
     · have hx0 : x.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero x hx_mant
@@ -143,7 +143,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
     have h_result : result = y := by
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant_ne : y.mantissa_ ≠ 0 := by
       intro h
       apply hy_guard
@@ -168,7 +168,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
-        (show (Except.ok Number.zero : Except String Number) = .ok result from hok)).symm
+        (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     rw [h_truth0]
     change ∃ n' : Number, (if (0 : ℚ) ≥ 0 then Number.lower 0 else Number.upper 0)
       = some n' ∧ result.toRat = n'.toRat

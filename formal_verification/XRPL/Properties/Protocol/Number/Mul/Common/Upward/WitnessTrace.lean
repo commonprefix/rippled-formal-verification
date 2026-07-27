@@ -57,7 +57,7 @@ lemma doNormalize_upward_witness :
       rw [if_pos (by decide), if_neg (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (922337203685477590 : UInt64) (19 : Int)
-      largeRange.min largeRange.max .upward "Number::normalize 2" =
+      largeRange.min largeRange.max .upward .normalize2 =
       .ok { negative_ := false, mantissa_ := mulUpwardWitness, exponent_ := 18 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]
@@ -77,7 +77,7 @@ lemma operator_mul_upward_witness :
   rw [scaleDown128_upward_witness]
   have h_rup : ({ digits_ := 4561337701706114, xbit_ := true, sbit_ := false } : Guard).doRoundUp
       false (922337203685477589 : UInt64) (19 : Int) largeRange.min largeRange.max .upward
-      "Number::multiplication overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := mulUpwardWitness, exponent_ := 18 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup]

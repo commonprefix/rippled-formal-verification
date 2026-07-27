@@ -1,11 +1,11 @@
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.VaultClawback
 
-open XRPL.Model.Protocol (STAmount)
+open XRPL.Model.Protocol (STAmount Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_clawback]
-def lean_vault_clawback (vault : Vault) (assets : STAmount) : Except String ClawbackResult :=
+def lean_vault_clawback (vault : Vault) (assets : STAmount) : Except Error ClawbackResult :=
   vault.clawback assets
 
 @[export lean_clawback_result_assets]

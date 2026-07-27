@@ -62,7 +62,7 @@ lemma doNormalize128_to_nearest_witness :
   simp only []
   rw [show ({ digits_ := 0x5000000000000000, xbit_ := true, sbit_ := false } : Guard).doRoundUp
         false (922337203685477581 : UInt64) (-18) largeRange.min largeRange.max .to_nearest
-        "Number::normalize 2"
+        .normalize2
         = .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := -19 } from by
       unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
       rfl]

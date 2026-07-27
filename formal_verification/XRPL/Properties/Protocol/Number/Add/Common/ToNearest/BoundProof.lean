@@ -39,7 +39,7 @@ theorem operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result 
   have h_bound_eq : ((2 ^ 63 + 7 : ℕ) : ℚ) = (2 ^ 63 + 7 : ℚ) := by norm_num
   rw [← h_bound_eq]
   exact doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp g zm ze' f hf_rep hzm_ge hzm_le_maxRep
-    h_floor_constraint "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+    h_floor_constraint .overflow res_pos h_rup_pos hres_pos_mant_ne
 /-- Unified tight `to_nearest` addition bound. For ALL normalized operands —
 same-sign or different-sign — the relative rounding error of `operator_add` is at
 most `6/(2^63 - 3) ≈ 6.5·10⁻¹⁹`, with **no** input-magnitude hypothesis. The

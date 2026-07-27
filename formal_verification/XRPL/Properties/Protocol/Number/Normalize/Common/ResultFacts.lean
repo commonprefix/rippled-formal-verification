@@ -17,7 +17,7 @@ a mode-generic pipeline walk (`normalize_doRoundUp_stage`) plus per-mode
 /-- `doRoundUp` succeeds only with exponent `≤ maxExponent` (the final overflow
 check errors otherwise). -/
 lemma doRoundUp_exponent_le_max
-    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : String)
+    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max mode loc = .ok res) :
     res.exponent_ ≤ maxExponent := by
@@ -25,7 +25,7 @@ lemma doRoundUp_exponent_le_max
   simp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
-      (if r'.exponent_ > maxExponent then (.error loc : Except String RoundResult)
+      (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res.exponent_ ≤ maxExponent := by
     intro r' h
     by_cases h_ovf : r'.exponent_ > maxExponent
@@ -60,7 +60,7 @@ decision is the sentinel `-2`); the `bringIntoRange` rescale path lowers the
 exponent below `maxExponent` (its input mantissa `< 10^18` certifies, via
 `h_cap_exp`, that the incoming exponent was already `≤ maxExponent`). -/
 lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
-    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : String)
+    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_m_le : m.toNat ≤ maxRepUp.toNat)
     (h_cap_exp : m.toNat < 1000000000000000000 → e ≤ maxExponent)
     (h_empty_above : 1844674407370955161 < m.toNat → g.empty = true)
@@ -112,7 +112,7 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
   simp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
-      (if r'.exponent_ > maxExponent then (.error loc : Except String RoundResult)
+      (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' := by
     intro r' h
     by_cases h_ovf : r'.exponent_ > maxExponent
@@ -199,7 +199,7 @@ at the top exponent. The drop-digit leg can fire here (a `doNormalize128`
 caller seeds a sticky guard), but its rescaled output is at most
 `(maxRepUp/10 + 1)·10`. -/
 lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
-    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : String)
+    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_m_le : m.toNat ≤ maxRepUp.toNat)
     (h_cap_exp : m.toNat < 1000000000000000000 → e ≤ maxExponent)
     (res : RoundResult)
@@ -250,7 +250,7 @@ lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
   simp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
-      (if r'.exponent_ > maxExponent then (.error loc : Except String RoundResult)
+      (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' := by
     intro r' h
     by_cases h_ovf : r'.exponent_ > maxExponent
@@ -322,7 +322,7 @@ nonzero result forces the input mantissa below `10^18`: only the
 final overflow check. Same-sign addition's drop-digit leg hits this at
 `e_common = maxExponent`. -/
 lemma doRoundUp_ok_high_exp_mantissa_small
-    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : String)
+    (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_e_gt : maxExponent < e)
     (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max mode loc = .ok res)
@@ -376,7 +376,7 @@ lemma doRoundUp_ok_high_exp_mantissa_small
   simp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
-      (if r'.exponent_ > maxExponent then (.error loc : Except String RoundResult)
+      (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' ∧ ¬ (res.exponent_ > maxExponent) := by
     intro r' h
     by_cases h_ovf : r'.exponent_ > maxExponent
@@ -442,7 +442,7 @@ exponent is at most `maxExponent + 1`, then `|truth| < 10^19 · 10^maxExponent`.
 At `ze' = maxExponent + 1` (addition's drop-digit leg at the top exponent) the
 mantissa must have been below `10^18` for `doRoundUp` to succeed at all. -/
 lemma doRoundUp_stage_truth_top (truth : ℚ) (g : Guard) (neg : Bool) (zm : UInt64) (ze' : Int)
-    (f : ℚ) (mode : rounding_mode) (loc : String) (res : RoundResult)
+    (f : ℚ) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (habs : |truth| = ((zm.toNat : ℚ) + f) * 10 ^ ze')
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (_hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -500,7 +500,7 @@ theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
     (hresult : result.mantissa_ ≠ 0) :
     ∃ (m3 : UInt64) (e3 : Int) (g3 : Guard) (res : RoundResult),
       g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode
-        "Number::normalize 2" = .ok res ∧
+        .normalize2 = .ok res ∧
       result = res.toNumber ∧
       mantissaFloor ≤ m3.toNat ∧
       m3.toNat ≤ maxRepUp.toNat ∧
@@ -544,9 +544,9 @@ theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
     simp only at hok
     obtain ⟨res, hrup⟩ : ∃ res,
         g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode
-          "Number::normalize 2" = .ok res := by
+          .normalize2 = .ok res := by
       match hrup : g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode
-          "Number::normalize 2" with
+          .normalize2 with
       | .error e => rw [hrup] at hok; exact absurd hok (by intro h; cases h)
       | .ok res => exact ⟨res, rfl⟩
     rw [hrup] at hok
@@ -685,9 +685,9 @@ theorem normalize_result_isNormalized (n result : Number) (mode : rounding_mode)
     exact hresult
   obtain ⟨h1, h2, h3, h4⟩ :=
     doRoundUp_output_invariants_upTo_maxRepUp_anyMode g3 n.negative_ m3 e3 mode
-      hfloor hle "Number::normalize 2" res hrup hres_ne
+      hfloor hle .normalize2 res hrup hres_ne
   have h_exp_le : res.exponent_ ≤ maxExponent :=
-    doRoundUp_exponent_le_max g3 n.negative_ m3 e3 mode "Number::normalize 2" res hrup
+    doRoundUp_exponent_le_max g3 n.negative_ m3 e3 mode .normalize2 res hrup
   right
   rw [hresult_eq]
   refine ⟨UInt64.le_iff_toNat_le.mpr h1, UInt64.le_iff_toNat_le.mpr h2, ?_, h3, h_exp_le⟩
@@ -722,6 +722,6 @@ theorem normalize_no_overflow_mantissa (n result : Number) (mode : rounding_mode
     normalize_doRoundUp_stage n result mode hn_mant_ne hok hresult
   rw [hresult_eq] at h_exp_ge ⊢
   exact doRoundUp_mantissa_le_maxRepUp_at_maxExp g3 n.negative_ m3 e3 mode
-    "Number::normalize 2" hle hcap_exp hempty res hrup h_exp_ge
+    .normalize2 hle hcap_exp hempty res hrup h_exp_ge
 
 end XRPL.Model.Protocol

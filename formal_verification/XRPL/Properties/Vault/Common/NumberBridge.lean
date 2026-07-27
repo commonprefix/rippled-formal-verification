@@ -242,14 +242,14 @@ lemma operator_add_isNormalized_to_nearest (x y result : Number)
   · have h_result : result = x := by
       unfold Number.operator_add at hok
       rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hx
   -- Zero-`x` guard: result = y.
   by_cases hx_guard : x.operator_eq Number.zero = true
   · have h_result : result = y := by
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hy
   -- Exact cancellation: result = Number.zero, excluded by `hresult`.
   by_cases heq_guard : x.operator_eq y.operator_neg = true
@@ -257,7 +257,7 @@ lemma operator_add_isNormalized_to_nearest (x y result : Number)
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
-        (show (Except.ok Number.zero : Except String Number) = .ok result from hok)).symm
+        (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     exact absurd (show result.mantissa_ = 0 by rw [h_result]; rfl) hresult
   -- Generic path.
   have hx_mant_ne : x.mantissa_ ≠ 0 := by

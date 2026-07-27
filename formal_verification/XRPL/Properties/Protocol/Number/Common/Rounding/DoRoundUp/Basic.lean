@@ -202,7 +202,7 @@ lemma bringIntoRange_noscale_result {m : UInt64} {e : Int} {neg : Bool} {minM : 
 lemma doRoundUp_negative_of_mant_ne
     (g : Guard) (zn : Bool) (m : UInt64) (e : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp zn m e minMant maxMant mode loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     res.negative_ = zn := by
@@ -219,7 +219,7 @@ set_option maxHeartbeats 1600000 in
 -- split_ifs at hok ⊢ with 10 conditions creates ~2^10 cases; extra heartbeats needed
 lemma doRoundUp_false_from_ok
     (g : Guard) (zn : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp zn m e largeRange.min largeRange.max mode loc = .ok res) :
     g.doRoundUp false m e largeRange.min largeRange.max mode loc =
       .ok { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ } := by

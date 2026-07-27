@@ -4,7 +4,7 @@ import XRPL.Model.Protocol.Number
 
 namespace XRPL.FFI
 
-open XRPL.Model.Protocol (Number largeRange rounding_mode)
+open XRPL.Model.Protocol (Number largeRange rounding_mode Error)
 
 @[export lean_number_build]
 def lean_number_build (negative : UInt8) (mantissa : UInt64) (exponent : Int64) : Number :=
@@ -20,19 +20,19 @@ def lean_number_mantissa (n : Number) : UInt64 := n.mantissa_
 def lean_number_exponent (n : Number) : Int64 := n.exponent_.toInt64
 
 @[export lean_number_mul]
-def lean_number_mul (a b : Number) (mode : rounding_mode) : Except String Number :=
+def lean_number_mul (a b : Number) (mode : rounding_mode) : Except Error Number :=
   Number.operator_mul a b mode
 
 @[export lean_number_div]
-def lean_number_div (a b : Number) (mode : rounding_mode) : Except String Number :=
+def lean_number_div (a b : Number) (mode : rounding_mode) : Except Error Number :=
   Number.operator_div a b mode
 
 @[export lean_number_add]
-def lean_number_add (a b : Number) (mode : rounding_mode) : Except String Number :=
+def lean_number_add (a b : Number) (mode : rounding_mode) : Except Error Number :=
   Number.operator_add a b mode
 
 @[export lean_number_sub]
-def lean_number_sub (a b : Number) (mode : rounding_mode) : Except String Number :=
+def lean_number_sub (a b : Number) (mode : rounding_mode) : Except Error Number :=
   Number.operator_sub a b mode
 
 @[export lean_number_neg]
@@ -40,7 +40,7 @@ def lean_number_neg (n : Number) : Number :=
   n.operator_neg
 
 @[export lean_number_normalize]
-def lean_number_normalize (n : Number) (mode : rounding_mode) : Except String Number :=
+def lean_number_normalize (n : Number) (mode : rounding_mode) : Except Error Number :=
   n.normalize largeRange.min largeRange.max mode
 
 @[export lean_number_signum]
@@ -48,7 +48,7 @@ def lean_number_signum (n : Number) : Int64 :=
   n.signum.toInt64
 
 @[export lean_number_to_rep]
-def lean_number_to_rep (n : Number) (mode : rounding_mode) : Except String Int64 :=
+def lean_number_to_rep (n : Number) (mode : rounding_mode) : Except Error Int64 :=
   n.to_rep mode
 
 @[export lean_number_eq]

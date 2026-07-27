@@ -39,7 +39,7 @@ theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
     have h_zm_gt_rep : maxRep.toNat < zm.toNat := by omega
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .towards_zero
-      h_zm_gt_rep hzm_le_maxRep "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+      h_zm_gt_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = v * 10 ^ ze' := by
       rw [h_result_abs]; exact hv_val
     have hzm_q_gt : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
@@ -89,7 +89,7 @@ theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
       rw [roundUp_bool_towards_zero_false] at hfire
       exact absurd hfire Bool.noConfusion
   -- ===== IN RANGE: zm ≤ maxRep =====
-  have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze' h_zm_le_rep "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+  have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze' h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
   simp only at h_tr_val
   have h_result_abs_eq : |result.toRat| = (zm.toNat : ℚ) * 10 ^ ze' := by
     rw [h_result_abs]; exact h_tr_val

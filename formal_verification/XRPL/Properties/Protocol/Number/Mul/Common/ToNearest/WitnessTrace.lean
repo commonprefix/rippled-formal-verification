@@ -53,7 +53,7 @@ lemma doNormalize_witness :
       rw [if_pos (by decide), if_neg (by decide), h_divu]; simp only [guard_new_push_zero]; norm_num]
   simp only []
   have h_rup : Guard.new.doRoundUp false (922337203685477582 : UInt64) (19 : Int)
-      largeRange.min largeRange.max .to_nearest "Number::normalize 2" =
+      largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 18 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup]
@@ -74,7 +74,7 @@ lemma operator_mul_to_nearest_witness :
   -- Now the goal has doRoundUp { digits_ := ..., xbit_ := false, sbit_ := false } false mantissaFloorSucc 19 ...
   have h_rup : ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .to_nearest
-      "Number::multiplication overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 18 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup]

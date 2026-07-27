@@ -50,7 +50,7 @@ lemma doNormalize_scaleDown128_fired_output_ge
   induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := largeRange.max)
     generalizing out with
   | case1 m e g hgt' hmax =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g = .error "Number::normalize 1" from by
+    rw [show doNormalize_scaleDown128 largeRange.max m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128.eq_def]
       rw [dif_pos hgt', if_pos hmax]] at h
     exact absurd h (by intro hh; cases hh)
@@ -88,7 +88,7 @@ lemma doNormalize_scaleDown128_output_le
     generalizing out with
   | case1 m e g hgt' hmax =>
     rw [show doNormalize_scaleDown128 largeRange.max m e g
-        = .error "Number::normalize 1" from by
+        = .error .normalize1 from by
       rw [doNormalize_scaleDown128.eq_def]
       rw [dif_pos hgt', if_pos hmax]] at h
     exact absurd h (by intro hh; cases hh)
@@ -123,7 +123,7 @@ theorem doNormalize128_doRoundUp_stage
     (hres : result.mantissa_ ≠ 0) :
     ∃ (zm : UInt64) (ze' : Int) (g : Guard) (res : RoundResult),
       g.doRoundUp zn zm ze' largeRange.min largeRange.max mode
-        "Number::normalize 2" = .ok res ∧
+        .normalize2 = .ok res ∧
       result = res.toNumber ∧
       mantissaFloor ≤ zm.toNat ∧
       zm.toNat ≤ maxRepUp.toNat ∧
@@ -177,7 +177,7 @@ theorem doNormalize128_doRoundUp_stage
         rw [hcap] at hok
         simp only [] at hok
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -265,19 +265,19 @@ theorem doNormalize128_result_isNormalized
     cases mode with
     | to_nearest =>
       exact doRoundUp_output_invariants_to_nearest_upTo_maxRepUp g zn zm ze'
-        hfloor hle "Number::normalize 2" res hru hres_ne
+        hfloor hle .normalize2 res hru hres_ne
     | towards_zero =>
       exact doRoundUp_output_invariants_towards_zero_upTo_maxRepUp g zn zm ze'
-        hfloor hle "Number::normalize 2" res hru hres_ne
+        hfloor hle .normalize2 res hru hres_ne
     | downward =>
       exact doRoundUp_output_invariants_downward_upTo_maxRepUp g zn zm ze'
-        hfloor hle "Number::normalize 2" res hru hres_ne
+        hfloor hle .normalize2 res hru hres_ne
     | upward =>
       exact doRoundUp_output_invariants_upward_upTo_maxRepUp g zn zm ze'
-        hfloor hle "Number::normalize 2" res hru hres_ne
+        hfloor hle .normalize2 res hru hres_ne
   obtain ⟨h1, h2, h3, h4⟩ := h_inv
   have h_exp_le : res.exponent_ ≤ maxExponent :=
-    doRoundUp_exponent_le_max g zn zm ze' mode "Number::normalize 2" res hru
+    doRoundUp_exponent_le_max g zn zm ze' mode .normalize2 res hru
   right
   rw [h_result]
   refine ⟨UInt64.le_iff_toNat_le.mpr h1, UInt64.le_iff_toNat_le.mpr h2, ?_, h3, h_exp_le⟩
@@ -300,7 +300,7 @@ theorem doNormalize128_no_overflow_mantissa
     doNormalize128_doRoundUp_stage zn M e sticky mode hM_pos result hok hres
   rw [h_result] at h_exp_ge ⊢
   exact doRoundUp_mantissa_le_cuspTop_at_maxExp g zn zm ze' mode
-    "Number::normalize 2" hle hcap_exp res hru h_exp_ge
+    .normalize2 hle hcap_exp res hru h_exp_ge
 
 set_option maxHeartbeats 12800000 in
 -- Full value-laden walk: scaleUp facts + two slip-threaded repr stages over
@@ -328,7 +328,7 @@ theorem doNormalize128_algorithmic_facts
       0 ≤ f ∧ f < 1 ∧
       ((M.toNat : ℚ) + δ) * 10 ^ e = ((zm.toNat : ℚ) + f) * 10 ^ ze' ∧
       g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-        "Number::normalize 2" = .ok res_pos ∧
+        .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       result.negative_ = zn ∧
@@ -462,7 +462,7 @@ theorem doNormalize128_algorithmic_facts
             (by rw [hM₂u_toNat]; rw [hmaxM_v] at h2le; exact h2le)
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -475,8 +475,8 @@ theorem doNormalize128_algorithmic_facts
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
             with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
-              mode "Number::normalize 2" = .ok res_pos :=
-            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode "Number::normalize 2" res hru
+              mode .normalize2 = .ok res_pos :=
+            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode .normalize2 res hru
           have hres_pos_mant : res_pos.mantissa_ ≠ 0 := hres_mant
           have h_value : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1
               = ((M.toNat : ℚ) + δ) * 10 ^ e := by
@@ -488,7 +488,7 @@ theorem doNormalize128_algorithmic_facts
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
-              "Number::normalize 2" res hru hres_mant
+              .normalize2 res hru hres_mant
           have h_sbit : cp.2.2.sbit_ = zn := h3sbit.trans (h2sbit.trans h_g0_sbit)
           -- Shadow ↔ residual transfers.
           have h_eq_nonsticky : sticky = false → φ₃ = ftilde₃ := by
@@ -735,7 +735,7 @@ theorem doNormalize128_underflow_value_small
             (by rw [hM₂u_toNat]; rw [hmaxM_v] at h2le; exact h2le)
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -750,7 +750,7 @@ theorem doNormalize128_underflow_value_small
               = ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := by
             rw [← h3val, hM₂u_toNat, ← h2val, hval₁]
           have hflush := doRoundUp_flush_value_small cp.2.2 zn cp.1 cp.2.1 mode
-            (le_of_lt h3floor) h3le "Number::normalize 2" res hru hres_mant0
+            (le_of_lt h3floor) h3le .normalize2 res hru hres_mant0
           rw [h_val3]
           calc ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1
               < ((cp.1.toNat : ℚ) + 1) * 10 ^ cp.2.1 :=

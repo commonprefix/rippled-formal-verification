@@ -165,9 +165,9 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
       cw.sharesRedeemed = shares := by
   unfold computeWithdrawByAssets at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  have handler_err : ∀ e : String,
+  have handler_err : ∀ e : Error,
       tryCatch (Except.error e :
-          Except String (DoResultPR ComputeWithdrawResult ComputeWithdrawResult PUnit))
+          Except Error (DoResultPR ComputeWithdrawResult ComputeWithdrawResult PUnit))
         (fun e => if isOverflow e = true then
             pure (DoResultPR.return
               ⟨some .tecPATH_DRY, STAmount.zero v.numericType, STAmount.zero .int64⟩

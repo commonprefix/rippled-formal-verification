@@ -273,12 +273,12 @@ theorem operator_mul_negative_eq (x y result : Number) (mode : rounding_mode)
     Number.normalize_mantissa_ne_zero_of_result d.normalizes hresult
   obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
     doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge d.zm_le_maxRepUp
-      "Number::multiplication overflow" res d.rounds hres_mant_ne
+      .overflow res d.rounds hres_mant_ne
   have hres_eq : result = res.toNumber :=
     Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod d.normalizes
   have hres_neg : res.negative_ = zn :=
     doRoundUp_negative_of_mant_ne g zn zm ze' largeRange.min largeRange.max mode
-      "Number::multiplication overflow" res d.rounds hres_mant_ne
+      .overflow res d.rounds hres_mant_ne
   rw [hres_eq, show res.toNumber.negative_ = res.negative_ from rfl, hres_neg]
   exact d.neg_eq
 

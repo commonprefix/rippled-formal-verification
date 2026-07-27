@@ -18,12 +18,12 @@ def IntAmount.signum (x : IntAmount) : Int :=
 
 def IntAmount.ofInt64 (v : Int64) : IntAmount := { value := v }
 
-def IntAmount.ofNumber (n : Number) (mode : rounding_mode) : Except String IntAmount :=
+def IntAmount.ofNumber (n : Number) (mode : rounding_mode) : Except Error IntAmount :=
   match n.to_rep mode with
   | .ok r => .ok { value := r }
   | .error e => .error e
 
-def IntAmount.toNumber (x : IntAmount) (mode : rounding_mode) : Except String Number :=
+def IntAmount.toNumber (x : IntAmount) (mode : rounding_mode) : Except Error Number :=
   Number.from_rep x.value 0 largeRange.min largeRange.max mode
 
 def IntAmount.operator_eq (x y : IntAmount) : Bool := x.value == y.value
@@ -54,8 +54,8 @@ def IntAmount.operator_sub_int (x : IntAmount) (v : Int64) : IntAmount :=
   { value := x.value - v }
 
 def IntAmount.mulRatio (amt : IntAmount) (num den : UInt32) (roundUp : Bool)
-    : Except String IntAmount :=
-  if den == 0 then .error "division by zero"
+    : Except Error IntAmount :=
+  if den == 0 then .error .divByZero
   else
     let neg := amt.value < 0
     let d : Int := (den.toNat : Int)
@@ -69,7 +69,7 @@ def IntAmount.mulRatio (amt : IntAmount) (num den : UInt32) (roundUp : Bool)
       else q
     let int64Max : Int := Int64.maxValue.toInt
     let int64Min : Int := Int64.minValue.toInt
-    if r > int64Max then .error "IntAmount mulRatio overflow"
+    if r > int64Max then .error .overflow
     -- C++ saturates to INT64_MIN via `convert_to<int64_t>` on negative underflow.
     else if r < int64Min then .ok { value := Int64.minValue }
     else .ok { value := r.toInt64 }

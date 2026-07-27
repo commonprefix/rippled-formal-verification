@@ -31,7 +31,7 @@ theorem normalize_no_inbetween_below_to_nearest (n result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
     normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
   exact no_inbetween_below_to_nearest_frame result n.toRat zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le (represents_nonneg hf_rep)
+    .normalize2 hzm_ge hzm_le (represents_nonneg hf_rep)
     (represents_lt_one hf_rep) hfloor_constr h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h_ru => by
@@ -60,7 +60,7 @@ theorem normalize_no_inbetween_above (n result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
     normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
   exact no_inbetween_above_to_nearest_frame result n.toRat zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le (represents_nonneg hf_rep)
+    .normalize2 hzm_ge hzm_le (represents_nonneg hf_rep)
     (represents_lt_one hf_rep) hfloor_constr h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h_ru => by

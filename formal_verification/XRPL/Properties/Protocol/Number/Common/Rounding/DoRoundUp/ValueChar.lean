@@ -18,7 +18,7 @@ lemma doRoundUp_value_noRoundUp
     (h_no_ru : ¬ (g.round .to_nearest = 1 ∨
                   (g.round .to_nearest = 0 ∧ m % 2 = 1)))
     (h_le_maxRep : m.toNat ≤ maxRep.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false m e largeRange.min largeRange.max .to_nearest loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (m.toNat : ℚ) * 10 ^ e := by
@@ -95,7 +95,7 @@ lemma doRoundUp_value_roundUp_noOverflow
     (h_ru : g.round .to_nearest = 1 ∨
             (g.round .to_nearest = 0 ∧ m % 2 = 1))
     (h_no_ovf : m.toNat + 1 ≤ maxRep.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false m e largeRange.min largeRange.max .to_nearest loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = ((m.toNat : ℚ) + 1) * 10 ^ e := by
@@ -172,7 +172,7 @@ lemma doRoundUp_value_cusp
     (g : Guard) (m : UInt64) (e : Int)
     (h_m_eq : m = maxRep)
     (h_ru : g.round .to_nearest = 0 ∧ m % 2 = 1)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false m e largeRange.min largeRange.max .to_nearest loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = maxRepCuspTarget * 10 ^ e := by
@@ -287,7 +287,7 @@ lemma doRoundUp_output_invariants_to_nearest
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     (h_lb : mantissaFloor ≤ m.toNat)
     (h_ub : m.toNat ≤ maxRep.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max .to_nearest loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     largeRange.min.toNat ≤ res.mantissa_.toNat ∧
@@ -584,7 +584,7 @@ lemma doRoundUp_output_invariants_cusp
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
     (h_lb : maxRep.toNat < m.toNat)
     (h_ub : m.toNat ≤ maxRepUp.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max mode loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     largeRange.min.toNat ≤ res.mantissa_.toNat ∧
@@ -752,7 +752,7 @@ lemma doRoundUp_output_invariants_to_nearest_upTo_maxRepUp
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     (h_lb : mantissaFloor ≤ m.toNat)
     (h_ub : m.toNat ≤ maxRepUp.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max .to_nearest loc = .ok res)
     (hne : res.mantissa_ ≠ 0) :
     largeRange.min.toNat ≤ res.mantissa_.toNat ∧
@@ -772,7 +772,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
     (h_zm_ge : (mantissaFloor : ℕ) ≤ zm.toNat)
     (h_zm_le_max : zm.toNat ≤ maxRep.toNat)
     (h_floor_constraint : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f)
-    (loc : String) (res_pos : RoundResult)
+    (loc : Error) (res_pos : RoundResult)
     (hok_pos : g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest loc = .ok res_pos)
     (hres_pos_mant_ne : res_pos.mantissa_ ≠ 0) :
     |(res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ -
@@ -1093,7 +1093,7 @@ theorem doRoundUp_value_no_roundUp
     (g : Guard) (zm : UInt64) (ze' : Int)
     (h_no_roundUp : ¬ g.shouldRoundUp_to_nearest zm)
     (h_le_maxRep : zm.toNat ≤ maxRep.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (zm.toNat : ℚ) * 10 ^ ze' :=
@@ -1106,7 +1106,7 @@ lemma doRoundUp_rounds_to_nearest_supTight (g : Guard) (zm : UInt64) (ze : Int) 
     (h_zm_ge : (mantissaFloor : ℕ) ≤ zm.toNat)
     (h_zm_le_max : zm.toNat ≤ maxRep.toNat)
     (h_floor_constraint : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f)
-    (loc : String) (res_pos : RoundResult)
+    (loc : Error) (res_pos : RoundResult)
     (hok_pos : g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest loc = .ok res_pos)
     (hres_pos_mant_ne : res_pos.mantissa_ ≠ 0) :
     |(res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ -
@@ -1139,7 +1139,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
     (hf_rep : represents g f)
     (h_zm_gt : maxRep.toNat < zm.toNat)
     (h_zm_le : zm.toNat ≤ maxRepUp.toNat)
-    (loc : String) (res_pos : RoundResult)
+    (loc : Error) (res_pos : RoundResult)
     (hok_pos : g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest loc = .ok res_pos)
     (hres_pos_mant_ne : res_pos.mantissa_ ≠ 0) :
     |(res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ -
@@ -1368,7 +1368,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp
     (h_zm_ge : (mantissaFloor : ℕ) ≤ zm.toNat)
     (h_zm_le_max : zm.toNat ≤ maxRepUp.toNat)
     (h_floor_constraint : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f)
-    (loc : String) (res_pos : RoundResult)
+    (loc : Error) (res_pos : RoundResult)
     (hok_pos : g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest loc = .ok res_pos)
     (hres_pos_mant_ne : res_pos.mantissa_ ≠ 0) :
     |(res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ -
@@ -1386,7 +1386,7 @@ theorem doRoundUp_value_to_nearest_roundUp_noCusp
     (g : Guard) (zm : UInt64) (ze' : Int)
     (h_roundUp : g.shouldRoundUp_to_nearest zm)
     (h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
@@ -1397,7 +1397,7 @@ theorem doRoundUp_value_to_nearest_roundUp_cusp
     (g : Guard) (zm : UInt64) (ze' : Int)
     (h_zm_eq_maxRep : zm = maxRep)
     (h_roundUp : g.round .to_nearest = 0 ∧ zm % 2 = 1)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = maxRepCuspTarget * 10 ^ ze' :=
@@ -1408,7 +1408,7 @@ theorem doRoundUp_value_to_nearest_roundUp_cusp_round1
     (g : Guard) (zm : UInt64) (ze' : Int)
     (h_zm_eq_maxRep : zm = maxRep)
     (h_roundUp : g.round .to_nearest = 1)
-    (loc : String) (res : RoundResult)
+    (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (maxRep.toNat : ℚ) * 10 ^ ze' := by

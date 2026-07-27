@@ -17,7 +17,7 @@ structure PostAlignSpec (truth : ℚ) (xn : Bool) (result : Number) (mode : roun
   floor_cusp : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f
   value_eq : |truth| = ((zm.toNat : ℚ) + f) * 10 ^ ze'
   rounds : g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-    "Number::addition overflow" = .ok res_pos
+    .overflow = .ok res_pos
   result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
   res_mant_ne : res_pos.mantissa_ ≠ 0
   represents_f : represents g f
@@ -48,7 +48,7 @@ private theorem operator_add_post_alignment_anyMode
                  (g_aln.doDropDigit128 zm128 e_common).1)
               else (toUInt64 zm128, e_common, g_aln)
             match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max
-                  mode "Number::addition overflow" with
+                  mode .overflow with
             | .error err => Except.error err
             | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
            = .ok result) :
@@ -184,7 +184,7 @@ private theorem operator_add_post_alignment_anyMode
       rw [hmaxRepUp_v] at h_drop
       omega
     have hok' : (match g_new.doRoundUp xn zm_new (e_common + 1) largeRange.min largeRange.max
-                       mode "Number::addition overflow" with
+                       mode .overflow with
                  | .error err => Except.error err
                  | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
                 = .ok result := by
@@ -199,8 +199,8 @@ private theorem operator_add_post_alignment_anyMode
       exact h
     have h_rup_exists : ∃ res : RoundResult,
         g_new.doRoundUp xn zm_new (e_common + 1) largeRange.min largeRange.max mode
-          "Number::addition overflow" = .ok res := by
-      match hg : g_new.doRoundUp xn zm_new (e_common + 1) largeRange.min largeRange.max mode "Number::addition overflow" with
+          .overflow = .ok res := by
+      match hg : g_new.doRoundUp xn zm_new (e_common + 1) largeRange.min largeRange.max mode .overflow with
       | .error e => simp only [hg, reduceCtorEq] at hok'
       | .ok r => exact ⟨r, rfl⟩
     obtain ⟨res, h_rup⟩ := h_rup_exists
@@ -209,7 +209,7 @@ private theorem operator_add_post_alignment_anyMode
     have hres_mant_ne : res.mantissa_ ≠ 0 := by
       intro hres0
       have hflush := doRoundUp_flush_value_small g_new xn zm_new (e_common + 1) mode
-        hzm_new_ge_floor hzm_new_le_maxRepUp "Number::addition overflow" res h_rup hres0
+        hzm_new_ge_floor hzm_new_le_maxRepUp .overflow res h_rup hres0
       have hzm_q : (mantissaFloor : ℚ) ≤ (zm_new.toNat : ℚ) := by
         exact_mod_cast hzm_new_ge_floor
       have hA : ((mantissaFloor : ℚ) + 1) * (10 : ℚ) ^ ((minExponent : ℤ) + 1)
@@ -223,19 +223,19 @@ private theorem operator_add_post_alignment_anyMode
         nlinarith [zpow_pos (by norm_num : (0 : ℚ) < 10) (minExponent : ℤ)]
       linarith
     have h_inv := doRoundUp_output_invariants_anyMode g_new xn zm_new (e_common + 1) mode
-      hzm_new_ge_floor hzm_new_le_maxRep "Number::addition overflow" res h_rup hres_mant_ne
+      hzm_new_ge_floor hzm_new_le_maxRep .overflow res h_rup hres_mant_ne
     obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ := h_inv
     set res_pos : RoundResult := { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
     have hres_pos_mant_ne : res_pos.mantissa_ ≠ 0 := hres_mant_ne
-    have h_rup_pos : g_new.doRoundUp false zm_new (e_common + 1) largeRange.min largeRange.max mode "Number::addition overflow" = .ok res_pos :=
-      doRoundUp_false_from_ok g_new xn zm_new (e_common + 1) mode "Number::addition overflow" res h_rup
+    have h_rup_pos : g_new.doRoundUp false zm_new (e_common + 1) largeRange.min largeRange.max mode .overflow = .ok res_pos :=
+      doRoundUp_false_from_ok g_new xn zm_new (e_common + 1) mode .overflow res h_rup
     have h_result_eq_res : result = res.toNumber :=
       Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok'
     have h_result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [h_result_eq_res, abs_toRat_eq res.toNumber]; rfl
     have h_res_neg_eq_xn : result.negative_ = xn := by
       rw [h_result_eq_res]
-      exact doRoundUp_negative_of_mant_ne g_new xn zm_new (e_common + 1) _ _ _ "Number::addition overflow" res h_rup hres_mant_ne
+      exact doRoundUp_negative_of_mant_ne g_new xn zm_new (e_common + 1) _ _ _ .overflow res h_rup hres_mant_ne
     have h_g_new_sbit : g_new.sbit_ = xn := by
       rw [hg_new_def]
       have h_push_sbit : (g_aln.push d).sbit_ = g_aln.sbit_ := rfl
@@ -252,7 +252,7 @@ private theorem operator_add_post_alignment_anyMode
       refine ⟨UInt64.le_iff_toNat_le.mpr h_res_min, UInt64.le_iff_toNat_le.mpr h_res_max, ?_,
         h_res_exp,
         doRoundUp_exponent_le_max _ xn zm_new (e_common + 1) mode
-          "Number::addition overflow" res h_rup⟩
+          .overflow res h_rup⟩
       by_cases hc : res.mantissa_.toNat ≤ maxRep.toNat
       · left
         exact UInt64.le_iff_toNat_le.mpr hc
@@ -260,7 +260,7 @@ private theorem operator_add_post_alignment_anyMode
         exact h_res_mod (by omega)
     have h_truth_top : |truth| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) :=
       doRoundUp_stage_truth_top truth g_new false zm_new (e_common + 1) f_new mode
-        "Number::addition overflow" res_pos h_value_eq hzm_new_le_maxRepUp hf_new_nn hf_new_lt
+        .overflow res_pos h_value_eq hzm_new_le_maxRepUp hf_new_nn hf_new_lt
         (by omega) h_rup_pos hres_pos_mant_ne
     have hresult_ne : result.mantissa_ ≠ 0 := by
       rw [h_result_eq_res]
@@ -301,7 +301,7 @@ private theorem operator_add_post_alignment_anyMode
       have : (10 : ℕ) ^ 18 ≤ mantissaFloor := h_floor ▸ this
       norm_num at this
     have hok' : (match g_aln.doRoundUp xn zm_new e_common largeRange.min largeRange.max
-                       mode "Number::addition overflow" with
+                       mode .overflow with
                  | .error err => Except.error err
                  | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
                 = .ok result := by
@@ -311,8 +311,8 @@ private theorem operator_add_post_alignment_anyMode
       exact h
     have h_rup_exists : ∃ res : RoundResult,
         g_aln.doRoundUp xn zm_new e_common largeRange.min largeRange.max mode
-          "Number::addition overflow" = .ok res := by
-      match hg : g_aln.doRoundUp xn zm_new e_common largeRange.min largeRange.max mode "Number::addition overflow" with
+          .overflow = .ok res := by
+      match hg : g_aln.doRoundUp xn zm_new e_common largeRange.min largeRange.max mode .overflow with
       | .error e => simp only [hg, reduceCtorEq] at hok'
       | .ok r => exact ⟨r, rfl⟩
     obtain ⟨res, h_rup⟩ := h_rup_exists
@@ -321,7 +321,7 @@ private theorem operator_add_post_alignment_anyMode
     have hres_mant_ne : res.mantissa_ ≠ 0 := by
       intro hres0
       have hflush := doRoundUp_flush_value_small g_aln xn zm_new e_common mode
-        hzm_new_ge_floor hzm_new_le_maxRepUp "Number::addition overflow" res h_rup hres0
+        hzm_new_ge_floor hzm_new_le_maxRepUp .overflow res h_rup hres0
       have hzm18 : (1000000000000000000 : ℚ) ≤ (zm_new.toNat : ℚ) := by
         have h : 1000000000000000000 ≤ zm_new.toNat := by
           rw [hzm_new_toNat, hzm128_toNat]
@@ -339,19 +339,19 @@ private theorem operator_add_post_alignment_anyMode
         exact mul_lt_mul_of_pos_right (by norm_num) (zpow_pos (by norm_num) _)
       linarith
     have h_inv := doRoundUp_output_invariants_upTo_maxRepUp_anyMode g_aln xn zm_new e_common mode
-      hzm_new_ge_floor hzm_new_le_maxRepUp "Number::addition overflow" res h_rup hres_mant_ne
+      hzm_new_ge_floor hzm_new_le_maxRepUp .overflow res h_rup hres_mant_ne
     obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ := h_inv
     set res_pos : RoundResult := { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
     have hres_pos_mant_ne : res_pos.mantissa_ ≠ 0 := hres_mant_ne
-    have h_rup_pos : g_aln.doRoundUp false zm_new e_common largeRange.min largeRange.max mode "Number::addition overflow" = .ok res_pos :=
-      doRoundUp_false_from_ok g_aln xn zm_new e_common mode "Number::addition overflow" res h_rup
+    have h_rup_pos : g_aln.doRoundUp false zm_new e_common largeRange.min largeRange.max mode .overflow = .ok res_pos :=
+      doRoundUp_false_from_ok g_aln xn zm_new e_common mode .overflow res h_rup
     have h_result_eq_res : result = res.toNumber :=
       Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok'
     have h_result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [h_result_eq_res, abs_toRat_eq res.toNumber]; rfl
     have h_res_neg_eq_xn : result.negative_ = xn := by
       rw [h_result_eq_res]
-      exact doRoundUp_negative_of_mant_ne g_aln xn zm_new e_common _ _ _ "Number::addition overflow" res h_rup hres_mant_ne
+      exact doRoundUp_negative_of_mant_ne g_aln xn zm_new e_common _ _ _ .overflow res h_rup hres_mant_ne
     have hzm_new_succ : mantissaFloorSucc ≤ zm_new.toNat := by
       rw [hzm_new_toNat, hzm128_toNat]
       have h18 : (10 : ℕ) ^ 18 = 1000000000000000000 := by norm_num
@@ -362,7 +362,7 @@ private theorem operator_add_post_alignment_anyMode
       refine ⟨UInt64.le_iff_toNat_le.mpr h_res_min, UInt64.le_iff_toNat_le.mpr h_res_max, ?_,
         h_res_exp,
         doRoundUp_exponent_le_max _ xn zm_new e_common mode
-          "Number::addition overflow" res h_rup⟩
+          .overflow res h_rup⟩
       by_cases hc : res.mantissa_.toNat ≤ maxRep.toNat
       · left
         exact UInt64.le_iff_toNat_le.mpr hc
@@ -370,7 +370,7 @@ private theorem operator_add_post_alignment_anyMode
         exact h_res_mod (by omega)
     have h_truth_top : |truth| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) :=
       doRoundUp_stage_truth_top truth g_aln false zm_new e_common f_aln mode
-        "Number::addition overflow" res_pos h_value_eq hzm_new_le_maxRepUp hf_aln_nn hf_aln_lt
+        .overflow res_pos h_value_eq hzm_new_le_maxRepUp hf_aln_nn hf_aln_lt
         (by omega) h_rup_pos hres_pos_mant_ne
     have hresult_ne : result.mantissa_ ≠ 0 := by
       rw [h_result_eq_res]
@@ -488,7 +488,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                           (g_aln.doDropDigit128 zm128 e_common).1)
                        else (toUInt64 zm128, e_common, g_aln)
                      match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
-                           mode "Number::addition overflow" with
+                           mode .overflow with
                      | .error err => Except.error err
                      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
                     = .ok result := by
@@ -562,7 +562,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                             (g_aln.doDropDigit128 zm128 e_common).1)
                          else (toUInt64 zm128, e_common, g_aln)
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
-                             mode "Number::addition overflow" with
+                             mode .overflow with
                        | .error err => Except.error err
                        | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
                       = .ok result := by
@@ -610,7 +610,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                             (g_aln.doDropDigit128 zm128 e_common).1)
                          else (toUInt64 zm128, e_common, g_aln)
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
-                             mode "Number::addition overflow" with
+                             mode .overflow with
                        | .error err => Except.error err
                        | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
                       = .ok result := by

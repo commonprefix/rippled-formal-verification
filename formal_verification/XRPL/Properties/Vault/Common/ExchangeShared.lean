@@ -870,7 +870,7 @@ lemma STAmount.checked_iou_zero_exp (mant : UInt64) (exp : Int) (neg : Bool) (mo
     unfold STAmount.signedDrops STAmount.unchecked
     rcases neg <;> simp
   have hiou : (STAmount.unchecked .fractional mant exp neg).iou mode
-      = (if exp > cMaxOffset then .error "value overflow"
+      = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
     unfold STAmount.iou
@@ -879,7 +879,7 @@ lemma STAmount.checked_iou_zero_exp (mant : UInt64) (exp : Int) (neg : Bool) (mo
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
-  · have hb : STAmount.checked .fractional mant exp neg mode = .error "value overflow" := by
+  · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
       rw [STAmount.checked]; unfold STAmount.canonicalize
       rw [if_neg hint, hiou, if_pos hhi]
     rw [hb] at hok; simp at hok

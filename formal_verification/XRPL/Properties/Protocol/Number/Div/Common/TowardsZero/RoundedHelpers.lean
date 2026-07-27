@@ -29,7 +29,7 @@ theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
   have h_truth_abs : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
     htruth.trans h_value
   exact no_inbetween_below_towards_zero_frame result (x.toRat / y.toRat) zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_pos => by
       have hzn_false : zn = false := zn_eq_false_of_pos hsign.1 h_pos
@@ -58,7 +58,7 @@ theorem operator_div_no_inbetween_above_towards_zero (x y result : Number)
   have h_truth_abs : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
     htruth.trans h_value
   exact no_inbetween_above_towards_zero_frame result (x.toRat / y.toRat) zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_negT => by
       have hzn_true : zn = true := zn_eq_true_of_neg hsign.2 h_negT
@@ -115,7 +115,7 @@ theorem operator_div_rounded_towards_zero_proof (x y result : Number)
     rw [if_neg hy_guard,
         if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat / y.toRat = 0 := by
       rw [hx_zero, Number.toRat_zero, zero_div]
     rw [h_truth0]

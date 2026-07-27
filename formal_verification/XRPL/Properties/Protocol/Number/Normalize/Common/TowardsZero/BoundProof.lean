@@ -29,7 +29,7 @@ theorem normalize_rounding_bound_towards_zero (n result : Number)
   by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
   · -- ===== IN RANGE: zm ≤ maxRep — towards_zero truncates: |result| = zm·10^ze =====
     have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze h_zm_le_rep
-      "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+      .normalize2 res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = (zm.toNat : ℚ) * 10 ^ ze := by
       rw [h_result_abs]; exact h_tr_val
     -- |result| ≤ |n|
@@ -48,7 +48,7 @@ theorem normalize_rounding_bound_towards_zero (n result : Number)
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
     push_neg at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze .towards_zero
-      h_zm_le_rep hzm_le_max "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+      h_zm_le_rep hzm_le_max .normalize2 res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = v * 10 ^ ze := by
       rw [h_result_abs]; exact hv_val
     obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_max

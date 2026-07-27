@@ -13,7 +13,7 @@ theorem normalize_algorithmic_facts_towards_zero (n result : Number)
       0 ≤ f ∧ f < 1 ∧
       (maxRep.toNat < zm.toNat → f = 0 ∧ g.empty = true) ∧
       |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze ∧
-      g.doRoundUp false zm ze largeRange.min largeRange.max .towards_zero "Number::normalize 2" = .ok res_pos ∧
+      g.doRoundUp false zm ze largeRange.min largeRange.max .towards_zero .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       represents g f ∧
