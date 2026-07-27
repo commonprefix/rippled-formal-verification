@@ -35,6 +35,7 @@ TEST(VaultTests, BuilderSettersRoundTrip)
     auto const shareMPTIDValue = canonical_UINT192();
     auto const withdrawalPolicyValue = canonical_UINT8();
     auto const scaleValue = canonical_UINT8();
+    auto const assetsReservedValue = canonical_NUMBER();
     auto const lEVersionValue = canonical_UINT8();
 
     VaultBuilder builder{
@@ -55,6 +56,7 @@ TEST(VaultTests, BuilderSettersRoundTrip)
     builder.setAssetsMaximum(assetsMaximumValue);
     builder.setLossUnrealized(lossUnrealizedValue);
     builder.setScale(scaleValue);
+    builder.setAssetsReserved(assetsReservedValue);
     builder.setLEVersion(lEVersionValue);
 
     builder.setLedgerIndex(index);
@@ -169,6 +171,14 @@ TEST(VaultTests, BuilderSettersRoundTrip)
     }
 
     {
+        auto const& expected = assetsReservedValue;
+        auto const actualOpt = entry.getAssetsReserved();
+        ASSERT_TRUE(actualOpt.has_value());
+        expectEqualField(expected, *actualOpt, "sfAssetsReserved");
+        EXPECT_TRUE(entry.hasAssetsReserved());
+    }
+
+    {
         auto const& expected = lEVersionValue;
         auto const actualOpt = entry.getLEVersion();
         ASSERT_TRUE(actualOpt.has_value());
@@ -204,6 +214,7 @@ TEST(VaultTests, BuilderFromSleRoundTrip)
     auto const shareMPTIDValue = canonical_UINT192();
     auto const withdrawalPolicyValue = canonical_UINT8();
     auto const scaleValue = canonical_UINT8();
+    auto const assetsReservedValue = canonical_NUMBER();
     auto const lEVersionValue = canonical_UINT8();
 
     auto sle = std::make_shared<SLE>(Vault::entryType, index);
@@ -223,6 +234,7 @@ TEST(VaultTests, BuilderFromSleRoundTrip)
     sle->at(sfShareMPTID) = shareMPTIDValue;
     sle->at(sfWithdrawalPolicy) = withdrawalPolicyValue;
     sle->at(sfScale) = scaleValue;
+    sle->at(sfAssetsReserved) = assetsReservedValue;
     sle->at(sfLEVersion) = lEVersionValue;
 
     VaultBuilder builderFromSle{sle};
@@ -403,6 +415,19 @@ TEST(VaultTests, BuilderFromSleRoundTrip)
     }
 
     {
+        auto const& expected = assetsReservedValue;
+
+        auto const fromSleOpt = entryFromSle.getAssetsReserved();
+        auto const fromBuilderOpt = entryFromBuilder.getAssetsReserved();
+
+        ASSERT_TRUE(fromSleOpt.has_value());
+        ASSERT_TRUE(fromBuilderOpt.has_value());
+
+        expectEqualField(expected, *fromSleOpt, "sfAssetsReserved");
+        expectEqualField(expected, *fromBuilderOpt, "sfAssetsReserved");
+    }
+
+    {
         auto const& expected = lEVersionValue;
 
         auto const fromSleOpt = entryFromSle.getLEVersion();
@@ -497,6 +522,8 @@ TEST(VaultTests, OptionalFieldsReturnNullopt)
     EXPECT_FALSE(entry.getLossUnrealized().has_value());
     EXPECT_FALSE(entry.hasScale());
     EXPECT_FALSE(entry.getScale().has_value());
+    EXPECT_FALSE(entry.hasAssetsReserved());
+    EXPECT_FALSE(entry.getAssetsReserved().has_value());
     EXPECT_FALSE(entry.hasLEVersion());
     EXPECT_FALSE(entry.getLEVersion().has_value());
 }

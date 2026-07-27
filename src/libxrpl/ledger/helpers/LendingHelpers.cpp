@@ -9,7 +9,10 @@
 #include <xrpl/ledger/ApplyView.h>
 #include <xrpl/ledger/ReadView.h>
 #include <xrpl/ledger/View.h>
+#include <xrpl/ledger/helpers/AccountRootHelpers.h>
+#include <xrpl/ledger/helpers/TokenHelpers.h>
 #include <xrpl/ledger/helpers/VaultHelpers.h>
+#include <xrpl/protocol/AccountID.h>
 #include <xrpl/protocol/Asset.h>
 #include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/LedgerFormats.h>
@@ -21,11 +24,13 @@
 #include <xrpl/protocol/STTx.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/Units.h>
+#include <xrpl/protocol/XRPAmount.h>
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <memory>
 #include <string_view>
 #include <utility>
 
@@ -2261,4 +2266,159 @@ loanMakePayment(
     return std::unexpected(tecINTERNAL);
     // LCOV_EXCL_STOP
 }
+
+TER
+checkLoanFreeze(
+    ReadView const& view,
+    Asset const& asset,
+    AccountID const& vaultPseudo,
+    AccountID const& brokerPseudo,
+    AccountID const& borrower,
+    AccountID const& brokerOwner,
+    beast::Journal j)
+{
+    if (auto const ter = canAddHolding(view, asset))
+        return ter;
+
+    // vaultPseudo is going to send funds, so it can't be frozen.
+    if (auto const ret = checkFrozen(view, vaultPseudo, asset))
+    {
+        JLOG(j.warn()) << "Vault pseudo-account is frozen.";
+        return ret;
+    }
+
+    // brokerPseudo is the fallback account to receive LoanPay fees, even if the
+    // broker owner is unable to accept them. Don't create the loan if it is
+    // deep frozen.
+    if (auto const ret = checkDeepFrozen(view, brokerPseudo, asset))
+    {
+        JLOG(j.warn()) << "Broker pseudo-account is frozen.";
+        return ret;
+    }
+
+    // borrower is eventually going to have to pay back the loan, so it can't be
+    // frozen now. It is also going to receive funds, so it can't be deep
+    // frozen, but being frozen is a prerequisite for being deep frozen, so
+    // checking the one is sufficient.
+    if (auto const ret = checkFrozen(view, borrower, asset))
+    {
+        JLOG(j.warn()) << "Borrower account is frozen.";
+        return ret;
+    }
+    // brokerOwner is going to receive funds if there's an origination fee, so
+    // it can't be deep frozen
+    if (auto const ret = checkDeepFrozen(view, brokerOwner, asset))
+    {
+        JLOG(j.warn()) << "Broker owner account is frozen.";
+        return ret;
+    }
+
+    return tesSUCCESS;
+}
+
+TER
+reserveLoanOwner(
+    ApplyView& view,
+    AccountID const& borrower,
+    SLE::ref loanOwnerSle,
+    AccountID const& signingAccount,
+    XRPAmount preFeeBalance,
+    beast::Journal j)
+{
+    XRPL_ASSERT(
+        loanOwnerSle && loanOwnerSle->getType() == ltACCOUNT_ROOT,
+        "xrpl::reserveLoanOwner : valid AccountRoot");
+    increaseOwnerCount(view, loanOwnerSle, {}, 1, j);
+    auto const balance =
+        signingAccount == borrower ? preFeeBalance : loanOwnerSle->at(sfBalance).value().xrp();
+    if (balance < accountReserve(view, loanOwnerSle, j))
+        return tecINSUFFICIENT_RESERVE;
+    return tesSUCCESS;
+}
+
+TER
+disburseLoan(
+    ApplyViewContext& viewContext,
+    SLE::ref borrowerSle,
+    SLE::ref brokerOwnerSle,
+    AccountID const& vaultPseudo,
+    Asset const& vaultAsset,
+    Number const& loanAssetsToBorrower,
+    Number const& originationFee,
+    AccountID const& signingAccount,
+    AccountID const& counterparty,
+    beast::Journal j)
+{
+    XRPL_ASSERT(
+        borrowerSle && borrowerSle->getType() == ltACCOUNT_ROOT,
+        "xrpl::disburseLoan : valid borrower AccountRoot");
+    XRPL_ASSERT(
+        brokerOwnerSle && brokerOwnerSle->getType() == ltACCOUNT_ROOT,
+        "xrpl::disburseLoan : valid broker owner AccountRoot");
+    AccountID const borrower = borrowerSle->at(sfAccount);
+    AccountID const brokerOwner = brokerOwnerSle->at(sfAccount);
+
+    // Account for the origination fee using two payments
+    //
+    // 1. Transfer loanAssetsAvailable (principalRequested - originationFee)
+    // from vault pseudo-account to the borrower.
+    // Create a holding for the borrower if one does not already exist.
+
+    XRPL_ASSERT_PARTS(
+        borrower == signingAccount || borrower == counterparty,
+        "xrpl::disburseLoan",
+        "borrower signed transaction");
+    if (auto const ter = addEmptyHolding(
+            viewContext, borrower, borrowerSle->at(sfBalance).value().xrp(), vaultAsset, j);
+        ter && ter != tecDUPLICATE)
+    {
+        // ignore tecDUPLICATE. That means the holding already exists, and
+        // is fine here
+        return ter;
+    }
+
+    if (auto const ter = requireAuth(viewContext.view, vaultAsset, borrower, AuthType::StrongAuth))
+        return ter;
+
+    // 2. Transfer originationFee, if any, from vault pseudo-account to
+    // LoanBroker owner.
+    if (originationFee != beast::kZero)
+    {
+        // Create the holding if it doesn't already exist (necessary for MPTs).
+        // The owner may have deleted their MPT / line at some point.
+        XRPL_ASSERT_PARTS(
+            brokerOwner == signingAccount || brokerOwner == counterparty,
+            "xrpl::disburseLoan",
+            "broker owner signed transaction");
+
+        if (auto const ter = addEmptyHolding(
+                viewContext,
+                brokerOwner,
+                brokerOwnerSle->at(sfBalance).value().xrp(),
+                vaultAsset,
+                j);
+            ter && ter != tecDUPLICATE)
+        {
+            // ignore tecDUPLICATE. That means the holding already exists,
+            // and is fine here
+            return ter;
+        }
+    }
+
+    if (auto const ter =
+            requireAuth(viewContext.view, vaultAsset, brokerOwner, AuthType::StrongAuth))
+        return ter;
+
+    if (auto const ter = accountSendMulti(
+            viewContext.view,
+            vaultPseudo,
+            vaultAsset,
+            {{borrower, loanAssetsToBorrower}, {brokerOwner, originationFee}},
+            j,
+            WaiveTransferFee::Yes))
+        return ter;
+
+    return tesSUCCESS;
+}
+
 }  // namespace xrpl
