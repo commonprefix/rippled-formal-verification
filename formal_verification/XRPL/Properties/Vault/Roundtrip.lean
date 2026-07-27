@@ -42,10 +42,6 @@ theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hAV : v.assetsAvailable = v.assetsTotal) -- nothing is lent out (no-lending parity)
-    -- the issued shares are a canonical nonnegative int64 count
-    (hSc : r₁.sharesIssued.IntegralCanonical)
-    (hSnt : r₁.sharesIssued.mNumericType = .int64)
-    (hSnn : 0 ≤ r₁.sharesIssued.toRat)
     -- the taken amount is stored canonically and is nonnegative
     (hDc : r₁.amountDeposit'.ExactCanonical)
     (hDnn : 0 ≤ r₁.amountDeposit'.toRat)
@@ -64,7 +60,7 @@ theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
         r₁.amountDeposit'.toRat * (2 * depositε)
           + (10 : ℚ) ^ r₂.assets'.exponent + (10 : ℚ) ^ r₁.amountDeposit'.exponent) :=
   Vault.deposit_withdraw_roundtrip_proof v amountDeposit r₁ r₂ hv hL hpos hcanon hAV
-    hSc hSnt hSnn hDc hDnn hSsz hok₁ herr₁ hok₂ herr₂
+    hDc hDnn hSsz hok₁ herr₁ hok₂ herr₂
 
 /-- Witness: the loss term in `deposit_withdraw_roundtrip` cannot be dropped,
 a round trip exists whose returned amount misses the taken amount by more than

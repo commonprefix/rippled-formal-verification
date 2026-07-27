@@ -357,8 +357,6 @@ theorem Vault.withdraw_final_payout (amount : WithdrawAmount) (waiveUnrealizedLo
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     -- the run was final: only the final branch zeroes the share total
     (hfinal : r.vault'.sharesTotal = Number.zero)
-    -- the share total fits the int64 domain, so its conversion is exact
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
     -- `assetsAvailable` is representable at the vault's numeric type, so the final
     -- `ofNumber` pays exactly `assetsAvailable` and never rounds up past the shares'
     -- worth (holds on all reachable vaults; false on a Lawful-non-Reachable one)
@@ -376,7 +374,7 @@ theorem Vault.withdraw_final_payout (amount : WithdrawAmount) (waiveUnrealizedLo
       v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * (1 - depositε) -
         2 * (10 : ℚ) ^ r.assets'.exponent ≤ r.assets'.toRat) :=
   Vault.withdraw_final_payout_proof v amount waiveUnrealizedLoss hv r hpos hc hSnt hnav
-    hok herr hfinal hfit hAAc
+    hok herr hfinal hAAc
 
 -- `Vault.withdraw_can_empty` is FALSE as stated, so it is omitted rather than
 -- assumed. A full-share redemption can hard-fail with `tecINSUFFICIENT_FUNDS`:
