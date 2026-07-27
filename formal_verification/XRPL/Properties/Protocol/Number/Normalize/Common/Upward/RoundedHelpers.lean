@@ -28,7 +28,7 @@ theorem normalize_no_inbetween_above_upward (n result : Number)
           h_g_sbit, hzm_succ⟩ :=
     normalize_algorithmic_facts_upward n result hn_mant_ne hok hresult
   exact no_inbetween_above_upward_frame result n.toRat zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h => represents_pos_of_shouldRoundUp_upward g f hf_rep h)
     (fun hd hxb => represents_eq_zero_of_digits_zero_xbit_false hd hxb hf_rep)

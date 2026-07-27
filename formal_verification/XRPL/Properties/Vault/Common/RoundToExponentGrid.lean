@@ -63,7 +63,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
   obtain ⟨postScale, hps, hround'⟩ := bind_ok_peel _ _ _ hround'
   obtain ⟨rounded'', hrx, hlast⟩ := bind_ok_peel _ _ _ hround'
   have hr_eq : rounded'' = rounded :=
-    Except.ok.inj (show (Except.ok rounded'' : Except String STAmount) = .ok rounded from hlast)
+    Except.ok.inj (show (Except.ok rounded'' : Except Error STAmount) = .ok rounded from hlast)
   rw [hr_eq] at hrx
   -- amountNumber facts
   obtain ⟨sn, hsn, hsn_val, hsn_norm⟩ := STAmount.toNumber_canonical_exact amountDeposit .to_nearest hcanon
@@ -115,7 +115,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
   unfold exponent at hps_frac
   obtain ⟨a, ha, hae⟩ := bind_ok_peel _ _ _ hps_frac
   have hae' : a.exponent = postScale :=
-    Except.ok.inj (show (Except.ok a.exponent : Except String Int) = .ok postScale from hae)
+    Except.ok.inj (show (Except.ok a.exponent : Except Error Int) = .ok postScale from hae)
   by_cases ha_mv : a.mValue = 0
   · -- `ofNumber` flushed to zero: the stored total is below `10⁻⁸¹`, so tiny; take `s = -81`
     have hbelow := STAmount.ofNumber_iou_zero_below_min .fractional assetsTotal' .to_nearest a

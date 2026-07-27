@@ -23,7 +23,7 @@ def Vault.hasCap (vault : Vault) : Bool :=
 def Vault.isInsolvent (vault : Vault) : Bool :=
   vault.assetsTotal.mantissa_ = 0 && vault.sharesTotal.signum = 1
 
--- Detect an overflow exception surfaced as a String error from arithmetic ops.
-def isOverflow (s : String) : Bool := (s.splitOn "overflow").length ≥ 2
+-- Detect an overflow error surfaced by arithmetic ops.
+def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
 
 end XRPL.Model.SingleAssetVault

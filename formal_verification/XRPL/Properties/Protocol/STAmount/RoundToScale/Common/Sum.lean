@@ -118,7 +118,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
   -- Destructure the chain.
   obtain ⟨n₁, h_add, hok₂⟩ : ∃ n₁, Number.operator_add v1n v2n mode = .ok n₁ ∧
       (match IOUAmount.ofNumber n₁ mode with
-       | .error e => (Except.error e : Except String STAmount)
+       | .error e => (Except.error e : Except Error STAmount)
        | .ok sumI => STAmount.ofIOUAmount sumI mode) = .ok sum := by
     match h_add : Number.operator_add v1n v2n mode with
     | .error e => rw [h_add] at hok; exact absurd hok (by intro h; cases h)

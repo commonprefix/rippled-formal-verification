@@ -16,7 +16,7 @@ lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (
     (h_lo : 10 ^ 15 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 16)
     (he_lo : minExponent + 3 ≤ exp) (he_hi : exp ≤ maxExponent) :
     IOUAmount.normalize ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩ mode
-      = (if exp > cMaxOffset then .error "value overflow"
+      = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
   have h_fit : mant.toNat < 2 ^ 63 := by omega
@@ -99,7 +99,7 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
     unfold STAmount.signedDrops STAmount.unchecked
     rcases neg <;> simp
   have hiou : (STAmount.unchecked .fractional mant exp neg).iou mode
-      = (if exp > cMaxOffset then .error "value overflow"
+      = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
     unfold STAmount.iou
@@ -109,7 +109,7 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · exfalso
-    have hb : STAmount.checked .fractional mant exp neg mode = .error "value overflow" := by
+    have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
       rw [STAmount.checked]; unfold STAmount.canonicalize
       rw [if_neg h_int, hiou, if_pos hhi]
     rw [hb] at hok; simp at hok

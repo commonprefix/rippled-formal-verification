@@ -24,7 +24,7 @@ structure ClawbackResult where
 def ClawbackResult.rejected (vault : Vault) (ter : TER) : ClawbackResult :=
   ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
-def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeClawbackResult := do
+def computeClawback (vault : Vault) (assets : STAmount) : Except Error ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.zero vault.numericType, STAmount.zero .int64⟩
   if assets.negative then
     return {result with error := some .tecINTERNAL}
@@ -50,7 +50,7 @@ def computeClawback (vault : Vault) (assets : STAmount) : Except String ComputeC
       throw e
 
 
-def Vault.clawback (vault : Vault) (assets : STAmount) : Except String ClawbackResult := do
+def Vault.clawback (vault : Vault) (assets : STAmount) : Except Error ClawbackResult := do
   let result ← computeClawback vault assets
   if result.error.isSome then
     return ⟨result.error, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩

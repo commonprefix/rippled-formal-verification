@@ -152,7 +152,7 @@ regular range (`zm ≤ maxRep - 1`), the round-to-nearest `doRoundUp` output is 
 `f ≥ 1/2` (round up). Shared by `operator_mul` and `operator_div` (both funnel the
 same `g, zm, ze', f`). -/
 theorem doRoundUp_clean_down_up (g : Guard) (zm : UInt64) (ze' : Int) (f : ℚ)
-    (res_pos : RoundResult) (result : Number) (loc : String)
+    (res_pos : RoundResult) (result : Number) (loc : Error)
     (hf_rep : represents g f)
     (hrounds : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc
       = .ok res_pos)

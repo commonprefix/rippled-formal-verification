@@ -189,8 +189,8 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     omega
   -- Extract the doRoundUp result.
   have h_rup_exists : ∃ res : RoundResult,
-      g.doRoundUp zn zm ze' largeRange.min largeRange.max mode "Number::multiplication overflow" = .ok res := by
-    match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode "Number::multiplication overflow" with
+      g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
+    match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow with
     | .error e => simp only [hg, reduceCtorEq] at hok
     | .ok r => exact ⟨r, rfl⟩
   obtain ⟨res, h_rup⟩ := h_rup_exists
@@ -202,7 +202,7 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
   by_cases hres_mant : res.mantissa_ = 0
   · -- The mul-stage doRoundUp flushed: the frame is at the representable floor.
     have h_small := doRoundUp_flush_value_small g zn zm ze' mode hzm_ge hzm_le_maxRep
-      "Number::multiplication overflow" res h_rup hres_mant
+      .overflow res h_rup hres_mant
     linarith
   · -- No flush: normalize is the identity on the invariant range — contradiction.
     exfalso
@@ -213,16 +213,16 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
       cases mode with
       | to_nearest =>
         exact doRoundUp_output_invariants_to_nearest_upTo_maxRepUp g zn zm ze' hzm_ge hzm_le_maxRep
-          "Number::multiplication overflow" res h_rup hres_mant
+          .overflow res h_rup hres_mant
       | towards_zero =>
         exact doRoundUp_output_invariants_towards_zero_upTo_maxRepUp g zn zm ze' hzm_ge
-          hzm_le_maxRep "Number::multiplication overflow" res h_rup hres_mant
+          hzm_le_maxRep .overflow res h_rup hres_mant
       | downward =>
         exact doRoundUp_output_invariants_downward_upTo_maxRepUp g zn zm ze' hzm_ge
-          hzm_le_maxRep "Number::multiplication overflow" res h_rup hres_mant
+          hzm_le_maxRep .overflow res h_rup hres_mant
       | upward =>
         exact doRoundUp_output_invariants_upward_upTo_maxRepUp g zn zm ze' hzm_ge
-          hzm_le_maxRep "Number::multiplication overflow" res h_rup hres_mant
+          hzm_le_maxRep .overflow res h_rup hres_mant
     obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ := h_inv
     have h_result_eq_res : result = res.toNumber :=
       Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok

@@ -8,12 +8,12 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 -- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
-def exponent (amount : Number) (nt : NumericType) : Except String Int := do
+def exponent (amount : Number) (nt : NumericType) : Except Error Int := do
   let a ← STAmount.ofNumber nt amount .to_nearest
   return a.exponent
 
 -- model of `roundToVaultScale` from xrpld
-def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Except String STAmount := do
+def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Except Error STAmount := do
   if amountDeposit.integral then
     return amountDeposit
   let amountNumber ← amountDeposit.toNumber .to_nearest
@@ -22,7 +22,7 @@ def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Exc
   let rounded ← STAmount.roundToExponent amountDeposit postScale .downward
   return rounded
 
--- The deposit either rounds to a usable amount, or is rejected with a TER. A String error
+-- The deposit either rounds to a usable amount, or is rejected with a TER. An Error
 -- from roundToVaultScale (e.g. overflow) propagates through the outer Except (a C++ throw).
 inductive RoundedDepositResult where
   | rejected (ter : TER)
@@ -34,7 +34,7 @@ digits in `amountDeposit` are dropped before the deposit runs (integral assets
 pass through unchanged). Returns the amount the deposit will actually use, or
 `tecPRECISION_LOSS` when nothing of it survives. -/
 def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
-    : Except String RoundedDepositResult := do
+    : Except Error RoundedDepositResult := do
   let roundedAmount ← roundToVaultExponent amountDeposit vault.assetsTotal
   if roundedAmount.isZero then
     return .rejected .tecPRECISION_LOSS
@@ -51,7 +51,7 @@ structure DepositResult where
 def DepositResult.rejected (vault : Vault) (ter : TER) : DepositResult :=
   ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
-def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except String STAmount := do
+def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except Error STAmount := do
   if vault.assetsTotal.mantissa_ = 0 then
     let sharesNumber ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + vault.scale.toNat) largeRange.min largeRange.max .to_nearest
     let sharesNumber ← sharesNumber.truncate
@@ -64,7 +64,7 @@ def assetsToSharesDeposit (vault : Vault) (amountDeposit : STAmount) : Except St
   let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
   return shares
 
-def sharesToAssetsDeposit (vault : Vault) (shares : STAmount) : Except String STAmount := do
+def sharesToAssetsDeposit (vault : Vault) (shares : STAmount) : Except Error STAmount := do
   if vault.assetsTotal.mantissa_ = 0 then
     let assets ← STAmount.checked vault.numericType shares.mantissa (shares.exponent - vault.scale.toNat) false .to_nearest
     return assets
@@ -79,7 +79,7 @@ inductive ComputeDepositResult where
   | error (error : TER)
   | success (assetDeposited : STAmount) (sharesCreated : STAmount)
 
-def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String ComputeDepositResult := do
+def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except Error ComputeDepositResult := do
   try
     let shares ← assetsToSharesDeposit vault amountDeposit
     if shares.isZero then
@@ -94,7 +94,7 @@ def computeDeposit (vault : Vault) (amountDeposit : STAmount) : Except String Co
     else
       throw e
 
-def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except String DepositResult := do
+def Vault.deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
 
   if amount.isZero then

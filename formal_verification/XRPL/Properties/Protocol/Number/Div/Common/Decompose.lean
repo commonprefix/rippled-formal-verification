@@ -92,7 +92,7 @@ theorem operator_div_operands_ne_zero {x y result : Number} {mode : rounding_mod
   rw [if_neg hy_guard,
       if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
   have h_result : result = x :=
-    (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+    (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
   apply hresult
   rw [h_result, hx_zero]
   rfl

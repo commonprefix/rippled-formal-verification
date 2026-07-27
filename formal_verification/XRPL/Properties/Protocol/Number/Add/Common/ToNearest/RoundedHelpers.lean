@@ -28,7 +28,7 @@ theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
       operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
         h_sign_eq h_not_zero hok
     exact no_inbetween_below_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::addition overflow" hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
+      .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne
       (fun h_ru => by
         rcases h_ru with h1 | ⟨h0, _⟩
@@ -55,7 +55,7 @@ theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
     have h_truth_abs : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
       htruth.trans h_value
     exact no_inbetween_below_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt
+      .normalize2 hzm_ge hzm_le hf_nn hf_lt
       (fun hfl => absurd hfl (by omega)) h_truth_abs h_rup_pos
       h_result_abs hres_pos_mant_ne
       (fun h_ru => h_pos_transfer (by
@@ -85,7 +85,7 @@ theorem operator_add_no_inbetween_above (x y result : Number)
       operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
         h_sign_eq h_not_zero hok
     exact no_inbetween_above_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::addition overflow" hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
+      .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr habs_xy_eq
       h_rup_pos h_result_abs hres_pos_mant_ne
       (fun h_ru => by
         rcases h_ru with h1 | ⟨h0, _⟩
@@ -113,7 +113,7 @@ theorem operator_add_no_inbetween_above (x y result : Number)
     have h_truth_abs : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
       htruth.trans h_value
     exact no_inbetween_above_to_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt
+      .normalize2 hzm_ge hzm_le hf_nn hf_lt
       (fun hfl => absurd hfl (by omega)) h_truth_abs h_rup_pos
       h_result_abs hres_pos_mant_ne
       (fun h_ru => h_pos_transfer (by
@@ -142,7 +142,7 @@ theorem operator_add_rounded_to_nearest_proof (x y result : Number)
     have h_result : result = x := by
       unfold Number.operator_add at hok
       rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [hy0, add_zero]
     by_cases hx_mant : x.mantissa_ = 0
     · have hx0 : x.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero x hx_mant
@@ -165,7 +165,7 @@ theorem operator_add_rounded_to_nearest_proof (x y result : Number)
     have h_result : result = y := by
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant_ne : y.mantissa_ ≠ 0 := by
       intro h
       apply hy_guard
@@ -184,7 +184,7 @@ theorem operator_add_rounded_to_nearest_proof (x y result : Number)
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
-        (show (Except.ok Number.zero : Except String Number) = .ok result from hok)).symm
+        (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     rw [h_truth0]
     left
     refine ⟨Number.zero, ?_, ?_⟩

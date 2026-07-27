@@ -99,7 +99,7 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
     | true => exact Number.truncate_source_ne_zero sharesNumber sharesNumber' htrunc hsn'
     | false =>
       have hpure : sharesNumber' = sharesNumber :=
-        (Except.ok.inj (show (pure sharesNumber : Except String Number) = .ok sharesNumber'
+        (Except.ok.inj (show (pure sharesNumber : Except Error Number) = .ok sharesNumber'
           from htrunc)).symm
       rw [hpure] at hsn'; exact hsn'
   -- positivity: a zero input would collapse the product and quotient to zero,
@@ -180,7 +180,7 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
       exact_mod_cast Int.floor_nonneg.mpr (le_of_lt hQpos)
   | false =>
     have hpure : sharesNumber' = sharesNumber :=
-      (Except.ok.inj (show (pure sharesNumber : Except String Number) = .ok sharesNumber'
+      (Except.ok.inj (show (pure sharesNumber : Except Error Number) = .ok sharesNumber'
         from htrunc)).symm
     have hofn' : STAmount.ofNumber .int64 sharesNumber .to_nearest = .ok shares := by
       rw [← hpure]; exact hofn

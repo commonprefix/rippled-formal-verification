@@ -9,7 +9,7 @@ open XRPL.Model.Protocol
 
 -- if the amount supplied for the withdrawal is specified as an amount of shares, this function
 -- calculates the amount of assets that will be withdrawn from the vault.
-def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except String STAmount := do
+def Vault.sharesToAssetsWithdraw (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except Error STAmount := do
   let lossUnrealized := match waiveUnrealizedLoss with
   | true => Number.zero
   | false => vault.lossUnrealized
@@ -39,7 +39,7 @@ def WithdrawResult.rejected (vault : Vault) (ter : TER) : WithdrawResult :=
   ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
 
 
-def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares waiveUnrealizedLoss : Bool) : Except String STAmount := do
+def assetsToSharesWithdraw (vault : Vault) (assets : STAmount) (truncateShares waiveUnrealizedLoss : Bool) : Except Error STAmount := do
   let lossUnrealized := match waiveUnrealizedLoss with
   | true => Number.zero
   | false => vault.lossUnrealized
@@ -66,7 +66,7 @@ structure ComputeWithdrawResult where
 
 
 
-def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
+def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except Error ComputeWithdrawResult := do
   try
     -- truncateShares = false in fn call
     let shares ← assetsToSharesWithdraw vault assets false waiveUnrealizedLoss
@@ -82,7 +82,7 @@ def computeWithdrawByAssets (vault : Vault) (assets : STAmount) (waiveUnrealized
       throw e
 
 
-def computeWithdrawByShares (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except String ComputeWithdrawResult := do
+def computeWithdrawByShares (vault : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) : Except Error ComputeWithdrawResult := do
   try
     let assets ← Vault.sharesToAssetsWithdraw vault shares waiveUnrealizedLoss
     return ⟨none, assets, shares⟩
@@ -100,7 +100,7 @@ inductive WithdrawAmount where
 
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except String WithdrawResult := do
+def Vault.withdraw (vault : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except Error WithdrawResult := do
   let result ← match amount with
     | .vaultAssets assets => computeWithdrawByAssets vault assets waiveUnrealizedLoss
     | .vaultShares shares => computeWithdrawByShares vault shares waiveUnrealizedLoss

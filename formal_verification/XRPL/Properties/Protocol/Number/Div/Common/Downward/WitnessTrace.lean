@@ -62,7 +62,7 @@ lemma doNormalize128_downward_witness :
   simp only []
   rw [show ({ digits_ := 0x9999000000000000, xbit_ := true, sbit_ := false } : Guard).doRoundUp
         false (922337203685477581 : UInt64) (-18) largeRange.min largeRange.max .downward
-        "Number::normalize 2"
+        .normalize2
         = .ok { negative_ := false, mantissa_ := 9223372036854775810, exponent_ := -19 } from by
       unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
       rfl]

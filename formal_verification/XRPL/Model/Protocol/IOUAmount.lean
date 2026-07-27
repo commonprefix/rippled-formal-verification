@@ -30,12 +30,12 @@ def IOUAmount.toRat (a : IOUAmount) : ℚ :=
   else
     mkRat (sign * m) ((10 : Nat) ^ (-a.exponent_).toNat)
 
-def IOUAmount.fromNumber (n : Number) (mode : rounding_mode) : Except String IOUAmount :=
+def IOUAmount.fromNumber (n : Number) (mode : rounding_mode) : Except Error IOUAmount :=
   match n.normalizeToRange cMinValue cMaxValue mode with
   | .error e => .error e
   | .ok (m, e) => .ok { mantissa_ := m, exponent_ := e }
 
-def IOUAmount.normalize (a : IOUAmount) (mode : rounding_mode) : Except String IOUAmount :=
+def IOUAmount.normalize (a : IOUAmount) (mode : rounding_mode) : Except Error IOUAmount :=
   if a.mantissa_ == 0 then .ok IOUAmount.zero
   else
     -- `Number{mantissa_, exponent_}` ctor normalizes against largeRange (throws on overflow).
@@ -45,25 +45,25 @@ def IOUAmount.normalize (a : IOUAmount) (mode : rounding_mode) : Except String I
       match IOUAmount.fromNumber v mode with
       | .error e => .error e
       | .ok result =>
-        if result.exponent_ > cMaxOffset then .error "value overflow"
+        if result.exponent_ > cMaxOffset then .error .overflow
         else if result.exponent_ < cMinOffset then .ok IOUAmount.zero
         else .ok result
 
 -- C++ `IOUAmount(mantissa_type, exponent_type)`
-def IOUAmount.ofMantissaExp (m : Int64) (e : Int) (mode : rounding_mode) : Except String IOUAmount :=
+def IOUAmount.ofMantissaExp (m : Int64) (e : Int) (mode : rounding_mode) : Except Error IOUAmount :=
   IOUAmount.normalize ⟨m, e⟩ mode
 
 -- C++ `explicit IOUAmount(Number const&)`
-def IOUAmount.ofNumber (n : Number) (mode : rounding_mode) : Except String IOUAmount :=
+def IOUAmount.ofNumber (n : Number) (mode : rounding_mode) : Except Error IOUAmount :=
   match IOUAmount.fromNumber n mode with
   | .error e => .error e
   | .ok r =>
-    if r.exponent_ > cMaxOffset then .error "value overflow"
+    if r.exponent_ > cMaxOffset then .error .overflow
     else if r.exponent_ < cMinOffset then .ok IOUAmount.zero
     else .ok r
 
 -- C++ `operator Number()` = `Number{mantissa_, exponent_}`
-def IOUAmount.toNumber (a : IOUAmount) (mode : rounding_mode) : Except String Number :=
+def IOUAmount.toNumber (a : IOUAmount) (mode : rounding_mode) : Except Error Number :=
   Number.from_rep a.mantissa_ a.exponent_ largeRange.min largeRange.max mode
 
 def IOUAmount.operator_eq (x y : IOUAmount) : Bool :=
@@ -75,7 +75,7 @@ def IOUAmount.operator_ne (x y : IOUAmount) : Bool :=
 
 -- C++ `operator<(other)` = `Number{*this} < Number{other}`.
 def IOUAmount.operator_lt (x y : IOUAmount) (mode : rounding_mode)
-    : Except String Bool :=
+    : Except Error Bool :=
   match x.toNumber mode with
   | .error e => .error e
   | .ok xn =>
@@ -85,27 +85,27 @@ def IOUAmount.operator_lt (x y : IOUAmount) (mode : rounding_mode)
 
 -- boost::totally_ordered<IOUAmount>: operator<= := !(y < x)
 def IOUAmount.operator_le (x y : IOUAmount) (mode : rounding_mode)
-    : Except String Bool :=
+    : Except Error Bool :=
   match IOUAmount.operator_lt y x mode with
   | .error e => .error e
   | .ok lt => .ok (!lt)
 
 def IOUAmount.operator_gt (x y : IOUAmount) (mode : rounding_mode)
-    : Except String Bool :=
+    : Except Error Bool :=
   IOUAmount.operator_lt y x mode
 
 def IOUAmount.operator_ge (x y : IOUAmount) (mode : rounding_mode)
-    : Except String Bool :=
+    : Except Error Bool :=
   match IOUAmount.operator_lt x y mode with
   | .error e => .error e
   | .ok lt => .ok (!lt)
 
 -- Unary negation invokes the normalizing `IOUAmount(int64, int)` ctor.
-def IOUAmount.operator_neg (x : IOUAmount) (mode : rounding_mode) : Except String IOUAmount :=
+def IOUAmount.operator_neg (x : IOUAmount) (mode : rounding_mode) : Except Error IOUAmount :=
   IOUAmount.normalize ⟨-x.mantissa_, x.exponent_⟩ mode
 
 def IOUAmount.operator_add (x y : IOUAmount) (mode : rounding_mode)
-    : Except String IOUAmount :=
+    : Except Error IOUAmount :=
   if y.mantissa_ == 0 then .ok x
   else if x.mantissa_ == 0 then .ok y
   else
@@ -121,14 +121,14 @@ def IOUAmount.operator_add (x y : IOUAmount) (mode : rounding_mode)
 
 -- C++ `operator-=(other)` = `*this += -other`.
 def IOUAmount.operator_sub (x y : IOUAmount) (mode : rounding_mode)
-    : Except String IOUAmount :=
+    : Except Error IOUAmount :=
   match y.operator_neg mode with
   | .error e => .error e
   | .ok ny => IOUAmount.operator_add x ny mode
 
 def IOUAmount.mulRatio (amt : IOUAmount) (num den : UInt32) (roundUp : Bool)
-    (mode : rounding_mode) : Except String IOUAmount :=
-  if den == 0 then .error "division by zero"
+    (mode : rounding_mode) : Except Error IOUAmount :=
+  if den == 0 then .error .divByZero
   else
     let neg := amt.mantissa_ < 0
     let denN : Nat := den.toNat

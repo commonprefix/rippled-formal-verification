@@ -234,7 +234,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         · -- regular roundUp: value (zm+1)·10^ze' > t, contra DOWN
           exfalso
           have hval := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' hru hcusp
-            "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+            .overflow res_pos hF.rounds hF.res_mant_ne
           have hV : r.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hr_val.trans hval
           rw [hV, ht_val] at hdir
           have := le_of_mul_le_mul_right hdir (hpow ze'); linarith [hf_lt]
@@ -247,7 +247,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
             · exact h1
             · exfalso
               have hval := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' hzmU ⟨h0, hodd⟩
-                "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+                .overflow res_pos hF.rounds hF.res_mant_ne
               have hV : r.toRat = (maxRepCuspTarget : ℚ) * 10 ^ ze' := hr_val.trans hval
               rw [hV, ht_val] at hdir
               have hc : (maxRepCuspTarget : ℚ) = (zm.toNat : ℚ) + 3 := by rw [hzmq]; norm_num
@@ -256,7 +256,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           have hfpos : (0 : ℚ) < f := by
             have := represents_round_eq_one hF.represents_f hround1; linarith
           have hval := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' hzmU hround1
-            "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+            .overflow res_pos hF.rounds hF.res_mant_ne
           have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by
             rw [hr_val, hval, hmaxRq]
           have hUb : (maxRepUpNat : ℚ) * 10 ^ ze' ≤ U.toRat :=
@@ -267,7 +267,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
       · -- no roundUp: value zm·10^ze', f ≤ 1/2
         have hf_le := hf_le_of_noRU hru
         have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-          "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+          .overflow res_pos hF.rounds hF.res_mant_ne
         have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
         have hzm_ge : mantissaFloorSucc ≤ zm.toNat := by
           by_contra h; push_neg at h
@@ -297,7 +297,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hzm_le; exact hzm_le
         exact_mod_cast this
       obtain ⟨v, hvval, hvcases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .to_nearest
-        hzm_le_rep hzm_le "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+        hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
       have hrv : r.toRat = (v : ℚ) * 10 ^ ze' := hr_val.trans hvval
       have hA : (0 : ℚ) < 10 ^ ze' := hpow ze'
       rcases hvcases with ⟨hv, hzlt, hdecf⟩ | ⟨hv, hsub⟩ | ⟨hv, hzeqU, _⟩
@@ -340,7 +340,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         have hzmU : (zm.toNat : ℚ) = (maxRepUpNat : ℚ) :=
           by exact_mod_cast (hzeqU.trans (rfl : maxRepUp.toNat = maxRepUpNat))
         have hbound := doRoundUp_rounds_to_nearest_supTight_cusp g zm ze' f hF.represents_f
-          hzm_le_rep hzm_le "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+          hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
         rw [hvval, hv, hzmU] at hbound
         have habs : |((maxRepNat : ℚ) + 13) * 10 ^ ze' - ((maxRepUpNat : ℚ) + f) * 10 ^ ze'|
             = (10 - f) * 10 ^ ze' := by
@@ -404,7 +404,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         have hru : g.shouldRoundUp_to_nearest zm := by
           by_contra hru
           have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-            "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+            .overflow res_pos hF.rounds hF.res_mant_ne
           have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
           rw [hV, ht_val] at hdir
           have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
@@ -413,7 +413,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           · exact le_of_lt (represents_round_eq_one hF.represents_f h1)
           · exact le_of_eq (represents_round_eq_zero hF.represents_f h0).symm
         have hval := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' hru hcusp
-          "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+          .overflow res_pos hF.rounds hF.res_mant_ne
         have hV : r.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hr_val.trans hval
         have hUv : U.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hUv0.trans hV
         by_cases hzm_ge : mantissaFloorSucc ≤ zm.toNat
@@ -457,21 +457,21 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           have hru : g.shouldRoundUp_to_nearest zm := by
             by_contra hru
             have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-              "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+              .overflow res_pos hF.rounds hF.res_mant_ne
             have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
             rw [hV, ht_val] at hdir
             have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
           rcases hru with h1 | ⟨h0, hodd⟩
           · exfalso
             have hval := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' hzmU h1
-              "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+              .overflow res_pos hF.rounds hF.res_mant_ne
             have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by rw [hr_val, hval, hmaxRq]
             rw [hV, ht_val, hzmq] at hdir
             have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
           · exact ⟨h0, hodd⟩
         have hfeq : f = 1 / 2 := represents_round_eq_zero hF.represents_f hround0.1
         have hval := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' hzmU hround0
-          "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+          .overflow res_pos hF.rounds hF.res_mant_ne
         have hUv : U.toRat = (maxRepUpNat : ℚ) * 10 ^ ze' := by rw [hUv0, hr_val, hval]
         have hLb : L.toRat ≤ (maxRepNat : ℚ) * 10 ^ ze' :=
           lower_le_cusp_bot t L hL ze'
@@ -491,7 +491,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         have : maxRepNat + 1 ≤ zm.toNat := by rw [maxRep_val] at hzm_le_rep; omega
         exact_mod_cast this
       obtain ⟨v, hvval, hvcases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .to_nearest
-        hzm_le_rep hzm_le "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+        hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
       have hrv : r.toRat = (v : ℚ) * 10 ^ ze' := hr_val.trans hvval
       -- the interior closer: from zm < maxRepUp and V = maxRepUp, B = maxRep
       have finishInterior : (zm.toNat : ℚ) ≤ (maxRepNat : ℚ) + 2 →
@@ -532,7 +532,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         have hzmU : (zm.toNat : ℚ) = (maxRepUpNat : ℚ) :=
           by exact_mod_cast (hzeqU.trans (rfl : maxRepUp.toNat = maxRepUpNat))
         have hbound := doRoundUp_rounds_to_nearest_supTight_cusp g zm ze' f hF.represents_f
-          hzm_le_rep hzm_le "Number::multiplication overflow" res_pos hF.rounds hF.res_mant_ne
+          hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
         rw [hvval, hv, hzmU] at hbound
         have habs : |((maxRepNat : ℚ) + 13) * 10 ^ ze' - ((maxRepUpNat : ℚ) + f) * 10 ^ ze'|
             = (10 - f) * 10 ^ ze' := by

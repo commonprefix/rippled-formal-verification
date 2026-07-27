@@ -38,7 +38,7 @@ lemma operator_add_downward_witness :
   rw [htoUInt64]
   have h_rup : ({ digits_ := 10376293541461622784, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (1000000000000000000 : UInt64) (1 : Int) largeRange.min largeRange.max .downward
-      "Number::addition overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 1000000000000000000, exponent_ := 1 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
     rfl
@@ -62,7 +62,7 @@ lemma operator_add_downward_witness :
       rw [if_neg (by decide)]]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (1000000000000000000 : UInt64) (1 : Int)
-      largeRange.min largeRange.max .downward "Number::normalize 2" =
+      largeRange.min largeRange.max .downward .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000000, exponent_ := 1 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]

@@ -37,7 +37,7 @@ lemma add_lift_trace_g (mode : rounding_mode) :
   rw [show toUInt64 (1000000000000000500 : UInt128) = (1000000000000000500 : UInt64) from by decide]
   rw [show ({ digits_ := 0, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (1000000000000000500 : UInt64) (-2 : Int) largeRange.min largeRange.max mode
-      "Number::addition overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
       from by unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl]
   simp only [RoundResult.toNumber]
@@ -57,7 +57,7 @@ lemma add_lift_trace_g (mode : rounding_mode) :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   rw [show Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max mode "Number::normalize 2" =
+      largeRange.min largeRange.max mode .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
       from by unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.new; rfl]
   simp only [RoundResult.toNumber]
@@ -276,7 +276,7 @@ lemma mul_lift_trace_g (mode : rounding_mode) :
   rw [hsd]
   have h_rup : Guard.new.doRoundUp
       false (1000000000000000500 : UInt64) (-2 : Int) largeRange.min largeRange.max mode
-      "Number::multiplication overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.new; rfl
   rw [h_rup]
@@ -298,7 +298,7 @@ lemma mul_lift_trace_g (mode : rounding_mode) :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max mode "Number::normalize 2" =
+      largeRange.min largeRange.max mode .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.new; rfl
   rw [h_rup2]

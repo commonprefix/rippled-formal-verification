@@ -52,7 +52,7 @@ lemma add_lift_trace :
   rw [htoUInt64]
   have h_rup : ({ digits_ := 0, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (1000000000000000500 : UInt64) (-2 : Int) largeRange.min largeRange.max .to_nearest
-      "Number::addition overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup]
@@ -74,7 +74,7 @@ lemma add_lift_trace :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max .to_nearest "Number::normalize 2" =
+      largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]
@@ -115,7 +115,7 @@ lemma reround_trace :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   rw [show (Guard.new.push 0 |>.push 0 |>.push 5 : Guard).doRoundUp false (1000000000000000 : UInt64) (1 : Int)
-        cMinValue cMaxValue .to_nearest "Number::normalize 2"
+        cMinValue cMaxValue .to_nearest .normalize2
         = .ok { negative_ := false, mantissa_ := 1000000000000000, exponent_ := 1 } from by
       unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new; rfl]
   simp only [RoundResult.toNumber]
@@ -239,7 +239,7 @@ lemma mul_lift_trace :
   rw [hsd]
   have h_rup : Guard.new.doRoundUp
       false (1000000000000000500 : UInt64) (-2 : Int) largeRange.min largeRange.max .to_nearest
-      "Number::multiplication overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.new; rfl
   rw [h_rup]
@@ -261,7 +261,7 @@ lemma mul_lift_trace :
       unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max .to_nearest "Number::normalize 2" =
+      largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.new; rfl
   rw [h_rup2]

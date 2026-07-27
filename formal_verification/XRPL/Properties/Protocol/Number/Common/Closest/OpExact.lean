@@ -305,7 +305,7 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
     rw [h_guard_y, h_guard_x, h_guard_eq] at hok
     simp only [Bool.false_eq_true, if_false, if_true] at hok
     have h_result : result = Number.zero :=
-      (Except.ok.inj (show (Except.ok Number.zero : Except String Number) = .ok result
+      (Except.ok.inj (show (Except.ok Number.zero : Except Error Number) = .ok result
         from hok)).symm
     rw [h_result, Number.toRat_zero, h_truth0]
   · -- Nonzero representable sum.

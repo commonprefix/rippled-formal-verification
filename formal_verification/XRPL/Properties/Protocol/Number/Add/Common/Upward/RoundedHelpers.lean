@@ -27,7 +27,7 @@ theorem operator_add_no_inbetween_above_upward (x y result : Number)
       operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
         h_sign_eq h_not_zero hok
     exact no_inbetween_above_upward_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::addition overflow" hzm_ge hzm_le hf_nn hf_lt habs_xy_eq h_rup_pos
+      .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq h_rup_pos
       h_result_abs hres_pos_mant_ne
       (fun h => represents_pos_of_shouldRoundUp_upward g f hf_rep h)
       (fun hd hxb => represents_eq_zero_of_digits_zero_xbit_false hd hxb hf_rep)
@@ -54,7 +54,7 @@ theorem operator_add_no_inbetween_above_upward (x y result : Number)
     have h_truth_abs : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
       htruth.trans h_value
     exact no_inbetween_above_upward_frame result (x.toRat + y.toRat) zm ze' f g res_pos
-      "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+      .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
       h_result_abs hres_pos_mant_ne
       (fun h => h_pos_transfer (represents_pos_of_shouldRoundUp_upward g ftilde hrep_t h))
       (fun hd hxb => h_zero_transfer (represents_eq_zero_of_digits_zero_xbit_false hd hxb hrep_t))
@@ -84,7 +84,7 @@ theorem operator_add_rounded_upward_proof (x y result : Number)
     have h_result : result = x := by
       unfold Number.operator_add at hok
       rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have hx_mant : x.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
     have hx_ne : x.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant
     rw [hy0, add_zero]
@@ -99,7 +99,7 @@ theorem operator_add_rounded_upward_proof (x y result : Number)
     have h_result : result = y := by
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant : y.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
     have hy_ne : y.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero y hy_mant
     rw [hx0, zero_add]
@@ -112,7 +112,7 @@ theorem operator_add_rounded_upward_proof (x y result : Number)
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
-        (show (Except.ok Number.zero : Except String Number) = .ok result from hok)).symm
+        (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
     apply hresult
     rw [h_result]
     rfl

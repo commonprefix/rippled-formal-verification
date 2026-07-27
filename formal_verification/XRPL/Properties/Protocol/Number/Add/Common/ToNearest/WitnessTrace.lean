@@ -38,7 +38,7 @@ lemma operator_add_to_nearest_witness :
   rw [htoUInt64]
   have h_rup : ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (1 : Int) largeRange.min largeRange.max .to_nearest
-      "Number::addition overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 0 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
     rfl
@@ -64,7 +64,7 @@ lemma operator_add_to_nearest_witness :
       simp only [guard_new_push_zero]; norm_num]
   simp only []
   have h_rup2 : Guard.new.doRoundUp false (922337203685477582 : UInt64) (1 : Int)
-      largeRange.min largeRange.max .to_nearest "Number::normalize 2" =
+      largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 0 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]

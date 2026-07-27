@@ -31,7 +31,7 @@ theorem normalize_no_inbetween_below_towards_zero (n result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
     normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
   exact no_inbetween_below_towards_zero_frame result n.toRat zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_pos => by
       have hn_nneg : n.negative_ = false := by
@@ -54,7 +54,7 @@ theorem normalize_no_inbetween_above_towards_zero (n result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
     normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
   exact no_inbetween_above_towards_zero_frame result n.toRat zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_neg => by
       have hn_neg : n.negative_ = true := by

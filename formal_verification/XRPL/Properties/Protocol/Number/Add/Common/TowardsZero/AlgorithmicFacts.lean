@@ -14,7 +14,7 @@ theorem operator_add_algorithmic_facts_same_sign_towards_zero (x y result : Numb
       zm.toNat ≤ maxRepUp.toNat ∧
       0 ≤ f ∧ f < 1 ∧
       |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' ∧
-      g.doRoundUp false zm ze' largeRange.min largeRange.max .towards_zero "Number::addition overflow" = .ok res_pos ∧
+      g.doRoundUp false zm ze' largeRange.min largeRange.max .towards_zero .overflow = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       represents g f ∧

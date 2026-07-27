@@ -39,7 +39,7 @@ lemma normalize_towards_zero_witness :
       rw [if_neg (by decide)]]
   simp only []
   have h_rup : (Guard.new.push 9).doRoundUp false (1000000000000000000 : UInt64) (1 : Int)
-      largeRange.min largeRange.max .towards_zero "Number::normalize 2" =
+      largeRange.min largeRange.max .towards_zero .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000000, exponent_ := 1 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new
     rfl

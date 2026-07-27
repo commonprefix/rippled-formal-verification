@@ -30,7 +30,7 @@ theorem doNormalize128_algorithmic_facts_round
       (zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f) ∧
       ((M.toNat : ℚ) + δ) * 10 ^ e = ((zm.toNat : ℚ) + f) * 10 ^ ze' ∧
       g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-        "Number::normalize 2" = .ok res_pos ∧
+        .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       result.negative_ = zn ∧
@@ -178,7 +178,7 @@ theorem doNormalize128_algorithmic_facts_round
             (by rw [hM₂u_toNat]; exact hv2couple)
             cp hcap
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err => except_clash hru hok
         | ok res =>
           rw [hru] at hok
@@ -188,8 +188,8 @@ theorem doNormalize128_algorithmic_facts_round
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
             with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
-              mode "Number::normalize 2" = .ok res_pos :=
-            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode "Number::normalize 2" res hru
+              mode .normalize2 = .ok res_pos :=
+            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode .normalize2 res hru
           have hres_pos_mant : res_pos.mantissa_ ≠ 0 := hres_mant
           have h_value : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1
               = ((M.toNat : ℚ) + δ) * 10 ^ e := by
@@ -200,7 +200,7 @@ theorem doNormalize128_algorithmic_facts_round
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
-              "Number::normalize 2" res hru hres_mant
+              .normalize2 res hru hres_mant
           -- reconcile the value fractions: φ₃v = φ₃
           have h_value_v : ((cp.1.toNat : ℚ) + φ₃v) * 10 ^ cp.2.1
               = ((M.toNat : ℚ) + δ) * 10 ^ e := by

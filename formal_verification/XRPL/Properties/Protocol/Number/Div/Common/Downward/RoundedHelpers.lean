@@ -29,7 +29,7 @@ theorem operator_div_no_inbetween_below_downward (x y result : Number)
   have h_truth_abs : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
     htruth.trans h_value
   exact no_inbetween_below_downward_frame result (x.toRat / y.toRat) zm ze' f g res_pos
-    "Number::normalize 2" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
     (fun h => h_pos_transfer (represents_pos_of_shouldRoundUp_downward g ftilde hrep_t h))
     (fun hd hxb => h_zero_transfer (represents_eq_zero_of_digits_zero_xbit_false hd hxb hrep_t))
@@ -69,7 +69,7 @@ theorem operator_div_rounded_downward_proof (x y result : Number)
     rw [if_neg hy_guard,
         if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult
     rw [h_result, hx_zero]
     rfl

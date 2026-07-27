@@ -92,7 +92,7 @@ theorem doNormalize_scaleDown128_valueInv
   induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := maxMantissa)
     generalizing φ x p with
   | case1 m e g hgt hge =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error "Number::normalize 1" from by
+    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128.eq_def, dif_pos hgt, if_pos hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>

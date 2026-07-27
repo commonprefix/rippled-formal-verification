@@ -1,4 +1,5 @@
 import Mathlib.Tactic
+import XRPL.Model.Protocol.Errors
 
 set_option linter.style.nativeDecide false
 
@@ -167,7 +168,7 @@ def Guard.pushOverflow (g : Guard) (mantissa : UInt64) (mode : rounding_mode) : 
 
 def Guard.doRoundUp (g : Guard) (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMantissa maxMantissa : internalrep) (mode : rounding_mode)
-    (location : String) : Except String RoundResult :=
+    (location : Error) : Except Error RoundResult :=
   let g := g.pushOverflow mantissa mode
   let r := g.round mode
   let roundUp := r == 1 || (r == 0 && mantissa % 2 == 1)
@@ -198,9 +199,9 @@ termination_by (e - minExponent).toNat
 decreasing_by omega
 
 def doNormalize_scaleDown (maxMantissa : UInt64) (m : UInt64) (e : Int) (g : Guard)
-    : Except String (UInt64 × Int × Guard) :=
+    : Except Error (UInt64 × Int × Guard) :=
   if h : m > maxMantissa then
-    if e ≥ maxExponent then .error "Number::normalize 1"
+    if e ≥ maxExponent then .error .normalize1
     else doNormalize_scaleDown maxMantissa (m / 10) (e + 1) (g.push (m % 10))
   else .ok (m, e, g)
 termination_by m.toNat
@@ -209,16 +210,16 @@ decreasing_by
   exact Nat.div_lt_self (u64_pos_of_gt h) (by omega)
 
 def doNormalize_capAtMaxRep (m : UInt64) (e : Int) (g : Guard)
-    : Except String (UInt64 × Int × Guard) :=
+    : Except Error (UInt64 × Int × Guard) :=
   if m > maxRepUp then
-    if e ≥ maxExponent then .error "Number::normalize 1.5"
+    if e ≥ maxExponent then .error .normalize1_5
     else
       let (q, r) := divu10 m
       .ok (q, e + 1, g.push r)
   else .ok (m, e, g)
 
 def doNormalize (negative : Bool) (mantissa : UInt64) (exponent : Int)
-    (minMantissa maxMantissa : UInt64) (mode : rounding_mode) : Except String Number :=
+    (minMantissa maxMantissa : UInt64) (mode : rounding_mode) : Except Error Number :=
   if mantissa == 0 then .ok Number.zero
   else
     let (m, e) := doNormalize_scaleUp minMantissa mantissa exponent
@@ -231,16 +232,16 @@ def doNormalize (negative : Bool) (mantissa : UInt64) (exponent : Int)
         match doNormalize_capAtMaxRep m e g with
         | .error err => .error err
         | .ok (m, e, g) =>
-          match g.doRoundUp negative m e minMantissa maxMantissa mode "Number::normalize 2" with
+          match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
           | .error err => .error err
           | .ok res => .ok res.toNumber
 
 def Number.normalize (n : Number) (minMant maxMant : UInt64)
-    (mode : rounding_mode) : Except String Number :=
+    (mode : rounding_mode) : Except Error Number :=
   doNormalize n.negative_ n.mantissa_ n.exponent_ minMant maxMant mode
 
 def Number.normalizeToRange (n : Number) (minMant maxMant : UInt64)
-    (mode : rounding_mode) : Except String (Int64 × Int) :=
+    (mode : rounding_mode) : Except Error (Int64 × Int) :=
   match doNormalize n.negative_ n.mantissa_ n.exponent_ minMant maxMant mode with
   | .error e => .error e
   | .ok res =>
@@ -250,13 +251,13 @@ def Number.normalizeToRange (n : Number) (minMant maxMant : UInt64)
     .ok (signedM, res.exponent_)
 
 def Number.normalized (negative : Bool) (mantissa : UInt64) (exponent : Int)
-    (minMant maxMant : UInt64) (mode : rounding_mode) : Except String Number :=
+    (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   (Number.unchecked negative mantissa exponent).normalize minMant maxMant mode
 
 -- C++ `Number(rep mantissa, int exponent)` — the signed-int64 entry-point ctor.
 -- `rep = std::int64_t`; sign + magnitude split happens inside via `externalToInternal`.
 def Number.from_rep (mantissa : Int64) (exponent : Int)
-    (minMant maxMant : UInt64) (mode : rounding_mode) : Except String Number :=
+    (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   Number.normalized (mantissa < 0) mantissa.toInt.natAbs.toUInt64 exponent minMant maxMant mode
 
 -- Divide the mantissa by 10 (dropping the low digit) until the exponent reaches 0,
@@ -271,7 +272,7 @@ decreasing_by omega
 
 -- Round toward zero to an integer. Sign is preserved; the exponent is ≥ 0 afterwards
 -- so re-normalization neither rounds nor throws (mode is inert).
-def Number.truncate (n : Number) : Except String Number :=
+def Number.truncate (n : Number) : Except Error Number :=
   if n.exponent_ ≥ 0 ∨ n.mantissa_ = 0 then
     .ok n
   else
@@ -326,9 +327,9 @@ decreasing_by
   exact Nat.div_lt_self (bv128_pos_of_gt h) (by omega)
 
 def doNormalize_scaleDown128 (maxMantissa : UInt64) (m : UInt128) (e : Int) (g : Guard)
-    : Except String (UInt128 × Int × Guard) :=
+    : Except Error (UInt128 × Int × Guard) :=
   if h : m > toUInt128 maxMantissa then
-    if e ≥ maxExponent then .error "Number::normalize 1"
+    if e ≥ maxExponent then .error .normalize1
     else doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
   else .ok (m, e, g)
 termination_by m.toNat
@@ -338,7 +339,7 @@ decreasing_by
 
 def doNormalize128 (negative : Bool) (mantissa : UInt128) (exponent : Int)
     (minMantissa maxMantissa : UInt64) (mode : rounding_mode)
-    (stickyTail : Bool := false) : Except String Number :=
+    (stickyTail : Bool := false) : Except Error Number :=
   if mantissa == 0 then .ok Number.zero
   else
     let (m, e) :=
@@ -359,12 +360,12 @@ def doNormalize128 (negative : Bool) (mantissa : UInt128) (exponent : Int)
         match doNormalize_capAtMaxRep (toUInt64 m) e g with
         | .error err => .error err
         | .ok (m, e, g) =>
-          match g.doRoundUp negative m e minMantissa maxMantissa mode "Number::normalize 2" with
+          match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
           | .error err => .error err
           | .ok res => .ok res.toNumber
 
 def Number.operator_mul (x y : Number)
-    (mode : rounding_mode) : Except String Number := do
+    (mode : rounding_mode) : Except Error Number := do
   if x.operator_eq Number.zero then return x
   else if y.operator_eq Number.zero then return y
   else
@@ -373,7 +374,7 @@ def Number.operator_mul (x y : Number)
     let ze := x.exponent_ + y.exponent_
     let g := if zn then Guard.new.set_negative else Guard.new
     let (zm, ze, g) := scaleDown128 zm128 ze g
-    match g.doRoundUp zn zm ze largeRange.min largeRange.max mode "Number::multiplication overflow" with
+    match g.doRoundUp zn zm ze largeRange.min largeRange.max mode .overflow with
     | .error err => .error err
     | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
 
@@ -398,8 +399,8 @@ def divQuotient128 (xm ym : UInt64) (xe ye : Int) : UInt128 × Int × Bool :=
   else (zm128, ze, false)
 
 def Number.operator_div (x y : Number)
-    (mode : rounding_mode) : Except String Number := do
-  if y.operator_eq Number.zero then .error "Number: divide by 0"
+    (mode : rounding_mode) : Except Error Number := do
+  if y.operator_eq Number.zero then .error .divByZero
   else if x.operator_eq Number.zero then return x
   else
     let zn := x.negative_ != y.negative_
@@ -407,7 +408,7 @@ def Number.operator_div (x y : Number)
     doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped
 
 def Number.operator_add (x y : Number)
-    (mode : rounding_mode) : Except String Number := do
+    (mode : rounding_mode) : Except Error Number := do
   if y.operator_eq Number.zero then return x
   else if x.operator_eq Number.zero then return y
   else if x.operator_eq (y.operator_neg) then return Number.zero
@@ -444,7 +445,7 @@ def Number.operator_add (x y : Number)
           let (g', zm128', xe') := g.doDropDigit128 zm128 xe
           (toUInt64 zm128', xe', g')
         else (toUInt64 zm128, xe, g)
-      match g.doRoundUp xn zm xe largeRange.min largeRange.max mode "Number::addition overflow" with
+      match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
       | .error err => .error err
       | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
     else
@@ -469,7 +470,7 @@ def Number.operator_add (x y : Number)
       doNormalize128 zn zm128 ze largeRange.min largeRange.max mode stickyTail
 
 def Number.operator_sub (x y : Number)
-    (mode : rounding_mode) : Except String Number :=
+    (mode : rounding_mode) : Except Error Number :=
   Number.operator_add x y.operator_neg mode
 
 def Number.mantissa (n : Number) : rep :=
@@ -480,7 +481,7 @@ def Number.mantissa (n : Number) : rep :=
 def Number.exponent (n : Number) : Int :=
   if n.mantissa_ > maxRep then n.exponent_ + 1 else n.exponent_
 
-def Number.to_rep (n : Number) (mode : rounding_mode) : Except String rep :=
+def Number.to_rep (n : Number) (mode : rounding_mode) : Except Error rep :=
   let drops : rep := n.mantissa
   let offset : Int := n.exponent
   if drops == 0 then .ok 0
@@ -495,10 +496,10 @@ def Number.to_rep (n : Number) (mode : rounding_mode) : Except String rep :=
     termination_by (-offset).toNat
     decreasing_by omega
 
-    let rec grow (drops : rep) (offset : Int) : Except String rep :=
+    let rec grow (drops : rep) (offset : Int) : Except Error rep :=
       if offset > 0 then
         if drops > maxRep.toInt64 / 10 then
-          .error "Number::operator rep() overflow"
+          .error .overflow
         else grow (drops * 10) (offset - 1)
       else .ok drops
     termination_by offset.toNat
@@ -515,7 +516,7 @@ def Number.to_rep (n : Number) (mode : rounding_mode) : Except String rep :=
       let r := g.round mode
       if r == 1 || (r == 0 && drops % 2 == 1) then
         if drops ≥ maxRep.toInt64 then
-          .error "Number::operator rep() rounding overflow"
+          .error .overflow
         else
           let drops := drops + 1
           .ok (if n.negative_ then -drops else drops)

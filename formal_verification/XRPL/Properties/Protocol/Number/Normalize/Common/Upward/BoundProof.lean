@@ -62,7 +62,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
       by_cases h_cusp : zm = maxRep
       · -- ===== CUSP =====
         have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
-          "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+          .normalize2 res_pos h_rup_pos hres_pos_mant_ne
         simp only at h_cusp_val
         have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
           rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
@@ -104,7 +104,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
           omega
         have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
         have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
-          "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+          .normalize2 res_pos h_rup_pos hres_pos_mant_ne
         simp only at h_nc_val
         have h_truth_signed : n.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
           have h1 : |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_n_eq
@@ -130,7 +130,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
         exact ⟨h_direction, h_magnitude⟩
     · -- ===== NO ROUND UP (truncate) =====
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
-        "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+        .normalize2 res_pos h_rup_pos hres_pos_mant_ne
       simp only at h_tr_val
       by_cases h_zn : n.negative_ = true
       · -- n < 0. Truncating magnitude toward zero ⇒ |result| ≤ |n|, both ≤ 0 ⇒ n ≤ result.
@@ -220,7 +220,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
     push_neg at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
-      h_zm_le_rep hzm_le_maxRep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant_ne
+      h_zm_le_rep hzm_le_maxRep .normalize2 res_pos h_rup_pos hres_pos_mant_ne
     obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
     -- The plain-guard round decision is dead (the guard is empty).
     have h_ground : g.round .upward = -2 := by

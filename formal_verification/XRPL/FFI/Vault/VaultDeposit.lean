@@ -1,12 +1,12 @@
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.VaultDeposit
 
-open XRPL.Model.Protocol (STAmount)
+open XRPL.Model.Protocol (STAmount Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_rounded_deposit_amount]
 def lean_rounded_deposit_amount (vault : Vault) (amountDeposit : STAmount)
-    : Except String RoundedDepositResult :=
+    : Except Error RoundedDepositResult :=
   vault.roundedDepositAmount amountDeposit
 
 @[export lean_rounded_deposit_result_amount]
@@ -27,7 +27,7 @@ def lean_vault_is_insolvent (vault : Vault) : Bool :=
 
 @[export lean_vault_deposit]
 def lean_vault_deposit (vault : Vault) (amountDeposit : STAmount) (isDonation : UInt8)
-    : Except String DepositResult :=
+    : Except Error DepositResult :=
   vault.deposit amountDeposit (isDonation != 0)
 
 @[export lean_deposit_result_amount]

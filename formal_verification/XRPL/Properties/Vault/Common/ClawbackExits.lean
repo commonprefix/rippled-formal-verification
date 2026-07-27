@@ -26,8 +26,8 @@ theorem computeClawback_codes (v : Vault) (assets : STAmount) (cc : ComputeClawb
   · rw [if_neg hneg] at hok
     simp only [pure_bind] at hok
     obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-    have handler_path_dry : ∀ (e : String),
-        tryCatch (Except.error e : Except String (DoResultPR ComputeClawbackResult ComputeClawbackResult PUnit))
+    have handler_path_dry : ∀ (e : Error),
+        tryCatch (Except.error e : Except Error (DoResultPR ComputeClawbackResult ComputeClawbackResult PUnit))
           (fun e => if isOverflow e = true then
               pure (DoResultPR.return (⟨some TER.tecPATH_DRY, STAmount.zero v.numericType,
                 STAmount.zero NumericType.int64⟩ : ComputeClawbackResult) PUnit.unit)

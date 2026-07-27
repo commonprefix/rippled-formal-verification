@@ -195,9 +195,9 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
     simp only at hok
     obtain ⟨res, hrup⟩ : ∃ res,
         g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode
-          "Number::normalize 2" = .ok res := by
+          .normalize2 = .ok res := by
       match hrup : g3.doRoundUp n.negative_ m3 e3 largeRange.min largeRange.max mode
-          "Number::normalize 2" with
+          .normalize2 with
       | .error e => rw [hrup] at hok; exact absurd hok (by intro h; cases h)
       | .ok res => exact ⟨res, rfl⟩
     rw [hrup] at hok
@@ -237,7 +237,7 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
         rw [hminMant_v] at hm2_ge_min
         omega
     have hflush := doRoundUp_flush_value_small g3 n.negative_ m3 e3 mode
-      hm3_ge_floor hm3_le_maxRep "Number::normalize 2" res hrup hres_mant0
+      hm3_ge_floor hm3_le_maxRep .normalize2 res hrup hres_mant0
     have h10e3_pos : (0 : ℚ) < (10 : ℚ) ^ e3 := zpow_pos (by norm_num) _
     calc |n.toRat| = ((m3.toNat : ℚ) + f3) * 10 ^ e3 := hval_n3
       _ < ((m3.toNat : ℚ) + 1) * 10 ^ e3 :=

@@ -24,7 +24,7 @@ Consumers (Mul, Normalize, …) destructure their facts bundle and apply these. 
 /-- `.towards_zero`, below form: with `result ≤ truth`, nothing normalized lies
 in `(result, truth]`. -/
 theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -165,7 +165,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
 /-- `.towards_zero`, above form: with `truth ≤ result`, nothing normalized lies
 in `[truth, result)`. -/
 theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -308,7 +308,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
 /-- `.to_nearest`, below form: with `result ≤ truth`, nothing normalized lies
 in `(result, truth]`. -/
 theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -595,7 +595,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
 /-- `.to_nearest`, above form: with `truth ≤ result`, nothing normalized lies
 in `[truth, result)`. -/
 theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -883,7 +883,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
 in `(result, truth]`. (`.downward` needs only this side — the direction always
 holds.) -/
 theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)
@@ -1094,7 +1094,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
 in `[truth, result)`. (`.upward` needs only this side — the direction always
 holds.) -/
 theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
-    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : String)
+    (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
     (hzm_le : zm.toNat ≤ maxRepUp.toNat)
     (hf_nn : 0 ≤ f) (hf_lt : f < 1)

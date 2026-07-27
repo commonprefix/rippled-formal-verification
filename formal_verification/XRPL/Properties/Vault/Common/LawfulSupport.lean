@@ -128,7 +128,7 @@ lemma Guard.bringIntoRange_cases (neg : Bool) (m : UInt64) (e : Int) (minM : UIn
 
 /-- A mantissa-`0` `doRoundUp` result converts to the literal `Number.zero`. -/
 lemma Guard.doRoundUp_zero_shape (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (minM maxM : UInt64) (mode : rounding_mode) (loc : String) (res : RoundResult)
+    (minM maxM : UInt64) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp neg m e minM maxM mode loc = .ok res)
     (h0 : res.mantissa_ = 0) : res.toNumber = Number.zero := by
   have key : ∃ (n' : Bool) (m' : UInt64) (e' : Int),
@@ -180,7 +180,7 @@ lemma doNormalize128_zero_shape (zn : Bool) (M : UInt128) (e : Int) (sticky : Bo
           rw [hcap] at hok
           simp only [] at hok
           cases hru : g₃.doRoundUp zn m₃ e₃ largeRange.min largeRange.max mode
-              "Number::normalize 2" with
+              .normalize2 with
           | error err => rw [hru] at hok; simp at hok
           | ok res =>
             rw [hru] at hok
@@ -190,7 +190,7 @@ lemma doNormalize128_zero_shape (zn : Bool) (M : UInt128) (e : Int) (sticky : Bo
               rw [hres] at h0; exact h0
             rw [hres]
             exact Guard.doRoundUp_zero_shape g₃ zn m₃ e₃ largeRange.min largeRange.max mode
-              "Number::normalize 2" res hru hres0
+              .normalize2 res hru hres0
 
 /-- A mantissa-`0` `to_nearest` addition result of normalized operands is the
 literal `Number.zero`. -/
@@ -202,21 +202,21 @@ lemma Number.operator_add_zero_shape (x y result : Number)
   · have h_result : result = x := by
       unfold Number.operator_add at hok
       rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hx h0
   by_cases hx_guard : x.operator_eq Number.zero = true
   · have h_result : result = y := by
       unfold Number.operator_add at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hy h0
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · unfold Number.operator_add at hok
     rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
     exact (Except.ok.inj
-      (show (Except.ok Number.zero : Except String Number) = .ok result from hok)).symm
+      (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
   have hx_mant_ne : x.mantissa_ ≠ 0 := by
     intro h
     exact hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)

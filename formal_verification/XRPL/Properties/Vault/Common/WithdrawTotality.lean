@@ -84,7 +84,7 @@ it by one). So a source exponent bounded by `maxExponent - 1` guarantees success
 /-- **Forward totality of `doRoundUp`.** When the source exponent is at most
 `maxExponent - 1`, the rounding step cannot overflow, so it returns `.ok`. -/
 theorem Guard.doRoundUp_ok_of_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (minM maxM : UInt64) (mode : rounding_mode) (loc : String)
+    (minM maxM : UInt64) (mode : rounding_mode) (loc : Error)
     (he : e + 1 ≤ maxExponent) :
     ∃ res, g.doRoundUp neg m e minM maxM mode loc = .ok res := by
   unfold Guard.doRoundUp Guard.bringIntoRange
@@ -100,7 +100,7 @@ exponent above the source `e + 1`: `bringIntoRange` keeps or lowers it, and only
 the carry drop-digit leg bumps it once. (The flush sentinel is far below any
 `e ≥ minExponent`.) This bounds the tail of `operator_mul` and `operator_add`. -/
 theorem Guard.doRoundUp_ok_output_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (minM maxM : UInt64) (mode : rounding_mode) (loc : String) (res : RoundResult)
+    (minM maxM : UInt64) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (he_lo : minExponent ≤ e)
     (hok : g.doRoundUp neg m e minM maxM mode loc = .ok res) :
     res.exponent_ ≤ e + 1 := by
@@ -162,7 +162,7 @@ theorem doNormalize_ok_of_inRange (neg : Bool) (M : UInt64) (e : Int)
   rw [hcap]
   simp only []
   obtain ⟨res, hres⟩ :=
-    Guard.doRoundUp_ok_of_exp_le g' neg m' e' minM maxM mode "Number::normalize 2" (by omega)
+    Guard.doRoundUp_ok_of_exp_le g' neg m' e' minM maxM mode .normalize2 (by omega)
   rw [hres]
   exact ⟨res.toNumber, rfl⟩
 
@@ -336,12 +336,12 @@ theorem Number.operator_mul_ok_of_large_operands
     omega
   -- the mid doRoundUp succeeds
   obtain ⟨res, hres⟩ := Guard.doRoundUp_ok_of_exp_le sd.2.2 zn sd.1 sd.2.1
-    largeRange.min largeRange.max mode "Number::multiplication overflow" (by omega)
+    largeRange.min largeRange.max mode .overflow (by omega)
   rw [hres]
   simp only []
   have hexp_out : res.exponent_ ≤ sd.2.1 + 1 :=
     Guard.doRoundUp_ok_output_exp_le sd.2.2 zn sd.1 sd.2.1 largeRange.min largeRange.max mode
-      "Number::multiplication overflow" res (by omega) hres
+      .overflow res (by omega) hres
   -- the final normalize is total: a flushed mantissa takes the zero branch, an
   -- in-range mantissa is returned unchanged by doNormalize_id
   by_cases hrm : res.mantissa_ = 0
@@ -353,7 +353,7 @@ theorem Number.operator_mul_ok_of_large_operands
       show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
   · obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
       doRoundUp_output_invariants_upTo_maxRepUp_anyMode sd.2.2 zn sd.1 sd.2.1 mode hzm_ge hzm_le
-        "Number::multiplication overflow" res hres hrm
+        .overflow res hres hrm
     have h_exp_le : res.exponent_ ≤ maxExponent := by omega
     have h_mru_exp : res.mantissa_.toNat > maxRepUp.toNat → res.exponent_ < maxExponent := by
       intro _; omega
@@ -501,7 +501,7 @@ theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
       simp only []
       obtain ⟨res, hru⟩ :=
         Guard.doRoundUp_ok_of_exp_le g'' zn m'' e'' largeRange.min largeRange.max mode
-          "Number::normalize 2" (by push_cast at hle' hle''; omega)
+          .normalize2 (by push_cast at hle' hle''; omega)
       rw [hru]
       exact ⟨res.toNumber, rfl⟩
 
@@ -883,7 +883,7 @@ theorem Vault.sharesToAssetsWithdraw_zeroLoss_reduces (v : Vault) (shares : STAm
     (hL : v.lossUnrealized.mantissa_ = 0) :
     v.sharesToAssetsWithdraw shares false =
       (if v.assetsTotal.mantissa_ == 0 then
-        (pure (STAmount.zero v.numericType) : Except String STAmount)
+        (pure (STAmount.zero v.numericType) : Except Error STAmount)
        else do
         let sharesNumber ← shares.toNumber .to_nearest
         let NAVShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest

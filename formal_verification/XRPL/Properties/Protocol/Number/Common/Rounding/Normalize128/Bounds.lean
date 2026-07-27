@@ -149,7 +149,7 @@ theorem doNormalize128_rounds_to_nearest
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         -- Final doRoundUp.
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            .to_nearest "Number::normalize 2" with
+            .to_nearest .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -163,8 +163,8 @@ theorem doNormalize128_rounds_to_nearest
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
             with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
-              .to_nearest "Number::normalize 2" = .ok res_pos :=
-            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 .to_nearest "Number::normalize 2" res hru
+              .to_nearest .normalize2 = .ok res_pos :=
+            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 .to_nearest .normalize2 res hru
           have hres_pos_mant : res_pos.mantissa_ ≠ 0 := hres_mant
           have h_floor_le : (mantissaFloor : ℕ) ≤ cp.1.toNat := le_of_lt h3floor
           have h_floor_vac : cp.1.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ ftilde₃ := by
@@ -173,7 +173,7 @@ theorem doNormalize128_rounds_to_nearest
             omega
           have h_sup := doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp
             cp.2.2 cp.1 cp.2.1 ftilde₃ h3rep h_floor_le h3le h_floor_vac
-            "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+            .normalize2 res_pos h_rup_pos hres_pos_mant
           -- |result.toRat| in terms of res.
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
@@ -181,7 +181,7 @@ theorem doNormalize128_rounds_to_nearest
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
-              "Number::normalize 2" res hru hres_mant
+              .normalize2 res hru hres_mant
           refine ⟨?_, h_neg⟩
           -- Assemble the triangle.
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
@@ -414,7 +414,7 @@ theorem doNormalize128_rounds_any
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         -- Final doRoundUp.
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -428,13 +428,13 @@ theorem doNormalize128_rounds_any
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
             with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
-              mode "Number::normalize 2" = .ok res_pos :=
-            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode "Number::normalize 2" res hru
+              mode .normalize2 = .ok res_pos :=
+            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode .normalize2 res hru
           have hres_pos_mant : res_pos.mantissa_ ≠ 0 := hres_mant
           have h_floor_le : (mantissaFloor : ℕ) ≤ cp.1.toNat := le_of_lt h3floor
           have h_sup := doRoundUp_rounds_any_supTight_upTo_maxRepUp
             cp.2.2 cp.1 cp.2.1 ftilde₃ mode h3rep h_floor_le h3le
-            "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+            .normalize2 res_pos h_rup_pos hres_pos_mant
           -- |result.toRat| in terms of res.
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
@@ -442,7 +442,7 @@ theorem doNormalize128_rounds_any
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
-              "Number::normalize 2" res hru hres_mant
+              .normalize2 res hru hres_mant
           refine ⟨?_, h_neg⟩
           -- Assemble the triangle.
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
@@ -676,7 +676,7 @@ theorem doNormalize128_rounds_direction
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         -- Final doRoundUp.
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
-            mode "Number::normalize 2" with
+            mode .normalize2 with
         | error err =>
           except_clash hru hok
         | ok res =>
@@ -689,8 +689,8 @@ theorem doNormalize128_rounds_direction
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
             with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
-              mode "Number::normalize 2" = .ok res_pos :=
-            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode "Number::normalize 2" res hru
+              mode .normalize2 = .ok res_pos :=
+            doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 mode .normalize2 res hru
           have hres_pos_mant : res_pos.mantissa_ ≠ 0 := hres_mant
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
@@ -698,7 +698,7 @@ theorem doNormalize128_rounds_direction
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
-              "Number::normalize 2" res hru hres_mant
+              .normalize2 res hru hres_mant
           -- The exact value equation at the doRoundUp stage.
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
           have hVW : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 = V := by
@@ -800,12 +800,12 @@ theorem doNormalize128_rounds_direction
                   ≤ ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := by
                 by_cases h_zm_le_rep : cp.1.toNat ≤ maxRep.toNat
                 · have h_tr := doRoundUp_value_downward_truncate cp.2.2 false cp.1 cp.2.1
-                    h_no_sru h_zm_le_rep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                    h_no_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                   rw [h_tr]
                   exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
                 · push_neg at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
-                    cp.2.1 .downward h_zm_le_rep h3le "Number::normalize 2" res_pos
+                    cp.2.1 .downward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
                   rw [hv_val]
                   have hzm_q_gt : (maxRepNat : ℚ) < (cp.1.toNat : ℚ) := by
@@ -842,7 +842,7 @@ theorem doNormalize128_rounds_direction
                 · by_cases h_sru : cp.2.2.shouldRoundUp_downward
                   · by_cases h_cusp : cp.1 = maxRep
                     · have h_val := doRoundUp_value_downward_roundUp_cusp cp.2.2 false cp.1
-                        cp.2.1 h_cusp h_sru "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                        cp.2.1 h_cusp h_sru .normalize2 res_pos h_rup_pos hres_pos_mant
                       rw [h_val]
                       have hzm_q : (cp.1.toNat : ℚ) = maxRepNat := by
                         rw [show cp.1.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]
@@ -856,7 +856,7 @@ theorem doNormalize128_rounds_direction
                           fun heq => h_cusp (UInt64.toNat_inj.mp heq)
                         omega
                       have h_val := doRoundUp_value_downward_roundUp_noCusp cp.2.2 false cp.1
-                        cp.2.1 h_sru (by omega) "Number::normalize 2" res_pos
+                        cp.2.1 h_sru (by omega) .normalize2 res_pos
                         h_rup_pos hres_pos_mant
                       rw [h_val]
                       exact mul_le_mul_of_nonneg_right (by linarith [h3lt]) h10cp_nn
@@ -864,11 +864,11 @@ theorem doNormalize128_rounds_direction
                       content_empty_of_not_shouldRoundUp_downward cp.2.2 h_sbit_t h_sru
                     have hφ0 : φ₃ = 0 := hφ_zero_of_empty h_dig0 h_xbit0
                     have h_tr := doRoundUp_value_downward_truncate cp.2.2 false cp.1 cp.2.1
-                      h_sru h_zm_le_rep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                      h_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                     rw [h_tr, hφ0, add_zero]
                 · push_neg at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
-                    cp.2.1 .downward h_zm_le_rep h3le "Number::normalize 2" res_pos
+                    cp.2.1 .downward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
                   rw [hv_val]
                   rcases hv_cases with ⟨hv, hzm_lt_up, hbool⟩ | ⟨hv, hcoup⟩ | ⟨hv, hzm_eq, _⟩
@@ -949,7 +949,7 @@ theorem doNormalize128_rounds_direction
                 · by_cases h_sru : cp.2.2.shouldRoundUp_upward
                   · by_cases h_cusp : cp.1 = maxRep
                     · have h_val := doRoundUp_value_upward_roundUp_cusp cp.2.2 false cp.1
-                        cp.2.1 h_cusp h_sru "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                        cp.2.1 h_cusp h_sru .normalize2 res_pos h_rup_pos hres_pos_mant
                       rw [h_val]
                       have hzm_q : (cp.1.toNat : ℚ) = maxRepNat := by
                         rw [show cp.1.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]
@@ -963,7 +963,7 @@ theorem doNormalize128_rounds_direction
                           fun heq => h_cusp (UInt64.toNat_inj.mp heq)
                         omega
                       have h_val := doRoundUp_value_upward_roundUp_noCusp cp.2.2 false cp.1
-                        cp.2.1 h_sru (by omega) "Number::normalize 2" res_pos
+                        cp.2.1 h_sru (by omega) .normalize2 res_pos
                         h_rup_pos hres_pos_mant
                       rw [h_val]
                       exact mul_le_mul_of_nonneg_right (by linarith [h3lt]) h10cp_nn
@@ -971,11 +971,11 @@ theorem doNormalize128_rounds_direction
                       content_empty_of_not_shouldRoundUp_upward cp.2.2 h_sbit_f h_sru
                     have hφ0 : φ₃ = 0 := hφ_zero_of_empty h_dig0 h_xbit0
                     have h_tr := doRoundUp_value_upward_truncate cp.2.2 false cp.1 cp.2.1
-                      h_sru h_zm_le_rep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                      h_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                     rw [h_tr, hφ0, add_zero]
                 · push_neg at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
-                    cp.2.1 .upward h_zm_le_rep h3le "Number::normalize 2" res_pos
+                    cp.2.1 .upward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
                   rw [hv_val]
                   rcases hv_cases with ⟨hv, hzm_lt_up, hbool⟩ | ⟨hv, hcoup⟩ | ⟨hv, hzm_eq, _⟩
@@ -1034,12 +1034,12 @@ theorem doNormalize128_rounds_direction
                   ≤ ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := by
                 by_cases h_zm_le_rep : cp.1.toNat ≤ maxRep.toNat
                 · have h_tr := doRoundUp_value_upward_truncate cp.2.2 false cp.1 cp.2.1
-                    h_no_sru h_zm_le_rep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                    h_no_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                   rw [h_tr]
                   exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
                 · push_neg at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
-                    cp.2.1 .upward h_zm_le_rep h3le "Number::normalize 2" res_pos
+                    cp.2.1 .upward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
                   rw [hv_val]
                   have hzm_q_gt : (maxRepNat : ℚ) < (cp.1.toNat : ℚ) := by
@@ -1074,12 +1074,12 @@ theorem doNormalize128_rounds_direction
                 ≤ ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := by
               by_cases h_zm_le_rep : cp.1.toNat ≤ maxRep.toNat
               · have h_tr := doRoundUp_value_towards_zero_truncate cp.2.2 false cp.1 cp.2.1
-                  h_zm_le_rep "Number::normalize 2" res_pos h_rup_pos hres_pos_mant
+                  h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                 rw [h_tr]
                 exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
               · push_neg at h_zm_le_rep
                 obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
-                  cp.2.1 .towards_zero h_zm_le_rep h3le "Number::normalize 2" res_pos
+                  cp.2.1 .towards_zero h_zm_le_rep h3le .normalize2 res_pos
                   h_rup_pos hres_pos_mant
                 rw [hv_val]
                 have hzm_q_gt : (maxRepNat : ℚ) < (cp.1.toNat : ℚ) := by

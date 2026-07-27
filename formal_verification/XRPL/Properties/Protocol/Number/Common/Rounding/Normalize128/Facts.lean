@@ -111,7 +111,7 @@ theorem doNormalize_scaleDown128_repr
     generalizing φ ftilde with
   | case1 m e g hgt hge =>
     -- error branch: m > maxMantissa and e ≥ maxExponent — contradicts hok.
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error "Number::normalize 1" from by
+    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error .normalize1 from by
       rw [doNormalize_scaleDown128.eq_def]
       rw [dif_pos hgt, if_pos hge]] at hok
     exact absurd hok (by intro h; cases h)

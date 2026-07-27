@@ -22,8 +22,8 @@ theorem computeDeposit_codes (v : Vault) (amount : STAmount) (cres : ComputeDepo
     ∃ a s, cres = .success a s := by
   unfold computeDeposit at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  have handler_path_dry : ∀ (e : String),
-      tryCatch (Except.error e : Except String (DoResultPR ComputeDepositResult ComputeDepositResult PUnit))
+  have handler_path_dry : ∀ (e : Error),
+      tryCatch (Except.error e : Except Error (DoResultPR ComputeDepositResult ComputeDepositResult PUnit))
         (fun e => if isOverflow e = true then
             pure (DoResultPR.return (ComputeDepositResult.error TER.tecPATH_DRY) PUnit.unit)
           else throw e >>= fun y => pure (DoResultPR.pure y PUnit.unit)) = Except.ok rr →

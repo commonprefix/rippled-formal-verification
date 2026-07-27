@@ -14,7 +14,7 @@ theorem normalize_algorithmic_facts_upward (n result : Number)
       (zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f) ∧
       (maxRep.toNat < zm.toNat → f = 0 ∧ g.empty = true) ∧
       |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze ∧
-      g.doRoundUp false zm ze largeRange.min largeRange.max .upward "Number::normalize 2" = .ok res_pos ∧
+      g.doRoundUp false zm ze largeRange.min largeRange.max .upward .normalize2 = .ok res_pos ∧
       |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ ∧
       res_pos.mantissa_ ≠ 0 ∧
       represents g f ∧

@@ -21,7 +21,7 @@ structure DivFactsToNearest (x y result : Number) (mode : rounding_mode)
   floor_cusp : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f
   value_eq : |x.toRat / y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze'
   rounds : g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-    "Number::normalize 2" = .ok res_pos
+    .normalize2 = .ok res_pos
   result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
   res_mant_ne : res_pos.mantissa_ ≠ 0
   result_nonneg : 0 < x.toRat / y.toRat → 0 ≤ result.toRat

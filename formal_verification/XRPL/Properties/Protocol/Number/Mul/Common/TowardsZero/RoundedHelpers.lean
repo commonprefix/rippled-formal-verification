@@ -22,7 +22,7 @@ theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
     operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_below_towards_zero_frame result (x.toRat * y.toRat) zm ze' f g res_pos
-    "Number::multiplication overflow" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_pos => mul_result_nonneg_of_truth_pos x y result h_sign h_pos)
     h_le
@@ -41,7 +41,7 @@ theorem operator_mul_no_inbetween_above_towards_zero (x y result : Number)
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
     operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_above_towards_zero_frame result (x.toRat * y.toRat) zm ze' f g res_pos
-    "Number::multiplication overflow" hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
+    .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
     (fun h_neg => mul_result_nonpos_of_truth_neg x y result h_sign h_neg)
     h_ge
@@ -93,7 +93,7 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
     unfold Number.operator_mul at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat * y.toRat = 0 := by
       rw [hx_zero, Number.toRat_zero, zero_mul]
     rw [h_truth0]
@@ -114,7 +114,7 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
     rw [if_neg hx_guard,
         if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
     have h_result : result = y :=
-      (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have h_truth0 : x.toRat * y.toRat = 0 := by
       rw [hy_zero, Number.toRat_zero, mul_zero]
     rw [h_truth0]

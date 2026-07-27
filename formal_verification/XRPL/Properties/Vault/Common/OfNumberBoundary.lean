@@ -35,7 +35,7 @@ namespace XRPL.Model.Protocol
 `maxMant` and the exponent has reached `maxExponent`, the loop aborts. -/
 lemma doNormalize_scaleDown_step_error {maxMant M : UInt64} {e : Int} {g : Guard}
     (hgt : maxMant < M) (he : maxExponent ≤ e) :
-    doNormalize_scaleDown maxMant M e g = .error "Number::normalize 1" := by
+    doNormalize_scaleDown maxMant M e g = .error .normalize1 := by
   conv_lhs => unfold doNormalize_scaleDown
   rw [dif_pos hgt, if_pos he]
 
@@ -45,7 +45,7 @@ if the exponent is within two of `maxExponent` at entry, one of those three
 lemma doNormalize_scaleDown_errors_of_ge (M : UInt64) (e : Int) (g : Guard)
     (hM_lo : 10 ^ 18 ≤ M.toNat) (hM_hi : M.toNat < 10 ^ 19)
     (he : maxExponent ≤ e + 2) :
-    doNormalize_scaleDown cMaxValue M e g = .error "Number::normalize 1" := by
+    doNormalize_scaleDown cMaxValue M e g = .error .normalize1 := by
   have h10 : (10 : UInt64).toNat = 10 := uint64_ten_toNat
   have hm1 : (M / 10).toNat = M.toNat / 10 := by rw [UInt64.toNat_div, h10]
   have hm2 : (M / 10 / 10).toNat = M.toNat / 100 := by
@@ -93,8 +93,8 @@ lemma doNormalize_iou_exp_hi (neg : Bool) (M : UInt64) (e : Int) (mode : roundin
 /-- The `doRoundUp` overflow guard: whenever the outer
 `if r'.exponent_ > maxExponent then .error else .ok r'` returns `.ok res`, the
 exponent of `res` is at most `maxExponent`. -/
-private lemma doRoundUp_outer_ok_exp_le {r' res : RoundResult} {loc : String}
-    (h : (if r'.exponent_ > maxExponent then (.error loc : Except String RoundResult)
+private lemma doRoundUp_outer_ok_exp_le {r' res : RoundResult} {loc : Error}
+    (h : (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
           else .ok r') = .ok res) :
     res.exponent_ ≤ maxExponent := by
   by_cases h_ovf : r'.exponent_ > maxExponent
@@ -106,7 +106,7 @@ private lemma doRoundUp_outer_ok_exp_le {r' res : RoundResult} {loc : String}
 /-- **A `.ok` `doRoundUp` result never overshoots `maxExponent`.** The final guard
 of `doRoundUp` errors exactly when the rounded exponent exceeds `maxExponent`. -/
 lemma doRoundUp_ok_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (minM maxM : UInt64) (mode : rounding_mode) (loc : String) (res : RoundResult)
+    (minM maxM : UInt64) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (hok : g.doRoundUp neg m e minM maxM mode loc = .ok res) :
     res.exponent_ ≤ maxExponent := by
   unfold Guard.doRoundUp at hok
@@ -127,11 +127,11 @@ the 16-digit range renormalizes to `(cMinValue, e+1)` and then either errors (if
 `e+1` overflows `maxExponent`) or returns that record. This unifies
 `doRoundUp_small_cusp` (the `.ok` leg) with its erroring leg. -/
 lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : rounding_mode)
-    (loc : String)
+    (loc : Error)
     (hb : (g.round mode == 1 || (g.round mode == 0 && cMaxValue % 2 == 1)) = true)
     (hexp_lo : minExponent ≤ e + 1) :
     g.doRoundUp neg cMaxValue e cMinValue cMaxValue mode loc
-      = if maxExponent < e + 1 then (.error loc : Except String RoundResult)
+      = if maxExponent < e + 1 then (.error loc : Except Error RoundResult)
         else .ok { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } := by
   have h9 : cMaxValue % 10 = 9 := by decide
   have hdiv : cMaxValue / 10 = 999999999999999 := by decide
@@ -233,10 +233,10 @@ theorem normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
       have hbr : (g.round mode == 1 || (g.round mode == 0 && cMaxValue % 2 == 1)) = true := by
         rw [hcusp] at hround; exact hround
       have hcusp_eq := doRoundUp_small_cusp_eq g n.negative_ (n.exponent_ + 3) mode
-        "Number::normalize 2" hbr (by omega)
+        .normalize2 hbr (by omega)
       by_cases hovf : maxExponent < (n.exponent_ + 3) + 1
       · exfalso
-        have h_err : n.normalizeToRange cMinValue cMaxValue mode = .error "Number::normalize 2" := by
+        have h_err : n.normalizeToRange cMinValue cMaxValue mode = .error .normalize2 := by
           unfold Number.normalizeToRange
           rw [h_red, hcusp, hcusp_eq, if_pos hovf]
         rw [h_err] at hok; exact absurd hok (by simp)
@@ -265,7 +265,7 @@ theorem normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
                  else (n.mantissa_ / 10 / 10 / 10 + 1).toInt64, n.exponent_ + 3) := by
         unfold Number.normalizeToRange
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
-          "Number::normalize 2" hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
+          .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
         rfl
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
@@ -280,7 +280,7 @@ theorem normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
                else (n.mantissa_ / 10 / 10 / 10).toInt64, n.exponent_ + 3) := by
       unfold Number.normalizeToRange
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
-        "Number::normalize 2" (by simpa using hround) (by rw [hcMin, hm3]; omega)
+        .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
         (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
       rfl
     rw [hcompute] at hok

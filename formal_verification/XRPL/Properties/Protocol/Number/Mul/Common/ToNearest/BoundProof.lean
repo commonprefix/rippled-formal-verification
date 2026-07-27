@@ -35,6 +35,6 @@ theorem operator_mul_rounding_bound_to_nearest (x y : Number) (result : Number)
   have h_bound_eq : ((2 ^ 63 + 7 : ℕ) : ℚ) = (2 ^ 63 + 7 : ℚ) := by norm_num
   rw [← h_bound_eq]
   exact doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp g zm ze' f hf_rep hzm_ge hzm_le_maxRep
-    h_floor_constraint "Number::multiplication overflow" res_pos h_rup_pos hres_pos_mant_ne
+    h_floor_constraint .overflow res_pos h_rup_pos hres_pos_mant_ne
 
 end XRPL.Model.Protocol

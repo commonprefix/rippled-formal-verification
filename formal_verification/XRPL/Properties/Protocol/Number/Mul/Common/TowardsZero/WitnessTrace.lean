@@ -44,7 +44,7 @@ lemma operator_mul_towards_zero_witness :
   rw [scaleDown128_towards_zero_witness]
   have h_rup : ({ digits_ := 10530320965215537013, xbit_ := true, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .towards_zero
-      "Number::multiplication overflow" =
+      .overflow =
       .ok { negative_ := false, mantissa_ := 9223372036854775810, exponent_ := 18 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
   rw [h_rup]
@@ -70,7 +70,7 @@ lemma operator_mul_towards_zero_witness :
         unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
     simp only []
     have h_rup2 : Guard.new.doRoundUp false (9223372036854775810 : UInt64) (18 : Int)
-        largeRange.min largeRange.max .towards_zero "Number::normalize 2" =
+        largeRange.min largeRange.max .towards_zero .normalize2 =
         .ok { negative_ := false, mantissa_ := 9223372036854775810, exponent_ := 18 } := by
       unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
     rw [h_rup2]

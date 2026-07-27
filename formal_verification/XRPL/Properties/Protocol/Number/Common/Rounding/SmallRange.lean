@@ -102,7 +102,7 @@ lemma represents_three_pushes {g : Guard} (hg : represents g 0) (M : UInt64) :
 /-- 16-digit `doRoundUp`, truncating branch: the round decision is off, the
 mantissa is kept. Mode-generic (the decision enters through `hb`). -/
 lemma doRoundUp_small_truncate (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (mode : rounding_mode) (loc : String)
+    (mode : rounding_mode) (loc : Error)
     (hb : (g.round mode == 1 || (g.round mode == 0 && m % 2 == 1)) = false)
     (hmin : cMinValue.toNat ≤ m.toNat) (hmax : m.toNat ≤ cMaxValue.toNat)
     (hexp_lo : minExponent ≤ e) (hexp_hi : e ≤ maxExponent) :
@@ -133,7 +133,7 @@ lemma doRoundUp_small_truncate (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
 /-- 16-digit `doRoundUp`, firing branch: the round decision is on and the
 mantissa has headroom (`m < cMaxValue`), so it increments in place. -/
 lemma doRoundUp_small_fire (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
-    (mode : rounding_mode) (loc : String)
+    (mode : rounding_mode) (loc : Error)
     (hb : (g.round mode == 1 || (g.round mode == 0 && m % 2 == 1)) = true)
     (hmin : cMinValue.toNat ≤ m.toNat) (hmax : m.toNat < cMaxValue.toNat)
     (hexp_lo : minExponent ≤ e) (hexp_hi : e ≤ maxExponent) :
@@ -175,7 +175,7 @@ theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : roun
       (M.toNat % 1000 = 0 → g.empty = true) ∧
       doNormalize neg M e cMinValue cMaxValue mode
         = match g.doRoundUp neg (M / 10 / 10 / 10) (e + 3) cMinValue cMaxValue mode
-                "Number::normalize 2" with
+                .normalize2 with
           | .error err => .error err
           | .ok res => .ok res.toNumber := by
   have h10 : (10 : UInt64).toNat = 10 := uint64_ten_toNat

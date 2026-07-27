@@ -38,7 +38,7 @@ lemma normalize_to_nearest_witness :
       norm_num]
   simp only []
   have h_rup : (Guard.new.push 5).doRoundUp false (mantissaFloorSucc : UInt64) (1 : Int)
-      largeRange.min largeRange.max .to_nearest "Number::normalize 2" =
+      largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := twoPow63Add12, exponent_ := 0 } := by
     unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new; rfl
   rw [h_rup]

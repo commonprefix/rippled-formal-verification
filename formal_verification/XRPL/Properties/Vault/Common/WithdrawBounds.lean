@@ -630,7 +630,7 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     STAmount.Canonical.abs_toRat_ge assets hc hmv_assets
   -- the pre-conversion shares number is nonzero (`truncateShares = false`)
   have hpure : sharesNumber' = sharesNumber :=
-    (Except.ok.inj (show (pure sharesNumber : Except String Number) = .ok sharesNumber'
+    (Except.ok.inj (show (pure sharesNumber : Except Error Number) = .ok sharesNumber'
       from htrunc)).symm
   have hQm : sharesNumber.mantissa_ ≠ 0 := by
     have hsn' : sharesNumber'.mantissa_ ≠ 0 :=

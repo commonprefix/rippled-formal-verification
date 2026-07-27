@@ -1,15 +1,15 @@
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.VaultBurn
 
-open XRPL.Model.Protocol (STAmount)
+open XRPL.Model.Protocol (STAmount Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_burn_shares]
-def lean_vault_burn_shares (vault : Vault) (sharesDestroyed : STAmount) : Except String Vault :=
+def lean_vault_burn_shares (vault : Vault) (sharesDestroyed : STAmount) : Except Error Vault :=
   vault.burnShares sharesDestroyed
 
 @[export lean_can_burn_shares]
-def lean_can_burn_shares (vault : Vault) : Except String CanBurnSharesResult :=
+def lean_can_burn_shares (vault : Vault) : Except Error CanBurnSharesResult :=
   vault.canBurnShares
 
 @[export lean_can_burn_result_assets]

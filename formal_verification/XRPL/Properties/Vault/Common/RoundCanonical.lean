@@ -162,7 +162,7 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
           normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
         have hres_ne : res.mantissa_ ≠ 0 := by rw [hres_eq] at hv_ne; exact hv_ne
         have hsg := doRoundUp_negative_of_mant_ne g3 _ m3 e3 largeRange.min largeRange.max mode
-          "Number::normalize 2" res hrup hres_ne
+          .normalize2 res hrup hres_ne
         rw [hres_eq]
         show res.negative_ = false
         rw [hsg]; exact hmlt
@@ -433,7 +433,7 @@ lemma STAmount.operator_sub_self_zero (a result : STAmount) (mode : rounding_mod
     with hs2n_def
   obtain ⟨n₂, h_add₂, hok₃⟩ : ∃ n₂, Number.operator_add s1n s2n mode = .ok n₂ ∧
       (match IOUAmount.ofNumber n₂ mode with
-       | .error e => (Except.error e : Except String STAmount)
+       | .error e => (Except.error e : Except Error STAmount)
        | .ok sumI => STAmount.ofIOUAmount sumI mode) = .ok result := by
     match h1 : Number.operator_add s1n s2n mode with
     | .error e => rw [h1] at hok; exact absurd hok (by intro h; cases h)

@@ -19,7 +19,7 @@ structure MulDecomp (x y result : Number) (mode : rounding_mode)
   represents_f : represents g f
   sbit_eq : g.sbit_ = (x.negative_ != y.negative_)
   rounds : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode
-    "Number::multiplication overflow" = .ok res
+    .overflow = .ok res
   normalizes : res.toNumber.normalize largeRange.min largeRange.max mode = .ok result
 
 theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
@@ -121,8 +121,8 @@ theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
     · rw [if_pos hzn]; exact hzn.symm
     · rw [if_neg hzn]; exact (Bool.not_eq_true _ |>.mp hzn).symm
   have h_rup_exists : ∃ res : RoundResult,
-      g.doRoundUp zn zm ze' largeRange.min largeRange.max mode "Number::multiplication overflow" = .ok res := by
-    match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode "Number::multiplication overflow" with
+      g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
+    match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow with
     | .error e => simp only [hg, reduceCtorEq] at hok
     | .ok r => exact ⟨r, rfl⟩
   obtain ⟨res, h_rup⟩ := h_rup_exists
@@ -140,7 +140,7 @@ structure MulFactsSpec (x y result : Number) (mode : rounding_mode)
   floor_cusp : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f
   value_eq : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze'
   rounds : g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-    "Number::multiplication overflow" = .ok res_pos
+    .overflow = .ok res_pos
   result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
   res_mant_ne : res_pos.mantissa_ ≠ 0
   represents_f : represents g f
@@ -157,7 +157,7 @@ structure MulFactsToNearest (x y result : Number) (mode : rounding_mode)
   floor_cusp : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f
   value_eq : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze'
   rounds : g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-    "Number::multiplication overflow" = .ok res_pos
+    .overflow = .ok res_pos
   result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
   res_mant_ne : res_pos.mantissa_ ≠ 0
   represents_f : represents g f
@@ -171,7 +171,7 @@ structure MulFactsTowardsZero (x y result : Number) (mode : rounding_mode)
   f_lt_one : f < 1
   value_eq : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze'
   rounds : g.doRoundUp false zm ze' largeRange.min largeRange.max mode
-    "Number::multiplication overflow" = .ok res_pos
+    .overflow = .ok res_pos
   result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
   res_mant_ne : res_pos.mantissa_ ≠ 0
   represents_f : represents g f
@@ -191,7 +191,7 @@ theorem operator_mul_result_isNormalized (x y result : Number) (mode : rounding_
     Number.normalize_mantissa_ne_zero_of_result d.normalizes hresult
   obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
     doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge d.zm_le_maxRepUp
-      "Number::multiplication overflow" res d.rounds hres_mant_ne
+      .overflow res d.rounds hres_mant_ne
   exact Number.normalize_isNormalized_of_invariants h_res_min h_res_max h_res_exp h_res_mod d.normalizes
 
 theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
@@ -208,7 +208,7 @@ theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding
   have hres_mant_ne : res.mantissa_ ≠ 0 :=
     Number.normalize_mantissa_ne_zero_of_result hok' hresult
   obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
-    doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge hzm_le_maxRep "Number::multiplication overflow" res h_rup hres_mant_ne
+    doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge hzm_le_maxRep .overflow res h_rup hres_mant_ne
   exact Number.normalize_mantissa_le_maxRepUp_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok' h_exp_ge
 
 /-- `operator_mul` short-circuits on a zero operand (returning that operand), so a
@@ -223,7 +223,7 @@ theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mod
     unfold Number.operator_mul at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
-      (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+      (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     apply hresult
     rw [h_result, hx_zero]
     rfl
@@ -232,7 +232,7 @@ theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mod
     · unfold Number.operator_mul at hok
       rw [if_pos hxg] at hok
       have h_result : result = x :=
-        (Except.ok.inj (show (Except.ok x : Except String Number) = .ok result from hok)).symm
+        (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
       apply hresult
       rw [h_result]
       exact Number.mantissa_eq_zero_of_operator_eq_zero hxg
@@ -240,7 +240,7 @@ theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mod
       rw [if_neg hxg,
           if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
       have h_result : result = y :=
-        (Except.ok.inj (show (Except.ok y : Except String Number) = .ok result from hok)).symm
+        (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
       apply hresult
       rw [h_result, hy_zero]
       rfl

@@ -28,7 +28,7 @@ theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (ro
             amt.toRat * (num.toNat : ℚ) / (den.toNat : ℚ) < result.toRat + 1) := by
   -- `den = 0` makes `mulRatio` error, contradicting `hok`; the real work is `den ≠ 0`.
   by_cases hden : den = 0
-  · rw [show IntAmount.mulRatio amt num den roundUp = Except.error "division by zero" from by
+  · rw [show IntAmount.mulRatio amt num den roundUp = Except.error .divByZero from by
           unfold IntAmount.mulRatio; rw [if_pos (by simpa using hden)]] at hok
     exact absurd hok (by simp)
   set m : ℤ := amt.value.toInt * (num.toNat : ℤ) with hm_def
@@ -43,7 +43,7 @@ theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (ro
   have hd : (0 : ℤ) < d := by rw [hd_def]; exact_mod_cast Nat.pos_of_ne_zero hdnat
   -- reduce the function call to a clean three-way if on `R`
   have key : IntAmount.mulRatio amt num den roundUp =
-      (if R > Int64.maxValue.toInt then Except.error "IntAmount mulRatio overflow"
+      (if R > Int64.maxValue.toInt then Except.error .overflow
        else if R < Int64.minValue.toInt then Except.ok ⟨Int64.minValue⟩
        else Except.ok ⟨R.toInt64⟩) := by
     unfold IntAmount.mulRatio; rw [if_neg (by simpa using hden)]

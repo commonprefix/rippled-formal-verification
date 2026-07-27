@@ -92,7 +92,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
     · -- In-range: doRoundUp truncates.
       have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_no_sru h_zm_le_rep
-        "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        .overflow res_pos h_rup_pos hres_pos_mant_ne
       simp only at h_tr_val
       refine ⟨?_, ?_⟩
       · -- Direction
@@ -119,7 +119,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     · -- Cusp range: maxRep < zm ≤ maxRepUp; truncate clamps stay below the truth.
       push_neg at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
-        h_zm_le_rep hzm_le_maxRep "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
       rcases hv_cases with ⟨hv, _, _⟩ | ⟨hv, hcoup⟩ | ⟨_, _, hfire⟩
       · -- v = maxRepNat: clamp to maxRep, below the truth.
@@ -195,7 +195,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
         by_cases h_cusp : zm = maxRep
         · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
-            "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+            .overflow res_pos h_rup_pos hres_pos_mant_ne
           simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
@@ -223,7 +223,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
             omega
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
-            "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+            .overflow res_pos h_rup_pos hres_pos_mant_ne
           simp only at h_nc_val
           have h_result_val : result.toRat = -(((zm.toNat : ℚ) + 1) * 10 ^ ze') := by
             rw [h_result_signed, h_nc_val]
@@ -259,7 +259,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
         have hf_zero : f = 0 :=
           represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_sru h_zm_le_rep
-          "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+          .overflow res_pos h_rup_pos hres_pos_mant_ne
         simp only at h_tr_val
         have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
           rw [h_result_signed, h_tr_val]
@@ -271,7 +271,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     · -- ===== cusp range: maxRep < zm ≤ maxRepUp =====
       push_neg at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
-        h_zm_le_rep hzm_le_maxRep "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
       have h_result_val : result.toRat = -(v * 10 ^ ze') := by
         rw [h_result_signed, hv_val]
@@ -441,7 +441,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
         by_cases h_cusp : zm = maxRep
         · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
-            "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+            .overflow res_pos h_rup_pos hres_pos_mant_ne
           simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
@@ -469,7 +469,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
             omega
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
-            "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+            .overflow res_pos h_rup_pos hres_pos_mant_ne
           simp only at h_nc_val
           have h_result_val : result.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := by
             rw [h_result_signed, h_nc_val]
@@ -504,7 +504,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
         have hf_zero : f = 0 :=
           represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
-          "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+          .overflow res_pos h_rup_pos hres_pos_mant_ne
         simp only at h_tr_val
         have h_result_val : result.toRat = (zm.toNat : ℚ) * 10 ^ ze' := by
           rw [h_result_signed, h_tr_val]
@@ -517,7 +517,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
     · -- ===== cusp range: maxRep < zm ≤ maxRepUp =====
       push_neg at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
-        h_zm_le_rep hzm_le_maxRep "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
       have h_result_val : result.toRat = v * 10 ^ ze' := by
         rw [h_result_signed, hv_val]
@@ -632,7 +632,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
     by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
     · -- In-range: doRoundUp truncates; -(zm·10^ze') sits at or above the truth.
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_no_sru h_zm_le_rep
-        "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        .overflow res_pos h_rup_pos hres_pos_mant_ne
       simp only at h_tr_val
       have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
         rw [h_result_signed, h_tr_val]
@@ -658,7 +658,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
       -- truth's magnitude, hence at or above the truth.
       push_neg at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
-        h_zm_le_rep hzm_le_maxRep "Number::addition overflow" res_pos h_rup_pos hres_pos_mant_ne
+        h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
       have h_result_val : result.toRat = -(v * 10 ^ ze') := by
         rw [h_result_signed, hv_val]
