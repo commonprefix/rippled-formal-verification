@@ -109,8 +109,6 @@ theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`; the state every
     -- modeled operation preserves), as in `deposit_no_dilution`
     (hL : v.toExact.lossUnrealized = 0)
-    -- the pricing subtraction does not round (automatic under `hL`)
-    (hnav : v.WithdrawNavExact false)
     -- the payout does not underflow to the canonical zero (mirrors `deposit_no_dilution`'s `hcnz`)
     (hcnz : r.assets'.isZero = false)
     (hnn : 0 ≤ r.sharesBurned.toRat) -- a real withdrawal burns a nonnegative share count
@@ -124,7 +122,8 @@ theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult
     (hok : v.withdraw amount false = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.withdraw_no_dilution_proof v amount r hv hL hnav hcnz hnn hc hSnt hmargin hSfit hok herr
+  Vault.withdraw_no_dilution_proof v amount r hv hL (Vault.withdrawNavExact_of_zero v hv false hL)
+    hcnz hnn hc hSnt hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `withdraw_no_dilution` cannot be
 dropped, a withdrawal exists that strictly decreases per-share value. -/
@@ -149,8 +148,6 @@ theorem Vault.clawback_no_dilution (assets : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`)
     (hL : v.toExact.lossUnrealized = 0)
-    -- the pricing subtraction does not round (automatic under `hL`)
-    (hnav : v.WithdrawNavExact false)
     (hc : assets.Canonical) -- the clawed-back amount is stored canonically
     -- near-final margin: at least half the shares remain to absorb the interior overpay
     (hmargin : r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
@@ -158,7 +155,8 @@ theorem Vault.clawback_no_dilution (assets : STAmount) (r : ClawbackResult)
     (hok : v.clawback assets = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.clawback_no_dilution_proof v assets r hv hL hnav hc hmargin hSfit hok herr
+  Vault.clawback_no_dilution_proof v assets r hv hL (Vault.withdrawNavExact_of_zero v hv false hL)
+    hc hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `clawback_no_dilution` cannot be
 dropped, a clawback exists that strictly decreases per-share value. -/

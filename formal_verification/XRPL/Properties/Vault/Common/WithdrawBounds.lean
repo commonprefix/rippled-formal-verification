@@ -1936,7 +1936,6 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hfinal : r.vault'.sharesTotal = Number.zero)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
     (hAAc : ∀ aa : STAmount,
       STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok aa →
         aa.toRat = v.assetsAvailable.toRat) :
@@ -1949,7 +1948,17 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
   obtain ⟨cw, an', sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
   have hfit' : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf]; exact hfit
+    -- the internal `ofNumber .int64 v.sharesTotal` success bounds the share total
+    have hic := STAmount.ofNumber_integral_canonical .int64 v.sharesTotal .to_nearest sta
+      (by decide) hsta
+    have hex := STAmount.ofNumber_integral_exact .int64 v.sharesTotal .to_nearest sta
+      (by decide) hv.wf.sharesTotal_norm hv.wf.sharesTotal_int hsta
+    have hle := STAmount.IntegralCanonical.abs_toRat_le sta hic.1
+    rw [hic.2, show (NumericType.int64.maxValue).toNat = 9223372036854775807 from by decide] at hle
+    rw [← hex]
+    calc sta.toRat ≤ |sta.toRat| := le_abs_self _
+      _ ≤ (9223372036854775807 : ℚ) := by exact_mod_cast hle
+      _ = 2 ^ 63 - 1 := by norm_num
   -- pricing of the payout `cw.assets'`
   have hstw : v.sharesToAssetsWithdraw cw.sharesRedeemed waiveUnrealizedLoss = .ok cw.assets' := by
     cases amount with
