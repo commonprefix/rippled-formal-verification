@@ -481,8 +481,7 @@ exceptVal(lean_object* e)
 // Model error kind. Ordinals MUST match the constructor order of
 // `XRPL.Model.Protocol.Error` in
 // formal_verification/XRPL/Model/Protocol/Errors.lean.
-enum class XRPLError : uint8_t
-{
+enum class LeanError : uint8_t {
     overflow = 0,
     divByZero,
     outOfRange,
@@ -498,7 +497,7 @@ template <class W>
 struct LeanExcept
 {
     std::optional<W> value;
-    std::optional<XRPLError> error;
+    std::optional<LeanError> error;
 };
 template <class W>
 inline LeanExcept<W>
@@ -509,7 +508,7 @@ readExcept(lean_object* exceptOwned)
         return {W(retain(exceptVal(e.raw()))), std::nullopt};
     // The error payload is a nullary constructor, so Lean represents it as an
     // unboxed scalar whose tag is the enum ordinal.
-    return {std::nullopt, static_cast<XRPLError>(lean_obj_tag(exceptVal(e.raw())))};
+    return {std::nullopt, static_cast<LeanError>(lean_obj_tag(exceptVal(e.raw())))};
 }
 
 // Bool: false = tag 0, true = tag 1
