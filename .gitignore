@@ -16,6 +16,7 @@ Release/
 /.venv/
 /build/
 /db/
+.lake
 /out.txt
 /Testing/
 /tmp/
@@ -89,3 +90,4 @@ target/
 
 # clangd cache
 /.cache
+.devcontainer/devcontainer.json
