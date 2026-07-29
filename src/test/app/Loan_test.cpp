@@ -8401,7 +8401,7 @@ protected:
 
         testcase("Impairment does not change payment due date");
 
-        Env env(*this, all_);
+        Env env(*this, all_ | featureLendingProtocolV1_1);
         BEAST_EXPECT(env.enabled(featureLendingProtocolV1_1));
 
         Account const lender{"lender"};
@@ -8626,7 +8626,7 @@ protected:
         // charges the late fee + late interest) is accepted.
         testcase("Impaired overdue LoanPay requires late-payment flag");
 
-        Env env(*this, all_);
+        Env env(*this, all_ | featureLendingProtocolV1_1);
         BEAST_EXPECT(env.enabled(featureLendingProtocolV1_1));
 
         Account const lender{"lender"};
@@ -10724,6 +10724,13 @@ protected:
             BEAST_EXPECT(vaultBeforeImpair);
             Number const lossBefore = vaultBeforeImpair->at(sfLossUnrealized);
 
+            // Under featureLendingProtocolV1_1, a loan can only be impaired
+            // once its payment is late.
+            env.close(
+                NetClock::time_point{
+                    NetClock::duration{loanBefore->at(sfNextPaymentDueDate)}} +
+                1s);
+
             env(manage(lender, loanKeylet.key, tfLoanImpair), Ter(tesSUCCESS));
             env.close();
 
@@ -10773,6 +10780,13 @@ protected:
                 env.current()->rules().enabled(featureLendingProtocolV1_1)
                 ? principalOutstanding
                 : totalValueOutstanding - managementFeeOutstanding;
+
+            // Under featureLendingProtocolV1_1, a loan can only be impaired
+            // once its payment is late.
+            env.close(
+                NetClock::time_point{
+                    NetClock::duration{loanBeforeImpair->at(sfNextPaymentDueDate)}} +
+                1s);
 
             env(manage(lender, loanKeylet.key, tfLoanImpair), Ter(tesSUCCESS));
             env.close();
@@ -10984,12 +10998,19 @@ protected:
         Number const managementFeeBeforeImpair = loanBeforeImpair->at(sfManagementFeeOutstanding);
         Number const expectedExposure = totalValueBeforeImpair - managementFeeBeforeImpair;
 
+        // Under featureLendingProtocolV1_1, a loan can only be impaired once
+        // its payment is late.
+        env.close(
+            NetClock::time_point{
+                NetClock::duration{loanBeforeImpair->at(sfNextPaymentDueDate)}} +
+            1s);
+
         env(manage(lender, loanKeylet.key, tfLoanImpair), Ter(tesSUCCESS));
         env.close();
 
         LoanState const stateAtImpair = getCurrentState(env, broker, loanKeylet);
         env.close(
-            stateAtImpair.startDate + std::chrono::seconds(paymentInterval) +
+            NetClock::time_point{NetClock::duration{stateAtImpair.nextPaymentDate}} +
             std::chrono::seconds(gracePeriod) + 60s);
 
         auto const vaultBeforeDefault = env.le(broker.vaultKeylet());
