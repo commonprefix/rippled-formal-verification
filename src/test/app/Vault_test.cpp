@@ -28,6 +28,7 @@
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/basics/base_uint.h>
+#include <xrpl/basics/chrono.h>
 #include <xrpl/basics/strHex.h>
 #include <xrpl/beast/unit_test/suite.h>
 #include <xrpl/beast/utility/Journal.h>
@@ -6107,6 +6108,7 @@ class Vault_test : public beast::unit_test::Suite
 
         {
             using namespace loan;
+            using namespace std::chrono_literals;
             env(set(f.borrower, f.brokerID, kStuckPrincipal),
                 Sig(sfCounterpartySignature, f.lender),
                 kPaymentTotal(kStuckPayTotal),
@@ -6114,6 +6116,15 @@ class Vault_test : public beast::unit_test::Suite
                 Fee(env.current()->fees().base * 2),
                 Ter(tesSUCCESS));
             env.close();
+
+            // Impairment requires the payment to be late, so advance past
+            // the due date before impairing.
+            auto const loanSle = env.le(*f.loanKeylet);
+            if (!BEAST_EXPECT(loanSle))
+                return f;
+            std::uint32_t const dueDate = loanSle->at(sfNextPaymentDueDate);
+            env.close(NetClock::time_point{NetClock::duration{dueDate}} + 1s);
+
             env(manage(f.lender, f.loanKeylet->key, tfLoanImpair), Ter(tesSUCCESS));
             env.close();
         }
@@ -6394,7 +6405,14 @@ class Vault_test : public beast::unit_test::Suite
         BEAST_EXPECT(retainedShares == f.sharesLender - 750'018'750);
 
         // Borrower repays the loan in full (pays more than the outstanding
-        // total; the loan transactor caps the receivable).
+        // total each time; the loan transactor caps the receivable). The
+        // loan is still overdue from the impairment setup, so the first
+        // (and only remaining, since kStuckPayTotal == 2) outstanding
+        // installment must be caught up with a late payment before the
+        // final regular payment can close the loan out.
+        env(pay(f.borrower, loanKey.key, asset(kStuckPrincipal * 2), tfLoanLatePayment),
+            Ter(tesSUCCESS));
+        env.close();
         env(pay(f.borrower, loanKey.key, asset(kStuckPrincipal * 2)), Ter(tesSUCCESS));
         env.close();
 

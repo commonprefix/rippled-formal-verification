@@ -257,6 +257,12 @@ loanPaymentDeltas(SLE::const_ref vaultSle, LoanPaymentParts const& parts)
                                       : Accrual::loanPaymentDeltas(parts);
 }
 
+[[nodiscard]] bool
+isPaymentLate(ReadView const& view, SLE::const_ref loanSle)
+{
+    return hasExpired(view, loanSle->at(sfNextPaymentDueDate));
+}
+
 namespace detail {
 
 void
@@ -481,7 +487,7 @@ loanLatePaymentInterest(
     // If the payment is not late by any amount of time, then there's no late
     // interest
     if (now <= nextPaymentDueDate)
-        return 0;
+        return kNumZero;
 
     // Equation (3) from XLS-66 spec, Section A-2 Equation Glossary
     auto const secondsOverdue = now - nextPaymentDueDate;
@@ -1002,7 +1008,7 @@ doOverpayment(
 std::expected<ExtendedPaymentComponents, TER>
 computeLatePayment(
     Asset const& asset,
-    ApplyView const& view,
+    ReadView const& view,
     SLE::const_ref loan,
     ExtendedPaymentComponents const& periodic,
     STAmount const& amount,
@@ -1095,7 +1101,7 @@ computeLatePayment(
 std::expected<ExtendedPaymentComponents, TER>
 computeFullPayment(
     Asset const& asset,
-    ApplyView& view,
+    ReadView const& view,
     SLE::const_ref loan,
     Number const& periodicRate,
     STAmount const& amount,
@@ -2237,7 +2243,7 @@ loanMakePayment(
 
     // -------------------------------------------------------------
     // A late payment not flagged as late overrides all other options.
-    if (paymentType != LoanPaymentType::Late && hasExpired(view, nextDueDateProxy))
+    if (paymentType != LoanPaymentType::Late && isPaymentLate(view, loan))
     {
         // If the payment is late, and the late flag was not set, it's not
         // valid

@@ -380,6 +380,10 @@ loanVaultExposure(SLE::const_ref vaultSle, SLE::const_ref loanSle);
 AccountingDeltas
 loanPaymentDeltas(SLE::const_ref vaultSle, LoanPaymentParts const& parts);
 
+// Returns true if the loan's next payment due date has passed.
+[[nodiscard]] bool
+isPaymentLate(ReadView const& view, SLE::const_ref loanSle);
+
 namespace detail {
 // These classes and functions should only be accessed by LendingHelper
 // functions and unit tests
