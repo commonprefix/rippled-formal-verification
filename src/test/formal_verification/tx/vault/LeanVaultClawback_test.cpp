@@ -34,6 +34,14 @@ class LeanVaultClawback_test : public LeanSuite
         return MPTIssue{env.le(vaultKeylet)->at(sfShareMPTID)};
     }
 
+    static STAmount
+    fetchHolderShares(jtx::Env& env, Keylet const& vaultKeylet, jtx::Account const& holder)
+    {
+        auto const share = shareIssue(env, vaultKeylet);
+        auto const sleToken = env.le(keylet::mptoken(share.getMptID(), holder.id()));
+        return STAmount{share, sleToken ? sleToken->at(sfMPTAmount) : 0};
+    }
+
     void
     compareClawbackAsset(
         jtx::Env& env,
@@ -46,7 +54,8 @@ class LeanVaultClawback_test : public LeanSuite
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
-        LeanClawbackResult const clawback = leanVaultClawback(state, amount);
+        STAmount const holderShares = fetchHolderShares(env, vaultKeylet, holder);
+        LeanClawbackResult const clawback = leanVaultClawback(state, amount, holderShares);
 
         env(Vault::clawback(
                 {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = amount}),
@@ -490,7 +499,8 @@ class LeanVaultClawback_test : public LeanSuite
         // Claw 4: both burn 3 shares (5*4/7 = 2.857 rounds up) and recover 7*3/5 = 4.2 > 4.
         VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const request = asset(4);
-        LeanClawbackResult const lean = leanVaultClawback(before, request);
+        STAmount const holderShares = fetchHolderShares(env, vaultKeylet, holder);
+        LeanClawbackResult const lean = leanVaultClawback(before, request, holderShares);
         BEAST_EXPECTS(!lean.threw, "lean clawback raised");
 
         env(Vault::clawback(
@@ -525,7 +535,8 @@ class LeanVaultClawback_test : public LeanSuite
 
         VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const amount = asset(Number{1'000'917, -3});  // 1000.917
-        LeanClawbackResult const lean = leanVaultClawback(before, amount);
+        STAmount const holderShares = fetchHolderShares(env, vaultKeylet, holder);
+        LeanClawbackResult const lean = leanVaultClawback(before, amount, holderShares);
         BEAST_EXPECTS(!lean.threw, "lean clawback raised");
 
         env(Vault::clawback(
@@ -584,7 +595,7 @@ class LeanVaultClawback_test : public LeanSuite
         testClawbackAsset(kMaxMpTokenAmount, 1, tesSUCCESS);
         testClawbackAsset(1, 1, tesSUCCESS);
 
-        testClawbackAsset(1'000, 0, tecPRECISION_LOSS);
+        testClawbackAsset(1'000, 0, tesSUCCESS);
 
         // NAV-drifted vault (owner donation)
         testClawbackDrifted(3, 2, 3, tesSUCCESS);
@@ -602,7 +613,9 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
         // testClawbackDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
         // testClawbackDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
-        // testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 should claw the full balance
+
+        // Fixed discrepancies, kept as regression tests.
+        testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 claws the full balance
         // clang-format on
     }
 };

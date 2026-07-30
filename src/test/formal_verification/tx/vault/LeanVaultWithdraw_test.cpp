@@ -671,12 +671,14 @@ class LeanVaultWithdraw_test : public LeanSuite
         // testWithdrawWaiveLoss();         // FV_M2_6: model waives the loss, C++ applies it
         // testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
         // testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
-        // testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit -> tefINTERNAL
         // testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
         // testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
         // testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
         // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
         // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
+
+        // Fixed discrepancies, kept as regression tests.
+        testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit with a loss
         // clang-format on
     }
 };

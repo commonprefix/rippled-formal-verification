@@ -14,7 +14,7 @@
 
 extern "C" {
 lean_object*
-lean_vault_clawback(lean_object* state, lean_object* assets);
+lean_vault_clawback(lean_object* state, lean_object* assets, lean_object* holderShares);
 lean_object*
 lean_vault_burn_shares(lean_object* state, lean_object* sharesDestroyed);
 lean_object*
@@ -67,10 +67,13 @@ public:
 };
 
 inline LeanClawbackResult
-leanVaultClawback(VaultState const& state, STAmount const& assets)
+leanVaultClawback(VaultState const& state, STAmount const& assets, STAmount const& holderShares)
 {
-    LeanExcept<ClawbackResultFFI> const e = readExcept<ClawbackResultFFI>(
-        leanCall(lean_vault_clawback, VaultStateFFI::build(state), STAmountFFI::build(assets)));
+    LeanExcept<ClawbackResultFFI> const e = readExcept<ClawbackResultFFI>(leanCall(
+        lean_vault_clawback,
+        VaultStateFFI::build(state),
+        STAmountFFI::build(assets),
+        STAmountFFI::build(holderShares)));
     if (!e.value)
     {
         LeanClawbackResult result;
