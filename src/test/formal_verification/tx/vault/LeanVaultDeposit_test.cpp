@@ -2,8 +2,14 @@
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
 #include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
-#include <test/jtx.h>
+#include <test/jtx/Account.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/amount.h>
+#include <test/jtx/flags.h>
+#include <test/jtx/mpt.h>
+#include <test/jtx/pay.h>
 #include <test/jtx/ter.h>
+#include <test/jtx/trust.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/Indexes.h>
@@ -109,7 +115,7 @@ class LeanVaultDeposit_test : public LeanSuite
             return;
 
         auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptIssuance(newVaultSle->at(sfShareMPTID));
+        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
         Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{

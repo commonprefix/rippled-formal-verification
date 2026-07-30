@@ -2,8 +2,16 @@
 #include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
-#include <test/jtx.h>
+#include <test/jtx/Account.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/TestHelpers.h>
+#include <test/jtx/amount.h>
+#include <test/jtx/fee.h>
+#include <test/jtx/mpt.h>
+#include <test/jtx/pay.h>
+#include <test/jtx/sig.h>
 #include <test/jtx/ter.h>
+#include <test/jtx/trust.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/Indexes.h>
@@ -33,7 +41,7 @@ class LeanVaultWithdraw_test : public LeanSuite
     {
         auto const shareMptId = env.le(vaultKeylet)->at(sfShareMPTID);
         return static_cast<std::int64_t>(
-            env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount));
+            env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount));
     }
 
     void
@@ -71,7 +79,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             return;
 
         auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptIssuance(newVaultSle->at(sfShareMPTID));
+        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
         Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
@@ -386,13 +394,13 @@ class LeanVaultWithdraw_test : public LeanSuite
         env.close();
 
         // A loan impaired immediately gives the vault a real unrealized loss.
-        auto const brokerID = keylet::loanbroker(lender.id(), env.seq(lender)).key;
+        auto const brokerID = keylet::loanBroker(lender.id(), env.seq(lender)).key;
         {
             using namespace loanBroker;
             env(set(lender, vaultKeylet.key), kDebtMaximum(asset(33'330).value()));
             env.close();
         }
-        auto const sleBroker = env.le(keylet::loanbroker(brokerID));
+        auto const sleBroker = env.le(keylet::loanBroker(brokerID));
         BEAST_EXPECT(sleBroker);
         auto const loanKeylet = keylet::loan(brokerID, sleBroker->at(sfLoanSequence));
         {

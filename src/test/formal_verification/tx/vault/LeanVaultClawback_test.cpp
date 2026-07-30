@@ -2,8 +2,14 @@
 #include <test/formal_verification/ffi/vault/VaultClawbackFFI.h>
 #include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
-#include <test/jtx.h>
+#include <test/jtx/Account.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/amount.h>
+#include <test/jtx/flags.h>
+#include <test/jtx/mpt.h>
+#include <test/jtx/pay.h>
 #include <test/jtx/ter.h>
+#include <test/jtx/trust.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/Indexes.h>
@@ -62,7 +68,7 @@ class LeanVaultClawback_test : public LeanSuite
             return;
 
         auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptIssuance(newVaultSle->at(sfShareMPTID));
+        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
         Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
@@ -300,7 +306,7 @@ class LeanVaultClawback_test : public LeanSuite
         Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{static_cast<std::int64_t>(
-            env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount))};
+            env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount))};
         env.close();
 
         BEAST_EXPECTS(cppTer == tesSUCCESS, std::string("cpp=") + transToken(cppTer));
@@ -434,7 +440,7 @@ class LeanVaultClawback_test : public LeanSuite
             jtx::Ter(tesSUCCESS));
         env.close();
         auto const shareMptId = env.le(vaultKeylet)->at(sfShareMPTID);
-        BEAST_EXPECT(env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount) == 0);
+        BEAST_EXPECT(env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount) == 0);
     }
 
     // Finding (FV_M2_11, both sides): an issuer clawback recovers more than requested because the

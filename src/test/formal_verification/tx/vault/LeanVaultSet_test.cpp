@@ -2,7 +2,8 @@
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
 #include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
-#include <test/jtx.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/amount.h>
 #include <test/jtx/ter.h>
 
 #include <xrpl/basics/Number.h>

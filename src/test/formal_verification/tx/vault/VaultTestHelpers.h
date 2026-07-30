@@ -1,7 +1,12 @@
 #pragma once
 
 #include <test/formal_verification/ffi/vault/VaultStateFFI.h>
-#include <test/jtx.h>
+#include <test/jtx/Account.h>
+#include <test/jtx/Env.h>
+#include <test/jtx/amount.h>
+#include <test/jtx/flags.h>
+#include <test/jtx/pay.h>
+#include <test/jtx/trust.h>
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
@@ -12,6 +17,7 @@
 #include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STLedgerEntry.h>
+#include <xrpl/protocol/STNumber.h>
 
 #include <cstdint>
 
@@ -41,7 +47,7 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
         .numericType = NumericTypeFFI::tagOf(asset),
         .scale = vaultSle->at(sfScale),
         .sharesTotal = Number{static_cast<std::int64_t>(
-            env.le(keylet::mptIssuance(shareMptId))->at(sfOutstandingAmount))},
+            env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount))},
         .lossUnrealized = vaultSle->at(sfLossUnrealized)};
 }
 
@@ -63,7 +69,7 @@ updateVaultState(
             auto v = sb.peek(vaultKeylet);
             if (!v)
                 return false;
-            auto iss = sb.peek(keylet::mptIssuance(v->at(sfShareMPTID)));
+            auto iss = sb.peek(keylet::mptokenIssuance(v->at(sfShareMPTID)));
             if (!iss)
                 return false;
             v->at(sfAssetsTotal) = assetsTotal;
