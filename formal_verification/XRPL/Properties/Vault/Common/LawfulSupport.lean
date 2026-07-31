@@ -534,9 +534,10 @@ theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
   }
 
 /-- A clawback preserves record-level asset parity. -/
-theorem Vault.clawback_asset_parity (v : Vault) (assets : STAmount) (r : ClawbackResult)
+theorem Vault.clawback_asset_parity (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult)
     (hAV : v.assetsAvailable = v.assetsTotal)
-    (hok : v.clawback assets = .ok r) :
+    (hok : v.clawback assets holderShares = .ok r) :
     r.vault'.assetsAvailable = r.vault'.assetsTotal := by
   unfold Vault.clawback at hok
   obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok

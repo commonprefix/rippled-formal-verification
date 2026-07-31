@@ -104,8 +104,8 @@ theorem Vault.withdraw_preserves_unrealized (v : Vault) (amount : WithdrawAmount
   }
 
 /-- A clawback keeps both unrealized fields at their starting values. -/
-theorem Vault.clawback_preserves_unrealized (v : Vault) (assets : STAmount)
-    (r : ClawbackResult) (hok : v.clawback assets = .ok r) :
+theorem Vault.clawback_preserves_unrealized (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r) :
     r.vault'.lossUnrealized = v.lossUnrealized := by
   unfold Vault.clawback at hok
   obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -624,17 +624,18 @@ theorem Vault.withdraw_lawful_proof (v : Vault) (amount : WithdrawAmount) (waive
         rw [show v.lossUnrealized.toRat = 0 from hL]
         linarith
 
-theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
+theorem Vault.clawback_lawful_proof (v : Vault) (assets holderShares : STAmount)
     (hv : v.Lawful)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanon : assets.Canonical)
-    (r : ClawbackResult) (hok : v.clawback assets = .ok r)
+    (r : ClawbackResult) (hznz : assets.isZero = false)
+    (hok : v.clawback assets holderShares = .ok r)
     (hslt : r.sharesDestroyed.toRat < (v.toExact.sharesTotal : ℚ))
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful := by
   by_cases herr : r.error.isSome = true
-  · rw [Vault.clawback_error_unchanged_proof v assets r hok herr]
+  · rw [Vault.clawback_error_unchanged_proof v assets holderShares r hok herr]
     exact hv
   · have herr' : r.error = none := Option.not_isSome_iff_eq_none.mp herr
     -- derive the recovery/destroyed-shares canonicity, sign, and coverage facts
@@ -643,15 +644,15 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets : STAmount)
     -- under `assetsAvailable`
     have hnavE : v.WithdrawNavExact false := Vault.withdrawNavExact_of_zero v hv false hL
     obtain ⟨hSnn_r, hcanon_sd_r, hprice_r, hDle_r, -, -⟩ :=
-      Vault.clawback_recovery_priced v assets r hv hnavE hcanon hok herr'
+      Vault.clawback_recovery_priced v assets holderShares r hv hnavE hcanon hznz hok herr'
     have hSc_r : r.sharesDestroyed.IntegralCanonical :=
-      Vault.clawback_shares_intCanonical v assets r hok herr'
+      Vault.clawback_shares_intCanonical v assets holderShares r hznz hok herr'
     have hDnn_r : 0 ≤ r.assetsRecovered.toRat :=
       (Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
         hSnn_r hcanon_sd_r hnavE hprice_r).1
     obtain ⟨result, hres, -, hshz, -, -, sdn, arn, at', st', av', -, -, hsdn, harn, hat, -, -, -,
         hst, hav, hr⟩ :=
-      Vault.clawback_success_reduces v assets r hok herr'
+      Vault.clawback_success_reduces v assets holderShares r hok herr'
     subst hr
     have hSc' : result.sharesDestroyed.IntegralCanonical := hSc_r
     have hSnn_val : 0 ≤ result.sharesDestroyed.toRat := hSnn_r

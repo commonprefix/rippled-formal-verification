@@ -144,26 +144,28 @@ worth times `1 + 12/(2^63-3)`, the stored `assetsTotal` drops within the raw
 sharesTotal/2` keeps enough shares to absorb the interior overpay. A clawback is
 always partial (no final exit), and the recovery pricing already forces `0 <
 withdrawNav`, so no nonzero-recovery hypothesis is needed. -/
-theorem Vault.clawback_no_dilution (assets : STAmount) (r : ClawbackResult)
+theorem Vault.clawback_no_dilution (assets holderShares : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`)
     (hL : v.toExact.lossUnrealized = 0)
     (hc : assets.Canonical) -- the clawed-back amount is stored canonically
+    -- zero amount claws all holder shares
+    (hznz : assets.isZero = false)
     -- near-final margin: at least half the shares remain to absorb the interior overpay
     (hmargin : r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
     (hSfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) -- share domain
-    (hok : v.clawback assets = .ok r) (herr : r.error = none) :
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
-  Vault.clawback_no_dilution_proof v assets r hv hL (Vault.withdrawNavExact_of_zero v hv false hL)
-    hc hmargin hSfit hok herr
+  Vault.clawback_no_dilution_proof v assets holderShares r hv hL
+    (Vault.withdrawNavExact_of_zero v hv false hL) hc hznz hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `clawback_no_dilution` cannot be
 dropped, a clawback exists that strictly decreases per-share value. -/
 theorem Vault.clawback_dilution_attained :
-    ∃ (v : Vault) (assets : STAmount) (r : ClawbackResult),
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
       v.Lawful ∧
-      v.clawback assets = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
         v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   clawback_dilution_witness

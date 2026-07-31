@@ -15,12 +15,23 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- **`computeClawback` no-error reduction.** A `cr.error = none` outcome forces
-the happy path of the body: the two-way exchange, and either the computed
-recovery fit under `assetsAvailable`, or the clamped recompute did. -/
-theorem computeClawback_none_reduces (v : Vault) (assets : STAmount)
+/-- With a nonzero amount the clawback share computation is the withdraw one. -/
+theorem assetsToSharesClawback_nonzero (v : Vault) (assets holderShares : STAmount)
+    (hz : assets.isZero = false) :
+    assetsToSharesClawback v assets holderShares =
+      assetsToSharesWithdraw v assets false false := by
+  unfold assetsToSharesClawback
+  rw [if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  simp only [pure_bind]
+
+/-- **`computeClawback` no-error reduction.** A `cr.error = none` outcome for a
+nonzero amount forces the happy path of the body: the two-way exchange, and
+either the computed recovery fit under `assetsAvailable`, or the clamped
+recompute did. -/
+theorem computeClawback_none_reduces (v : Vault) (assets holderShares : STAmount)
     (cr : ComputeClawbackResult)
-    (hok : computeClawback v assets = .ok cr) (herr : cr.error = none) :
+    (hz : assets.isZero = false)
+    (hok : computeClawback v assets holderShares = .ok cr) (herr : cr.error = none) :
     assets.negative = false ∧
     ∃ (sharesDestroyed assetsRecovered : STAmount) (assetsRecoveredNumber : Number),
       assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
@@ -48,6 +59,7 @@ theorem computeClawback_none_reduces (v : Vault) (assets : STAmount)
   · rw [if_neg hneg] at hok
     refine ⟨by simpa using hneg, ?_⟩
     obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
+    rw [assetsToSharesClawback_nonzero v assets holderShares hz] at htc
     have handler_err : ∀ e : Error,
         tryCatch (Except.error e :
             Except Error (DoResultPR ComputeClawbackResult ComputeClawbackResult PUnit))
@@ -128,10 +140,11 @@ theorem computeClawback_none_reduces (v : Vault) (assets : STAmount)
 /-- **`Vault.clawback` success reduction.** A run that returns no error code
 exposes the `computeClawback` result (nonzero destroyed shares), the passed
 too-small guard, and the three stored-field updates in the success record. -/
-theorem Vault.clawback_success_reduces (v : Vault) (assets : STAmount) (r : ClawbackResult)
-    (hok : v.clawback assets = .ok r) (herr : r.error = none) :
+theorem Vault.clawback_success_reduces (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult)
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     ∃ cr : ComputeClawbackResult,
-      computeClawback v assets = .ok cr ∧ cr.error = none ∧
+      computeClawback v assets holderShares = .ok cr ∧ cr.error = none ∧
       cr.sharesDestroyed.isZero = false ∧
       r.assetsRecovered = cr.assetsRecovered ∧ r.sharesDestroyed = cr.sharesDestroyed ∧
       ∃ (sharesDestroyedNumber assetsRecoveredNumber
