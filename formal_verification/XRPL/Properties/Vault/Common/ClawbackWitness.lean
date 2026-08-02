@@ -5,7 +5,7 @@ import XRPL.Model.Vault.VaultClawback
 
 /-! # Witness data for the clawback `*_attained` theorems
 
-Concrete vaults, amounts, and results for the four clawback `*_attained`
+Concrete vaults, amounts, and results for the clawback `*_attained`
 witnesses `VaultClawback.lean` delegates to, each closed by `native_decide`
 over the clawback pipeline. -/
 
@@ -35,6 +35,9 @@ def cwa1 : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) fal
 /-- Witness holder-shares balance passed to `Vault.clawback`. Unused on these
 runs since `cwa1` is nonzero (the zero-amount "claw all" branch never fires). -/
 def cwHolderShares : STAmount := STAmount.zero .int64
+
+/-- The zero clawed amount of the claw-all run. -/
+def cwa0 : STAmount := STAmount.zero .fractional
 
 /-- The destroyed shares of the `cwv` run, `2333333333333333`. -/
 def cwsh1 : STAmount := STAmount.unchecked .int64 2333333333333333 0 false
@@ -73,7 +76,7 @@ def cwvB' : Vault :=
 /-- The `cwvB` clawback result. -/
 def cwr2 : ClawbackResult := ⟨none, cwvB', cwar2, cwsh2⟩
 
-/-! ## The four `*_attained` witnesses -/
+/-! ## The `*_attained` witnesses -/
 
 set_option maxRecDepth 10000
 
@@ -136,5 +139,20 @@ theorem Vault.clawback_vault_updates_witness :
       v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
   ⟨cwvB, cwa1, cwHolderShares, cwr2, by native_decide⟩
+
+/-- Witness for `Vault.clawback_zero_all_shares_attained`: the zero amount run
+on `cwv` against holder balance `cwsh1` destroys exactly `cwsh1`, reproducing
+the `cwv` run priced from `cwa1`. -/
+theorem Vault.clawback_zero_all_shares_witness :
+    ∃ (v : Vault) (assets holderShares assetsRecovered : STAmount)
+      (assetsRecoveredNumber : Number) (r : ClawbackResult),
+      v.Lawful ∧ assets.isZero = true ∧
+      v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered ∧
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
+      assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      r.sharesDestroyed = holderShares ∧ holderShares.isZero = false :=
+  ⟨cwv, cwa0, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
+    by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

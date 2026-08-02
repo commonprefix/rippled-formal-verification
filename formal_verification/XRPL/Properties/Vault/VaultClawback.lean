@@ -128,6 +128,39 @@ theorem Vault.clawback_sharesDestroyed_clamped_attained :
         (v.idealSharesClawback assetsRecovered'.toRat) depositε :=
   Vault.clawback_sharesDestroyed_clamped_witness
 
+/-- A zero amount claws back the holder's entire share balance: the destroyed
+shares are exactly `holderShares`, with no rounding, and the clawback prices
+them through the withdraw pipeline. -/
+theorem Vault.clawback_zero_all_shares
+    (assets holderShares assetsRecovered : STAmount)
+    (assetsRecoveredNumber : Number) (r : ClawbackResult)
+    -- the zero amount selects the claw all branch
+    (hz : assets.isZero = true)
+    -- the clawback computation prices the holder's shares
+    (hassets : v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered)
+    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
+    -- the computed number does not exceed assetsAvailable
+    (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
+    -- the clawback succeeds
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
+    r.sharesDestroyed = holderShares ∧ r.assetsRecovered = assetsRecovered ∧
+    holderShares.isZero = false :=
+  Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered
+    assetsRecoveredNumber r hz hassets hnum hle hok herr
+
+/-- Witness: the claw-all path is exercised, a zero amount run exists that
+destroys exactly the holder's nonzero share balance. -/
+theorem Vault.clawback_zero_all_shares_attained :
+    ∃ (v : Vault) (assets holderShares assetsRecovered : STAmount)
+      (assetsRecoveredNumber : Number) (r : ClawbackResult),
+      v.Lawful ∧ assets.isZero = true ∧
+      v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered ∧
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
+      assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      r.sharesDestroyed = holderShares ∧ holderShares.isZero = false :=
+  Vault.clawback_zero_all_shares_witness
+
 /-- Recovered assets never exceed the stored `assetsAvailable`: every
 successful run passes this exact comparison, and a run whose first computed
 recovery is above `assetsAvailable` recomputes from `assetsAvailable` with

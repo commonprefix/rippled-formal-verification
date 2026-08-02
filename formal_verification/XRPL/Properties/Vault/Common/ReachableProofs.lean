@@ -26,7 +26,7 @@ theorem Vault.Reachable.lossUnrealized_zero_proof (v : Vault) (hr : Vault.Reacha
   | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
     rw [(Vault.withdraw_preserves_unrealized v amount waive r hwd)]; exact ih
-  | clawback v assets holderShares r hrv hcb _ _ _ _ ih =>
+  | clawback v assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
     rw [(Vault.clawback_preserves_unrealized v assets holderShares r hcb)]; exact ih
   | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
@@ -43,7 +43,7 @@ theorem Vault.Reachable.asset_parity_proof (v : Vault) (hr : Vault.Reachable v) 
     exact Vault.deposit_asset_parity v amount isDonation r ih hdep
   | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
     exact Vault.withdraw_asset_parity v amount waive r ih hwd
-  | clawback v assets holderShares r hrv hcb _ _ _ _ ih =>
+  | clawback v assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
     exact Vault.clawback_asset_parity v assets holderShares r ih hcb
   | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
     exact Vault.burnShares_asset_parity v sharesDestroyed v' ih hburn
@@ -64,10 +64,10 @@ theorem Vault.Reachable.lawful_proof (v : Vault) (hr : Vault.Reachable v) : v.La
     exact Vault.withdraw_lawful v amount waive ih
       (Vault.Reachable.lossUnrealized_zero_proof v hrv)
       (Vault.Reachable.asset_parity_proof v hrv) r hwd hSc hSnt hSnn hsle hfit
-  | clawback v assets holderShares r hrv hcb hcanon hznz hslt hfit ih =>
+  | clawback v assets holderShares r hrv hcb hcanon hSic hSc hSnn hslt hfit ih =>
     exact Vault.clawback_lawful v assets holderShares ih
       (Vault.Reachable.lossUnrealized_zero_proof v hrv)
-      (Vault.Reachable.asset_parity_proof v hrv) hcanon r hznz hcb hslt hfit
+      (Vault.Reachable.asset_parity_proof v hrv) hcanon r hSic hSc hSnn hcb hslt hfit
   | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
     exact Vault.burnShares_lawful v sharesDestroyed sharesTotalAmount v' ih hcan hcanon hnn
       hle hfit hburn

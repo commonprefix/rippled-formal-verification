@@ -629,7 +629,9 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets holderShares : STAmount)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanon : assets.Canonical)
-    (r : ClawbackResult) (hznz : assets.isZero = false)
+    (r : ClawbackResult)
+    (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
+    (hSnn : holderShares.negative = false)
     (hok : v.clawback assets holderShares = .ok r)
     (hslt : r.sharesDestroyed.toRat < (v.toExact.sharesTotal : ℚ))
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
@@ -643,10 +645,10 @@ theorem Vault.clawback_lawful_proof (v : Vault) (assets holderShares : STAmount)
     -- shares through `sharesToAssetsWithdraw` and the guard already forced it
     -- under `assetsAvailable`
     have hnavE : v.WithdrawNavExact false := Vault.withdrawNavExact_of_zero v hv false hL
-    obtain ⟨hSnn_r, hcanon_sd_r, hprice_r, hDle_r, -, -⟩ :=
-      Vault.clawback_recovery_priced v assets holderShares r hv hnavE hcanon hznz hok herr'
+    obtain ⟨hSnn_r, hcanon_sd_r, hprice_r, hDle_r, -⟩ :=
+      Vault.clawback_recovery_priced' v assets holderShares r hv hnavE hcanon hSc hSnn hok herr'
     have hSc_r : r.sharesDestroyed.IntegralCanonical :=
-      Vault.clawback_shares_intCanonical v assets holderShares r hznz hok herr'
+      Vault.clawback_shares_intCanonical' v assets holderShares r hSic hok herr'
     have hDnn_r : 0 ≤ r.assetsRecovered.toRat :=
       (Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
         hSnn_r hcanon_sd_r hnavE hprice_r).1

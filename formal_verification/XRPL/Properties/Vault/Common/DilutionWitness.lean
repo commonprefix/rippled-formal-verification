@@ -133,6 +133,16 @@ def wdR : WithdrawResult :=
 def clawR : ClawbackResult :=
   (baseV.clawback clawAmt clawHolderShares).toOption.getD (ClawbackResult.rejected baseV .tecINTERNAL)
 
+/-- Zero clawed amount for the claw all dilution run. -/
+def clawA0 : STAmount := STAmount.zero .fractional
+
+/-- Holder balance of the zero amount run. -/
+def clawZeroShares : STAmount := clawR.sharesDestroyed
+
+/-- The zero amount clawback result. -/
+def clawR0 : ClawbackResult :=
+  (baseV.clawback clawA0 clawZeroShares).toOption.getD (ClawbackResult.rejected baseV .tecINTERNAL)
+
 /-- Second deposit in the compounding history: the first deposit takes `baseV` to
 `depR.vault'`, this one takes it one step further. -/
 def r2 : DepositResult :=
@@ -171,6 +181,19 @@ theorem clawR_dilutes :
     baseV.clawback clawAmt clawHolderShares = .ok clawR ∧ clawR.error = none ∧
     clawR.vault'.withdrawNav * (baseV.toExact.sharesTotal : ℚ) <
       baseV.withdrawNav * (clawR.vault'.toExact.sharesTotal : ℚ) := by native_decide
+
+/-- The zero-amount clawback destroys exactly the holder's balance (a canonical
+nonnegative integral amount) and strictly decreases per-share value.
+
+`native_decide` (`Lean.ofReduceBool`). -/
+theorem clawR0_dilutes :
+    clawA0.isZero = true ∧
+    clawZeroShares.IntegralCanonical ∧ clawZeroShares.Canonical ∧
+    clawZeroShares.negative = false ∧
+    baseV.clawback clawA0 clawZeroShares = .ok clawR0 ∧ clawR0.error = none ∧
+    clawR0.sharesDestroyed = clawZeroShares ∧
+    clawR0.vault'.withdrawNav * (baseV.toExact.sharesTotal : ℚ) <
+      baseV.withdrawNav * (clawR0.vault'.toExact.sharesTotal : ℚ) := by native_decide
 
 /-- The two-deposit history: each step satisfies its `ReachableFromIn.deposit`
 side conditions (canonical storage, positive amount and shares, share domain), and
@@ -215,6 +238,17 @@ theorem clawback_dilution_witness :
         v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨baseV, clawAmt, clawHolderShares, clawR, baseV_lawful, clawR_dilutes.1, clawR_dilutes.2.1,
     clawR_dilutes.2.2⟩
+
+theorem clawback_zero_dilution_witness :
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
+      v.Lawful ∧ assets.isZero = true ∧
+      holderShares.IntegralCanonical ∧ holderShares.Canonical ∧
+      holderShares.negative = false ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      r.sharesDestroyed = holderShares ∧
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+  ⟨baseV, clawA0, clawZeroShares, clawR0, baseV_lawful, clawR0_dilutes⟩
 
 /-- Witness backing `ReachableFromIn.dilution_attained`: the two-deposit history
 from `baseV` whose endpoint `r2.vault'` strictly dilutes against `baseV`. Each

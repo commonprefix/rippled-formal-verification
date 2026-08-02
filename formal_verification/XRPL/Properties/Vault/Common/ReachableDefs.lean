@@ -41,7 +41,9 @@ inductive Vault.Reachable : Vault → Prop where
   | clawback (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult) :
       Vault.Reachable v → v.clawback assets holderShares = .ok r →
       assets.Canonical → -- the clawback amount is a stored-canonical user input
-      assets.isZero = false → -- zero claws all holder shares
+      holderShares.IntegralCanonical → -- the holder balance is a stored integral MPT amount
+      holderShares.Canonical → -- and value-exact through toNumber
+      holderShares.negative = false → -- a balance is nonnegative
       r.sharesDestroyed.toRat < (v.toExact.sharesTotal : ℚ) → -- strictly partial
       (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
       Vault.Reachable r.vault'
@@ -85,7 +87,9 @@ inductive Vault.ReachableFromIn : Vault → Vault → ℕ → Prop where
       Vault.ReachableFromIn w u n → u.clawback assets holderShares = .ok r →
       u.WithdrawNavExact false → -- the two pricing subtractions do not round (clawback_assetsRecovered)
       assets.Canonical → -- the clawed-back amount is a stored-canonical user input
-      assets.isZero = false → -- zero claws all holder shares
+      holderShares.IntegralCanonical → -- the holder balance is a stored integral MPT amount
+      holderShares.Canonical → -- and value-exact through toNumber
+      holderShares.negative = false → -- a balance is nonnegative
       -- near-final margin: at least half the shares remain, so the clawback step respects
       -- `clawback_no_dilution` (honestly restricts to margin-respecting histories)
       r.sharesDestroyed.toRat ≤ (u.toExact.sharesTotal : ℚ) / 2 →

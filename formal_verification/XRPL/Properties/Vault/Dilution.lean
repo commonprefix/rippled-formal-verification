@@ -142,15 +142,18 @@ identical to `withdraw_no_dilution`: the recovery is at most the destroyed share
 worth times `1 + 12/(2^63-3)`, the stored `assetsTotal` drops within the raw
 `6/(2^63-3)` subtraction stage, and the near-final margin `sharesDestroyed ≤
 sharesTotal/2` keeps enough shares to absorb the interior overpay. A clawback is
-always partial (no final exit), and the recovery pricing already forces `0 <
-withdrawNav`, so no nonzero-recovery hypothesis is needed. -/
+always partial (no final exit). A zero amount claws the holder's entire share
+balance and is covered: the holder balance side conditions make the destroyed
+shares a nonzero canonical integer, so the margin keeps the share total positive. -/
 theorem Vault.clawback_no_dilution (assets holderShares : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`)
     (hL : v.toExact.lossUnrealized = 0)
     (hc : assets.Canonical) -- the clawed-back amount is stored canonically
-    -- zero amount claws all holder shares
-    (hznz : assets.isZero = false)
+    -- the holder balance passed to the run is a stored integral MPT amount,
+    -- value-exact and nonnegative (it carries the zero amount claw all arm)
+    (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
+    (hSnn : holderShares.negative = false)
     -- near-final margin: at least half the shares remain to absorb the interior overpay
     (hmargin : r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
     (hSfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) -- share domain
@@ -158,7 +161,7 @@ theorem Vault.clawback_no_dilution (assets holderShares : STAmount) (r : Clawbac
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
   Vault.clawback_no_dilution_proof v assets holderShares r hv hL
-    (Vault.withdrawNavExact_of_zero v hv false hL) hc hznz hmargin hSfit hok herr
+    (Vault.withdrawNavExact_of_zero v hv false hL) hc hSic hSc hSnn hmargin hSfit hok herr
 
 /-- Witness: the `1 - depositε` factor in `clawback_no_dilution` cannot be
 dropped, a clawback exists that strictly decreases per-share value. -/
@@ -169,6 +172,21 @@ theorem Vault.clawback_dilution_attained :
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
         v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   clawback_dilution_witness
+
+/-- Witness: the `1 - depositε` factor binds on the zero-amount arm of
+`clawback_no_dilution` too, a claw-all run exists that destroys exactly the
+holder's balance (a canonical nonnegative integral amount, the side conditions
+of the theorem) and strictly decreases per-share value. -/
+theorem Vault.clawback_zero_dilution_attained :
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
+      v.Lawful ∧ assets.isZero = true ∧
+      holderShares.IntegralCanonical ∧ holderShares.Canonical ∧
+      holderShares.negative = false ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      r.sharesDestroyed = holderShares ∧
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+  clawback_zero_dilution_witness
 
 /-- Along any margin-respecting history of `n` operations from a lawful vault with no
 unrealized loss, per-share value decreases by at most the compounded factor

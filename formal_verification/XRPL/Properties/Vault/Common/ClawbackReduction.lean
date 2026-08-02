@@ -24,6 +24,15 @@ theorem assetsToSharesClawback_nonzero (v : Vault) (assets holderShares : STAmou
   rw [if_neg (by rw [hz]; exact Bool.false_ne_true)]
   simp only [pure_bind]
 
+/-- With a zero amount the clawback share computation returns the holder's
+entire share balance unchanged. -/
+theorem assetsToSharesClawback_zero (v : Vault) (assets holderShares : STAmount)
+    (hz : assets.isZero = true) :
+    assetsToSharesClawback v assets holderShares = .ok holderShares := by
+  unfold assetsToSharesClawback
+  rw [if_pos hz]
+  rfl
+
 /-- **`computeClawback` no-error reduction.** A `cr.error = none` outcome for a
 nonzero amount forces the happy path of the body: the two-way exchange, and
 either the computed recovery fit under `assetsAvailable`, or the clamped
@@ -137,6 +146,114 @@ theorem computeClawback_none_reduces (v : Vault) (assets holderShares : STAmount
             exact ⟨sharesDestroyed, assetsRecovered, arn, rfl, h2, h3,
               Or.inl ⟨by simpa using hgt, rfl, rfl⟩⟩
 
+/-- **`computeClawback` no-error reduction, zero amount.** A `cr.error = none`
+outcome for a zero amount destroys the holder's shares directly: the withdraw
+prices `holderShares` through the withdraw pipeline, and either it fit under
+`assetsAvailable` and the destroyed shares are exactly `holderShares`, or the
+clamped recompute did. -/
+theorem computeClawback_none_reduces_zero (v : Vault) (assets holderShares : STAmount)
+    (cr : ComputeClawbackResult)
+    (hz : assets.isZero = true)
+    (hok : computeClawback v assets holderShares = .ok cr) (herr : cr.error = none) :
+    assets.negative = false ∧
+    ∃ (assetsRecovered : STAmount) (assetsRecoveredNumber : Number),
+      v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered ∧
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
+      ((assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
+        cr.assetsRecovered = assetsRecovered ∧ cr.sharesDestroyed = holderShares) ∨
+       (assetsRecoveredNumber.operator_gt v.assetsAvailable = true ∧
+        ∃ (clamped sharesDestroyed' assetsRecovered' : STAmount)
+          (assetsRecoveredNumber' : Number),
+          STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok clamped ∧
+          assetsToSharesWithdraw v clamped true false = .ok sharesDestroyed' ∧
+          v.sharesToAssetsWithdraw sharesDestroyed' false = .ok assetsRecovered' ∧
+          assetsRecovered'.toNumber .to_nearest = .ok assetsRecoveredNumber' ∧
+          assetsRecoveredNumber'.operator_gt v.assetsAvailable = false ∧
+          cr.assetsRecovered = assetsRecovered' ∧
+          cr.sharesDestroyed = sharesDestroyed')) := by
+  unfold computeClawback at hok
+  simp only [pure_bind] at hok
+  by_cases hneg : assets.negative = true
+  · rw [if_pos hneg] at hok
+    have hcr := (Except.ok.inj hok).symm
+    rw [hcr] at herr
+    exact absurd herr (by simp)
+  · rw [if_neg hneg] at hok
+    refine ⟨by simpa using hneg, ?_⟩
+    obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
+    rw [assetsToSharesClawback_zero v assets holderShares hz] at htc
+    have handler_err : ∀ e : Error,
+        tryCatch (Except.error e :
+            Except Error (DoResultPR ComputeClawbackResult ComputeClawbackResult PUnit))
+          (fun e => if isOverflow e = true then
+              pure (DoResultPR.return
+                ⟨some .tecPATH_DRY, STAmount.zero v.numericType, STAmount.zero .int64⟩
+                PUnit.unit)
+            else do
+              let y ← throw e
+              pure (DoResultPR.pure y PUnit.unit)) = .ok rr → False := by
+      intro e htc'
+      rw [tryCatch_error] at htc'
+      by_cases hov : isOverflow e = true
+      · rw [if_pos hov, epure] at htc'
+        rw [← Except.ok.inj htc'] at hK
+        have hcr := Except.ok.inj (show Except.ok _ = Except.ok cr from hK)
+        rw [← hcr] at herr
+        exact absurd herr (by simp)
+      · rw [if_neg hov, ethrow, err_bind] at htc'
+        exact absurd htc' (by simp)
+    simp only [ok_bind] at htc
+    cases h2 : v.sharesToAssetsWithdraw holderShares false with
+    | error e => rw [h2, err_bind] at htc; exact absurd htc (handler_err e)
+    | ok assetsRecovered =>
+      rw [h2] at htc
+      simp only [ok_bind] at htc
+      cases h3 : assetsRecovered.toNumber .to_nearest with
+      | error e => rw [h3, err_bind] at htc; exact absurd htc (handler_err e)
+      | ok arn =>
+        rw [h3] at htc
+        simp only [ok_bind] at htc
+        by_cases hgt : arn.operator_gt v.assetsAvailable = true
+        · rw [if_pos hgt] at htc
+          cases h4 : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest with
+          | error e => rw [h4, err_bind] at htc; exact absurd htc (handler_err e)
+          | ok clamped =>
+            rw [h4] at htc
+            simp only [ok_bind] at htc
+            cases h5 : assetsToSharesWithdraw v clamped true false with
+            | error e => rw [h5, err_bind] at htc; exact absurd htc (handler_err e)
+            | ok sharesDestroyed' =>
+              rw [h5] at htc
+              simp only [ok_bind] at htc
+              cases h6 : v.sharesToAssetsWithdraw sharesDestroyed' false with
+              | error e => rw [h6, err_bind] at htc; exact absurd htc (handler_err e)
+              | ok assetsRecovered' =>
+                rw [h6] at htc
+                simp only [ok_bind] at htc
+                cases h7 : assetsRecovered'.toNumber .to_nearest with
+                | error e => rw [h7, err_bind] at htc; exact absurd htc (handler_err e)
+                | ok arn' =>
+                  rw [h7] at htc
+                  simp only [ok_bind] at htc
+                  by_cases hgt' : arn'.operator_gt v.assetsAvailable = true
+                  · rw [if_pos hgt', epure, tryCatch_ok] at htc
+                    rw [← Except.ok.inj htc] at hK
+                    have hcr := Except.ok.inj (show Except.ok _ = Except.ok cr from hK)
+                    rw [← hcr] at herr
+                    exact absurd herr (by simp)
+                  · rw [if_neg hgt', epure, tryCatch_ok] at htc
+                    rw [← Except.ok.inj htc] at hK
+                    have hcr := Except.ok.inj (show Except.ok _ = Except.ok cr from hK)
+                    rw [← hcr]
+                    exact ⟨assetsRecovered, arn, rfl, h3,
+                      Or.inr ⟨hgt, clamped, sharesDestroyed', assetsRecovered', arn',
+                        rfl, h5, h6, h7, by simpa using hgt', rfl, rfl⟩⟩
+        · rw [if_neg hgt, epure, tryCatch_ok] at htc
+          rw [← Except.ok.inj htc] at hK
+          have hcr := Except.ok.inj (show Except.ok _ = Except.ok cr from hK)
+          rw [← hcr]
+          exact ⟨assetsRecovered, arn, rfl, h3, Or.inl ⟨by simpa using hgt, rfl, rfl⟩⟩
+
 /-- **`Vault.clawback` success reduction.** A run that returns no error code
 exposes the `computeClawback` result (nonzero destroyed shares), the passed
 too-small guard, and the three stored-field updates in the success record. -/
@@ -201,5 +318,29 @@ theorem Vault.clawback_success_reduces (v : Vault) (assets holderShares : STAmou
         exact ⟨cr, hcomp, herr2, by simpa using hz, rfl, rfl,
           sbn, arn, at', st', av', atr, atr', hsbn, harn, hat, hatr, hatr',
           by simpa using hg, hst, hav, rfl⟩
+
+/-- **Proof body of `clawback_zero_all_shares`.** -/
+theorem Vault.clawback_zero_all_shares_proof (v : Vault)
+    (assets holderShares assetsRecovered : STAmount) (assetsRecoveredNumber : Number)
+    (r : ClawbackResult)
+    (hz : assets.isZero = true)
+    (hassets : v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered)
+    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
+    (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
+    r.sharesDestroyed = holderShares ∧ r.assetsRecovered = assetsRecovered ∧
+    holderShares.isZero = false := by
+  obtain ⟨cr, hcomp, herr2, hcrnz, hra, hsd, -⟩ :=
+    Vault.clawback_success_reduces v assets holderShares r hok herr
+  obtain ⟨-, ar, arn, har, harn, hdisj⟩ :=
+    computeClawback_none_reduces_zero v assets holderShares cr hz hcomp herr2
+  -- the run is deterministic, pin the intermediates against the hypotheses
+  obtain rfl := Except.ok.inj (har.symm.trans hassets)
+  obtain rfl := Except.ok.inj (harn.symm.trans hnum)
+  rcases hdisj with ⟨-, hra', hsd'⟩ | ⟨hgt, -⟩
+  · rw [hsd'] at hsd hcrnz
+    exact ⟨hsd, hra.trans hra', hcrnz⟩
+  · rw [hle] at hgt
+    exact absurd hgt Bool.false_ne_true
 
 end XRPL.Model.SingleAssetVault

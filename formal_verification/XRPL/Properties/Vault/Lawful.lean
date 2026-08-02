@@ -90,8 +90,10 @@ theorem Vault.clawback_lawful (assets holderShares : STAmount)
     -- the clawback amount is a stored-canonical user input
     (hcanon : assets.Canonical)
     (r : ClawbackResult)
-    -- zero amount claws all holder shares
-    (hznz : assets.isZero = false)
+    -- the holder balance passed to the run is a stored integral MPT amount,
+    -- value exact and nonnegative (it carries the zero-amount claw all arm)
+    (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
+    (hSnn : holderShares.negative = false)
     (hok : v.clawback assets holderShares = .ok r)
     -- the destroyed shares stay strictly below the share total (a full clawback
     -- can leave asset dust with zero shares outstanding, which
@@ -100,7 +102,7 @@ theorem Vault.clawback_lawful (assets holderShares : STAmount)
     -- the share total fits the share domain (int64)
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
-  Vault.clawback_lawful_proof v assets holderShares hv hL hAV hcanon r hznz hok hslt hfit
+  Vault.clawback_lawful_proof v assets holderShares hv hL hAV hcanon r hSic hSc hSnn hok hslt hfit
 
 theorem Vault.burnShares_lawful (sharesDestroyed sharesTotalAmount : STAmount) (v' : Vault)
     (hv : v.Lawful) -- the starting vault is lawful
