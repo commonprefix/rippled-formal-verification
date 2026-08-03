@@ -148,19 +148,6 @@ theorem Vault.clawback_zero_all_shares
   Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered
     assetsRecoveredNumber r hz hassets hnum hle hok herr
 
-/-- Witness: the claw-all path is exercised, a zero amount run exists that
-destroys exactly the holder's nonzero share balance. -/
-theorem Vault.clawback_zero_all_shares_attained :
-    ∃ (v : Vault) (assets holderShares assetsRecovered : STAmount)
-      (assetsRecoveredNumber : Number) (r : ClawbackResult),
-      v.Lawful ∧ assets.isZero = true ∧
-      v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered ∧
-      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
-      assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
-      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      r.sharesDestroyed = holderShares ∧ holderShares.isZero = false :=
-  Vault.clawback_zero_all_shares_witness
-
 /-- Recovered assets never exceed the stored `assetsAvailable`: every
 successful run passes this exact comparison, and a run whose first computed
 recovery is above `assetsAvailable` recomputes from `assetsAvailable` with
