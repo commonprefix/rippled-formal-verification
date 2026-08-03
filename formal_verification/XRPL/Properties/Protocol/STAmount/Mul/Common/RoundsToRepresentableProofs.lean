@@ -11,7 +11,7 @@ theorem STAmount.operator_mul_repr_iou_proof (v1 v2 result : STAmount) (nt : Num
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .to_nearest := by
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent := by
   obtain ⟨r, hofn, hr_lo, hr_hi, hr_exp_lo, hr_exp_hi, hop⟩ :=
     STAmount.operator_mul_iou_decompose v1 v2 result nt hnt
       hc1 hc2 hok hresult
@@ -33,9 +33,9 @@ theorem STAmount.operator_mul_repr_iou_proof (v1 v2 result : STAmount) (nt : Num
       exact_mod_cast le_of_lt hr_hi
     exact le_trans hkey (mul_le_mul_of_nonneg_left (zpow_le_zpow_right₀ (by norm_num) hexp)
       (by positivity))
-  exact STAmount.RoundsToRepresentableWithin_of_double_round result r (v1.toRat * v2.toRat)
-    .to_nearest 1 (1 / 2) (5 / (2 ^ 63 + 7 : ℚ)) trivial hsnap hr_ulp hop (by positivity)
-    (by norm_num) (by norm_num)
+  have h := STAmount.double_round_abs_le result r (v1.toRat * v2.toRat) 1 (1 / 2)
+    (5 / (2 ^ 63 + 7 : ℚ)) hsnap hr_ulp hop (by positivity) (by norm_num) (by norm_num)
+  simpa using h
 
 /-- Proof of `operator_mul_repr_iou_directed` (IOU multiply within **1** ULP, directed
 modes, non-negative operands). The directed double rounding does not compound: because the
@@ -49,19 +49,30 @@ theorem STAmount.operator_mul_repr_iou_directed_proof (v1 v2 result : STAmount) 
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 mode := by
-  cases mode with
-  | to_nearest =>
-    exact STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
-  | upward =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .upward
-      (Or.inl rfl) hnt hc1 hc2 hn1 hn2 hok hresult
-  | downward =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .downward
-      (Or.inr (Or.inl rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
-  | towards_zero =>
-    exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .towards_zero
-      (Or.inr (Or.inr rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
+    (mode = .downward → result.toRat ≤ v1.toRat * v2.toRat) ∧
+     (mode = .upward   → v1.toRat * v2.toRat ≤ result.toRat) ∧
+    |result.toRat - v1.toRat * v2.toRat| ≤ (10 : ℚ) ^ result.exponent := by
+  have h : STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) mode 1 := by
+    cases mode with
+    | to_nearest =>
+      exact ⟨trivial, by
+        rw [Nat.cast_one, one_mul]
+        exact STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult⟩
+    | upward =>
+      exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .upward
+        (Or.inl rfl) hnt hc1 hc2 hn1 hn2 hok hresult
+    | downward =>
+      exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .downward
+        (Or.inr (Or.inl rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
+    | towards_zero =>
+      exact STAmount.operator_mul_repr_iou_directed_core v1 v2 result nt .towards_zero
+        (Or.inr (Or.inr rfl)) hnt hc1 hc2 hn1 hn2 hok hresult
+  have hbound := h.2
+  rw [Nat.cast_one, one_mul] at hbound
+  have hdir := h.1
+  refine ⟨?_, ?_, hbound⟩
+  · intro hm; subst hm; exact hdir
+  · intro hm; subst hm; exact hdir
 
 /-- Proof of `operator_mul_iou_within_1ulp` (IOU multiply accuracy **1** ULP, any sign/mode).
 Dispatches to the half-ULP `to_nearest` snap, the magnitude `towards_zero` collapse, and the
@@ -71,12 +82,10 @@ theorem STAmount.operator_mul_iou_within_1ulp_proof (v1 v2 result : STAmount) (n
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    |result.toRat - v1.toRat * v2.toRat| ≤ 1 * (10 : ℚ) ^ result.exponent := by
-  rw [one_mul]
+    |result.toRat - v1.toRat * v2.toRat| ≤ (10 : ℚ) ^ result.exponent := by
   cases mode with
   | to_nearest =>
-    have h := STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
-    have := h.2; rwa [Nat.cast_one, one_mul] at this
+    exact STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
   | upward =>
     exact STAmount.operator_mul_iou_directed_mag_one v1 v2 result nt .upward (Or.inl rfl)
       hnt hc1 hc2 hok hresult

@@ -129,7 +129,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (h_truth_nn : 0 ≤ v1.toRat + v2.toRat)
     (hok : STAmount.operator_add v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) 1 mode := by
+    STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) mode 1 := by
   obtain ⟨xn, yn, sum, sumI, hrv, hexp_br, hofn, hsumI_ne, h_lo, h_hi, he_lo, he_hi,
       hxn_val, hyn_val, hxn_norm, hyn_norm, _hxn_ne, _hyn_ne, _h_no_cancel, hsum_ne, hadd⟩ :=
     STAmount.operator_add_iou_decompose_anyMode v1 v2 result mode hc1 hc2
@@ -336,7 +336,7 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
     (h_truth_np : v1.toRat + v2.toRat ≤ 0)
     (hok : STAmount.operator_add v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) 1 mode := by
+    STAmount.RoundsToRepresentableWithin result (v1.toRat + v2.toRat) mode 1 := by
   obtain ⟨xn, yn, sum, sumI, hrv, hexp_br, hofn, hsumI_ne, h_lo, h_hi, he_lo, he_hi,
       hxn_val, hyn_val, hxn_norm, hyn_norm, _hxn_ne, _hyn_ne, _h_no_cancel, hsum_ne, hadd⟩ :=
     STAmount.operator_add_iou_decompose_anyMode v1 v2 result mode hc1 hc2

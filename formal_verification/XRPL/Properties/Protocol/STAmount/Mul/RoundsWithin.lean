@@ -41,8 +41,7 @@ theorem STAmount.operator_mul_rounds_integral (v1 v2 result : STAmount) (nt : Nu
 theorem STAmount.operator_mul_rounds_iou (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result)
-    (hresult : result.mValue ≠ 0) :
+    (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
     RoundsWithin result (v1.toRat * v2.toRat) .to_nearest εMulIOUToNearest :=
   STAmount.operator_mul_iou_rel_error v1 v2 result nt hnt hc1 hc2 hok hresult
 

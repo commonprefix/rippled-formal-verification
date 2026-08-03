@@ -352,7 +352,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 mode := by
+    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) mode 1 := by
   obtain ⟨r, hofn, hr_lo, hr_hi, hr_exp_lo, hr_exp_hi, hr_neg, hrepr⟩ :=
     STAmount.operator_mul_iou_decompose_tight v1 v2 result nt mode hnt
       hc1 hc2 hn1 hn2 hok hresult

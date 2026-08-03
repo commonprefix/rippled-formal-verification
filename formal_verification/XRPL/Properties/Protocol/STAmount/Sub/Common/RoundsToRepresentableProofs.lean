@@ -14,7 +14,7 @@ theorem STAmount.operator_sub_repr_iou_proof (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
     (hok : STAmount.operator_sub v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat - v2.toRat) 1 mode := by
+    STAmount.RoundsToRepresentableWithin result (v1.toRat - v2.toRat) mode 1 := by
   have htruth : v1.toRat + (v2.operator_neg).toRat = v1.toRat - v2.toRat := by
     rw [STAmount.operator_neg_toRat]; ring
   have hok' : STAmount.operator_add v1 v2.operator_neg mode = .ok result := hok

@@ -16,17 +16,16 @@ theorem STAmount.operator_mul_repr_integral (v1 v2 result : STAmount) (nt : Nume
     (hbound_val : nt.maxValue.toNat ≤ maxRep.toNat)
     (hbound : v1.mValue.toNat * v2.mValue.toNat ≤ nt.maxValue.toNat)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 0 mode :=
-  RoundsToRepresentableWithin_of_eq result (v1.toRat * v2.toRat) mode
-    (STAmount.operator_mul_integral_exact v1 v2 result nt mode hc1 hc2 hntint hv1nt hv2nt
-      hn1 hn2 hbound_val hbound hok)
+    |result.toRat - v1.toRat * v2.toRat| = 0 := by
+  simp [STAmount.operator_mul_integral_exact v1 v2 result nt mode hc1 hc2 hntint hv1nt hv2nt
+    hn1 hn2 hbound_val hbound hok]
 
 /-- **IOU multiplication lands within `1` ULP of `v1 · v2` (`to_nearest`).** -/
 theorem STAmount.operator_mul_repr_iou (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .to_nearest :=
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_repr_iou_proof v1 v2 result nt hnt hc1 hc2 hok hresult
 
 /-- **IOU multiplication of non-negative operands lands within `1` ULP of `v1 · v2`
@@ -37,7 +36,9 @@ theorem STAmount.operator_mul_repr_iou_directed (v1 v2 result : STAmount) (nt : 
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 mode :=
+  (mode = .downward → result.toRat ≤ v1.toRat * v2.toRat) ∧
+  (mode = .upward → v1.toRat * v2.toRat ≤ result.toRat) ∧
+  |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_repr_iou_directed_proof v1 v2 result nt mode hnt
     hc1 hc2 hn1 hn2 hok hresult
 
@@ -49,7 +50,7 @@ theorem STAmount.operator_mul_iou_within_1ulp (v1 v2 result : STAmount) (nt : Nu
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    |result.toRat - v1.toRat * v2.toRat| ≤ 1 * (10 : ℚ) ^ result.exponent :=
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
   STAmount.operator_mul_iou_within_1ulp_proof v1 v2 result nt mode hnt
     hc1 hc2 hok hresult
 
@@ -59,11 +60,9 @@ theorem STAmount.operator_mul_repr_iou_towards_zero (v1 v2 result : STAmount) (n
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (hok : STAmount.multiply v1 v2 nt .towards_zero = .ok result) (hresult : result.mValue ≠ 0) :
-    STAmount.RoundsToRepresentableWithin result (v1.toRat * v2.toRat) 1 .towards_zero :=
-  ⟨trivial, by
-    rw [Nat.cast_one, one_mul]
-    exact STAmount.operator_mul_iou_towards_zero_one v1 v2 result nt hnt
-      hc1 hc2 hok hresult⟩
+    |result.toRat - v1.toRat * v2.toRat| ≤ 10 ^ result.exponent :=
+  STAmount.operator_mul_iou_towards_zero_one v1 v2 result nt hnt
+    hc1 hc2 hok hresult
 
 /-- **IOU multiplication never increases magnitude (`towards_zero`), any sign.**
 `upward`/`downward` admit no such any-sign directional statement. -/
