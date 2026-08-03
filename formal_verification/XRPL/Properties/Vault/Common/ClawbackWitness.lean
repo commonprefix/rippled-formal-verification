@@ -5,7 +5,7 @@ import XRPL.Model.Vault.VaultClawback
 
 /-! # Witness data for the clawback `*_attained` theorems
 
-Concrete vaults, amounts, and results for the four clawback `*_attained`
+Concrete vaults, amounts, and results for the clawback `*_attained`
 witnesses `VaultClawback.lean` delegates to, each closed by `native_decide`
 over the clawback pipeline. -/
 
@@ -31,6 +31,10 @@ def cwvB : Vault :=
 
 /-- The clawed amount, `1` of the IOU. -/
 def cwa1 : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
+
+/-- Witness holder-shares balance passed to `Vault.clawback`. Unused on these
+runs since `cwa1` is nonzero (the zero-amount "claw all" branch never fires). -/
+def cwHolderShares : STAmount := STAmount.zero .int64
 
 /-- The destroyed shares of the `cwv` run, `2333333333333333`. -/
 def cwsh1 : STAmount := STAmount.unchecked .int64 2333333333333333 0 false
@@ -69,24 +73,24 @@ def cwvB' : Vault :=
 /-- The `cwvB` clawback result. -/
 def cwr2 : ClawbackResult := ⟨none, cwvB', cwar2, cwsh2⟩
 
-/-! ## The four `*_attained` witnesses -/
+/-! ## The `*_attained` witnesses -/
 
 set_option maxRecDepth 10000
 
 /-- Witness for `Vault.clawback_sharesDestroyed_attained`: the `cwv` run's
 half-share rounding error `1/3` exceeds the relative budget alone. -/
 theorem Vault.clawback_sharesDestroyed_witness :
-    ∃ (v : Vault) (assets sharesDestroyed assetsRecovered : STAmount)
+    ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (assetsRecoveredNumber : Number) (r : ClawbackResult),
       v.Lawful ∧ v.WithdrawNavExact false ∧
       assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
-      v.clawback assets = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesDestroyed
         (v.idealSharesClawback assets.toRat) depositε := by
-  refine ⟨cwv, cwa1, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
+  refine ⟨cwv, cwa1, cwHolderShares, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -95,7 +99,7 @@ theorem Vault.clawback_sharesDestroyed_witness :
 run reprices from `assetsAvailable` and its truncation error `1/3` exceeds the
 relative budget alone. -/
 theorem Vault.clawback_sharesDestroyed_clamped_witness :
-    ∃ (v : Vault) (assets sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
+    ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
       (assetsRecoveredNumber : Number) (r : ClawbackResult),
       v.Lawful ∧ v.WithdrawNavExact false ∧
       assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
@@ -103,10 +107,10 @@ theorem Vault.clawback_sharesDestroyed_clamped_witness :
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = true ∧
       STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered' ∧
-      v.clawback assets = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesDestroyed
         (v.idealSharesClawback assetsRecovered'.toRat) depositε := by
-  refine ⟨cwvB, cwa1, cwsh1, cwar1, cwclamp, ⟨false, 9999999999999998000, -19⟩, cwr2,
+  refine ⟨cwvB, cwa1, cwHolderShares, cwsh1, cwar1, cwclamp, ⟨false, 9999999999999998000, -19⟩, cwr2,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -115,11 +119,12 @@ theorem Vault.clawback_sharesDestroyed_clamped_witness :
 recovery misses the destroyed shares' exact worth by more than the relative
 budget. -/
 theorem Vault.clawback_assetsRecovered_witness :
-    ∃ (v : Vault) (assets : STAmount) (r : ClawbackResult),
-      v.Lawful ∧ v.WithdrawNavExact false ∧ v.clawback assets = .ok r ∧ r.error = none ∧
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
+      v.Lawful ∧ v.WithdrawNavExact false ∧ v.clawback assets holderShares = .ok r ∧
+      r.error = none ∧
       RoundsWithinWitness r.assetsRecovered
         (v.idealAssetsClawback r.sharesDestroyed.toRat) depositε := by
-  refine ⟨cwv, cwa1, cwr1,
+  refine ⟨cwv, cwa1, cwHolderShares, cwr1,
     by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -127,9 +132,9 @@ theorem Vault.clawback_assetsRecovered_witness :
 /-- Witness for `Vault.clawback_vault_updates_attained`: the `cwvB` run's
 stored total is not the exact difference. -/
 theorem Vault.clawback_vault_updates_witness :
-    ∃ (v : Vault) (assets : STAmount) (r : ClawbackResult),
-      v.Lawful ∧ v.clawback assets = .ok r ∧ r.error = none ∧
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
+      v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
-  ⟨cwvB, cwa1, cwr2, by native_decide⟩
+  ⟨cwvB, cwa1, cwHolderShares, cwr2, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

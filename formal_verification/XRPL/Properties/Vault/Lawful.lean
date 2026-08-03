@@ -79,7 +79,7 @@ theorem Vault.withdraw_lawful (amount : WithdrawAmount) (waiveUnrealizedLoss : B
   Vault.withdraw_lawful_proof v amount waiveUnrealizedLoss hv hL hAV r hok
     hSc hSnt hSnn hsle hfit
 
-theorem Vault.clawback_lawful (assets : STAmount)
+theorem Vault.clawback_lawful (assets holderShares : STAmount)
     (hv : v.Lawful) -- the starting vault is lawful
     -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
     -- the two independent additions can shrink the gap and break Valid, so
@@ -89,7 +89,12 @@ theorem Vault.clawback_lawful (assets : STAmount)
     (hAV : v.assetsAvailable = v.assetsTotal)
     -- the clawback amount is a stored-canonical user input
     (hcanon : assets.Canonical)
-    (r : ClawbackResult) (hok : v.clawback assets = .ok r)
+    (r : ClawbackResult)
+    -- the holder balance passed to the run is a stored integral MPT amount,
+    -- value exact and nonnegative (it carries the zero-amount claw all arm)
+    (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
+    (hSnn : holderShares.negative = false)
+    (hok : v.clawback assets holderShares = .ok r)
     -- the destroyed shares stay strictly below the share total (a full clawback
     -- can leave asset dust with zero shares outstanding, which
     -- `Valid.empty_shares` forbids)
@@ -97,7 +102,7 @@ theorem Vault.clawback_lawful (assets : STAmount)
     -- the share total fits the share domain (int64)
     (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
-  Vault.clawback_lawful_proof v assets hv hL hAV hcanon r hok hslt hfit
+  Vault.clawback_lawful_proof v assets holderShares hv hL hAV hcanon r hSic hSc hSnn hok hslt hfit
 
 theorem Vault.burnShares_lawful (sharesDestroyed sharesTotalAmount : STAmount) (v' : Vault)
     (hv : v.Lawful) -- the starting vault is lawful

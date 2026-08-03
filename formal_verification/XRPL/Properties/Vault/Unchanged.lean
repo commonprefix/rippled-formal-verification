@@ -26,11 +26,11 @@ theorem Vault.withdraw_error_unchanged (v : Vault) (amount : WithdrawAmount)
     r.sharesBurned = STAmount.zero .int64 :=
   Vault.withdraw_error_rejected_proof v amount waiveUnrealizedLoss r hok herr
 
-theorem Vault.clawback_error_unchanged (v : Vault) (assets : STAmount)
-    (r : ClawbackResult) (hok : v.clawback assets = .ok r)
+theorem Vault.clawback_error_unchanged (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r)
     (herr : r.error.isSome = true) :
     r.vault' = v ∧ r.assetsRecovered = STAmount.zero v.numericType ∧
     r.sharesDestroyed = STAmount.zero .int64 :=
-  Vault.clawback_error_rejected_proof v assets r hok herr
+  Vault.clawback_error_rejected_proof v assets holderShares r hok herr
 
 end XRPL.Model.SingleAssetVault

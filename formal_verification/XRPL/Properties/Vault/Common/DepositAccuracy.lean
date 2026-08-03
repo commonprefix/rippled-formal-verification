@@ -654,6 +654,16 @@ lemma STAmount.Canonical.abs_toRat_ge (s : STAmount) (hc : s.Canonical)
       _ ≤ (s.mValue.toNat : ℚ) * 10 ^ s.mOffset := by
           exact mul_le_mul_of_nonneg_right (by exact_mod_cast hio.mant_lo) (le_of_lt h10)
 
+/-- A nonnegative nonzero deposit amount is strictly positive: it clears
+the `10 ^ (-81)` magnitude floor, so it cannot be the zero rational. -/
+lemma STAmount.Canonical.toRat_pos_of_nonneg (s : STAmount) (hc : s.Canonical)
+    (hnn : 0 ≤ s.toRat) (hnz : s.isZero = false) : 0 < s.toRat := by
+  have hfloor := STAmount.Canonical.abs_toRat_ge s hc (ne_of_beq_false hnz)
+  rcases lt_or_eq_of_le hnn with h | h
+  · exact h
+  · exfalso; rw [← h, abs_zero] at hfloor
+    linarith [show (0 : ℚ) < 10 ^ (-81 : ℤ) from zpow_pos (by norm_num) _]
+
 /-! ## Relative-error composition of the `mul`/`div` exchange pipeline -/
 
 /-- Compose the three stage errors of `T0 / nav` computed as

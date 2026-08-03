@@ -679,13 +679,13 @@ theorem Vault.withdraw_no_dilution_proof (amount : WithdrawAmount) (r : Withdraw
 /-- A successful clawback moves `withdrawNav` by exactly the change in the stored
 `assetsTotal`: it rewrites only the three balance fields, leaving `interestUnrealized`
 and `lossUnrealized` untouched. -/
-theorem Vault.clawback_withdrawNav_change (assets : STAmount) (r : ClawbackResult)
-    (hok : v.clawback assets = .ok r) (herr : r.error = none) :
+theorem Vault.clawback_withdrawNav_change (assets holderShares : STAmount) (r : ClawbackResult)
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav - v.withdrawNav =
       r.vault'.toExact.assetsTotal - v.toExact.assetsTotal := by
   obtain ⟨cr, hcomp, herr2, hcrnz, hra_eq, hsd_eq, sbn, arn, at', st', av', atr, atr',
       hsbn, harn, hat, -, -, -, hst, hav, hr⟩ :=
-    Vault.clawback_success_reduces v assets r hok herr
+    Vault.clawback_success_reduces v assets holderShares r hok herr
   subst hr
   simp only [Vault.withdrawNav, Vault.toExact]; ring
 
@@ -695,16 +695,19 @@ idealAssetsWithdraw false`), so it reduces to `withdraw_no_dilution_arith` exact
 `withdraw_no_dilution_proof`: recovery upper `p ≤ A·x/S·(1 + 12/(2^63-3))`, stored
 `assetsTotal` update lower at the raw `6/(2^63-3)` subtraction stage, and the near-final
 margin `sharesDestroyed ≤ sharesTotal/2`. There is no final exit (a clawback is always
-partial), and `clawback_recovery_priced` already gives `0 < withdrawNav`, so no
-nonzero-payout hypothesis is needed. -/
-theorem Vault.clawback_no_dilution_proof (assets : STAmount) (r : ClawbackResult)
+partial), and the destroyed shares are nonzero, so the margin keeps the share total
+positive; a zero amount (claw all holder shares) is covered through the holder-balance
+side conditions. -/
+theorem Vault.clawback_no_dilution_proof (assets holderShares : STAmount) (r : ClawbackResult)
     (hv : v.Lawful)
     (hL : v.toExact.lossUnrealized = 0)
     (hnav : v.WithdrawNavExact false)
     (hc : assets.Canonical)
+    (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
+    (hSnn : holderShares.negative = false)
     (hmargin : r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
     (hSfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
-    (hok : v.clawback assets = .ok r) (herr : r.error = none) :
+    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
       v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) := by
   set A : ℚ := v.toExact.assetsTotal with hA_def
@@ -712,9 +715,9 @@ theorem Vault.clawback_no_dilution_proof (assets : STAmount) (r : ClawbackResult
   have hAnn : 0 ≤ A := hv.valid.assetsTotal_nonneg
   have hl0 : v.lossUnrealized.toRat = 0 := hL
   have hNav_v : v.withdrawNav = A := by unfold Vault.withdrawNav; rw [hL]; ring
-  -- recovery priced through the withdraw pipeline; `0 < withdrawNav`
-  obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz, hnav_pos⟩ :=
-    Vault.clawback_recovery_priced v assets r hv hnav hc hok herr
+  -- recovery priced through the withdraw pipeline
+  obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz⟩ :=
+    Vault.clawback_recovery_priced' v assets holderShares r hv hnav hc hSc hSnn hok herr
   obtain ⟨hp_nn, hideal_nn, hp_up, -⟩ :=
     Vault.sharesToAssetsWithdraw_spec_raw v hv r.sharesDestroyed r.assetsRecovered false
       hnn_sd hcanon_sd hnav hprice
@@ -724,11 +727,13 @@ theorem Vault.clawback_no_dilution_proof (assets : STAmount) (r : ClawbackResult
     unfold Vault.idealAssetsWithdraw
     rw [if_neg (by decide : ¬ ((false : Bool) = true)), hNav_v]
   rw [hideal_eq] at hp_up
-  have hApos : 0 < A := by rw [hNav_v] at hnav_pos; exact hnav_pos
+  -- the destroyed shares are nonzero, so the near-final margin forces `0 < S`
+  have hxpos : 0 < x :=
+    STAmount.Canonical.toRat_pos_of_nonneg r.sharesDestroyed hcanon_sd hnn_sd hsdnz
   -- reduce for the stored `assetsTotal` subtraction
   obtain ⟨cr, hcomp, herr2, hcrnz, hra_eq, hsd_eq, sbn, arn, at', st', av', atr, atr',
       hsbn, harn, hat, -, -, -, hst, hav, hr⟩ :=
-    Vault.clawback_success_reduces v assets r hok herr
+    Vault.clawback_success_reduces v assets holderShares r hok herr
   have hnum_r : r.assetsRecovered.toNumber .to_nearest = .ok arn := by rw [hra_eq]; exact harn
   have hle_AT : p ≤ v.assetsTotal.toRat := le_trans hle_AA hv.valid.assetsAvailable_le
   have hApm : 0 ≤ A - p := by have : p ≤ A := hle_AT; linarith
@@ -742,14 +747,7 @@ theorem Vault.clawback_no_dilution_proof (assets : STAmount) (r : ClawbackResult
     rw [abs_of_nonneg hApm] at h
     have hab := abs_le.mp h
     nlinarith [hab.1]
-  have hSpos : 0 < S := by
-    rcases eq_or_lt_of_le (show (0 : ℚ) ≤ S by rw [hS_def]; positivity) with hS0 | hSp
-    · exfalso
-      have hSnat : v.toExact.sharesTotal = 0 := by
-        have : ((v.toExact.sharesTotal : ℕ) : ℚ) = 0 := by rw [← hS_def]; exact hS0.symm
-        exact_mod_cast this
-      exact absurd (hv.valid.empty_shares hSnat).1 (ne_of_gt hApos)
-    · exact hSp
+  have hSpos : 0 < S := by linarith [hxpos, hmargin]
   have hmargin' : 2 * x ≤ S := by rw [hx_def]; linarith [hmargin]
   have hcore : A * (S - x) * (1 - depositε) ≤ at'.toRat * S :=
     withdraw_no_dilution_arith A S x p at'.toRat (12 / (2 ^ 63 - 3)) (6 / (2 ^ 63 - 3))
@@ -759,7 +757,8 @@ theorem Vault.clawback_no_dilution_proof (assets : STAmount) (r : ClawbackResult
     rw [hr]; simp only [Vault.withdrawNav, Vault.toExact, hl0]; ring
   have hle_x : x ≤ S := by rw [hx_def]; linarith [hmargin, hSpos]
   have hSharesEq : (r.vault'.toExact.sharesTotal : ℚ) = S - x :=
-    (Vault.clawback_vault_updates_proof v assets r hv hnav hc hok herr).2.2 ⟨hle_x, hSfit⟩
+    (Vault.clawback_vault_updates_proof' v assets holderShares r hv hnav hc hSic hSc hSnn
+      hok herr).2.2 ⟨hle_x, hSfit⟩
   rw [ge_iff_le, hNav_v, hNav_r, hSharesEq]
   exact hcore
 
@@ -996,55 +995,56 @@ theorem Vault.ReachableFromIn.no_dilution_proof (w : Vault) (n : ℕ)
         exact le_of_mul_le_mul_right key hSu_pos
       · rw [hNw0]; simp only [zero_mul]; exact mul_nonneg hNr_nn hSw_nn
 
-  | clawback u' k assets r prev hrun hnav hcanon hmargin hSfit ih =>
+  | clawback u' k assets holderShares r prev hrun hnav hcanon hSic hSc hSnn hmargin hSfit ih =>
     obtain ⟨hLu, hLu0, hAVu, hSuw, hratio_u⟩ := ih
     have he_nn : (0 : ℚ) ≤ 1 - depositε := by rw [depositε_eq]; norm_num
     have he_le1 : (1 : ℚ) - depositε ≤ 1 := by rw [depositε_eq]; norm_num
     have hSu_nn : (0 : ℚ) ≤ (u'.toExact.sharesTotal : ℚ) := by exact_mod_cast Nat.zero_le _
     have hSw_nn : (0 : ℚ) ≤ (w.toExact.sharesTotal : ℚ) := by exact_mod_cast Nat.zero_le _
     have hNu_nn : 0 ≤ u'.withdrawNav := hLu.valid.withdraw_nav_nonneg
-    -- success derives S_u > 0 (recovery pricing forces positive nav)
+    -- success derives S_u > 0 (nonzero destroyed shares under the margin)
     have hsuc_pos : r.error = none → 0 < (u'.toExact.sharesTotal : ℚ) := by
       intro herr'
-      obtain ⟨-, -, -, -, -, hnav_pos⟩ :=
-        Vault.clawback_recovery_priced u' assets r hLu hnav hcanon hrun herr'
-      have hApos : 0 < u'.toExact.assetsTotal := by rwa [navEq u' hLu0] at hnav_pos
-      by_contra h; push_neg at h
-      have hz : u'.toExact.sharesTotal = 0 := by
-        have := le_antisymm h hSu_nn; exact_mod_cast this
-      exact absurd (hLu.valid.empty_shares hz).1 (ne_of_gt hApos)
+      obtain ⟨hnn_sd, hcanon_sd, -, -, hsdnz⟩ :=
+        Vault.clawback_recovery_priced' u' assets holderShares r hLu hnav hcanon hSc hSnn
+          hrun herr'
+      have hxpos : 0 < r.sharesDestroyed.toRat :=
+        STAmount.Canonical.toRat_pos_of_nonneg r.sharesDestroyed hcanon_sd hnn_sd hsdnz
+      linarith [hmargin, hxpos]
     have hLr : r.vault'.Lawful := by
       by_cases herr : r.error.isSome = true
-      · rw [(Vault.clawback_error_unchanged u' assets r hrun herr).1]; exact hLu
+      · rw [(Vault.clawback_error_unchanged u' assets holderShares r hrun herr).1]; exact hLu
       · have herr' : r.error = none := Option.not_isSome_iff_eq_none.mp herr
         have hSu_pos := hsuc_pos herr'
         have hslt : r.sharesDestroyed.toRat < (u'.toExact.sharesTotal : ℚ) := by
           linarith [hmargin, hSu_pos]
-        exact Vault.clawback_lawful u' assets hLu hLu0 hAVu hcanon r hrun hslt hSfit
-    have hLeq := Vault.clawback_preserves_unrealized u' assets r hrun
+        exact Vault.clawback_lawful u' assets holderShares hLu hLu0 hAVu hcanon r hSic hSc hSnn
+          hrun hslt hSfit
+    have hLeq := Vault.clawback_preserves_unrealized u' assets holderShares r hrun
     have hLr0 : r.vault'.toExact.lossUnrealized = 0 := by
       show r.vault'.lossUnrealized.toRat = 0; rw [hLeq]; exact hLu0
     have hAVr : r.vault'.assetsAvailable = r.vault'.assetsTotal :=
-      Vault.clawback_asset_parity u' assets r hAVu hrun
+      Vault.clawback_asset_parity u' assets holderShares r hAVu hrun
     have hNr_nn : 0 ≤ r.vault'.withdrawNav := hLr.valid.withdraw_nav_nonneg
     have hSr_nn : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := by exact_mod_cast Nat.zero_le _
     have hstep : r.vault'.withdrawNav * (u'.toExact.sharesTotal : ℚ) ≥
         u'.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) := by
       by_cases herr : r.error.isSome = true
-      · obtain ⟨hveq, -, -⟩ := Vault.clawback_error_unchanged u' assets r hrun herr
+      · obtain ⟨hveq, -, -⟩ := Vault.clawback_error_unchanged u' assets holderShares r hrun herr
         rw [hveq]; nlinarith [mul_nonneg hNu_nn hSu_nn, he_le1]
       · have herr' : r.error = none := Option.not_isSome_iff_eq_none.mp herr
-        exact Vault.clawback_no_dilution_proof u' assets r hLu hLu0 hnav hcanon hmargin hSfit hrun herr'
+        exact Vault.clawback_no_dilution_proof u' assets holderShares r hLu hLu0 hnav hcanon
+          hSic hSc hSnn hmargin hSfit hrun herr'
     have hSrpos : 0 < (u'.toExact.sharesTotal : ℚ) → 0 < (r.vault'.toExact.sharesTotal : ℚ) := by
       intro hSu_pos
       by_cases herr : r.error.isSome = true
-      · obtain ⟨hveq, -, -⟩ := Vault.clawback_error_unchanged u' assets r hrun herr
+      · obtain ⟨hveq, -, -⟩ := Vault.clawback_error_unchanged u' assets holderShares r hrun herr
         rw [hveq]; exact hSu_pos
       · have herr' : r.error = none := Option.not_isSome_iff_eq_none.mp herr
         have hle_x : r.sharesDestroyed.toRat ≤ (u'.toExact.sharesTotal : ℚ) := by
           linarith [hmargin, hSu_pos]
-        have hSrq := (Vault.clawback_vault_updates_proof u' assets r hLu hnav hcanon hrun herr').2.2
-          ⟨hle_x, hSfit⟩
+        have hSrq := (Vault.clawback_vault_updates_proof' u' assets holderShares r hLu hnav hcanon
+          hSic hSc hSnn hrun herr').2.2 ⟨hle_x, hSfit⟩
         rw [hSrq]; linarith [hmargin, hSu_pos]
     refine ⟨hLr, hLr0, hAVr, ?_, ?_⟩
     · rcases hSuw with hSu_pos | hNw0

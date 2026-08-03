@@ -12,28 +12,29 @@ variable (v : Vault)
 
 /-- A negative `assets` amount: `some .tecINTERNAL`, the vault is unchanged
 and nothing is recovered. -/
-theorem Vault.clawback_negative_amount (assets : STAmount)
+theorem Vault.clawback_negative_amount (assets holderShares : STAmount)
     (hneg : assets.negative = true) :
-    v.clawback assets = .ok (.rejected v .tecINTERNAL) :=
-  Vault.clawback_negative_amount_proof v assets hneg
+    v.clawback assets holderShares = .ok (.rejected v .tecINTERNAL) :=
+  Vault.clawback_negative_amount_proof v assets holderShares hneg
 
 /-- The exchange computation destroys zero shares: `some .tecPRECISION_LOSS`
 and the vault is unchanged. -/
-theorem Vault.clawback_zero_shares (assets : STAmount) (result : ComputeClawbackResult)
-    (hcomp : computeClawback v assets = .ok result)
+theorem Vault.clawback_zero_shares (assets holderShares : STAmount)
+    (result : ComputeClawbackResult)
+    (hcomp : computeClawback v assets holderShares = .ok result)
     (herr : result.error = none)
     (hz : result.sharesDestroyed.isZero = true) :
-    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) :=
-  Vault.clawback_zero_shares_proof v assets result hcomp herr hz
+    v.clawback assets holderShares = .ok (.rejected v .tecPRECISION_LOSS) :=
+  Vault.clawback_zero_shares_proof v assets holderShares result hcomp herr hz
 
 /-- A nonzero recovery whose subtraction does not change `assetsTotal` rounded
 into the vault's `numericType`: `some .tecPRECISION_LOSS`. The guard is marked
 "(waiting the C++ fix)" in the model. -/
-theorem Vault.clawback_recovery_too_small (assets : STAmount)
+theorem Vault.clawback_recovery_too_small (assets holderShares : STAmount)
     (result : ComputeClawbackResult)
     (sharesDestroyedNumber assetsRecoveredNumber at' : Number)
     (assetsTotalRounded assetsTotalRounded' : STAmount)
-    (hcomp : computeClawback v assets = .ok result)
+    (hcomp : computeClawback v assets holderShares = .ok result)
     (herr : result.error = none)
     (hz : result.sharesDestroyed.isZero = false)
     (hsN : result.sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
@@ -47,8 +48,8 @@ theorem Vault.clawback_recovery_too_small (assets : STAmount)
     -- the guard fires: the recovery is nonzero yet the rounded totals are equal
     (hguard : (assetsRecoveredNumber.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
-    v.clawback assets = .ok (.rejected v .tecPRECISION_LOSS) :=
-  Vault.clawback_recovery_too_small_proof v assets result sharesDestroyedNumber
+    v.clawback assets holderShares = .ok (.rejected v .tecPRECISION_LOSS) :=
+  Vault.clawback_recovery_too_small_proof v assets holderShares result sharesDestroyedNumber
     assetsRecoveredNumber at' assetsTotalRounded assetsTotalRounded'
     hcomp herr hz hsN haN hat hrt hrt' hguard
 
@@ -56,10 +57,10 @@ theorem Vault.clawback_recovery_too_small (assets : STAmount)
 recovered assets, and the destroyed shares. The updated vault stores the
 rounded differences `sharesTotal - sharesDestroyed`,
 `assetsAvailable - assetsRecovered`, and `assetsTotal - assetsRecovered`. -/
-theorem Vault.clawback_success (assets : STAmount) (result : ComputeClawbackResult)
+theorem Vault.clawback_success (assets holderShares : STAmount) (result : ComputeClawbackResult)
     (sharesDestroyedNumber assetsRecoveredNumber st' av' at' : Number)
     (assetsTotalRounded assetsTotalRounded' : STAmount)
-    (hcomp : computeClawback v assets = .ok result)
+    (hcomp : computeClawback v assets holderShares = .ok result)
     (herr : result.error = none)
     (hz : result.sharesDestroyed.isZero = false)
     (hsN : result.sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
@@ -74,10 +75,10 @@ theorem Vault.clawback_success (assets : STAmount) (result : ComputeClawbackResu
       assetsTotalRounded.operator_eq assetsTotalRounded') = false)
     (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st')
     (hav : v.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest = .ok av') :
-    v.clawback assets =
+    v.clawback assets holderShares =
       .ok ⟨none, { v with sharesTotal := st', assetsAvailable := av', assetsTotal := at' },
         result.assetsRecovered, result.sharesDestroyed⟩ :=
-  Vault.clawback_success_proof v assets result sharesDestroyedNumber assetsRecoveredNumber
+  Vault.clawback_success_proof v assets holderShares result sharesDestroyedNumber assetsRecoveredNumber
     st' av' at' assetsTotalRounded assetsTotalRounded'
     hcomp herr hz hsN haN hat hrt hrt' hguard hst hav
 
@@ -92,12 +93,12 @@ proof exists either way. TODO: prove the recomputation check dead on lawful
 vaults if possible. Then for nonnegative `assets` this inventory loses
 `tecINTERNAL`, and the matching xrpld check is certified removable. If instead
 a lawful vault reaches it, that is a reportable xrpld bug. -/
-theorem Vault.clawback_error_codes (assets : STAmount) (r : ClawbackResult)
-    (hok : v.clawback assets = .ok r) :
+theorem Vault.clawback_error_codes (assets holderShares : STAmount) (r : ClawbackResult)
+    (hok : v.clawback assets holderShares = .ok r) :
     r.error = none ∨
     r.error = some .tecINTERNAL ∨
     r.error = some .tecPATH_DRY ∨
     r.error = some .tecPRECISION_LOSS :=
-  Vault.clawback_error_codes_proof v assets r hok
+  Vault.clawback_error_codes_proof v assets holderShares r hok
 
 end XRPL.Model.SingleAssetVault
