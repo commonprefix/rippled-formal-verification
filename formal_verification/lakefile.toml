@@ -25,3 +25,10 @@ name = "XRPL"
 name = "XRPLModel"
 roots = ["XRPL.Model.Model", "XRPL.FFI.FFI"]
 globs = ["XRPL.Model.+", "XRPL.FFI.+"]
+
+# Deposit precision experiment. Native-compiled: the model's BitVec 128 arithmetic is
+# far too slow under the #eval interpreter.
+# lake exe depositprecision [sites|fuzz|seq|headroom]
+[[lean_exe]]
+name = "depositprecision"
+root = "XRPL.Experiments.Main"
