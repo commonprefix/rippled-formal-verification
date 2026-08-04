@@ -1,3 +1,5 @@
+import XRPL.Model.Lending.Loan
+import XRPL.Model.Lending.LoanBroker
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Vault.VaultBurn
 import XRPL.Model.Vault.VaultClawback
