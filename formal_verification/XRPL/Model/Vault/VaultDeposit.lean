@@ -7,11 +7,6 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
--- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
-def exponent (amount : Number) (nt : NumericType) : Except Error Int := do
-  let a ← STAmount.ofNumber nt amount .to_nearest
-  return a.exponent
-
 -- model of `roundToVaultScale` from xrpld
 def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Except Error STAmount := do
   if amountDeposit.integral then
