@@ -147,6 +147,12 @@ def STAmount.ofNumber (nt : NumericType) (n : Number) (mode : rounding_mode)
     | .ok (mantissa, exponent) =>
       STAmount.checked nt mantissa.toUInt64 exponent neg mode
 
+-- C++ `STAmount{asset, value} == value`
+def STAmount.equalAfterNumberConvert (nt : NumericType) (value : Number) : Except Error Bool := do
+  let stValue ← STAmount.ofNumber nt value .to_nearest
+  let numValue ← stValue.toNumber .to_nearest
+  return numValue.operator_eq value
+
 def STAmount.operator_eq (lhs rhs : STAmount) : Bool :=
   STAmount.areComparable lhs rhs &&
     lhs.mIsNegative == rhs.mIsNegative &&
