@@ -45,7 +45,7 @@ instance : DecidableEq MantissaRange := fun a b =>
   else
     isFalse (by intro heq; apply h; cases heq; exact ⟨rfl, rfl⟩)
 
-def largeRange : MantissaRange := { min := 1000000000000000000, max := 9999999999999999999 }
+def largeRange : MantissaRange := { min := 1_000_000_000_000_000_000, max := 9_999_999_999_999_999_999 }
 def cMinOffset : Int := -96
 def cMaxOffset : Int := 80
 def minExponent : Int := -32768
@@ -60,7 +60,7 @@ structure Number where
   deriving DecidableEq, Repr
 
 def Number.zero : Number :=
-  { negative_ := false, mantissa_ := 0, exponent_ := -2147483648 }
+  { negative_ := false, mantissa_ := 0, exponent_ := -2_147_483_648 }
 
 def Number.unchecked (negative : Bool) (mantissa : UInt64) (exponent : Int) : Number :=
   { negative_ := negative, mantissa_ := mantissa, exponent_ := exponent }
@@ -260,6 +260,10 @@ def Number.from_rep (mantissa : Int64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   Number.normalized (mantissa < 0) mantissa.toInt.natAbs.toUInt64 exponent minMant maxMant mode
 
+-- Number(int64_t) ctor
+def Number.ofInt64 (m : Int64) : Number :=
+  (Number.from_rep m 0 largeRange.min largeRange.max .to_nearest).toOption.getD Number.zero
+
 -- Divide the mantissa by 10 (dropping the low digit) until the exponent reaches 0,
 -- i.e. discard the fractional part toward zero.
 def Number.truncateAux (m : UInt64) (e : Int) : UInt64 × Int :=
@@ -406,6 +410,18 @@ def Number.operator_div (x y : Number)
     let zn := x.negative_ != y.negative_
     let (zm128, ze, dropped) := divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
     doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped
+
+-- Number::power, exponentiation by squaring (to_nearest multiply)
+def Number.power (base : Number) (exponent : Nat) : Except Error Number :=
+  match exponent with
+  | 0 => .ok (Number.ofInt64 1)
+  | 1 => .ok base
+  | k + 2 => do
+    let half ← Number.power base ((k + 2) / 2)
+    let squared ← half.operator_mul half .to_nearest
+    if (k + 2) % 2 == 1 then squared.operator_mul base .to_nearest else .ok squared
+  termination_by exponent
+  decreasing_by omega
 
 def Number.operator_add (x y : Number)
     (mode : rounding_mode) : Except Error Number := do

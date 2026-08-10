@@ -1,32 +1,74 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
+import XRPL.Model.Protocol.TER
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-structure Loan where
-  -- all rates in 1/10 bips
+def defaultPaymentTotal : UInt32 := 1      -- payments count
+def defaultPaymentInterval : UInt32 := 60  -- seconds
+def defaultGracePeriod : UInt32 := 60      -- seconds
+
+-- UInt32 max (2³² − 1)
+def maxTime : UInt32 := 4_294_967_295
+
+-- all rates in 1/10 bips (0.1 bp = 0.001% = 0.00001)
+structure LoanRates where
   interestRate : UInt32
   lateInterestRate : UInt32
   closeInterestRate : UInt32
   overpaymentInterestRate : UInt32
   overpaymentFee : UInt32
-  -- fixed fee amounts
-  loanOriginationFee : Number
-  loanServiceFee : Number
+
+-- fixed fee amounts
+structure LoanFees where
+  originationFee : Number
+  serviceFee : Number
   latePaymentFee : Number
   closePaymentFee : Number
+
+-- fee amounts (C++ getValueFields, with principalRequested prepended)
+def LoanFees.amountFields (fees : LoanFees) : List Number :=
+  [fees.originationFee, fees.serviceFee, fees.latePaymentFee, fees.closePaymentFee]
+
+structure LoanSchedule where
+  paymentInterval : UInt32
+  paymentTotal : UInt32
+  gracePeriod : UInt32
+  startDate : UInt32
+
+-- build the schedule, filling defaults
+def LoanSchedule.build (paymentInterval paymentTotal gracePeriod : Option UInt32)
+    (startDate ledgerCloseTime : UInt32) (twoStep : Bool) : LoanSchedule :=
+  { paymentInterval := paymentInterval.getD defaultPaymentInterval
+    paymentTotal := paymentTotal.getD defaultPaymentTotal
+    gracePeriod := gracePeriod.getD defaultGracePeriod
+    -- C++ getStartDate: two-step keeps the provided StartDate, one-step uses ledgerCloseTime
+    startDate := if twoStep then startDate else ledgerCloseTime }
+
+def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
+  let timeAvailable := maxTime - schedule.startDate
+  if schedule.gracePeriod > timeAvailable
+      || schedule.paymentInterval > timeAvailable
+      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds
+      || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
+    .tecKILLED
+  else
+    .tesSUCCESS
+
+structure Loan where
+  rates : LoanRates
+  fees : LoanFees
+  schedule : LoanSchedule
   -- accounting
   paymentRemaining : UInt32
   periodicPayment : Number
   principalOutstanding : Number
   totalValueOutstanding : Number
   managementFeeOutstanding : Number
-  loanScale : Int32
-  -- payment schedule in seconds
-  startDate : UInt32
-  paymentInterval : UInt32
-  gracePeriod : UInt32
+  loanScale : Int
+  -- due dates in seconds
   previousPaymentDueDate : UInt32
   nextPaymentDueDate : UInt32
   -- modeled from the flags
@@ -34,8 +76,5 @@ structure Loan where
   isImpaired : Bool
   isDefault : Bool
   allowsOverpayment : Bool
-
-def Loan.isPaidOff (loan : Loan) : Bool :=
-  loan.paymentRemaining == 0
 
 end XRPL.Model.Lending

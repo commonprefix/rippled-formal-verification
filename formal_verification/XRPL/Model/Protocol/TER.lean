@@ -24,6 +24,7 @@ inductive TER where
   | tecFAILED_PROCESSING
   | tecPATH_DRY
   | tecINSUFFICIENT_FUNDS
+  | tecKILLED
   | tefINTERNAL
   | tefBAD_LEDGER
   | terNO_ACCOUNT
@@ -58,7 +59,7 @@ def TER.isTec : TER → Bool
   | .tecNO_PERMISSION | .tecDUPLICATE | .tecNO_LINE_INSUF_RESERVE
   | .tecHAS_OBLIGATIONS | .tecNO_DST | .tecDST_TAG_NEEDED | .tecNO_LINE
   | .tecFAILED_PROCESSING | .tecPATH_DRY | .tecINSUFFICIENT_FUNDS
-  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED | .tecPRECISION_LOSS => true
+  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED | .tecPRECISION_LOSS | .tecKILLED => true
   | _ => false
 
 def TER.code : TER → Int32
@@ -85,6 +86,7 @@ def TER.code : TER → Int32
   | .tecFAILED_PROCESSING => 105
   | .tecPATH_DRY => 128
   | .tecINSUFFICIENT_FUNDS => 159
+  | .tecKILLED => 150
   | .tefINTERNAL => -192
   | .tefBAD_LEDGER => -195
   | .terNO_ACCOUNT => -96

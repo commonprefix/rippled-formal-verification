@@ -11,6 +11,7 @@ open XRPL.Model.Protocol
 structure Vault where
   assetsTotal : Number
   assetsAvailable : Number
+  assetsReserved : Number
   assetsMaximum : Option Number
   numericType : NumericType
   scale : UInt8
