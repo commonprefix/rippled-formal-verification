@@ -331,6 +331,15 @@ cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake -DC
 cmake --build . --target xrpld && ./xrpld --unittest=formal_verification
 ```
 
+Set `XRPL_LEAN4_DIR` to an unpacked Lean toolchain of the pinned version to use
+that one instead of downloading the release — for instance one your package
+manager provides, or one you had to prepare for your platform.
+
+With Nix, use the `formal-verification` dev shell (`nix develop
+.#formal-verification`): it provides the pinned Lean toolchain (through that
+variable) and the rest of what the Lean side needs. See
+[Formal verification](./docs/build/nix.md#formal-verification).
+
 See [formal verification docs](./docs/formal-verification/README.md) for more details.
 
 ## Options

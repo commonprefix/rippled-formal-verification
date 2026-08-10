@@ -18,6 +18,9 @@ let
   # pinned glibc snapshot only builds on Linux, so on darwin these fall back to
   # the plain stdenvs; the `if isLinux` guard keeps `customGlibc` from being
   # forced (and erroring) on macOS.
+  # Lean toolchain and helpers, pulled in by the formal-verification shell only.
+  lean4 = import ./lean4.nix { inherit pkgs; };
+
   customCompilers = import ./compilers.nix { inherit pkgs customGlibc; };
   customGccStdenv = if pkgs.stdenv.isLinux then customCompilers.customStdenv else plainGccStdenv;
   customClangStdenv =
@@ -56,6 +59,10 @@ let
       version ? null,
       versionedTools ? [ ],
       extraPackages ? [ ],
+      # Extra environment variables, and shell commands run after the greeting
+      # (for anything that must append to a variable rather than set it).
+      extraEnv ? { },
+      extraHook ? "",
       warningHook ? "",
       # Opt out of PatchNixBinary.cmake retargeting binaries to the system
       # loader. The plain toolchain links a newer glibc, so it must not be
@@ -88,8 +95,10 @@ let
           echo "Welcome to xrpld development shell";
           ${compilerVersionHook}
           ${warningHook}
+          ${extraHook}
         '';
       }
+      // extraEnv
       // pkgs.lib.optionalAttrs noPatchNixBinary { XRPLD_NO_PATCH_NIX_BINARY = "1"; }
     );
 in
@@ -115,6 +124,31 @@ rec {
     version = llvmVersion;
     versionedTools = clangVersionedTools;
   };
+
+  # Everything the regular shell has, plus the pinned Lean 4 toolchain and the
+  # tooling the `formal_verification=ON` build needs (see nix/lean4.nix and
+  # docs/formal-verification/README.md). Kept separate because the Lean
+  # toolchain is a large download nobody else needs.
+  #
+  # It deliberately uses the *plain* toolchain: the Lean runtime that gets linked
+  # into xrpld is an upstream binary release, so the C++ side has to be built
+  # against the stock nixpkgs glibc rather than the pinned custom (older) one,
+  # and its binaries must keep the Nix loader.
+  formal-verification = makeShell {
+    shellName = "formal-verification";
+    stdenv = if pkgs.stdenv.isDarwin then plainClangStdenv else plainGccStdenv;
+    compilerName = if pkgs.stdenv.isDarwin then "clang" else "gcc";
+    version = if pkgs.stdenv.isDarwin then llvmVersion else gccVersion;
+    versionedTools = if pkgs.stdenv.isDarwin then clangVersionedTools else gccVersionedTools;
+    extraPackages =
+      lean4.packages ++ pkgs.lib.optional (!pkgs.stdenv.isDarwin) plainGcov;
+    extraEnv = lean4.shellEnv;
+    extraHook = lean4.shellHook + ''
+      echo "Lean: ${lean4.leanVersion} (lake, lean and leanc on PATH)"
+    '';
+    noPatchNixBinary = true;
+  };
+  fv = formal-verification;
 
   # Nix provides no compiler; use the one from your system (e.g. Apple Clang).
   no-compiler = makeShell {

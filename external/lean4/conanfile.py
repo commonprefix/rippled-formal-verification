@@ -1,8 +1,15 @@
+import os
 from pathlib import Path
 
 from conan import ConanFile
 from conan.errors import ConanInvalidConfiguration
 from conan.tools.files import copy, get
+
+# Points at an already unpacked toolchain to use instead of the release download.
+# The Nix formal-verification dev shell sets it (see nix/lean4.nix) to the same
+# pinned release, prepared to run on NixOS — where the release binaries, which
+# reference the system ELF loader, do not run as downloaded.
+LOCAL_TOOLCHAIN_ENV = "XRPL_LEAN4_DIR"
 
 # sha256-pinned Lean releases per platform (no elan installer) (bump with the lean-toolchain pin)
 _SHA256 = {
@@ -20,6 +27,9 @@ class Lean(ConanFile):
 
     Version defaults from formal_verification/lean-toolchain, pass --version
     when exporting outside the repo layout (e.g. the CI image).
+
+    Set XRPL_LEAN4_DIR to an unpacked toolchain of that version to use it
+    instead of downloading the release.
     """
 
     name = "lean4"
@@ -36,7 +46,21 @@ class Lean(ConanFile):
             # "leanprover/lean4:vX" -> "X"
             self.version = toolchain.read_text(encoding="utf-8").strip().split(":v")[1]
 
+    def _local_toolchain(self):
+        """The toolchain named by LOCAL_TOOLCHAIN_ENV, or None to download one."""
+        local = os.environ.get(LOCAL_TOOLCHAIN_ENV)
+        if not local:
+            return None
+        path = Path(local)
+        if not (path / "bin" / "lake").exists():
+            raise ConanInvalidConfiguration(
+                f"lean4: {LOCAL_TOOLCHAIN_ENV}={local} is not a Lean toolchain (no bin/lake)"
+            )
+        return path
+
     def build(self):
+        if self._local_toolchain():
+            return
         os_name, arch = str(self.settings.os), str(self.settings.arch)
         sha256 = _SHA256.get((os_name, arch))
         if sha256 is None:
@@ -56,6 +80,19 @@ class Lean(ConanFile):
         )
 
     def package(self):
+        local = self._local_toolchain()
+        if local:
+            # Link rather than copy: the toolchain is gigabytes, immutable, and
+            # already laid out the way lean/lake expect (they resolve their
+            # sysroot from the resolved executable path, so links are fine).
+            # Conan then warns "No files in this package!" because it does not
+            # walk into linked directories; the package is complete regardless.
+            for entry in sorted(local.iterdir()):
+                link = Path(self.package_folder) / entry.name
+                link.unlink(missing_ok=True)
+                link.symlink_to(entry)
+            self.output.info(f"lean4: linked toolchain from {local}")
+            return
         copy(
             self,
             "*",
