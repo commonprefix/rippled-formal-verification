@@ -2,9 +2,19 @@
 # (see docs/formal-verification/README.md). Consumed only by the
 # `formal-verification` dev shell in devshell.nix, so the regular shells and the
 # CI environment don't pull the Lean toolchain into their closure.
-{ pkgs }:
+{
+  pkgs,
+  # The compiler the consuming shell uses. Lean's generated C has to be built by
+  # that one, not by whatever nixpkgs' default stdenv happens to be.
+  stdenv ? pkgs.stdenv,
+}:
 let
-  inherit (pkgs) lib stdenv;
+  inherit (pkgs) lib;
+
+  # The toolchain itself is a prebuilt binary release, so it is unpacked with the
+  # default stdenv regardless of the shell's compiler: one store path, shared by
+  # every shell and by `nix build .#lean4`.
+  buildStdenv = pkgs.stdenv;
 
   # Single source of truth for the Lean version: the pin that lake and the Conan
   # recipes (external/lean4, external/lean4-deps) already read.
@@ -36,14 +46,14 @@ let
     };
   };
   release =
-    releases.${stdenv.hostPlatform.system}
-      or (throw "lean4: unsupported platform ${stdenv.hostPlatform.system}");
+    releases.${buildStdenv.hostPlatform.system}
+      or (throw "lean4: unsupported platform ${buildStdenv.hostPlatform.system}");
 
   # Libraries the prebuilt toolchain expects from the system. Its own bundled
   # libc++ / libgmp / libuv live under lib/ and are found there, so this only
   # needs to cover the base ones.
   systemLibs = [
-    stdenv.cc.cc.lib
+    buildStdenv.cc.cc.lib
     pkgs.gmp
     pkgs.libuv
     pkgs.zlib
@@ -51,11 +61,11 @@ let
 
   # The pinned Lean release, unpacked from the upstream binary archive. It is not
   # built from source and not relocatable: the binaries reference the system ELF
-  # loader, which NixOS doesn't have, so autoPatchelf retargets them at the Nix
-  # store. Using the release (rather than nixpkgs' `lean4`, which tracks a
+  # loader, which NixOS doesn't have, so autoPatchelf points them at the Nix
+  # store instead. Using the release (rather than nixpkgs' `lean4`, which tracks a
   # different version) is what makes the prebuilt mathlib olean cache usable:
   # lake only accepts a cache built by the exact toolchain in lean-toolchain.
-  toolchain = stdenv.mkDerivation {
+  toolchain = buildStdenv.mkDerivation {
     pname = "lean4";
     version = leanVersion;
 
@@ -64,7 +74,10 @@ let
       inherit (release) sha256;
     };
 
-    nativeBuildInputs = [ pkgs.unzip ] ++ lib.optional stdenv.isLinux pkgs.autoPatchelfHook;
+    nativeBuildInputs = [
+      pkgs.unzip
+    ]
+    ++ lib.optional buildStdenv.isLinux pkgs.autoPatchelfHook;
     buildInputs = systemLibs;
 
     dontConfigure = true;
@@ -92,29 +105,27 @@ let
 
   # xrpld links libleanshared.so, whose RUNPATH doesn't cover its own transitive
   # libLake_shared.so, so the built binary needs the runtime on the search path.
+  # Appended, so an existing value keeps precedence.
   runtimeLibraryPathHook =
-    if stdenv.isDarwin then
+    if buildStdenv.isDarwin then
       ''
-        export DYLD_LIBRARY_PATH="${toolchain}/lib/lean''${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
+        export DYLD_LIBRARY_PATH="''${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}${toolchain}/lib/lean"
       ''
     else
       ''
-        export LD_LIBRARY_PATH="${toolchain}/lib/lean''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+        export LD_LIBRARY_PATH="''${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}${toolchain}/lib/lean"
       '';
 in
 {
   inherit toolchain leanVersion;
 
-  packages = [
-    toolchain
-  ]
-  ++ (with pkgs; [
+  packages = with pkgs; [
     # `lake exe cache get` bootstraps leantar by unpacking a .tar.gz, then
     # unpacks the mathlib cache itself (.tar.zst).
     gnutar
     gzip
     zstd
-  ]);
+  ];
 
   # Plain env vars for the shell; anything needing append semantics is in
   # shellHook below.
@@ -129,12 +140,19 @@ in
   };
 
   shellHook = ''
+    # Appended rather than added to `packages`: the release's bin/ carries a
+    # bundled LLVM toolchain, which must not shadow the compiler and binutils the
+    # C++ build uses. lake/lean/leanc resolve their sysroot from the executable
+    # they run as, not from PATH, so being last costs them nothing.
+    export PATH="$PATH:${toolchain}/bin"
     # Building lean4-deps links mathlib's `cache` executable against the Lean
-    # runtime's bundled -lc++ -lc++abi -lgmp -luv, which exist only here.
-    export LIBRARY_PATH="${toolchain}/lib''${LIBRARY_PATH:+:$LIBRARY_PATH}"
+    # runtime's bundled -lc++ -lc++abi -lgmp -luv, which exist only here. Last
+    # entry, and `-L` flags outrank it, so it only applies to otherwise
+    # unresolved libraries.
+    export LIBRARY_PATH="''${LIBRARY_PATH:+$LIBRARY_PATH:}${toolchain}/lib"
   ''
   + runtimeLibraryPathHook
-  + lib.optionalString stdenv.isLinux ''
+  + lib.optionalString buildStdenv.isLinux ''
     # Not needed for the toolchain above (XRPL_LEAN4_DIR keeps Conan on it), but
     # it lets any other prebuilt binary that ends up in the Conan cache — such as
     # a lean4 package created before that variable existed — run through nix-ld.

@@ -146,7 +146,7 @@ nix develop .#formal-verification
 cd formal_verification && lake exe cache get && lake build
 ```
 
-It intentionally uses the *plain* (stock nixpkgs) toolchain rather than the
+It intentionally uses the _plain_ (stock nixpkgs) toolchain rather than the
 custom-glibc one CI uses: the Lean runtime linked into `xrpld` comes from an
 upstream binary release, so the C++ side must be built against the same stock
 glibc, and its binaries must keep the Nix loader.

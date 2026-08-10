@@ -1,4 +1,6 @@
 import os
+import shutil
+from io import StringIO
 from pathlib import Path
 
 from conan import ConanFile
@@ -29,7 +31,8 @@ class Lean(ConanFile):
     when exporting outside the repo layout (e.g. the CI image).
 
     Set XRPL_LEAN4_DIR to an unpacked toolchain of that version to use it
-    instead of downloading the release.
+    instead of downloading the release. Such a package links to that directory,
+    so it is local-only: don't upload it or `conan cache save` it.
     """
 
     name = "lean4"
@@ -55,6 +58,16 @@ class Lean(ConanFile):
         if not (path / "bin" / "lake").exists():
             raise ConanInvalidConfiguration(
                 f"lean4: {LOCAL_TOOLCHAIN_ENV}={local} is not a Lean toolchain (no bin/lake)"
+            )
+        # The package is labelled with the lean-toolchain pin, so a toolchain of a
+        # different version would silently produce a mislabelled one — and lake
+        # rejects an olean cache built by any other version.
+        reported = StringIO()
+        self.run(f'"{path / "bin" / "lean"}" --version', stdout=reported)
+        if self.version not in reported.getvalue():
+            raise ConanInvalidConfiguration(
+                f"lean4: {LOCAL_TOOLCHAIN_ENV}={local} reports"
+                f" '{reported.getvalue().strip()}', expected version {self.version}"
             )
         return path
 
@@ -89,7 +102,10 @@ class Lean(ConanFile):
             # walk into linked directories; the package is complete regardless.
             for entry in sorted(local.iterdir()):
                 link = Path(self.package_folder) / entry.name
-                link.unlink(missing_ok=True)
+                if link.is_dir() and not link.is_symlink():
+                    shutil.rmtree(link)
+                else:
+                    link.unlink(missing_ok=True)
                 link.symlink_to(entry)
             self.output.info(f"lean4: linked toolchain from {local}")
             return

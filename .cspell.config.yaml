@@ -59,6 +59,7 @@ words:
   - autobridge
   - autobridged
   - autobridging
+  - axhline
   - bimap
   - bindir
   - blindings
@@ -154,6 +155,7 @@ words:
   - keyvadb
   - kwarg
   - kwargs
+  - leanc
   - ledgerentry
   - ledgerhash
   - ledgerindex
@@ -364,6 +366,7 @@ words:
   - xbridge
   - xchain
   - ximinez
+  - xlabel
   - XMACRO
   - xrpkuwait
   - xrpl
@@ -371,4 +374,7 @@ words:
   - xrplf
   - xxhash
   - xxhasher
+  - ylabel
+  - yscale
+  - zorder
   - CGNAT
