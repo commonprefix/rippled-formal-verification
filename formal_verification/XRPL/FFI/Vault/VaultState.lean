@@ -11,6 +11,7 @@ def lean_vault_state_build (assetsTotal : Number) (assetsAvailable : Number)
     (numericType : NumericType) (scale : UInt8) (sharesTotal : Number) (lossUnrealized : Number)
     : Vault :=
   { assetsTotal, assetsAvailable,
+    assetsReserved := Number.zero, -- new field, set zero for now
     assetsMaximum := if hasMaximum != 0 then some assetsMaximum else none,
     numericType, scale, sharesTotal, lossUnrealized }
 

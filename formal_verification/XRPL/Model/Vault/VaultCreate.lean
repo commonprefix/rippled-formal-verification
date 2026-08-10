@@ -10,6 +10,7 @@ open XRPL.Model.Protocol
 def Vault.create (nt : NumericType) (scale : UInt8) (assetsMaximum : Option Number) : Vault where
   assetsTotal := Number.zero
   assetsAvailable := Number.zero
+  assetsReserved := Number.zero
   assetsMaximum := assetsMaximum
   numericType := nt
   scale := scale
