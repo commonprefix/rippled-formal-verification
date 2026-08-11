@@ -11,9 +11,11 @@ representable square):
          onto the envelope line.
   bottom the same data normalized: err / bound, linear y. The bound is now a flat line at
          1 and the scatter fills [0,1), exposing how much headroom there actually is."""
+
 import sys
 from fractions import Fraction
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
@@ -34,27 +36,38 @@ with open(CSV) as f:
 # sort by truth so the envelope draws as a single clean line across the whole range
 order = sorted(range(len(truth)), key=lambda i: truth[i])
 truth = [truth[i] for i in order]
-err   = [err[i]   for i in order]
-env   = [env[i]   for i in order]
+err = [err[i] for i in order]
+env = [env[i] for i in order]
 # env = truth * epsTN > 0 (truth > 0: squares of nonzero, zero results skipped in Lean)
 ratio = [e / v for e, v in zip(err, env)]
 
 fig, (ax_abs, ax_rel) = plt.subplots(2, 1, figsize=(16, 12), sharex=True)
 
 # --- top: absolute error vs bound, log-log ---
-ax_abs.scatter(truth, err, s=3, color="#1f77b4", alpha=0.4,
-               label="|result - truth|", zorder=3)
-ax_abs.plot(truth, env, color="#ff7f0e", lw=1.3,
-            label="|truth| * epsMulIOUToNearest", zorder=2)
+ax_abs.scatter(
+    truth, err, s=3, color="#1f77b4", alpha=0.4, label="|result - truth|", zorder=3
+)
+ax_abs.plot(
+    truth, env, color="#ff7f0e", lw=1.3, label="|truth| * epsMulIOUToNearest", zorder=2
+)
 ax_abs.set_yscale("log")
 ax_abs.set_ylabel("absolute value")
 ax_abs.grid(True, which="both", ls=":", alpha=0.4)
 ax_abs.legend(fontsize=10, loc="upper left")
-ax_abs.set_title("absolute:  actual rounding error vs. the bound (log-log)", fontsize=11)
+ax_abs.set_title(
+    "absolute:  actual rounding error vs. the bound (log-log)", fontsize=11
+)
 
 # --- bottom: normalized error, linear y ---
-ax_rel.scatter(truth, ratio, s=3, color="#1f77b4", alpha=0.4,
-               label="|result - truth| / bound", zorder=3)
+ax_rel.scatter(
+    truth,
+    ratio,
+    s=3,
+    color="#1f77b4",
+    alpha=0.4,
+    label="|result - truth| / bound",
+    zorder=3,
+)
 ax_rel.axhline(1.0, color="#ff7f0e", lw=1.3, label="bound (= 1)", zorder=2)
 ax_rel.set_ylim(0, 1.05)
 ax_rel.set_ylabel("error / bound")
@@ -63,12 +76,13 @@ ax_rel.grid(True, which="both", ls=":", alpha=0.4)
 ax_rel.legend(fontsize=10, loc="upper left")
 ax_rel.set_title("normalized:  error as a fraction of the bound (linear)", fontsize=11)
 
-ax_rel.set_xscale("log")   # shared with the top panel
+ax_rel.set_xscale("log")  # shared with the top panel
 
 fig.suptitle(
     "IOU multiplication (v1 = v2, to_nearest) over the full positive range.\n"
     "result = STAmount.multiply v1 v1,  truth = (v1.toRat)^2",
-    fontsize=13)
+    fontsize=13,
+)
 fig.tight_layout(rect=[0, 0, 1, 0.97])
 fig.savefig(OUT, dpi=120)
 print(f"wrote {OUT} ({len(truth)} points)")

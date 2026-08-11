@@ -540,8 +540,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Withdraw all but one share: C++ overpays to the whole balance (assetsTotal -> 0), the
         // model rounds the payout down (assetsTotal stays positive), so the stored total diverges.
         STAmount const allButOne{
-            shareIssue(env, vaultKeylet),
-            std::uint64_t{100'000'000'000'000'000ULL - 1}};
+            shareIssue(env, vaultKeylet), std::uint64_t{100'000'000'000'000'000ULL - 1}};
         compareWithdraw(env, vaultKeylet, holder, asset.raw(), allButOne, tesSUCCESS);
     }
 

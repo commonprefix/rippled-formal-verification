@@ -43,4 +43,3 @@ def LoanBroker.coverDeposit (lb : LoanBroker) (vaultNumericType : NumericType) (
   return { result with amountDeposit' := rounded, loanBroker' := lb' }
 
 end XRPL.Model.Lending
-
