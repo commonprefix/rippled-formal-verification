@@ -1,6 +1,7 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.NumericType
+import XRPL.Model.Protocol.TER
 
 namespace XRPL.Model.Lending
 
@@ -109,6 +110,17 @@ def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum
     : Except Error Number := do
   let raw ← tenthBipsOfValue debtTotal coverRateMinimum.toUInt64.toInt64 .upward
   STAmount.roundToNumericType nt raw .upward (some vaultScale)
+
+-- reject a cover deposit/withdraw/clawback that rounds to zero at the cover's own scale
+def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
+    : Except Error TER := do
+  if amount.isZero then
+    return .tecPRECISION_LOSS
+  let coverScale ← getAssetsTotalScale nt coverAvailable
+  let rounded ← STAmount.roundToExponent amount coverScale .to_nearest
+  if rounded.signum == 0 then
+    return .tecPRECISION_LOSS
+  return .tesSUCCESS
 
 -- XLS-66 (10): principal implied by a periodic payment
 def loanPrincipalFromPeriodicPayment (periodicPayment rate : Number) (paymentsRemaining : UInt32)

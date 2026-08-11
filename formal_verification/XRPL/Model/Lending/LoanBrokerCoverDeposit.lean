@@ -33,7 +33,7 @@ def LoanBroker.coverDeposit (lb : LoanBroker) (vaultNumericType : NumericType) (
   }
 
   let rounded ← match (← lb.roundedCoverDeposit vaultNumericType amount) with
-    | .rejected ter => return { result with status := ter }
+    | .rejected _ => return { result with status := .tecINTERNAL }
     | .rounded amount => .pure amount
   -- rounded cannot be 0 here, don't implement the CPP defensive 0 check
 
