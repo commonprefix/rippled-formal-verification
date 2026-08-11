@@ -206,6 +206,24 @@ theorem Vault.deposit_vault_updates_attained :
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
   Vault.deposit_vault_updates_witness
 
+/-- Witness: the entry rounding runs on the requested amount but never on the
+taken amount from the shares round-trip. A run exists where the request
+`0.001` is on the vault grid, the taken amount `0.0009999999999998572` is not,
+and the stored totals move by the different on-ledger amount
+`0.000999999999999857`. -/
+theorem Vault.deposit_applied_delta_attained :
+    ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧
+      v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.amountDeposit' v.assetsTotal = .ok amountDeposit'' ∧
+      amountDeposit''.operator_eq r.amountDeposit' = false ∧
+      r.vault'.assetsTotal.operator_sub v.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.amountDeposit' = false :=
+  Vault.deposit_applied_delta_witness
+
 /-- Integral strengthening of `deposit_vault_updates`: in-domain integer
 sums are stored exactly. -/
 theorem Vault.deposit_vault_updates_integral (amountDeposit : STAmount) (isDonation : Bool)

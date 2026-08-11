@@ -1,3 +1,4 @@
+import XRPL.Model.Vault.VaultDeposit
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Approx
 import XRPL.Properties.Vault.Common.WithdrawDefs
@@ -5,7 +6,7 @@ import XRPL.Properties.Vault.Common.DilutionWitness
 
 /-! # Witness data for the `Vault.withdraw` sharpness theorems
 
-Concrete vaults, amounts, and results for the four withdraw `*_attained`
+Concrete vaults, amounts, and results for the withdraw `*_attained`
 witnesses `VaultWithdraw.lean` delegates to, each closed by `native_decide`
 over the withdraw pipeline. One fractional vault holding `3` assets against
 `7·10¹⁵` shares backs every witness.
@@ -34,6 +35,7 @@ set_option linter.style.nativeDecide false
 def wvW : Vault :=
   { assetsTotal := ⟨false, 3000000000000000000, -18⟩
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
   , lossUnrealized := Number.zero }
@@ -55,6 +57,7 @@ def wstW : STAmount := STAmount.unchecked .int64 7000000000000000 0 false
 def wvW' : Vault :=
   { assetsTotal := ⟨false, 2000000000000000200, -18⟩
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
   , lossUnrealized := Number.zero }
@@ -75,6 +78,7 @@ def wp4W : STAmount := STAmount.unchecked .fractional 9999999999998571 (-19) fal
 def wv4W' : Vault :=
   { assetsTotal := ⟨false, 2999000000000000143, -18⟩
   , assetsAvailable := ⟨false, 2999000000000000143, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6997666666666667000, -3⟩
   , lossUnrealized := Number.zero }
@@ -82,7 +86,7 @@ def wv4W' : Vault :=
 /-- The witness result of the vault-updates run. -/
 def wr4W : WithdrawResult := ⟨none, wv4W', wp4W, wsh4W⟩
 
-/-! ## The four `*_attained` witnesses -/
+/-! ## The `*_attained` witnesses -/
 
 set_option maxRecDepth 10000
 
@@ -136,5 +140,29 @@ theorem Vault.withdraw_vault_updates_witness :
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
   ⟨wvW, .vaultShares wsh4W, false, wstW, wr4W, by native_decide⟩
+
+/-- The vault-updates payout re-rounded to the vault scale,
+`0.000999999999999`. -/
+def wpr4W : STAmount := STAmount.unchecked .fractional 9999999999990000 (-19) false
+
+/-- The applied total delta of the vault-updates run, `0.000999999999999857`,
+as a `Number`. -/
+def wdn4W : Number := ⟨false, 9999999999998570000, -22⟩
+
+/-- The applied delta as an on-ledger amount, one step below the payout. -/
+def wda4W : STAmount := STAmount.unchecked .fractional 9999999999998570 (-19) false
+
+/-- Witness data for `Vault.withdraw_applied_delta_attained`. -/
+theorem Vault.withdraw_applied_delta_witness :
+    ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+      (assets'' : STAmount) (r : WithdrawResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.assets' v.assetsTotal = .ok assets'' ∧
+      assets''.operator_eq r.assets' = false ∧
+      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.assets' = false :=
+  ⟨wvW, .vaultShares wsh4W, false, wpr4W, wr4W, wdn4W, wda4W, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

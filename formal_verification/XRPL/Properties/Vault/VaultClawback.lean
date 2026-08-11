@@ -257,6 +257,21 @@ theorem Vault.clawback_vault_updates_attained :
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
   Vault.clawback_vault_updates_witness
 
+/-- Witness: the recovery from the shares round-trip is never rounded to the
+vault scale, unlike a deposit request on entry. A run exists where re-rounding
+the recovery `0.00009999999999985714` would change it, and the stored total
+moves by the different on-ledger amount `0.000099999999999857`. -/
+theorem Vault.clawback_applied_delta_attained :
+    ∃ (v : Vault) (assets holderShares assetsRecovered' : STAmount) (r : ClawbackResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.assetsRecovered v.assetsTotal = .ok assetsRecovered' ∧
+      assetsRecovered'.operator_eq r.assetsRecovered = false ∧
+      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.assetsRecovered = false :=
+  Vault.clawback_applied_delta_witness
+
 /-- Integral strengthening of `clawback_vault_updates`: in-domain integer
 differences are stored exactly. -/
 theorem Vault.clawback_vault_updates_integral (assets holderShares : STAmount) (r : ClawbackResult)

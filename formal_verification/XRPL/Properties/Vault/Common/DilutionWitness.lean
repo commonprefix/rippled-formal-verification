@@ -102,6 +102,7 @@ nothing unrealized, no cap, scale `6`. -/
 def baseV : Vault :=
   { assetsTotal := ⟨false, 9000001233333321000, -10⟩
   , assetsAvailable := ⟨false, 9000001233333321000, -10⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 6
   , sharesTotal := ⟨false, 8999999998765430000, -4⟩
   , lossUnrealized := Number.zero }

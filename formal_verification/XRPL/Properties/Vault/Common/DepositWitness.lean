@@ -5,7 +5,7 @@ import XRPL.Properties.Vault.Common.DilutionWitness
 
 /-! # Witnesses for the `Vault.deposit` `*_attained` theorems
 
-Concrete vaults, amounts, and results for the four deposit `*_attained` witnesses
+Concrete vaults, amounts, and results for the deposit `*_attained` witnesses
 `VaultDeposit.lean` delegates to, each closed by `native_decide` over the deposit
 pipeline. One lawful IOU vault (`wvF`: 3 assets, 7·10¹⁵ shares, nothing
 unrealized) backs the three fractional witnesses; an int64 vault (`wvDVU`) backs
@@ -19,7 +19,9 @@ the vault-updates witness.
   issued shares' worth by `3/(7·10¹⁶)`, beyond the relative budget.
 * Vault updates: donating `9000000000000000006` int64 (`waDVU`) makes the exact
   new total `18000000000000000013`, rounded to `18000000000000000010`, so the
-  stored total is not the exact sum. -/
+  stored total is not the exact sum.
+* Applied delta: depositing `0.001` (`waAD`) yields an off-grid charge, so
+  the stored totals move by a different amount than the charge. -/
 
 set_option linter.style.nativeDecide false
 
@@ -35,6 +37,7 @@ deriving instance DecidableEq for RoundedDepositResult
 def wvF : Vault :=
   { assetsTotal := ⟨false, 3000000000000000000, -18⟩
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
   , lossUnrealized := Number.zero }
@@ -53,6 +56,7 @@ def wcF : STAmount := STAmount.unchecked .fractional 9999999999999999 (-16) fals
 def wvF' : Vault :=
   { assetsTotal := ⟨false, 3999999999999999900, -18⟩
   , assetsAvailable := ⟨false, 3999999999999999900, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 9333333333333333000, -3⟩
   , lossUnrealized := Number.zero }
@@ -79,6 +83,7 @@ cannot be dropped. -/
 def wvDVU : Vault :=
   { assetsTotal := ⟨false, 9000000000000000007, 0⟩
   , assetsAvailable := ⟨false, 9000000000000000007, 0⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .int64, scale := 0
   , sharesTotal := ⟨false, 1000000000000000000, 0⟩
   , lossUnrealized := Number.zero }
@@ -91,6 +96,7 @@ exact sum `18000000000000000013` rounded to 19 significant digits. -/
 def wvDVU' : Vault :=
   { assetsTotal := ⟨false, 1800000000000000001, 1⟩
   , assetsAvailable := ⟨false, 1800000000000000001, 1⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .int64, scale := 0
   , sharesTotal := ⟨false, 1000000000000000000, 0⟩
   , lossUnrealized := Number.zero }
@@ -98,7 +104,7 @@ def wvDVU' : Vault :=
 /-- The witness deposit result. -/
 def wrDVU : DepositResult := ⟨none, wvDVU', waDVU, STAmount.zero .int64⟩
 
-/-! ## The four `*_attained` witnesses -/
+/-! ## The `*_attained` witnesses -/
 
 set_option maxRecDepth 10000
 
@@ -137,5 +143,51 @@ theorem Vault.deposit_vault_updates_witness :
       v.Lawful ∧ v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
   ⟨wvDVU, waDVU, true, wrDVU, by native_decide⟩
+
+/-- The applied-delta witness request, `0.001` of the IOU. -/
+def waAD : STAmount := STAmount.unchecked .fractional 1000000000000000 (-18) false
+
+/-- The issued shares, `⌊7·10¹⁵ · 0.001 / 3⌋ = 2333333333333`. -/
+def wsAD : STAmount := STAmount.unchecked .int64 2333333333333 0 false
+
+/-- The charge: `3 · 2333333333333 / 7·10¹⁵` rounded upward at 16 digits,
+`0.0009999999999998572`. -/
+def wcAD : STAmount := STAmount.unchecked .fractional 9999999999998572 (-19) false
+
+/-- The charge re-rounded to the vault scale, `0.000999999999999`. -/
+def wcrAD : STAmount := STAmount.unchecked .fractional 9999999999990000 (-19) false
+
+/-- The post-deposit vault: both asset totals store `3.000999999999999857`,
+the exact sum rounded to 19 significant digits. -/
+def wvAD' : Vault :=
+  { assetsTotal := ⟨false, 3000999999999999857, -18⟩
+  , assetsAvailable := ⟨false, 3000999999999999857, -18⟩
+  , assetsReserved := Number.zero
+  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , sharesTotal := ⟨false, 7002333333333333000, -3⟩
+  , lossUnrealized := Number.zero }
+
+/-- The witness deposit result. -/
+def wrAD : DepositResult := ⟨none, wvAD', wcAD, wsAD⟩
+
+/-- The applied total delta, `3.000999999999999857 - 3` -/
+def wdnAD : Number := ⟨false, 9999999999998570000, -22⟩
+
+/-- The applied delta as an on-ledger amount. -/
+def wdaAD : STAmount := STAmount.unchecked .fractional 9999999999998570 (-19) false
+
+/-- Witness backing `Vault.deposit_applied_delta_attained`. -/
+theorem Vault.deposit_applied_delta_witness :
+    ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧
+      v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.amountDeposit' v.assetsTotal = .ok amountDeposit'' ∧
+      amountDeposit''.operator_eq r.amountDeposit' = false ∧
+      r.vault'.assetsTotal.operator_sub v.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.amountDeposit' = false :=
+  ⟨wvF, waAD, wcrAD, wrAD, wdnAD, wdaAD, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

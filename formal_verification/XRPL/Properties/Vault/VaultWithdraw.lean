@@ -262,6 +262,22 @@ theorem Vault.withdraw_vault_updates_attained :
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
   Vault.withdraw_vault_updates_witness
 
+/-- Witness: the payout from the shares round-trip is never rounded to the
+vault scale, unlike a deposit request on entry. A run exists where re-rounding
+the payout `0.0009999999999998571` would change it, and the stored totals move
+by the different on-ledger amount `0.000999999999999857`. -/
+theorem Vault.withdraw_applied_delta_attained :
+    ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+      (assets'' : STAmount) (r : WithdrawResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.assets' v.assetsTotal = .ok assets'' ∧
+      assets''.operator_eq r.assets' = false ∧
+      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.assets' = false :=
+  Vault.withdraw_applied_delta_witness
+
 /-- Integral strengthening of `withdraw_vault_updates`: in-domain integer
 differences are stored exactly. -/
 theorem Vault.withdraw_vault_updates_integral (amount : WithdrawAmount)
