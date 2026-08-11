@@ -2,6 +2,7 @@ import XRPL.Properties.Vault.Common.ClawbackDefs
 import XRPL.Properties.Vault.Common.WithdrawDefs
 import XRPL.Properties.Vault.Common.DilutionWitness
 import XRPL.Model.Vault.VaultClawback
+import XRPL.Model.Vault.VaultDeposit
 
 /-! # Witness data for the clawback `*_attained` theorems
 
@@ -21,6 +22,7 @@ open XRPL.Model.Protocol
 def cwv : Vault :=
   { assetsTotal := ⟨false, 3000000000000000000, -18⟩
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
   , lossUnrealized := Number.zero }
@@ -55,6 +57,7 @@ def cwar2 : STAmount := STAmount.unchecked .fractional 9999999999985714 (-20) fa
 def cwv1' : Vault :=
   { assetsTotal := ⟨false, 2000000000000000200, -18⟩
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
   , lossUnrealized := Number.zero }
@@ -66,6 +69,7 @@ def cwr1 : ClawbackResult := ⟨none, cwv1', cwar1, cwsh1⟩
 def cwvB' : Vault :=
   { assetsTotal := ⟨false, 2999900000000000143, -18⟩
   , assetsAvailable := ⟨false, 1428600000000000000, -34⟩
+  , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6999766666666667000, -3⟩
   , lossUnrealized := Number.zero }
@@ -136,5 +140,28 @@ theorem Vault.clawback_vault_updates_witness :
       v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
   ⟨cwvB, cwa1, cwHolderShares, cwr2, by native_decide⟩
+
+/-- The `cwvB` recovery re-rounded to the vault scale, `0.000099999999999`. -/
+def cwrr2 : STAmount := STAmount.unchecked .fractional 9999999999900000 (-20) false
+
+/-- The applied total delta of the `cwvB` run, `0.000099999999999857` -/
+def cwdn2 : Number := ⟨false, 9999999999985700000, -23⟩
+
+/-- The applied delta as an on-ledger amount, below the recovery. -/
+def cwda2 : STAmount := STAmount.unchecked .fractional 9999999999985700 (-20) false
+
+/-- Witness for `Vault.clawback_applied_delta_attained`: the `cwvB` run's
+recovery is off the vault grid and the stored total moves by a different
+amount. -/
+theorem Vault.clawback_applied_delta_witness :
+    ∃ (v : Vault) (assets holderShares assetsRecovered' : STAmount) (r : ClawbackResult)
+      (deltaTotal : Number) (deltaAmount : STAmount),
+      v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.assetsRecovered v.assetsTotal = .ok assetsRecovered' ∧
+      assetsRecovered'.operator_eq r.assetsRecovered = false ∧
+      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq r.assetsRecovered = false :=
+  ⟨cwvB, cwa1, cwHolderShares, cwrr2, cwr2, cwdn2, cwda2, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault
