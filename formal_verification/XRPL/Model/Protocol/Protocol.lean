@@ -4,7 +4,6 @@ namespace XRPL.Model.Protocol
 
 abbrev TenthBips32 := UInt32
 
--- the ledger's uint16 rate fields; widens into TenthBips32, as `SafeToCast` allows in C++
 abbrev TenthBips16 := UInt16
 
 def TenthBips32.toNumber (bips : TenthBips32) : Number :=

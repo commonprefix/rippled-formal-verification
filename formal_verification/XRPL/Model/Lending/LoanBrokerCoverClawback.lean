@@ -34,9 +34,6 @@ def LoanBroker.roundedCoverClawback (lb : LoanBroker) (vault : Vault) (amount : 
 
 def LoanBroker.canCoverClawback (lb : LoanBroker) (vault : Vault) (amount : Option STAmount)
     : Except Error TER := do
-  --if vault.numericType == .native then
-  --  return .tecNO_PERMISSION
-
   match ← lb.roundedCoverClawback vault amount with
   | .rejected ter => return ter
   | .rounded clawAmount => canApplyToBrokerCover vault.numericType lb.coverAvailable clawAmount
