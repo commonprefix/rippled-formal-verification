@@ -45,8 +45,8 @@ structure LoanComputed where
   firstPaymentPrincipal : Number
 
 def computeLoanProperties (nt : NumericType) (principal : Number)
-    (interestRate paymentInterval paymentsRemaining : UInt32) (managementFeeRate : UInt16)
-    (minimumScale : Int) : Except Error LoanComputed := do
+    (interestRate : TenthBips32) (paymentInterval paymentsRemaining : UInt32)
+    (managementFeeRate : TenthBips16) (minimumScale : Int) : Except Error LoanComputed := do
   let periodicRate ← loanPeriodicRate interestRate paymentInterval
   let periodicPayment ← loanPeriodicPayment principal periodicRate paymentsRemaining
 
@@ -75,7 +75,7 @@ def computeLoanProperties (nt : NumericType) (principal : Number)
   }
 
 def LoanComputed.checkGuards (computed : LoanComputed) (nt : NumericType) (principal : Number)
-    (interestRate paymentsRemaining : UInt32) : Except Error TER := do
+    (interestRate : TenthBips32) (paymentsRemaining : UInt32) : Except Error TER := do
   let expectInterest := interestRate != 0
   let totalInterest ← computed.totalValueOutstanding.operator_sub principal .to_nearest
   if expectInterest && totalInterest.signum ≤ 0 then return .tecPRECISION_LOSS

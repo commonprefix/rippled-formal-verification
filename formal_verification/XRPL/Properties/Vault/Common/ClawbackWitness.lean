@@ -69,8 +69,7 @@ def cwr1 : ClawbackResult := ⟨none, cwv1', cwar1, cwsh1⟩
 def cwvB' : Vault :=
   { assetsTotal := ⟨false, 2999900000000000143, -18⟩
   , assetsAvailable := ⟨false, 1428600000000000000, -34⟩
-  , assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , assetsReserved := Number.zero, assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6999766666666667000, -3⟩
   , lossUnrealized := Number.zero }
 

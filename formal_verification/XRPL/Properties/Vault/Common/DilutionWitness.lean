@@ -98,7 +98,7 @@ instance Vault.instDecidableLawful (v : Vault) : Decidable v.Lawful :=
 
 /-- The lawful IOU vault the search reaches through the public API:
 `assetsTotal = assetsAvailable = 900000123.3333321`, `sharesTotal = 899999999876543`,
-nothing unrealized, no cap, scale `6`. -/
+nothing unrealized or reserved, no cap, scale `6`. -/
 def baseV : Vault :=
   { assetsTotal := ⟨false, 9000001233333321000, -10⟩
   , assetsAvailable := ⟨false, 9000001233333321000, -10⟩

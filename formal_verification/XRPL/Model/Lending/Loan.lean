@@ -1,6 +1,7 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
+import XRPL.Model.Protocol.Protocol
 
 namespace XRPL.Model.Lending
 
@@ -13,13 +14,13 @@ def defaultGracePeriod : UInt32 := 60      -- seconds
 -- UInt32 max (2³² − 1)
 def maxTime : UInt32 := 4_294_967_295
 
--- all rates in 1/10 bips (0.1 bp = 0.001% = 0.00001)
+-- 1/10 bips: 0.1 bp = 0.001% = 0.00001
 structure LoanRates where
-  interestRate : UInt32
-  lateInterestRate : UInt32
-  closeInterestRate : UInt32
-  overpaymentInterestRate : UInt32
-  overpaymentFee : UInt32
+  interestRate : TenthBips32
+  lateInterestRate : TenthBips32
+  closeInterestRate : TenthBips32
+  overpaymentInterestRate : TenthBips32
+  overpaymentFee : TenthBips32
 
 -- fixed fee amounts
 structure LoanFees where

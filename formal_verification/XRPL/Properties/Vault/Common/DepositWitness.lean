@@ -56,8 +56,7 @@ def wcF : STAmount := STAmount.unchecked .fractional 9999999999999999 (-16) fals
 def wvF' : Vault :=
   { assetsTotal := ⟨false, 3999999999999999900, -18⟩
   , assetsAvailable := ⟨false, 3999999999999999900, -18⟩
-  , assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , assetsReserved := Number.zero, assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 9333333333333333000, -3⟩
   , lossUnrealized := Number.zero }
 

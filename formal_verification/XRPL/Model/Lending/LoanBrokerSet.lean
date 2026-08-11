@@ -26,9 +26,9 @@ def LoanBroker.canUpdate (lb : LoanBroker) (debtMaximum : Option Number)
 
 structure LoanBrokerSetCreate where
   debtMaximum : Option Number
-  managementFeeRate : Option UInt16
-  coverRateMinimum : Option UInt32
-  coverRateLiquidation : Option UInt32
+  managementFeeRate : Option TenthBips16
+  coverRateMinimum : Option TenthBips32
+  coverRateLiquidation : Option TenthBips32
 
 structure LoanBrokerSetResult where
   loanBroker : LoanBroker
