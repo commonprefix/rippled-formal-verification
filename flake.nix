@@ -32,7 +32,16 @@
     in
     {
       devShells = forEachSystem (import ./nix/devshell.nix);
-      packages = forEachSystem (import ./nix/ci-env.nix);
+      packages = forEachSystem (
+        args:
+        (import ./nix/ci-env.nix args)
+        // {
+          # The Lean toolchain pinned by formal_verification/lean-toolchain.
+          # Part of the formal-verification dev shell; exposed separately so it
+          # can be built (warmed) on its own.
+          lean4 = (import ./nix/lean4.nix { inherit (args) pkgs; }).toolchain;
+        }
+      );
       formatter = forEachSystem ({ pkgs, ... }: pkgs.nixfmt);
     };
 }

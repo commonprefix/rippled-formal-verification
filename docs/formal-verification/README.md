@@ -86,6 +86,10 @@ flowchart LR
 | Run tests                                                            | Make it easy to run cross-verification tests.                                                                                                |                                                                                                                                               |
 | Build theorems                                                       | Formal verification proof work can be done independently.                                                                                    | User can use `lake` installed by Conan, but they need to add it to `PATH`. Alternatively, install your own, but make sure version is correct. |
 
+With Nix, `nix develop .#formal-verification` provides the pinned toolchain (and
+what NixOS needs for the Conan/CMake side) — see
+[Formal verification](../build/nix.md#formal-verification).
+
 ---
 
 ## Project structure

@@ -10727,8 +10727,7 @@ protected:
             // Under featureLendingProtocolV1_1, a loan can only be impaired
             // once its payment is late.
             env.close(
-                NetClock::time_point{
-                    NetClock::duration{loanBefore->at(sfNextPaymentDueDate)}} +
+                NetClock::time_point{NetClock::duration{loanBefore->at(sfNextPaymentDueDate)}} +
                 1s);
 
             env(manage(lender, loanKeylet.key, tfLoanImpair), Ter(tesSUCCESS));
@@ -11001,8 +11000,7 @@ protected:
         // Under featureLendingProtocolV1_1, a loan can only be impaired once
         // its payment is late.
         env.close(
-            NetClock::time_point{
-                NetClock::duration{loanBeforeImpair->at(sfNextPaymentDueDate)}} +
+            NetClock::time_point{NetClock::duration{loanBeforeImpair->at(sfNextPaymentDueDate)}} +
             1s);
 
         env(manage(lender, loanKeylet.key, tfLoanImpair), Ter(tesSUCCESS));

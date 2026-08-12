@@ -128,6 +128,50 @@ Coverage builds (`-Dcoverage=ON`) work in the `gcc` shell (and `gcc-plain` on Li
 each ships a `gcov` matching its compiler, since Nix's cc-wrapper does not expose one.
 The `clang` shells do not include `llvm-cov`, so use a `gcc` shell for coverage.
 
+## Formal verification
+
+The `formal-verification` shell (alias `fv`) adds what the Lean 4 work needs on
+top of the regular environment: the Lean toolchain pinned by
+[`formal_verification/lean-toolchain`](../../formal_verification/lean-toolchain)
+(so `lake`, `lean` and `leanc` are on `PATH`, no `elan` and no separate
+toolchain install), the archivers `lake exe cache get` shells out to, and the
+environment the Lean/C++ link needs (`LEAN_CC`, `LIBRARY_PATH`,
+`LD_LIBRARY_PATH`). It is a separate shell because the Lean toolchain is a large
+download that the other shells have no use for.
+
+```bash
+nix develop .#formal-verification
+
+# Proofs and the model on their own — no C++ build involved
+cd formal_verification && lake exe cache get && lake build
+```
+
+It intentionally uses the _plain_ (stock nixpkgs) toolchain rather than the
+custom-glibc one CI uses: the Lean runtime linked into `xrpld` comes from an
+upstream binary release, so the C++ side must be built against the same stock
+glibc, and its binaries must keep the Nix loader.
+
+To build `xrpld` with the cross-validation tests, follow
+[BUILD.md](../../BUILD.md#formal-verification) unchanged. No extra step is needed:
+the shell exports `XRPL_LEAN4_DIR`, so the Conan `lean4` recipe links this
+toolchain instead of downloading the upstream release — whose binaries reference
+the system ELF loader and would not run on NixOS as downloaded. There is one Lean
+install, shared by `lake` here and by the Conan/CMake build.
+
+Two consequences worth knowing:
+
+- Because the Conan package links into the Nix store, a `nix-collect-garbage`
+  that removes the toolchain leaves it dangling. Re-create it with
+  `conan remove 'lean4/*' -c && conan create external/lean4` (no download, so
+  this takes seconds), or keep a garbage-collector root — `direnv`, or
+  `nix build .#lean4 --out-link result-lean4`, does that for you.
+- `XRPL_LEAN4_DIR` is not part of the Conan package ID, so a `lean4` package
+  built earlier from the download is reused as-is. Remove it (as above) when
+  switching an existing cache over.
+
+The toolchain can be pre-fetched without entering the shell with
+`nix build .#lean4`.
+
 ## Automatic Activation with direnv
 
 [direnv](https://direnv.net/) or [nix-direnv](https://github.com/nix-community/nix-direnv) can automatically activate the Nix development shell when you enter the repository directory.
