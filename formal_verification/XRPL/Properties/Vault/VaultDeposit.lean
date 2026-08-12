@@ -210,7 +210,8 @@ theorem Vault.deposit_vault_updates_attained :
 taken amount from the shares round-trip. A run exists where the request
 `0.001` is on the vault grid, the taken amount `0.0009999999999998572` is not,
 and the stored totals move by the different on-ledger amount
-`0.000999999999999857`. -/
+`0.000999999999999857`.
+`amountDeposit''` - the taken amount `r.amountDeposit'` re-rounded to the vault scale -/
 theorem Vault.deposit_applied_delta_attained :
     ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
       (deltaTotal : Number) (deltaAmount : STAmount),

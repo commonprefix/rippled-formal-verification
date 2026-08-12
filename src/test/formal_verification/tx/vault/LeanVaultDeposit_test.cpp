@@ -453,9 +453,8 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
-        // The owner deposits 3 drops (3 shares) then donates 2 drops, so 3 shares now back 5 drops
-        // (1 share = 1.667 drops). bob depositing 4 drops gets 2 shares. C++ charges round(3.33) =
-        // 3, the model charges ceil = 4.
+        // After the donation 1 share = 1.667 drops. bob's 4-drop deposit buys 2 shares:
+        // C++ charges round(3.33) = 3, the model charges ceil = 4.
         env(Vault::deposit({.depositor = vaultOwner, .id = vaultKeylet.key, .amount = drops(3)}),
             jtx::Ter(tesSUCCESS));
         env.close();
@@ -544,9 +543,8 @@ class LeanVaultDeposit_test : public LeanSuite
             env, vaultKeylet, vaultOwner, asset.raw(), asset(1'000), tesSUCCESS, true);
     }
 
-    // Finding (FV_M2_8, both sides): deposit pricing rounds in the vault's favor, but the
-    // sfAssetsTotal += update rounds again, dropping the exact sum's low digits from the vault and
-    // lowering the share price. Both C++ and the model dilute, so assert the price does not fall.
+    // FV_M2_8 (both sides): the sfAssetsTotal += update re-rounds, dropping the sum's low
+    // digits and lowering the share price. Assert the price does not fall.
     void
     testDepositDilution()
     {
@@ -584,9 +582,8 @@ class LeanVaultDeposit_test : public LeanSuite
             "model deposit lowered the share price");
     }
 
-    // Finding (FV_M2_14): a donation adds the same amount to assetsTotal and assetsAvailable, but
-    // each rounds independently, so their difference can decrease below lossUnrealized and the
-    // invariant fires -> tecINVARIANT_FAILED.
+    // FV_M2_14: a donation rounds assetsTotal and assetsAvailable independently, so their
+    // difference can drop below lossUnrealized and trip the invariant (tecINVARIANT_FAILED).
     void
     testDonationLossInvariant()
     {
@@ -628,9 +625,8 @@ class LeanVaultDeposit_test : public LeanSuite
             jtx::Ter(tesSUCCESS));
     }
 
-    // Finding (FV_M2_15): an IOU deposit whose exact new total needs 17 significant digits is
-    // rounded up when stored, so the vault (sfAssetsTotal) is credited more than the depositor
-    // paid.
+    // FV_M2_15: an IOU deposit whose exact new total needs 17 significant digits rounds up
+    // when stored, so sfAssetsTotal is credited more than the depositor paid.
     void
     testDepositOvercredit(Number const& seed, Number const& deposit, int vaultScale)
     {
@@ -657,6 +653,70 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // The exact new total needs 17 digits, C++ rounds sfAssetsTotal up, the model keeps it.
         compareVaultDeposit(env, vaultKeylet, issuer, asset.raw(), asset(deposit), tesSUCCESS);
+    }
+
+    // The round-trip charge is never re-rounded to the vault scale, so the totals move by
+    // slightly more than the depositor pays (both C++ and the model).
+    void
+    testDepositAppliedDelta()
+    {
+        using namespace jtx;
+        testcase("deposit moves the vault totals by a different amount than paid");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createAppliedDeltaVault(env, owner, issuer, holder, asset);
+
+        // Leave the holder exactly 0.001: the debit below then subtracts without rounding,
+        // so the balance diff is the exact amount accountSend moves.
+        env(pay(holder, issuer, asset(Number{992, -3})));
+        env.close();
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        BEAST_EXPECT(before.assetsTotal == Number{3});
+
+        // Deposit 0.001, an amount already on the vault grid.
+        STAmount const amount = asset(Number{1, -3});
+        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        BEAST_EXPECTS(!lean.threw && !lean.error, "lean deposit failed");
+
+        Number const holderBefore = iouBalance(env, holder, asset);
+        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        // C++: the vault must gain exactly what the depositor paid.
+        Number const cppDelta = after.assetsTotal - before.assetsTotal;
+        Number const paid = holderBefore - iouBalance(env, holder, asset);
+        BEAST_EXPECTS(
+            cppDelta == paid,
+            "C++ booked " + to_string(cppDelta) + " but the depositor paid " + to_string(paid));
+
+        // Model: the vault must gain exactly the charge it reports.
+        Number const leanDelta = lean.vault.assetsTotal - before.assetsTotal;
+        BEAST_EXPECTS(
+            leanDelta == Number{lean.amountDeposit},
+            "model booked " + to_string(leanDelta) + " but charged " +
+                to_string(Number{lean.amountDeposit}));
+
+        // C++: the paid amount must be on the vault scale.
+        STAmount const paidRounded = roundToVaultScale(asset, before.assetsTotal, paid);
+        BEAST_EXPECTS(
+            Number{paidRounded} == paid,
+            "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
+
+        // Model: its charge must be on the vault scale as well.
+        LeanRoundedDepositAmountResult const chargeRounded =
+            leanRoundedDepositAmount(before, lean.amountDeposit);
+        BEAST_EXPECTS(!chargeRounded.threw && chargeRounded.amount, "rounding the charge failed");
+        BEAST_EXPECTS(
+            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.amountDeposit},
+            "the charge " + to_string(Number{lean.amountDeposit}) + " re-rounds to " +
+                (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
     }
 
     void
@@ -743,6 +803,7 @@ class LeanVaultDeposit_test : public LeanSuite
         // testVaultDonationInsolvent();        // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
         // testDepositDilution();               // FV_M2_8: deposit lowers the share price (both)
         // testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
+        // testDepositAppliedDelta();           // totals move by more than paid (both)
         // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
         // testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
         // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);

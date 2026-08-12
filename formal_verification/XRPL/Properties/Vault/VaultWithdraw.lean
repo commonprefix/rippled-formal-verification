@@ -265,7 +265,8 @@ theorem Vault.withdraw_vault_updates_attained :
 /-- Witness: the payout from the shares round-trip is never rounded to the
 vault scale, unlike a deposit request on entry. A run exists where re-rounding
 the payout `0.0009999999999998571` would change it, and the stored totals move
-by the different on-ledger amount `0.000999999999999857`. -/
+by the different on-ledger amount `0.000999999999999857`.
+`assets''` - the payout `r.assets'` re-rounded to the vault scale -/
 theorem Vault.withdraw_applied_delta_attained :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (assets'' : STAmount) (r : WithdrawResult)

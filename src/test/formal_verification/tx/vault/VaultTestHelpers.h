@@ -16,6 +16,7 @@
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/SField.h>
+#include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/STLedgerEntry.h>
 #include <xrpl/protocol/STNumber.h>
 
@@ -139,6 +140,65 @@ createDilutionVault(
         {.depositor = owner, .id = keylet.key, .amount = asset(donation), .flags = tfVaultDonate}));
     env.close();
     return keylet;
+}
+
+// A scale-18 vault mints 7e15 shares for a 0.007 deposit, then a 2.993 owner donation lifts
+// the total to 3. The share price 3/7e15 puts every round-trip amount off the vault grid.
+[[nodiscard]] inline Keylet
+createAppliedDeltaVault(
+    jtx::Env& env,
+    jtx::Account const& owner,
+    jtx::Account const& issuer,
+    jtx::Account const& holder,
+    jtx::PrettyAsset const& asset)
+{
+    using namespace jtx;
+    env.fund(XRP(1'000'000), owner, issuer, holder);
+    env.close();
+    // Clawback must be enabled while the issuer has no trust line yet.
+    env(fset(issuer, asfAllowTrustLineClawback));
+    env.close();
+    env(trust(owner, asset(10)));
+    env(trust(holder, asset(10)));
+    env.close();
+    env(pay(issuer, owner, asset(Number{2'993, -3})));
+    env(pay(issuer, holder, asset(Number{1})));
+    env.close();
+
+    Vault vault{env};
+    auto [tx, keylet] = vault.create({.owner = owner, .asset = asset.raw()});
+    tx[sfScale] = 18;
+    env(tx);
+    env.close();
+
+    env(Vault::deposit({.depositor = holder, .id = keylet.key, .amount = asset(Number{7, -3})}));
+    env.close();
+    env(Vault::deposit(
+        {.depositor = owner,
+         .id = keylet.key,
+         .amount = asset(Number{2'993, -3}),
+         .flags = tfVaultDonate}));
+    env.close();
+    return keylet;
+}
+
+// The account's IOU balance as a Number.
+[[nodiscard]] inline Number
+iouBalance(jtx::Env& env, jtx::Account const& account, jtx::PrettyAsset const& asset)
+{
+    return env.balance(account, asset.raw().get<Issue>()).value();
+}
+
+// Replicates the file-static roundToVaultScale from VaultDeposit.cpp: round the amount down
+// to the scale the vault total has after adding it.
+[[nodiscard]] inline STAmount
+roundToVaultScale(jtx::PrettyAsset const& asset, Number const& assetsTotal, Number const& amount)
+{
+    int const postScale = [&] {
+        NumberRoundModeGuard const rg(Number::RoundingMode::ToNearest);
+        return scale(assetsTotal + amount, asset.raw());
+    }();
+    return roundToScale(STAmount{asset.raw(), amount}, postScale, Number::RoundingMode::Downward);
 }
 
 }  // namespace xrpl::test::formal_verification
