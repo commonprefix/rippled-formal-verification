@@ -22,6 +22,7 @@
 #include <xrpl/protocol/STObject.h>
 #include <xrpl/protocol/STTakesAsset.h>
 #include <xrpl/protocol/STTx.h>
+#include <xrpl/protocol/SeqProxy.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/TxFlags.h>
 #include <xrpl/protocol/Units.h>
@@ -343,7 +344,8 @@ buildLoan(ApplyContext& ctx, LoanPlan const& plan, SLE::ref brokerSle, bool pend
     auto const loanSequence = *brokerSle->at(sfLoanSequence);
 
     // Create the loan
-    auto loan = std::make_shared<SLE>(keylet::loan(plan.brokerID, loanSequence));
+    auto loan =
+        std::make_shared<SLE>(keylet::loan(plan.brokerID, SeqProxy::rawSequence(loanSequence)));
 
     // Prevent copy/paste errors
     auto setLoanField = [&loan, &tx](auto const& field, std::uint32_t const defValue = 0) {
@@ -613,7 +615,7 @@ LoanSet::getFlagsMask(PreflightContext const& ctx)
 NotTEC
 LoanSet::preflight(PreflightContext const& ctx)
 {
-    using namespace Lending;
+    using namespace lending;
 
     auto const& tx = ctx.tx;
 
