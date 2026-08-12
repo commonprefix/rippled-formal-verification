@@ -1,13 +1,14 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.NumericType
+import XRPL.Model.Protocol.TER
+import XRPL.Model.Protocol.TenthBips
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
 def secondsInYear : Number := Number.ofInt64 31_536_000
-def tenthBipsPerUnity : Number := Number.ofInt64 100_000
 
 def hasExpired (ledgerCloseTime expTime : UInt32) : Bool :=
   ledgerCloseTime ≥ expTime
@@ -17,17 +18,11 @@ def getAssetsTotalScale (nt : NumericType) (assetsTotal : Number) : Except Error
   let st ← STAmount.ofNumber nt assetsTotal .to_nearest
   return st.exponent
 
--- value * bips / 100_000 (bips in 1/10 bips)
-def tenthBipsOfValue (value : Number) (bips : Int64) (mode : rounding_mode := .to_nearest)
-    : Except Error Number := do
-  let prod ← value.operator_mul (Number.ofInt64 bips) mode
-  prod.operator_div tenthBipsPerUnity mode
-
 -- XLS-66 (1): annual rate prorated to the interval
-def loanPeriodicRate (interestRate paymentInterval : UInt32) : Except Error Number := do
+def loanPeriodicRate (interestRate : TenthBips32) (paymentInterval : UInt32)
+    : Except Error Number := do
   let paymentIntervalInt64 := paymentInterval.toUInt64.toInt64
-  let interestRateInt64 := interestRate.toUInt64.toInt64
-  let tenthBips ← tenthBipsOfValue (Number.ofInt64 paymentIntervalInt64) interestRateInt64
+  let tenthBips ← tenthBipsOfValue (Number.ofInt64 paymentIntervalInt64) interestRate .to_nearest
   tenthBips.operator_div secondsInYear .to_nearest
 
 -- binomial series for (1+rate)^paymentsRemaining - 1, stop once a term underflows
@@ -93,9 +88,9 @@ def loanPeriodicPayment (principal rate : Number) (paymentsRemaining : UInt32)
     principal.operator_mul factor .to_nearest
 
 -- XLS-66 (32): management fee on the interest, rounded down
-def computeManagementFee (nt : NumericType) (value : Number) (feeRate : UInt16) (scale : Int)
+def computeManagementFee (nt : NumericType) (value : Number) (feeRate : TenthBips16) (scale : Int)
     : Except Error Number := do
-  let raw ← tenthBipsOfValue value feeRate.toUInt64.toInt64
+  let raw ← tenthBipsOfValue value feeRate.toTenthBips32 .to_nearest
   STAmount.roundToNumericType nt raw .downward (some scale)
 
 def adjustImpreciseNumber (nt : NumericType) (value adjustment : Number) (scale : Int)
@@ -105,10 +100,21 @@ def adjustImpreciseNumber (nt : NumericType) (value adjustment : Number) (scale 
   if rounded.signum < 0 then return Number.zero else return rounded
 
 -- minimum first-loss cover for the debt, rounded up
-def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : UInt32) (vaultScale : Int)
+def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (vaultScale : Int)
     : Except Error Number := do
-  let raw ← tenthBipsOfValue debtTotal coverRateMinimum.toUInt64.toInt64 .upward
+  let raw ← tenthBipsOfValue debtTotal coverRateMinimum .upward
   STAmount.roundToNumericType nt raw .upward (some vaultScale)
+
+-- reject a cover deposit/withdraw/clawback that rounds to zero at the cover's own scale
+def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
+    : Except Error TER := do
+  if amount.isZero then
+    return .tecPRECISION_LOSS
+  let coverScale ← getAssetsTotalScale nt coverAvailable
+  let rounded ← STAmount.roundToExponent amount coverScale .to_nearest
+  if rounded.signum == 0 then
+    return .tecPRECISION_LOSS
+  return .tesSUCCESS
 
 -- XLS-66 (10): principal implied by a periodic payment
 def loanPrincipalFromPeriodicPayment (periodicPayment rate : Number) (paymentsRemaining : UInt32)

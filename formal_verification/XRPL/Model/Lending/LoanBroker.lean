@@ -1,14 +1,14 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.TenthBips
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
 structure LoanBroker where
-  -- all rates in 1/10 bips
-  managementFeeRate : UInt16
-  coverRateMinimum : UInt32
-  coverRateLiquidation : UInt32
+  managementFeeRate : TenthBips16
+  coverRateMinimum : TenthBips32
+  coverRateLiquidation : TenthBips32
   -- amounts in the vault's asset
   debtTotal : Number
   debtMaximum : Number
