@@ -260,7 +260,8 @@ theorem Vault.clawback_vault_updates_attained :
 /-- Witness: the recovery from the shares round-trip is never rounded to the
 vault scale, unlike a deposit request on entry. A run exists where re-rounding
 the recovery `0.00009999999999985714` would change it, and the stored total
-moves by the different on-ledger amount `0.000099999999999857`. -/
+moves by the different on-ledger amount `0.000099999999999857`.
+`assetsRecovered'` - the recovery re-rounded to the vault scale -/
 theorem Vault.clawback_applied_delta_attained :
     ∃ (v : Vault) (assets holderShares assetsRecovered' : STAmount) (r : ClawbackResult)
       (deltaTotal : Number) (deltaAmount : STAmount),

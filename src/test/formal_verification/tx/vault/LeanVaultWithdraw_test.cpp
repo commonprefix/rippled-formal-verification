@@ -616,6 +616,64 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, holder, asset.raw(), oneShare, tecPRECISION_LOSS);
     }
 
+    // The round-trip payout is never re-rounded to the vault scale, so the totals move by
+    // slightly more than the holder receives (both C++ and the model).
+    void
+    testWithdrawAppliedDelta()
+    {
+        using namespace jtx;
+        testcase("withdraw moves the vault totals by a different amount than paid out");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createAppliedDeltaVault(env, owner, issuer, holder, asset);
+
+        // Empty the holder's balance: the payout below then lands without rounding, so the
+        // balance diff is the exact amount accountSend moves.
+        env(pay(holder, issuer, asset(Number{993, -3})));
+        env.close();
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        BEAST_EXPECT(before.assetsTotal == Number{3});
+
+        // Redeem 2333333333333 of the holder's shares.
+        STAmount const shares{shareIssue(env, vaultKeylet), 2'333'333'333'333LL};
+        LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true);
+        BEAST_EXPECTS(!lean.threw && !lean.error, "lean withdraw failed");
+
+        Number const holderBefore = iouBalance(env, holder, asset);
+        env(Vault::withdraw({.depositor = holder, .id = vaultKeylet.key, .amount = shares}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        // C++: the vault must lose exactly what the holder received.
+        Number const cppDelta = before.assetsTotal - after.assetsTotal;
+        Number const received = iouBalance(env, holder, asset) - holderBefore;
+        BEAST_EXPECTS(
+            cppDelta == received,
+            "C++ booked " + to_string(cppDelta) + " but the holder received " +
+                to_string(received));
+
+        // Model: the vault must lose exactly the payout it reports.
+        Number const leanDelta = before.assetsTotal - lean.vault.assetsTotal;
+        BEAST_EXPECTS(
+            leanDelta == Number{lean.assets},
+            "model booked " + to_string(leanDelta) + " but paid out " +
+                to_string(Number{lean.assets}));
+
+        // The paid-out amount must be on the vault scale, on both sides: the model payout
+        // is the same value here.
+        STAmount const receivedRounded = roundToVaultScale(asset, before.assetsTotal, received);
+        BEAST_EXPECTS(
+            Number{receivedRounded} == received,
+            "the paid out " + to_string(received) + " re-rounds to " +
+                to_string(Number{receivedRounded}));
+    }
+
     void
     runTests() override
     {
@@ -674,6 +732,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         // testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
         // testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
         // testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
+        // testWithdrawAppliedDelta();      // totals move by more than paid out (both)
         // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
         // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
 

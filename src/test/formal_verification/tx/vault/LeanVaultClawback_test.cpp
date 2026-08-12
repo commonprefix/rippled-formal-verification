@@ -558,6 +558,59 @@ class LeanVaultClawback_test : public LeanSuite
             "model clawback lowered the share price");
     }
 
+    // The round-trip recovery is never re-rounded to the vault scale, so the total moves by
+    // slightly more than the issuer recovers (both C++ and the model).
+    void
+    testClawbackAppliedDelta()
+    {
+        using namespace jtx;
+        testcase("clawback moves the vault total by a different amount than recovered");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createAppliedDeltaVault(env, owner, issuer, holder, asset);
+
+        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        BEAST_EXPECT(before.assetsTotal == Number{3});
+
+        // Claw 0.0001 of the asset from the holder.
+        STAmount const amount = asset(Number{1, -4});
+        LeanClawbackResult const lean =
+            leanVaultClawback(before, amount, fetchHolderShares(env, vaultKeylet, holder));
+        BEAST_EXPECTS(!lean.threw && !lean.error, "lean clawback failed");
+        // Model and C++ agree on the recovery, so it stands in for the accountSend amount.
+        Number const recovery{lean.assets};
+        BEAST_EXPECTS((recovery == Number{9'999'999'999'985'714LL, -20}), to_string(recovery));
+
+        env(Vault::clawback(
+                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = amount}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+
+        // C++: the vault must lose exactly the recovery.
+        Number const cppDelta = before.assetsTotal - after.assetsTotal;
+        BEAST_EXPECTS(
+            cppDelta == recovery,
+            "C++ booked " + to_string(cppDelta) + " but recovered " + to_string(recovery));
+
+        // Model: the same, on its own stored total.
+        Number const leanDelta = before.assetsTotal - lean.vault.assetsTotal;
+        BEAST_EXPECTS(
+            leanDelta == recovery,
+            "model booked " + to_string(leanDelta) + " but recovered " + to_string(recovery));
+
+        // The recovery must be on the vault scale, on both sides: they share the value here.
+        STAmount const recoveryRounded = roundToVaultScale(asset, before.assetsTotal, recovery);
+        BEAST_EXPECTS(
+            Number{recoveryRounded} == recovery,
+            "the recovery " + to_string(recovery) + " re-rounds to " +
+                to_string(Number{recoveryRounded}));
+    }
+
     void
     runTests() override
     {
@@ -611,6 +664,7 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackPrecisionLoss();     // FV_M2_12: model tecPRECISION_LOSS, C++ invariant
         // testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
         // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
+        // testClawbackAppliedDelta();      // total moves by more than recovered (both)
         // testClawbackDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
         // testClawbackDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
 
