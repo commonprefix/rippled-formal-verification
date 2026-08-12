@@ -2,7 +2,7 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Protocol.Protocol
+import XRPL.Model.Protocol.TenthBips
 
 namespace XRPL.Model.Lending
 
