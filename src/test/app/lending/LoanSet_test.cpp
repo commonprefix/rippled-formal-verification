@@ -13,6 +13,7 @@
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
+#include <xrpl/basics/chrono.h>
 #include <xrpl/beast/unit_test/suite.h>
 #include <xrpl/json/json_value.h>
 #include <xrpl/ledger/helpers/AccountRootHelpers.h>
@@ -21,6 +22,7 @@
 #include <xrpl/protocol/Issue.h>
 #include <xrpl/protocol/LedgerFormats.h>
 #include <xrpl/protocol/MPTIssue.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/TER.h>
@@ -1340,6 +1342,127 @@ private:
         }
     }
 
+    // LoanSet in a closed-ended vault — phase gating and maturity bound.
+    void
+    testLoanSetClosedEnded()
+    {
+        testcase("LoanSet closed-ended: phase and maturity bound");
+        using namespace jtx;
+        using namespace loan;
+
+        Account const issuer{"issuer"};
+        Account const lender{"lender"};
+        Account const borrower{"borrower"};
+
+        // Common loan schedule used by the phase-rejection cases below.
+        constexpr std::uint32_t kInterval = 3600u * 24u;  // 1 day
+        constexpr std::uint32_t kTotal = 2u;
+
+        // featureLendingProtocolV1_1 is excluded from `all_` by convention (see the comment on
+        // `all_`), so callers must opt in. Closed-ended vaults are gated on this amendment; without
+        // it VaultCreate returns temDISABLED and every follow-on txn sees tecNO_ENTRY.
+        auto const withEnv = [&, this](auto&& body) {
+            Env env(*this, testableAmendments() | featureLendingProtocolV1_1);
+            env.fund(XRP(1'000'000'000), issuer, lender, borrower);
+            env.close();
+            PrettyAsset const asset{xrpIssue(), 1'000'000};
+            body(env, asset);
+        };
+
+        auto const setLoan = [&](Env& env, BrokerInfo const& broker, TER expected) {
+            env(set(lender, broker.brokerID, broker.asset(100).value()),
+                kCounterparty(borrower),
+                Sig(sfCounterpartySignature, borrower),
+                Fee(env.current()->fees().base * 5),
+                kPaymentTotal(kTotal),
+                kPaymentInterval(kInterval),
+                Ter(expected));
+            env.close();
+        };
+
+        // 1. Rejected during Subscription: the broker is created in Subscription (skipPhaseAdvance
+        // = true), then LoanSet is attempted before advancing past SubscriptionDate.
+        withEnv([&](Env& env, PrettyAsset const& asset) {
+            auto const broker = createVaultAndBroker(
+                env,
+                asset,
+                lender,
+                BrokerParameters{.vaultKind = VaultKind::ClosedEnded, .skipPhaseAdvance = true});
+            setLoan(env, broker, tecTOO_SOON);
+        });
+
+        // 2. Rejected during Redemption: broker is set up normally (which lands the vault in
+        // Investment), then advance the clock past RedemptionDate before attempting LoanSet.
+        withEnv([&](Env& env, PrettyAsset const& asset) {
+            auto const broker = createVaultAndBroker(
+                env, asset, lender, BrokerParameters{.vaultKind = VaultKind::ClosedEnded});
+            BEAST_EXPECT(broker.redemptionDate.has_value());
+            using d = NetClock::duration;
+            using tp = NetClock::time_point;
+            env.close(tp{d{*broker.redemptionDate + 1}});
+            setLoan(env, broker, tecEXPIRED);
+        });
+
+        // 3. Accepted during Investment when the schedule comfortably fits before RedemptionDate.
+        withEnv([&](Env& env, PrettyAsset const& asset) {
+            auto const broker = createVaultAndBroker(
+                env, asset, lender, BrokerParameters{.vaultKind = VaultKind::ClosedEnded});
+            setLoan(env, broker, tesSUCCESS);
+        });
+
+        // 4. Rejected during Investment when the loan's final payment would land on or after
+        // RedemptionDate. Use a tight redemptionOffset and a schedule whose final payment is well
+        // past that boundary.
+        withEnv([&](Env& env, PrettyAsset const& asset) {
+            constexpr std::uint32_t kRedemptionOffset = 3u * 24u * 3600u;
+            auto const broker = createVaultAndBroker(
+                env,
+                asset,
+                lender,
+                BrokerParameters{
+                    .vaultKind = VaultKind::ClosedEnded, .redemptionOffset = kRedemptionOffset});
+            env(set(lender, broker.brokerID, broker.asset(100).value()),
+                kCounterparty(borrower),
+                Sig(sfCounterpartySignature, borrower),
+                Fee(env.current()->fees().base * 5),
+                kPaymentTotal(10u),
+                kPaymentInterval(kInterval),
+                Ter(tecNO_PERMISSION));
+            env.close();
+        });
+
+        // 5. Boundary: schedule whose finalPayment lands exactly (RedemptionDate - 1) is accepted,
+        // and one second later (== RedemptionDate) is rejected. Uses payTotal = 1 so the arithmetic
+        // is simple: finalPayment = startDate + interval.
+        withEnv([&](Env& env, PrettyAsset const& asset) {
+            auto const broker = createVaultAndBroker(
+                env, asset, lender, BrokerParameters{.vaultKind = VaultKind::ClosedEnded});
+            BEAST_EXPECT(broker.redemptionDate.has_value());
+
+            auto const startDate = env.now().time_since_epoch().count();
+            auto const acceptInterval = *broker.redemptionDate - 1 - startDate;
+            env(set(lender, broker.brokerID, broker.asset(100).value()),
+                kCounterparty(borrower),
+                Sig(sfCounterpartySignature, borrower),
+                Fee(env.current()->fees().base * 5),
+                kPaymentTotal(1u),
+                kPaymentInterval(acceptInterval),
+                Ter(tesSUCCESS));
+            env.close();
+
+            auto const rejectInterval =
+                *broker.redemptionDate - env.now().time_since_epoch().count();
+            env(set(lender, broker.brokerID, broker.asset(100).value()),
+                kCounterparty(borrower),
+                Sig(sfCounterpartySignature, borrower),
+                Fee(env.current()->fees().base * 5),
+                kPaymentTotal(1u),
+                kPaymentInterval(rejectInterval),
+                Ter(tecNO_PERMISSION));
+            env.close();
+        });
+    }
+
 public:
     void
     run() override
@@ -1351,6 +1474,8 @@ public:
                  {fixCleanup3_1_3, fixCleanup3_2_0, featureMPTokensV2, featureLendingProtocolV1_1},
                  all_))
             testTwoStep(features);
+
+        testLoanSetClosedEnded();
     }
 };
 
