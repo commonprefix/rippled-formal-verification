@@ -13,3 +13,4 @@ PRs merged into the `ripple/lending-protocol-fv` branch.
 | [#7932](https://github.com/XRPLF/rippled/pull/7932) | fix: Exempt loan default from asset freeze                                   | @tyalymov  | `tialymov/FN-23-loan_default_freeze_guard`                | 2026-08-14 |
 | [#7877](https://github.com/XRPLF/rippled/pull/7877) | fix: Remove credentials pinned to Vault, LoanBroker, and AMM pseudo-accounts | @tyalymov  | `FN-36-credential_pins_pseudo_account`                    | 2026-08-14 |
 | [#7977](https://github.com/XRPLF/rippled/pull/7977) | fix: Tighten destination checks on vault withdrawal                          | @tyalymov  | `tialymov/FN-69-withdraw_destination_domain_check`        | 2026-08-14 |
+| [#7950](https://github.com/XRPLF/rippled/pull/7950) | fix: Reject VaultWithdraw fixed-share amounts that round to zero             | @Tapanito  | `tapanito/lending-bugfix`                                 | 2026-08-14 |
