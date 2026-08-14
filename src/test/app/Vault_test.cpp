@@ -45,6 +45,7 @@
 #include <xrpl/ledger/helpers/VaultHelpers.h>
 #include <xrpl/protocol/AccountID.h>
 #include <xrpl/protocol/Asset.h>
+#include <xrpl/protocol/ErrorCodes.h>
 #include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/Issue.h>
@@ -5285,6 +5286,22 @@ class Vault_test : public beast::unit_test::Suite
             }
         };
 
+        // An error response must carry a registered token together with the matching code and
+        // message, so that clients dispatching on either of them reach the same conclusion.
+        auto const checkError = [this](
+                                    json::Value const& result,
+                                    std::string const& token,
+                                    ErrorCodeI const code,
+                                    std::string const& message) {
+            BEAST_EXPECT(result[jss::error].asString() == token);
+            BEAST_EXPECT(result[jss::error_code].asInt() == code);
+            BEAST_EXPECT(result[jss::error_message].asString() == message);
+        };
+
+        std::string const badSeqMessage = "Invalid field 'seq', not a positive 32-bit integer.";
+        std::string const badFieldsMessage =
+            "Must specify either 'vault_id' or both 'owner' and 'seq'.";
+
         {
             testcase("RPC ledger_entry selected by key");
             json::Value jvParams;
@@ -5439,16 +5456,31 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::ledger_index] = jss::validated;
             jvParams[jss::vault_id] = "foobar";
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(
+                jv[jss::result],
+                "invalidParams",
+                RpcInvalidParams,
+                "Invalid field 'vault_id', not hex string.");
         }
 
         {
-            testcase("RPC vault_info json invalid index");
+            testcase("RPC vault_info json zero vault_id");
             json::Value jvParams;
             jvParams[jss::ledger_index] = jss::validated;
             jvParams[jss::vault_id] = 0;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "entryNotFound", RpcEntryNotFound, "Entry not found.");
+        }
+
+        {
+            // An all-zero key is a well-formed request for a vault that cannot exist, not a
+            // malformed one.
+            testcase("RPC vault_info json all zero vault_id");
+            json::Value jvParams;
+            jvParams[jss::ledger_index] = jss::validated;
+            jvParams[jss::vault_id] = strHex(uint256(beast::kZero));
+            auto jv = env.rpc("json", "vault_info", to_string(jvParams));
+            checkError(jv[jss::result], "entryNotFound", RpcEntryNotFound, "Entry not found.");
         }
 
         {
@@ -5471,7 +5503,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = owner.human();
             jvParams[jss::seq] = "foobar";
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badSeqMessage);
         }
 
         {
@@ -5481,7 +5513,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = owner.human();
             jvParams[jss::seq] = 0;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badSeqMessage);
         }
 
         {
@@ -5491,7 +5523,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = owner.human();
             jvParams[jss::seq] = -1;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badSeqMessage);
         }
 
         {
@@ -5501,7 +5533,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = owner.human();
             jvParams[jss::seq] = 1e20;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badSeqMessage);
         }
 
         {
@@ -5511,7 +5543,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = owner.human();
             jvParams[jss::seq] = true;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badSeqMessage);
         }
 
         {
@@ -5521,7 +5553,11 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::owner] = "foobar";
             jvParams[jss::seq] = sequence;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(
+                jv[jss::result],
+                "actMalformed",
+                RpcActMalformed,
+                "Invalid field 'owner', not AccountID.");
         }
 
         {
@@ -5530,7 +5566,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::ledger_index] = jss::validated;
             jvParams[jss::owner] = owner.human();
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5539,7 +5575,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::ledger_index] = jss::validated;
             jvParams[jss::seq] = sequence;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5549,7 +5585,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::vault_id] = strHex(keylet.key);
             jvParams[jss::seq] = sequence;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5559,7 +5595,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::vault_id] = strHex(keylet.key);
             jvParams[jss::owner] = owner.human();
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5572,7 +5608,7 @@ class Vault_test : public beast::unit_test::Suite
             jvParams[jss::seq] = sequence;
             jvParams[jss::owner] = owner.human();
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5580,7 +5616,7 @@ class Vault_test : public beast::unit_test::Suite
             json::Value jvParams;
             jvParams[jss::ledger_index] = jss::validated;
             auto jv = env.rpc("json", "vault_info", to_string(jvParams));
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "invalidParams", RpcInvalidParams, badFieldsMessage);
         }
 
         {
@@ -5590,15 +5626,15 @@ class Vault_test : public beast::unit_test::Suite
         }
 
         {
-            testcase("RPC vault_info command line invalid index");
+            testcase("RPC vault_info command line zero index");
             json::Value jv = env.rpc("vault_info", "0", "validated");
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "malformedRequest");
+            checkError(jv[jss::result], "entryNotFound", RpcEntryNotFound, "Entry not found.");
         }
 
         {
-            testcase("RPC vault_info command line invalid index");
+            testcase("RPC vault_info command line unknown index");
             json::Value jv = env.rpc("vault_info", strHex(uint256(42)), "validated");
-            BEAST_EXPECT(jv[jss::result][jss::error].asString() == "entryNotFound");
+            checkError(jv[jss::result], "entryNotFound", RpcEntryNotFound, "Entry not found.");
         }
 
         {
