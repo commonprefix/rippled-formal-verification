@@ -15,3 +15,4 @@ PRs merged into the `ripple/lending-protocol-fv` branch.
 | [#7977](https://github.com/XRPLF/rippled/pull/7977) | fix: Tighten destination checks on vault withdrawal                          | @tyalymov  | `tialymov/FN-69-withdraw_destination_domain_check`        | 2026-08-14 |
 | [#7950](https://github.com/XRPLF/rippled/pull/7950) | fix: Reject VaultWithdraw fixed-share amounts that round to zero             | @Tapanito  | `tapanito/lending-bugfix`                                 | 2026-08-14 |
 | [#6528](https://github.com/XRPLF/rippled/pull/6528) | feat: Make VaultID conditional on LoanBrokerSet                              | @Tapanito  | `tapanito/loan-broker-set`                                | 2026-08-14 |
+| [#6361](https://github.com/XRPLF/rippled/pull/6361) | Adds functionality to block vault deposits                                   | @Tapanito  | `tapanito/vault-block-deposit`                            | 2026-08-14 |
