@@ -12,3 +12,4 @@ PRs merged into the `ripple/lending-protocol-fv` branch.
 | [#8015](https://github.com/XRPLF/rippled/pull/8015) | fix: Return specific and consistent errors from vault_info                   | @tyalymov  | `tialymov/FN-84-vault_info_error_diagnostics`             | 2026-08-14 |
 | [#7932](https://github.com/XRPLF/rippled/pull/7932) | fix: Exempt loan default from asset freeze                                   | @tyalymov  | `tialymov/FN-23-loan_default_freeze_guard`                | 2026-08-14 |
 | [#7877](https://github.com/XRPLF/rippled/pull/7877) | fix: Remove credentials pinned to Vault, LoanBroker, and AMM pseudo-accounts | @tyalymov  | `FN-36-credential_pins_pseudo_account`                    | 2026-08-14 |
+| [#7977](https://github.com/XRPLF/rippled/pull/7977) | fix: Tighten destination checks on vault withdrawal                          | @tyalymov  | `tialymov/FN-69-withdraw_destination_domain_check`        | 2026-08-14 |
