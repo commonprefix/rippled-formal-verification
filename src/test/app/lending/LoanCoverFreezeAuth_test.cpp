@@ -460,6 +460,16 @@ private:
 
         auto const loanKeylet = keylet::loan(brokerInfo.brokerID, SeqProxy::rawSequence(1));
 
+        using tp = NetClock::time_point;
+        using d = NetClock::duration;
+
+        // Under featureLendingProtocolV1_1, a loan can only be impaired once
+        // its payment is late.
+        if (auto loan = env.le(loanKeylet); BEAST_EXPECT(loan))
+        {
+            env.close(tp{d{loan->at(sfNextPaymentDueDate) + 1}});
+        }
+
         // Realize a loss via impairment before locking.
         env(manage(lender, loanKeylet.key, tfLoanImpair));
         env.close();
@@ -472,8 +482,6 @@ private:
         env(pay(borrower, loanKeylet.key, debtMaximumRequest), Ter(tecLOCKED));
         env.close();
 
-        using tp = NetClock::time_point;
-        using d = NetClock::duration;
         if (auto loan = env.le(loanKeylet); BEAST_EXPECT(loan))
         {
             env.close(tp{d{loan->at(sfNextPaymentDueDate) + loan->at(sfGracePeriod) + 1}});
