@@ -75,13 +75,14 @@ lemma alignDown_abs_value
 
 lemma alignDown_sbit_preserved (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (Number.operator_add.alignDown m e g target).2.2.sbit_ = g.sbit_ := by
-  induction m, e, g using Number.operator_add.alignDown.induct target with
+  rw [alignDown_eq_spec]
+  induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
     simp only [Guard.doDropDigit] at IH
-    rw [alignDown_step hlt]
+    rw [alignDownSpec_step hlt]
     rw [IH]
     rfl
   | case2 m e g hnlt =>
-    rw [alignDown_noop hnlt]
+    rw [alignDownSpec_noop hnlt]
 
 end XRPL.Model.Protocol

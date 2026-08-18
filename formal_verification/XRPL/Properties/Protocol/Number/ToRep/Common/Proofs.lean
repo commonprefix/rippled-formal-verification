@@ -1,5 +1,6 @@
 import XRPL.Properties.Protocol.Number.Accessors.Accessors
 import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
+import XRPL.Properties.Protocol.Number.Common.DropDigitEquivalence
 import Mathlib.Tactic
 
 
@@ -21,7 +22,7 @@ divides evenly by `10^(-offset)`, every dropped digit is `0`, the guard stays
 /-- A clean guard is empty, so it rounds to the sentinel `-2` (never rounds up). -/
 lemma clean_guard_round (g : Guard) (h1 : g.digits_ = 0) (h2 : g.xbit_ = false)
     (mode : rounding_mode) : g.round mode = -2 := by
-  have h_empty : g.empty = true := by unfold Guard.empty; rw [h1, h2]; decide
+  have h_empty : g.empty = true := by unfold Guard.empty Guard.unrecoverable; rw [h1, h2]; decide
   unfold Guard.round
   rw [if_pos h_empty]
 
@@ -40,9 +41,10 @@ lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
     (hg1 : g.digits_ = 0) (hg2 : g.xbit_ = false)
     (hdvd : D.toInt % 10 ^ (-off).toNat = 0) :
     (Number.to_rep.shift D off g).2.digits_ = 0 ∧ (Number.to_rep.shift D off g).2.xbit_ = false := by
-  induction D, off, g using Number.to_rep.shift.induct with
+  simp only [shift_eq_spec]
+  induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
-    rw [Number.to_rep.shift, if_pos hneg]
+    rw [shiftSpec, if_pos hneg]
     -- dropped digit is 0
     have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
     rw [hk, pow_succ'] at hdvd
@@ -69,7 +71,7 @@ lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
     nth_rewrite 1 [← hdig0] at hpc2
     exact ih hdiv_nn hpc1 hpc2 hdiv_dvd
   | case2 drops offset gg hnneg =>
-    rw [Number.to_rep.shift, if_neg hnneg]
+    rw [shiftSpec, if_neg hnneg]
     exact ⟨hg1, hg2⟩
 
 /-! ## Sign and magnitude of the external mantissa -/
@@ -174,9 +176,10 @@ i.e. `D / 10^(-offset)` (`Int` floor division on the non-negative magnitude). -/
 
 lemma shift_fst_eq (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt) :
     ((Number.to_rep.shift D off g).fst).toInt = D.toInt / 10 ^ (-off).toNat := by
-  induction D, off, g using Number.to_rep.shift.induct with
+  simp only [shift_eq_spec]
+  induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
-    rw [Number.to_rep.shift, if_pos hneg]
+    rw [shiftSpec, if_pos hneg]
     have hdiv : (drops / 10).toInt = drops.toInt / 10 := toInt_div_ten_of_nonneg drops h0
     have h0' : 0 ≤ (drops / 10).toInt := by
       rw [hdiv]; exact Int.ediv_nonneg h0 (by norm_num)
@@ -185,7 +188,7 @@ lemma shift_fst_eq (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt) :
     have hk : (-offset).toNat = (-(offset + 1)).toNat + 1 := by omega
     rw [hk, pow_succ', Int.ediv_ediv_of_nonneg (by norm_num)]
   | case2 drops offset gg hnneg =>
-    rw [Number.to_rep.shift, if_neg hnneg]
+    rw [shiftSpec, if_neg hnneg]
     have hk : (-offset).toNat = 0 := by omega
     rw [hk, pow_zero, Int.ediv_one]
 

@@ -91,7 +91,7 @@ lemma push6_round_one (g : Guard) : (g.push 6).round .to_nearest = 1 := by
   have hgt : (0x5000_0000_0000_0000 : UInt64) < (g.push 6).digits_ := by
     rw [UInt64.lt_iff_toNat_lt, hthr, hd, h260]; omega
   have hne : ¬ (g.push 6).empty := by
-    unfold Guard.empty
+    unfold Guard.empty Guard.unrecoverable
     simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true, not_and]
     intro hz
     have hz0 : (g.push 6).digits_.toNat = 0 := by rw [hz]; rfl

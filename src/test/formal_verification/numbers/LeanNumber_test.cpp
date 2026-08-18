@@ -931,6 +931,42 @@ public:
         }
     }
 
+    // Cases from rippled PR 7825: Operands at opposite ends of the exponent
+    void
+    testAddSubExtremeExponents()
+    {
+        beginCase("LeanNumber.add_sub_extreme_exponents");
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+
+        CppBinOp const add = [](Number const& a, Number const& b) { return a + b; };
+        CppBinOp const sub = [](Number const& a, Number const& b) { return a - b; };
+
+        // (mantissa, exponentOffset): the min-mantissa pair, and a near-top pair
+        // whose round-up stays representable.
+        std::pair<uint64_t, int> const params[] = {
+            {Number::minMantissa(), 0}, {9'000'000'000'000'000'000ULL, 1}};
+
+        for (auto mode :
+             {Number::RoundingMode::ToNearest,
+              Number::RoundingMode::TowardsZero,
+              Number::RoundingMode::Downward,
+              Number::RoundingMode::Upward})
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            for (auto const& [mantissa, exponentOffset] : params)
+            {
+                auto const x = makeNumberPair(false, mantissa, Number::kMaxExponent);
+                auto const y =
+                    makeNumberPair(false, mantissa, Number::kMinExponent + exponentOffset);
+
+                checkBinOp(fmtNum(x) + " + " + fmtNum(y), lean_number_add, add, x, y, mode);
+                checkBinOp(fmtNum(x) + " - " + fmtNum(y), lean_number_sub, sub, x, y, mode);
+                checkBinOp(fmtNum(y) + " + " + fmtNum(x), lean_number_add, add, y, x, mode);
+                checkBinOp(fmtNum(y) + " - " + fmtNum(x), lean_number_sub, sub, y, x, mode);
+            }
+        }
+    }
+
     // operator/= Upward at the kMaxRep cusp on the fix-enabled (Large330) scale.
     // We reported this as returning a value strictly below the exact quotient
     // (violating Upward)
@@ -1115,6 +1151,7 @@ private:
         testNegativeComparison();
         testRangeBoundaryArithmetic();
         testAdditionRounding();
+        testAddSubExtremeExponents();
         testDivisionRounding();
         testMultiplicationRounding();
         testCuspRounding();
