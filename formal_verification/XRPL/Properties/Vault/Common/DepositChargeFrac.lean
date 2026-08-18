@@ -192,9 +192,9 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
             rw [if_pos (Guard.content_of_not_empty hne')]
           rw [hrv1]; simp
         have hdig : sp.2.digits_ = 0 := by
-          unfold Guard.empty at hemp; rw [Bool.and_eq_true] at hemp; exact beq_iff_eq.mp hemp.1
+          unfold Guard.empty Guard.unrecoverable at hemp; rw [Bool.and_eq_true] at hemp; exact beq_iff_eq.mp hemp.1
         have hxb : sp.2.xbit_ = false := by
-          unfold Guard.empty at hemp; rw [Bool.and_eq_true, Bool.not_eq_true'] at hemp; exact hemp.2
+          unfold Guard.empty Guard.unrecoverable at hemp; rw [Bool.and_eq_true, Bool.not_eq_true'] at hemp; exact hemp.2
         have hfrac0 : frac = 0 := represents_eq_zero_of_digits_zero_xbit_false hdig hxb hrep
         rw [hr, hval_frac, hfrac0]; simp
 

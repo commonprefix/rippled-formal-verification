@@ -203,7 +203,7 @@ lemma doRoundUp_value_cusp
     change (0x5000_0000_0000_0000 : UInt64) < g'.digits_
     rw [UInt64.lt_iff_toNat_lt]; exact h_hex5_lt
   have h_g'_ne : ¬ g'.empty := by
-    unfold Guard.empty
+    unfold Guard.empty Guard.unrecoverable
     simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true]
     intro ⟨hd, _⟩
     have hd0 : g'.digits_.toNat = 0 := by
@@ -399,7 +399,7 @@ lemma doRoundUp_output_invariants_to_nearest
         change (0x5000_0000_0000_0000 : UInt64) < g'.digits_
         rw [UInt64.lt_iff_toNat_lt]; exact h_hex5_lt
       have h_g'_ne : ¬ g'.empty := by
-        unfold Guard.empty
+        unfold Guard.empty Guard.unrecoverable
         simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true]
         intro ⟨hd, _⟩
         have hd0 : g'.digits_.toNat = 0 := by

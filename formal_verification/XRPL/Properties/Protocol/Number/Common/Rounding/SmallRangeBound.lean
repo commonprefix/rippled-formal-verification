@@ -21,7 +21,7 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
     intro h
     have : (g.push 9).digits_.toNat = 0 := by rw [h]; rfl
     omega
-  have hpush_ne : (g.push 9).empty = false := by unfold Guard.empty; simp [hne0]
+  have hpush_ne : (g.push 9).empty = false := by unfold Guard.empty Guard.unrecoverable; simp [hne0]
   have hpush_sbit : (g.push 9).sbit_ = g.sbit_ := Guard.push_sbit g 9
   -- the re-round bool fires (dropped digit is 9)
   have hroundUp' : ((g.push 9).round mode == 1
@@ -216,7 +216,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
     intro r hr hr2 he; unfold Guard.round at hr; rw [if_pos he] at hr; exact hr2 hr.symm
   have hempty_tail : g.empty = true → M % 1000 = 0 := by
     intro he
-    simp only [Guard.empty, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true'] at he
+    simp only [Guard.empty, Guard.unrecoverable, Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true'] at he
     obtain ⟨hd, hx⟩ := he
     have hf0 : (((M % 1000 : ℕ) : ℚ) / 1000) = 0 :=
       represents_eq_zero_of_digits_zero_xbit_false hd hx hrep

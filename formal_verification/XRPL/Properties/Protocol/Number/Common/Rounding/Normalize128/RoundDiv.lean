@@ -458,7 +458,7 @@ lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
   have key := valueInv_key g f x hval
   by_cases hgt : g.digits_ > 0x5000_0000_0000_0000
   · have hne : ¬ g.empty := by
-      unfold Guard.empty
+      unfold Guard.empty Guard.unrecoverable
       simp only [Bool.and_eq_true, beq_iff_eq, Bool.not_eq_true, not_and]
       intro hz; exact absurd (hz ▸ hgt) (by decide)
     rw [round_to_nearest_def hne, if_pos hgt]
@@ -478,7 +478,7 @@ lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
       have hxp : 0 < x := by rw [hq] at key; linarith only [key, h]
       have hxb : g.xbit_ = true := hxbit.mpr hxp
       have hne : ¬ g.empty := by
-        unfold Guard.empty; rw [hxb]; simp
+        unfold Guard.empty Guard.unrecoverable; rw [hxb]; simp
       rw [round_to_nearest_def hne, if_neg hgt, if_neg hlt, if_pos hxb]
 
 /-- **Div f = ½ ⟹ round = 0.** At an exact tie the captured digits are exactly the

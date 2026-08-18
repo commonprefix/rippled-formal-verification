@@ -142,7 +142,7 @@ lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : roundin
     intro h
     have : (g.push 9).digits_.toNat = 0 := by rw [h]; rfl
     omega
-  have hpush_ne : (g.push 9).empty = false := by unfold Guard.empty; simp [hne0]
+  have hpush_ne : (g.push 9).empty = false := by unfold Guard.empty Guard.unrecoverable; simp [hne0]
   have hpush_sbit : (g.push 9).sbit_ = g.sbit_ := Guard.push_sbit g 9
   have hroundUp' : ((g.push 9).round mode == 1
       || ((g.push 9).round mode == 0 && (999999999999999 : UInt64) % 2 == 1)) = true := by
@@ -419,11 +419,12 @@ lemma Guard.pushOverflow_sbit (g : Guard) (m : UInt64) (mode : rounding_mode) :
 /-- `to_rep.shift` never touches the sign bit (it only `push`es digits). -/
 lemma Number.to_rep_shift_sbit (D : Int64) (off : Int) (g : Guard) :
     (Number.to_rep.shift D off g).2.sbit_ = g.sbit_ := by
-  induction D, off, g using Number.to_rep.shift.induct with
+  simp only [shift_eq_spec]
+  induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
-    rw [Number.to_rep.shift, if_pos hneg, ih, Guard.push_sbit]
+    rw [shiftSpec, if_pos hneg, ih, Guard.push_sbit]
   | case2 drops offset gg hnneg =>
-    rw [Number.to_rep.shift, if_neg hnneg]
+    rw [shiftSpec, if_neg hnneg]
 
 /-- **`.downward` `to_rep` on a sign-cleared `Number` is the integer floor.**
 When `sbit_ = false` the `.downward` round decision is `-1`/`-2`, never a bump, so
@@ -524,10 +525,11 @@ lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     0 ≤ D.toInt → ∀ f : ℚ, represents g f →
     represents (Number.to_rep.shift D off g).2
       (f / 10 ^ (-off).toNat + ((D.toInt % 10 ^ (-off).toNat : ℤ) : ℚ) / 10 ^ (-off).toNat) := by
-  induction D, off, g using Number.to_rep.shift.induct with
+  simp only [shift_eq_spec]
+  induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
     intro h0 f hg
-    rw [Number.to_rep.shift, if_pos hneg]
+    rw [shiftSpec, if_pos hneg]
     have hdiv_nn : 0 ≤ (drops / 10).toInt := by
       rw [toInt_div_ten_of_nonneg drops h0]; exact Int.ediv_nonneg h0 (by norm_num)
     have hd_toInt : ((drops % 10).toUInt64.toNat : ℤ) = drops.toInt % 10 := by
@@ -564,7 +566,7 @@ lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     exact hgoal
   | case2 drops offset gg hnneg =>
     intro h0 f hg
-    rw [Number.to_rep.shift, if_neg hnneg]
+    rw [shiftSpec, if_neg hnneg]
     have hk0 : (-offset).toNat = 0 := by omega
     rw [hk0]
     simp only [pow_zero, Int.emod_one, div_one, Int.cast_zero, add_zero]

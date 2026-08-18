@@ -26,7 +26,7 @@ lemma Guard.push_zero_empty {g : Guard} (h : g.empty = true) {d : UInt64} (hd : 
     (g.push d).empty = true := by
   subst hd
   obtain ⟨dg, xb, sb⟩ := g
-  unfold Guard.empty at h
+  unfold Guard.empty Guard.unrecoverable at h
   rw [Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨hdig, hxb⟩ := h
   simp only at hdig hxb
@@ -35,7 +35,7 @@ lemma Guard.push_zero_empty {g : Guard} (h : g.empty = true) {d : UInt64} (hd : 
     · rfl
     · rw [hx] at hxb; exact absurd hxb (by decide)
   subst hdig hxb'
-  simp only [Guard.push, Guard.empty]
+  simp only [Guard.push, Guard.empty, Guard.unrecoverable]
   decide
 
 /-- One firing step of `doNormalize_scaleDown`. -/
@@ -383,7 +383,7 @@ lemma Guard.not_empty_of_represents_pos {g : Guard} {f : ℚ}
   rcases h : g.empty with _ | _
   · rfl
   · exfalso
-    unfold Guard.empty at h
+    unfold Guard.empty Guard.unrecoverable at h
     rw [Bool.and_eq_true, beq_iff_eq] at h
     obtain ⟨hdig, hxb⟩ := h
     have hxb' : g.xbit_ = false := by
@@ -397,7 +397,7 @@ lemma Guard.not_empty_of_represents_pos {g : Guard} {f : ℚ}
 /-- Nonempty guards have visible content: `digits_ > 0 || xbit_`. -/
 lemma Guard.content_of_not_empty {g : Guard} (h : g.empty = false) :
     (g.digits_ > 0 || g.xbit_) = true := by
-  unfold Guard.empty at h
+  unfold Guard.empty Guard.unrecoverable at h
   rw [Bool.and_eq_false_iff] at h
   rcases h with h | h
   · have hne : g.digits_ ≠ 0 := by

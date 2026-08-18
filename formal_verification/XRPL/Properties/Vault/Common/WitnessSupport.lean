@@ -7,6 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRange
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
+import XRPL.Properties.Protocol.Number.ToRep.Common.Proofs
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
@@ -95,14 +96,14 @@ theorem truncateAux_stop (m : UInt64) : Number.truncateAux m 0 = (m, 0) := by
 theorem to_rep_shift_step (d : Int64) (e : Int) (g : Guard) (he : e < 0) :
     Number.to_rep.shift d e g
       = Number.to_rep.shift (d / 10) (e + 1) (g.push (d % 10).toUInt64) := by
-  conv_lhs => rw [Number.to_rep.shift]
+  rw [shift_eq_spec, shift_eq_spec]
+  conv_lhs => rw [shiftSpec]
   rw [if_pos he]
 
 /-- The `Number.to_rep` mantissa shift stops at offset `0`. -/
 theorem to_rep_shift_stop (d : Int64) (g : Guard) :
     Number.to_rep.shift d 0 g = (d, g) := by
-  rw [Number.to_rep.shift]
-  rw [if_neg (by decide : ¬ ((0 : Int) < 0))]
+  rw [shift_eq_spec, shiftSpec, if_neg (by decide : ¬ ((0 : Int) < 0))]
 
 /-- The `Number.to_rep` growth loop at offset `0` returns its input. -/
 theorem to_rep_grow_zero (d : Int64) : Number.to_rep.grow d 0 = .ok d := by

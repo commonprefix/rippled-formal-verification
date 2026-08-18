@@ -561,7 +561,7 @@ lemma round_downward_eq_one_iff (g : Guard) :
     by_cases hemp : g.empty
     · -- g.empty: digits_ = 0 and xbit_ = false; shouldRoundUp_downward requires digits > 0 or xbit = true
       exfalso
-      unfold Guard.empty at hemp
+      unfold Guard.empty Guard.unrecoverable at hemp
       simp only [Bool.and_eq_true, beq_iff_eq] at hemp
       obtain ⟨hd0, hx_true⟩ := hemp
       have hd : g.digits_ = 0 := by exact_mod_cast hd0
@@ -1292,7 +1292,7 @@ lemma round_upward_eq_one_iff (g : Guard) :
     by_cases hemp : g.empty
     · -- g.empty means digits = 0 and xbit = false, contradicts shouldRoundUp_upward
       exfalso
-      unfold Guard.empty at hemp
+      unfold Guard.empty Guard.unrecoverable at hemp
       simp only [Bool.and_eq_true, beq_iff_eq] at hemp
       obtain ⟨hd0, hx_true⟩ := hemp
       have hd : g.digits_ = 0 := by exact_mod_cast hd0

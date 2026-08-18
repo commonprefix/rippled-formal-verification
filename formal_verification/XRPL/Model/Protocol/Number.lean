@@ -111,7 +111,34 @@ def Guard.doDropDigit (g : Guard) (mantissa : UInt64) (exponent : Int) : Guard �
 def Guard.doDropDigit128 (g : Guard) (mantissa : UInt128) (exponent : Int) : Guard × UInt128 × Int :=
   (g.push (toUInt64 (mantissa % 10)), mantissa / 10, exponent + 1)
 
-def Guard.empty (g : Guard) : Bool := g.digits_ == 0 && !g.xbit_
+-- no recoverable digits in the guard; xbit_ may still record that one was dropped
+def Guard.unrecoverable (g : Guard) : Bool := g.digits_ == 0
+
+def Guard.empty (g : Guard) : Bool := g.unrecoverable && !g.xbit_
+
+-- `doDropDigitWithTarget` from xrpld: drop digits from `mantissa` into the guard
+-- until `exponent` reaches `target`. Once `mantissa` is 0 and the guard has no recoverable
+-- digits, the remaining drops change only the exponent, so it is set to `target` directly.
+def Guard.doDropDigitWithTargetU64 (g : Guard) (mantissa : UInt64) (exponent target : Int)
+    : UInt64 × Int × Guard :=
+  if exponent < target then
+    if mantissa == 0 && g.unrecoverable then (mantissa, target, g)
+    else (g.doDropDigit mantissa exponent).1.doDropDigitWithTargetU64
+           (g.doDropDigit mantissa exponent).2.1 (g.doDropDigit mantissa exponent).2.2 target
+  else (mantissa, exponent, g)
+termination_by (target - exponent).toNat
+decreasing_by simp [Guard.doDropDigit]; omega
+
+-- `rep` version of `doDropDigitWithTargetU64`, with the drop written out since `doDropDigit`
+-- takes a `UInt64`. `to_rep` uses only the value and guard, so the exponent is not returned.
+def Guard.doDropDigitWithTargetI64 (g : Guard) (drops : rep) (offset target : Int)
+    : rep × Guard :=
+  if offset < target then
+    if drops == 0 && g.unrecoverable then (drops, g)
+    else (g.push (drops % 10).toUInt64).doDropDigitWithTargetI64 (drops / 10) (offset + 1) target
+  else (drops, g)
+termination_by (target - offset).toNat
+decreasing_by omega
 
 def Guard.round (g : Guard) (mode : rounding_mode) : Int :=
   if g.empty then -2
@@ -437,11 +464,7 @@ def Number.operator_add (x y : Number)
     let ye := y.exponent_
     let rec alignDown (m : UInt64) (e : Int) (g : Guard)
         (target : Int) : UInt64 × Int × Guard :=
-      if e < target then
-        alignDown (g.doDropDigit m e).2.1 (g.doDropDigit m e).2.2 (g.doDropDigit m e).1 target
-      else (m, e, g)
-    termination_by (target - e).toNat
-    decreasing_by simp [Guard.doDropDigit]; omega
+      g.doDropDigitWithTargetU64 m e target
     let (xm, xe, ym, _ye, g) :=
       if xe < ye then
         let g := if xn then Guard.new.set_negative else Guard.new
@@ -506,11 +529,7 @@ def Number.to_rep (n : Number) (mode : rounding_mode) : Except Error rep :=
     let drops : rep := if n.negative_ then -drops else drops
 
     let rec shift (drops : rep) (offset : Int) (g : Guard) : rep × Guard :=
-      if offset < 0 then
-        shift (drops / 10) (offset + 1) (g.push (drops % 10).toUInt64)
-      else (drops, g)
-    termination_by (-offset).toNat
-    decreasing_by omega
+      g.doDropDigitWithTargetI64 drops offset 0
 
     let rec grow (drops : rep) (offset : Int) : Except Error rep :=
       if offset > 0 then

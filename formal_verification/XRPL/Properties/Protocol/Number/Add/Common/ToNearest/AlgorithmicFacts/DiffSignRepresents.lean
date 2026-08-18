@@ -171,7 +171,7 @@ theorem operator_add_post_subtract
         have hdig_ne : R.2.2.digits_ ≠ 0 := by
           intro hd0
           apply hemp
-          unfold Guard.empty
+          unfold Guard.empty Guard.unrecoverable
           rw [hd0, hxbit_exit]
           decide
         have hf'_pos : 0 < f' := by
