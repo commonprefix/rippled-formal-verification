@@ -336,10 +336,9 @@ class LeanVaultClawback_test : public LeanSuite
         testClawbackDrifted(3, 2, 2, tesSUCCESS);
     }
 
-    // Discrepancy (C++ bug): a clawback too small to debit assetsTotal (the debit rounds back
-    // to the old value) still pays the issuer and burns the holder's shares. Same finding as
-    // testWithdrawPrecisionLoss in LeanVaultWithdraw_test.cpp, the model rejects with
-    // tecPRECISION_LOSS.
+    // Finding (FV_M2_12, regression): a clawback too small to debit assetsTotal (the debit rounds
+    // back to the old value) used to pay the issuer and burn the holder's shares. Both sides now
+    // return tecPRECISION_LOSS. Same finding as testWithdrawPrecisionLoss.
     void
     testClawbackPrecisionLoss()
     {
@@ -379,8 +378,8 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
-    // Finding (FV_M2_12): a clawback too small to change the stored assetsTotal still burns
-    // a share (c++ -> tecINVARIANT_FAILED, Lean -> tecPRECISION_LOSS)
+    // Finding (FV_M2_12, regression): a clawback too small to change the stored assetsTotal
+    // used to burn a share (c++ -> tecINVARIANT_FAILED). Both sides now return tecPRECISION_LOSS.
     void
     testClawbackDustDebit(Number const& assetsTotal, std::uint64_t sharesTotal)
     {

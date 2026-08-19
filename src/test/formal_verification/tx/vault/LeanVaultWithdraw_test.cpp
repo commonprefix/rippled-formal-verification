@@ -331,9 +331,9 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, bob, xrpIssue(), oneShare, tesSUCCESS);
     }
 
-    // Finding (C++ bug): a withdrawal too small to debit assetsTotal (the debit rounds back to the
-    // old value) still pays the withdrawer. C++ only catches it with the global invariant, where
-    // it should reject with tecPRECISION_LOSS.
+    // Finding (FV_M2_4, regression): a withdrawal too small to debit assetsTotal (the debit rounds
+    // back to the old value) used to pay the withdrawer and trip the global invariant. C++ now
+    // rejects it upfront with tecPRECISION_LOSS, like the model.
     void
     testWithdrawPrecisionLoss()
     {
@@ -365,8 +365,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
-    // Finding (C++ bug): preclaim computes waiveUnrealizedLoss (Yes for a sole shareholder) but
-    // doApply ignores it and applies the loss, paying the withdrawer less.
+    // Finding (FV_M2_6, regression): preclaim computes waiveUnrealizedLoss (Yes for a sole
+    // shareholder) and doApply used to ignore it, paying the withdrawer less. Both now waive.
     void
     testWithdrawWaiveLoss()
     {
@@ -415,6 +415,9 @@ class LeanVaultWithdraw_test : public LeanSuite
                 Fee(env.current()->fees().base * 2),
                 jtx::Ter(tesSUCCESS));
             env.close();
+            // A loan can only be impaired once its payment is late.
+            std::uint32_t const dueDate = env.le(loanKeylet)->at(sfNextPaymentDueDate);
+            env.close(NetClock::time_point{NetClock::duration{dueDate + 1}});
             env(manage(lender, loanKeylet.key, tfLoanImpair), jtx::Ter(tesSUCCESS));
             env.close();
         }
@@ -586,8 +589,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             "model withdraw lowered the share price");
     }
 
-    // Finding (FV_M2_12): a withdrawal too small to change the stored assetsTotal still burns
-    // a share (c++ -> tecINVARIANT_FAILED, Lean -> tecPRECISION_LOSS)
+    // Finding (FV_M2_12, regression): a withdrawal too small to change the stored assetsTotal
+    // used to burn a share (c++ -> tecINVARIANT_FAILED). Both sides now return tecPRECISION_LOSS.
     void
     testWithdrawDustDebit(Number const& assetsTotal, std::uint64_t sharesTotal)
     {
@@ -735,15 +738,12 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
         // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
-        // Needs a setup update first. Impairing a loan now requires a late payment, so the
-        // impair here returns tecTOO_SOON and the case never reaches the divergence:
-        // testWithdrawWaiveLoss();         // FV_M2_6: model waives the loss, C++ applies it
-        // Both sides now return tecINSUFFICIENT_FUNDS and agree. Re-pin before enabling:
         // testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
 
         // Fixed discrepancies, kept as regression tests.
         testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit with a loss
-        testWithdrawPrecisionLoss();                         // FV_M2_4: dust withdrawal now rejects upfront
+        testWithdrawWaiveLoss();              // FV_M2_6: doApply now honors the waiver
+        testWithdrawPrecisionLoss();          // FV_M2_4: dust withdrawal now rejects upfront
         testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
         testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
         // clang-format on
