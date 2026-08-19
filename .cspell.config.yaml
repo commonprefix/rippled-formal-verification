@@ -4,6 +4,8 @@ ignorePaths:
   - CMakeUserPresets.json
   - Doxyfile
   - docs/**/*.puml
+  - formal_verification/**/*.py
+  - formal_verification/**/*.lean
   - cmake/**
   - LICENSE.md
   - .clang-tidy
@@ -218,6 +220,7 @@ words:
   - nullptr
   - nunl
   - Nyffenegger
+  - olean
   - onlatest
   - ostr
   - oxalica
@@ -368,6 +371,7 @@ words:
   - xbridge
   - xchain
   - ximinez
+  - xlabel
   - XMACRO
   - xored
   - xrpkuwait
