@@ -16,7 +16,7 @@ open XRPL.Model.Protocol
 /-- Net asset value backing the shares for withdrawal:
 assetsTotal minus lossUnrealized. -/
 def Vault.withdrawNav (v : Vault) : ℚ :=
-  v.toExact.assetsTotal - v.toExact.lossUnrealized
+  v.assetsTotal.toRat - v.lossUnrealized.toRat
 
 /-- The exact `assets'` for redeeming `shares`, before any rounding. The XLS-0065
 exchange formula `nav * shares / sharesTotal`, where the pricing `nav` is
@@ -24,13 +24,13 @@ exchange formula `nav * shares / sharesTotal`, where the pricing `nav` is
 unrealized loss is not subtracted. -/
 def Vault.idealAssetsWithdraw (v : Vault) (waiveUnrealizedLoss : Bool) (shares : ℚ) : ℚ :=
   (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) *
-    shares / v.toExact.sharesTotal
+    shares / v.sharesTotal.toRat
 
 /-- The exact share amount for withdrawing `assets`, before any rounding. The
 XLS-0065 exchange formula `sharesTotal * assets / nav`, with the same pricing
 `nav` as `idealAssetsWithdraw`. -/
 def Vault.idealSharesWithdraw (v : Vault) (waiveUnrealizedLoss : Bool) (assets : ℚ) : ℚ :=
-  v.toExact.sharesTotal * assets /
+  v.sharesTotal.toRat * assets /
     (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav)
 
 /-- The stored pricing computation loses nothing: the single `Number`
@@ -51,6 +51,6 @@ def Vault.WithdrawNavExact (v : Vault) (waiveUnrealizedLoss : Bool) : Prop :=
 assetsTotal minus lossUnrealized: the single subtraction is correctly rounded,
 contributing at most `depositε` relative to its exact operand magnitude. -/
 def Vault.navSlack (v : Vault) : ℚ :=
-  depositε * (v.toExact.assetsTotal + v.toExact.assetsTotal)
+  depositε * (v.assetsTotal.toRat + v.assetsTotal.toRat)
 
 end XRPL.Model.SingleAssetVault

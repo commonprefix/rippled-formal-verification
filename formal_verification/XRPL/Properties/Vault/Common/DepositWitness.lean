@@ -140,7 +140,7 @@ theorem Vault.deposit_charge_witness :
 theorem Vault.deposit_vault_updates_witness :
     ∃ (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (r : DepositResult),
       v.Lawful ∧ v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
+      r.vault'.assetsTotal.toRat ≠ v.assetsTotal.toRat + r.amountDeposit'.toRat :=
   ⟨wvDVU, waDVU, true, wrDVU, by native_decide⟩
 
 /-- The applied-delta witness request, `0.001` of the IOU. -/

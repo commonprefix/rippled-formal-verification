@@ -9,8 +9,9 @@ import XRPL.Properties.Vault.Common.WithdrawTotality
 Proof bodies for the `CanEmpty` headline in `CanEmpty.lean`.
 
 The construction peels one share per withdrawal, driven by well-founded
-induction on the stored share total `v.toExact.sharesTotal` (a `ℕ`). A single
-share withdrawal always runs to a success that strictly lowers the share total:
+induction on the stored share total, read as a natural number (`WF` makes it a
+nonnegative integer). A single share withdrawal always runs to a success that
+strictly lowers the share total:
 
 * a share count of at least two prices to at most half the net asset value, so
   the funds guard has ample margin and cannot fire, and the run is not the final
@@ -30,6 +31,25 @@ bound, and the induction) is discharged around it. -/
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+
+/-- A positive whole-number rational is at least one.  -/
+private theorem one_le_toRat_of_pos (q : ℚ) (hpos : 0 < q) (hden : q.den = 1) : 1 ≤ q := by
+  have hnum : 0 < q.num := Rat.num_pos.mpr hpos
+  have hq : (q.num : ℚ) = q := by
+    have h := Rat.num_div_den q; rw [hden, Nat.cast_one, div_one] at h; exact h
+  rw [← hq]; exact_mod_cast hnum
+
+/-- Reading a well-formed stored share total as a natural number and casting back
+recovers the stored value. -/
+private theorem sharesTotal_natCast (v : Vault) (h : v.WF) :
+    ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = v.sharesTotal.toRat := by
+  set q := v.sharesTotal.toRat with hq
+  have hden : q.den = 1 := h.sharesTotal_int
+  have hnum_nn : 0 ≤ q.num := Rat.num_nonneg.mpr h.sharesTotal_nonneg
+  have hcast : (q.num : ℚ) = q := by
+    have hnd := Rat.num_div_den q
+    rw [hden] at hnd; simpa using hnd
+  rw [← Int.cast_natCast, Int.toNat_of_nonneg hnum_nn, hcast]
 
 /-- One vault share as a canonical `int64` amount: value one, offset zero,
 nonnegative. Shares are always an integral (MPT) amount, so this is the smallest
@@ -105,7 +125,7 @@ whole), and it supplies the magnitude floor `1 ≤ assetsTotal.toRat` (when nonz
 that discharges the multiply operand bound `minExponent ≤ assetsTotal.exponent_`. -/
 structure Vault.EmptyReady (v : Vault) : Prop where
   reachable : Vault.Reachable v
-  fits : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1
+  fits : v.sharesTotal.toRat ≤ 2 ^ 63 - 1
   assetsCap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1
   int64 : v.numericType = .int64
   assetsInt : v.assetsTotal.toRat.den = 1
@@ -114,7 +134,7 @@ structure Vault.EmptyReady (v : Vault) : Prop where
 records that the vault already has no shares; `step` performs one non-loss-waiving
 withdrawal that runs without a throw and then empties the resulting vault. -/
 inductive CanEmpty : Vault → Prop where
-  | done (v : Vault) : v.toExact.sharesTotal = 0 → CanEmpty v
+  | done (v : Vault) : v.sharesTotal.toRat = 0 → CanEmpty v
   | step (v : Vault) (amount : WithdrawAmount) (r : WithdrawResult) :
       v.withdraw amount false = .ok r → r.error = none → CanEmpty r.vault' → CanEmpty v
 
@@ -236,8 +256,8 @@ canonical zero. Otherwise `assetsTotal` is a whole number `≥ 1`, so its expone
 (`nav * 1 = nav`). The downward `ofNumber .int64` never overpays: its output floors
 the quotient, which is at most `assetsTotal`. -/
 theorem withdraw_oneShare_exchange (v : Vault) (hr : Vault.Reachable v)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
-    (hpos : 0 < v.toExact.sharesTotal) (hcap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1)
+    (hpos : 0 < v.sharesTotal.toRat) (hcap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1)
     (hint : v.numericType = .int64) (hAint : v.assetsTotal.toRat.den = 1) :
     ∃ (assets : STAmount) (aN : Number),
       v.sharesToAssetsWithdraw oneShare false = .ok assets ∧
@@ -253,13 +273,10 @@ theorem withdraw_oneShare_exchange (v : Vault) (hr : Vault.Reachable v)
   have hAneg : v.assetsTotal.negative_ = false :=
     Number.negative_false_of_norm_nonneg _ hAnorm hAnn
   have hSTnorm : v.sharesTotal.isNormalized := hv.wf.sharesTotal_norm
-  have hSTcap : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf]; exact hfit
+  have hSTcap : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := hfit
   -- share total is a positive integer, so `1 ≤ sharesTotal`
-  have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf]
-    have : (1 : ℕ) ≤ v.toExact.sharesTotal := hpos
-    exact_mod_cast this
+  have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat :=
+    one_le_toRat_of_pos _ hpos hv.wf.sharesTotal_int
   have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
     Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith)
   have h81 : (10 : ℚ) ^ (-81 : ℤ) ≤ 1 := by
@@ -424,8 +441,8 @@ The `int64` scope is necessary; the statement is false for fractional vaults, wh
 a sub-ULP one-share payout trips the precision-loss guard (see `Vault.EmptyReady`).
 -/
 theorem withdraw_oneShare_run_ok (v : Vault) (hr : Vault.Reachable v)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
-    (hpos : 0 < v.toExact.sharesTotal)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1)
+    (hpos : 0 < v.sharesTotal.toRat)
     (hcap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1)
     (hint : v.numericType = .int64)
     (hAint : v.assetsTotal.toRat.den = 1) :
@@ -445,12 +462,9 @@ theorem withdraw_oneShare_run_ok (v : Vault) (hr : Vault.Reachable v)
   have hSTnn : 0 ≤ v.sharesTotal.toRat := hv.wf.sharesTotal_nonneg
   have hSTneg : v.sharesTotal.negative_ = false := Number.negative_false_of_norm_nonneg _ hSTnorm hSTnn
   have hSTden : v.sharesTotal.toRat.den = 1 := hv.wf.sharesTotal_int
-  have hSTcap : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf]; exact hfit
-  have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf]
-    have : (1 : ℕ) ≤ v.toExact.sharesTotal := hpos
-    exact_mod_cast this
+  have hSTcap : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := hfit
+  have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat :=
+    one_le_toRat_of_pos _ hpos hv.wf.sharesTotal_int
   -- the priced payout and its `toNumber` lift
   obtain ⟨assets, aN, hex, haN_ok, haN_norm, haN_val, haN_den, hassets_nn, hassets_le, hpay_ub⟩ :=
     withdraw_oneShare_exchange v hr hfit hpos hcap hint hAint
@@ -619,7 +633,7 @@ theorem withdraw_oneShare_assetsTotal_le (v : Vault) (hr : Vault.Reachable v)
     (hok : v.withdraw (.vaultShares oneShare) false = .ok r) (herr : r.error = none) :
     r.vault'.assetsTotal.toRat ≤ v.assetsTotal.toRat := by
   have hv : v.Lawful := Vault.Reachable.lawful v hr
-  have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
+  have hL : v.lossUnrealized.toRat = 0 := Vault.Reachable.lossUnrealized_zero v hr
   have hsb : r.sharesBurned = oneShare :=
     Vault.withdraw_sharesBurned_exact v oneShare false r hok herr
   obtain ⟨cw, aN, sta, hcomp, hcwerr, haN, hlt, hsta, hsbeq, hbranch⟩ :=
@@ -665,15 +679,15 @@ therefore strictly lower the stored total.
 The one remaining input, that the one-share run reaches a success record at all
 (no throw, no rejecting `TER`), is isolated as `withdraw_oneShare_run_ok`. -/
 theorem withdraw_one_share_step (v : Vault) (hr : Vault.Reachable v)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
-    (hpos : 0 < v.toExact.sharesTotal)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1)
+    (hpos : 0 < v.sharesTotal.toRat)
     (hcap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1)
     (hint : v.numericType = .int64)
     (hAint : v.assetsTotal.toRat.den = 1) :
     ∃ r : WithdrawResult,
       v.withdraw (.vaultShares oneShare) false = .ok r ∧
       r.error = none ∧
-      r.vault'.toExact.sharesTotal < v.toExact.sharesTotal := by
+      r.vault'.sharesTotal.toRat < v.sharesTotal.toRat := by
   obtain ⟨r, hok, herr⟩ := withdraw_oneShare_run_ok v hr hfit hpos hcap hint hAint
   refine ⟨r, hok, herr, ?_⟩
   -- the run burns exactly the named single share
@@ -686,13 +700,11 @@ theorem withdraw_one_share_step (v : Vault) (hr : Vault.Reachable v)
       ⟨hfineq, _, _, _, _, _, _, _, _, _, _, _, _, _⟩
   · -- final withdrawal: the vault is zeroed, so the stored total drops to `0`
     have hz : r.vault'.sharesTotal = Number.zero := by rw [hreq]
-    have hzz : r.vault'.toExact.sharesTotal = 0 := by
-      show r.vault'.sharesTotal.toRat.num.toNat = 0
-      rw [hz, Number.toRat_zero]; simp
+    have hzz : r.vault'.sharesTotal.toRat = 0 := by rw [hz, Number.toRat_zero]
     rw [hzz]; exact hpos
   · -- non-final withdrawal: the stored total drops by exactly one share
     have hv : v.Lawful := Vault.Reachable.lawful v hr
-    have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
+    have hL : v.lossUnrealized.toRat = 0 := Vault.Reachable.lossUnrealized_zero v hr
     have hfin : r.sharesBurned.operator_eq sta = false := by rw [hsbeq]; exact hfineq
     have hpnn : 0 ≤ r.assets'.toRat :=
       Vault.withdraw_assets_nonneg v (.vaultShares oneShare) false hv hL r hok
@@ -706,15 +718,9 @@ theorem withdraw_one_share_step (v : Vault) (hr : Vault.Reachable v)
         (by rw [hsb]; exact oneShare_canonical)
         (by rw [hsb]; exact oneShare_numericType)
         hok herr hsta hfin
-    have hNpos : 1 ≤ v.toExact.sharesTotal := hpos
-    have hqeq : r.vault'.sharesTotal.toRat = ((v.toExact.sharesTotal - 1 : ℕ) : ℚ) := by
-      rw [hshares hfit, hsb, oneShare_toRat, Nat.cast_sub hNpos, Nat.cast_one]
-    show r.vault'.sharesTotal.toRat.num.toNat < v.toExact.sharesTotal
-    rw [hqeq]
-    have hnn' : (0 : ℤ) ≤ ((v.toExact.sharesTotal - 1 : ℕ) : ℤ) := Int.natCast_nonneg _
-    rw [show (((v.toExact.sharesTotal - 1 : ℕ) : ℚ)).num.toNat = v.toExact.sharesTotal - 1 from by
-      rw [Rat.num_natCast, Int.toNat_natCast]]
-    omega
+    have hqeq : r.vault'.sharesTotal.toRat = v.sharesTotal.toRat - 1 := by
+      rw [hshares hfit, hsb, oneShare_toRat]
+    rw [hqeq]; linarith
 
 /-- **A one-share `int64` withdrawal preserves the `int64` type and the whole-number
 `assetsTotal`.** The result vault carries the vault's numeric type unchanged (both
@@ -728,7 +734,7 @@ theorem withdraw_oneShare_result_int64 (v : Vault) (hr : Vault.Reachable v)
     (hok : v.withdraw (.vaultShares oneShare) false = .ok r) (herr : r.error = none) :
     r.vault'.numericType = .int64 ∧ r.vault'.assetsTotal.toRat.den = 1 := by
   have hv : v.Lawful := Vault.Reachable.lawful v hr
-  have hL : v.toExact.lossUnrealized = 0 := Vault.Reachable.lossUnrealized_zero v hr
+  have hL : v.lossUnrealized.toRat = 0 := Vault.Reachable.lossUnrealized_zero v hr
   have hpar : v.assetsAvailable = v.assetsTotal := Vault.Reachable.asset_parity v hr
   have hsb : r.sharesBurned = oneShare :=
     Vault.withdraw_sharesBurned_exact v oneShare false r hok herr
@@ -800,16 +806,15 @@ preserved because the withdrawal does not increase `assetsTotal`, and the `int64
 type and whole-number `assetsTotal` are preserved
 (`withdraw_oneShare_result_int64`). -/
 theorem withdraw_one_share_ready (v : Vault) (hv : Vault.EmptyReady v)
-    (hpos : 0 < v.toExact.sharesTotal) (r : WithdrawResult)
+    (hpos : 0 < v.sharesTotal.toRat) (r : WithdrawResult)
     (hok : v.withdraw (.vaultShares oneShare) false = .ok r) (herr : r.error = none)
-    (hdec : r.vault'.toExact.sharesTotal < v.toExact.sharesTotal) :
+    (hdec : r.vault'.sharesTotal.toRat < v.sharesTotal.toRat) :
     Vault.EmptyReady r.vault' := by
   have hsb : r.sharesBurned = oneShare :=
     Vault.withdraw_sharesBurned_exact v oneShare false r hok herr
-  have hle : r.sharesBurned.toRat ≤ (v.toExact.sharesTotal : ℚ) := by
+  have hle : r.sharesBurned.toRat ≤ v.sharesTotal.toRat := by
     rw [hsb, oneShare_toRat]
-    have : (1 : ℕ) ≤ v.toExact.sharesTotal := hpos
-    exact_mod_cast this
+    exact one_le_toRat_of_pos _ hpos (Vault.Reachable.lawful v hv.reachable).wf.sharesTotal_int
   have hreach : Vault.Reachable r.vault' :=
     Vault.Reachable.withdraw v (.vaultShares oneShare) false r hv.reachable hok
       (by rw [hsb]; exact oneShare_integralCanonical)
@@ -819,35 +824,40 @@ theorem withdraw_one_share_ready (v : Vault) (hv : Vault.EmptyReady v)
   obtain ⟨hnt', hAint'⟩ :=
     withdraw_oneShare_result_int64 v hv.reachable hv.int64 hv.assetsInt hv.assetsCap r hok herr
   refine ⟨hreach, ?_, ?_, hnt', hAint'⟩
-  · have hcast : (r.vault'.toExact.sharesTotal : ℚ) < (v.toExact.sharesTotal : ℚ) := by
-      exact_mod_cast hdec
-    linarith [hv.fits]
+  · linarith [hv.fits, hdec]
   · exact le_trans (withdraw_oneShare_assetsTotal_le v hv.reachable r hok herr) hv.assetsCap
 
-/-- Well-founded core: strong induction on the stored share total. At zero shares
-the vault is already empty (`done`); otherwise one share is withdrawn, the total
-strictly drops, and the smaller `EmptyReady` result is emptied by the induction
-hypothesis (`step`). -/
+/-- Well-founded core: strong induction on the stored share total, read as a
+natural number. At zero shares the vault is already empty (`done`); otherwise one
+share is withdrawn, the total strictly drops, and the smaller `EmptyReady` result
+is emptied by the induction hypothesis (`step`). -/
 theorem canEmpty_of_emptyReady_aux :
-    ∀ (n : ℕ) (v : Vault), Vault.EmptyReady v → v.toExact.sharesTotal = n → CanEmpty v := by
+    ∀ (n : ℕ) (v : Vault), Vault.EmptyReady v → v.sharesTotal.toRat = (n : ℚ) → CanEmpty v := by
   intro n
   induction n using Nat.strong_induction_on with
   | _ n ih =>
     intro v hv hn
     rcases Nat.eq_zero_or_pos n with hz | hposn
-    · exact CanEmpty.done v (hn.trans hz)
-    · have hpos : 0 < v.toExact.sharesTotal := hn ▸ hposn
+    · exact CanEmpty.done v (by rw [hn, hz]; norm_num)
+    · have hpos : 0 < v.sharesTotal.toRat := by rw [hn]; exact_mod_cast hposn
       obtain ⟨r, hok, herr, hdec⟩ :=
         withdraw_one_share_step v hv.reachable hv.fits hpos hv.assetsCap hv.int64 hv.assetsInt
       have hready : Vault.EmptyReady r.vault' :=
         withdraw_one_share_ready v hv hpos r hok herr hdec
-      have hdecn : r.vault'.toExact.sharesTotal < n := hn ▸ hdec
+      have hcast : ((r.vault'.sharesTotal.toRat.num.toNat : ℕ) : ℚ)
+          = r.vault'.sharesTotal.toRat :=
+        sharesTotal_natCast r.vault' (Vault.Reachable.lawful r.vault' hready.reachable).wf
+      have hdecn : r.vault'.sharesTotal.toRat.num.toNat < n := by
+        have h : ((r.vault'.sharesTotal.toRat.num.toNat : ℕ) : ℚ) < (n : ℚ) := by
+          rw [hcast, ← hn]; exact hdec
+        exact_mod_cast h
       exact CanEmpty.step v (.vaultShares oneShare) r hok herr
-        (ih _ hdecn r.vault' hready rfl)
+        (ih _ hdecn r.vault' hready hcast.symm)
 
 /-- Every `EmptyReady` vault can be emptied. -/
 theorem canEmpty_of_emptyReady (v : Vault) (hv : Vault.EmptyReady v) : CanEmpty v :=
-  canEmpty_of_emptyReady_aux v.toExact.sharesTotal v hv rfl
+  canEmpty_of_emptyReady_aux v.sharesTotal.toRat.num.toNat v hv
+    (sharesTotal_natCast v (Vault.Reachable.lawful v hv.reachable).wf).symm
 
 /-- Proof body of the `CanEmpty` headline: a reachable `int64`-asset vault whose
 stored share total fits the `int64` domain, whose `assetsTotal` is representable
@@ -856,7 +866,7 @@ emptied. Loss-freeness is not assumed, it is a reachability corollary. The `int6
 scope is necessary: on a fractional vault a sub-ULP one-share payout trips the
 precision-loss guard (see `Vault.EmptyReady`). -/
 theorem Vault.Reachable.canEmpty_proof (v : Vault) (hr : Vault.Reachable v)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1)
     (hcap : v.assetsTotal.toRat ≤ 2 ^ 63 - 1)
     (hint : v.numericType = .int64)
     (hAint : v.assetsTotal.toRat.den = 1) : CanEmpty v :=

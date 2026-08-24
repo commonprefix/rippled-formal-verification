@@ -11,7 +11,7 @@ open XRPL.Model.Protocol
 theorem Vault.lawful_canVaultDelete_iff (v : Vault)
     (hv : v.Lawful) : -- the vault is lawful
     v.canVaultDelete = .tesSUCCESS ↔
-      v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 :=
+      v.assetsTotal.toRat = 0 ∧ v.sharesTotal.toRat = 0 :=
   Vault.lawful_canVaultDelete_iff_proof v hv
 
 /-! ## `canVaultDelete` on arbitrary states -/

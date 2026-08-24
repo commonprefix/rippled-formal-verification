@@ -38,7 +38,7 @@ theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
     (r₁ : DepositResult) (r₂ : WithdrawResult)
     (hv : v.Lawful) -- the starting vault is lawful
     -- no unrealized loss, so the pricing is exact on both sides
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hAV : v.assetsAvailable = v.assetsTotal) -- nothing is lent out (no-lending parity)
@@ -46,7 +46,7 @@ theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
     (hDc : r₁.amountDeposit'.ExactCanonical)
     (hDnn : 0 ≤ r₁.amountDeposit'.toRat)
     -- the post-deposit share total stays in the int64 domain
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r₁.sharesIssued.toRat ≤ 2 ^ 63 - 1)
+    (hSsz : v.sharesTotal.toRat + r₁.sharesIssued.toRat ≤ 2 ^ 63 - 1)
     (hok₁ : v.deposit amountDeposit false = .ok r₁) (herr₁ : r₁.error = none)
     -- the depositor redeems exactly the issued shares from the updated vault
     (hok₂ : r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂)
@@ -68,7 +68,7 @@ the relative stage error alone. -/
 theorem Vault.deposit_withdraw_roundtrip_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (r₁ : DepositResult) (r₂ : WithdrawResult),
       v.Lawful ∧ 0 < amountDeposit.toRat ∧
-      v.toExact.lossUnrealized = 0 ∧
+      v.lossUnrealized.toRat = 0 ∧
       v.deposit amountDeposit false = .ok r₁ ∧ r₁.error = none ∧
       r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂ ∧
       r₂.error = none ∧

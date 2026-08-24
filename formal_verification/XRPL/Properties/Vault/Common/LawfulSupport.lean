@@ -34,13 +34,6 @@ lemma rat_eq_num_cast_of_den_one (q : ℚ) (hden : q.den = 1) : ((q.num : ℤ) :
   conv_rhs => rw [← Rat.num_div_den q]
   rw [hden, Nat.cast_one, div_one]
 
-/-- A non-negative integer-valued rational is recovered from `q.num.toNat`. -/
-lemma rat_toNat_cast_of_den_one (q : ℚ) (hden : q.den = 1) (h0 : 0 ≤ q) :
-    ((q.num.toNat : ℕ) : ℚ) = q := by
-  have hnum : 0 ≤ q.num := Rat.num_nonneg.mpr h0
-  rw [← Int.cast_natCast, Int.toNat_of_nonneg hnum]
-  exact rat_eq_num_cast_of_den_one q hden
-
 /-- Numerator magnitude bound for a small non-negative integer-valued rational. -/
 lemma rat_num_natAbs_lt_of_le (q : ℚ) (hden : q.den = 1) (h0 : 0 ≤ q)
     (hle : q ≤ 2 ^ 63 - 1) : q.num.natAbs < 2 ^ 63 := by

@@ -42,7 +42,7 @@ theorem Vault.lawful_canVaultSet_iff
     (assetsMaximum : Number)
     (hnorm : assetsMaximum.isNormalized) : -- the new maximum is normalized
     v.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat :=
+      assetsMaximum.toRat = 0 ∨ v.assetsTotal.toRat ≤ assetsMaximum.toRat :=
   Vault.lawful_canVaultSet_iff_proof v hv assetsMaximum hnorm
 
 end XRPL.Model.SingleAssetVault

@@ -18,11 +18,11 @@ rounding. The XLS-0065 exchange formula for the withdrawal direction:
 `sharesTotal * assets / withdrawNav`. A clawback never waives the unrealized
 loss, so the price always uses `withdrawNav`. -/
 def Vault.idealSharesClawback (v : Vault) (assets : ℚ) : ℚ :=
-  v.toExact.sharesTotal * assets / v.withdrawNav
+  v.sharesTotal.toRat * assets / v.withdrawNav
 
 /-- The exact asset amount recovered for destroying `shares`, before any
 rounding: `withdrawNav * shares / sharesTotal`. -/
 def Vault.idealAssetsClawback (v : Vault) (shares : ℚ) : ℚ :=
-  v.withdrawNav * shares / v.toExact.sharesTotal
+  v.withdrawNav * shares / v.sharesTotal.toRat
 
 end XRPL.Model.SingleAssetVault

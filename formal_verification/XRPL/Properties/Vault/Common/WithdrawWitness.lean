@@ -138,7 +138,7 @@ theorem Vault.withdraw_vault_updates_witness :
       v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
+      r.vault'.assetsTotal.toRat ≠ v.assetsTotal.toRat - r.assets'.toRat :=
   ⟨wvW, .vaultShares wsh4W, false, wstW, wr4W, by native_decide⟩
 
 /-- The vault-updates payout re-rounded to the vault scale,

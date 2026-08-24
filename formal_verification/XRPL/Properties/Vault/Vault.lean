@@ -13,7 +13,7 @@ open XRPL.Model.Protocol
 /-- On a lawful state, `isInsolvent` holds exactly when the vault has no assets
 but shares outstanding. -/
 theorem Vault.isInsolvent_iff (v : Vault) (hv : v.Lawful) :
-    v.isInsolvent = true ↔ v.toExact.assetsTotal = 0 ∧ 0 < v.toExact.sharesTotal :=
+    v.isInsolvent = true ↔ v.assetsTotal.toRat = 0 ∧ 0 < v.sharesTotal.toRat :=
   Vault.isInsolvent_iff_proof v hv
 
 end XRPL.Model.SingleAssetVault

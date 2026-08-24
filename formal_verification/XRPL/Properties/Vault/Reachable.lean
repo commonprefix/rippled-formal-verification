@@ -27,7 +27,7 @@ open XRPL.Model.Protocol
 
 /-- No operation changes `lossUnrealized`. -/
 theorem Vault.Reachable.lossUnrealized_zero (v : Vault) (hr : Vault.Reachable v) :
-    v.toExact.lossUnrealized = 0 :=
+    v.lossUnrealized.toRat = 0 :=
   Vault.Reachable.lossUnrealized_zero_proof v hr
 
 /-- Every operation writes both asset fields with the identical update, so

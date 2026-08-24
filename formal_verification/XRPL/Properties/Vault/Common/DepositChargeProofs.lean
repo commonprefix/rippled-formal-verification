@@ -111,7 +111,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
   unfold sharesToAssetsDeposit at hsad
   by_cases hmz : v.assetsTotal.mantissa_ = 0
   · -- empty vault: `c = shares` exactly, `idealCharge = shares` (scale 0)
-    have hA0 : v.toExact.assetsTotal = 0 :=
+    have hA0 : v.assetsTotal.toRat = 0 :=
       Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
     have hscale : v.scale = 0 := hv.wf.scale_integral hint
     have hshexp : shares.exponent = 0 := hshc.offset_zero
@@ -157,24 +157,21 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
     set nav : ℚ := v.depositNav with hnav_def
     set s : ℚ := shares.toRat with hs_def
     set ST : ℚ := v.sharesTotal.toRat with hST_def
-    have hApos : 0 < v.toExact.assetsTotal := by
+    have hApos : 0 < v.assetsTotal.toRat := by
       rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
       · exact h
       · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
     have hnav_pos : 0 < nav := by
       rw [hnav_def]; unfold Vault.depositNav; exact hApos
     have hST_pos : 0 < ST := by
-      have hne : v.toExact.sharesTotal ≠ 0 := by
+      have hne : v.sharesTotal.toRat ≠ 0 := by
         intro h0
         exact absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
-      have hcast := Vault.WF.toExact_sharesTotal v hv.wf
-      have : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by
-        have : 0 < v.toExact.sharesTotal := Nat.pos_of_ne_zero hne
-        exact_mod_cast this
-      rw [hST_def, ← hcast]; exact this
+      rw [hST_def]
+      exact lt_of_le_of_ne hv.wf.sharesTotal_nonneg (Ne.symm hne)
     have hideal : v.idealChargeDeposit shares.toRat = nav * s / ST := by
       unfold Vault.idealChargeDeposit
-      rw [if_neg (ne_of_gt hApos), Vault.WF.toExact_sharesTotal v hv.wf]
+      rw [if_neg (ne_of_gt hApos)]
     have hidpos : 0 < nav * s / ST := div_pos (mul_pos hnav_pos hshpos) hST_pos
     have hideal_nonneg : 0 ≤ v.idealChargeDeposit shares.toRat := by
       rw [hideal]; exact le_of_lt hidpos

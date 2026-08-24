@@ -192,16 +192,14 @@ lemma sharesToAssetsDeposit_disj_canonical (v : Vault) (hv : v.Lawful)
       -- nonzero chain: c ≠ 0 forces Q ≠ 0, walked back to the pipeline operands
       have hQm : Q.mantissa_ ≠ 0 :=
         STAmount.ofNumber_iou_mantissa_ne_zero .fractional Q .upward c rfl hcof hc0
-      have hApos : 0 < v.toExact.assetsTotal := by
+      have hApos : 0 < v.assetsTotal.toRat := by
         rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
         · exact h
         · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
-      have hSTne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
+      have hSTne : v.sharesTotal.toRat ≠ 0 := fun h0 =>
         absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
       have hSTm : v.sharesTotal.mantissa_ ≠ 0 := by
-        refine Number.mantissa_ne_zero_of_toRat_ne_zero ?_
-        rw [← Vault.WF.toExact_sharesTotal v hv.wf]
-        exact_mod_cast hSTne
+        exact Number.mantissa_ne_zero_of_toRat_ne_zero hSTne
       have hnavnorm : navN.isNormalized := hv.wf.assetsTotal_norm
       obtain ⟨sn, hsn, hsnval, hsnnorm, _⟩ :=
         STAmount.toNumber_integral_exact shares .to_nearest hshc (by rw [hshnt]; decide)
@@ -456,7 +454,7 @@ lemma deposit_real_charge_bound (v : Vault) (hv : v.Lawful)
     (hameq : amount = roundedAmount)
     (hcd : computeDeposit v amount = .ok (.success a sh))
     (hcN : a.toNumber .to_nearest = .ok cN)
-    (hmargin : ∀ m ∈ v.assetsMaximum, v.toExact.assetsTotal + roundedAmount.toRat ≤ m.toRat) :
+    (hmargin : ∀ m ∈ v.assetsMaximum, v.assetsTotal.toRat + roundedAmount.toRat ≤ m.toRat) :
     ∀ m ∈ v.assetsMaximum, v.assetsTotal.toRat + cN.toRat ≤ m.toRat := by
   intro m hm
   obtain ⟨shares, hats, hshz, hsad, hgt, hseq⟩ := computeDeposit_success_reduces v amount a sh hcd
@@ -470,12 +468,10 @@ lemma deposit_real_charge_bound (v : Vault) (hv : v.Lawful)
     · rename_i hcond; simpa using hcond
   have hcmp_ab : STAmount.areComparable a amount = true := by
     rw [STAmount.areComparable_comm]; exact hcmp_ba
-  have hAeq : v.assetsTotal.toRat = v.toExact.assetsTotal := rfl
   by_cases ha0 : a.mValue = 0
   · have haR0 : a.toRat = 0 := (STAmount.toRat_eq_zero_iff a).mpr ha0
-    have hcapm : v.toExact.assetsTotal ≤ m.toRat :=
-      hv.valid.cap m.toRat (Option.mem_map_of_mem _ hm)
-    rw [hcNval, haR0, hAeq]; linarith
+    have hcapm : v.assetsTotal.toRat ≤ m.toRat := hv.valid.cap m hm
+    rw [hcNval, haR0]; linarith
   · have hexact : a.ExactCanonical := by
       rcases sharesToAssetsDeposit_exactCanonical_or_zero v hv shares a hshc hshnt hsad with h | h0
       · exact h
@@ -490,7 +486,7 @@ lemma deposit_real_charge_bound (v : Vault) (hv : v.Lawful)
     have hcharge_le : a.toRat ≤ amount.toRat :=
       computeDeposit_success_charge_le v amount a sh hcmpF hcd
     rw [hameq] at hcharge_le
-    rw [hcNval, hAeq]
+    rw [hcNval]
     have := hmargin m hm
     linarith
 
@@ -501,7 +497,7 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
     (hcanon : amountDeposit.Canonical)
     (hok : v.deposit amountDeposit isDonation = .ok r)
     (hmargin : ∀ m ∈ v.assetsMaximum,
-      v.toExact.assetsTotal + roundedAmount.toRat ≤ m.toRat) :
+      v.assetsTotal.toRat + roundedAmount.toRat ≤ m.toRat) :
     r.error ≠ some .tecLIMIT_EXCEEDED := by
   intro hLE
   obtain ⟨hround0, hnzR⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
@@ -538,7 +534,6 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
               intro m hm2
               rw [hval, hameq]
               have hmarg := hmargin m hm2
-              have hAeq : v.assetsTotal.toRat = v.toExact.assetsTotal := rfl
               linarith
             have hgf := deposit_maximum_guard_false v hv n1 at' hnorm hat hbound
             rw [hgf] at hm; exact absurd hm (by simp)
@@ -703,15 +698,14 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (hv : v.Lawful) (shares c : STAmo
     by_cases hc0 : c.mValue = 0
     · rw [STAmount.toRat_signed, show c.mValue.toNat = 0 from by rw [hc0]; rfl]; simp
     · -- `Q` is positive and normalized; the upward `ofNumber` snap is nonnegative
-      have hApos : 0 < v.toExact.assetsTotal := by
+      have hApos : 0 < v.assetsTotal.toRat := by
         rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
         · exact h
         · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
       have hST_pos : 0 < v.sharesTotal.toRat := by
-        have hne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
+        have hne : v.sharesTotal.toRat ≠ 0 := fun h0 =>
           absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
-        have hcast := Vault.WF.toExact_sharesTotal v hv.wf
-        rw [← hcast]; exact_mod_cast Nat.pos_of_ne_zero hne
+        exact lt_of_le_of_ne hv.wf.sharesTotal_nonneg (Ne.symm hne)
       have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
         Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hST_pos)
       have hQm : Q.mantissa_ ≠ 0 := by
@@ -771,12 +765,12 @@ theorem Vault.deposit_vault_updates_proof (v : Vault) (amountDeposit : STAmount)
     (hpos : 0 < amountDeposit.toRat) (r : DepositResult)
     (hok : v.deposit amountDeposit isDonation = .ok r) (herr : r.error = none) :
     RoundsWithin r.vault'.assetsTotal
-      (v.toExact.assetsTotal + r.amountDeposit'.toRat) .to_nearest depositε ∧
+      (v.assetsTotal.toRat + r.amountDeposit'.toRat) .to_nearest depositε ∧
     RoundsWithin r.vault'.assetsAvailable
-      (v.toExact.assetsAvailable + r.amountDeposit'.toRat) .to_nearest depositε ∧
-    ((v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 →
-      (r.vault'.toExact.sharesTotal : ℚ) =
-        (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat) := by
+      (v.assetsAvailable.toRat + r.amountDeposit'.toRat) .to_nearest depositε ∧
+    (v.sharesTotal.toRat + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 →
+      r.vault'.sharesTotal.toRat =
+        v.sharesTotal.toRat + r.sharesIssued.toRat) := by
   obtain ⟨am, aD, sC, cN, sN, at', av', st', hround, hamz, hsh_don, _hins, hdon_eq, hcomp,
     hcN, hsN, hat, hav, hst, hmax, hr⟩ :=
     Vault.deposit_success_reduces v amountDeposit isDonation r hok herr
@@ -820,17 +814,15 @@ theorem Vault.deposit_vault_updates_proof (v : Vault) (amountDeposit : STAmount)
     have h := operator_add_nonneg_rounds v.assetsTotal cN at'
       hv.wf.assetsTotal_norm hcNn hv.valid.assetsTotal_nonneg hcN_nn hat
     rw [hcNv] at h
-    exact RoundsWithin_mono at' (v.toExact.assetsTotal + aD.toRat) _ _ .to_nearest h hε_mono
+    exact RoundsWithin_mono at' (v.assetsTotal.toRat + aD.toRat) _ _ .to_nearest h hε_mono
   · -- assetsAvailable
     have h := operator_add_nonneg_rounds v.assetsAvailable cN av'
       hv.wf.assetsAvailable_norm hcNn hv.valid.assetsAvailable_nonneg hcN_nn hav
     rw [hcNv] at h
-    exact RoundsWithin_mono av' (v.toExact.assetsAvailable + aD.toRat) _ _ .to_nearest h hε_mono
+    exact RoundsWithin_mono av' (v.assetsAvailable.toRat + aD.toRat) _ _ .to_nearest h hε_mono
   · -- sharesTotal, exact whenever in domain
     intro hSsz
-    have hST : ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat :=
-      Vault.WF.toExact_sharesTotal v hv.wf
-    have hSsz' : v.sharesTotal.toRat + sC.toRat ≤ 2 ^ 63 - 1 := by rw [← hST]; exact hSsz
+    have hSsz' : v.sharesTotal.toRat + sC.toRat ≤ 2 ^ 63 - 1 := hSsz
     have hST_nn : 0 ≤ v.sharesTotal.toRat := hv.wf.sharesTotal_nonneg
     -- the issued shares are a nonnegative int64 canonical count
     have hSfacts : sC.IntegralCanonical ∧ sC.mNumericType = .int64 ∧ 0 ≤ sC.toRat := by
@@ -870,14 +862,7 @@ theorem Vault.deposit_vault_updates_proof (v : Vault) (amountDeposit : STAmount)
     obtain ⟨hst_val, hst_den⟩ := operator_add_exact_int v.sharesTotal sN st'
       hv.wf.sharesTotal_norm hsN_norm hv.wf.sharesTotal_int hsN_den hsum_bound hst
     have hst_nn : 0 ≤ st'.toRat := by rw [hst_val]; exact hsum_nn
-    -- reconstruct the ℕ shares total from the exact rational
-    have hcast : ((st'.toRat.num.toNat : ℕ) : ℚ) = st'.toRat := by
-      have hnum_nn : 0 ≤ st'.toRat.num := Rat.num_nonneg.mpr hst_nn
-      have hnd := Rat.num_div_den st'.toRat
-      rw [hst_den] at hnd
-      rw [← Int.cast_natCast, Int.toNat_of_nonneg hnum_nn]
-      simpa using hnd
-    show ((st'.toRat.num.toNat : ℕ) : ℚ) = (v.toExact.sharesTotal : ℚ) + sC.toRat
-    rw [hcast, hst_val, hsN_val, ← hST]
+    show st'.toRat = v.sharesTotal.toRat + sC.toRat
+    rw [hst_val, hsN_val]
 
 end XRPL.Model.SingleAssetVault

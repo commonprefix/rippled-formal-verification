@@ -79,12 +79,12 @@ theorem Vault.sharesToAssetsWithdraw_total (shares assets : STAmount)
     -- never pays more than the shares' worth plus the slack, up to the stage error
     assets.toRat ≤
       (v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat +
-        v.navSlack * shares.toRat / (v.toExact.sharesTotal : ℚ)) * (1 + depositε) ∧
+        v.navSlack * shares.toRat / v.sharesTotal.toRat) * (1 + depositε) ∧
     -- a nonzero payout falls short of the shares' worth by at most the slack
     -- plus 2 ULP
     (assets.isZero = false →
       v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat - assets.toRat ≤
-        v.navSlack * shares.toRat / (v.toExact.sharesTotal : ℚ) * (1 + depositε) +
+        v.navSlack * shares.toRat / v.sharesTotal.toRat * (1 + depositε) +
           2 * (10 : ℚ) ^ assets.exponent) :=
   Vault.sharesToAssetsWithdraw_total_proof v shares assets hv waiveUnrealizedLoss hnn hc hok
 
@@ -240,14 +240,14 @@ theorem Vault.withdraw_vault_updates (amount : WithdrawAmount) (waiveUnrealizedL
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false) :
     -- assetsTotal' = assetsTotal - assets', within depositε
     RoundsWithin r.vault'.assetsTotal
-      (v.toExact.assetsTotal - r.assets'.toRat) .to_nearest depositε ∧
+      (v.assetsTotal.toRat - r.assets'.toRat) .to_nearest depositε ∧
     -- assetsAvailable' = assetsAvailable - assets', within depositε
     RoundsWithin r.vault'.assetsAvailable
-      (v.toExact.assetsAvailable - r.assets'.toRat) .to_nearest depositε ∧
+      (v.assetsAvailable.toRat - r.assets'.toRat) .to_nearest depositε ∧
     -- sharesTotal' = sharesTotal - burned shares, exactly, whenever the
     -- stored total fits in the share domain (int64)
-    ((v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 →
-      r.vault'.sharesTotal.toRat = (v.toExact.sharesTotal : ℚ) - r.sharesBurned.toRat) :=
+    (v.sharesTotal.toRat ≤ 2 ^ 63 - 1 →
+      r.vault'.sharesTotal.toRat = v.sharesTotal.toRat - r.sharesBurned.toRat) :=
   Vault.withdraw_vault_updates_proof v amount waiveUnrealizedLoss hv sharesTotalAmount r
     hpnn hnn hc hSnt hok herr hst hfin
 
@@ -259,7 +259,7 @@ theorem Vault.withdraw_vault_updates_attained :
       v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
+      r.vault'.assetsTotal.toRat ≠ v.assetsTotal.toRat - r.assets'.toRat :=
   Vault.withdraw_vault_updates_witness
 
 /-- Witness: the payout from the shares round-trip is never rounded to the
@@ -291,9 +291,9 @@ theorem Vault.withdraw_vault_updates_integral (amount : WithdrawAmount)
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false)
     -- the stored total fits the asset domain (int64)
-    (hsz : v.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
-    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat :=
+    (hsz : v.assetsTotal.toRat ≤ 2 ^ 63 - 1) :
+    r.vault'.assetsTotal.toRat = v.assetsTotal.toRat - r.assets'.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat - r.assets'.toRat :=
   Vault.withdraw_vault_updates_integral_proof v amount waiveUnrealizedLoss sharesTotalAmount r
     hv hint hok herr hnn hst hfin hsz
 
@@ -312,8 +312,8 @@ theorem Vault.withdraw_payout_decreases_assets (amount : WithdrawAmount)
     -- not the final withdrawal, which zeroes the vault instead
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false) :
-    r.vault'.assetsTotal.toRat < v.toExact.assetsTotal ∧
-    r.vault'.assetsAvailable.toRat ≤ v.toExact.assetsAvailable :=
+    r.vault'.assetsTotal.toRat < v.assetsTotal.toRat ∧
+    r.vault'.assetsAvailable.toRat ≤ v.assetsAvailable.toRat :=
   Vault.withdraw_payout_decreases_assets_proof v amount hv waiveUnrealizedLoss sharesTotalAmount r
     hc hok herr hpay hst hfin
 
@@ -332,7 +332,7 @@ theorem Vault.withdraw_under_available (shares : STAmount) (waiveUnrealizedLoss 
     (hok : v.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
     -- the named shares' worth fits under assetsAvailable with margin
     (hmargin : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat *
-      (1 + depositε) ≤ v.toExact.assetsAvailable) :
+      (1 + depositε) ≤ v.assetsAvailable.toRat) :
     -- the assetsAvailable guard cannot fire
     r.error ≠ some .tecINSUFFICIENT_FUNDS :=
   Vault.withdraw_under_available_proof v shares waiveUnrealizedLoss r hv hpos hc hnav hok hmargin
@@ -387,7 +387,7 @@ theorem Vault.withdraw_final_payout (amount : WithdrawAmount) (waiveUnrealizedLo
     -- the zero record, whose `mOffset` (`-100`) sits below the smallest representable
     -- grid, so its `2` ULP slack is too fine to cover the shares' worth and the lower
     -- bound is gated on a positive available balance
-    (0 < v.toExact.assetsAvailable →
+    (0 < v.assetsAvailable.toRat →
       v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * (1 - depositε) -
         2 * (10 : ℚ) ^ r.assets'.exponent ≤ r.assets'.toRat) :=
   Vault.withdraw_final_payout_proof v amount waiveUnrealizedLoss hv r hpos hc hSnt hnav
@@ -404,7 +404,7 @@ theorem Vault.withdraw_final_payout (amount : WithdrawAmount) (waiveUnrealizedLo
 --
 -- theorem Vault.withdraw_can_empty (sharesTotalAmount : STAmount)
 --     (hv : v.Lawful)
---     (hlent : v.toExact.assetsTotal = v.toExact.assetsAvailable)
+--     (hlent : v.assetsTotal.toRat = v.assetsAvailable.toRat)
 --     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount) :
 --     ∃ allAvailable : STAmount,
 --       STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok allAvailable ∧

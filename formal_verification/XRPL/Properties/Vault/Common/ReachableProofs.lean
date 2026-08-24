@@ -16,10 +16,10 @@ open XRPL.Model.Protocol
 
 /-- No operation changes `lossUnrealized`. -/
 theorem Vault.Reachable.lossUnrealized_zero_proof (v : Vault) (hr : Vault.Reachable v) :
-    v.toExact.lossUnrealized = 0 := by
+    v.lossUnrealized.toRat = 0 := by
   induction hr with
   | create nt scale am hn hp hi hl =>
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
+    simp only [Vault.create, Number.toRat_zero]
   | deposit v amount isDonation r hrv hdep _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
     rw [(Vault.deposit_preserves_unrealized v amount isDonation r hdep)]; exact ih

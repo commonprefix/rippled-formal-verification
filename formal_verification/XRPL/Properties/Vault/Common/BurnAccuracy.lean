@@ -16,11 +16,8 @@ open XRPL.Model.Protocol
 theorem Vault.canBurnShares_assets_exact_proof (v : Vault) (sharesTotalAmount : STAmount)
     (hv : v.Lawful)
     (hok : v.canBurnShares = .ok (.assets sharesTotalAmount))
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
-    sharesTotalAmount.toRat = (v.toExact.sharesTotal : ℚ) := by
-  have hST : ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat :=
-    Vault.WF.toExact_sharesTotal v hv.wf
-  have hfit' : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by rw [← hST]; exact hfit
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
+    sharesTotalAmount.toRat = v.sharesTotal.toRat := by
   unfold Vault.canBurnShares at hok
   by_cases hg : (v.sharesTotal.mantissa_ == 0 ||
       (v.assetsTotal.mantissa_ != 0 || v.assetsAvailable.mantissa_ != 0)) = true
@@ -32,8 +29,8 @@ theorem Vault.canBurnShares_assets_exact_proof (v : Vault) (sharesTotalAmount : 
     rw [epure] at hok
     have hsta : sta = sharesTotalAmount := CanBurnSharesResult.assets.inj (Except.ok.inj hok)
     obtain ⟨_, _, _, _, hval⟩ := STAmount.ofNumber_int64_shape v.sharesTotal .to_nearest sta
-      hv.wf.sharesTotal_norm hv.wf.sharesTotal_nonneg hv.wf.sharesTotal_int hfit' hofn
-    rw [← hsta, hval, ← hST]
+      hv.wf.sharesTotal_norm hv.wf.sharesTotal_nonneg hv.wf.sharesTotal_int hfit hofn
+    rw [← hsta, hval]
 
 /-- **Proof body of `burnShares_sharesTotal_exact`.** -/
 theorem Vault.burnShares_sharesTotal_exact_proof (v : Vault) (sharesDestroyed : STAmount)
@@ -42,12 +39,10 @@ theorem Vault.burnShares_sharesTotal_exact_proof (v : Vault) (sharesDestroyed : 
     (hok : v.burnShares sharesDestroyed = .ok vault')
     (hcanon : sharesDestroyed.IntegralCanonical)
     (hnn : sharesDestroyed.negative = false)
-    (hle : sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ))
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
-    (vault'.toExact.sharesTotal : ℚ) =
-      (v.toExact.sharesTotal : ℚ) - sharesDestroyed.toRat := by
-  have hST : ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat :=
-    Vault.WF.toExact_sharesTotal v hv.wf
+    (hle : sharesDestroyed.toRat ≤ v.sharesTotal.toRat)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
+    vault'.sharesTotal.toRat =
+      v.sharesTotal.toRat - sharesDestroyed.toRat := by
   have hsd_nn : 0 ≤ sharesDestroyed.toRat := STAmount.toRat_nonneg_of sharesDestroyed hnn
   have hsd_den : sharesDestroyed.toRat.den = 1 :=
     STAmount.IntegralCanonical.den_eq_one sharesDestroyed hcanon
@@ -85,10 +80,10 @@ theorem Vault.burnShares_sharesTotal_exact_proof (v : Vault) (sharesDestroyed : 
     rw [hdiff]; exact Rat.den_intCast _
   have hdiff_nn : 0 ≤ v.sharesTotal.toRat - sdn.toRat := by
     rw [hsdn_val]
-    have : sharesDestroyed.toRat ≤ v.sharesTotal.toRat := by rw [← hST]; exact hle
+    have : sharesDestroyed.toRat ≤ v.sharesTotal.toRat := hle
     linarith
   have hdiff_le : v.sharesTotal.toRat - sdn.toRat ≤ 2 ^ 63 - 1 := by
-    have h1 : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by rw [← hST]; exact hfit
+    have h1 : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := hfit
     rw [hsdn_val]
     linarith
   obtain ⟨hst_val, hst_den⟩ := operator_sub_exact_int v.sharesTotal sdn st'
@@ -97,8 +92,7 @@ theorem Vault.burnShares_sharesTotal_exact_proof (v : Vault) (sharesDestroyed : 
     (rat_num_natAbs_lt_of_le _ hdiff_den hdiff_nn hdiff_le) hst
   -- read the new stored total back
   have hst_nn : 0 ≤ st'.toRat := by rw [hst_val]; exact hdiff_nn
-  have hproj : (vault'.toExact.sharesTotal : ℚ) = ((st'.toRat.num.toNat : ℕ) : ℚ) := by
-    rw [hv']; rfl
-  rw [hproj, rat_toNat_cast_of_den_one st'.toRat hst_den hst_nn, hst_val, hsdn_val, ← hST]
+  have hproj : vault'.sharesTotal.toRat = st'.toRat := by rw [hv']
+  rw [hproj, hst_val, hsdn_val]
 
 end XRPL.Model.SingleAssetVault

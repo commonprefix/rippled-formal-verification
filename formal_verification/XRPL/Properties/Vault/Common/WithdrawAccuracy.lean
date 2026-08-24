@@ -586,9 +586,9 @@ theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdr
     (hnn : 0 ≤ r.assets'.toRat)
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false)
-    (hsz : v.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
-    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat := by
+    (hsz : v.assetsTotal.toRat ≤ 2 ^ 63 - 1) :
+    r.vault'.assetsTotal.toRat = v.assetsTotal.toRat - r.assets'.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat - r.assets'.toRat := by
   obtain ⟨cw, aN, sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
   -- the share total conversion is deterministic
@@ -653,10 +653,10 @@ theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdr
       (le_trans hAA_le_A hsz') hsn_norm (by rw [hsn_val]) hsn_den hknn hk_le_AA hav
   constructor
   · rw [hr]
-    show at'.toRat = v.toExact.assetsTotal - cw.assets'.toRat
+    show at'.toRat = v.assetsTotal.toRat - cw.assets'.toRat
     exact hat_exact
   · rw [hr]
-    show av'.toRat = v.toExact.assetsAvailable - cw.assets'.toRat
+    show av'.toRat = v.assetsAvailable.toRat - cw.assets'.toRat
     exact hav_exact
 
 end XRPL.Model.SingleAssetVault

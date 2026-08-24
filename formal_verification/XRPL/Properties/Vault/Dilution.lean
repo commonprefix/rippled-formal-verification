@@ -38,15 +38,15 @@ theorem Vault.deposit_no_dilution (amountDeposit : STAmount) (r : DepositResult)
     -- modeled operation preserves). Without it the 19-digit stored-total rounding of
     -- `assetsTotal` is unbounded relative to a tiny `withdrawNav` and one deposit can dilute far
     -- past `depositε`, so this hypothesis is necessary, not merely convenient.
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     -- the taken amount does not underflow to the canonical zero (the `isZero = false`
     -- precondition class of `deposit_charge`; a deep fractional charge underflow issues shares
     -- for a zero charge and dilutes past `depositε`, so this is necessary, not convenient)
     (hcnz : r.amountDeposit'.isZero = false)
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1) -- share domain
+    (hSsz : v.sharesTotal.toRat + r.sharesIssued.toRat ≤ 2 ^ 63 - 1) -- share domain
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
-    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
-      v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
+    r.vault'.withdrawNav * v.sharesTotal.toRat ≥
+      v.withdrawNav * r.vault'.sharesTotal.toRat * (1 - depositε) :=
   Vault.deposit_no_dilution_proof v amountDeposit r hv hcanon hpos hL hcnz hSsz hok herr
 
 /-- Witness: the `1 - depositε` factor in `deposit_no_dilution` cannot be
@@ -55,8 +55,8 @@ theorem Vault.deposit_dilution_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (r : DepositResult),
       v.Lawful ∧ 0 < amountDeposit.toRat ∧
       v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
-        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      r.vault'.withdrawNav * v.sharesTotal.toRat <
+        v.withdrawNav * r.vault'.sharesTotal.toRat :=
   deposit_dilution_witness
 
 /-- A donation strictly increases per-share value: assets come in, the share
@@ -81,10 +81,10 @@ theorem Vault.deposit_donation_no_dilution (amountDeposit : STAmount) (r : Depos
       (v.numericType = .int64 ∨ v.numericType = .native) ∧
       amountDeposit.mNumericType = v.numericType ∧
       v.assetsTotal.toRat.den = 1 ∧ v.assetsAvailable.toRat.den = 1 ∧
-      v.toExact.assetsTotal + amountDeposit.toRat ≤ 2 ^ 63 - 1)
+      v.assetsTotal.toRat + amountDeposit.toRat ≤ 2 ^ 63 - 1)
     (hok : v.deposit amountDeposit true = .ok r) (herr : r.error = none) :
     v.withdrawNav < r.vault'.withdrawNav ∧
-    r.vault'.toExact.sharesTotal = v.toExact.sharesTotal :=
+    r.vault'.sharesTotal.toRat = v.sharesTotal.toRat :=
   Vault.deposit_donation_no_dilution_proof v amountDeposit r hv hcanon hpos hint_dom hok herr
 
 /-- A withdrawal cannot decrease per-share value by more than `1 - depositε`:
@@ -108,7 +108,7 @@ theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult
     (hv : v.Lawful) -- the starting vault is lawful
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`; the state every
     -- modeled operation preserves), as in `deposit_no_dilution`
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     -- the payout does not underflow to the canonical zero (mirrors `deposit_no_dilution`'s `hcnz`)
     (hcnz : r.assets'.isZero = false)
     (hnn : 0 ≤ r.sharesBurned.toRat) -- a real withdrawal burns a nonnegative share count
@@ -117,11 +117,11 @@ theorem Vault.withdraw_no_dilution (amount : WithdrawAmount) (r : WithdrawResult
     -- near-final margin: at least half the shares remain to absorb the interior overpay, so the
     -- concentration on the remaining holders stays within `depositε` (necessary, not convenient:
     -- a near-total withdrawal concentrates the overpay and can leave the window)
-    (hmargin : r.sharesBurned.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
-    (hSfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) -- share domain
+    (hmargin : r.sharesBurned.toRat ≤ v.sharesTotal.toRat / 2)
+    (hSfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) -- share domain
     (hok : v.withdraw amount false = .ok r) (herr : r.error = none) :
-    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
-      v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
+    r.vault'.withdrawNav * v.sharesTotal.toRat ≥
+      v.withdrawNav * r.vault'.sharesTotal.toRat * (1 - depositε) :=
   Vault.withdraw_no_dilution_proof v amount r hv hL (Vault.withdrawNavExact_of_zero v hv false hL)
     hcnz hnn hc hSnt hmargin hSfit hok herr
 
@@ -131,8 +131,8 @@ theorem Vault.withdraw_dilution_attained :
     ∃ (v : Vault) (amount : WithdrawAmount) (r : WithdrawResult),
       v.Lawful ∧
       v.withdraw amount false = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
-        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      r.vault'.withdrawNav * v.sharesTotal.toRat <
+        v.withdrawNav * r.vault'.sharesTotal.toRat :=
   withdraw_dilution_witness
 
 /-- A clawback cannot decrease per-share value by more than `1 - depositε`: it
@@ -148,18 +148,18 @@ shares a nonzero canonical integer, so the margin keeps the share total positive
 theorem Vault.clawback_no_dilution (assets holderShares : STAmount) (r : ClawbackResult)
     (hv : v.Lawful) -- the starting vault is lawful
     -- the vault carries no unrealized loss (so `withdrawNav = assetsTotal`)
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     (hc : assets.Canonical) -- the clawed-back amount is stored canonically
     -- the holder balance passed to the run is a stored integral MPT amount,
     -- value-exact and nonnegative (it carries the zero amount claw all arm)
     (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
     (hSnn : holderShares.negative = false)
     -- near-final margin: at least half the shares remain to absorb the interior overpay
-    (hmargin : r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) / 2)
-    (hSfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) -- share domain
+    (hmargin : r.sharesDestroyed.toRat ≤ v.sharesTotal.toRat / 2)
+    (hSfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) -- share domain
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
-    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
-      v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) * (1 - depositε) :=
+    r.vault'.withdrawNav * v.sharesTotal.toRat ≥
+      v.withdrawNav * r.vault'.sharesTotal.toRat * (1 - depositε) :=
   Vault.clawback_no_dilution_proof v assets holderShares r hv hL
     (Vault.withdrawNavExact_of_zero v hv false hL) hc hSic hSc hSnn hmargin hSfit hok herr
 
@@ -169,8 +169,8 @@ theorem Vault.clawback_dilution_attained :
     ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
       v.Lawful ∧
       v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
-        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      r.vault'.withdrawNav * v.sharesTotal.toRat <
+        v.withdrawNav * r.vault'.sharesTotal.toRat :=
   clawback_dilution_witness
 
 /-- Witness: the `1 - depositε` factor binds on the zero-amount arm of
@@ -184,8 +184,8 @@ theorem Vault.clawback_zero_dilution_attained :
       holderShares.negative = false ∧
       v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.sharesDestroyed = holderShares ∧
-      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
-        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      r.vault'.withdrawNav * v.sharesTotal.toRat <
+        v.withdrawNav * r.vault'.sharesTotal.toRat :=
   clawback_zero_dilution_witness
 
 /-- Along any margin-respecting history of `n` operations from a lawful vault with no
@@ -203,14 +203,14 @@ decrease, carrying `Lawful` and `loss = 0` forward by the field preservation the
 reductions expose. -/
 theorem Vault.ReachableFromIn.no_dilution (w : Vault) (n : ℕ)
     (hw : w.Lawful)
-    (hwL : w.toExact.lossUnrealized = 0)
+    (hwL : w.lossUnrealized.toRat = 0)
     -- vault-only operations keep both asset fields identical (no lending), the same record-level
     -- parity `Vault.Reachable` gets from `create`; it is preserved by every step and is needed to
     -- carry `Lawful` forward through the compounding induction (each `*_lawful` step consumes it)
     (hwAV : w.assetsAvailable = w.assetsTotal)
     (h : Vault.ReachableFromIn w v n) :
-    v.withdrawNav * (w.toExact.sharesTotal : ℚ) ≥
-      w.withdrawNav * (v.toExact.sharesTotal : ℚ) * (1 - depositε) ^ n :=
+    v.withdrawNav * w.sharesTotal.toRat ≥
+      w.withdrawNav * v.sharesTotal.toRat * (1 - depositε) ^ n :=
   Vault.ReachableFromIn.no_dilution_proof v w n hw hwL hwAV h
 
 /-- Witness: dilution compounds, a history of more than one operation exists
@@ -218,8 +218,8 @@ whose total per-share value decrease is strict. -/
 theorem Vault.ReachableFromIn.dilution_attained :
     ∃ (w u : Vault) (n : ℕ),
       w.Lawful ∧ 1 < n ∧ Vault.ReachableFromIn w u n ∧
-      u.withdrawNav * (w.toExact.sharesTotal : ℚ) <
-        w.withdrawNav * (u.toExact.sharesTotal : ℚ) :=
+      u.withdrawNav * w.sharesTotal.toRat <
+        w.withdrawNav * u.sharesTotal.toRat :=
   dilution_attained_witness
 
 end XRPL.Model.SingleAssetVault

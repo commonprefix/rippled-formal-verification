@@ -86,7 +86,7 @@ theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
     (assetsMaximum : Number)
     (hnorm : assetsMaximum.isNormalized) :
     v.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat := by
+      assetsMaximum.toRat = 0 ∨ v.assetsTotal.toRat ≤ assetsMaximum.toRat := by
   have htotal : v.assetsTotal.isNormalized := hv.wf.assetsTotal_norm
   -- the nonzero guard vanishes exactly at rational zero
   have hb1 : assetsMaximum.operator_ne Number.zero = false ↔ assetsMaximum.toRat = 0 :=
@@ -95,7 +95,6 @@ theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
   have hb2 : assetsMaximum.operator_lt v.assetsTotal = false ↔
       v.assetsTotal.toRat ≤ assetsMaximum.toRat := by
     rw [Bool.eq_false_iff, ne_eq, operator_lt_iff assetsMaximum v.assetsTotal hnorm htotal, not_lt]
-  -- `v.toExact.assetsTotal` is `v.assetsTotal.toRat` by definition of `toExact`
   show v.canVaultSet assetsMaximum = .tesSUCCESS ↔
       assetsMaximum.toRat = 0 ∨ v.assetsTotal.toRat ≤ assetsMaximum.toRat
   unfold Vault.canVaultSet
@@ -124,12 +123,10 @@ the success condition is `assetsTotal = 0 ∧ sharesTotal = 0`, and the
 theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault)
     (hv : v.Lawful) :
     v.canVaultDelete = .tesSUCCESS ↔
-      v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 := by
+      v.assetsTotal.toRat = 0 ∧ v.sharesTotal.toRat = 0 := by
   have hav := Number.operator_ne_zero_eq_false_iff v.assetsAvailable hv.wf.assetsAvailable_norm
   have hat := Number.operator_ne_zero_eq_false_iff v.assetsTotal hv.wf.assetsTotal_norm
   have hst := Number.operator_ne_zero_eq_false_iff v.sharesTotal hv.wf.sharesTotal_norm
-  have hshares : v.toExact.sharesTotal = 0 ↔ v.sharesTotal.toRat = 0 := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf, Nat.cast_eq_zero]
   -- on a lawful vault `assetsTotal = 0` forces `assetsAvailable = 0`
   have hAV0 : v.assetsTotal.toRat = 0 → v.assetsAvailable.toRat = 0 := fun h => by
     have hle : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := hv.valid.assetsAvailable_le
@@ -137,8 +134,8 @@ theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault)
     rw [h] at hle
     exact le_antisymm hle hnn
   show v.canVaultDelete = .tesSUCCESS ↔
-      v.assetsTotal.toRat = 0 ∧ v.toExact.sharesTotal = 0
-  rw [← hat, hshares, ← hst]
+      v.assetsTotal.toRat = 0 ∧ v.sharesTotal.toRat = 0
+  rw [← hat, ← hst]
   unfold Vault.canVaultDelete
   split_ifs with h1 h2 h3
   · refine iff_of_false (by decide) ?_

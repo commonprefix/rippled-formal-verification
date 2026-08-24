@@ -68,7 +68,7 @@ amount is the empty-vault formula: pricing an empty vault at `10 ^ scale` is
 the special case of the general formula, not a different rule. -/
 theorem Vault.idealSharesDeposit_initial_rate (amount : ℚ)
     (hv : v.Lawful) -- the starting vault is lawful
-    (hrate : (v.toExact.sharesTotal : ℚ) = v.depositNav * (10 : ℚ) ^ v.scale.toNat) :
+    (hrate : v.sharesTotal.toRat = v.depositNav * (10 : ℚ) ^ v.scale.toNat) :
     v.idealSharesDeposit amount = amount * (10 : ℚ) ^ v.scale.toNat :=
   Vault.idealSharesDeposit_initial_rate_proof v hv amount hrate
 
@@ -103,7 +103,7 @@ theorem Vault.deposit_sharesIssued (amountDeposit roundedAmount : STAmount) (r :
     (hcanon : roundedAmount.Canonical) -- the rounded amount is stored canonically
     (hpos : 0 < roundedAmount.toRat) -- the rounded amount is positive, the preflight guard
     -- the net asset value clears the deep-underflow threshold of the Number line
-    (hnav : 0 < v.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
+    (hnav : 0 < v.assetsTotal.toRat → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
     r.sharesIssued.toRat.den = 1 ∧ 0 ≤ r.sharesIssued.toRat ∧
@@ -185,15 +185,15 @@ theorem Vault.deposit_vault_updates (amountDeposit : STAmount) (isDonation : Boo
     (hok : v.deposit amountDeposit isDonation = .ok r) (herr : r.error = none) :
     -- assetsTotal' = assetsTotal + taken amount, within depositε
     RoundsWithin r.vault'.assetsTotal
-      (v.toExact.assetsTotal + r.amountDeposit'.toRat) .to_nearest depositε ∧
+      (v.assetsTotal.toRat + r.amountDeposit'.toRat) .to_nearest depositε ∧
     -- assetsAvailable' = assetsAvailable + taken amount, within depositε
     RoundsWithin r.vault'.assetsAvailable
-      (v.toExact.assetsAvailable + r.amountDeposit'.toRat) .to_nearest depositε ∧
+      (v.assetsAvailable.toRat + r.amountDeposit'.toRat) .to_nearest depositε ∧
     -- sharesTotal' = sharesTotal + issued shares, exactly, whenever the
     -- sum fits in the share domain (int64)
-    ((v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 →
-      (r.vault'.toExact.sharesTotal : ℚ) =
-        (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat) :=
+    (v.sharesTotal.toRat + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 →
+      r.vault'.sharesTotal.toRat =
+        v.sharesTotal.toRat + r.sharesIssued.toRat) :=
   Vault.deposit_vault_updates_proof v amountDeposit isDonation hv hcanon hpos r hok herr
 
 /-- Witness: the error term in `deposit_vault_updates` cannot be dropped, a run
@@ -203,7 +203,7 @@ from the exact sum `18000000000000000013`. -/
 theorem Vault.deposit_vault_updates_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (r : DepositResult),
       v.Lawful ∧ v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
+      r.vault'.assetsTotal.toRat ≠ v.assetsTotal.toRat + r.amountDeposit'.toRat :=
   Vault.deposit_vault_updates_witness
 
 /-- Witness: the entry rounding runs on the requested amount but never on the
@@ -238,9 +238,9 @@ theorem Vault.deposit_vault_updates_integral (amountDeposit : STAmount) (isDonat
     (hdenAv : v.assetsAvailable.toRat.den = 1)
     (hok : v.deposit amountDeposit isDonation = .ok r) (herr : r.error = none)
     -- the new total fits the asset domain (int64)
-    (hsz : v.toExact.assetsTotal + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal + r.amountDeposit'.toRat ∧
-    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable + r.amountDeposit'.toRat :=
+    (hsz : v.assetsTotal.toRat + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
+    r.vault'.assetsTotal.toRat = v.assetsTotal.toRat + r.amountDeposit'.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat + r.amountDeposit'.toRat :=
   Vault.deposit_vault_updates_integral_proof v amountDeposit isDonation hv r hnt hcanon hty
     hdenA hdenAv hok herr hsz
 
@@ -258,7 +258,7 @@ theorem Vault.deposit_under_maximum (amountDeposit roundedAmount : STAmount) (is
     (hok : v.deposit amountDeposit isDonation = .ok r)
     -- assetsTotal + roundedAmount fits under the maximum m
     (hmargin : ∀ m ∈ v.assetsMaximum,
-      v.toExact.assetsTotal + roundedAmount.toRat ≤ m.toRat) :
+      v.assetsTotal.toRat + roundedAmount.toRat ≤ m.toRat) :
     -- the assetsMaximum guard cannot fire
     r.error ≠ some .tecLIMIT_EXCEEDED :=
   Vault.deposit_under_maximum_proof v amountDeposit roundedAmount isDonation hv r hrounded

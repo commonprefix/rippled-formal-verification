@@ -714,8 +714,7 @@ lemma Vault.recovery_pipeline_bound (v : Vault) (shares assets : STAmount)
     rcases lt_or_eq_of_le hv.wf.sharesTotal_nonneg with h | h
     · exact h
     · exfalso
-      have hz : v.toExact.sharesTotal = 0 := by
-        show v.sharesTotal.toRat.num.toNat = 0; rw [← h]; rfl
+      have hz : v.sharesTotal.toRat = 0 := h.symm
       have hAT := (hv.valid.empty_shares hz).1
       have hnav0 : v.withdrawNav = 0 := by
         have hl := hv.valid.lossUnrealized_nonneg
@@ -734,8 +733,7 @@ lemma Vault.recovery_pipeline_bound (v : Vault) (shares assets : STAmount)
   have hideal_eq : ideal = nav2.toRat * shares.toRat / v.sharesTotal.toRat := by
     rw [hideal_def]
     unfold Vault.idealAssetsWithdraw
-    rw [if_neg (by decide : ¬ ((false : Bool) = true)), ← hnav2val,
-      Vault.WF.toExact_sharesTotal v hv.wf]
+    rw [if_neg (by decide : ¬ ((false : Bool) = true)), ← hnav2val]
   rcases hcase with ⟨hnav2m0, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · exfalso

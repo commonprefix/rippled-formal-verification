@@ -20,16 +20,14 @@ theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
     (hscale_int : nt.isIntegral = true → scale = 0) (hscale_le : scale.toNat ≤ 18) :
     (Vault.create nt scale assetsMaximum).Lawful := by
   have hz : Number.zero.isNormalized := Or.inl rfl
-  have hAT : (Vault.create nt scale assetsMaximum).toExact.assetsTotal = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hAV : (Vault.create nt scale assetsMaximum).toExact.assetsAvailable = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hST : (Vault.create nt scale assetsMaximum).toExact.sharesTotal = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
-  have hLU : (Vault.create nt scale assetsMaximum).toExact.lossUnrealized = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hAM : (Vault.create nt scale assetsMaximum).toExact.assetsMaximum
-      = assetsMaximum.map Number.toRat := rfl
+  have hAT : (Vault.create nt scale assetsMaximum).assetsTotal.toRat = 0 := by
+    simp only [Vault.create, Number.toRat_zero]
+  have hAV : (Vault.create nt scale assetsMaximum).assetsAvailable.toRat = 0 := by
+    simp only [Vault.create, Number.toRat_zero]
+  have hST : (Vault.create nt scale assetsMaximum).sharesTotal.toRat = 0 := by
+    simp only [Vault.create, Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
+  have hLU : (Vault.create nt scale assetsMaximum).lossUnrealized.toRat = 0 := by
+    simp only [Vault.create, Number.toRat_zero]
   refine ⟨⟨hz, hz, ?_, hz, hz, ?_, ?_, hscale_int, hscale_le⟩, ?_⟩
   · intro m hm; exact hmax_norm m hm
   · simp only [Vault.create, Number.toRat_zero, le_refl]
@@ -38,11 +36,9 @@ theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
     · rw [hAT]
     · rw [hAV]
     · rw [hAV, hAT]
-    · rw [hAM]; intro m hm; rw [Option.mem_map] at hm
-      obtain ⟨n, hn, rfl⟩ := hm; exact hmax_pos n hn
+    · intro m hm; exact hmax_pos m hm
     · rw [hST, hAT, hAV]; intro _; exact ⟨rfl, rfl⟩
-    · rw [hAM, hAT]; intro m hm; rw [Option.mem_map] at hm
-      obtain ⟨n, hn, rfl⟩ := hm; exact le_of_lt (hmax_pos n hn)
+    · intro m hm; rw [hAT]; exact le_of_lt (hmax_pos m hm)
     · rw [hLU]
     · rw [hLU, hAT, hAV]; norm_num
     · rw [hAT, hLU]; norm_num

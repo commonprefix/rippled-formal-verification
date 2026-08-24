@@ -641,19 +641,17 @@ lemma sharesToAssetsDeposit_charge_nonempty (v : Vault) (hv : v.Lawful)
   set nav : ℚ := v.depositNav with hnav_def
   set s : ℚ := shares.toRat with hs_def
   set ST : ℚ := v.sharesTotal.toRat with hST_def
-  have hApos : 0 < v.toExact.assetsTotal := by
+  have hApos : 0 < v.assetsTotal.toRat := by
     rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
     · exact h
     · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
   have hnav_pos : 0 < nav := by
     rw [hnav_def]; unfold Vault.depositNav; exact hApos
   have hST_pos : 0 < ST := by
-    have hne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
+    have hne : v.sharesTotal.toRat ≠ 0 := fun h0 =>
       absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
-    have hcast := Vault.WF.toExact_sharesTotal v hv.wf
-    have : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by
-      exact_mod_cast Nat.pos_of_ne_zero hne
-    rw [hST_def, ← hcast]; exact this
+    rw [hST_def]
+    exact lt_of_le_of_ne hv.wf.sharesTotal_nonneg (Ne.symm hne)
   have hST_one : 1 ≤ ST := by
     have hnum_pos : 0 < ST.num := Rat.num_pos.mpr hST_pos
     have hcast : ST = (ST.num : ℚ) := by
@@ -664,7 +662,7 @@ lemma sharesToAssetsDeposit_charge_nonempty (v : Vault) (hv : v.Lawful)
     Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [← hST_def]; exact ne_of_gt hST_pos)
   have hideal : v.idealChargeDeposit s = nav * s / ST := by
     unfold Vault.idealChargeDeposit
-    rw [if_neg (ne_of_gt hApos), Vault.WF.toExact_sharesTotal v hv.wf]
+    rw [if_neg (ne_of_gt hApos)]
   have hidpos : 0 < nav * s / ST := div_pos (mul_pos hnav_pos hshpos) hST_pos
   -- reduce the charge pipeline
   unfold sharesToAssetsDeposit at hsad
@@ -833,19 +831,17 @@ lemma sharesToAssetsDeposit_charge_nonempty_raw (v : Vault) (hv : v.Lawful)
   set nav : ℚ := v.depositNav with hnav_def
   set s : ℚ := shares.toRat with hs_def
   set ST : ℚ := v.sharesTotal.toRat with hST_def
-  have hApos : 0 < v.toExact.assetsTotal := by
+  have hApos : 0 < v.assetsTotal.toRat := by
     rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
     · exact h
     · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
   have hnav_pos : 0 < nav := by
     rw [hnav_def]; unfold Vault.depositNav; exact hApos
   have hST_pos : 0 < ST := by
-    have hne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
+    have hne : v.sharesTotal.toRat ≠ 0 := fun h0 =>
       absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
-    have hcast := Vault.WF.toExact_sharesTotal v hv.wf
-    have : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by
-      exact_mod_cast Nat.pos_of_ne_zero hne
-    rw [hST_def, ← hcast]; exact this
+    rw [hST_def]
+    exact lt_of_le_of_ne hv.wf.sharesTotal_nonneg (Ne.symm hne)
   have hST_one : 1 ≤ ST := by
     have hnum_pos : 0 < ST.num := Rat.num_pos.mpr hST_pos
     have hcast : ST = (ST.num : ℚ) := by
@@ -856,7 +852,7 @@ lemma sharesToAssetsDeposit_charge_nonempty_raw (v : Vault) (hv : v.Lawful)
     Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [← hST_def]; exact ne_of_gt hST_pos)
   have hideal : v.idealChargeDeposit s = nav * s / ST := by
     unfold Vault.idealChargeDeposit
-    rw [if_neg (ne_of_gt hApos), Vault.WF.toExact_sharesTotal v hv.wf]
+    rw [if_neg (ne_of_gt hApos)]
   have hidpos : 0 < nav * s / ST := div_pos (mul_pos hnav_pos hshpos) hST_pos
   unfold sharesToAssetsDeposit at hsad
   rw [if_neg hmz] at hsad
@@ -1008,7 +1004,7 @@ lemma sharesToAssetsDeposit_charge_bound (v : Vault) (hv : v.Lawful)
   set I : ℚ := v.idealChargeDeposit shares.toRat with hI_def
   by_cases hmz : v.assetsTotal.mantissa_ = 0
   · -- empty vault: the charge equals the ideal exactly
-    have hA0 : v.toExact.assetsTotal = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
+    have hA0 : v.assetsTotal.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
     have hI_eq : I = shares.toRat / (10 : ℚ) ^ v.scale.toNat := by
       rw [hI_def]; unfold Vault.idealChargeDeposit; rw [if_pos hA0]
     have hI_pos : 0 < I := by rw [hI_eq]; exact div_pos hshpos (by positivity)
@@ -1287,7 +1283,7 @@ lemma empty_frac_charge_exact (v : Vault) (hv : v.Lawful) (amount shares c : STA
     · exact hcx
   rw [hcval]
   unfold Vault.idealChargeDeposit
-  have hA0 : v.toExact.assetsTotal = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
+  have hA0 : v.assetsTotal.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
   rw [if_pos hA0]
   have hsheq : shares.toRat = (shares.mValue.toNat : ℚ) := by
     rw [STAmount.toRat_of_nonneg shares hshneg, hshc.offset_zero]; norm_num

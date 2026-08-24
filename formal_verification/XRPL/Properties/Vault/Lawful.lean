@@ -45,7 +45,7 @@ theorem Vault.deposit_lawful (amount : STAmount) (isDonation : Bool)
     -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
     -- the two independent additions can shrink the gap and break Valid, so
     -- preservation only holds on the zero-loss state
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
     -- the deposit amount is a stored-canonical, nonnegative user input
@@ -53,7 +53,7 @@ theorem Vault.deposit_lawful (amount : STAmount) (isDonation : Bool)
     (hnn : 0 ≤ amount.toRat)
     (r : DepositResult) (hok : v.deposit amount isDonation = .ok r)
     -- the new share total fits the share domain (int64)
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1) :
+    (hSsz : v.sharesTotal.toRat + r.sharesIssued.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
   Vault.deposit_lawful_proof v amount isDonation hv hL hAV hcanon hnn r hok hSsz
 
@@ -62,7 +62,7 @@ theorem Vault.withdraw_lawful (amount : WithdrawAmount) (waiveUnrealizedLoss : B
     -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
     -- the two independent additions can shrink the gap and break Valid, so
     -- preservation only holds on the zero-loss state
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (r : WithdrawResult) (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
@@ -72,9 +72,9 @@ theorem Vault.withdraw_lawful (amount : WithdrawAmount) (waiveUnrealizedLoss : B
     (hSnt : r.sharesBurned.mNumericType = .int64)
     (hSnn : r.sharesBurned.negative = false)
     -- a holder cannot burn more shares than exist
-    (hsle : r.sharesBurned.toRat ≤ (v.toExact.sharesTotal : ℚ))
+    (hsle : r.sharesBurned.toRat ≤ v.sharesTotal.toRat)
     -- the share total fits the share domain (int64)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
   Vault.withdraw_lawful_proof v amount waiveUnrealizedLoss hv hL hAV r hok
     hSc hSnt hSnn hsle hfit
@@ -84,7 +84,7 @@ theorem Vault.clawback_lawful (assets holderShares : STAmount)
     -- no unrealized loss: with lossUnrealized equal to the stored gap exactly,
     -- the two independent additions can shrink the gap and break Valid, so
     -- preservation only holds on the zero-loss state
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : v.lossUnrealized.toRat = 0)
     -- vault-only operations keep both asset fields identical (no lending)
     (hAV : v.assetsAvailable = v.assetsTotal)
     -- the clawback amount is a stored-canonical user input
@@ -98,9 +98,9 @@ theorem Vault.clawback_lawful (assets holderShares : STAmount)
     -- the destroyed shares stay strictly below the share total (a full clawback
     -- can leave asset dust with zero shares outstanding, which
     -- `Valid.empty_shares` forbids)
-    (hslt : r.sharesDestroyed.toRat < (v.toExact.sharesTotal : ℚ))
+    (hslt : r.sharesDestroyed.toRat < v.sharesTotal.toRat)
     -- the share total fits the share domain (int64)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.Lawful :=
   Vault.clawback_lawful_proof v assets holderShares hv hL hAV hcanon r hSic hSc hSnn hok hslt hfit
 
@@ -110,7 +110,7 @@ theorem Vault.burnShares_lawful (sharesDestroyed sharesTotalAmount : STAmount) (
     (hcanon : sharesDestroyed.IntegralCanonical) -- stored as a plain integral amount
     (hnn : sharesDestroyed.negative = false)
     (hle : sharesDestroyed.toRat ≤ sharesTotalAmount.toRat) -- a holder cannot burn more than exists
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) -- the share total fits int64
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) -- the share total fits int64
     (hok : v.burnShares sharesDestroyed = .ok v') :
     v'.Lawful :=
   Vault.burnShares_lawful_proof v sharesDestroyed sharesTotalAmount v' hv hcan hcanon hnn

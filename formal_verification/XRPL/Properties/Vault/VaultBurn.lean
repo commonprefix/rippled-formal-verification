@@ -23,8 +23,8 @@ theorem Vault.canBurnShares_assets_exact (sharesTotalAmount : STAmount)
     (hv : v.Lawful) -- the starting vault is lawful
     (hok : v.canBurnShares = .ok (.assets sharesTotalAmount))
     -- the share total fits the int64 amount domain
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
-    sharesTotalAmount.toRat = (v.toExact.sharesTotal : ℚ) :=
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
+    sharesTotalAmount.toRat = v.sharesTotal.toRat :=
   Vault.canBurnShares_assets_exact_proof v sharesTotalAmount hv hok hfit
 
 /-! ## `Vault.burnShares` -/
@@ -39,10 +39,10 @@ theorem Vault.burnShares_sharesTotal_exact (sharesDestroyed : STAmount) (vault' 
     (hok : v.burnShares sharesDestroyed = .ok vault')
     (hcanon : sharesDestroyed.IntegralCanonical) -- stored as a plain integral amount
     (hnn : sharesDestroyed.negative = false)
-    (hle : sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ))
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1) :
-    (vault'.toExact.sharesTotal : ℚ) =
-      (v.toExact.sharesTotal : ℚ) - sharesDestroyed.toRat :=
+    (hle : sharesDestroyed.toRat ≤ v.sharesTotal.toRat)
+    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1) :
+    vault'.sharesTotal.toRat =
+      v.sharesTotal.toRat - sharesDestroyed.toRat :=
   Vault.burnShares_sharesTotal_exact_proof v sharesDestroyed vault' hv hok hcanon hnn hle hfit
 
 end XRPL.Model.SingleAssetVault

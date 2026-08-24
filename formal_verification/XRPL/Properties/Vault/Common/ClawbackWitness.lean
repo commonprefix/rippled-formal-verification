@@ -137,7 +137,7 @@ stored total is not the exact difference. -/
 theorem Vault.clawback_vault_updates_witness :
     ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
       v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
+      r.vault'.assetsTotal.toRat ≠ v.assetsTotal.toRat - r.assetsRecovered.toRat :=
   ⟨cwvB, cwa1, cwHolderShares, cwr2, by native_decide⟩
 
 /-- The `cwvB` recovery re-rounded to the vault scale, `0.000099999999999`. -/
