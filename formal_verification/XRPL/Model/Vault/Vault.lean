@@ -27,10 +27,6 @@ def Vault.isInsolvent (vault : Vault) : Bool :=
 -- Detect an overflow error surfaced by arithmetic ops.
 def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
 
--- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
-def exponent (amount : Number) (nt : NumericType) : Except Error Int := do
-  let a ← STAmount.ofNumber nt amount .to_nearest
-  return a.exponent
 
 
 end XRPL.Model.SingleAssetVault

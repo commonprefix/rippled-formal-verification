@@ -31,6 +31,7 @@ def LoanBroker.canCoverWithdraw (lb : LoanBroker) (vault : Vault) (amount : STAm
     | .rounded amount => .pure amount
 
   let vaultScale ← getAssetsTotalScale vault.numericType vault.assetsTotal
+  let vaultScale ← AssetPool.exponent pool
   let minimumCover ← minimumBrokerCover vault.numericType lb.debtTotal lb.coverRateMinimum vaultScale
   let amountNumber ← rounded.toNumber .to_nearest
   if lb.coverAvailable.operator_lt amountNumber then
