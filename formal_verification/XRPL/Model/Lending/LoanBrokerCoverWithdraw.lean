@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -8,14 +9,11 @@ import XRPL.Model.Lending.LendingHelpers
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
+open XRPL.Model.Result
 open XRPL.Model.SingleAssetVault
 
-inductive RoundedCoverWithdrawResult where
-  | rejected (ter : TER)
-  | rounded (amount : STAmount)
-
-def LoanBroker.roundedCoverWithdraw (lb : LoanBroker) (vaultNumericType : NumericType) (amount : STAmount) : Except Error RoundedCoverWithdrawResult := do
-  let exponent ← exponent lb.coverAvailable vaultNumericType
+def LoanBroker.roundedCoverWithdraw (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error RoundingResult := do
+  let exponent ← exponent lb.coverAvailable numericType
   let rounded ← STAmount.roundToExponent amount exponent .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
@@ -49,14 +47,14 @@ structure LoanBrokerCoverWithdrawResult where
   withdrawAmount' : STAmount
   loanBroker' : LoanBroker
 
-def LoanBroker.coverWithdraw (lb : LoanBroker) (vaultNumericType : NumericType) (amount : STAmount) : Except Error LoanBrokerCoverWithdrawResult := do
+def LoanBroker.coverWithdraw (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error LoanBrokerCoverWithdrawResult := do
   let result : LoanBrokerCoverWithdrawResult := {
     status := .tesSUCCESS,
-    withdrawAmount' := STAmount.zero vaultNumericType,
+    withdrawAmount' := STAmount.zero numericType,
     loanBroker' := lb
   }
 
-  let rounded ← match (← lb.roundedCoverWithdraw vaultNumericType amount) with
+  let rounded ← match (← lb.roundedCoverWithdraw numericType amount) with
     | .rejected _ => return { result with status := .tecINTERNAL }
     | .rounded amount => .pure amount
 

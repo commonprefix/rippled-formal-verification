@@ -21,6 +21,7 @@ positive canonical `amount` has a mantissa of at most 19 digits, so scaling it i
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+open XRPL.Model.Result
 
 variable (v : Vault)
 
@@ -245,7 +246,7 @@ private lemma roundedDepositAmount_roundTo (amountDeposit roundedAmount : STAmou
   · rw [if_pos hz] at h; exact absurd (Except.ok.inj h) (by simp)
   · rw [if_neg hz] at h
     have : ra = roundedAmount :=
-      RoundedDepositResult.rounded.inj (Except.ok.inj h)
+      RoundingResult.rounded.inj (Except.ok.inj h)
     rw [this] at hra; exact hra
 
 /-- **Deposit shares are monotone in the rounded amount.** Minimal added inputs over

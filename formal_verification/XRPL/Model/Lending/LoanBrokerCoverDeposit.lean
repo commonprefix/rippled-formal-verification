@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -7,14 +8,11 @@ import XRPL.Model.Lending.LoanBroker
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
+open XRPL.Model.Result
 open XRPL.Model.SingleAssetVault
 
-inductive RoundedCoverDepositResult where
-  | rejected (ter : TER)
-  | rounded (amount : STAmount)
-
-def LoanBroker.roundedCoverDeposit (lb : LoanBroker) (vaultNumericType : NumericType) (amount : STAmount) : Except Error RoundedCoverDepositResult := do
-  let exponent ← exponent lb.coverAvailable vaultNumericType
+def LoanBroker.roundedCoverDeposit (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error RoundingResult := do
+  let exponent ← exponent lb.coverAvailable numericType
   let rounded ← STAmount.roundToExponent amount exponent .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
@@ -25,14 +23,14 @@ structure LoanBrokerCoverDepositResult where
   amountDeposit' : STAmount
   loanBroker' : LoanBroker
 
-def LoanBroker.coverDeposit (lb : LoanBroker) (vaultNumericType : NumericType) (amount : STAmount) : Except Error LoanBrokerCoverDepositResult := do
+def LoanBroker.coverDeposit (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error LoanBrokerCoverDepositResult := do
   let result : LoanBrokerCoverDepositResult := {
     status := .tesSUCCESS,
-    amountDeposit' := STAmount.zero vaultNumericType,
+    amountDeposit' := STAmount.zero numericType,
     loanBroker' := lb
   }
 
-  let rounded ← match (← lb.roundedCoverDeposit vaultNumericType amount) with
+  let rounded ← match (← lb.roundedCoverDeposit numericType amount) with
     | .rejected _ => return { result with status := .tecINTERNAL }
     | .rounded amount => .pure amount
   -- rounded cannot be 0 here, don't implement the CPP defensive 0 check

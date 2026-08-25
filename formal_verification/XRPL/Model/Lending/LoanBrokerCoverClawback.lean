@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -8,14 +9,10 @@ import XRPL.Model.Lending.LendingHelpers
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
-
-inductive RoundedCoverClawbackResult where
-  | rejected (ter : TER)
-  | rounded (amount : STAmount)
+open XRPL.Model.Result
 
 def LoanBroker.roundedCoverClawback (lb : LoanBroker) (vault : Vault) (amount : Option STAmount)
-    : Except Error RoundedCoverClawbackResult := do
+    : Except Error RoundingResult := do
   let vaultScale ← getAssetsTotalScale vault.numericType vault.assetsTotal
   let minRequiredCover ← minimumBrokerCover vault.numericType lb.debtTotal lb.coverRateMinimum vaultScale
   let maxClawAmount ← lb.coverAvailable.operator_sub minRequiredCover .downward

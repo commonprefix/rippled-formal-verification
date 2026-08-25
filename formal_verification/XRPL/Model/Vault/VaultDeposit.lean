@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -6,6 +7,7 @@ import XRPL.Model.Vault.Vault
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+open XRPL.Model.Result
 
 -- model of `roundToVaultScale` from xrpld
 def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Except Error STAmount := do
@@ -17,19 +19,15 @@ def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Exc
   let rounded ← STAmount.roundToExponent amountDeposit postScale .downward
   return rounded
 
--- The deposit either rounds to a usable amount, or is rejected with a TER. An Error
--- from roundToVaultScale (e.g. overflow) propagates through the outer Except (a C++ throw).
-inductive RoundedDepositResult where
-  | rejected (ter : TER)
-  | rounded (amount : STAmount)
-
 /-- The preclaim check on a deposit amount. An IOU vault cannot track digits
 below the exponent its `assetsTotal` will have after the deposit, so any such
 digits in `amountDeposit` are dropped before the deposit runs (integral assets
 pass through unchanged). Returns the amount the deposit will actually use, or
-`tecPRECISION_LOSS` when nothing of it survives. -/
+`tecPRECISION_LOSS` when nothing of it survives. An `Error` from
+`roundToVaultExponent` (e.g. overflow) propagates through the outer `Except`
+(a C++ throw). -/
 def Vault.roundedDepositAmount (vault : Vault) (amountDeposit : STAmount)
-    : Except Error RoundedDepositResult := do
+    : Except Error RoundingResult := do
   let roundedAmount ← roundToVaultExponent amountDeposit vault.assetsTotal
   if roundedAmount.isZero then
     return .rejected .tecPRECISION_LOSS
