@@ -1,7 +1,6 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.NumericType
-import XRPL.Model.Lending.LoanBroker
 
 namespace XRPL.Model.Lending
 
