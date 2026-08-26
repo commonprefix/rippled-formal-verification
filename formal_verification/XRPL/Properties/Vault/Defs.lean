@@ -78,6 +78,20 @@ structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   lossUnrealized_le : s.lossUnrealized ≤ s.assetsTotal - s.assetsAvailable
   withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.lossUnrealized
 
+/-- `Vault.Exact.Valid`, restated with the modeled `Number` operators on the stored fields. -/
+structure Vault.Valid (v : Vault) : Prop where
+  assetsTotal_nonneg : Number.zero.operator_le v.assetsTotal = true
+  assetsAvailable_nonneg : Number.zero.operator_le v.assetsAvailable = true
+  assetsAvailable_le : v.assetsAvailable.operator_le v.assetsTotal = true
+  assetsMaximum_pos : ∀ m ∈ v.assetsMaximum, Number.zero.operator_lt m = true
+  empty_shares : v.sharesTotal = Number.zero →
+    v.assetsTotal = Number.zero ∧ v.assetsAvailable = Number.zero
+  cap : ∀ m ∈ v.assetsMaximum, v.assetsTotal.operator_le m = true
+  lossUnrealized_nonneg : Number.zero.operator_le v.lossUnrealized = true
+  lossUnrealized_le : ∀ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d →
+    v.lossUnrealized.operator_le d = true
+  withdraw_nav_nonneg : v.lossUnrealized.operator_le v.assetsTotal = true
+
 /-- A lawful vault is a well-formed representation whose exact value satisfies
 the invariant. -/
 structure Vault.Lawful (v : Vault) : Prop where
