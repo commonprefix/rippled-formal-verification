@@ -1,8 +1,9 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.LoanBroker
 import XRPL.Model.Lending.LendingHelpers
 
@@ -10,29 +11,28 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.Result
-open XRPL.Model.SingleAssetVault
 
 def LoanBroker.roundedCoverWithdraw (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error RoundingResult := do
-  let exponent ← exponent lb.coverAvailable numericType
+  let exponent ← numberExponent lb.coverAvailable numericType
   let rounded ← STAmount.roundToExponent amount exponent .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
   return .rounded rounded
 
 
-def LoanBroker.canCoverWithdraw (lb : LoanBroker) (vault : Vault) (amount : STAmount)
-    : Except Error TER := do
-  let ter ← canApplyToBrokerCover vault.numericType lb.coverAvailable amount
+def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
+    (amount : STAmount) : Except Error TER := do
+  let ter ← canApplyToBrokerCover (AssetPool.numericType pool) lb.coverAvailable amount
   if ter.operator_bool then
     return ter
 
-  let rounded ← match (← lb.roundedCoverWithdraw vault.numericType amount) with
+  let rounded ← match (← lb.roundedCoverWithdraw (AssetPool.numericType pool) amount) with
     | .rejected ter => return ter
     | .rounded amount => .pure amount
 
-  let vaultScale ← getAssetsTotalScale vault.numericType vault.assetsTotal
-  let vaultScale ← AssetPool.exponent pool
-  let minimumCover ← minimumBrokerCover vault.numericType lb.debtTotal lb.coverRateMinimum vaultScale
+  let poolExponent ← AssetPool.exponent pool
+  let minimumCover ← minimumBrokerCover (AssetPool.numericType pool) lb.debtTotal
+    lb.coverRateMinimum poolExponent
   let amountNumber ← rounded.toNumber .to_nearest
   if lb.coverAvailable.operator_lt amountNumber then
     return .tecINSUFFICIENT_FUNDS

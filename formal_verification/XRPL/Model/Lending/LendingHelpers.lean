@@ -1,3 +1,4 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.NumericType
@@ -12,11 +13,6 @@ def secondsInYear : Number := Number.ofInt64 31_536_000
 
 def hasExpired (ledgerCloseTime expTime : UInt32) : Bool :=
   ledgerCloseTime ≥ expTime
-
--- C++ getAssetsTotalScale: STAmount{asset, assetsTotal}.exponent(), the vault asset's scale
-def getAssetsTotalScale (nt : NumericType) (assetsTotal : Number) : Except Error Int := do
-  let st ← STAmount.ofNumber nt assetsTotal .to_nearest
-  return st.exponent
 
 -- XLS-66 (1): annual rate prorated to the interval
 def loanPeriodicRate (interestRate : TenthBips32) (paymentInterval : UInt32)
@@ -100,18 +96,18 @@ def adjustImpreciseNumber (nt : NumericType) (value adjustment : Number) (scale 
   if rounded.signum < 0 then return Number.zero else return rounded
 
 -- minimum first-loss cover for the debt, rounded up
-def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (vaultScale : Int)
+def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (poolExponent : Int)
     : Except Error Number := do
   let raw ← tenthBipsOfValue debtTotal coverRateMinimum .upward
-  STAmount.roundToNumericType nt raw .upward (some vaultScale)
+  STAmount.roundToNumericType nt raw .upward (some poolExponent)
 
 -- reject a cover deposit/withdraw/clawback that rounds to zero at the cover's own scale
 def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
     : Except Error TER := do
   if amount.isZero then
     return .tecPRECISION_LOSS
-  let coverScale ← getAssetsTotalScale nt coverAvailable
-  let rounded ← STAmount.roundToExponent amount coverScale .to_nearest
+  let coverExponent ← numberExponent coverAvailable nt
+  let rounded ← STAmount.roundToExponent amount coverExponent .to_nearest
   if rounded.signum == 0 then
     return .tecPRECISION_LOSS
   return .tesSUCCESS

@@ -1,18 +1,17 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.Result
-open XRPL.Model.SingleAssetVault
 
 def LoanBroker.roundedCoverDeposit (lb : LoanBroker) (numericType : NumericType) (amount : STAmount) : Except Error RoundingResult := do
-  let exponent ← exponent lb.coverAvailable numericType
+  let exponent ← numberExponent lb.coverAvailable numericType
   let rounded ← STAmount.roundToExponent amount exponent .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS

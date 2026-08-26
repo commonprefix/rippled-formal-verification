@@ -97,10 +97,10 @@ def LoanComputed.checkGuards (computed : LoanComputed) (nt : NumericType) (princ
 
 -- broker stays under its debt cap and keeps enough cover
 def LoanBroker.checkLimits (broker : LoanBroker) (nt : NumericType) (newDebtTotal : Number)
-    (vaultScale : Int) : Except Error TER := do
+    (vaultExponent : Int) : Except Error TER := do
   if broker.debtMaximum.operator_ne Number.zero && broker.debtMaximum.operator_lt newDebtTotal then
     return .tecLIMIT_EXCEEDED
-  let minCover ← minimumBrokerCover nt newDebtTotal broker.coverRateMinimum vaultScale
+  let minCover ← minimumBrokerCover nt newDebtTotal broker.coverRateMinimum vaultExponent
   if broker.coverAvailable.operator_lt minCover then return .tecINSUFFICIENT_FUNDS
   return .tesSUCCESS
 
@@ -132,10 +132,10 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
     : Except Error LoanCreateResult := do
   if vault.assetsAvailable.operator_lt principal then return .rejected .tecINSUFFICIENT_FUNDS
-  let vaultScale ← getAssetsTotalScale vault.numericType vault.assetsTotal
+  let vaultExponent ← exponent vault.assetsTotal vault.numericType
 
   let computed ← computeLoanProperties vault.numericType principal rates.interestRate
-    schedule.paymentInterval schedule.paymentTotal broker.managementFeeRate vaultScale
+    schedule.paymentInterval schedule.paymentTotal broker.managementFeeRate vaultExponent
   let repTer ← checkPrecisionFields principal fees
     (fun v => isRounded vault.numericType v computed.loanScale)
   if !repTer.isTesSuccess then return .rejected repTer
@@ -145,7 +145,7 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
   if !guardTer.isTesSuccess then return .rejected guardTer
 
   let newDebtTotal ← broker.debtTotal.operator_add principal .to_nearest
-  let limitTer ← broker.checkLimits vault.numericType newDebtTotal vaultScale
+  let limitTer ← broker.checkLimits vault.numericType newDebtTotal vaultExponent
   if !limitTer.isTesSuccess then return .rejected limitTer
 
   let loan := buildLoan computed rates fees schedule allowsOverpayment pending
@@ -155,7 +155,7 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
                       else pure vault.assetsReserved
   let vault' := { vault with assetsAvailable := availableAfter, assetsReserved := reservedAfter }
 
-  let debtAfter ← adjustImpreciseNumber vault.numericType broker.debtTotal principal vaultScale
+  let debtAfter ← adjustImpreciseNumber vault.numericType broker.debtTotal principal vaultExponent
   let broker' := { broker with debtTotal := debtAfter, loanCount := broker.loanCount + 1 }
 
   return .created loan vault' broker'

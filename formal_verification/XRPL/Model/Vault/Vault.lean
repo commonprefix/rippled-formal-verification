@@ -1,3 +1,4 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
@@ -27,6 +28,7 @@ def Vault.isInsolvent (vault : Vault) : Bool :=
 -- Detect an overflow error surfaced by arithmetic ops.
 def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
 
-
+def exponent (amount : Number) (nt : NumericType) : Except Error Int :=
+  numberExponent amount nt
 
 end XRPL.Model.SingleAssetVault

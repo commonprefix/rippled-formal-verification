@@ -1,7 +1,6 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.LoanBroker
 
 namespace XRPL.Model.Lending
