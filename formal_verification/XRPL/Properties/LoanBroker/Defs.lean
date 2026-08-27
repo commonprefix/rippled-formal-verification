@@ -77,4 +77,19 @@ structure LoanBroker.Lawful (lb : LoanBroker) : Prop where
   wf : lb.WF
   valid : lb.toExact.Valid
 
+/-- A broker bundled with its lawfulness proof. -/
+def LawfulLoanBroker : Type := {lb : LoanBroker // lb.Lawful}
+
+/-- Raw broker of a lawful broker. -/
+def LawfulLoanBroker.val (lb : LawfulLoanBroker) : LoanBroker := Subtype.val lb
+
+/-- Lawfulness proof of a lawful broker. -/
+def LawfulLoanBroker.lawful (lb : LawfulLoanBroker) : lb.val.Lawful := Subtype.property lb
+
+/-- The untrusted-boundary check: promote a raw broker to a `LawfulLoanBroker` if it
+is lawful. TODO: derive the `Decidable` instance so this is usable without
+`Classical`. -/
+def LoanBroker.validate (lb : LoanBroker) [Decidable lb.Lawful] : Option LawfulLoanBroker :=
+  if h : lb.Lawful then some ⟨lb, h⟩ else none
+
 end XRPL.Model.Lending

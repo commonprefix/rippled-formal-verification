@@ -66,7 +66,7 @@ lemma debtMaxCap_facts :
 
 variable {lb : LoanBroker}
 
-/-- `debtMaximum.operator_le kDebtMaxCap` says `debtMaximum.toRat ≤ 2^63 − 1`. -/
+/-- `debtMaximum.operator_le debtMaxCap` says `debtMaximum.toRat ≤ 2^63 − 1`. -/
 theorem LoanBroker.debtMaximum_cap_iff (hwf : lb.WF) :
     lb.debtMaximum.operator_le debtMaxCap = true ↔
       lb.debtMaximum.toRat ≤ (2 : ℚ) ^ 63 - 1 := by

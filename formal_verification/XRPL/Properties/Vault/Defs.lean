@@ -1,6 +1,10 @@
 import XRPL.Model.Vault.Vault
 
-/-! # Single-asset vault state validity -/
+/-! # Single-asset vault state validity
+
+`WF` checks the stored `Number` fields are normalized. `Exact.Valid` states
+the invariant in exact rationals. `Valid` states the same invariant with the `Number`
+operators the code compares with. A `Lawful` state is both well-formed and valid. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -109,8 +113,7 @@ def LawfulVault.val (v : LawfulVault) : Vault := Subtype.val v
 def LawfulVault.lawful (v : LawfulVault) : v.val.Lawful := Subtype.property v
 
 /-- The untrusted-boundary check: promote a raw vault to a `LawfulVault` if it is
-lawful. TODO: derive the `Decidable` instance so this is usable without
-`Classical`. -/
+lawful. -/
 def Vault.validate (v : Vault) [Decidable v.Lawful] : Option LawfulVault :=
   if h : v.Lawful then some ⟨v, h⟩ else none
 
