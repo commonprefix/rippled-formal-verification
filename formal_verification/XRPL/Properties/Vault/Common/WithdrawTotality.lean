@@ -802,7 +802,7 @@ nonpositive. This is agnostic to the result sign, the pre-`recover` mantissa and
 the guard, because `recover` only decreases the exponent (`recover_exponent_le`)
 and the tail keeps 22 steps of headroom to `maxExponent`. -/
 private lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
-    (g : Guard) (mode : rounding_mode) (hE : E ≤ 0) :
+    (g : Guard) (mode : rounding_mode) (hE : E + 22 ≤ maxExponent) :
     ∃ result, doNormalize128 zn
       (if (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty = true
         then (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).1
@@ -813,18 +813,19 @@ private lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int
     = .ok result := by
   set R := Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40 with hR
   have hle : R.2.1 ≤ E := by rw [hR]; exact recover_exponent_le _ _ _ _ _
-  exact doNormalize128_ok_of_exp zn _ R.2.1 mode _ (by unfold maxExponent; omega)
+  exact doNormalize128_ok_of_exp zn _ R.2.1 mode _ (by unfold maxExponent at hE ⊢; omega)
 
 /-- **Forward totality of the different-sign `operator_add`.** A nonzero second
-operand of opposite sign to the first, with both raw exponents nonpositive, reaches
+operand of opposite sign to the first, with both raw exponents leaving the
+`doNormalize128` renormalization headroom (`exponent_ + 22 ≤ maxExponent`), reaches
 a success. The zero and exact-cancellation guards short-circuit to a success, and
 the different-sign body reduces to `Number.diffSign_recover_tail_ok`. The aligned
-common exponent is `max x.exponent_ y.exponent_ ≤ 0` (`alignDown_e_eq`), which
-feeds the tail. -/
+common exponent is `max x.exponent_ y.exponent_` (`alignDown_e_eq`), which feeds
+the tail. -/
 private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_mode)
     (hy0 : y.mantissa_ ≠ 0)
     (hsign : (x.negative_ == y.negative_) = false)
-    (hxe : x.exponent_ ≤ 0) (hye : y.exponent_ ≤ 0) :
+    (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
     ∃ result, x.operator_add y mode = .ok result := by
   unfold Number.operator_add
   rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0, if_neg Bool.false_ne_true]
@@ -835,15 +836,19 @@ private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_
     · rw [if_pos hg3]; exact ⟨Number.zero, rfl⟩
     · rw [if_neg hg3]
       simp only [hsign, Bool.false_eq_true, if_false]
+      have hmx : max x.exponent_ y.exponent_ + 22 ≤ maxExponent := by
+        rcases le_total x.exponent_ y.exponent_ with h | h
+        · rw [max_eq_right h]; exact hye
+        · rw [max_eq_left h]; exact hxe
       apply Number.diffSign_recover_tail_ok
-      split_ifs <;> first | (rw [alignDown_e_eq]; exact max_le hxe hye) | exact hxe
+      split_ifs <;> first | (rw [alignDown_e_eq]; exact hmx) | exact hxe
 
 /-- **Forward totality of `operator_sub` for two normalized capped operands.** Both
 stored-total decrements of the withdraw run, `assetsTotal - payout` and
 `sharesTotal - sharesBurned`, share this shape: `x` and `y` are normalized
 nonnegative `Number`s bounded by `2 ^ 63 - 1`, so each succeeds in every mode. A
-zero subtrahend is the identity (`Number.operator_sub_of_mantissa_zero`). Otherwise
-the negated subtrahend has the opposite sign to `x`, so the internal add takes its
+zero `y` is the identity (`Number.operator_sub_of_mantissa_zero`). Otherwise `-y`
+has the opposite sign to `x`, so the internal add takes its
 different-sign branch, discharged by `Number.operator_add_diffSign_ok` with the
 cap-derived exponent bounds. No ordering (`y ≤ x`) is needed for totality. -/
 theorem Number.operator_sub_ok_of_normalized_cap (x y : Number) (mode : rounding_mode)
@@ -860,6 +865,28 @@ theorem Number.operator_sub_ok_of_normalized_cap (x y : Number) (mode : rounding
       have h := Number.exponent_fn_le_zero_of_cap y hy hyneg hycap
       unfold Number.exponent at h; split at h <;> omega
     have hkey : y.operator_neg = { y with negative_ := !y.negative_ } := by
+      unfold Number.operator_neg
+      rw [if_neg (ne_true_of_eq_false (beq_false_of_ne hy0))]
+    unfold Number.operator_sub
+    apply Number.operator_add_diffSign_ok x y.operator_neg mode
+    · rw [hkey]; exact hy0
+    · rw [hkey]; simp only [hxneg, hyneg]; rfl
+    · unfold maxExponent; omega
+    · rw [hkey]; show y.exponent_ + 22 ≤ maxExponent; unfold maxExponent; omega
+
+/-- **Forward totality of `operator_sub` from an exponent bound.** Two normalized
+nonnegative operands whose exponents leave the `doNormalize128` renormalization
+headroom (`exponent_ + 22 ≤ maxExponent`) subtract without overflow, in every mode.
+This is the exponent-bound companion to `Number.operator_sub_ok_of_normalized_cap`:
+it covers values past the `2 ^ 63 - 1` cap (large IOU balances) whose exponents
+are still far below `maxExponent`. -/
+theorem Number.operator_sub_ok_of_exp (x y : Number) (mode : rounding_mode)
+    (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
+    (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
+    ∃ result, x.operator_sub y mode = .ok result := by
+  by_cases hy0 : y.mantissa_ = 0
+  · exact ⟨x, Number.operator_sub_of_mantissa_zero x y mode hy0⟩
+  · have hkey : y.operator_neg = { y with negative_ := !y.negative_ } := by
       unfold Number.operator_neg
       rw [if_neg (ne_true_of_eq_false (beq_false_of_ne hy0))]
     unfold Number.operator_sub

@@ -1,3 +1,5 @@
+import XRPL.Properties.LoanBroker.Defs
+import XRPL.Properties.LoanBroker.LoanBrokerValid
 import XRPL.Properties.Protocol.IOUAmount.Properties
 import XRPL.Properties.Protocol.Number.Properties
 import XRPL.Properties.Protocol.IntAmount.Properties
@@ -28,3 +30,4 @@ import XRPL.Properties.Vault.VaultClawback
 import XRPL.Properties.Vault.Dilution
 import XRPL.Properties.Vault.Roundtrip
 import XRPL.Properties.Vault.CanEmpty
+import XRPL.Properties.Vault.VaultValid

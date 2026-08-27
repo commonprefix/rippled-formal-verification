@@ -1120,8 +1120,8 @@ lemma Number.operator_sub_to_nearest_ge (x y z result : Number)
     hxm hyneg_m hnz hok' hres h_le
   exact hcontra z hz hlt (by rw [hyneg_val]; linarith [hz_le])
 
-/-- **Subtracting a non-negative operand under `.to_nearest` never overshoots the
-minuend.** The rounded difference `x - y` is at most `x`: a zero result is `≤ x`
+/-- **Subtracting a non-negative operand under `.to_nearest` never overshoots
+`x`.** The rounded difference `x - y` is at most `x`: a zero result is `≤ x`
 because `x ≥ 0`, an equal-operand cancellation gives the zero result, and the
 generic case is `operator_sub_to_nearest_le` at `z = x` (using `x - y ≤ x`). -/
 lemma Number.operator_sub_nonneg_le (x y result : Number)

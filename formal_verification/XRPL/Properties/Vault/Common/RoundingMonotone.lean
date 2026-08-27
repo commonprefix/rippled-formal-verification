@@ -297,8 +297,8 @@ theorem operator_div_num_toRat_mono (a₁ a₂ b r₁ r₂ : Number)
     r₁.toRat ≤ r₂.toRat :=
   Number.roundsNearestEven_mono _ _ _ _ hne₁ hne₂ (by gcongr)
 
-/-- `operator_sub` is monotone in the minuend at `.to_nearest` (the withdraw NAV
-path fixes the subtrahend): a larger `x` never rounds to a smaller difference. -/
+/-- `operator_sub` is monotone in its first operand `x` at `.to_nearest` (the
+withdraw NAV path fixes `y`): a larger `x` never rounds to a smaller difference. -/
 theorem operator_sub_left_toRat_mono (x₁ x₂ y r₁ r₂ : Number)
     (hne₁ : r₁.RoundsNearestEven (x₁.toRat - y.toRat))
     (hne₂ : r₂.RoundsNearestEven (x₂.toRat - y.toRat))
@@ -306,8 +306,8 @@ theorem operator_sub_left_toRat_mono (x₁ x₂ y r₁ r₂ : Number)
     r₁.toRat ≤ r₂.toRat :=
   Number.roundsNearestEven_mono _ _ _ _ hne₁ hne₂ (by linarith)
 
-/-- `operator_sub` is antitone in the subtrahend at `.to_nearest` (fixed minuend):
-a larger `y` never rounds to a larger difference. -/
+/-- `operator_sub` is antitone in its second operand `y` at `.to_nearest` (fixed
+`x`): a larger `y` never rounds to a larger difference. -/
 theorem operator_sub_right_toRat_anti (x y₁ y₂ r₁ r₂ : Number)
     (hne₁ : r₁.RoundsNearestEven (x.toRat - y₁.toRat))
     (hne₂ : r₂.RoundsNearestEven (x.toRat - y₂.toRat))

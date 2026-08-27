@@ -1,6 +1,10 @@
 import XRPL.Model.Vault.Vault
 
-/-! # Single-asset vault state validity -/
+/-! # Single-asset vault state validity
+
+`WF` checks the stored `Number` fields are normalized. `Exact.Valid` states
+the invariant in exact rationals. `Valid` states the same invariant with the `Number`
+operators the code compares with. A `Lawful` state is both well-formed and valid. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -78,6 +82,20 @@ structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   lossUnrealized_le : s.lossUnrealized ≤ s.assetsTotal - s.assetsAvailable
   withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.lossUnrealized
 
+/-- `Vault.Exact.Valid`, restated with the modeled `Number` operators on the stored fields. -/
+structure Vault.Valid (v : Vault) : Prop where
+  assetsTotal_nonneg : Number.zero.operator_le v.assetsTotal = true
+  assetsAvailable_nonneg : Number.zero.operator_le v.assetsAvailable = true
+  assetsAvailable_le : v.assetsAvailable.operator_le v.assetsTotal = true
+  assetsMaximum_pos : ∀ m ∈ v.assetsMaximum, Number.zero.operator_lt m = true
+  empty_shares : v.sharesTotal = Number.zero →
+    v.assetsTotal = Number.zero ∧ v.assetsAvailable = Number.zero
+  cap : ∀ m ∈ v.assetsMaximum, v.assetsTotal.operator_le m = true
+  lossUnrealized_nonneg : Number.zero.operator_le v.lossUnrealized = true
+  lossUnrealized_le : ∀ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d →
+    v.lossUnrealized.operator_le d = true
+  withdraw_nav_nonneg : v.lossUnrealized.operator_le v.assetsTotal = true
+
 /-- A lawful vault is a well-formed representation whose exact value satisfies
 the invariant. -/
 structure Vault.Lawful (v : Vault) : Prop where
@@ -95,8 +113,7 @@ def LawfulVault.val (v : LawfulVault) : Vault := Subtype.val v
 def LawfulVault.lawful (v : LawfulVault) : v.val.Lawful := Subtype.property v
 
 /-- The untrusted-boundary check: promote a raw vault to a `LawfulVault` if it is
-lawful. TODO: derive the `Decidable` instance so this is usable without
-`Classical`. -/
+lawful. -/
 def Vault.validate (v : Vault) [Decidable v.Lawful] : Option LawfulVault :=
   if h : v.Lawful then some ⟨v, h⟩ else none
 
