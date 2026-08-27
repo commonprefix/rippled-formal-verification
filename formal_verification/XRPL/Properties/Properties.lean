@@ -1,3 +1,5 @@
+import XRPL.Properties.LoanBroker.Defs
+import XRPL.Properties.LoanBroker.LoanBrokerValid
 import XRPL.Properties.Protocol.IOUAmount.Properties
 import XRPL.Properties.Protocol.Number.Properties
 import XRPL.Properties.Protocol.IntAmount.Properties
