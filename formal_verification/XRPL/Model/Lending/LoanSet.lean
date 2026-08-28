@@ -1,10 +1,13 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.Amortization
+import XRPL.Model.Lending.BrokerCover
+import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan
 import XRPL.Model.Lending.LoanBroker
-import XRPL.Model.Lending.LendingHelpers
 
 namespace XRPL.Model.Lending
 

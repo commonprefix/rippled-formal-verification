@@ -14,6 +14,9 @@ def defaultGracePeriod : UInt32 := 60      -- seconds
 -- UInt32 max (2³² − 1)
 def maxTime : UInt32 := 4_294_967_295
 
+def hasExpired (ledgerCloseTime expTime : UInt32) : Bool :=
+  ledgerCloseTime ≥ expTime
+
 -- 1/10 bips: 0.1 bp = 0.001% = 0.00001
 structure LoanRates where
   interestRate : TenthBips32

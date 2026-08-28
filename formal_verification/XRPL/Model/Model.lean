@@ -1,7 +1,15 @@
-import XRPL.Model.Lending.LendingHelpers
+import XRPL.Model.Lending.Amortization
+import XRPL.Model.Lending.AssetPool
+import XRPL.Model.Lending.BrokerCover
+import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan
 import XRPL.Model.Lending.LoanAccept
 import XRPL.Model.Lending.LoanBroker
+import XRPL.Model.Lending.LoanBrokerCoverClawback
+import XRPL.Model.Lending.LoanBrokerCoverDeposit
+import XRPL.Model.Lending.LoanBrokerCoverWithdraw
+import XRPL.Model.Lending.LoanBrokerDelete
+import XRPL.Model.Lending.LoanBrokerSet
 import XRPL.Model.Lending.LoanDelete
 import XRPL.Model.Lending.LoanSet
 import XRPL.Model.Vault.Vault
