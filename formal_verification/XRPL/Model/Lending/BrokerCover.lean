@@ -42,26 +42,22 @@ def LoanBroker.roundedCoverAmount (lb : LoanBroker) (nt : NumericType) (amount :
   return .rounded rounded
 
 structure LoanBrokerCoverResult where
-  status : TER
+  status : TER := .tesSUCCESS
   amount' : STAmount
   loanBroker' : LoanBroker
 
-inductive CoverFlow where
-  | inflow
-  | outflow
+inductive CoverDirection where
+  | credit
+  | debit
 
 -- settle a rounded cover movement against coverAvailable
-def LoanBroker.applyCoverFlow (lb : LoanBroker) (nt : NumericType) (flow : CoverFlow)
-    (rounded : RoundingResult) : Except Error LoanBrokerCoverResult := do
-  match rounded with
-  | .rejected _ =>
-    return { status := .tecINTERNAL, amount' := STAmount.zero nt, loanBroker' := lb }
-  | .rounded amount =>
-    let magnitude ← amount.toNumber .to_nearest
-    let coverAvailable' ← match flow with
-      | .inflow => lb.coverAvailable.operator_add magnitude .to_nearest
-      | .outflow => lb.coverAvailable.operator_sub magnitude .to_nearest
-    return { status := .tesSUCCESS, amount' := amount,
-             loanBroker' := { lb with coverAvailable := coverAvailable' } }
+def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirection) (amount : STAmount)
+   : Except Error LoanBrokerCoverResult := do
+  let magnitude ← amount.toNumber .to_nearest
+  let coverAvailable' ← match direction with
+    | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
+    | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
+  return { status := .tesSUCCESS, amount' := amount,
+           loanBroker' := { lb with coverAvailable := coverAvailable' } }
 
 end XRPL.Model.Lending

@@ -8,7 +8,9 @@ open XRPL.Model.Protocol
 
 def LoanBroker.coverDeposit (lb : LoanBroker) (numericType : NumericType) (amount : STAmount)
     : Except Error LoanBrokerCoverResult := do
-  let rounded ← lb.roundedCoverAmount numericType amount
-  lb.applyCoverFlow numericType .inflow rounded
+  let amount ← match (← lb.roundedCoverAmount numericType amount) with
+    | .rejected ter => return { status := ter, loanBroker' := lb, amount' := STAmount.zero numericType }
+    | .rounded amount => .pure amount
+  lb.applyCoverTransaction .credit amount
 
 end XRPL.Model.Lending

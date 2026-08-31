@@ -40,8 +40,10 @@ def LoanBroker.canCoverClawback {α : Type} [AssetPool α] (lb : LoanBroker) (po
 
 def LoanBroker.coverClawback {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) : Except Error LoanBrokerCoverResult := do
-  let rounded ← lb.roundedCoverClawback pool amount
   let nt := AssetPool.numericType pool
-  lb.applyCoverFlow nt .outflow rounded
+  let amount ← match (← lb.roundedCoverClawback pool amount) with
+    | .rejected ter => return { status := ter, loanBroker' := lb, amount' := STAmount.zero nt }
+    | .rounded amount => .pure amount
+  lb.applyCoverTransaction .debit amount
 
 end XRPL.Model.Lending
