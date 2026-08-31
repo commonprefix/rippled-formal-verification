@@ -91,6 +91,10 @@ let
     version = llvmVersion;
     tools = [ "run-clang-tidy" ];
   };
+
+  # Named to not collide with nixpkgs' own `lean4` (a source build of a different
+  # version), which is in scope via the `with pkgs` in commonPackages below.
+  leanToolchain = pkgs.callPackage ./lean4.nix { };
 in
 {
   inherit
@@ -121,6 +125,7 @@ in
     gnumake
     gnupg # needed for signing commits & codecov/codecov-action
     graphviz
+    leanToolchain # lean + lake, pinned by formal_verification/lean-toolchain
     less # needed for git diff
     mold
     nettools # provides netstat, used to debug failures in CI
