@@ -9,6 +9,7 @@ import XRPL.Properties.Protocol.STAmount.Mul.RoundsWithin
 import XRPL.Properties.Protocol.STAmount.Mul.RoundsToRepresentable
 import XRPL.Properties.Protocol.STAmount.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
+import XRPL.Properties.Vault.AssociateAsset
 import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.Vault
 import XRPL.Properties.Vault.Reachable

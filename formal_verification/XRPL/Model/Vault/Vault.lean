@@ -96,4 +96,11 @@ def RawVault.to_lawful (v : RawVault) : Except Error LawfulVault :=
 def LawfulVault.isInsolvent (lv : LawfulVault) : Bool :=
   lv.assetsTotal.mantissa_ = 0 && lv.sharesTotal.signum = 1
 
+def LawfulVault.assetsRounded (lv : LawfulVault) : Prop :=
+  STAmount.isRounded lv.numericType lv.assetsTotal ∨
+  STAmount.isRounded lv.numericType lv.assetsAvailable ∨
+  STAmount.isRounded lv.numericType lv.assetsReserved ∨
+  STAmount.isRounded lv.numericType lv.lossUnrealized ∨
+  ∃ m ∈ lv.assetsMaximum, STAmount.isRounded lv.numericType m
+
 end XRPL.Model.SingleAssetVault

@@ -156,6 +156,12 @@ def STAmount.equalAfterNumberConvert (nt : NumericType) (value : Number) : Excep
   let numValue ← stValue.toNumber .to_nearest
   return numValue.operator_eq value
 
+-- Checks if Number will be rounded when converted to STAmount
+def STAmount.isRounded (nt : NumericType) (value : Number) : Bool :=
+  match STAmount.equalAfterNumberConvert nt value with
+  | .ok isEqual => !isEqual
+  | .error _ => true
+
 def STAmount.operator_eq (lhs rhs : STAmount) : Bool :=
   STAmount.areComparable lhs rhs &&
     lhs.mIsNegative == rhs.mIsNegative &&
