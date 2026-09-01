@@ -41,7 +41,7 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         VaultState const state = readVaultState(env, vaultKeylet, asset);
-        LeanRoundedDepositAmountResult const rounded = leanRoundedDepositAmount(state, amount);
+        LeanRoundingResult const rounded = leanRoundedDepositAmount(state, amount);
 
         env(Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
@@ -710,7 +710,7 @@ class LeanVaultDeposit_test : public LeanSuite
             "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
 
         // Model: its charge must be on the vault scale as well.
-        LeanRoundedDepositAmountResult const chargeRounded =
+        LeanRoundingResult const chargeRounded =
             leanRoundedDepositAmount(before, lean.amountDeposit);
         BEAST_EXPECTS(!chargeRounded.threw && chargeRounded.amount, "rounding the charge failed");
         BEAST_EXPECTS(

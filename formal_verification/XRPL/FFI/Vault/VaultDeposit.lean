@@ -2,21 +2,22 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.VaultDeposit
 
 open XRPL.Model.Protocol (STAmount Error)
+open XRPL.Model.Result (RoundingResult)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_rounded_deposit_amount]
 def lean_rounded_deposit_amount (vault : Vault) (amountDeposit : STAmount)
-    : Except Error RoundedDepositResult :=
+    : Except Error RoundingResult :=
   vault.roundedDepositAmount amountDeposit
 
 @[export lean_rounded_deposit_result_amount]
-def lean_rounded_deposit_result_amount (r : RoundedDepositResult) : Option STAmount :=
+def lean_rounded_deposit_result_amount (r : RoundingResult) : Option STAmount :=
   match r with
   | .rounded s => some s
   | .rejected _ => none
 
 @[export lean_rounded_deposit_result_code]
-def lean_rounded_deposit_result_code (r : RoundedDepositResult) : Option Int32 :=
+def lean_rounded_deposit_result_code (r : RoundingResult) : Option Int32 :=
   match r with
   | .rejected t => some t.code
   | .rounded _ => none

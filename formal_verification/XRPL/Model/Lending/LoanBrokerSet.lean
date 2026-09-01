@@ -1,26 +1,23 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
-def LoanBroker.canCreate (debtMaximum : Option Number) (vaultNumericType : NumericType) : Except Error TER := do
+def LoanBroker.canCreate (debtMaximum : Option Number) (numericType : NumericType) : Except Error TER := do
   let some dm := debtMaximum | return .tesSUCCESS
-  if !(← STAmount.equalAfterNumberConvert vaultNumericType dm) then
+  if !(← STAmount.equalAfterNumberConvert numericType dm) then
     return .tecPRECISION_LOSS
   return .tesSUCCESS
 
-def LoanBroker.canUpdate (lb : LoanBroker) (debtMaximum : Option Number)
-  (vaultNumericType : NumericType) : Except Error TER := do
+def LoanBroker.canUpdate (lb : LoanBroker) (debtMaximum : Option Number) (numericType : NumericType) : Except Error TER := do
   let some dm := debtMaximum | return .tesSUCCESS
   if dm.signum != 0 && dm.operator_lt lb.debtTotal then
     return .tecLIMIT_EXCEEDED
-  if !(← STAmount.equalAfterNumberConvert vaultNumericType dm) then
+  if !(← STAmount.equalAfterNumberConvert numericType dm) then
     return .tecPRECISION_LOSS
   return .tesSUCCESS
 
