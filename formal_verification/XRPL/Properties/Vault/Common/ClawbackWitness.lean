@@ -173,4 +173,26 @@ theorem LawfulVault.clawback_applied_delta_witness :
       deltaAmount.operator_eq r.assetsRecovered = false :=
   ⟨cwvBL, cwa1, cwHolderShares, cwrr2, cwr2, cwdn2, cwda2, by native_decide⟩
 
+/-! ## Clawback-all empty-shares dust witness -/
+
+/-- Dust witness vault: π assets/available (16-digit IOU), 7000025 shares. -/
+def clawbackDustVault : RawVault :=
+  { assetsTotal := ⟨false, 3141592653589793000, -18⟩
+  , assetsAvailable := ⟨false, 3141592653589793000, -18⟩
+  , assetsReserved := Number.zero
+  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , sharesTotal := ⟨false, 7000025000000000000, -12⟩
+  , lossUnrealized := Number.zero }
+
+/-- The dust witness vault as a `LawfulVault`. -/
+def clawbackDustVaultL : LawfulVault := ⟨clawbackDustVault, by decide, by decide⟩
+
+/-- Witness that `clawback_success`'s `hempty` is meaningful: clawing back all
+shares of a lawful vault can leave sub-ULP `assetsTotal` dust (`sharesTotal' = 0`,
+`assetsTotal' ≠ 0`), so `to_lawful` rejects with `notLawful`. -/
+theorem LawfulVault.clawback_dust_witness :
+    clawbackDustVaultL.clawback (STAmount.zero .fractional)
+        (STAmount.unchecked .int64 7000025 0 false) = .error .notLawful := by
+  native_decide
+
 end XRPL.Model.SingleAssetVault
