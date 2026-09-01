@@ -9,7 +9,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault
 
-def LoanBroker.canDelete (lb : LoanBroker) (vault : Vault) : Except Error TER := do
+def LoanBroker.canDelete (lb : LoanBroker) (vault : RawVault) : Except Error TER := do
   if lb.loanCount != 0 then
     return .tecHAS_OBLIGATIONS
 

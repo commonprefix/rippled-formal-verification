@@ -11,9 +11,9 @@ vault needs the opposite: that the one-share run *reaches* a success. This file
 supplies the reusable forward facts that do not touch the well-founded `Number`
 rounding pipeline:
 
-* subtracting a mantissa-zero `Number` (the reachable vault's zero interest and
-  loss) is the identity and total, so the two pricing subtractions of
-  `sharesToAssetsWithdraw` collapse to `nav = assetsTotal`, and
+* subtracting a mantissa-zero `Number` (the reachable vault's zero loss) is the
+  identity and total, so the pricing subtraction of
+  `sharesToAssetsWithdraw` collapses to `nav = assetsTotal`, and
 * the try/catch wrapper `computeWithdrawByShares` forwards a successful
   `sharesToAssetsWithdraw` to a no-error record.
 
@@ -36,7 +36,7 @@ theorem Number.operator_add_zero_right (x : Number) (mode : rounding_mode) :
   rfl
 
 /-- Subtracting a mantissa-zero `Number` is the identity, and total. This is how
-a reachable vault's zero interest and zero loss drop out of the pricing prefix. -/
+a reachable vault's zero loss drops out of the pricing prefix. -/
 theorem Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mode)
     (h : y.mantissa_ = 0) :
     x.operator_sub y mode = .ok x := by
@@ -879,29 +879,29 @@ open XRPL.Model.Protocol
 carries a zero mantissa (the reachable, loss-free case), the net-asset-value
 subtraction of `sharesToAssetsWithdraw` is an identity, so the exchange reduces
 to the raw `assetsTotal` guard and the mul/div/ofNumber pricing chain. -/
-theorem Vault.sharesToAssetsWithdraw_zeroLoss_reduces (v : Vault) (shares : STAmount)
-    (hL : v.lossUnrealized.mantissa_ = 0) :
-    v.sharesToAssetsWithdraw shares false =
-      (if v.assetsTotal.mantissa_ == 0 then
-        (pure (STAmount.zero v.numericType) : Except Error STAmount)
+theorem LawfulVault.sharesToAssetsWithdraw_zeroLoss_reduces (lv : LawfulVault) (shares : STAmount)
+    (hL : lv.lossUnrealized.mantissa_ = 0) :
+    lv.sharesToAssetsWithdraw shares false =
+      (if lv.assetsTotal.mantissa_ == 0 then
+        (pure (STAmount.zero lv.numericType) : Except Error STAmount)
        else do
         let sharesNumber ← shares.toNumber .to_nearest
-        let NAVShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest
-        let assetsNumber ← NAVShares.operator_div v.sharesTotal .to_nearest
-        let assets ← STAmount.ofNumber v.numericType assetsNumber .downward
+        let NAVShares ← lv.assetsTotal.operator_mul sharesNumber .to_nearest
+        let assetsNumber ← NAVShares.operator_div lv.sharesTotal .to_nearest
+        let assets ← STAmount.ofNumber lv.numericType assetsNumber .downward
         return assets) := by
-  unfold Vault.sharesToAssetsWithdraw
+  unfold LawfulVault.sharesToAssetsWithdraw
   simp only []
-  rw [Number.operator_sub_of_mantissa_zero v.assetsTotal v.lossUnrealized _ hL, ok_bind]
+  rw [Number.operator_sub_of_mantissa_zero lv.assetsTotal lv.lossUnrealized _ hL, ok_bind]
   rfl
 
 /-- **`computeWithdrawByShares` forwards a successful exchange.** If the exchange
 `sharesToAssetsWithdraw` returns `.ok assets`, the try/catch wrapper produces the
 no-error record echoing the named shares. -/
-theorem computeWithdrawByShares_of_exchange_ok (v : Vault) (shares : STAmount)
+theorem computeWithdrawByShares_of_exchange_ok (lv : LawfulVault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (assets : STAmount)
-    (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
-    computeWithdrawByShares v shares waiveUnrealizedLoss
+    (hok : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
+    computeWithdrawByShares lv shares waiveUnrealizedLoss
       = .ok ⟨none, assets, shares⟩ := by
   unfold computeWithdrawByShares
   rw [hok]

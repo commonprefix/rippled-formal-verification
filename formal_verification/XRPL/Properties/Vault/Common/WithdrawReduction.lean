@@ -1,15 +1,16 @@
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.LawfulVaultValid
 import XRPL.Properties.Vault.Common.DepositReduction
 
-/-! # Guard-extraction reductions for `Vault.withdraw`
+/-! # Guard-extraction reductions for `LawfulVault.withdraw`
 
 The accuracy proofs need to recover, from a successful run
 (`v.withdraw … = .ok r` with `r.error = none`), every intermediate the success
 record was built from. This file provides that walk for the withdraw pipeline:
 the two exchange helpers (`sharesToAssetsWithdraw`, `assetsToSharesWithdraw`),
 the two `computeWithdrawBy*` wrappers (whose `try`/`catch` handler can only
-produce error codes), and `Vault.withdraw` itself, split into its final and
+produce error codes), and `LawfulVault.withdraw` itself, split into its final and
 non-final success exits.
 
 The walk uses only `bind_ok_peel` and `if`-elimination, so every heavy step
@@ -46,27 +47,27 @@ theorem STAmount.zero_toRat (nt : NumericType) : (STAmount.zero nt).toRat = 0 :=
   rw [STAmount.toRat_of_nonneg _ (STAmount.zero_mIsNegative nt), STAmount.zero_mValue]
   norm_num
 
-/-! ## `Vault.sharesToAssetsWithdraw` -/
+/-! ## `LawfulVault.sharesToAssetsWithdraw` -/
 
 /-- **`sharesToAssetsWithdraw` success reduction.** Exposes the pricing
 subtraction, then either the zero-NAV early exit or the full
 `toNumber`/`operator_mul`/`operator_div`/`ofNumber` chain. -/
-theorem Vault.sharesToAssetsWithdraw_ok_reduces (v : Vault) (shares assets : STAmount)
+theorem LawfulVault.sharesToAssetsWithdraw_ok_reduces (lv : LawfulVault) (shares assets : STAmount)
     (waiveUnrealizedLoss : Bool)
-    (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
+    (hok : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
     ∃ nav : Number,
-      v.assetsTotal.operator_sub
+      lv.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with
           | true => Number.zero
-          | false => v.lossUnrealized) .to_nearest = .ok nav ∧
-      ((nav.mantissa_ = 0 ∧ assets = STAmount.zero v.numericType) ∨
+          | false => lv.lossUnrealized) .to_nearest = .ok nav ∧
+      ((nav.mantissa_ = 0 ∧ assets = STAmount.zero lv.numericType) ∨
        (nav.mantissa_ ≠ 0 ∧ ∃ sharesNumber NAVShares assetsNumber : Number,
          shares.toNumber .to_nearest = .ok sharesNumber ∧
          nav.operator_mul sharesNumber .to_nearest = .ok NAVShares ∧
-         NAVShares.operator_div v.sharesTotal .to_nearest = .ok assetsNumber ∧
-         STAmount.ofNumber v.numericType assetsNumber .downward = .ok assets)) := by
+         NAVShares.operator_div lv.sharesTotal .to_nearest = .ok assetsNumber ∧
+         STAmount.ofNumber lv.numericType assetsNumber .downward = .ok assets)) := by
   cases waiveUnrealizedLoss <;>
-  · unfold Vault.sharesToAssetsWithdraw at hok
+  · unfold LawfulVault.sharesToAssetsWithdraw at hok
     simp only [pure_bind, bind_pure] at hok
     obtain ⟨nav, h1, hok⟩ := bind_ok_peel _ _ _ hok
     refine ⟨nav, h1, ?_⟩
@@ -84,18 +85,18 @@ theorem Vault.sharesToAssetsWithdraw_ok_reduces (v : Vault) (shares assets : STA
 /-- **`assetsToSharesWithdraw` success reduction.** Same pricing subtractions,
 then either the zero-NAV early exit or the mirrored
 `toNumber`/`operator_mul`/`operator_div`/(optional truncate)/`ofNumber` chain. -/
-theorem assetsToSharesWithdraw_ok_reduces (v : Vault) (assets shares : STAmount)
+theorem assetsToSharesWithdraw_ok_reduces (lv : LawfulVault) (assets shares : STAmount)
     (truncateShares waiveUnrealizedLoss : Bool)
-    (hok : assetsToSharesWithdraw v assets truncateShares waiveUnrealizedLoss = .ok shares) :
+    (hok : assetsToSharesWithdraw lv assets truncateShares waiveUnrealizedLoss = .ok shares) :
     ∃ nav : Number,
-      v.assetsTotal.operator_sub
+      lv.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with
           | true => Number.zero
-          | false => v.lossUnrealized) .to_nearest = .ok nav ∧
+          | false => lv.lossUnrealized) .to_nearest = .ok nav ∧
       ((nav.mantissa_ = 0 ∧ shares = STAmount.zero .int64) ∨
        (nav.mantissa_ ≠ 0 ∧ ∃ assetsNumber sharesAssets sharesNumber sharesNumber' : Number,
          assets.toNumber .to_nearest = .ok assetsNumber ∧
-         v.sharesTotal.operator_mul assetsNumber .to_nearest = .ok sharesAssets ∧
+         lv.sharesTotal.operator_mul assetsNumber .to_nearest = .ok sharesAssets ∧
          sharesAssets.operator_div nav .to_nearest = .ok sharesNumber ∧
          (match truncateShares with
            | true => sharesNumber.truncate
@@ -123,15 +124,15 @@ theorem assetsToSharesWithdraw_ok_reduces (v : Vault) (assets shares : STAmount)
 /-- **`computeWithdrawByShares` no-error reduction.** The `try`/`catch` handler
 can only produce error codes, so a `cw.error = none` outcome forces the body's
 happy path: the pricing succeeded and the named shares are echoed. -/
-theorem computeWithdrawByShares_none_reduces (v : Vault) (shares : STAmount)
+theorem computeWithdrawByShares_none_reduces (lv : LawfulVault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult)
-    (hok : computeWithdrawByShares v shares waiveUnrealizedLoss = .ok cw)
+    (hok : computeWithdrawByShares lv shares waiveUnrealizedLoss = .ok cw)
     (herr : cw.error = none) :
-    v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok cw.assets' ∧
+    lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok cw.assets' ∧
     cw.sharesRedeemed = shares := by
   unfold computeWithdrawByShares at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  cases hs : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss with
+  cases hs : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss with
   | error e =>
     rw [hs, err_bind, tryCatch_error] at htc
     by_cases hov : isOverflow e = true
@@ -154,14 +155,14 @@ theorem computeWithdrawByShares_none_reduces (v : Vault) (shares : STAmount)
 /-- **`computeWithdrawByAssets` no-error reduction.** A `cw.error = none`
 outcome forces the body's happy path: the shares priced (nonzero), the payout
 re-priced, both echoed in the record. -/
-theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
+theorem computeWithdrawByAssets_none_reduces (lv : LawfulVault) (assets : STAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult)
-    (hok : computeWithdrawByAssets v assets waiveUnrealizedLoss = .ok cw)
+    (hok : computeWithdrawByAssets lv assets waiveUnrealizedLoss = .ok cw)
     (herr : cw.error = none) :
     ∃ shares : STAmount,
-      assetsToSharesWithdraw v assets false waiveUnrealizedLoss = .ok shares ∧
+      assetsToSharesWithdraw lv assets false waiveUnrealizedLoss = .ok shares ∧
       shares.isZero = false ∧
-      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok cw.assets' ∧
+      lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok cw.assets' ∧
       cw.sharesRedeemed = shares := by
   unfold computeWithdrawByAssets at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
@@ -170,7 +171,7 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
           Except Error (DoResultPR ComputeWithdrawResult ComputeWithdrawResult PUnit))
         (fun e => if isOverflow e = true then
             pure (DoResultPR.return
-              ⟨some .tecPATH_DRY, STAmount.zero v.numericType, STAmount.zero .int64⟩
+              ⟨some .tecPATH_DRY, STAmount.zero lv.numericType, STAmount.zero .int64⟩
               PUnit.unit)
           else do
             let y ← throw e
@@ -185,7 +186,7 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
       exact absurd herr (by simp)
     · rw [if_neg hov, ethrow, err_bind] at htc'
       exact absurd htc' (by simp)
-  cases hs : assetsToSharesWithdraw v assets false waiveUnrealizedLoss with
+  cases hs : assetsToSharesWithdraw lv assets false waiveUnrealizedLoss with
   | error e =>
     rw [hs, err_bind] at htc
     exact absurd htc (handler_err e)
@@ -199,7 +200,7 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
       rw [← hcw] at herr
       exact absurd herr (by simp)
     · rw [if_neg hz] at htc
-      cases hs2 : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss with
+      cases hs2 : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss with
       | error e2 =>
         rw [hs2, err_bind] at htc
         exact absurd htc (handler_err e2)
@@ -212,47 +213,48 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
         rw [← hcw]
         exact ⟨shares, rfl, by simpa using hz, hs2, rfl⟩
 
-/-! ## `Vault.withdraw` -/
+/-! ## `LawfulVault.withdraw` -/
 
-/-- **`Vault.withdraw` success reduction.** A run that returns no error code
+/-- **`LawfulVault.withdraw` success reduction.** A run that returns no error code
 exposes: the exchange result, its passed `assetsAvailable` guard, the share
 total conversion, and either the final exit (whole share total redeemed, all of
 `assetsAvailable` paid, vault zeroed) or the non-final exit (the three stored
 fields updated by exact `operator_sub` calls). -/
-theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_success_reduces (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none) :
+    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none) :
     ∃ (cw : ComputeWithdrawResult) (assetsNumber' : Number) (sharesTotalAmount : STAmount),
       (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
+        | .vaultAssets assets => computeWithdrawByAssets lv assets waiveUnrealizedLoss
+        | .vaultShares shares => computeWithdrawByShares lv shares waiveUnrealizedLoss)
         = .ok cw ∧
       cw.error = none ∧
       cw.assets'.toNumber .to_nearest = .ok assetsNumber' ∧
-      v.assetsAvailable.operator_lt assetsNumber' = false ∧
-      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
+      lv.assetsAvailable.operator_lt assetsNumber' = false ∧
+      STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned = cw.sharesRedeemed ∧
       ((cw.sharesRedeemed.operator_eq sharesTotalAmount = true ∧
-        v.lossUnrealized.operator_ne Number.zero = false ∧
+        lv.lossUnrealized.operator_ne Number.zero = false ∧
         ∃ allAvailable : STAmount,
-          STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok allAvailable ∧
-          r = ⟨none, { v with assetsTotal := Number.zero, assetsAvailable := Number.zero,
-                              sharesTotal := Number.zero }, allAvailable, cw.sharesRedeemed⟩) ∨
+          STAmount.ofNumber lv.numericType lv.assetsAvailable .to_nearest = .ok allAvailable ∧
+          r.assets' = allAvailable ∧
+          r.vault'.toRawVault = { lv.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero }) ∨
        (cw.sharesRedeemed.operator_eq sharesTotalAmount = false ∧
         ∃ (sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
           (assetsTotalRounded assetsTotalRounded' : STAmount),
           cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber ∧
-          v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal' ∧
-          STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded ∧
-          STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded' ∧
+          lv.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal' ∧
+          STAmount.ofNumber lv.numericType lv.assetsTotal .to_nearest = .ok assetsTotalRounded ∧
+          STAmount.ofNumber lv.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded' ∧
           (assetsNumber'.mantissa_ != 0 &&
             assetsTotalRounded.operator_eq assetsTotalRounded') = false ∧
-          v.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable' ∧
-          v.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal' ∧
-          r = ⟨none, { v with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable',
-                              sharesTotal := sharesTotal' }, cw.assets', cw.sharesRedeemed⟩)) := by
+          lv.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable' ∧
+          lv.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal' ∧
+          r.assets' = cw.assets' ∧
+          r.vault'.toRawVault = { lv.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' })) := by
   cases amount <;>
-  · unfold Vault.withdraw at hok
+  · unfold LawfulVault.withdraw at hok
+    simp only [] at hok
     obtain ⟨cw, hcomp, hok⟩ := bind_ok_peel _ _ _ hok
     simp only [pure_bind] at hok
     by_cases he : cw.error.isSome = true
@@ -268,7 +270,7 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
         | none => rfl
         | some t => exact absurd (by rw [hce]; rfl) he
       obtain ⟨an, han, hok⟩ := bind_ok_peel _ _ _ hok
-      by_cases hlt : v.assetsAvailable.operator_lt an = true
+      by_cases hlt : lv.assetsAvailable.operator_lt an = true
       · rw [if_pos hlt] at hok
         have hr := (Except.ok.inj hok).symm
         rw [hr] at herr
@@ -277,17 +279,17 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
         obtain ⟨sta, hsta, hok⟩ := bind_ok_peel _ _ _ hok
         by_cases hfin : cw.sharesRedeemed.operator_eq sta = true
         · rw [if_pos hfin] at hok
-          by_cases hloss : v.lossUnrealized.operator_ne Number.zero = true
+          by_cases hloss : lv.lossUnrealized.operator_ne Number.zero = true
           · rw [if_pos hloss] at hok
             have hr := (Except.ok.inj hok).symm
             rw [hr] at herr
             exact absurd herr (by simp [WithdrawResult.rejected])
           · rw [if_neg hloss] at hok
             obtain ⟨aa, haa, hok⟩ := bind_ok_peel _ _ _ hok
-            have hr := (Except.ok.inj hok).symm
-            subst hr
+            obtain ⟨lv', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain rfl := Except.ok.inj hok
             exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
-              Or.inl ⟨hfin, by simpa using hloss, aa, haa, rfl⟩⟩
+              Or.inl ⟨hfin, by simpa using hloss, aa, haa, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
         · rw [if_neg hfin] at hok
           obtain ⟨sbn, hsbn, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
@@ -301,10 +303,10 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
           · rw [if_neg hg] at hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            have hr := (Except.ok.inj hok).symm
-            subst hr
+            obtain ⟨lv', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain rfl := Except.ok.inj hok
             exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
               Or.inr ⟨by simpa using hfin, sbn, at', av', st', atr, atr', hsbn, hat,
-                hatr, hatr', by simpa using hg, hav, hst, rfl⟩⟩
+                hatr, hatr', by simpa using hg, hav, hst, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
 
 end XRPL.Model.SingleAssetVault

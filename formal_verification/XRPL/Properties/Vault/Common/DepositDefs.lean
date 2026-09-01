@@ -3,10 +3,10 @@ import XRPL.Model.Vault.VaultDeposit
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
-/-! # Exact-arithmetic reference values for `Vault.deposit`
+/-! # Exact-arithmetic reference values for `LawfulVault.deposit`
 
 The ideal (unrounded) exchange quantities and the relative-error budget the
-`Vault.deposit` accuracy headlines are stated against. Kept in `Common` so both
+`LawfulVault.deposit` accuracy headlines are stated against. Kept in `Common` so both
 the headline file and its proof files can see them. -/
 
 namespace XRPL.Model.Protocol
@@ -32,20 +32,20 @@ def depositε : ℚ := (10 : ℚ) ^ (-17 : ℤ)
 
 /-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
-def Vault.depositNav (v : Vault) : ℚ :=
+def RawVault.depositNav (v : RawVault) : ℚ :=
   v.toExact.assetsTotal
 
 /-- The exact share amount for a deposit, before any rounding. The XLS-0065
 exchange formula: an empty vault issues `amount * 10 ^ scale` shares, otherwise
 `sharesTotal * amount / nav`. -/
-def Vault.idealSharesDeposit (v : Vault) (amount : ℚ) : ℚ :=
+def RawVault.idealSharesDeposit (v : RawVault) (amount : ℚ) : ℚ :=
   if v.toExact.assetsTotal = 0 then amount * (10 : ℚ) ^ v.scale.toNat
   else v.toExact.sharesTotal * amount / v.depositNav
 
 /-- The exact `amountDeposit'` for issuing `shares`, before any rounding. The
 XLS-0065 exchange formula: an empty vault takes `shares / 10 ^ scale`, otherwise
 `nav * shares / sharesTotal`. -/
-def Vault.idealChargeDeposit (v : Vault) (shares : ℚ) : ℚ :=
+def RawVault.idealChargeDeposit (v : RawVault) (shares : ℚ) : ℚ :=
   if v.toExact.assetsTotal = 0 then shares / (10 : ℚ) ^ v.scale.toNat
   else v.depositNav * shares / v.toExact.sharesTotal
 

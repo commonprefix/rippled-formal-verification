@@ -1,6 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
@@ -41,9 +41,11 @@ class LeanVaultSet_test : public LeanSuite
             Number{assetsTotal},
             static_cast<std::uint64_t>(assetsTotal)));
 
-        VaultState const state = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const state = readVaultState(env, vaultKeylet, asset.raw());
         Number const cap{assetsMaximum};
-        TER const leanTer = leanCanVaultSet(state, cap);
+        auto const lean = leanCanVaultSet(state, cap);
+        expectLawful(lean);
+        TER const leanTer = lean.ter;
 
         auto tx = Vault::set({.owner = owner, .id = vaultKeylet.key});
         tx[sfAssetsMaximum] = cap;

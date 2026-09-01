@@ -11,6 +11,7 @@ inductive Error where
   | normalize2
   | notComparable
   | cannotConvert
+  | notLawful
 deriving DecidableEq, Repr, Inhabited
 
 end XRPL.Model.Protocol

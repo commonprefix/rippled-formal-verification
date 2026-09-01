@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Defs
+import XRPL.Properties.Vault.LawfulVaultValid
 import XRPL.Properties.Vault.VaultDeposit
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.RoundtripProofs
@@ -16,8 +17,6 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-variable (v : Vault)
-
 /-- Depositing and immediately redeeming the issued shares returns the taken
 amount up to rounding: never more than the stage error above it, and at most
 the rounding budget below it. From an empty vault the redemption is the final
@@ -34,20 +33,20 @@ strictly inside the `2·depositε` relative budget. The loss bound is stated for
 nonzero payout: a payout that underflows to the canonical zero (a sub-grid share
 worth) can lose up to one whole grid unit, which no relative-plus-ULP bound
 covers, exactly as the per-op siblings gate their shortfall on `isZero = false`. -/
-theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
+theorem LawfulVault.deposit_withdraw_roundtrip (lv : LawfulVault) (amountDeposit : STAmount)
     (r₁ : DepositResult) (r₂ : WithdrawResult)
-    (hv : v.Lawful) -- the starting vault is lawful
+    -- the starting vault is lawful
     -- no unrealized loss, so the pricing is exact on both sides
-    (hL : v.toExact.lossUnrealized = 0)
+    (hL : lv.toExact.lossUnrealized = 0)
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
-    (hAV : v.assetsAvailable = v.assetsTotal) -- nothing is lent out (no-lending parity)
+    (hAV : lv.assetsAvailable = lv.assetsTotal) -- nothing is lent out (no-lending parity)
     -- the taken amount is stored canonically and is nonnegative
     (hDc : r₁.amountDeposit'.ExactCanonical)
     (hDnn : 0 ≤ r₁.amountDeposit'.toRat)
     -- the post-deposit share total stays in the int64 domain
-    (hSsz : (v.toExact.sharesTotal : ℚ) + r₁.sharesIssued.toRat ≤ 2 ^ 63 - 1)
-    (hok₁ : v.deposit amountDeposit false = .ok r₁) (herr₁ : r₁.error = none)
+    (hSsz : (lv.toExact.sharesTotal : ℚ) + r₁.sharesIssued.toRat ≤ 2 ^ 63 - 1)
+    (hok₁ : lv.deposit amountDeposit false = .ok r₁) (herr₁ : r₁.error = none)
     -- the depositor redeems exactly the issued shares from the updated vault
     (hok₂ : r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂)
     (herr₂ : r₂.error = none) :
@@ -59,20 +58,20 @@ theorem Vault.deposit_withdraw_roundtrip (amountDeposit : STAmount)
       r₁.amountDeposit'.toRat - r₂.assets'.toRat ≤
         r₁.amountDeposit'.toRat * (2 * depositε)
           + (10 : ℚ) ^ r₂.assets'.exponent + (10 : ℚ) ^ r₁.amountDeposit'.exponent) :=
-  Vault.deposit_withdraw_roundtrip_proof v amountDeposit r₁ r₂ hv hL hpos hcanon hAV
+  LawfulVault.deposit_withdraw_roundtrip_proof lv amountDeposit r₁ r₂ hL hpos hcanon hAV
     hDc hDnn hSsz hok₁ herr₁ hok₂ herr₂
 
 /-- Witness: the loss term in `deposit_withdraw_roundtrip` cannot be dropped,
 a round trip exists whose returned amount misses the taken amount by more than
 the relative stage error alone. -/
-theorem Vault.deposit_withdraw_roundtrip_attained :
-    ∃ (v : Vault) (amountDeposit : STAmount) (r₁ : DepositResult) (r₂ : WithdrawResult),
-      v.Lawful ∧ 0 < amountDeposit.toRat ∧
-      v.toExact.lossUnrealized = 0 ∧
-      v.deposit amountDeposit false = .ok r₁ ∧ r₁.error = none ∧
+theorem LawfulVault.deposit_withdraw_roundtrip_attained :
+    ∃ (lv : LawfulVault) (amountDeposit : STAmount) (r₁ : DepositResult) (r₂ : WithdrawResult),
+      0 < amountDeposit.toRat ∧
+      lv.toExact.lossUnrealized = 0 ∧
+      lv.deposit amountDeposit false = .ok r₁ ∧ r₁.error = none ∧
       r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂ ∧
       r₂.error = none ∧
       RoundsWithinWitness r₂.assets' r₁.amountDeposit'.toRat (2 * depositε) :=
-  Vault.deposit_withdraw_roundtrip_attained_proof
+  LawfulVault.deposit_withdraw_roundtrip_attained_proof
 
 end XRPL.Model.SingleAssetVault

@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.VaultDeposit
+import XRPL.Properties.Vault.LawfulVaultValid
 import XRPL.Properties.Vault.Common.RoundCanonical
 import XRPL.Properties.Vault.Common.ClawbackAccuracy
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
@@ -26,28 +27,26 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-variable (v : Vault)
-
 /-- **Grid-step and ceiling bound for a surviving fractional donation.** For the
 post-deposit scale `s`, the surviving rounded amount is at least one grid step
 `10 ^ s ≤ rounded`, and the pre-deposit stored total is under `2·10^16·10^s`. -/
-lemma Vault.donation_grid_bound (hv : v.Lawful)
+lemma LawfulVault.donation_grid_bound (lv : LawfulVault)
     (amountDeposit rounded : STAmount)
     (hcanon : amountDeposit.Canonical) (hfr : amountDeposit.integral = false)
     (hpos : 0 < amountDeposit.toRat)
-    (hround : roundToVaultExponent amountDeposit v.assetsTotal = .ok rounded)
+    (hround : roundToVaultExponent amountDeposit lv.assetsTotal = .ok rounded)
     (hnz : rounded.isZero = false) :
     ∃ s : ℤ, (10 : ℚ) ^ s ≤ rounded.toRat ∧
-      v.assetsTotal.toRat < 2 * 10 ^ 16 * (10 : ℚ) ^ s := by
+      lv.assetsTotal.toRat < 2 * 10 ^ 16 * (10 : ℚ) ^ s := by
   set δ : ℚ := 6 / (2 ^ 63 - 3 : ℚ) with hδ_def
   have hδ1 : δ < 1 := by rw [hδ_def]; norm_num
   have hδ0 : (0 : ℚ) ≤ δ := by rw [hδ_def]; norm_num
   have hiou : amountDeposit.IOUCanonical := hcanon.2 hfr
   have hmv : rounded.mValue ≠ 0 := by unfold STAmount.isZero at hnz; exact ne_of_beq_false hnz
   have hrnn : 0 ≤ rounded.toRat :=
-    Vault.roundToVaultExponent_nonneg amountDeposit rounded v.assetsTotal hcanon (le_of_lt hpos) hround
+    RawVault.roundToVaultExponent_nonneg amountDeposit rounded lv.assetsTotal hcanon (le_of_lt hpos) hround
   have hrcanon : rounded.Canonical := by
-    rcases roundToVaultExponent_canonical_or_isZero amountDeposit rounded v.assetsTotal hcanon hround with hc | hz
+    rcases roundToVaultExponent_canonical_or_isZero amountDeposit rounded lv.assetsTotal hcanon hround with hc | hz
     · exact hc
     · rw [hz] at hnz; exact absurd hnz (by decide)
   have hr_ge : (10 : ℚ) ^ (-81 : ℤ) ≤ rounded.toRat := by
@@ -71,37 +70,37 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
   have haN_val : amountNumber.toRat = amountDeposit.toRat := by rw [haN_eq]; exact hsn_val
   have haN_norm : amountNumber.isNormalized := by rw [haN_eq]; exact hsn_norm
   have haN_nn : 0 ≤ amountNumber.toRat := by rw [haN_val]; exact le_of_lt hpos
-  have hAnn : 0 ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
+  have hAnn : 0 ≤ lv.assetsTotal.toRat := lv.exact.assetsTotal_nonneg
   -- operator_add bound
-  have hadd := operator_add_nonneg_rounds v.assetsTotal amountNumber assetsTotal'
-    hv.wf.assetsTotal_norm haN_norm hAnn haN_nn hAT'
+  have hadd := operator_add_nonneg_rounds lv.assetsTotal amountNumber assetsTotal'
+    lv.wf.assetsTotal_norm haN_norm hAnn haN_nn hAT'
   simp only [RoundsWithin, RatValued.toRat] at hadd
   rw [← hδ_def] at hadd
-  have hT_nn : 0 ≤ v.assetsTotal.toRat + amountNumber.toRat := add_nonneg hAnn haN_nn
+  have hT_nn : 0 ≤ lv.assetsTotal.toRat + amountNumber.toRat := add_nonneg hAnn haN_nn
   rw [abs_of_nonneg hT_nn] at hadd
   have haddle := abs_le.mp hadd
-  have hT_pos : 0 < v.assetsTotal.toRat + amountNumber.toRat := by rw [haN_val]; linarith
-  have hlb : (v.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) ≤ assetsTotal'.toRat := by
-    have hring : (v.assetsTotal.toRat + amountNumber.toRat) * (1 - δ)
-        = (v.assetsTotal.toRat + amountNumber.toRat)
-          - (v.assetsTotal.toRat + amountNumber.toRat) * δ := by ring
+  have hT_pos : 0 < lv.assetsTotal.toRat + amountNumber.toRat := by rw [haN_val]; linarith
+  have hlb : (lv.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) ≤ assetsTotal'.toRat := by
+    have hring : (lv.assetsTotal.toRat + amountNumber.toRat) * (1 - δ)
+        = (lv.assetsTotal.toRat + amountNumber.toRat)
+          - (lv.assetsTotal.toRat + amountNumber.toRat) * δ := by ring
     rw [hring]; linarith [haddle.1]
-  have hAlb : v.assetsTotal.toRat * (1 - δ) ≤ assetsTotal'.toRat := by
-    have hring2 : v.assetsTotal.toRat * (1 - δ)
-        = (v.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) - amountNumber.toRat * (1 - δ) := by ring
+  have hAlb : lv.assetsTotal.toRat * (1 - δ) ≤ assetsTotal'.toRat := by
+    have hring2 : lv.assetsTotal.toRat * (1 - δ)
+        = (lv.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) - amountNumber.toRat * (1 - δ) := by ring
     rw [hring2]
     have haN1 : 0 ≤ amountNumber.toRat * (1 - δ) := mul_nonneg haN_nn (by linarith)
     linarith [hlb, haN1]
   -- assetsTotal' > 0, normalized, sign, 19-digit range
   have hAT'_pos : 0 < assetsTotal'.toRat := by
-    have hprod : 0 < (v.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) :=
+    have hprod : 0 < (lv.assetsTotal.toRat + amountNumber.toRat) * (1 - δ) :=
       mul_pos hT_pos (by linarith)
     linarith [hlb, hprod]
   have hAT'_ne : assetsTotal'.mantissa_ ≠ 0 :=
     Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hAT'_pos)
   have hAT'_norm : assetsTotal'.isNormalized :=
-    operator_add_isNormalized_to_nearest v.assetsTotal amountNumber assetsTotal'
-      hv.wf.assetsTotal_norm haN_norm hAT' hAT'_ne
+    operator_add_isNormalized_to_nearest lv.assetsTotal amountNumber assetsTotal'
+      lv.wf.assetsTotal_norm haN_norm hAT' hAT'_ne
   have hAT'_neg : assetsTotal'.negative_ = false :=
     Number.negative_false_of_norm_nonneg assetsTotal' hAT'_norm (le_of_lt hAT'_pos)
   obtain ⟨hM_lo, hM_hi⟩ := hAT'_norm.mantissaBounds_nat hAT'_ne
@@ -175,7 +174,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
           apply le_trans hhalf_bd; nlinarith [hpow_mono]
         have h3 : a.toRat ≤ |a.toRat| := le_abs_self _
         linarith [habs_lt, h1, h2, h3]
-      have hA_lt : v.assetsTotal.toRat * (1 - δ)
+      have hA_lt : lv.assetsTotal.toRat * (1 - δ)
           < (10 : ℚ) ^ 16 * (10 : ℚ) ^ postScale + (1 / 2) * (10 : ℚ) ^ postScale :=
         lt_of_le_of_lt hAlb hAT'_ub
       have hgap : (10 : ℚ) ^ 16 * (10 : ℚ) ^ postScale + (1 / 2) * (10 : ℚ) ^ postScale
@@ -183,7 +182,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
         have hpos2 : 0 < (10 : ℚ) ^ postScale * (2 * 10 ^ 16 * (1 - δ) - (10 ^ 16 + 1 / 2)) :=
           mul_pos hP_pos (by rw [hδ_def]; norm_num)
         nlinarith [hpos2]
-      have hmul_ub : v.assetsTotal.toRat * (1 - δ)
+      have hmul_ub : lv.assetsTotal.toRat * (1 - δ)
           < (2 * 10 ^ 16 * (10 : ℚ) ^ postScale) * (1 - δ) := lt_trans hA_lt hgap
       exact lt_of_mul_lt_mul_right hmul_ub (by linarith : (0 : ℚ) ≤ 1 - δ)
 

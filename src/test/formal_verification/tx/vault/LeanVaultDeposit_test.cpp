@@ -1,6 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -40,8 +40,9 @@ class LeanVaultDeposit_test : public LeanSuite
         TER expected)
     {
         using namespace jtx;
-        VaultState const state = readVaultState(env, vaultKeylet, asset);
+        LawfulVault const state = readVaultState(env, vaultKeylet, asset);
         LeanRoundedDepositAmountResult const rounded = leanRoundedDepositAmount(state, amount);
+        expectLawful(rounded);
 
         env(Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
@@ -53,7 +54,7 @@ class LeanVaultDeposit_test : public LeanSuite
             std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
 
         std::optional<TER> const leanError =
-            rounded.threw ? std::optional<TER>{tefEXCEPTION} : rounded.error;
+            rounded.leanError.has_value() ? std::optional<TER>{tefEXCEPTION} : rounded.error;
         std::optional<TER> const expectedError =
             expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
         // The model result carries no asset, so compare the rounded value (a Number), not the
@@ -86,8 +87,9 @@ class LeanVaultDeposit_test : public LeanSuite
         bool isDonation = false)
     {
         using namespace jtx;
-        VaultState const state = readVaultState(env, vaultKeylet, asset);
+        LawfulVault const state = readVaultState(env, vaultKeylet, asset);
         LeanDepositResult const deposit = leanVaultDeposit(state, amount, isDonation);
+        expectLawful(deposit);
 
         Vault::DepositArgs depositArgs{
             .depositor = depositor, .id = vaultKeylet.key, .amount = amount};
@@ -103,7 +105,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // A model raise surfaces as tefEXCEPTION, matching the C++ transactor.
         std::optional<TER> const leanError =
-            deposit.threw ? std::optional<TER>{tefEXCEPTION} : deposit.error;
+            deposit.leanError.has_value() ? std::optional<TER>{tefEXCEPTION} : deposit.error;
         std::optional<TER> const expectedError =
             expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
         BEAST_EXPECTS(
@@ -132,6 +134,11 @@ class LeanVaultDeposit_test : public LeanSuite
             deposit.vault.sharesTotal == cppSharesTotal,
             "sharesTotal lean=" + to_string(deposit.vault.sharesTotal) +
                 " cpp=" + to_string(cppSharesTotal));
+        Number const cppLossUnrealized = newVaultSle->at(sfLossUnrealized);
+        BEAST_EXPECTS(
+            deposit.vault.lossUnrealized == cppLossUnrealized,
+            "lossUnrealized lean=" + to_string(deposit.vault.lossUnrealized) +
+                " cpp=" + to_string(cppLossUnrealized));
     }
 
     void
@@ -559,15 +566,16 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const depositN{15'870'335, -4};  // 1587.0335
         auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset, depositN);
 
-        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const amount = asset(depositN);
         LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
-        BEAST_EXPECTS(!lean.threw, "lean deposit raised");
+        expectLawful(lean);
+        BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
 
         env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         BEAST_EXPECTS(
             priceNotBelow(
@@ -675,19 +683,20 @@ class LeanVaultDeposit_test : public LeanSuite
         env(pay(holder, issuer, asset(Number{992, -3})));
         env.close();
 
-        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
         BEAST_EXPECT(before.assetsTotal == Number{3});
 
         // Deposit 0.001, an amount already on the vault grid.
         STAmount const amount = asset(Number{1, -3});
         LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
-        BEAST_EXPECTS(!lean.threw && !lean.error, "lean deposit failed");
+        expectLawful(lean);
+        BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean deposit failed");
 
         Number const holderBefore = iouBalance(env, holder, asset);
         env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         // C++: the vault must gain exactly what the depositor paid.
         Number const cppDelta = after.assetsTotal - before.assetsTotal;
@@ -712,7 +721,10 @@ class LeanVaultDeposit_test : public LeanSuite
         // Model: its charge must be on the vault scale as well.
         LeanRoundedDepositAmountResult const chargeRounded =
             leanRoundedDepositAmount(before, lean.amountDeposit);
-        BEAST_EXPECTS(!chargeRounded.threw && chargeRounded.amount, "rounding the charge failed");
+        expectLawful(chargeRounded);
+        BEAST_EXPECTS(
+            !chargeRounded.leanError.has_value() && chargeRounded.amount,
+            "rounding the charge failed");
         BEAST_EXPECTS(
             chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.amountDeposit},
             "the charge " + to_string(Number{lean.amountDeposit}) + " re-rounds to " +

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <test/formal_verification/ffi/LeanObjectFFI.h>
+
 #include <xrpl/beast/unit_test.h>
 
 #include <lean/lean.h>
@@ -77,6 +79,15 @@ protected:
     {
         for (int i = 0; i < iterations; ++i)
             (void)check();
+    }
+
+    // A model operation over a valid state must never be rejected as not lawful
+    template <class R>
+    void
+    expectLawful(R const& r)
+    {
+        BEAST_EXPECTS(
+            r.leanError != LeanError::notLawful, "model rejected the staged state as not lawful");
     }
 
 public:

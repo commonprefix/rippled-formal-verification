@@ -8,28 +8,27 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-theorem Vault.lawful_canVaultDelete_iff (v : Vault)
-    (hv : v.Lawful) : -- the vault is lawful
-    v.canVaultDelete = .tesSUCCESS ↔
-      v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 :=
-  Vault.lawful_canVaultDelete_iff_proof v hv
+theorem LawfulVault.lawful_canVaultDelete_iff (lv : LawfulVault) :
+    lv.canVaultDelete = .tesSUCCESS ↔
+      lv.toExact.assetsTotal = 0 ∧ lv.toExact.sharesTotal = 0 :=
+  LawfulVault.lawful_canVaultDelete_iff_proof lv
 
 /-! ## `canVaultDelete` on arbitrary states -/
 
 /-- Every outcome of the check: `tecHAS_OBLIGATIONS` is the only rejection
 `canVaultDelete` can return. -/
-theorem Vault.canVaultDelete_error_codes (v : Vault) :
-    v.canVaultDelete = .tesSUCCESS ∨
-    v.canVaultDelete = .tecHAS_OBLIGATIONS :=
-  Vault.canVaultDelete_error_codes_proof v
+theorem LawfulVault.canVaultDelete_error_codes (lv : LawfulVault) :
+    lv.canVaultDelete = .tesSUCCESS ∨
+    lv.canVaultDelete = .tecHAS_OBLIGATIONS :=
+  LawfulVault.canVaultDelete_error_codes_proof lv
 
 /-- The check returns `tecHAS_OBLIGATIONS` exactly when one of the three stored
-quantities differs from `Number.zero`. The vault is arbitrary and the comparison
-is on the stored records. -/
-theorem Vault.canVaultDelete_has_obligations_iff (v : Vault) :
-    v.canVaultDelete = .tecHAS_OBLIGATIONS ↔
-      (v.assetsAvailable ≠ Number.zero ∨ v.assetsTotal ≠ Number.zero ∨
-        v.sharesTotal ≠ Number.zero) :=
-  Vault.canVaultDelete_has_obligations_iff_proof v
+quantities differs from `Number.zero`. The comparison is on the stored
+records. -/
+theorem LawfulVault.canVaultDelete_has_obligations_iff (lv : LawfulVault) :
+    lv.canVaultDelete = .tecHAS_OBLIGATIONS ↔
+      (lv.assetsAvailable ≠ Number.zero ∨ lv.assetsTotal ≠ Number.zero ∨
+        lv.sharesTotal ≠ Number.zero) :=
+  LawfulVault.canVaultDelete_has_obligations_iff_proof lv
 
 end XRPL.Model.SingleAssetVault

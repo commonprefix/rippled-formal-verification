@@ -73,6 +73,26 @@ def Number.isnormal (n : Number) : Prop :=
 
 abbrev Number.isNormalized (n : Number) : Prop := n.isnormal
 
+-- `Number.isnormal` is a decidable arithmetic condition.
+instance Number.instDecidableIsnormal (n : Number) : Decidable n.isnormal := by
+  unfold Number.isnormal; infer_instance
+
+-- `∀ d, e = .ok d → p d` over an `Except Error Number` is decidable: vacuous on
+-- error, `p d` on the single `ok` value.
+instance {e : Except Error Number} {p : Number → Prop} [∀ d, Decidable (p d)] :
+    Decidable (∀ d, e = .ok d → p d) :=
+  match e with
+  | .error _ => isTrue (fun _ h => by simp at h)
+  | .ok d0 =>
+    decidable_of_iff (p d0)
+      ⟨fun hp d hd => by injection hd with hd'; exact hd' ▸ hp, fun h => h d0 rfl⟩
+
+-- `∃ d, e = .ok d` over an `Except Error Number` is decidable: true exactly when `e` is `.ok`.
+instance {e : Except Error Number} : Decidable (∃ d, e = .ok d) :=
+  match e with
+  | .error _ => isFalse (by rintro ⟨d, h⟩; simp at h)
+  | .ok d0 => isTrue ⟨d0, rfl⟩
+
 def Number.toRat (n : Number) : ℚ :=
   let sign : Int := if n.negative_ then -1 else 1
   let m : Int := n.mantissa_.toNat
@@ -80,6 +100,29 @@ def Number.toRat (n : Number) : ℚ :=
     mkRat (sign * m * (10 : Int) ^ n.exponent_.toNat) 1
   else
     mkRat (sign * m) ((10 : Nat) ^ (-n.exponent_).toNat)
+
+-- Compiled fast-path for `toRat`: short-circuits the zero sentinel
+-- (`mantissa = 0, exponent = -2^31`), which otherwise builds `10 ^ 2^31` in the
+-- denominator. The `@[csimp]` swaps only the compiled/`#eval`/FFI implementation;
+-- the logical `toRat` is unchanged, so no proof depending on it is affected.
+def Number.toRatFast (n : Number) : ℚ :=
+  if n.mantissa_ = 0 then 0
+  else
+    let sign : Int := if n.negative_ then -1 else 1
+    let m : Int := n.mantissa_.toNat
+    if n.exponent_ ≥ 0 then
+      mkRat (sign * m * (10 : Int) ^ n.exponent_.toNat) 1
+    else
+      mkRat (sign * m) ((10 : Nat) ^ (-n.exponent_).toNat)
+
+@[csimp] theorem Number.toRat_eq_toRatFast : Number.toRat = Number.toRatFast := by
+  funext n
+  unfold Number.toRat Number.toRatFast
+  by_cases hm : n.mantissa_ = 0
+  · rw [if_pos hm]
+    have hm0 : n.mantissa_.toNat = 0 := by rw [hm]; rfl
+    simp [hm0, Rat.mkRat_eq_div]
+  · rw [if_neg hm]
 
 def divu10 (u : UInt64) : UInt64 × UInt64 := (u / 10, u % 10)
 

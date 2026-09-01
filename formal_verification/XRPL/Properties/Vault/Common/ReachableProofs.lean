@@ -1,75 +1,56 @@
-import XRPL.Properties.Vault.Lawful
 import XRPL.Properties.Vault.Common.Preservation
 import XRPL.Properties.Vault.Common.ReachableDefs
 
 /-! # Reachability induction proofs
 
-Proof bodies for the `Vault.Reachable` headlines in `Reachable.lean`. Each is an
-induction on `Vault.Reachable` (from `ReachableDefs.lean`): one base case
-`create` and one step case per operation, discharged by the field-preservation
-theorems in `Preservation.lean` and, for `lawful`, the `*_lawful` theorems in
-`Lawful.lean`. -/
+Proof bodies for the `LawfulVault.Reachable` corollaries in `Reachable.lean`. Each is an
+induction on `LawfulVault.Reachable` (from `ReachableDefs.lean`, over `LawfulVault`): one
+base case `create` and one step case per operation, discharged by the field
+preservation theorems in `Preservation.lean`. Reachable states are lawful by
+construction (the ops return `LawfulVault`), so no separate lawfulness proof is
+needed: read `lv.wf`/`lv.exact` directly. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
+-- `LawfulVault.create_lawful` is a tactic-mode definition; reducing its `toRawVault` in the
+-- `create` base case needs a deeper reduction budget.
+set_option maxRecDepth 4000
+
 /-- No operation changes `lossUnrealized`. -/
-theorem Vault.Reachable.lossUnrealized_zero_proof (v : Vault) (hr : Vault.Reachable v) :
-    v.toExact.lossUnrealized = 0 := by
+theorem LawfulVault.Reachable.lossUnrealized_zero_proof (lv : LawfulVault) (hr : LawfulVault.Reachable lv) :
+    lv.toExact.lossUnrealized = 0 := by
   induction hr with
   | create nt scale am hn hp hi hl =>
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  | deposit v amount isDonation r hrv hdep _ _ _ ih =>
+    simp only [LawfulVault.create_lawful_toRawVault, RawVault.toExact, Number.toRat_zero]
+  | deposit lw amount isDonation r hrv hdep _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.deposit_preserves_unrealized v amount isDonation r hdep)]; exact ih
-  | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
+    rw [LawfulVault.deposit_preserves_unrealized lw amount isDonation r hdep]; exact ih
+  | withdraw lw amount waive r hrv hwd _ _ _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.withdraw_preserves_unrealized v amount waive r hwd)]; exact ih
-  | clawback v assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
+    rw [LawfulVault.withdraw_preserves_unrealized lw amount waive r hwd]; exact ih
+  | clawback lw assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
     show r.vault'.lossUnrealized.toRat = 0
-    rw [(Vault.clawback_preserves_unrealized v assets holderShares r hcb)]; exact ih
-  | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
-    show v'.lossUnrealized.toRat = 0
-    rw [(Vault.burnShares_preserves_unrealized v sharesDestroyed v' hburn)]; exact ih
+    rw [LawfulVault.clawback_preserves_unrealized lw assets holderShares r hcb]; exact ih
+  | burnShares lw sharesDestroyed sharesTotalAmount lw' hrv hcan hcanon hnn hle hfit hburn ih =>
+    show lw'.lossUnrealized.toRat = 0
+    rw [LawfulVault.burnShares_preserves_unrealized lw sharesDestroyed lw' hburn]; exact ih
 
 /-- Every operation writes both asset fields with the identical update, so
 record-level asset parity holds on all reachable states. -/
-theorem Vault.Reachable.asset_parity_proof (v : Vault) (hr : Vault.Reachable v) :
-    v.assetsAvailable = v.assetsTotal := by
-  induction hr with
-  | create nt scale am hn hp hi hl => rfl
-  | deposit v amount isDonation r hrv hdep _ _ _ ih =>
-    exact Vault.deposit_asset_parity v amount isDonation r ih hdep
-  | withdraw v amount waive r hrv hwd _ _ _ _ _ ih =>
-    exact Vault.withdraw_asset_parity v amount waive r ih hwd
-  | clawback v assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
-    exact Vault.clawback_asset_parity v assets holderShares r ih hcb
-  | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
-    exact Vault.burnShares_asset_parity v sharesDestroyed v' ih hburn
-
-/-- All reachable states are lawful. Base case `create` is `Vault.create_lawful`;
-each operation case is the matching preservation theorem applied to the
-induction hypothesis (the prior state is lawful) and the reachability
-corollaries (both unrealized fields zero, asset parity). -/
-theorem Vault.Reachable.lawful_proof (v : Vault) (hr : Vault.Reachable v) : v.Lawful := by
+theorem LawfulVault.Reachable.asset_parity_proof (lv : LawfulVault) (hr : LawfulVault.Reachable lv) :
+    lv.assetsAvailable = lv.assetsTotal := by
   induction hr with
   | create nt scale am hn hp hi hl =>
-    exact Vault.create_lawful nt scale am hn hp hi hl
-  | deposit v amount isDonation r hrv hdep hcanon hnn hSsz ih =>
-    exact Vault.deposit_lawful v amount isDonation ih
-      (Vault.Reachable.lossUnrealized_zero_proof v hrv)
-      (Vault.Reachable.asset_parity_proof v hrv) hcanon hnn r hdep hSsz
-  | withdraw v amount waive r hrv hwd hSc hSnt hSnn hsle hfit ih =>
-    exact Vault.withdraw_lawful v amount waive ih
-      (Vault.Reachable.lossUnrealized_zero_proof v hrv)
-      (Vault.Reachable.asset_parity_proof v hrv) r hwd hSc hSnt hSnn hsle hfit
-  | clawback v assets holderShares r hrv hcb hcanon hSic hSc hSnn hslt hfit ih =>
-    exact Vault.clawback_lawful v assets holderShares ih
-      (Vault.Reachable.lossUnrealized_zero_proof v hrv)
-      (Vault.Reachable.asset_parity_proof v hrv) hcanon r hSic hSc hSnn hcb hslt hfit
-  | burnShares v sharesDestroyed sharesTotalAmount v' hrv hcan hcanon hnn hle hfit hburn ih =>
-    exact Vault.burnShares_lawful v sharesDestroyed sharesTotalAmount v' ih hcan hcanon hnn
-      hle hfit hburn
+    simp only [LawfulVault.create_lawful_toRawVault]
+  | deposit lw amount isDonation r hrv hdep _ _ _ ih =>
+    exact LawfulVault.deposit_asset_parity lw amount isDonation r ih hdep
+  | withdraw lw amount waive r hrv hwd _ _ _ _ _ ih =>
+    exact LawfulVault.withdraw_asset_parity lw amount waive r ih hwd
+  | clawback lw assets holderShares r hrv hcb _ _ _ _ _ _ ih =>
+    exact LawfulVault.clawback_asset_parity lw assets holderShares r ih hcb
+  | burnShares lw sharesDestroyed sharesTotalAmount lw' hrv hcan hcanon hnn hle hfit hburn ih =>
+    exact LawfulVault.burnShares_asset_parity lw sharesDestroyed lw' ih hburn
 
 end XRPL.Model.SingleAssetVault

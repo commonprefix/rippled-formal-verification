@@ -1,40 +1,49 @@
 import XRPL.Properties.Vault.Defs
-import XRPL.Model.Vault.VaultCreate
+import XRPL.Properties.Vault.LawfulVaultValid
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
-/-! # `Vault.create` lawfulness proof
+/-! # `LawfulVault.create_lawful` lawfulness proof
 
-The proof backing the `Vault.create_lawful` headline. A freshly created vault has
+The proof backing the `LawfulVault.create_lawful` headline. A freshly created vault has
 every `Number` field at `Number.zero`, so `WF` follows from `Number.zero` being
 normalized and the two scale hypotheses, and every `Valid` clause is arithmetic
-on zeros (the `assetsMaximum` clauses use the creation positivity hypothesis). -/
+on zeros (the `assetsMaximum` clauses use the creation positivity hypothesis).
+The result is packaged as a `LawfulVault`, converting the exact-rational validity
+to the operator invariant through `RawVault.valid_iff_exact`. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
+/-- A freshly created vault, packaged directly as a `LawfulVault`. `create_lawful`
+is the base of `Reachable` and what every create consumer uses. -/
+def LawfulVault.create_lawful (nt : NumericType) (scale : UInt8)
     (assetsMaximum : Option Number)
     (hmax_norm : ∀ m ∈ assetsMaximum, m.isNormalized)
     (hmax_pos : ∀ m ∈ assetsMaximum, 0 < m.toRat)
     (hscale_int : nt.isIntegral = true → scale = 0) (hscale_le : scale.toNat ≤ 18) :
-    (Vault.create nt scale assetsMaximum).Lawful := by
+    LawfulVault := by
+  set v : RawVault := { assetsTotal := Number.zero, assetsAvailable := Number.zero, assetsReserved := Number.zero, assetsMaximum := assetsMaximum, numericType := nt, scale := scale, sharesTotal := Number.zero, lossUnrealized := Number.zero } with hv_def
   have hz : Number.zero.isNormalized := Or.inl rfl
-  have hAT : (Vault.create nt scale assetsMaximum).toExact.assetsTotal = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hAV : (Vault.create nt scale assetsMaximum).toExact.assetsAvailable = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hST : (Vault.create nt scale assetsMaximum).toExact.sharesTotal = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
-  have hLU : (Vault.create nt scale assetsMaximum).toExact.lossUnrealized = 0 := by
-    simp only [Vault.toExact, Vault.create, Number.toRat_zero]
-  have hAM : (Vault.create nt scale assetsMaximum).toExact.assetsMaximum
-      = assetsMaximum.map Number.toRat := rfl
-  refine ⟨⟨hz, hz, ?_, hz, hz, ?_, ?_, hscale_int, hscale_le⟩, ?_⟩
-  · intro m hm; exact hmax_norm m hm
-  · simp only [Vault.create, Number.toRat_zero, le_refl]
-  · simp only [Vault.create, Number.toRat_zero]; rfl
-  · refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  have hAT : v.toExact.assetsTotal = 0 := by
+    simp only [hv_def, RawVault.toExact, Number.toRat_zero]
+  have hAV : v.toExact.assetsAvailable = 0 := by
+    simp only [hv_def, RawVault.toExact, Number.toRat_zero]
+  have hST : v.toExact.sharesTotal = 0 := by
+    simp only [hv_def, RawVault.toExact, Number.toRat_zero, Rat.num_zero, Int.toNat_zero]
+  have hLU : v.toExact.lossUnrealized = 0 := by
+    simp only [hv_def, RawVault.toExact, Number.toRat_zero]
+  have hAM : v.toExact.assetsMaximum = assetsMaximum.map Number.toRat := rfl
+  -- The loss subtraction is `zero - zero`, so it succeeds.
+  have hsub : ∃ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d :=
+    Number.operator_sub_self_ok Number.zero .downward
+  have hwf : v.WF :=
+    ⟨hz, hz, hmax_norm, hz, hz,
+     by simp only [hv_def, Number.toRat_zero, le_refl],
+     by simp only [hv_def, Number.toRat_zero]; rfl,
+     hscale_int, hscale_le, hsub⟩
+  have hex : v.toExact.Valid := by
+    refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
     · rw [hAT]
     · rw [hAV]
     · rw [hAV, hAT]
@@ -46,5 +55,16 @@ theorem Vault.create_lawful_proof (nt : NumericType) (scale : UInt8)
     · rw [hLU]
     · rw [hLU, hAT, hAV]; norm_num
     · rw [hAT, hLU]; norm_num
+  exact ⟨v, hwf, (RawVault.valid_iff_exact v hwf).mpr hex⟩
+
+/-- `create_lawful`'s underlying record is the fresh zero-field vault. Lets the
+`Reachable` base case read the created state without reducing the packaged proofs. -/
+@[simp] theorem LawfulVault.create_lawful_toRawVault (nt : NumericType) (scale : UInt8)
+    (assetsMaximum : Option Number)
+    (hmax_norm : ∀ m ∈ assetsMaximum, m.isNormalized)
+    (hmax_pos : ∀ m ∈ assetsMaximum, 0 < m.toRat)
+    (hscale_int : nt.isIntegral = true → scale = 0) (hscale_le : scale.toNat ≤ 18) :
+    (LawfulVault.create_lawful nt scale assetsMaximum hmax_norm hmax_pos hscale_int hscale_le).toRawVault
+      = { assetsTotal := Number.zero, assetsAvailable := Number.zero, assetsReserved := Number.zero, assetsMaximum := assetsMaximum, numericType := nt, scale := scale, sharesTotal := Number.zero, lossUnrealized := Number.zero } := rfl
 
 end XRPL.Model.SingleAssetVault

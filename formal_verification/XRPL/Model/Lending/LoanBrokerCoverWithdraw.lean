@@ -22,7 +22,7 @@ def LoanBroker.roundedCoverWithdraw (lb : LoanBroker) (vaultNumericType : Numeri
   return .rounded rounded
 
 
-def LoanBroker.canCoverWithdraw (lb : LoanBroker) (vault : Vault) (amount : STAmount)
+def LoanBroker.canCoverWithdraw (lb : LoanBroker) (vault : RawVault) (amount : STAmount)
     : Except Error TER := do
   let ter ← canApplyToBrokerCover vault.numericType lb.coverAvailable amount
   if ter.operator_bool then

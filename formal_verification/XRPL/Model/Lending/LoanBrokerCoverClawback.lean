@@ -14,7 +14,7 @@ inductive RoundedCoverClawbackResult where
   | rejected (ter : TER)
   | rounded (amount : STAmount)
 
-def LoanBroker.roundedCoverClawback (lb : LoanBroker) (vault : Vault) (amount : Option STAmount)
+def LoanBroker.roundedCoverClawback (lb : LoanBroker) (vault : RawVault) (amount : Option STAmount)
     : Except Error RoundedCoverClawbackResult := do
   let vaultScale ← getAssetsTotalScale vault.numericType vault.assetsTotal
   let minRequiredCover ← minimumBrokerCover vault.numericType lb.debtTotal lb.coverRateMinimum vaultScale
@@ -32,7 +32,7 @@ def LoanBroker.roundedCoverClawback (lb : LoanBroker) (vault : Vault) (amount : 
 
   return .rounded (← STAmount.ofNumber vault.numericType claw .to_nearest)
 
-def LoanBroker.canCoverClawback (lb : LoanBroker) (vault : Vault) (amount : Option STAmount)
+def LoanBroker.canCoverClawback (lb : LoanBroker) (vault : RawVault) (amount : Option STAmount)
     : Except Error TER := do
   match ← lb.roundedCoverClawback vault amount with
   | .rejected ter => return ter
@@ -43,7 +43,7 @@ structure LoanBrokerCoverClawbackResult where
   clawAmount' : STAmount
   loanBroker' : LoanBroker
 
-def LoanBroker.coverClawback (lb : LoanBroker) (vault : Vault) (amount : Option STAmount)
+def LoanBroker.coverClawback (lb : LoanBroker) (vault : RawVault) (amount : Option STAmount)
     : Except Error LoanBrokerCoverClawbackResult := do
   let result : LoanBrokerCoverClawbackResult := {
     status := .tesSUCCESS,

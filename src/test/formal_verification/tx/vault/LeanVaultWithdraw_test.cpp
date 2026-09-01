@@ -1,5 +1,5 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
+#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
@@ -56,10 +56,11 @@ class LeanVaultWithdraw_test : public LeanSuite
         bool waiveUnrealizedLoss = false)
     {
         using namespace jtx;
-        VaultState const state = readVaultState(env, vaultKeylet, asset);
+        LawfulVault const state = readVaultState(env, vaultKeylet, asset);
         bool const byShares = amount.asset() != asset;
         LeanWithdrawResult const withdraw =
             leanVaultWithdraw(state, amount, byShares, waiveUnrealizedLoss);
+        expectLawful(withdraw);
 
         env(Vault::withdraw({.depositor = withdrawer, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
@@ -69,7 +70,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         BEAST_EXPECTS(
             cppTer == expected,
             std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
-        BEAST_EXPECTS(!withdraw.threw, "lean withdraw raised");
+        BEAST_EXPECTS(!withdraw.leanError.has_value(), "lean withdraw error");
 
         TER const leanTer = withdraw.error.value_or(tesSUCCESS);
         BEAST_EXPECTS(
@@ -97,6 +98,11 @@ class LeanVaultWithdraw_test : public LeanSuite
             withdraw.vault.sharesTotal == cppSharesTotal,
             "sharesTotal lean=" + to_string(withdraw.vault.sharesTotal) +
                 " cpp=" + to_string(cppSharesTotal));
+        Number const cppLossUnrealized = newVaultSle->at(sfLossUnrealized);
+        BEAST_EXPECTS(
+            withdraw.vault.lossUnrealized == cppLossUnrealized,
+            "lossUnrealized lean=" + to_string(withdraw.vault.lossUnrealized) +
+                " cpp=" + to_string(cppLossUnrealized));
     }
 
     // Seed the vault with a deposit by `holder` (who thereby gets shares), then withdraw `amount`.
@@ -229,8 +235,9 @@ class LeanVaultWithdraw_test : public LeanSuite
         }
 
         STAmount const shares{shareIssue(env, vaultKeylet), shareCount};
-        VaultState const state = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const state = readVaultState(env, vaultKeylet, asset.raw());
         LeanSharesToAssetsResult const lean = leanSharesToAssetsWithdraw(state, shares, false);
+        expectLawful(lean);
 
         Number const availableBefore = env.le(vaultKeylet)->at(sfAssetsAvailable);
         env(Vault::withdraw({.depositor = issuer, .id = vaultKeylet.key, .amount = shares}),
@@ -238,7 +245,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         env.close();
         Number const availableAfter = env.le(vaultKeylet)->at(sfAssetsAvailable);
 
-        BEAST_EXPECTS(!lean.threw, "lean sharesToAssetsWithdraw raised");
+        BEAST_EXPECTS(!lean.leanError.has_value(), "lean sharesToAssetsWithdraw error");
         BEAST_EXPECT(static_cast<Number>(lean.assets) == availableBefore - availableAfter);
     }
 
@@ -566,15 +573,16 @@ class LeanVaultWithdraw_test : public LeanSuite
         PrettyAsset const asset = issuer["USD"];
         auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset);
 
-        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const shares{shareIssue(env, vaultKeylet), 1'003'103'695};
         LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true, false);
-        BEAST_EXPECTS(!lean.threw, "lean withdraw raised");
+        expectLawful(lean);
+        BEAST_EXPECTS(!lean.leanError.has_value(), "lean withdraw error");
 
         env(Vault::withdraw({.depositor = holder, .id = vaultKeylet.key, .amount = shares}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         BEAST_EXPECTS(
             priceNotBelow(
@@ -643,19 +651,20 @@ class LeanVaultWithdraw_test : public LeanSuite
         env(pay(holder, issuer, asset(Number{993, -3})));
         env.close();
 
-        VaultState const before = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
         BEAST_EXPECT(before.assetsTotal == Number{3});
 
         // Redeem 2333333333333 of the holder's shares.
         STAmount const shares{shareIssue(env, vaultKeylet), 2'333'333'333'333LL};
         LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true);
-        BEAST_EXPECTS(!lean.threw && !lean.error, "lean withdraw failed");
+        expectLawful(lean);
+        BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean withdraw failed");
 
         Number const holderBefore = iouBalance(env, holder, asset);
         env(Vault::withdraw({.depositor = holder, .id = vaultKeylet.key, .amount = shares}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        VaultState const after = readVaultState(env, vaultKeylet, asset.raw());
+        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         // C++: the vault must lose exactly what the holder received.
         Number const cppDelta = before.assetsTotal - after.assetsTotal;

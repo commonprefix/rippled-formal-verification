@@ -15,54 +15,55 @@ structure ComputeClawbackResult where
 
 structure ClawbackResult where
   error : Option TER
-  vault' : Vault
+  vault' : LawfulVault
   assetsRecovered : STAmount
   sharesDestroyed : STAmount
 
 -- A rejection changes nothing and reports nothing: the vault is returned
 -- unchanged and both amount fields are zero.
-def ClawbackResult.rejected (vault : Vault) (ter : TER) : ClawbackResult :=
-  ⟨some ter, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
+def ClawbackResult.rejected (lv : LawfulVault) (ter : TER) : ClawbackResult :=
+  ⟨some ter, lv, STAmount.zero lv.numericType, STAmount.zero .int64⟩
 
-def assetsToSharesClawback (vault : Vault) (assets holderShares : STAmount) : Except Error STAmount := do
+def assetsToSharesClawback (lv : LawfulVault) (assets holderShares : STAmount) : Except Error STAmount := do
   if assets.isZero then
     -- zero means destroy "all" holder shares
     return holderShares
-  assetsToSharesWithdraw vault assets false false
+  assetsToSharesWithdraw lv assets false false
 
-def computeClawback (vault : Vault) (assets holderShares : STAmount) : Except Error ComputeClawbackResult := do
-  let result : ComputeClawbackResult := ⟨none, STAmount.zero vault.numericType, STAmount.zero .int64⟩
+def computeClawback (lv : LawfulVault) (assets holderShares : STAmount) : Except Error ComputeClawbackResult := do
+  let result : ComputeClawbackResult := ⟨none, STAmount.zero lv.numericType, STAmount.zero .int64⟩
   if assets.negative then
     return {result with error := some .tecINTERNAL}
   try
-    let sharesDestroyed ← assetsToSharesClawback vault assets holderShares
-    let assetsRecovered ← Vault.sharesToAssetsWithdraw vault sharesDestroyed false
+    let sharesDestroyed ← assetsToSharesClawback lv assets holderShares
+    let assetsRecovered ← lv.sharesToAssetsWithdraw sharesDestroyed false
 
     let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
-    if assetsRecoveredNumber.operator_gt vault.assetsAvailable then
-      let assetsRecovered ← STAmount.ofNumber vault.numericType vault.assetsAvailable .to_nearest
-      let sharesDestroyed ← assetsToSharesWithdraw vault assetsRecovered true false
-      let assetsRecovered ← Vault.sharesToAssetsWithdraw vault sharesDestroyed false
+    if assetsRecoveredNumber.operator_gt lv.assetsAvailable then
+      let assetsRecovered ← STAmount.ofNumber lv.numericType lv.assetsAvailable .to_nearest
+      let sharesDestroyed ← assetsToSharesWithdraw lv assetsRecovered true false
+      let assetsRecovered ← lv.sharesToAssetsWithdraw sharesDestroyed false
 
       let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
-      if assetsRecoveredNumber.operator_gt vault.assetsAvailable then
+      if assetsRecoveredNumber.operator_gt lv.assetsAvailable then
         return {result with error := some .tecINTERNAL}
       return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
     return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
   catch e =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, STAmount.zero vault.numericType, STAmount.zero .int64⟩
+      return ⟨.some .tecPATH_DRY, STAmount.zero lv.numericType, STAmount.zero .int64⟩
     else
       throw e
 
 
-def Vault.clawback (vault : Vault) (assets holderShares : STAmount) : Except Error ClawbackResult := do
-  let result ← computeClawback vault assets holderShares
+def LawfulVault.clawback (lv : LawfulVault) (assets holderShares : STAmount) : Except Error ClawbackResult := do
+  let vault := lv.toRawVault
+  let result ← computeClawback lv assets holderShares
   if result.error.isSome then
-    return ⟨result.error, vault, STAmount.zero vault.numericType, STAmount.zero .int64⟩
+    return ⟨result.error, lv, STAmount.zero lv.numericType, STAmount.zero .int64⟩
 
   if result.sharesDestroyed.isZero then
-    return .rejected vault .tecPRECISION_LOSS
+    return .rejected lv .tecPRECISION_LOSS
 
   let sharesDestroyedNumber ← result.sharesDestroyed.toNumber .to_nearest
   let assetsRecoveredNumber ← result.assetsRecovered.toNumber .to_nearest
@@ -72,7 +73,7 @@ def Vault.clawback (vault : Vault) (assets holderShares : STAmount) : Except Err
   let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
   let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
   if assetsRecoveredNumber.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
-    return .rejected vault .tecPRECISION_LOSS
+    return .rejected lv .tecPRECISION_LOSS
 
   let vault' := {
     vault with
@@ -80,6 +81,9 @@ def Vault.clawback (vault : Vault) (assets holderShares : STAmount) : Except Err
       assetsAvailable := ← vault.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest
       assetsTotal := assetsTotal'
   }
-  return ⟨none, vault', result.assetsRecovered, result.sharesDestroyed⟩
+  -- re-validate the new state into a LawfulVault. Clawback-all on a fractional vault can leave dust
+  -- (sharesTotal=0, assetsTotal>0), which fails empty_shares, so this can error.
+  let lv' ← vault'.to_lawful
+  return ⟨none, lv', result.assetsRecovered, result.sharesDestroyed⟩
 
 end XRPL.Model.SingleAssetVault

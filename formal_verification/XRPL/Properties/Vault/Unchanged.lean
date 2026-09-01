@@ -4,33 +4,32 @@ import XRPL.Properties.Vault.Common.Unchanged
 
 When an operation returns a `TER` in its result, the vault is the starting
 vault and both amount fields are zero: nothing moved and the record says so.
-A thrown error needs no theorem because the model returns no result at all.
-These theorems hold for arbitrary vaults, lawful or not. -/
+A thrown error needs no theorem because the model returns no result at all. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-theorem Vault.deposit_error_unchanged (v : Vault) (amount : STAmount) (isDonation : Bool)
-    (r : DepositResult) (hok : v.deposit amount isDonation = .ok r)
+theorem LawfulVault.deposit_error_unchanged (lv : LawfulVault) (amount : STAmount) (isDonation : Bool)
+    (r : DepositResult) (hok : lv.deposit amount isDonation = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = v ∧ r.amountDeposit' = STAmount.zero v.numericType ∧
+    r.vault' = lv ∧ r.amountDeposit' = STAmount.zero lv.numericType ∧
     r.sharesIssued = STAmount.zero .int64 :=
-  Vault.deposit_error_rejected_proof v amount isDonation r hok herr
+  LawfulVault.deposit_error_rejected_proof lv amount isDonation r hok herr
 
-theorem Vault.withdraw_error_unchanged (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_error_unchanged (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
+    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = v ∧ r.assets' = STAmount.zero v.numericType ∧
+    r.vault' = lv ∧ r.assets' = STAmount.zero lv.numericType ∧
     r.sharesBurned = STAmount.zero .int64 :=
-  Vault.withdraw_error_rejected_proof v amount waiveUnrealizedLoss r hok herr
+  LawfulVault.withdraw_error_rejected_proof lv amount waiveUnrealizedLoss r hok herr
 
-theorem Vault.clawback_error_unchanged (v : Vault) (assets holderShares : STAmount)
-    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r)
+theorem LawfulVault.clawback_error_unchanged (lv : LawfulVault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : lv.clawback assets holderShares = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = v ∧ r.assetsRecovered = STAmount.zero v.numericType ∧
+    r.vault' = lv ∧ r.assetsRecovered = STAmount.zero lv.numericType ∧
     r.sharesDestroyed = STAmount.zero .int64 :=
-  Vault.clawback_error_rejected_proof v assets holderShares r hok herr
+  LawfulVault.clawback_error_rejected_proof lv assets holderShares r hok herr
 
 end XRPL.Model.SingleAssetVault

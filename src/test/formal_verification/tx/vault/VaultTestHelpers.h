@@ -1,6 +1,6 @@
 #pragma once
 
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
+#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
@@ -34,17 +34,18 @@ createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
     return keylet;
 }
 
-// Snapshot the on-ledger vault into the model's VaultState DTO
-inline VaultState
+// Snapshot the on-ledger vault into the model's LawfulVault DTO
+inline LawfulVault
 readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
 {
     auto const vaultSle = env.le(vaultKeylet);
     auto const shareMptId = vaultSle->at(sfShareMPTID);
-    return VaultState{
+    return LawfulVault{
         .assetsTotal = vaultSle->at(sfAssetsTotal),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
-        .hasMaximum = vaultSle->isFieldPresent(sfAssetsMaximum),
-        .assetsMaximum = vaultSle->at(sfAssetsMaximum),
+        .assetsMaximum = vaultSle->isFieldPresent(sfAssetsMaximum)
+            ? std::optional<Number>(vaultSle->at(sfAssetsMaximum))
+            : std::nullopt,
         .numericType = NumericTypeFFI::tagOf(asset),
         .scale = vaultSle->at(sfScale),
         .sharesTotal = Number{static_cast<std::int64_t>(

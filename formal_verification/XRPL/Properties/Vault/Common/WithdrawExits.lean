@@ -4,7 +4,7 @@ import XRPL.Model.Vault.VaultWithdraw
 /-! # Withdraw exit reductions
 
 Code inventories for the two exchange computations (`computeWithdrawByAssets`,
-`computeWithdrawByShares`) and the full `Vault.withdraw` walk behind
+`computeWithdrawByShares`) and the full `LawfulVault.withdraw` walk behind
 `withdraw_error_codes`. The walks use `bind_ok_peel`, `if`-elimination, and the
 `tryCatch` step lemmas only, keeping the `checked`/`ofNumber` pipeline opaque. -/
 
@@ -13,18 +13,18 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 /-- Every outcome of a `computeWithdrawByAssets` that runs without a throw. -/
-theorem computeWithdrawByAssets_codes (v : Vault) (assets : STAmount) (waive : Bool)
-    (cw : ComputeWithdrawResult) (hok : computeWithdrawByAssets v assets waive = .ok cw) :
+theorem computeWithdrawByAssets_codes (lv : LawfulVault) (assets : STAmount) (waive : Bool)
+    (cw : ComputeWithdrawResult) (hok : computeWithdrawByAssets lv assets waive = .ok cw) :
     cw.error = none ∨ cw.error = some .tecPRECISION_LOSS ∨ cw.error = some .tecPATH_DRY := by
   unfold computeWithdrawByAssets at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  cases hats : assetsToSharesWithdraw v assets false waive with
+  cases hats : assetsToSharesWithdraw lv assets false waive with
   | error e =>
     rw [hats, err_bind, tryCatch_error] at htc
     by_cases hov : isOverflow e = true
     · rw [if_pos hov, epure] at htc
       rw [← Except.ok.inj htc] at hK
-      have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero v.numericType,
+      have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero lv.numericType,
           STAmount.zero .int64⟩ : ComputeWithdrawResult) = Except.ok cw := hK
       rw [← Except.ok.inj hK2]
       exact .inr (.inr rfl)
@@ -35,18 +35,18 @@ theorem computeWithdrawByAssets_codes (v : Vault) (assets : STAmount) (waive : B
     by_cases hz : shares.isZero = true
     · rw [if_pos hz, tryCatch_ok] at htc
       rw [← Except.ok.inj htc] at hK
-      have hK2 : Except.ok (⟨some TER.tecPRECISION_LOSS, STAmount.zero v.numericType,
+      have hK2 : Except.ok (⟨some TER.tecPRECISION_LOSS, STAmount.zero lv.numericType,
           STAmount.zero .int64⟩ : ComputeWithdrawResult) = Except.ok cw := hK
       rw [← Except.ok.inj hK2]
       exact .inr (.inl rfl)
     · rw [if_neg hz] at htc
-      cases hsa : Vault.sharesToAssetsWithdraw v shares waive with
+      cases hsa : lv.sharesToAssetsWithdraw shares waive with
       | error e2 =>
         rw [hsa, err_bind, tryCatch_error] at htc
         by_cases hov : isOverflow e2 = true
         · rw [if_pos hov] at htc
           rw [← Except.ok.inj htc] at hK
-          have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero v.numericType,
+          have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero lv.numericType,
               STAmount.zero .int64⟩ : ComputeWithdrawResult) = Except.ok cw := hK
           rw [← Except.ok.inj hK2]
           exact .inr (.inr rfl)
@@ -62,18 +62,18 @@ theorem computeWithdrawByAssets_codes (v : Vault) (assets : STAmount) (waive : B
         exact .inl rfl
 
 /-- Every outcome of a `computeWithdrawByShares` that runs without a throw. -/
-theorem computeWithdrawByShares_codes (v : Vault) (shares : STAmount) (waive : Bool)
-    (cw : ComputeWithdrawResult) (hok : computeWithdrawByShares v shares waive = .ok cw) :
+theorem computeWithdrawByShares_codes (lv : LawfulVault) (shares : STAmount) (waive : Bool)
+    (cw : ComputeWithdrawResult) (hok : computeWithdrawByShares lv shares waive = .ok cw) :
     cw.error = none ∨ cw.error = some .tecPATH_DRY := by
   unfold computeWithdrawByShares at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  cases hsa : Vault.sharesToAssetsWithdraw v shares waive with
+  cases hsa : lv.sharesToAssetsWithdraw shares waive with
   | error e =>
     rw [hsa, err_bind, tryCatch_error] at htc
     by_cases hov : isOverflow e = true
     · rw [if_pos hov, epure] at htc
       rw [← Except.ok.inj htc] at hK
-      have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero v.numericType,
+      have hK2 : Except.ok (⟨some TER.tecPATH_DRY, STAmount.zero lv.numericType,
           STAmount.zero .int64⟩ : ComputeWithdrawResult) = Except.ok cw := hK
       rw [← Except.ok.inj hK2]
       exact .inr rfl
@@ -89,29 +89,30 @@ theorem computeWithdrawByShares_codes (v : Vault) (shares : STAmount) (waive : B
     exact .inl rfl
 
 /-- Every outcome of a withdrawal that runs without a throw. -/
-theorem Vault.withdraw_error_codes_proof (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_error_codes_proof (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) :
+    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r) :
     r.error = none ∨
     r.error = some .tecPRECISION_LOSS ∨
     r.error = some .tecPATH_DRY ∨
     r.error = some .tecINSUFFICIENT_FUNDS ∨
     r.error = some .tefINTERNAL := by
-  unfold Vault.withdraw at hok
+  unfold LawfulVault.withdraw at hok
+  simp only [] at hok
   cases amount
   case' vaultAssets a =>
     simp only [] at hok
     obtain ⟨result, hres, hok⟩ := bind_ok_peel _ _ _ hok
     have hcodes : result.error = none ∨ result.error = some .tecPRECISION_LOSS ∨
         result.error = some .tecPATH_DRY :=
-      computeWithdrawByAssets_codes v a waiveUnrealizedLoss result hres
+      computeWithdrawByAssets_codes lv a waiveUnrealizedLoss result hres
     clear hres
   case' vaultShares s =>
     simp only [] at hok
     obtain ⟨result, hres, hok⟩ := bind_ok_peel _ _ _ hok
     have hcodes : result.error = none ∨ result.error = some .tecPRECISION_LOSS ∨
         result.error = some .tecPATH_DRY :=
-      (computeWithdrawByShares_codes v s waiveUnrealizedLoss result hres).elim Or.inl
+      (computeWithdrawByShares_codes lv s waiveUnrealizedLoss result hres).elim Or.inl
         (fun hc => Or.inr (Or.inr hc))
     clear hres
   all_goals {
@@ -123,18 +124,19 @@ theorem Vault.withdraw_error_codes_proof (v : Vault) (amount : WithdrawAmount)
       · exact .inr (.inr (.inl hc))
     · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
       obtain ⟨assetsNumber', _, hok⟩ := bind_ok_peel _ _ _ hok
-      by_cases h2 : v.assetsAvailable.operator_lt assetsNumber' = true
+      by_cases h2 : lv.assetsAvailable.operator_lt assetsNumber' = true
       · rw [if_pos h2] at hok; injection hok with h; rw [← h]
         exact .inr (.inr (.inr (.inl rfl)))
       · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
         obtain ⟨sta, _, hok⟩ := bind_ok_peel _ _ _ hok
         by_cases h3 : result.sharesRedeemed.operator_eq sta = true
         · rw [if_pos h3] at hok
-          by_cases h4 : v.lossUnrealized.operator_ne Number.zero = true
+          by_cases h4 : lv.lossUnrealized.operator_ne Number.zero = true
           · rw [if_pos h4] at hok; injection hok with h; rw [← h]
             exact .inr (.inr (.inr (.inr rfl)))
           · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
             obtain ⟨allAvail, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h]; exact .inl rfl
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
           obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -147,22 +149,23 @@ theorem Vault.withdraw_error_codes_proof (v : Vault) (amount : WithdrawAmount)
           · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h]; exact .inl rfl
   }
 
 /-- **Proof body of `sharesToAssetsWithdraw_zero_nav`.** -/
-theorem Vault.sharesToAssetsWithdraw_zero_nav_proof (v : Vault) (shares : STAmount)
+theorem LawfulVault.sharesToAssetsWithdraw_zero_nav_proof (lv : LawfulVault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
-    (hnav : v.assetsTotal.operator_sub
+    (hnav : lv.assetsTotal.operator_sub
       (match waiveUnrealizedLoss with
         | true => Number.zero
-        | false => v.lossUnrealized) .to_nearest = .ok netAssetValue)
+        | false => lv.lossUnrealized) .to_nearest = .ok netAssetValue)
     (hz : netAssetValue.mantissa_ = 0) :
-    v.sharesToAssetsWithdraw shares waiveUnrealizedLoss =
-      .ok (STAmount.zero v.numericType) := by
+    lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss =
+      .ok (STAmount.zero lv.numericType) := by
   cases waiveUnrealizedLoss
   all_goals {
-    unfold Vault.sharesToAssetsWithdraw
+    unfold LawfulVault.sharesToAssetsWithdraw
     simp only []
     rw [hnav, ok_bind]
     rw [if_pos (beq_iff_eq.mpr hz)]
@@ -170,18 +173,19 @@ theorem Vault.sharesToAssetsWithdraw_zero_nav_proof (v : Vault) (shares : STAmou
   }
 
 /-- **Proof body of `withdraw_insufficient_funds`.** -/
-theorem Vault.withdraw_insufficient_funds_proof (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_insufficient_funds_proof (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult) (assetsNumber' : Number)
     (hcomp : (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
+        | .vaultAssets assets => computeWithdrawByAssets lv assets waiveUnrealizedLoss
+        | .vaultShares shares => computeWithdrawByShares lv shares waiveUnrealizedLoss)
       = .ok cw)
     (herr : cw.error = none)
     (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
-    (hins : v.assetsAvailable.operator_lt assetsNumber' = true) :
-    v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tecINSUFFICIENT_FUNDS) := by
-  unfold Vault.withdraw
+    (hins : lv.assetsAvailable.operator_lt assetsNumber' = true) :
+    lv.withdraw amount waiveUnrealizedLoss =
+      .ok (.rejected lv .tecINSUFFICIENT_FUNDS) := by
+  unfold LawfulVault.withdraw
+  simp only []
   cases amount
   all_goals {
     simp only [] at hcomp ⊢
@@ -193,22 +197,23 @@ theorem Vault.withdraw_insufficient_funds_proof (v : Vault) (amount : WithdrawAm
   }
 
 /-- **Proof body of `withdraw_final_nonzero_loss`.** -/
-theorem Vault.withdraw_final_nonzero_loss_proof (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_final_nonzero_loss_proof (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult) (assetsNumber' : Number)
     (sharesTotalAmount : STAmount)
     (hcomp : (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
+        | .vaultAssets assets => computeWithdrawByAssets lv assets waiveUnrealizedLoss
+        | .vaultShares shares => computeWithdrawByShares lv shares waiveUnrealizedLoss)
       = .ok cw)
     (herr : cw.error = none)
     (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
-    (hins : v.assetsAvailable.operator_lt assetsNumber' = false)
-    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
+    (hins : lv.assetsAvailable.operator_lt assetsNumber' = false)
+    (hst : STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = true)
-    (hloss : v.lossUnrealized.operator_ne Number.zero = true) :
-    v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tefINTERNAL) := by
-  unfold Vault.withdraw
+    (hloss : lv.lossUnrealized.operator_ne Number.zero = true) :
+    lv.withdraw amount waiveUnrealizedLoss =
+      .ok (.rejected lv .tefINTERNAL) := by
+  unfold LawfulVault.withdraw
+  simp only []
   cases amount
   all_goals {
     simp only [] at hcomp ⊢
@@ -221,64 +226,30 @@ theorem Vault.withdraw_final_nonzero_loss_proof (v : Vault) (amount : WithdrawAm
     rfl
   }
 
-/-- **Proof body of `withdraw_final`.** -/
-theorem Vault.withdraw_final_proof (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-    (cw : ComputeWithdrawResult) (assetsNumber' : Number)
-    (sharesTotalAmount allAvailable : STAmount)
-    (hcomp : (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
-      = .ok cw)
-    (herr : cw.error = none)
-    (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
-    (hins : v.assetsAvailable.operator_lt assetsNumber' = false)
-    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
-    (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = true)
-    (hloss : v.lossUnrealized.operator_ne Number.zero = false)
-    (hall : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok allAvailable) :
-    v.withdraw amount waiveUnrealizedLoss =
-      .ok ⟨none,
-        { v with assetsAvailable := Number.zero, assetsTotal := Number.zero,
-                 sharesTotal := Number.zero },
-        allAvailable, cw.sharesRedeemed⟩ := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_pos hfin, if_neg (by rw [hloss]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hall, ok_bind]
-    rfl
-  }
-
 /-- **Proof body of `withdraw_payout_too_small`.** -/
-theorem Vault.withdraw_payout_too_small_proof (v : Vault) (amount : WithdrawAmount)
+theorem LawfulVault.withdraw_payout_too_small_proof (lv : LawfulVault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult)
     (assetsNumber' sharesBurnedNumber assetsTotal' : Number)
     (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
     (hcomp : (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
+        | .vaultAssets assets => computeWithdrawByAssets lv assets waiveUnrealizedLoss
+        | .vaultShares shares => computeWithdrawByShares lv shares waiveUnrealizedLoss)
       = .ok cw)
     (herr : cw.error = none)
     (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
-    (hins : v.assetsAvailable.operator_lt assetsNumber' = false)
-    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
+    (hins : lv.assetsAvailable.operator_lt assetsNumber' = false)
+    (hst : STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
     (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
-    (hat : v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
-    (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
-    (hrt' : STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
+    (hat : lv.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
+    (hrt : STAmount.ofNumber lv.numericType lv.assetsTotal .to_nearest = .ok assetsTotalRounded)
+    (hrt' : STAmount.ofNumber lv.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
     (hguard : (assetsNumber'.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
-    v.withdraw amount waiveUnrealizedLoss =
-      .ok (.rejected v .tecPRECISION_LOSS) := by
-  unfold Vault.withdraw
+    lv.withdraw amount waiveUnrealizedLoss =
+      .ok (.rejected lv .tecPRECISION_LOSS) := by
+  unfold LawfulVault.withdraw
+  simp only []
   cases amount
   all_goals {
     simp only [] at hcomp ⊢
@@ -291,50 +262,6 @@ theorem Vault.withdraw_payout_too_small_proof (v : Vault) (amount : WithdrawAmou
     try simp only [pure_bind]
     simp only [hsN, hat, hrt, hrt', ok_bind]
     rw [if_pos hguard]
-    rfl
-  }
-
-/-- **Proof body of `withdraw_success`.** -/
-theorem Vault.withdraw_success_proof (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-    (cw : ComputeWithdrawResult)
-    (assetsNumber' sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
-    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
-    (hcomp : (match amount with
-        | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
-        | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
-      = .ok cw)
-    (herr : cw.error = none)
-    (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
-    (hins : v.assetsAvailable.operator_lt assetsNumber' = false)
-    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
-    (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
-    (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
-    (hat : v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
-    (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
-    (hrt' : STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsNumber'.mantissa_ != 0 &&
-      assetsTotalRounded.operator_eq assetsTotalRounded') = false)
-    (hav : v.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable')
-    (hshares : v.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal') :
-    v.withdraw amount waiveUnrealizedLoss =
-      .ok ⟨none,
-        { v with assetsAvailable := assetsAvailable', assetsTotal := assetsTotal',
-                 sharesTotal := sharesTotal' },
-        cw.assets', cw.sharesRedeemed⟩ := by
-  unfold Vault.withdraw
-  cases amount
-  all_goals {
-    simp only [] at hcomp ⊢
-    rw [hcomp, ok_bind]
-    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    rw [hst, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
-    try simp only [pure_bind]
-    simp only [hsN, hat, hrt, hrt', ok_bind]
-    rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
-    simp only [hav, hshares, ok_bind]
     rfl
   }
 
