@@ -42,7 +42,7 @@ def LoanBroker.coverClawback {α : Type} [AssetPool α] (lb : LoanBroker) (pool 
     (amount : Option STAmount) : Except Error LoanBrokerCoverResult := do
   let nt := AssetPool.numericType pool
   let amount ← match (← lb.roundedCoverClawback pool amount) with
-    | .rejected ter => return { status := ter, loanBroker' := lb, amount' := STAmount.zero nt }
+    | .rejected _ => return { status := .tecINTERNAL, loanBroker' := lb, amount' := STAmount.zero nt }
     | .rounded amount => .pure amount
   lb.applyCoverTransaction .debit amount
 

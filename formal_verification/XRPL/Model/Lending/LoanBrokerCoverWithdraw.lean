@@ -35,7 +35,7 @@ def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (po
 def LoanBroker.coverWithdraw (lb : LoanBroker) (numericType : NumericType) (amount : STAmount)
     : Except Error LoanBrokerCoverResult := do
   let amount ← match (← lb.roundedCoverAmount numericType amount) with
-    | .rejected ter => return { status := ter, loanBroker' := lb, amount' := STAmount.zero numericType }
+    | .rejected _ => return { status := .tecINTERNAL, loanBroker' := lb, amount' := STAmount.zero numericType }
     | .rounded amount => .pure amount
   lb.applyCoverTransaction .debit amount
 
