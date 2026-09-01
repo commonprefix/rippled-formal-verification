@@ -133,6 +133,65 @@ theorem LawfulVault.withdraw_payout_too_small (amount : WithdrawAmount)
     assetsNumber' sharesBurnedNumber assetsTotal' sharesTotalAmount assetsTotalRounded
     assetsTotalRounded' hcomp herr haN hins hst hfin hsN hat hrt hrt' hguard
 
+/-- Every guard passes on a non-final withdrawal: the stored total and available
+assets each drop by the payout and the share total by the redeemed shares, the
+post-state is still a `LawfulVault`. -/
+theorem LawfulVault.withdraw_success (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+    (cw : ComputeWithdrawResult)
+    (assetsNumber' sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
+    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
+    (hL : lv.toExact.lossUnrealized = 0)
+    (hAV : lv.assetsAvailable = lv.assetsTotal)
+    (hp_norm : assetsNumber'.isNormalized) (hp_nn : 0 ≤ assetsNumber'.toRat)
+    (hp_le : assetsNumber'.toRat ≤ lv.assetsTotal.toRat)
+    (hb_norm : sharesBurnedNumber.isNormalized) (hb_nn : 0 ≤ sharesBurnedNumber.toRat)
+    (hb_den : sharesBurnedNumber.toRat.den = 1)
+    (hb_le : sharesBurnedNumber.toRat ≤ lv.sharesTotal.toRat)
+    (hfit : lv.sharesTotal.toRat ≤ 2 ^ 63 - 1)
+    (hcomp : (match amount with
+        | .vaultAssets assets => computeWithdrawByAssets lv assets waiveUnrealizedLoss
+        | .vaultShares shares => computeWithdrawByShares lv shares waiveUnrealizedLoss)
+      = .ok cw)
+    (herr : cw.error = none)
+    (haN : cw.assets'.toNumber .to_nearest = .ok assetsNumber')
+    (hins : lv.assetsAvailable.operator_lt assetsNumber' = false)
+    (hstn : STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount)
+    (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
+    (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
+    (hat : lv.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
+    (hrt : STAmount.ofNumber lv.numericType lv.assetsTotal .to_nearest = .ok assetsTotalRounded)
+    (hrt' : STAmount.ofNumber lv.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
+    (hguard : (assetsNumber'.mantissa_ != 0 &&
+      assetsTotalRounded.operator_eq assetsTotalRounded') = false)
+    (hav : lv.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable')
+    (hshares : lv.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal')
+    (hempty : sharesTotal'.toRat = 0 → assetsTotal'.toRat = 0) :
+    ∃ lv' : LawfulVault,
+      lv.withdraw amount waiveUnrealizedLoss = .ok ⟨none, lv', cw.assets', cw.sharesRedeemed⟩ ∧
+      lv'.toRawVault = { lv.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' } := by
+  obtain ⟨lv', htl, hlv'eq⟩ := LawfulVault.withdraw_poststate_lawful lv assetsNumber'
+    sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' hL hAV hp_norm hp_nn hp_le
+    hb_norm hb_nn hb_den hb_le hfit hat hav hshares hempty
+  refine ⟨lv', ?_, hlv'eq⟩
+  unfold LawfulVault.withdraw
+  simp only []
+  cases amount
+  all_goals {
+    simp only [] at hcomp ⊢
+    rw [hcomp, ok_bind]
+    rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
+    try simp only [pure_bind]
+    rw [haN, ok_bind, if_neg (by rw [hins]; exact Bool.false_ne_true)]
+    try simp only [pure_bind]
+    rw [hstn, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
+    try simp only [pure_bind]
+    rw [hsN, ok_bind, hat, ok_bind, hrt, ok_bind, hrt', ok_bind]
+    rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
+    try simp only [pure_bind]
+    rw [hav, ok_bind, hshares, ok_bind, htl, ok_bind]
+    rfl
+  }
+
 /-- Every outcome of a withdrawal that runs without a throw. -/
 theorem LawfulVault.withdraw_error_codes (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     (r : WithdrawResult)

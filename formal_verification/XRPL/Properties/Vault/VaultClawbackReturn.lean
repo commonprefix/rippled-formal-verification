@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.ClawbackExits
+import XRPL.Properties.Vault.Common.Preservation
 
 /-! # `LawfulVault.clawback` exits -/
 
@@ -48,6 +49,54 @@ theorem LawfulVault.clawback_recovery_too_small (assets holderShares : STAmount)
   LawfulVault.clawback_recovery_too_small_proof lv assets holderShares result sharesDestroyedNumber
     assetsRecoveredNumber at' assetsTotalRounded assetsTotalRounded'
     hcomp herr hz hsN haN hat hrt hrt' hguard
+
+/-- Every guard passes on a clawback: the stored total and available assets each
+drop by the recovery and the share total by the destroyed shares, the post-state
+is still a `LawfulVault`. -/
+theorem LawfulVault.clawback_success (assets holderShares : STAmount) (result : ComputeClawbackResult)
+    (sharesDestroyedNumber assetsRecoveredNumber st' av' at' : Number)
+    (assetsTotalRounded assetsTotalRounded' : STAmount)
+    (hL : lv.toExact.lossUnrealized = 0)
+    (hAV : lv.assetsAvailable = lv.assetsTotal)
+    (hr_norm : assetsRecoveredNumber.isNormalized) (hr_nn : 0 ≤ assetsRecoveredNumber.toRat)
+    (hr_le : assetsRecoveredNumber.toRat ≤ lv.assetsTotal.toRat)
+    (hd_norm : sharesDestroyedNumber.isNormalized) (hd_nn : 0 ≤ sharesDestroyedNumber.toRat)
+    (hd_den : sharesDestroyedNumber.toRat.den = 1)
+    (hd_le : sharesDestroyedNumber.toRat ≤ lv.sharesTotal.toRat)
+    (hfit : lv.sharesTotal.toRat ≤ 2 ^ 63 - 1)
+    (hcomp : computeClawback lv assets holderShares = .ok result)
+    (herr : result.error = none)
+    (hz : result.sharesDestroyed.isZero = false)
+    (hsN : result.sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
+    (haN : result.assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
+    (hat : lv.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest = .ok at')
+    (hrt : STAmount.ofNumber lv.numericType lv.assetsTotal .to_nearest = .ok assetsTotalRounded)
+    (hrt' : STAmount.ofNumber lv.numericType at' .to_nearest = .ok assetsTotalRounded')
+    (hguard : (assetsRecoveredNumber.mantissa_ != 0 &&
+      assetsTotalRounded.operator_eq assetsTotalRounded') = false)
+    (hst : lv.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st')
+    (hav : lv.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest = .ok av')
+    (hempty : st'.toRat = 0 → at'.toRat = 0) :
+    ∃ lv' : LawfulVault,
+      lv.clawback assets holderShares =
+        .ok ⟨none, lv', result.assetsRecovered, result.sharesDestroyed⟩ ∧
+      lv'.toRawVault = { lv.toRawVault with sharesTotal := st', assetsAvailable := av', assetsTotal := at' } := by
+  obtain ⟨lv', htl, hlv'eq⟩ := LawfulVault.clawback_poststate_lawful lv assetsRecoveredNumber
+    sharesDestroyedNumber at' av' st' hL hAV hr_norm hr_nn hr_le hd_norm hd_nn hd_den hd_le hfit
+    hat hav hst hempty
+  refine ⟨lv', ?_, hlv'eq⟩
+  unfold LawfulVault.clawback
+  simp only []
+  rw [hcomp, ok_bind]
+  rw [if_neg (by rw [herr, Option.isSome_none]; exact Bool.false_ne_true)]
+  try simp only [pure_bind]
+  rw [if_neg (by rw [hz]; exact Bool.false_ne_true)]
+  try simp only [pure_bind]
+  rw [hsN, ok_bind, haN, ok_bind, hat, ok_bind, hrt, ok_bind, hrt', ok_bind]
+  rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
+  try simp only [pure_bind]
+  rw [hst, ok_bind, hav, ok_bind, htl, ok_bind]
+  rfl
 
 /-- Every outcome of a clawback that runs without a throw.
 

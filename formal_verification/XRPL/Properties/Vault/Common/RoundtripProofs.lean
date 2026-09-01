@@ -315,7 +315,7 @@ theorem LawfulVault.deposit_withdraw_roundtrip_proof (lv : LawfulVault) (amountD
     (hL : lv.toExact.lossUnrealized = 0)
     (hpos : 0 < amountDeposit.toRat)
     (hcanon : amountDeposit.Canonical)
-    (hAV : lv.assetsAvailable = lv.assetsTotal)
+    (_hAV : lv.assetsAvailable = lv.assetsTotal)
     (hDc : r₁.amountDeposit'.ExactCanonical)
     (hDnn : 0 ≤ r₁.amountDeposit'.toRat)
     (hSsz : (lv.toExact.sharesTotal : ℚ) + r₁.sharesIssued.toRat ≤ 2 ^ 63 - 1)

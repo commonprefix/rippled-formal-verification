@@ -13,7 +13,9 @@ namespace XRPL.Model.Protocol
 lemma STAmount.toRat_of_offset_zero (s : STAmount) (ho : s.mOffset = 0) :
     s.toRat = (s.signedDrops : ℚ) := by
   unfold STAmount.toRat STAmount.signedDrops
-  rw [ho]
+  by_cases hm : s.mValue = 0
+  · simp [hm]
+  rw [if_neg hm, ho]
   simp only [ge_iff_le, le_refl, if_true, Int.toNat_zero, pow_zero, mul_one, Rat.mkRat_one]
   by_cases hneg : s.mIsNegative
   · rw [if_pos hneg, if_pos hneg]; push_cast; ring

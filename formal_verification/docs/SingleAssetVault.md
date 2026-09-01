@@ -226,10 +226,12 @@ Some theorems here are proven, but need to be tightened as the bugs are fixed, n
 |                            | `LawfulVault.withdraw_final_nonzero_loss`                 | final withdrawal with a nonzero loss → `tefINTERNAL`           | Proven |
 |                            | `LawfulVault.withdraw_final`                              | final withdrawal, no loss → vault zeroed, pays all available   | Proven |
 |                            | `LawfulVault.withdraw_payout_too_small`                   | payout too small to move the total → `tecPRECISION_LOSS`       | Proven |
+|                            | `LawfulVault.withdraw_success`                            | all guards pass → exact updated vault and payout               | Proven |
 |                            | `LawfulVault.withdraw_error_codes`                        | the full set of withdraw return codes                          | Proven |
 | `VaultClawbackReturn.lean` | `LawfulVault.clawback_negative_amount`                    | negative amount → `tecINTERNAL`, unchanged                     | Proven |
 |                            | `LawfulVault.clawback_zero_shares`                        | destroys zero shares → `tecPRECISION_LOSS`, unchanged          | Proven |
 |                            | `LawfulVault.clawback_recovery_too_small`                 | recovery too small to move the total → `tecPRECISION_LOSS`     | Proven |
+|                            | `LawfulVault.clawback_success`                            | all guards pass → exact updated vault and recovery             | Proven |
 |                            | `LawfulVault.clawback_error_codes`                        | the full set of clawback return codes                          | Proven |
 | `VaultBurnReturn.lean`     | `LawfulVault.canBurnShares_rejected_code`                 | the only burn-check rejection is `tecNO_PERMISSION`            | Proven |
 |                            | `LawfulVault.canBurnShares_no_permission`                 | no shares, or shares with nonzero assets → `tecNO_PERMISSION`  | Proven |

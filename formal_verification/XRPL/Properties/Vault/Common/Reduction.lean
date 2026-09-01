@@ -35,13 +35,13 @@ theorem roundedDepositAmount_ok (lv : LawfulVault) (amountDeposit ra' : STAmount
     (hr : roundToVaultExponent amountDeposit lv.assetsTotal = .ok ra') :
     lv.roundedDepositAmount amountDeposit =
       (if ra'.isZero then .ok (.rejected .tecPRECISION_LOSS) else .ok (.rounded ra')) := by
-  simp only [LawfulVault.roundedDepositAmount, hr, ok_bind, err_bind]; rfl
+  simp only [LawfulVault.roundedDepositAmount, hr, ok_bind]; rfl
 
 /-- `roundedDepositAmount` propagates a `roundToVaultExponent` error. -/
 theorem roundedDepositAmount_err (lv : LawfulVault) (amountDeposit : STAmount) (e : Error)
     (hr : roundToVaultExponent amountDeposit lv.assetsTotal = .error e) :
     lv.roundedDepositAmount amountDeposit = .error e := by
-  simp only [LawfulVault.roundedDepositAmount, hr, ok_bind, err_bind]
+  simp only [LawfulVault.roundedDepositAmount, hr, err_bind]
 
 /-- A `rounded` outcome means `roundToVaultExponent` produced exactly that nonzero
 amount. -/

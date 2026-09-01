@@ -134,10 +134,13 @@ theorem Number.exponent_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
     have hexp_nn : (0 : ℤ) ≤ n.exponent_ := le_of_lt hcon
     have htoRat : n.toRat = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_.toNat := by
       unfold Number.toRat
-      simp only [hneg, Bool.false_eq_true, if_false, ge_iff_le]
-      rw [if_pos hexp_nn, Rat.mkRat_one]
-      push_cast
-      ring
+      rcases eq_or_ne n.mantissa_ 0 with hm | hm
+      · simp [hm]
+      · rw [if_neg hm]
+        simp only [hneg, Bool.false_eq_true, if_false, ge_iff_le]
+        rw [if_pos hexp_nn, Rat.mkRat_one]
+        push_cast
+        ring
     have hm_nat : 1000000000000000000 ≤ n.mantissa_.toNat := by
       have hle := UInt64.le_iff_toNat_le.mp hmlo
       rwa [largeRange_min_val] at hle
