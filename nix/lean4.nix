@@ -9,7 +9,6 @@
   fetchurl,
   zstd,
   autoPatchelfHook,
-  fixDarwinDylibNames,
 }:
 let
   # "leanprover/lean4:vX.Y.Z" -> "X.Y.Z". Single source of truth with lake.
@@ -56,12 +55,15 @@ stdenv.mkDerivation {
   nativeBuildInputs = [
     zstd
   ]
-  ++ lib.optional stdenv.hostPlatform.isLinux autoPatchelfHook
-  ++ lib.optional stdenv.hostPlatform.isDarwin fixDarwinDylibNames;
+  ++ lib.optional stdenv.hostPlatform.isLinux autoPatchelfHook;
 
   # The release binaries name the FHS loader in PT_INTERP; autoPatchelfHook
-  # retargets them at the Nix one.
+  # points them at the Nix one.
   buildInputs = lib.optional stdenv.hostPlatform.isLinux stdenv.cc.cc.lib;
+
+  # Skip Darwin fixup: fixDarwinDylibNames cannot rewrite the prebuilt
+  # libleanshared_1.dylib install name, so it aborts.
+  dontFixup = stdenv.hostPlatform.isDarwin;
 
   # Keep the release layout as shipped: bin/ needs lib/lean/ beside it.
   installPhase = ''
