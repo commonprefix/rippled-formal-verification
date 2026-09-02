@@ -756,7 +756,7 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
         // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
         // testClawbackAppliedDelta();      // total moves by more than recovered (both)
-        // testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000);                 // FV_M2_17 (unrealized loss)
+        // testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000);                     // FV_M2_17 (unrealized loss)
         // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793'238LL, -18}, Number{0}, 7'000'025);  // FV_M2_18 (>16 digit dust)
 
         // Fixed discrepancies, kept as regression tests.
