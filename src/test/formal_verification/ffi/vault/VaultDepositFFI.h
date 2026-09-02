@@ -35,21 +35,21 @@ lean_deposit_result_error(lean_object* r);
 
 namespace xrpl::test::formal_verification {
 
-// Rounded-deposit result. Exactly one of amount (rounded) / error (rejected TER, e.g.
+// Rounding result. Exactly one of amount (rounded) / error (rejected TER, e.g.
 // tecPRECISION_LOSS) is set, unless the model error.
-struct LeanRoundedDepositAmountResult
+struct LeanRoundingResult
 {
     std::optional<LeanError> leanError;
     std::optional<TER> error;
     std::optional<STAmount> amount;
 };
 
-class RoundedDepositResultFFI : public LeanObjectFFI
+class RoundingResultFFI : public LeanObjectFFI
 {
 public:
     using LeanObjectFFI::LeanObjectFFI;
 
-    LeanRoundedDepositAmountResult
+    LeanRoundingResult
     read() const
     {
         auto const code = leanGetOptU32(lean_rounded_deposit_result_code);
@@ -107,13 +107,13 @@ leanVaultDeposit(Vault const& state, STAmount const& amount, bool isDonation)
     return e.value->read();
 }
 
-inline LeanRoundedDepositAmountResult
+inline LeanRoundingResult
 leanRoundedDepositAmount(Vault const& state, STAmount const& amount)
 {
     auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful, .error = std::nullopt, .amount = std::nullopt};
-    LeanExcept<RoundedDepositResultFFI> const e = readExcept<RoundedDepositResultFFI>(
+    LeanExcept<RoundingResultFFI> const e = readExcept<RoundingResultFFI>(
         leanCall(lean_rounded_deposit_amount, *lawful, STAmountFFI::build(amount)));
     if (!e.value)
         return {.leanError = e.error, .error = std::nullopt, .amount = std::nullopt};

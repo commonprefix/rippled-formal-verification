@@ -39,7 +39,7 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanRoundedDepositAmountResult const rounded = leanRoundedDepositAmount(state, amount);
+        LeanRoundingResult const rounded = leanRoundedDepositAmount(state, amount);
         expectLawful(rounded);
 
         env(jtx::Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
@@ -719,7 +719,7 @@ class LeanVaultDeposit_test : public LeanSuite
             "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
 
         // Model: its charge must be on the vault scale as well.
-        LeanRoundedDepositAmountResult const chargeRounded =
+        LeanRoundingResult const chargeRounded =
             leanRoundedDepositAmount(before, lean.amountDeposit);
         expectLawful(chargeRounded);
         BEAST_EXPECTS(

@@ -29,8 +29,6 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-deriving instance DecidableEq for RoundedDepositResult
-
 /-! ## Witness data for the fractional sharpness theorems -/
 
 /-- The shared fractional witness vault: 3 assets, 7·10¹⁵ shares. -/

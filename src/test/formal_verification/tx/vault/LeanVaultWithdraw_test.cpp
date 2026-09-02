@@ -660,7 +660,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         BEAST_EXPECT(before.assetsTotal == Number{3});
 
         // Redeem 2333333333333 of the holder's shares.
-        STAmount const shares{shareIssue(env, vaultKeylet), 2'333'333'333'333LL};
+        STAmount const shares{shareIssue(env, vaultKeylet), std::int64_t{2'333'333'333'333}};
         LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true);
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean withdraw failed");

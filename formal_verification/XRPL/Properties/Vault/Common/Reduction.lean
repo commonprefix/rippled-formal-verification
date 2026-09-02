@@ -10,6 +10,7 @@ and the two bridges that read that characterization back. -/
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
+open XRPL.Model.Result
 
 /-- `Except.ok`-bind step, definitional. -/
 theorem ok_bind {ε α β} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
@@ -55,7 +56,7 @@ theorem roundedDepositAmount_rounded (v : Vault) (amountDeposit ra : STAmount)
     split at h
     · exact absurd h (by simp)
     · rename_i hz
-      rw [Except.ok.injEq, RoundedDepositResult.rounded.injEq] at h
+      rw [Except.ok.injEq, RoundingResult.rounded.injEq] at h
       subst h
       exact ⟨rfl, by simpa using hz⟩
 
@@ -71,7 +72,7 @@ theorem roundedDepositAmount_rejected (v : Vault) (amountDeposit : STAmount) (te
     rw [roundedDepositAmount_ok v amountDeposit ra' hr] at h
     split at h
     · rename_i hz
-      rw [Except.ok.injEq, RoundedDepositResult.rejected.injEq] at h
+      rw [Except.ok.injEq, RoundingResult.rejected.injEq] at h
       exact ⟨ra', rfl, hz, h.symm⟩
     · exact absurd h (by simp)
 

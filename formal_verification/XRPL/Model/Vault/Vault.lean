@@ -1,3 +1,4 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
@@ -21,10 +22,8 @@ structure RawVault where
 -- Detect an overflow error surfaced by arithmetic ops.
 def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
 
--- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld.
-def exponent (amount : Number) (nt : NumericType) : Except Error Int := do
-  let a ← STAmount.ofNumber nt amount .to_nearest
-  return a.exponent
+def exponent (amount : Number) (nt : NumericType) : Except Error Int :=
+  numberExponent amount nt
 
 /-- Representation well-formed of the raw record. The per-issuance shares
 bound (`OutstandingAmount ≤ MaximumAmount`) is not stated here: the issuance's

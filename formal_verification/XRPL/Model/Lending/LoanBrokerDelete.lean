@@ -1,22 +1,23 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
-def LoanBroker.canDelete (lb : LoanBroker) (vault : RawVault) : Except Error TER := do
+def LoanBroker.canDelete {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
+    : Except Error TER := do
   if lb.loanCount != 0 then
     return .tecHAS_OBLIGATIONS
 
   if lb.debtTotal.signum != 0 then
     -- defensive check: in case debt is non-zero but rounds to zero
-    let scale ← exponent vault.assetsTotal vault.numericType
-    let rounded ← STAmount.roundToNumericType vault.numericType lb.debtTotal .towards_zero (.some scale)
+    let poolExponent ← AssetPool.exponent pool
+    let rounded ← STAmount.roundToNumericType (AssetPool.numericType pool) lb.debtTotal
+      .towards_zero (.some poolExponent)
     if rounded.signum != 0 then
       return .tecHAS_OBLIGATIONS
 
