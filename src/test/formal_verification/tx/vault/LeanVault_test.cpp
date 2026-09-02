@@ -1,21 +1,19 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 
 #include <xrpl/basics/Number.h>
 
 #include <optional>
 #include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 // A not-lawful result is the expected and each case violates one invariant clause
 // (RawVault.WF / RawVault.Valid) and build must reject it.
-class LeanLawfulVault_test : public LeanSuite
+class LeanVault_test : public LeanSuite
 {
     // A valid vault: solvent, fractional (IOU) asset at scale 6, no cap, no unrealized loss.
-    static LawfulVault
+    static Vault
     baseline()
     {
         return {
@@ -29,10 +27,10 @@ class LeanLawfulVault_test : public LeanSuite
     }
 
     void
-    runLawful(LawfulVault const& s, bool shouldBeLawful, std::string const& label)
+    runLawful(Vault const& s, bool shouldBeLawful, std::string const& label)
     {
         testcase(label);
-        BEAST_EXPECTS(LawfulVaultFFI::build(s).has_value() == shouldBeLawful, label);
+        BEAST_EXPECTS(VaultFFI::build(s).has_value() == shouldBeLawful, label);
     }
 
     void
@@ -140,6 +138,6 @@ class LeanLawfulVault_test : public LeanSuite
     }
 };
 
-BEAST_DEFINE_TESTSUITE(LeanLawfulVault, formal_verification, xrpl);
+BEAST_DEFINE_TESTSUITE(LeanVault, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

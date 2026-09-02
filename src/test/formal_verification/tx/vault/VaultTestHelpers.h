@@ -1,6 +1,6 @@
 #pragma once
 
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
@@ -34,13 +34,13 @@ createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
     return keylet;
 }
 
-// Snapshot the on-ledger vault into the model's LawfulVault DTO
-inline LawfulVault
+// Snapshot the on-ledger vault into the model's Vault DTO
+inline Vault
 readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
 {
     auto const vaultSle = env.le(vaultKeylet);
     auto const shareMptId = vaultSle->at(sfShareMPTID);
-    return LawfulVault{
+    return Vault{
         .assetsTotal = vaultSle->at(sfAssetsTotal),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
         .assetsMaximum = vaultSle->isFieldPresent(sfAssetsMaximum)
@@ -135,9 +135,9 @@ createDilutionVault(
     env.close();
 
     auto const keylet = createVault(env, owner, asset.raw());
-    env(Vault::deposit({.depositor = holder, .id = keylet.key, .amount = asset(seed)}));
+    env(jtx::Vault::deposit({.depositor = holder, .id = keylet.key, .amount = asset(seed)}));
     env.close();
-    env(Vault::deposit(
+    env(jtx::Vault::deposit(
         {.depositor = owner, .id = keylet.key, .amount = asset(donation), .flags = tfVaultDonate}));
     env.close();
     return keylet;
@@ -166,15 +166,16 @@ createAppliedDeltaVault(
     env(pay(issuer, holder, asset(Number{1})));
     env.close();
 
-    Vault vault{env};
+    jtx::Vault vault{env};
     auto [tx, keylet] = vault.create({.owner = owner, .asset = asset.raw()});
     tx[sfScale] = 18;
     env(tx);
     env.close();
 
-    env(Vault::deposit({.depositor = holder, .id = keylet.key, .amount = asset(Number{7, -3})}));
+    env(jtx::Vault::deposit(
+        {.depositor = holder, .id = keylet.key, .amount = asset(Number{7, -3})}));
     env.close();
-    env(Vault::deposit(
+    env(jtx::Vault::deposit(
         {.depositor = owner,
          .id = keylet.key,
          .amount = asset(Number{2'993, -3}),

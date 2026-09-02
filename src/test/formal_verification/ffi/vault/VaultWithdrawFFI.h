@@ -2,7 +2,7 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/TER.h>
@@ -21,7 +21,7 @@ lean_shares_to_assets_withdraw(
 lean_object*
 lean_mk_withdraw_amount(lean_object* amount, uint8_t byShares);
 lean_object*
-lean_vault_withdraw(lean_object* lv, lean_object* amount, uint8_t waiveUnrealizedLoss);
+lean_vault_withdraw(lean_object* v, lean_object* amount, uint8_t waiveUnrealizedLoss);
 
 lean_object*
 lean_withdraw_result_assets(lean_object* r);
@@ -58,12 +58,9 @@ struct LeanSharesToAssetsResult
 };
 
 inline LeanSharesToAssetsResult
-leanSharesToAssetsWithdraw(
-    LawfulVault const& state,
-    STAmount const& shares,
-    bool waiveUnrealizedLoss)
+leanSharesToAssetsWithdraw(Vault const& state, STAmount const& shares, bool waiveUnrealizedLoss)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful, .assets = STAmount{}};
     LeanExcept<STAmountFFI> const e = readExcept<STAmountFFI>(leanCall(
@@ -82,7 +79,7 @@ struct LeanWithdrawResult
     std::optional<TER> error;
     STAmount assets{};
     STAmount shares{};
-    LawfulVault vault;
+    Vault vault;
 };
 
 class WithdrawResultFFI : public LeanObjectFFI
@@ -99,19 +96,19 @@ public:
                            : std::nullopt,
             .assets = leanGetObj<STAmountFFI>(lean_withdraw_result_assets),
             .shares = leanGetObj<STAmountFFI>(lean_withdraw_result_shares),
-            .vault = leanGetObj<LawfulVaultFFI>(lean_withdraw_result_vault),
+            .vault = leanGetObj<VaultFFI>(lean_withdraw_result_vault),
         };
     }
 };
 
 inline LeanWithdrawResult
 leanVaultWithdraw(
-    LawfulVault const& state,
+    Vault const& state,
     STAmount const& amount,
     bool byShares,
     bool waiveUnrealizedLoss = false)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful};
     LeanExcept<WithdrawResultFFI> const e = readExcept<WithdrawResultFFI>(leanCall(

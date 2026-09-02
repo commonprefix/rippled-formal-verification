@@ -17,19 +17,19 @@ structure RawVault.Exact where
 /-- The exact value of a vault state. Total: `sharesTotal` falls back to `0`-like
 junk when the stored `Number` is not a nonnegative integer; `RawVault.WF` rules that
 out. -/
-def RawVault.toExact (v : RawVault) : RawVault.Exact where
-  assetsTotal := v.assetsTotal.toRat
-  assetsAvailable := v.assetsAvailable.toRat
-  assetsMaximum := v.assetsMaximum.map Number.toRat
-  sharesTotal := v.sharesTotal.toRat.num.toNat
-  lossUnrealized := v.lossUnrealized.toRat
+def RawVault.toExact (rv : RawVault) : RawVault.Exact where
+  assetsTotal := rv.assetsTotal.toRat
+  assetsAvailable := rv.assetsAvailable.toRat
+  assetsMaximum := rv.assetsMaximum.map Number.toRat
+  sharesTotal := rv.sharesTotal.toRat.num.toNat
+  lossUnrealized := rv.lossUnrealized.toRat
 
 /-- `toExact`'s shares projection is faithful on well-formed records: casting the
 `ℕ` value back to `ℚ` recovers the stored value. -/
-theorem RawVault.WF.toExact_sharesTotal (v : RawVault) (h : v.WF) :
-    ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat := by
-  show ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = v.sharesTotal.toRat
-  set q := v.sharesTotal.toRat with hq
+theorem RawVault.WF.toExact_sharesTotal (rv : RawVault) (h : rv.WF) :
+    ((rv.toExact.sharesTotal : ℕ) : ℚ) = rv.sharesTotal.toRat := by
+  show ((rv.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = rv.sharesTotal.toRat
+  set q := rv.sharesTotal.toRat with hq
   have hden : q.den = 1 := h.sharesTotal_int
   have hnum_nn : 0 ≤ q.num := Rat.num_nonneg.mpr h.sharesTotal_nonneg
   have hcast : (q.num : ℚ) = q := by

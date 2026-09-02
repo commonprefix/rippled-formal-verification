@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Defs
-import XRPL.Properties.Vault.LawfulVaultValid
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Model.Vault.VaultSet
@@ -56,51 +56,51 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-! ## `LawfulVault.canVaultSet` proof bodies -/
+/-! ## `Vault.canVaultSet` proof bodies -/
 
 /-- **Proof body of `canVaultSet_below_total`.** -/
-theorem LawfulVault.canVaultSet_below_total_proof (lv : LawfulVault) (assetsMaximum : Number)
+theorem Vault.canVaultSet_below_total_proof (v : Vault) (assetsMaximum : Number)
     (hne : assetsMaximum.operator_ne Number.zero = true)
-    (hlt : assetsMaximum.operator_lt lv.assetsTotal = true) :
-    lv.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
-  unfold LawfulVault.canVaultSet
+    (hlt : assetsMaximum.operator_lt v.assetsTotal = true) :
+    v.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
+  unfold Vault.canVaultSet
   exact if_pos (by rw [Bool.and_eq_true]; exact ⟨hne, hlt⟩)
 
 /-- **Proof body of `canVaultSet_success`.** -/
-theorem LawfulVault.canVaultSet_success_proof (lv : LawfulVault) (assetsMaximum : Number)
+theorem Vault.canVaultSet_success_proof (v : Vault) (assetsMaximum : Number)
     (hok : (assetsMaximum.operator_ne Number.zero &&
-        assetsMaximum.operator_lt lv.assetsTotal) = false) :
-    lv.canVaultSet assetsMaximum = .tesSUCCESS := by
-  unfold LawfulVault.canVaultSet
+        assetsMaximum.operator_lt v.assetsTotal) = false) :
+    v.canVaultSet assetsMaximum = .tesSUCCESS := by
+  unfold Vault.canVaultSet
   exact if_neg (by rw [Bool.not_eq_true]; exact hok)
 
 /-- **Proof body of `canVaultSet_error_codes`.** -/
-theorem LawfulVault.canVaultSet_error_codes_proof (lv : LawfulVault) (assetsMaximum : Number) :
-    lv.canVaultSet assetsMaximum = .tesSUCCESS ∨
-    lv.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
-  unfold LawfulVault.canVaultSet
+theorem Vault.canVaultSet_error_codes_proof (v : Vault) (assetsMaximum : Number) :
+    v.canVaultSet assetsMaximum = .tesSUCCESS ∨
+    v.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
+  unfold Vault.canVaultSet
   split_ifs <;> first | exact Or.inl rfl | exact Or.inr rfl
 
 /-- **Proof body of `lawful_canVaultSet_iff`.** -/
-theorem LawfulVault.lawful_canVaultSet_iff_proof (lv : LawfulVault)
+theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
     (assetsMaximum : Number)
     (hnorm : assetsMaximum.isNormalized) :
-    lv.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ lv.toExact.assetsTotal ≤ assetsMaximum.toRat := by
-  have htotal : lv.assetsTotal.isNormalized := lv.wf.assetsTotal_norm
+    v.canVaultSet assetsMaximum = .tesSUCCESS ↔
+      assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat := by
+  have htotal : v.assetsTotal.isNormalized := v.wf.assetsTotal_norm
   -- the nonzero guard vanishes exactly at rational zero
   have hb1 : assetsMaximum.operator_ne Number.zero = false ↔ assetsMaximum.toRat = 0 :=
     Number.operator_ne_zero_eq_false_iff assetsMaximum hnorm
   -- the below-total guard vanishes exactly when the maximum is at least the total
-  have hb2 : assetsMaximum.operator_lt lv.assetsTotal = false ↔
-      lv.assetsTotal.toRat ≤ assetsMaximum.toRat := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff assetsMaximum lv.assetsTotal hnorm htotal, not_lt]
-  -- `lv.toExact.assetsTotal` is `lv.assetsTotal.toRat` by definition of `toExact`
-  show lv.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ lv.assetsTotal.toRat ≤ assetsMaximum.toRat
-  unfold LawfulVault.canVaultSet
+  have hb2 : assetsMaximum.operator_lt v.assetsTotal = false ↔
+      v.assetsTotal.toRat ≤ assetsMaximum.toRat := by
+    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff assetsMaximum v.assetsTotal hnorm htotal, not_lt]
+  -- `v.toExact.assetsTotal` is `v.assetsTotal.toRat` by definition of `toExact`
+  show v.canVaultSet assetsMaximum = .tesSUCCESS ↔
+      assetsMaximum.toRat = 0 ∨ v.assetsTotal.toRat ≤ assetsMaximum.toRat
+  unfold Vault.canVaultSet
   by_cases hc : (assetsMaximum.operator_ne Number.zero &&
-      assetsMaximum.operator_lt lv.assetsTotal) = true
+      assetsMaximum.operator_lt v.assetsTotal) = true
   · rw [if_pos hc]
     rw [Bool.and_eq_true] at hc
     refine iff_of_false (by decide) ?_
@@ -114,35 +114,35 @@ theorem LawfulVault.lawful_canVaultSet_iff_proof (lv : LawfulVault)
     · exact Or.inl (hb1.mp h1)
     · exact Or.inr (hb2.mp h2)
 
-/-! ## `LawfulVault.canVaultDelete` proof bodies -/
+/-! ## `Vault.canVaultDelete` proof bodies -/
 
 /-- **Proof body of `lawful_canVaultDelete_iff`.** On a lawful vault
 `assetsAvailable ≤ assetsTotal` and `0 ≤ assetsAvailable`, so `assetsTotal = 0`
 already forces `assetsAvailable = 0`. The redundant middle conjunct is dropped:
 the success condition is `assetsTotal = 0 ∧ sharesTotal = 0`, and the
 `assetsAvailable` guard (checked first) is discharged from `assetsTotal = 0`. -/
-theorem LawfulVault.lawful_canVaultDelete_iff_proof (lv : LawfulVault) :
-    lv.canVaultDelete = .tesSUCCESS ↔
-      lv.toExact.assetsTotal = 0 ∧ lv.toExact.sharesTotal = 0 := by
-  have hav := Number.operator_ne_zero_eq_false_iff lv.assetsAvailable lv.wf.assetsAvailable_norm
-  have hat := Number.operator_ne_zero_eq_false_iff lv.assetsTotal lv.wf.assetsTotal_norm
-  have hst := Number.operator_ne_zero_eq_false_iff lv.sharesTotal lv.wf.sharesTotal_norm
-  have hshares : lv.toExact.sharesTotal = 0 ↔ lv.sharesTotal.toRat = 0 := by
-    rw [← RawVault.WF.toExact_sharesTotal lv.toRawVault lv.wf, Nat.cast_eq_zero]
+theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault) :
+    v.canVaultDelete = .tesSUCCESS ↔
+      v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 := by
+  have hav := Number.operator_ne_zero_eq_false_iff v.assetsAvailable v.wf.assetsAvailable_norm
+  have hat := Number.operator_ne_zero_eq_false_iff v.assetsTotal v.wf.assetsTotal_norm
+  have hst := Number.operator_ne_zero_eq_false_iff v.sharesTotal v.wf.sharesTotal_norm
+  have hshares : v.toExact.sharesTotal = 0 ↔ v.sharesTotal.toRat = 0 := by
+    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, Nat.cast_eq_zero]
   -- on a lawful vault `assetsTotal = 0` forces `assetsAvailable = 0`
-  have hAV0 : lv.assetsTotal.toRat = 0 → lv.assetsAvailable.toRat = 0 := fun h => by
-    have hle : lv.assetsAvailable.toRat ≤ lv.assetsTotal.toRat := lv.exact.assetsAvailable_le
-    have hnn : 0 ≤ lv.assetsAvailable.toRat := lv.exact.assetsAvailable_nonneg
+  have hAV0 : v.assetsTotal.toRat = 0 → v.assetsAvailable.toRat = 0 := fun h => by
+    have hle : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
+    have hnn : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
     rw [h] at hle
     exact le_antisymm hle hnn
-  show lv.canVaultDelete = .tesSUCCESS ↔
-      lv.assetsTotal.toRat = 0 ∧ lv.toExact.sharesTotal = 0
+  show v.canVaultDelete = .tesSUCCESS ↔
+      v.assetsTotal.toRat = 0 ∧ v.toExact.sharesTotal = 0
   rw [← hat, hshares, ← hst]
-  unfold LawfulVault.canVaultDelete
+  unfold Vault.canVaultDelete
   split_ifs with h1 h2 h3
   · refine iff_of_false (by decide) ?_
     rintro ⟨hat', _⟩
-    have hAvz : lv.assetsAvailable.operator_ne Number.zero = false := hav.mpr (hAV0 (hat.mp hat'))
+    have hAvz : v.assetsAvailable.operator_ne Number.zero = false := hav.mpr (hAV0 (hat.mp hat'))
     rw [hAvz] at h1; exact absurd h1 (by decide)
   · refine iff_of_false (by decide) ?_
     rintro ⟨hat', _⟩; rw [h2] at hat'; exact absurd hat' (by decide)
@@ -151,20 +151,20 @@ theorem LawfulVault.lawful_canVaultDelete_iff_proof (lv : LawfulVault) :
   · exact iff_of_true rfl ⟨Bool.eq_false_iff.mpr h2, Bool.eq_false_iff.mpr h3⟩
 
 /-- **Proof body of `canVaultDelete_error_codes`.** -/
-theorem LawfulVault.canVaultDelete_error_codes_proof (lv : LawfulVault) :
-    lv.canVaultDelete = .tesSUCCESS ∨
-    lv.canVaultDelete = .tecHAS_OBLIGATIONS := by
-  unfold LawfulVault.canVaultDelete
+theorem Vault.canVaultDelete_error_codes_proof (v : Vault) :
+    v.canVaultDelete = .tesSUCCESS ∨
+    v.canVaultDelete = .tecHAS_OBLIGATIONS := by
+  unfold Vault.canVaultDelete
   split_ifs <;> first | exact Or.inl rfl | exact Or.inr rfl
 
 /-- **Proof body of `canVaultDelete_has_obligations_iff`.** -/
-theorem LawfulVault.canVaultDelete_has_obligations_iff_proof (lv : LawfulVault) :
-    lv.canVaultDelete = .tecHAS_OBLIGATIONS ↔
-      (lv.assetsAvailable ≠ Number.zero ∨ lv.assetsTotal ≠ Number.zero ∨
-        lv.sharesTotal ≠ Number.zero) := by
-  unfold LawfulVault.canVaultDelete
-  rw [← Number.operator_ne_iff_ne lv.assetsAvailable, ← Number.operator_ne_iff_ne lv.assetsTotal,
-      ← Number.operator_ne_iff_ne lv.sharesTotal]
+theorem Vault.canVaultDelete_has_obligations_iff_proof (v : Vault) :
+    v.canVaultDelete = .tecHAS_OBLIGATIONS ↔
+      (v.assetsAvailable ≠ Number.zero ∨ v.assetsTotal ≠ Number.zero ∨
+        v.sharesTotal ≠ Number.zero) := by
+  unfold Vault.canVaultDelete
+  rw [← Number.operator_ne_iff_ne v.assetsAvailable, ← Number.operator_ne_iff_ne v.assetsTotal,
+      ← Number.operator_ne_iff_ne v.sharesTotal]
   split_ifs with h1 h2 h3
   · exact iff_of_true rfl (Or.inl h1)
   · exact iff_of_true rfl (Or.inr (Or.inl h2))

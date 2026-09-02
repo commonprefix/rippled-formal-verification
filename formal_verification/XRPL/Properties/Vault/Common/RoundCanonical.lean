@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
 /-! # Canonicity of the `roundToVaultExponent` output
 
-The `LawfulVault.deposit` accuracy headlines only ever hypothesize that the *raw* input
+The `Vault.deposit` accuracy headlines only ever hypothesize that the *raw* input
 `amountDeposit` is stored canonically (`amountDeposit.Canonical`). Internally the
 deposit rounds it with `roundToVaultExponent`, and the rounded amount must itself
 be canonical for the `toNumber`-exactness lemmas the exchange proofs consume.
@@ -860,12 +860,12 @@ theorem RawVault.roundToVaultExponent_le (amountDeposit result : STAmount) (asse
 
 /-- The rounded deposit amount from `roundedDepositAmount` is stored canonically
 whenever the raw `amountDeposit` is: the `.rounded` outcome forbids the zero case. -/
-theorem LawfulVault.roundedDepositAmount_canonical (lv : LawfulVault) (amountDeposit roundedAmount : STAmount)
+theorem Vault.roundedDepositAmount_canonical (v : Vault) (amountDeposit roundedAmount : STAmount)
     (hcanon : amountDeposit.Canonical)
-    (hrounded : lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
     roundedAmount.Canonical := by
-  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded lv amountDeposit roundedAmount hrounded
-  rcases roundToVaultExponent_canonical_or_isZero amountDeposit roundedAmount lv.assetsTotal
+  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  rcases roundToVaultExponent_canonical_or_isZero amountDeposit roundedAmount v.assetsTotal
     hcanon hround with hc | hz
   · exact hc
   · rw [hz] at hnz; exact absurd hnz (by decide)

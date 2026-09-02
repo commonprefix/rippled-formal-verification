@@ -1,6 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -22,9 +22,7 @@
 #include <optional>
 #include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 class LeanVaultDeposit_test : public LeanSuite
 {
@@ -40,11 +38,11 @@ class LeanVaultDeposit_test : public LeanSuite
         TER expected)
     {
         using namespace jtx;
-        LawfulVault const state = readVaultState(env, vaultKeylet, asset);
+        Vault const state = readVaultState(env, vaultKeylet, asset);
         LeanRoundedDepositAmountResult const rounded = leanRoundedDepositAmount(state, amount);
         expectLawful(rounded);
 
-        env(Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
+        env(jtx::Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         env.close();
@@ -87,15 +85,15 @@ class LeanVaultDeposit_test : public LeanSuite
         bool isDonation = false)
     {
         using namespace jtx;
-        LawfulVault const state = readVaultState(env, vaultKeylet, asset);
+        Vault const state = readVaultState(env, vaultKeylet, asset);
         LeanDepositResult const deposit = leanVaultDeposit(state, amount, isDonation);
         expectLawful(deposit);
 
-        Vault::DepositArgs depositArgs{
+        jtx::Vault::DepositArgs depositArgs{
             .depositor = depositor, .id = vaultKeylet.key, .amount = amount};
         if (isDonation)
             depositArgs.flags = tfVaultDonate;
-        env(Vault::deposit(depositArgs), jtx::Ter(std::ignore));
+        env(jtx::Vault::deposit(depositArgs), jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         env.close();
 
@@ -158,7 +156,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         if (vaultBalanceBeforeDeposit.signum() != 0)
         {
-            env(Vault::deposit(
+            env(jtx::Vault::deposit(
                     {.depositor = seeder,
                      .id = vaultKeylet.key,
                      .amount = vaultBalanceBeforeDeposit}),
@@ -170,7 +168,7 @@ class LeanVaultDeposit_test : public LeanSuite
         // exercise the exchange-rate path.
         if (donation.signum() != 0)
         {
-            env(Vault::deposit(
+            env(jtx::Vault::deposit(
                     {.depositor = vaultOwner,
                      .id = vaultKeylet.key,
                      .amount = donation,
@@ -393,7 +391,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         PrettyAsset const asset = issuer["USD"];
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        env(Vault::deposit(
+        env(jtx::Vault::deposit(
                 {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
             jtx::Ter(tesSUCCESS));
         env.close();
@@ -428,7 +426,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
         // Vault holds 1e12 USD -> ULP ~1e-3, so depositing 1e-4 rounds to zero at the vault scale.
-        env(Vault::deposit(
+        env(jtx::Vault::deposit(
                 {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
             jtx::Ter(tesSUCCESS));
         env.close();
@@ -462,10 +460,11 @@ class LeanVaultDeposit_test : public LeanSuite
         auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
         // After the donation 1 share = 1.667 drops. bob's 4-drop deposit buys 2 shares:
         // C++ charges round(3.33) = 3, the model charges ceil = 4.
-        env(Vault::deposit({.depositor = vaultOwner, .id = vaultKeylet.key, .amount = drops(3)}),
+        env(jtx::Vault::deposit(
+                {.depositor = vaultOwner, .id = vaultKeylet.key, .amount = drops(3)}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        env(Vault::deposit(
+        env(jtx::Vault::deposit(
                 {.depositor = vaultOwner,
                  .id = vaultKeylet.key,
                  .amount = drops(2),
@@ -566,16 +565,16 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const depositN{15'870'335, -4};  // 1587.0335
         auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset, depositN);
 
-        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const amount = asset(depositN);
         LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
 
-        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
+        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         BEAST_EXPECTS(
             priceNotBelow(
@@ -611,7 +610,7 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        env(Vault::deposit(
+        env(jtx::Vault::deposit(
                 {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{100})}),
             jtx::Ter(tesSUCCESS));
         env.close();
@@ -625,7 +624,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Donating 50 rounds the two totals in opposite directions, decreasing the gap below the
         // loss. The donation is valid and should succeed, but the invariant fires.
-        env(Vault::deposit(
+        env(jtx::Vault::deposit(
                 {.depositor = vaultOwner,
                  .id = vaultKeylet.key,
                  .amount = asset(Number{50}),
@@ -650,12 +649,13 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         PrettyAsset const asset = issuer["USD"];
-        Vault vault{env};
+        jtx::Vault vault{env};
         auto [tx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
         tx[sfScale] = vaultScale;
         env(tx);
         env.close();
-        env(Vault::deposit({.depositor = issuer, .id = vaultKeylet.key, .amount = asset(seed)}),
+        env(jtx::Vault::deposit(
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(seed)}),
             jtx::Ter(tesSUCCESS));
         env.close();
 
@@ -683,7 +683,7 @@ class LeanVaultDeposit_test : public LeanSuite
         env(pay(holder, issuer, asset(Number{992, -3})));
         env.close();
 
-        LawfulVault const before = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         BEAST_EXPECT(before.assetsTotal == Number{3});
 
         // Deposit 0.001, an amount already on the vault grid.
@@ -693,10 +693,10 @@ class LeanVaultDeposit_test : public LeanSuite
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean deposit failed");
 
         Number const holderBefore = iouBalance(env, holder, asset);
-        env(Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
+        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(tesSUCCESS));
         env.close();
-        LawfulVault const after = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const after = readVaultState(env, vaultKeylet, asset.raw());
 
         // C++: the vault must gain exactly what the depositor paid.
         Number const cppDelta = after.assetsTotal - before.assetsTotal;
@@ -826,4 +826,4 @@ class LeanVaultDeposit_test : public LeanSuite
 
 BEAST_DEFINE_TESTSUITE(LeanVaultDeposit, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

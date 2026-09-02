@@ -7,12 +7,12 @@ open XRPL.Model.Protocol (Number NumericType STAmount Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_burn_shares]
-def lean_vault_burn_shares (lv : LawfulVault) (sharesDestroyed : STAmount) : Except Error LawfulVault :=
-  lv.burnShares sharesDestroyed
+def lean_vault_burn_shares (v : Vault) (sharesDestroyed : STAmount) : Except Error Vault :=
+  v.burnShares sharesDestroyed
 
 @[export lean_can_burn_shares]
-def lean_can_burn_shares (lv : LawfulVault) : Except Error CanBurnSharesResult :=
-  lv.canBurnShares
+def lean_can_burn_shares (v : Vault) : Except Error CanBurnSharesResult :=
+  v.canBurnShares
 
 @[export lean_can_burn_result_assets]
 def lean_can_burn_result_assets (r : CanBurnSharesResult) : Option STAmount :=

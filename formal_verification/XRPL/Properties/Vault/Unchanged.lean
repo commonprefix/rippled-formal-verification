@@ -10,26 +10,26 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-theorem LawfulVault.deposit_error_unchanged (lv : LawfulVault) (amount : STAmount) (isDonation : Bool)
-    (r : DepositResult) (hok : lv.deposit amount isDonation = .ok r)
+theorem Vault.deposit_error_unchanged (v : Vault) (amount : STAmount) (isDonation : Bool)
+    (r : DepositResult) (hok : v.deposit amount isDonation = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.amountDeposit' = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.amountDeposit' = STAmount.zero v.numericType ∧
     r.sharesIssued = STAmount.zero .int64 :=
-  LawfulVault.deposit_error_rejected_proof lv amount isDonation r hok herr
+  Vault.deposit_error_rejected_proof v amount isDonation r hok herr
 
-theorem LawfulVault.withdraw_error_unchanged (lv : LawfulVault) (amount : WithdrawAmount)
+theorem Vault.withdraw_error_unchanged (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r)
+    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.assets' = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.assets' = STAmount.zero v.numericType ∧
     r.sharesBurned = STAmount.zero .int64 :=
-  LawfulVault.withdraw_error_rejected_proof lv amount waiveUnrealizedLoss r hok herr
+  Vault.withdraw_error_rejected_proof v amount waiveUnrealizedLoss r hok herr
 
-theorem LawfulVault.clawback_error_unchanged (lv : LawfulVault) (assets holderShares : STAmount)
-    (r : ClawbackResult) (hok : lv.clawback assets holderShares = .ok r)
+theorem Vault.clawback_error_unchanged (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.assetsRecovered = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.assetsRecovered = STAmount.zero v.numericType ∧
     r.sharesDestroyed = STAmount.zero .int64 :=
-  LawfulVault.clawback_error_rejected_proof lv assets holderShares r hok herr
+  Vault.clawback_error_rejected_proof v assets holderShares r hok herr
 
 end XRPL.Model.SingleAssetVault

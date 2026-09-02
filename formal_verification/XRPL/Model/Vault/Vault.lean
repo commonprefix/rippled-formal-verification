@@ -29,78 +29,78 @@ def exponent (amount : Number) (nt : NumericType) : Except Error Int := do
 /-- Representation well-formed of the raw record. The per-issuance shares
 bound (`OutstandingAmount ≤ MaximumAmount`) is not stated here: the issuance's
 `MaximumAmount` is not part of this record. -/
-structure RawVault.WF (v : RawVault) : Prop where
-  assetsTotal_norm : v.assetsTotal.isNormalized
-  assetsAvailable_norm : v.assetsAvailable.isNormalized
-  assetsMaximum_norm : ∀ m ∈ v.assetsMaximum, m.isNormalized
-  sharesTotal_norm : v.sharesTotal.isNormalized
-  lossUnrealized_norm : v.lossUnrealized.isNormalized
-  sharesTotal_nonneg : 0 ≤ v.sharesTotal.toRat
-  sharesTotal_int : v.sharesTotal.toRat.den = 1
-  scale_integral : v.numericType.isIntegral = true → v.scale = 0
-  scale_le : v.scale.toNat ≤ 18
+structure RawVault.WF (rv : RawVault) : Prop where
+  assetsTotal_norm : rv.assetsTotal.isNormalized
+  assetsAvailable_norm : rv.assetsAvailable.isNormalized
+  assetsMaximum_norm : ∀ m ∈ rv.assetsMaximum, m.isNormalized
+  sharesTotal_norm : rv.sharesTotal.isNormalized
+  lossUnrealized_norm : rv.lossUnrealized.isNormalized
+  sharesTotal_nonneg : 0 ≤ rv.sharesTotal.toRat
+  sharesTotal_int : rv.sharesTotal.toRat.den = 1
+  scale_integral : rv.numericType.isIntegral = true → rv.scale = 0
+  scale_le : rv.scale.toNat ≤ 18
   -- `assetsTotal - assetsAvailable` must be computable, so overflow doesn't happen
-  assetsTotal_sub_ok : ∃ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d
+  assetsTotal_sub_ok : ∃ d, rv.assetsTotal.operator_sub rv.assetsAvailable .downward = .ok d
 
 /-- The vault invariant (XLS-0065 §4.5) stated with the modeled `Number` operators -/
-structure RawVault.Valid (v : RawVault) : Prop where
-  assetsTotal_nonneg : Number.zero.operator_le v.assetsTotal = true
-  assetsAvailable_nonneg : Number.zero.operator_le v.assetsAvailable = true
-  assetsAvailable_le : v.assetsAvailable.operator_le v.assetsTotal = true
-  assetsMaximum_pos : ∀ m ∈ v.assetsMaximum, Number.zero.operator_lt m = true
-  empty_shares : v.sharesTotal = Number.zero →
-    v.assetsTotal = Number.zero ∧ v.assetsAvailable = Number.zero
-  cap : ∀ m ∈ v.assetsMaximum, v.assetsTotal.operator_le m = true
-  lossUnrealized_nonneg : Number.zero.operator_le v.lossUnrealized = true
-  lossUnrealized_le : ∀ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d →
-    v.lossUnrealized.operator_le d = true
-  withdraw_nav_nonneg : v.lossUnrealized.operator_le v.assetsTotal = true
+structure RawVault.Valid (rv : RawVault) : Prop where
+  assetsTotal_nonneg : Number.zero.operator_le rv.assetsTotal = true
+  assetsAvailable_nonneg : Number.zero.operator_le rv.assetsAvailable = true
+  assetsAvailable_le : rv.assetsAvailable.operator_le rv.assetsTotal = true
+  assetsMaximum_pos : ∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true
+  empty_shares : rv.sharesTotal = Number.zero →
+    rv.assetsTotal = Number.zero ∧ rv.assetsAvailable = Number.zero
+  cap : ∀ m ∈ rv.assetsMaximum, rv.assetsTotal.operator_le m = true
+  lossUnrealized_nonneg : Number.zero.operator_le rv.lossUnrealized = true
+  lossUnrealized_le : ∀ d, rv.assetsTotal.operator_sub rv.assetsAvailable .downward = .ok d →
+    rv.lossUnrealized.operator_le d = true
+  withdraw_nav_nonneg : rv.lossUnrealized.operator_le rv.assetsTotal = true
 
 -- Deciding `WF` reduces to the conjunction of its clauses, each decidable above.
-instance (v : RawVault) : Decidable v.WF :=
+instance (rv : RawVault) : Decidable rv.WF :=
   decidable_of_iff
-    (v.assetsTotal.isNormalized ∧ v.assetsAvailable.isNormalized ∧
-      (∀ m ∈ v.assetsMaximum, m.isNormalized) ∧ v.sharesTotal.isNormalized ∧
-      v.lossUnrealized.isNormalized ∧ 0 ≤ v.sharesTotal.toRat ∧ v.sharesTotal.toRat.den = 1 ∧
-      (v.numericType.isIntegral = true → v.scale = 0) ∧ v.scale.toNat ≤ 18 ∧
-      (∃ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d))
+    (rv.assetsTotal.isNormalized ∧ rv.assetsAvailable.isNormalized ∧
+      (∀ m ∈ rv.assetsMaximum, m.isNormalized) ∧ rv.sharesTotal.isNormalized ∧
+      rv.lossUnrealized.isNormalized ∧ 0 ≤ rv.sharesTotal.toRat ∧ rv.sharesTotal.toRat.den = 1 ∧
+      (rv.numericType.isIntegral = true → rv.scale = 0) ∧ rv.scale.toNat ≤ 18 ∧
+      (∃ d, rv.assetsTotal.operator_sub rv.assetsAvailable .downward = .ok d))
     ⟨fun ⟨a, b, c, d, e, f, g, h, i, j⟩ => ⟨a, b, c, d, e, f, g, h, i, j⟩,
      fun ⟨a, b, c, d, e, f, g, h, i, j⟩ => ⟨a, b, c, d, e, f, g, h, i, j⟩⟩
 
 -- Deciding `Valid` reduces to the conjunction of its clauses, each decidable above.
-instance (v : RawVault) : Decidable v.Valid :=
+instance (rv : RawVault) : Decidable rv.Valid :=
   decidable_of_iff
-    (Number.zero.operator_le v.assetsTotal = true ∧
-      Number.zero.operator_le v.assetsAvailable = true ∧
-      v.assetsAvailable.operator_le v.assetsTotal = true ∧
-      (∀ m ∈ v.assetsMaximum, Number.zero.operator_lt m = true) ∧
-      (v.sharesTotal = Number.zero → v.assetsTotal = Number.zero ∧ v.assetsAvailable = Number.zero) ∧
-      (∀ m ∈ v.assetsMaximum, v.assetsTotal.operator_le m = true) ∧
-      Number.zero.operator_le v.lossUnrealized = true ∧
-      (∀ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d →
-        v.lossUnrealized.operator_le d = true) ∧
-      v.lossUnrealized.operator_le v.assetsTotal = true)
+    (Number.zero.operator_le rv.assetsTotal = true ∧
+      Number.zero.operator_le rv.assetsAvailable = true ∧
+      rv.assetsAvailable.operator_le rv.assetsTotal = true ∧
+      (∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true) ∧
+      (rv.sharesTotal = Number.zero → rv.assetsTotal = Number.zero ∧ rv.assetsAvailable = Number.zero) ∧
+      (∀ m ∈ rv.assetsMaximum, rv.assetsTotal.operator_le m = true) ∧
+      Number.zero.operator_le rv.lossUnrealized = true ∧
+      (∀ d, rv.assetsTotal.operator_sub rv.assetsAvailable .downward = .ok d →
+        rv.lossUnrealized.operator_le d = true) ∧
+      rv.lossUnrealized.operator_le rv.assetsTotal = true)
     ⟨fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩,
      fun ⟨a, b, c, d, e, f, g, h, i⟩ => ⟨a, b, c, d, e, f, g, h, i⟩⟩
 
-/-- A `LawfulVault` extends `RawVault` with proofs that the representation is
+/-- A `Vault` extends `RawVault` with proofs that the representation is
 well-formed (`wf`) and satisfies the invariant (`valid`, in Number operators). -/
-structure LawfulVault extends RawVault where
+structure Vault extends RawVault where
   wf : toRawVault.WF
   valid : toRawVault.Valid
 
 /-- Build a lawful vault from a raw vault, or reject. -/
-def RawVault.to_lawful (v : RawVault) : Except Error LawfulVault :=
-  if h : v.WF ∧ v.Valid then .ok { toRawVault := v, wf := h.1, valid := h.2 } else .error .notLawful
+def RawVault.to_lawful (rv : RawVault) : Except Error Vault :=
+  if h : rv.WF ∧ rv.Valid then .ok { toRawVault := rv, wf := h.1, valid := h.2 } else .error .notLawful
 
-def LawfulVault.isInsolvent (lv : LawfulVault) : Bool :=
-  lv.assetsTotal.mantissa_ = 0 && lv.sharesTotal.signum = 1
+def Vault.isInsolvent (v : Vault) : Bool :=
+  v.assetsTotal.mantissa_ = 0 && v.sharesTotal.signum = 1
 
-def LawfulVault.assetsRounded (lv : LawfulVault) : Prop :=
-  STAmount.isRounded lv.numericType lv.assetsTotal ∨
-  STAmount.isRounded lv.numericType lv.assetsAvailable ∨
-  STAmount.isRounded lv.numericType lv.assetsReserved ∨
-  STAmount.isRounded lv.numericType lv.lossUnrealized ∨
-  ∃ m ∈ lv.assetsMaximum, STAmount.isRounded lv.numericType m
+def Vault.assetsRounded (v : Vault) : Prop :=
+  STAmount.isRounded v.numericType v.assetsTotal ∨
+  STAmount.isRounded v.numericType v.assetsAvailable ∨
+  STAmount.isRounded v.numericType v.assetsReserved ∨
+  STAmount.isRounded v.numericType v.lossUnrealized ∨
+  ∃ m ∈ v.assetsMaximum, STAmount.isRounded v.numericType m
 
 end XRPL.Model.SingleAssetVault

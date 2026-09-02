@@ -28,9 +28,9 @@ below the exponent its `assetsTotal` will have after the deposit, so any such
 digits in `amountDeposit` are dropped before the deposit runs (integral assets
 pass through unchanged). Returns the amount the deposit will actually use, or
 `tecPRECISION_LOSS` when nothing of it survives. -/
-def LawfulVault.roundedDepositAmount (lv : LawfulVault) (amountDeposit : STAmount)
+def Vault.roundedDepositAmount (v : Vault) (amountDeposit : STAmount)
     : Except Error RoundedDepositResult := do
-  let vault := lv.toRawVault
+  let vault := v.toRawVault
   let roundedAmount ← roundToVaultExponent amountDeposit vault.assetsTotal
   if roundedAmount.isZero then
     return .rejected .tecPRECISION_LOSS
@@ -38,49 +38,49 @@ def LawfulVault.roundedDepositAmount (lv : LawfulVault) (amountDeposit : STAmoun
 
 structure DepositResult where
   error : Option TER
-  vault' : LawfulVault
+  vault' : Vault
   amountDeposit' : STAmount
   sharesIssued : STAmount
 
 -- A rejection changes nothing and reports nothing: the vault is returned
 -- unchanged and both amount fields are zero.
-def DepositResult.rejected (lv : LawfulVault) (ter : TER) : DepositResult :=
-  ⟨some ter, lv, STAmount.zero lv.numericType, STAmount.zero .int64⟩
+def DepositResult.rejected (v : Vault) (ter : TER) : DepositResult :=
+  ⟨some ter, v, STAmount.zero v.numericType, STAmount.zero .int64⟩
 
-def assetsToSharesDeposit (lv : LawfulVault) (amountDeposit : STAmount) : Except Error STAmount := do
-  if lv.assetsTotal.mantissa_ = 0 then
-    let sharesNumber ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + lv.scale.toNat) largeRange.min largeRange.max .to_nearest
+def assetsToSharesDeposit (v : Vault) (amountDeposit : STAmount) : Except Error STAmount := do
+  if v.assetsTotal.mantissa_ = 0 then
+    let sharesNumber ← Number.normalized false amountDeposit.mantissa (amountDeposit.exponent + v.scale.toNat) largeRange.min largeRange.max .to_nearest
     let sharesNumber ← sharesNumber.truncate
     let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
     return shares
   let amountDepositNumber ← amountDeposit.toNumber .to_nearest
-  let sharesAssets ← lv.sharesTotal.operator_mul amountDepositNumber .to_nearest
-  let sharesNumber ← sharesAssets.operator_div lv.assetsTotal .to_nearest
+  let sharesAssets ← v.sharesTotal.operator_mul amountDepositNumber .to_nearest
+  let sharesNumber ← sharesAssets.operator_div v.assetsTotal .to_nearest
   let sharesNumber ← sharesNumber.truncate
   let shares ← STAmount.ofNumber .int64 sharesNumber .to_nearest
   return shares
 
-def sharesToAssetsDeposit (lv : LawfulVault) (shares : STAmount) : Except Error STAmount := do
-  if lv.assetsTotal.mantissa_ = 0 then
-    let assets ← STAmount.checked lv.numericType shares.mantissa (shares.exponent - lv.scale.toNat) false .to_nearest
+def sharesToAssetsDeposit (v : Vault) (shares : STAmount) : Except Error STAmount := do
+  if v.assetsTotal.mantissa_ = 0 then
+    let assets ← STAmount.checked v.numericType shares.mantissa (shares.exponent - v.scale.toNat) false .to_nearest
     return assets
   let sharesNumber ← shares.toNumber .to_nearest
-  let assetsShares ← lv.assetsTotal.operator_mul sharesNumber .to_nearest
-  let amountDepositNumber ← assetsShares.operator_div lv.sharesTotal .to_nearest
+  let assetsShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest
+  let amountDepositNumber ← assetsShares.operator_div v.sharesTotal .to_nearest
   -- (waiting the C++ fix) round the charge up so a depositor never pays less than the issued shares are worth
-  let amountDeposit ← STAmount.ofNumber lv.numericType amountDepositNumber .upward
+  let amountDeposit ← STAmount.ofNumber v.numericType amountDepositNumber .upward
   return amountDeposit
 
 inductive ComputeDepositResult where
   | error (error : TER)
   | success (assetDeposited : STAmount) (sharesCreated : STAmount)
 
-def computeDeposit (lv : LawfulVault) (amountDeposit : STAmount) : Except Error ComputeDepositResult := do
+def computeDeposit (v : Vault) (amountDeposit : STAmount) : Except Error ComputeDepositResult := do
   try
-    let shares ← assetsToSharesDeposit lv amountDeposit
+    let shares ← assetsToSharesDeposit v amountDeposit
     if shares.isZero then
       return .error .tecPRECISION_LOSS
-    let amountDeposit' ← sharesToAssetsDeposit lv shares
+    let amountDeposit' ← sharesToAssetsDeposit v shares
     if ← amountDeposit'.operator_gt amountDeposit then
       return .error .tecINTERNAL
     return .success amountDeposit' shares
@@ -90,25 +90,25 @@ def computeDeposit (lv : LawfulVault) (amountDeposit : STAmount) : Except Error 
     else
       throw e
 
-def LawfulVault.deposit (lv : LawfulVault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
-  let vault := lv.toRawVault
+def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
+  let vault := v.toRawVault
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
 
   if amount.isZero then
-    return .rejected lv .tecINTERNAL
+    return .rejected v .tecINTERNAL
 
   if isDonation && vault.sharesTotal.mantissa_ == 0 then
-    return .rejected lv .tecNO_PERMISSION
+    return .rejected v .tecNO_PERMISSION
 
-  if lv.isInsolvent && !isDonation then
-    return .rejected lv .tecLOCKED
+  if v.isInsolvent && !isDonation then
+    return .rejected v .tecLOCKED
 
   let (assetDeposited, sharesCreated) ←
     if isDonation then
       pure (amount, STAmount.zero .int64)
     else
-      match ← computeDeposit lv amount with
-      | .error e => return .rejected lv e
+      match ← computeDeposit v amount with
+      | .error e => return .rejected v e
       | .success a s => pure (a, s)
 
   let vault' : RawVault := {
@@ -121,9 +121,9 @@ def LawfulVault.deposit (lv : LawfulVault) (amountDeposit : STAmount) (isDonatio
   -- C++: if (maximum != 0 && assetsTotal > maximum)
   let assetsMaximum := vault.assetsMaximum.getD Number.zero
   if assetsMaximum.operator_ne Number.zero && vault'.assetsTotal.operator_gt assetsMaximum then
-    return .rejected lv .tecLIMIT_EXCEEDED
+    return .rejected v .tecLIMIT_EXCEEDED
 
-  let lv' ← vault'.to_lawful
-  return ⟨none, lv', assetDeposited, sharesCreated⟩
+  let v' ← vault'.to_lawful
+  return ⟨none, v', assetDeposited, sharesCreated⟩
 
 end XRPL.Model.SingleAssetVault

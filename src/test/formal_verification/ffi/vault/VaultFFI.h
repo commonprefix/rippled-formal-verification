@@ -15,7 +15,7 @@
 
 namespace xrpl::test::formal_verification {
 
-struct LawfulVault
+struct Vault
 {
     Number assetsTotal{};
     Number assetsAvailable{};
@@ -37,7 +37,7 @@ struct LawfulTerResult
 
 extern "C" {
 lean_object*
-lean_lawful_vault_build(
+lean_vault_build(
     lean_object* assetsTotal,
     lean_object* assetsAvailable,
     lean_object* assetsMaximum,
@@ -46,33 +46,33 @@ lean_lawful_vault_build(
     lean_object* sharesTotal,
     lean_object* lossUnrealized);
 lean_object*
-lean_lawful_vault_assets_total(lean_object* v);
+lean_vault_assets_total(lean_object* v);
 lean_object*
-lean_lawful_vault_assets_available(lean_object* v);
+lean_vault_assets_available(lean_object* v);
 lean_object*
-lean_lawful_vault_assets_maximum(lean_object* v);
+lean_vault_assets_maximum(lean_object* v);
 uint8_t
-lean_lawful_vault_numeric_tag(lean_object* v);
+lean_vault_numeric_tag(lean_object* v);
 uint8_t
-lean_lawful_vault_scale(lean_object* v);
+lean_vault_scale(lean_object* v);
 lean_object*
-lean_lawful_vault_shares_total(lean_object* v);
+lean_vault_shares_total(lean_object* v);
 lean_object*
-lean_lawful_vault_loss_unrealized(lean_object* v);
+lean_vault_loss_unrealized(lean_object* v);
 }
 
-class LawfulVaultFFI : public LeanObjectFFI
+class VaultFFI : public LeanObjectFFI
 {
 public:
     using LeanObjectFFI::LeanObjectFFI;
-    using CppType = LawfulVault;
+    using CppType = Vault;
 
     // Validate the fields; `nullopt` if the model rejects them (not lawful).
-    static std::optional<LawfulVaultFFI>
-    build(LawfulVault const& state)
+    static std::optional<VaultFFI>
+    build(Vault const& state)
     {
-        auto e = readExcept<LawfulVaultFFI>(leanCall(
-            lean_lawful_vault_build,
+        auto e = readExcept<VaultFFI>(leanCall(
+            lean_vault_build,
             NumberFFI::build(state.assetsTotal),
             NumberFFI::build(state.assetsAvailable),
             state.assetsMaximum ? leanSome(NumberFFI::build(*state.assetsMaximum)) : leanNone(),
@@ -84,17 +84,17 @@ public:
     }
 
     // Read the fields of this lawful handle through its getters.
-    LawfulVault
+    Vault
     read() const
     {
-        return LawfulVault{
-            .assetsTotal = leanGetObj<NumberFFI>(lean_lawful_vault_assets_total),
-            .assetsAvailable = leanGetObj<NumberFFI>(lean_lawful_vault_assets_available),
-            .assetsMaximum = leanGetOpt<NumberFFI>(lean_lawful_vault_assets_maximum),
-            .numericType = leanGet(lean_lawful_vault_numeric_tag),
-            .scale = leanGet(lean_lawful_vault_scale),
-            .sharesTotal = leanGetObj<NumberFFI>(lean_lawful_vault_shares_total),
-            .lossUnrealized = leanGetObj<NumberFFI>(lean_lawful_vault_loss_unrealized)};
+        return Vault{
+            .assetsTotal = leanGetObj<NumberFFI>(lean_vault_assets_total),
+            .assetsAvailable = leanGetObj<NumberFFI>(lean_vault_assets_available),
+            .assetsMaximum = leanGetOpt<NumberFFI>(lean_vault_assets_maximum),
+            .numericType = leanGet(lean_vault_numeric_tag),
+            .scale = leanGet(lean_vault_scale),
+            .sharesTotal = leanGetObj<NumberFFI>(lean_vault_shares_total),
+            .lossUnrealized = leanGetObj<NumberFFI>(lean_vault_loss_unrealized)};
     }
 };
 

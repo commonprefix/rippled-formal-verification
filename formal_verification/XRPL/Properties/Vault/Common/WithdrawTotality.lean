@@ -879,29 +879,29 @@ open XRPL.Model.Protocol
 carries a zero mantissa (the reachable, loss-free case), the net-asset-value
 subtraction of `sharesToAssetsWithdraw` is an identity, so the exchange reduces
 to the raw `assetsTotal` guard and the mul/div/ofNumber pricing chain. -/
-theorem LawfulVault.sharesToAssetsWithdraw_zeroLoss_reduces (lv : LawfulVault) (shares : STAmount)
-    (hL : lv.lossUnrealized.mantissa_ = 0) :
-    lv.sharesToAssetsWithdraw shares false =
-      (if lv.assetsTotal.mantissa_ == 0 then
-        (pure (STAmount.zero lv.numericType) : Except Error STAmount)
+theorem Vault.sharesToAssetsWithdraw_zeroLoss_reduces (v : Vault) (shares : STAmount)
+    (hL : v.lossUnrealized.mantissa_ = 0) :
+    v.sharesToAssetsWithdraw shares false =
+      (if v.assetsTotal.mantissa_ == 0 then
+        (pure (STAmount.zero v.numericType) : Except Error STAmount)
        else do
         let sharesNumber ← shares.toNumber .to_nearest
-        let NAVShares ← lv.assetsTotal.operator_mul sharesNumber .to_nearest
-        let assetsNumber ← NAVShares.operator_div lv.sharesTotal .to_nearest
-        let assets ← STAmount.ofNumber lv.numericType assetsNumber .downward
+        let NAVShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest
+        let assetsNumber ← NAVShares.operator_div v.sharesTotal .to_nearest
+        let assets ← STAmount.ofNumber v.numericType assetsNumber .downward
         return assets) := by
-  unfold LawfulVault.sharesToAssetsWithdraw
+  unfold Vault.sharesToAssetsWithdraw
   simp only []
-  rw [Number.operator_sub_of_mantissa_zero lv.assetsTotal lv.lossUnrealized _ hL, ok_bind]
+  rw [Number.operator_sub_of_mantissa_zero v.assetsTotal v.lossUnrealized _ hL, ok_bind]
   rfl
 
 /-- **`computeWithdrawByShares` forwards a successful exchange.** If the exchange
 `sharesToAssetsWithdraw` returns `.ok assets`, the try/catch wrapper produces the
 no-error record echoing the named shares. -/
-theorem computeWithdrawByShares_of_exchange_ok (lv : LawfulVault) (shares : STAmount)
+theorem computeWithdrawByShares_of_exchange_ok (v : Vault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (assets : STAmount)
-    (hok : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
-    computeWithdrawByShares lv shares waiveUnrealizedLoss
+    (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
+    computeWithdrawByShares v shares waiveUnrealizedLoss
       = .ok ⟨none, assets, shares⟩ := by
   unfold computeWithdrawByShares
   rw [hok]

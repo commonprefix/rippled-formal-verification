@@ -3,7 +3,7 @@ import XRPL.Properties.Approx
 import XRPL.Properties.Vault.Common.DepositDefs
 import XRPL.Properties.Vault.Common.DilutionWitness
 
-/-! # Witnesses for the `LawfulVault.deposit` `*_attained` theorems
+/-! # Witnesses for the `Vault.deposit` `*_attained` theorems
 
 Concrete vaults, amounts, and results for the deposit `*_attained` witnesses
 `VaultDeposit.lean` delegates to, each closed by `native_decide` over the deposit
@@ -60,8 +60,8 @@ def wvF' : RawVault :=
   , sharesTotal := ⟨false, 9333333333333333000, -3⟩
   , lossUnrealized := Number.zero }
 
-/-- The post-deposit vault as a `LawfulVault` (the op re-validates on success). -/
-def wvF'L : LawfulVault := ⟨wvF', by native_decide, by native_decide⟩
+/-- The post-deposit vault as a `Vault` (the op re-validates on success). -/
+def wvF'L : Vault := ⟨wvF', by native_decide, by native_decide⟩
 
 /-- The witness deposit result. -/
 def wrF : DepositResult := ⟨none, wvF'L, wcF, wsF⟩
@@ -103,8 +103,8 @@ def wvDVU' : RawVault :=
   , sharesTotal := ⟨false, 1000000000000000000, 0⟩
   , lossUnrealized := Number.zero }
 
-/-- The post-donation vault as a `LawfulVault` (the op re-validates on success). -/
-def wvDVU'L : LawfulVault := ⟨wvDVU', by native_decide, by native_decide⟩
+/-- The post-donation vault as a `Vault` (the op re-validates on success). -/
+def wvDVU'L : Vault := ⟨wvDVU', by native_decide, by native_decide⟩
 
 /-- The witness deposit result. -/
 def wrDVU : DepositResult := ⟨none, wvDVU'L, waDVU, STAmount.zero .int64⟩
@@ -113,45 +113,45 @@ def wrDVU : DepositResult := ⟨none, wvDVU'L, waDVU, STAmount.zero .int64⟩
 
 set_option maxRecDepth 10000
 
-/-- The fractional witness vault, packaged as a `LawfulVault`. -/
-def wvFL : LawfulVault := ⟨wvF, by native_decide, by native_decide⟩
+/-- The fractional witness vault, packaged as a `Vault`. -/
+def wvFL : Vault := ⟨wvF, by native_decide, by native_decide⟩
 
-/-- The vault-updates witness vault, packaged as a `LawfulVault`. -/
-def wvDVUL : LawfulVault := ⟨wvDVU, by native_decide, by native_decide⟩
+/-- The vault-updates witness vault, packaged as a `Vault`. -/
+def wvDVUL : Vault := ⟨wvDVU, by native_decide, by native_decide⟩
 
-/-- Witness backing `LawfulVault.roundedDepositAmount_truncation_attained`. -/
-theorem LawfulVault.roundedDepositAmount_truncation_witness :
-    ∃ (lv : LawfulVault) (amountDeposit roundedAmount : STAmount),
-      lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+/-- Witness backing `Vault.roundedDepositAmount_truncation_attained`. -/
+theorem Vault.roundedDepositAmount_truncation_witness :
+    ∃ (v : Vault) (amountDeposit roundedAmount : STAmount),
+      v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
       roundedAmount.toRat < amountDeposit.toRat :=
   ⟨wvFL, wtF, wtrF, by native_decide⟩
 
-/-- Witness backing `LawfulVault.deposit_sharesIssued_attained`. -/
-theorem LawfulVault.deposit_sharesIssued_witness :
-    ∃ (lv : LawfulVault) (amountDeposit roundedAmount : STAmount) (r : DepositResult),
+/-- Witness backing `Vault.deposit_sharesIssued_attained`. -/
+theorem Vault.deposit_sharesIssued_witness :
+    ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (r : DepositResult),
       0 < amountDeposit.toRat ∧
-      lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
-      lv.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesIssued
-        (lv.idealSharesDeposit roundedAmount.toRat) depositε :=
+        (v.idealSharesDeposit roundedAmount.toRat) depositε :=
   ⟨wvFL, waF, waF, wrF, by native_decide, by native_decide,
     by native_decide, by native_decide, by unfold RoundsWithinWitness; native_decide⟩
 
-/-- Witness backing `LawfulVault.deposit_charge_attained`. -/
-theorem LawfulVault.deposit_charge_witness :
-    ∃ (lv : LawfulVault) (amountDeposit : STAmount) (r : DepositResult),
+/-- Witness backing `Vault.deposit_charge_attained`. -/
+theorem Vault.deposit_charge_witness :
+    ∃ (v : Vault) (amountDeposit : STAmount) (r : DepositResult),
       0 < amountDeposit.toRat ∧
-      lv.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.amountDeposit'
-        (lv.idealChargeDeposit r.sharesIssued.toRat) depositε :=
+        (v.idealChargeDeposit r.sharesIssued.toRat) depositε :=
   ⟨wvFL, waF, wrF, by native_decide, by native_decide,
     by native_decide, by unfold RoundsWithinWitness; native_decide⟩
 
-/-- Witness backing `LawfulVault.deposit_vault_updates_attained`. -/
-theorem LawfulVault.deposit_vault_updates_witness :
-    ∃ (lv : LawfulVault) (amountDeposit : STAmount) (isDonation : Bool) (r : DepositResult),
-      lv.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
-      r.vault'.assetsTotal.toRat ≠ lv.toExact.assetsTotal + r.amountDeposit'.toRat :=
+/-- Witness backing `Vault.deposit_vault_updates_attained`. -/
+theorem Vault.deposit_vault_updates_witness :
+    ∃ (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (r : DepositResult),
+      v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
+      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
   ⟨wvDVUL, waDVU, true, wrDVU, by native_decide⟩
 
 /-- The applied-delta witness request, `0.001` of the IOU. -/
@@ -177,8 +177,8 @@ def wvAD' : RawVault :=
   , sharesTotal := ⟨false, 7002333333333333000, -3⟩
   , lossUnrealized := Number.zero }
 
-/-- The post-deposit vault as a `LawfulVault` (the op re-validates on success). -/
-def wvAD'L : LawfulVault := ⟨wvAD', by native_decide, by native_decide⟩
+/-- The post-deposit vault as a `Vault` (the op re-validates on success). -/
+def wvAD'L : Vault := ⟨wvAD', by native_decide, by native_decide⟩
 
 /-- The witness deposit result. -/
 def wrAD : DepositResult := ⟨none, wvAD'L, wcAD, wsAD⟩
@@ -189,16 +189,16 @@ def wdnAD : Number := ⟨false, 9999999999998570000, -22⟩
 /-- The applied delta as an on-ledger amount. -/
 def wdaAD : STAmount := STAmount.unchecked .fractional 9999999999998570 (-19) false
 
-/-- Witness backing `LawfulVault.deposit_applied_delta_attained`. -/
-theorem LawfulVault.deposit_applied_delta_witness :
-    ∃ (lv : LawfulVault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
+/-- Witness backing `Vault.deposit_applied_delta_attained`. -/
+theorem Vault.deposit_applied_delta_witness :
+    ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
       (deltaTotal : Number) (deltaAmount : STAmount),
-      lv.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
-      lv.deposit amountDeposit false = .ok r ∧ r.error = none ∧
-      roundToVaultExponent r.amountDeposit' lv.assetsTotal = .ok amountDeposit'' ∧
+      v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      roundToVaultExponent r.amountDeposit' v.assetsTotal = .ok amountDeposit'' ∧
       amountDeposit''.operator_eq r.amountDeposit' = false ∧
-      r.vault'.assetsTotal.operator_sub lv.assetsTotal .to_nearest = .ok deltaTotal ∧
-      STAmount.ofNumber lv.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
+      r.vault'.assetsTotal.operator_sub v.assetsTotal .to_nearest = .ok deltaTotal ∧
+      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
       deltaAmount.operator_eq r.amountDeposit' = false :=
   ⟨wvFL, waAD, wcrAD, wrAD, wdnAD, wdaAD, by native_decide⟩
 

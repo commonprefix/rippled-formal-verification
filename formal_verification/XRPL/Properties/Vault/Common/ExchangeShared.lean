@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Common.OfNumberBoundary
-import XRPL.Properties.Vault.LawfulVaultValid
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
 import XRPL.Properties.Vault.Common.DepositAccuracy
 import XRPL.Properties.Vault.Common.SubZeroShape
@@ -420,106 +420,106 @@ lemma STAmount.ofNumber_source_ne_zero (nt : NumericType) (n : Number) (mode : r
 
 /-- **`assetsToSharesWithdraw` packs the shares through `ofNumber .int64`,** so a
 nonzero result is a canonical `int64` record. -/
-lemma assetsToSharesWithdraw_int64_canonical (lv : LawfulVault) (assets shares : STAmount)
+lemma assetsToSharesWithdraw_int64_canonical (v : Vault) (assets shares : STAmount)
     (truncateShares waiveUnrealizedLoss : Bool)
-    (hok : assetsToSharesWithdraw lv assets truncateShares waiveUnrealizedLoss = .ok shares)
+    (hok : assetsToSharesWithdraw v assets truncateShares waiveUnrealizedLoss = .ok shares)
     (hnz : shares.isZero = false) :
     shares.IntegralCanonical ∧ shares.mNumericType = .int64 := by
   obtain ⟨nav, -, hcase⟩ :=
-    assetsToSharesWithdraw_ok_reduces lv assets shares truncateShares waiveUnrealizedLoss hok
+    assetsToSharesWithdraw_ok_reduces v assets shares truncateShares waiveUnrealizedLoss hok
   rcases hcase with ⟨-, hzero⟩ | ⟨-, an, sa, sn, sn', -, -, -, -, hofn⟩
   · rw [hzero, STAmount.zero_isZero] at hnz; exact absurd hnz (by decide)
   · exact STAmount.ofNumber_integral_canonical .int64 sn' .to_nearest shares (by decide) hofn
 
 /-- A nonzero `assetsToSharesWithdraw` result is `Canonical` (feeds
 `sharesToAssetsWithdraw_bounds_proof`). -/
-lemma assetsToSharesWithdraw_shares_canonical (lv : LawfulVault) (assets shares : STAmount)
+lemma assetsToSharesWithdraw_shares_canonical (v : Vault) (assets shares : STAmount)
     (truncateShares waiveUnrealizedLoss : Bool)
-    (hok : assetsToSharesWithdraw lv assets truncateShares waiveUnrealizedLoss = .ok shares)
+    (hok : assetsToSharesWithdraw v assets truncateShares waiveUnrealizedLoss = .ok shares)
     (hnz : shares.isZero = false) :
     shares.Canonical := by
   obtain ⟨hic, hnt⟩ :=
-    assetsToSharesWithdraw_int64_canonical lv assets shares truncateShares waiveUnrealizedLoss hok hnz
+    assetsToSharesWithdraw_int64_canonical v assets shares truncateShares waiveUnrealizedLoss hok hnz
   have hint : shares.integral = true := by show shares.mNumericType.isIntegral = true; rw [hnt]; decide
   refine ⟨fun _ => ⟨hic, by rw [hnt]; decide⟩, fun hfr => ?_⟩
   rw [hint] at hfr; exact absurd hfr (by decide)
 
 /-- **`toNumber` is value-exact on a nonzero `sharesToAssetsWithdraw` payout.** The
-payout packs through `ofNumber lv.numericType (NAVShares/sharesTotal) .downward`; its
+payout packs through `ofNumber v.numericType (NAVShares/sharesTotal) .downward`; its
 division source is normalized (both operands normalized and nonzero once the payout
 is nonzero), so `ofNumber_toNumber_exact_of_norm` applies. -/
-lemma LawfulVault.sharesToAssetsWithdraw_toNumber_exact_of_ne (lv : LawfulVault)
+lemma Vault.sharesToAssetsWithdraw_toNumber_exact_of_ne (v : Vault)
     (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (hc : shares.Canonical)
-    (hok : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
+    (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
     (hne : assets.mValue ≠ 0) :
     ∃ an : Number, assets.toNumber .to_nearest = .ok an ∧
       an.toRat = assets.toRat ∧ an.isNormalized := by
   obtain ⟨nav, hsub, hcase⟩ :=
-    LawfulVault.sharesToAssetsWithdraw_ok_reduces lv shares assets waiveUnrealizedLoss hok
+    Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
   rcases hcase with ⟨hnav2m, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · exfalso; rw [hzero, STAmount.zero_mValue] at hne; exact hne rfl
   · have hnav2norm : nav.isNormalized := by
       cases waiveUnrealizedLoss with
       | false =>
-        exact operator_sub_isNormalized_to_nearest_sz _ _ _ lv.wf.assetsTotal_norm lv.wf.lossUnrealized_norm hsub
-      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ lv.wf.assetsTotal_norm (Or.inl rfl) hsub
+        exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub
+      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub
     obtain ⟨sn0, hsn0ok, -, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsnnorm : sharesNumber.isNormalized := by
       rw [show sharesNumber = sn0 from (Except.ok.inj (hsn0ok.symm.trans hsn)).symm]; exact hsn0norm
     have hanm : assetsNumber.mantissa_ ≠ 0 :=
-      STAmount.ofNumber_source_ne_zero lv.numericType assetsNumber .downward assets hof hne
-    have hST_ne : ¬ lv.sharesTotal.operator_eq Number.zero = true := by
+      STAmount.ofNumber_source_ne_zero v.numericType assetsNumber .downward assets hof hne
+    have hST_ne : ¬ v.sharesTotal.operator_eq Number.zero = true := by
       intro h0
       unfold Number.operator_div at hdiv
       rw [if_pos h0] at hdiv
       exact absurd hdiv (by simp)
-    have hSTm : lv.sharesTotal.mantissa_ ≠ 0 := by
+    have hSTm : v.sharesTotal.mantissa_ ≠ 0 := by
       intro h0
       exact hST_ne (by
-        rw [Number.eq_zero_of_mantissa_zero lv.sharesTotal lv.wf.sharesTotal_norm h0]; decide)
+        rw [Number.eq_zero_of_mantissa_zero v.sharesTotal v.wf.sharesTotal_norm h0]; decide)
     have hNAVm : NAVShares.mantissa_ ≠ 0 :=
-      operator_div_numerator_ne_zero_sz NAVShares lv.sharesTotal assetsNumber .to_nearest hST_ne hdiv hanm
+      operator_div_numerator_ne_zero_sz NAVShares v.sharesTotal assetsNumber .to_nearest hST_ne hdiv hanm
     obtain ⟨hnav2_m', hsn_m⟩ := operator_mul_operands_ne_zero hnav2norm hsnnorm hmul hNAVm
     have hNAVnorm : NAVShares.isNormalized :=
       operator_mul_result_isNormalized nav sharesNumber NAVShares .to_nearest
         hnav2norm hsnnorm hnav2_m' hsn_m hmul hNAVm
     have hANnorm : assetsNumber.isNormalized :=
-      operator_div_result_isNormalized NAVShares lv.sharesTotal assetsNumber .to_nearest
-        hNAVnorm lv.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
-    exact STAmount.ofNumber_toNumber_exact_of_norm lv.numericType assetsNumber .downward assets hANnorm hof
+      operator_div_result_isNormalized NAVShares v.sharesTotal assetsNumber .to_nearest
+        hNAVnorm v.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
+    exact STAmount.ofNumber_toNumber_exact_of_norm v.numericType assetsNumber .downward assets hANnorm hof
 
 /-- Every `sharesToAssetsWithdraw` payout carries the vault's numeric type. -/
-lemma LawfulVault.sharesToAssetsWithdraw_mNumericType (lv : LawfulVault) (shares assets : STAmount)
+lemma Vault.sharesToAssetsWithdraw_mNumericType (v : Vault) (shares assets : STAmount)
     (waiveUnrealizedLoss : Bool)
-    (hok : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
-    assets.mNumericType = lv.numericType := by
+    (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
+    assets.mNumericType = v.numericType := by
   obtain ⟨_, _, hcase⟩ :=
-    LawfulVault.sharesToAssetsWithdraw_ok_reduces lv shares assets waiveUnrealizedLoss hok
+    Vault.sharesToAssetsWithdraw_ok_reduces v shares assets waiveUnrealizedLoss hok
   rcases hcase with ⟨_, hzero⟩ | ⟨_, _, _, an, _, _, _, hof⟩
-  · rw [hzero]; cases lv.numericType <;> rfl
-  · exact STAmount.ofNumber_mNumericType lv.numericType an .downward assets hof
+  · rw [hzero]; cases v.numericType <;> rfl
+  · exact STAmount.ofNumber_mNumericType v.numericType an .downward assets hof
 
 /-- **`toNumber` is value-exact and normalized on any `sharesToAssetsWithdraw`
 payout,** the zero payout included. -/
-lemma LawfulVault.sharesToAssetsWithdraw_toNumber_facts (lv : LawfulVault)
+lemma Vault.sharesToAssetsWithdraw_toNumber_facts (v : Vault)
     (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (arn : Number) (hc : shares.Canonical)
-    (hprice : lv.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
+    (hprice : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
     (hnum : assets.toNumber .to_nearest = .ok arn) :
     arn.toRat = assets.toRat ∧ arn.isNormalized := by
   by_cases hz : assets.mValue = 0
-  · have hnt : assets.mNumericType = lv.numericType :=
-      LawfulVault.sharesToAssetsWithdraw_mNumericType lv shares assets waiveUnrealizedLoss hprice
-    by_cases hint : lv.numericType.isIntegral = true
+  · have hnt : assets.mNumericType = v.numericType :=
+      Vault.sharesToAssetsWithdraw_mNumericType v shares assets waiveUnrealizedLoss hprice
+    by_cases hint : v.numericType.isIntegral = true
     · obtain ⟨hshape_nt, hshape_off, hshape_val⟩ :=
-        LawfulVault.sharesToAssetsWithdraw_integral_shape lv shares assets waiveUnrealizedLoss hint hprice
+        Vault.sharesToAssetsWithdraw_integral_shape v shares assets waiveUnrealizedLoss hint hprice
       obtain ⟨sn, hsn_ok, hsn_val, hsn_norm, -⟩ :=
         STAmount.toNumber_integral_exact' assets .to_nearest (by rw [hshape_nt]; exact hint)
           hshape_off hshape_val
       rw [show arn = sn from Except.ok.inj (hnum.symm.trans hsn_ok)]
       exact ⟨hsn_val, hsn_norm⟩
-    · have hvfr : lv.numericType.isIntegral = false := by
-        cases hh : lv.numericType.isIntegral with
+    · have hvfr : v.numericType.isIntegral = false := by
+        cases hh : v.numericType.isIntegral with
         | true => exact absurd hh hint
         | false => rfl
       have hfr : assets.integral = false := by
@@ -529,7 +529,7 @@ lemma LawfulVault.sharesToAssetsWithdraw_toNumber_facts (lv : LawfulVault)
       refine ⟨?_, Or.inl rfl⟩
       rw [Number.toRat_zero, STAmount.toRat_signed, hz]; simp
   · obtain ⟨an, hnum', hval, hnorm⟩ :=
-      LawfulVault.sharesToAssetsWithdraw_toNumber_exact_of_ne lv shares assets waiveUnrealizedLoss hc hprice hz
+      Vault.sharesToAssetsWithdraw_toNumber_exact_of_ne v shares assets waiveUnrealizedLoss hc hprice hz
     rw [show arn = an from Except.ok.inj (hnum.symm.trans hnum')]
     exact ⟨hval, hnorm⟩
 
@@ -691,52 +691,52 @@ lemma Number.sub_recovery_rounds_within (x arn result : Number) (E : Int)
 payout is `ofNumber v.numericType aN .downward`, and the exact recovery ideal sits
 within `depositε` of `aN` when `aN` is nonzero, or is `Number`-underflow tiny when
 `aN` is zero. Feeds the zero-payout corner of the accuracy headlines. -/
-lemma LawfulVault.recovery_pipeline_bound (lv : LawfulVault) (shares assets : STAmount)
-    (hnav : lv.WithdrawNavExact false) (hc : shares.Canonical)
-    (hnav_pos : 0 < lv.withdrawNav) (hshpos : 0 < shares.toRat)
-    (hprice : lv.sharesToAssetsWithdraw shares false = .ok assets) :
+lemma Vault.recovery_pipeline_bound (v : Vault) (shares assets : STAmount)
+    (hnav : v.WithdrawNavExact false) (hc : shares.Canonical)
+    (hnav_pos : 0 < v.withdrawNav) (hshpos : 0 < shares.toRat)
+    (hprice : v.sharesToAssetsWithdraw shares false = .ok assets) :
     ∃ aN : Number,
-      STAmount.ofNumber lv.numericType aN .downward = .ok assets ∧
+      STAmount.ofNumber v.numericType aN .downward = .ok assets ∧
       (aN.mantissa_ ≠ 0 → aN.isNormalized ∧ aN.negative_ = false ∧
-        lv.idealAssetsWithdraw false shares.toRat ≤
-          aN.toRat + lv.idealAssetsWithdraw false shares.toRat * depositε) ∧
+        v.idealAssetsWithdraw false shares.toRat ≤
+          aN.toRat + v.idealAssetsWithdraw false shares.toRat * depositε) ∧
       (aN.mantissa_ = 0 →
-        lv.idealAssetsWithdraw false shares.toRat ≤ (10 : ℚ) ^ (-32700 : ℤ)) := by
+        v.idealAssetsWithdraw false shares.toRat ≤ (10 : ℚ) ^ (-32700 : ℤ)) := by
   obtain ⟨nav2, hsub, hcase⟩ :=
-    LawfulVault.sharesToAssetsWithdraw_ok_reduces lv shares assets false hprice
+    Vault.sharesToAssetsWithdraw_ok_reduces v shares assets false hprice
   have hnav2norm : nav2.isNormalized :=
-    operator_sub_isNormalized_to_nearest_sz _ _ _ lv.wf.assetsTotal_norm lv.wf.lossUnrealized_norm hsub
+    operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub
   obtain ⟨nvv, hs, hnavval⟩ := hnav
   have hnav2eq : nav2 = nvv := Except.ok.inj (hsub.symm.trans hs)
-  have hnav2val : nav2.toRat = lv.withdrawNav := by rw [hnav2eq]; exact hnavval
+  have hnav2val : nav2.toRat = v.withdrawNav := by rw [hnav2eq]; exact hnavval
   have hnav2_pos : 0 < nav2.toRat := by rw [hnav2val]; exact hnav_pos
   -- shares total positive integer
-  have hST_pos : 0 < lv.sharesTotal.toRat := by
-    rcases lt_or_eq_of_le lv.wf.sharesTotal_nonneg with h | h
+  have hST_pos : 0 < v.sharesTotal.toRat := by
+    rcases lt_or_eq_of_le v.wf.sharesTotal_nonneg with h | h
     · exact h
     · exfalso
-      have hz : lv.toExact.sharesTotal = 0 := by
-        show lv.sharesTotal.toRat.num.toNat = 0; rw [← h]; rfl
-      have hAT := (lv.exact.empty_shares hz).1
-      have hnav0 : lv.withdrawNav = 0 := by
-        have hl := lv.exact.lossUnrealized_nonneg
-        have hle := lv.exact.withdraw_nav_nonneg
+      have hz : v.toExact.sharesTotal = 0 := by
+        show v.sharesTotal.toRat.num.toNat = 0; rw [← h]; rfl
+      have hAT := (v.exact.empty_shares hz).1
+      have hnav0 : v.withdrawNav = 0 := by
+        have hl := v.exact.lossUnrealized_nonneg
+        have hle := v.exact.withdraw_nav_nonneg
         rw [hAT] at hle
         unfold RawVault.withdrawNav; rw [hAT]; linarith
       linarith [hnav_pos]
-  have hST_one : 1 ≤ lv.sharesTotal.toRat := by
-    have hnum_pos : 0 < lv.sharesTotal.toRat.num := Rat.num_pos.mpr hST_pos
-    have hcast : lv.sharesTotal.toRat = (lv.sharesTotal.toRat.num : ℚ) := by
-      conv_lhs => rw [← Rat.num_div_den lv.sharesTotal.toRat]
-      rw [lv.wf.sharesTotal_int]; simp
+  have hST_one : 1 ≤ v.sharesTotal.toRat := by
+    have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hST_pos
+    have hcast : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
+      conv_lhs => rw [← Rat.num_div_den v.sharesTotal.toRat]
+      rw [v.wf.sharesTotal_int]; simp
     rw [hcast]; exact_mod_cast hnum_pos
-  have hSTm : lv.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hST_pos.ne'
-  set ideal : ℚ := lv.idealAssetsWithdraw false shares.toRat with hideal_def
-  have hideal_eq : ideal = nav2.toRat * shares.toRat / lv.sharesTotal.toRat := by
+  have hSTm : v.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hST_pos.ne'
+  set ideal : ℚ := v.idealAssetsWithdraw false shares.toRat with hideal_def
+  have hideal_eq : ideal = nav2.toRat * shares.toRat / v.sharesTotal.toRat := by
     rw [hideal_def]
     unfold RawVault.idealAssetsWithdraw
     rw [if_neg (by decide : ¬ ((false : Bool) = true)), ← hnav2val,
-      RawVault.WF.toExact_sharesTotal lv.toRawVault lv.wf]
+      RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
   rcases hcase with ⟨hnav2m0, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · exfalso
@@ -748,18 +748,18 @@ lemma LawfulVault.recovery_pipeline_bound (lv : LawfulVault) (shares assets : ST
     have hsnnorm : sharesNumber.isNormalized := by rw [hsn_eq]; exact hsn0norm
     have hsnval : sharesNumber.toRat = shares.toRat := by rw [hsn_eq]; exact hsn0val
     have hsn_pos : 0 < sharesNumber.toRat := by rw [hsnval]; exact hshpos
-    have hideal_eq' : ideal = nav2.toRat * sharesNumber.toRat / lv.sharesTotal.toRat := by
+    have hideal_eq' : ideal = nav2.toRat * sharesNumber.toRat / v.sharesTotal.toRat := by
       rw [hideal_eq, hsnval]
     refine ⟨assetsNumber, hof, ?_, ?_⟩
     · intro hQm
       have hNAVm : NAVShares.mantissa_ ≠ 0 :=
-        operator_div_numerator_ne_zero_sz NAVShares lv.sharesTotal assetsNumber .to_nearest
+        operator_div_numerator_ne_zero_sz NAVShares v.sharesTotal assetsNumber .to_nearest
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hdiv hQm
       obtain ⟨hnav2_m', hsn_m⟩ := operator_mul_operands_ne_zero hnav2norm hsnnorm hmul hNAVm
       have hPm : NAVShares.mantissa_ ≠ 0 := hNAVm
       obtain ⟨hQnorm, hQpos, hQbound⟩ :=
-        RawVault.exchange_pipeline_within nav2 sharesNumber lv.sharesTotal NAVShares assetsNumber
-          hnav2norm hsnnorm lv.wf.sharesTotal_norm hnav2_pos hsn_pos hST_pos hmul hdiv hPm hQm
+        RawVault.exchange_pipeline_within nav2 sharesNumber v.sharesTotal NAVShares assetsNumber
+          hnav2norm hsnnorm v.wf.sharesTotal_norm hnav2_pos hsn_pos hST_pos hmul hdiv hPm hQm
       rw [← hideal_eq'] at hQbound
       have hANneg : assetsNumber.negative_ = false := Number.negative_false_of_pos assetsNumber hQpos
       obtain ⟨_, hhi⟩ := abs_le.mp hQbound
@@ -786,7 +786,7 @@ lemma LawfulVault.recovery_pipeline_bound (lv : LawfulVault) (shares assets : ST
           rw [abs_of_pos hprod_pos, hunit] at hsmall
           have hle : ideal ≤ nav2.toRat * sharesNumber.toRat := by
             rw [hideal_eq']
-            calc nav2.toRat * sharesNumber.toRat / lv.sharesTotal.toRat
+            calc nav2.toRat * sharesNumber.toRat / v.sharesTotal.toRat
                 ≤ nav2.toRat * sharesNumber.toRat / 1 :=
                   div_le_div_of_nonneg_left (le_of_lt hprod_pos) (by norm_num) hST_one
               _ = nav2.toRat * sharesNumber.toRat := by ring
@@ -796,8 +796,8 @@ lemma LawfulVault.recovery_pipeline_bound (lv : LawfulVault) (shares assets : ST
             operator_mul_result_isNormalized nav2 sharesNumber NAVShares .to_nearest
               hnav2norm hsnnorm (Number.mantissa_ne_zero_of_toRat_ne_zero hnav2_pos.ne')
               (Number.mantissa_ne_zero_of_toRat_ne_zero hsn_pos.ne') hmul hPm0
-          have hsmall := operator_div_underflow_truth_small NAVShares lv.sharesTotal assetsNumber
-            .to_nearest hNAVnorm lv.wf.sharesTotal_norm hPm0 hSTm hdiv hQm0
+          have hsmall := operator_div_underflow_truth_small NAVShares v.sharesTotal assetsNumber
+            .to_nearest hNAVnorm v.wf.sharesTotal_norm hPm0 hSTm hdiv hQm0
           have hmulbound : |NAVShares.toRat - nav2.toRat * sharesNumber.toRat|
               ≤ |nav2.toRat * sharesNumber.toRat| * (5 / (2 ^ 63 + 7)) :=
             operator_mul_rounds_to_nearest nav2 sharesNumber NAVShares hnav2norm hsnnorm hmul hPm0
@@ -808,7 +808,7 @@ lemma LawfulVault.recovery_pipeline_bound (lv : LawfulVault) (shares assets : ST
           have hNAV_close : nav2.toRat * sharesNumber.toRat ≤ NAVShares.toRat * 2 := by
             have := abs_le.mp hmulbound; nlinarith [hprodpos]
           rw [abs_of_nonneg (le_of_lt (div_pos hNAVpos hST_pos)), hunit] at hsmall
-          have hle : ideal ≤ NAVShares.toRat / lv.sharesTotal.toRat * 2 := by
+          have hle : ideal ≤ NAVShares.toRat / v.sharesTotal.toRat * 2 := by
             rw [hideal_eq', div_mul_eq_mul_div]
             exact div_le_div_of_nonneg_right hNAV_close (le_of_lt hST_pos)
           nlinarith [hsmall, hle, div_pos hNAVpos hST_pos]

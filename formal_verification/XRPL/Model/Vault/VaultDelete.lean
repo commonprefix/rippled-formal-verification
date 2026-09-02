@@ -7,12 +7,12 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 -- Checks from VaultDelete::preclaim, in C++ order.
-def LawfulVault.canVaultDelete (lv : LawfulVault) : TER :=
-  if lv.assetsAvailable.operator_ne Number.zero then
+def Vault.canVaultDelete (v : Vault) : TER :=
+  if v.assetsAvailable.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
-  else if lv.assetsTotal.operator_ne Number.zero then
+  else if v.assetsTotal.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
-  else if lv.sharesTotal.operator_ne Number.zero then
+  else if v.sharesTotal.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
   else
     .tesSUCCESS

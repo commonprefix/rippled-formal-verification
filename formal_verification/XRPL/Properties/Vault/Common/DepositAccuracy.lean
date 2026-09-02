@@ -4,7 +4,7 @@ import XRPL.Properties.Vault.Common.DepositReduction
 import XRPL.Properties.Vault.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 import XRPL.Properties.Vault.Common.DepositExits
-import XRPL.Properties.Vault.LawfulVaultValid
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Approx
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
@@ -17,7 +17,7 @@ import XRPL.Properties.Protocol.Number.Div.RoundsWithin
 import XRPL.Properties.Protocol.Number.Normalize.RoundsWithin
 import XRPL.Properties.Protocol.Number.Normalize.RoundsToRepresentable
 
-/-! # `LawfulVault.deposit` accuracy proofs
+/-! # `Vault.deposit` accuracy proofs
 
 Proof bodies behind the accuracy headlines in `VaultDeposit.lean`. -/
 
@@ -714,19 +714,19 @@ open XRPL.Model.Protocol
 
 /-- When the exchange rate still equals `10 ^ scale`, `idealSharesDeposit` is the
 empty-vault formula. -/
-theorem LawfulVault.idealSharesDeposit_initial_rate_proof (lv : LawfulVault) (amount : ℚ)
-    (hrate : (lv.toExact.sharesTotal : ℚ) =
-      lv.depositNav * (10 : ℚ) ^ lv.scale.toNat) :
-    lv.idealSharesDeposit amount = amount * (10 : ℚ) ^ lv.scale.toNat := by
+theorem Vault.idealSharesDeposit_initial_rate_proof (v : Vault) (amount : ℚ)
+    (hrate : (v.toExact.sharesTotal : ℚ) =
+      v.depositNav * (10 : ℚ) ^ v.scale.toNat) :
+    v.idealSharesDeposit amount = amount * (10 : ℚ) ^ v.scale.toNat := by
   unfold RawVault.idealSharesDeposit
-  by_cases h : lv.toExact.assetsTotal = 0
+  by_cases h : v.toExact.assetsTotal = 0
   · rw [if_pos h]
   · rw [if_neg h]
-    have hpos : 0 < lv.toExact.assetsTotal :=
-      lt_of_le_of_ne lv.exact.assetsTotal_nonneg (Ne.symm h)
-    have hnav : (0 : ℚ) < lv.depositNav := by
+    have hpos : 0 < v.toExact.assetsTotal :=
+      lt_of_le_of_ne v.exact.assetsTotal_nonneg (Ne.symm h)
+    have hnav : (0 : ℚ) < v.depositNav := by
       unfold RawVault.depositNav; exact hpos
-    have hne : lv.depositNav ≠ 0 := hnav.ne'
+    have hne : v.depositNav ≠ 0 := hnav.ne'
     rw [hrate]; field_simp
 
 /-- The vault `exponent` helper on a fractional asset returns `-100` (zero) or a
@@ -789,15 +789,15 @@ lemma Number.negative_false_of_pos (n : Number) (h : 0 < n.toRat) :
 ideal share amount.** On a lawful vault, for a positive deposit-ready amount and
 a nonzero result. The nonempty branch needs the net asset value clear of the
 `Number` underflow threshold. -/
-theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
+theorem assetsToSharesDeposit_spec (v : Vault) (amount shares : STAmount)
     (hc : amount.Canonical) (hpos : 0 < amount.toRat)
-    (_hnav : 0 < lv.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ lv.depositNav)
-    (hok : assetsToSharesDeposit lv amount = .ok shares)
+    (_hnav : 0 < v.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
+    (hok : assetsToSharesDeposit v amount = .ok shares)
     (hnz : shares.isZero = false) :
     ∃ q : ℚ, shares.toRat = (⌊q⌋ : ℚ) ∧
-      |q - lv.idealSharesDeposit amount.toRat| ≤
-        lv.idealSharesDeposit amount.toRat * depositε ∧
-      0 < lv.idealSharesDeposit amount.toRat := by
+      |q - v.idealSharesDeposit amount.toRat| ≤
+        v.idealSharesDeposit amount.toRat * depositε ∧
+      0 < v.idealSharesDeposit amount.toRat := by
   unfold assetsToSharesDeposit at hok
   have hmv : shares.mValue ≠ 0 :=
     ne_of_beq_false (show (shares.mValue == 0) = false from hnz)
@@ -809,7 +809,7 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
     exact absurd h00 (ne_of_gt hpos)
   have hnegam : amount.mIsNegative = false := STAmount.mIsNegative_false_of_pos amount hpos
   have hεd : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
-  by_cases hmz : lv.assetsTotal.mantissa_ = 0
+  by_cases hmz : v.assetsTotal.mantissa_ = 0
   · -- empty vault: shares = ⌊normalize (amount · 10^scale)⌋
     rw [if_pos hmz] at hok
     obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
@@ -819,19 +819,19 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
       Except.ok.inj (show Except.ok sh' = .ok shares from hlast)
     rw [hsh'] at hsh
     -- the ideal
-    have hA0 : lv.toExact.assetsTotal = 0 :=
-      Number.toRat_eq_zero_of_mantissa_zero lv.assetsTotal hmz
-    have hideal : lv.idealSharesDeposit amount.toRat
-        = amount.toRat * (10 : ℚ) ^ (lv.scale.toNat : ℕ) := by
+    have hA0 : v.toExact.assetsTotal = 0 :=
+      Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
+    have hideal : v.idealSharesDeposit amount.toRat
+        = amount.toRat * (10 : ℚ) ^ (v.scale.toNat : ℕ) := by
       unfold RawVault.idealSharesDeposit
       rw [if_pos hA0]
-    have hideal_pos : 0 < lv.idealSharesDeposit amount.toRat := by
+    have hideal_pos : 0 < v.idealSharesDeposit amount.toRat := by
       rw [hideal]; positivity
     -- the normalize input denotes the ideal
     have hin : (Number.unchecked false amount.mantissa
-        (amount.exponent + (lv.scale.toNat : ℤ))).toRat = lv.idealSharesDeposit amount.toRat := by
+        (amount.exponent + (v.scale.toNat : ℤ))).toRat = v.idealSharesDeposit amount.toRat := by
       rw [Number.toRat_of_nonneg _ rfl, hideal, STAmount.toRat_of_nonneg amount hnegam]
-      show (amount.mValue.toNat : ℚ) * 10 ^ (amount.mOffset + (lv.scale.toNat : ℤ)) = _
+      show (amount.mValue.toNat : ℚ) * 10 ^ (amount.mOffset + (v.scale.toNat : ℤ)) = _
       rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
       ring
     -- the nonzero chain
@@ -840,14 +840,14 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
     have hn1m : n1.mantissa_ ≠ 0 := Number.truncate_source_ne_zero n1 n2 hn2 hn2m
     -- the normalize is `RoundsWithin` the ideal
     have hn1cast : (Number.unchecked false amount.mantissa
-        (amount.exponent + (lv.scale.toNat : ℤ))).normalize largeRange.min largeRange.max
+        (amount.exponent + (v.scale.toNat : ℤ))).normalize largeRange.min largeRange.max
           .to_nearest = .ok n1 := hn1
     have hround := normalize_rounds_to_nearest _ n1 hn1cast hn1m
     rw [hin] at hround
-    have hround' : |n1.toRat - lv.idealSharesDeposit amount.toRat|
-        ≤ lv.idealSharesDeposit amount.toRat * depositε := by
-      have h1 : |n1.toRat - lv.idealSharesDeposit amount.toRat|
-          ≤ |lv.idealSharesDeposit amount.toRat| * (5 / (2 ^ 63 + 7)) := hround
+    have hround' : |n1.toRat - v.idealSharesDeposit amount.toRat|
+        ≤ v.idealSharesDeposit amount.toRat * depositε := by
+      have h1 : |n1.toRat - v.idealSharesDeposit amount.toRat|
+          ≤ |v.idealSharesDeposit amount.toRat| * (5 / (2 ^ 63 + 7)) := hround
       rw [abs_of_pos hideal_pos] at h1
       refine le_trans h1 ?_
       exact mul_le_mul_of_nonneg_left εnorm_le_depositε (le_of_lt hideal_pos)
@@ -878,32 +878,32 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
       Except.ok.inj (show Except.ok sh' = .ok shares from hlast)
     rw [hsh'] at hsh
     -- the divisor is `assetsTotal` exactly: there is no subtraction stage
-    set navN := lv.assetsTotal with hnavN_eq
-    have hApos : 0 < lv.toExact.assetsTotal := by
-      rcases lt_or_eq_of_le lv.exact.assetsTotal_nonneg with h | h
+    set navN := v.assetsTotal with hnavN_eq
+    have hApos : 0 < v.toExact.assetsTotal := by
+      rcases lt_or_eq_of_le v.exact.assetsTotal_nonneg with h | h
       · exact h
-      · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero lv.assetsTotal hmz)
-    have hnav_pos : 0 < lv.depositNav := by
+      · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
+    have hnav_pos : 0 < v.depositNav := by
       unfold RawVault.depositNav; exact hApos
-    have hS_pos : 0 < lv.sharesTotal.toRat := by
-      rcases lt_or_eq_of_le lv.wf.sharesTotal_nonneg with h | h
+    have hS_pos : 0 < v.sharesTotal.toRat := by
+      rcases lt_or_eq_of_le v.wf.sharesTotal_nonneg with h | h
       · exact h
       · exfalso
-        have hz : lv.toExact.sharesTotal = 0 := by
-          show lv.sharesTotal.toRat.num.toNat = 0
+        have hz : v.toExact.sharesTotal = 0 := by
+          show v.sharesTotal.toRat.num.toNat = 0
           rw [← h]
           rfl
-        have := (lv.exact.empty_shares hz).1
+        have := (v.exact.empty_shares hz).1
         exact absurd this.symm (ne_of_lt hApos)
-    have hS_one : 1 ≤ lv.sharesTotal.toRat := by
-      have hnum_pos : 0 < lv.sharesTotal.toRat.num := Rat.num_pos.mpr hS_pos
-      have hcast : lv.sharesTotal.toRat = (lv.sharesTotal.toRat.num : ℚ) := by
-        conv_lhs => rw [← Rat.num_div_den lv.sharesTotal.toRat]
-        rw [lv.wf.sharesTotal_int]
+    have hS_one : 1 ≤ v.sharesTotal.toRat := by
+      have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hS_pos
+      have hcast : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
+        conv_lhs => rw [← Rat.num_div_den v.sharesTotal.toRat]
+        rw [v.wf.sharesTotal_int]
         simp
       rw [hcast]
       exact_mod_cast hnum_pos
-    have hSm : lv.sharesTotal.mantissa_ ≠ 0 :=
+    have hSm : v.sharesTotal.mantissa_ ≠ 0 :=
       Number.mantissa_ne_zero_of_toRat_ne_zero hS_pos.ne'
     obtain ⟨an', han', hanval, hannorm⟩ := STAmount.toNumber_canonical_exact amount .to_nearest hc
     have haneq : an' = amountN := by rw [han'] at hamN; exact Except.ok.inj hamN
@@ -914,26 +914,26 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
       STAmount.ofNumber_integral_source_ne_zero .int64 T .to_nearest shares (by decide) hsh hmv
     have hQm : Q.mantissa_ ≠ 0 := Number.truncate_source_ne_zero Q T hT hTm
     -- navN = assetsTotal exactly, so the pricing value equals depositNav with no rounding
-    have hnavnorm : navN.isNormalized := lv.wf.assetsTotal_norm
+    have hnavnorm : navN.isNormalized := v.wf.assetsTotal_norm
     have hnavm : navN.mantissa_ ≠ 0 := hmz
-    have hnavN_eqNav : navN.toRat = lv.depositNav := by rw [hnavN_eq]; rfl
-    have hnavbound : |navN.toRat - lv.depositNav| ≤ lv.depositNav * (6 / (2 ^ 63 - 3)) := by
+    have hnavN_eqNav : navN.toRat = v.depositNav := by rw [hnavN_eq]; rfl
+    have hnavbound : |navN.toRat - v.depositNav| ≤ v.depositNav * (6 / (2 ^ 63 - 3)) := by
       rw [hnavN_eqNav, sub_self, abs_zero]
       exact mul_nonneg (le_of_lt hnav_pos) (by norm_num)
     have hnavN_pos : 0 < navN.toRat := by rw [hnavN_eqNav]; exact hnav_pos
     -- the product stage
     have hPm : P.mantissa_ ≠ 0 := by
       intro h0
-      have hsmall := operator_mul_underflow_truth_small lv.sharesTotal amountN P .to_nearest
-        lv.wf.sharesTotal_norm hannorm hSm hanm hP h0
+      have hsmall := operator_mul_underflow_truth_small v.sharesTotal amountN P .to_nearest
+        v.wf.sharesTotal_norm hannorm hSm hanm hP h0
       have hcombo : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
           = (10 : ℚ) ^ (-32750 : ℤ) := by
         rw [← zpow_natCast (10 : ℚ) 18, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
         norm_num [minExponent]
       rw [hcombo] at hsmall
-      have hge : (10 : ℚ) ^ (-81 : ℤ) ≤ |lv.sharesTotal.toRat * amountN.toRat| := by
+      have hge : (10 : ℚ) ^ (-81 : ℤ) ≤ |v.sharesTotal.toRat * amountN.toRat| := by
         rw [abs_mul]
-        have h1 : (1 : ℚ) ≤ |lv.sharesTotal.toRat| := by
+        have h1 : (1 : ℚ) ≤ |v.sharesTotal.toRat| := by
           rw [abs_of_pos hS_pos]; exact hS_one
         have h2 : (10 : ℚ) ^ (-81 : ℤ) ≤ |amountN.toRat| := by
           rw [hanval]
@@ -943,15 +943,15 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
         zpow_le_zpow_right₀ (by norm_num) (by norm_num)
       linarith
     have hPnorm : P.isNormalized :=
-      operator_mul_result_isNormalized lv.sharesTotal amountN P .to_nearest
-        lv.wf.sharesTotal_norm hannorm hSm hanm hP hPm
-    have hPbound := operator_mul_rounds_to_nearest lv.sharesTotal amountN P
-      lv.wf.sharesTotal_norm hannorm hP hPm
-    set T0 : ℚ := lv.sharesTotal.toRat * amount.toRat with hT0_def
+      operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
+        v.wf.sharesTotal_norm hannorm hSm hanm hP hPm
+    have hPbound := operator_mul_rounds_to_nearest v.sharesTotal amountN P
+      v.wf.sharesTotal_norm hannorm hP hPm
+    set T0 : ℚ := v.sharesTotal.toRat * amount.toRat with hT0_def
     have hT0_pos : 0 < T0 := mul_pos hS_pos hpos
     have hPb : |P.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by
-      have h1 : |P.toRat - lv.sharesTotal.toRat * amountN.toRat|
-          ≤ |lv.sharesTotal.toRat * amountN.toRat| * (5 / (2 ^ 63 + 7)) := hPbound
+      have h1 : |P.toRat - v.sharesTotal.toRat * amountN.toRat|
+          ≤ |v.sharesTotal.toRat * amountN.toRat| * (5 / (2 ^ 63 + 7)) := hPbound
       rw [hanval, ← hT0_def, abs_of_pos hT0_pos] at h1
       exact h1
     -- the division stage
@@ -986,15 +986,15 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
         _ ≤ P.toRat / navN.toRat * (6 / (2 ^ 63 - 3)) * navN.toRat := by nlinarith [hnavN_pos]
         _ = P.toRat * (6 / (2 ^ 63 - 3)) := by field_simp
     -- compose the three stages
-    have hcomp := div_pipeline_rel_bound lv.depositNav navN.toRat T0 P.toRat Q.toRat
+    have hcomp := div_pipeline_rel_bound v.depositNav navN.toRat T0 P.toRat Q.toRat
       (6 / (2 ^ 63 - 3)) (5 / (2 ^ 63 + 7)) (6 / (2 ^ 63 - 3)) depositε hT0_pos
       (le_of_lt hQpos) hnavbound hPb h3 (by norm_num) (by norm_num) (by norm_num)
       (by norm_num) (by norm_num) deposit_pipeline_up deposit_pipeline_lo
     -- the ideal is the exact quotient
-    have hideal : lv.idealSharesDeposit amount.toRat = T0 / lv.depositNav := by
+    have hideal : v.idealSharesDeposit amount.toRat = T0 / v.depositNav := by
       unfold RawVault.idealSharesDeposit
-      rw [if_neg (ne_of_gt hApos), RawVault.WF.toExact_sharesTotal lv.toRawVault lv.wf, ← hT0_def]
-    have hideal_pos : 0 < lv.idealSharesDeposit amount.toRat := by
+      rw [if_neg (ne_of_gt hApos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, ← hT0_def]
+    have hideal_pos : 0 < v.idealSharesDeposit amount.toRat := by
       rw [hideal]; positivity
     -- floor and exact packing
     have hQnorm : Q.isNormalized :=
@@ -1006,33 +1006,33 @@ theorem assetsToSharesDeposit_spec (lv : LawfulVault) (amount shares : STAmount)
         (hTnorm hTm) (by rw [hTval]; exact Rat.den_intCast _) hsh
     refine ⟨Q.toRat, by rw [hshval, hTval], ?_, hideal_pos⟩
     rw [hideal]
-    have heq1 : Q.toRat - T0 / lv.depositNav
-        = (Q.toRat * lv.depositNav - T0) / lv.depositNav := by
+    have heq1 : Q.toRat - T0 / v.depositNav
+        = (Q.toRat * v.depositNav - T0) / v.depositNav := by
       field_simp
     rw [heq1, abs_div, abs_of_pos hnav_pos, div_mul_eq_mul_div]
     exact div_le_div_of_nonneg_right hcomp (le_of_lt hnav_pos)
 
-/-- Proof body of `LawfulVault.deposit_sharesIssued`: the issued shares are a
+/-- Proof body of `Vault.deposit_sharesIssued`: the issued shares are a
 nonnegative integer within the stage budget and one truncation of the ideal. -/
-theorem LawfulVault.deposit_sharesIssued_proof (lv : LawfulVault)
+theorem Vault.deposit_sharesIssued_proof (v : Vault)
     (amountDeposit roundedAmount : STAmount) (r : DepositResult)
     (hcanon : roundedAmount.Canonical) (hpos : 0 < roundedAmount.toRat)
-    (hnav : 0 < lv.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ lv.depositNav)
-    (hrounded : lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
-    (hok : lv.deposit amountDeposit false = .ok r) (herr : r.error = none) :
+    (hnav : 0 < v.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
     r.sharesIssued.toRat.den = 1 ∧ 0 ≤ r.sharesIssued.toRat ∧
-    lv.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 < r.sharesIssued.toRat ∧
-    r.sharesIssued.toRat ≤ lv.idealSharesDeposit roundedAmount.toRat * (1 + depositε) := by
-  obtain ⟨hround0, hnz0⟩ := roundedDepositAmount_rounded lv amountDeposit roundedAmount hrounded
+    v.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 < r.sharesIssued.toRat ∧
+    r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + depositε) := by
+  obtain ⟨hround0, hnz0⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, _, _, _, _, hcd, _, _, _, _, _, _, _, hshr, _⟩ :=
-    LawfulVault.deposit_success_reduces lv amountDeposit false r hok herr
+    Vault.deposit_success_reduces v amountDeposit false r hok herr
   have hameq : amount = roundedAmount := by
     rw [hround0] at hround
     exact (Except.ok.inj hround).symm
   obtain ⟨shares, hats, hsz, _, _, hsheq⟩ :=
-    computeDeposit_success_reduces lv amount c sh (hcd rfl)
+    computeDeposit_success_reduces v amount c sh (hcd rfl)
   rw [hameq] at hats
-  obtain ⟨q, hqval, hqbound, hqpos⟩ := assetsToSharesDeposit_spec lv roundedAmount shares
+  obtain ⟨q, hqval, hqbound, hqpos⟩ := assetsToSharesDeposit_spec v roundedAmount shares
     hcanon hpos hnav hats hsz
   have hshare_eq : r.sharesIssued = shares := by rw [hshr, hsheq]
   rw [hshare_eq, hqval]
@@ -1044,10 +1044,10 @@ theorem LawfulVault.deposit_sharesIssued_proof (lv : LawfulVault)
   · have hqpos' : 0 < q := by nlinarith
     have h0 : (0 : ℤ) ≤ ⌊q⌋ := Int.floor_nonneg.mpr (le_of_lt hqpos')
     exact_mod_cast h0
-  · have h1 : lv.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 ≤ q - 1 := by
+  · have h1 : v.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 ≤ q - 1 := by
       nlinarith
     linarith
-  · have h1 : q ≤ lv.idealSharesDeposit roundedAmount.toRat * (1 + depositε) := by
+  · have h1 : q ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + depositε) := by
       nlinarith
     linarith
 
@@ -1059,21 +1059,21 @@ theorem roundToVaultExponent_integral (amountDeposit : STAmount) (assetsTotal : 
   rw [if_pos hint]
   rfl
 
-/-- Proof body of `LawfulVault.roundedDepositAmount_integral`. -/
-theorem LawfulVault.roundedDepositAmount_integral_proof (lv : LawfulVault) (amountDeposit : STAmount)
+/-- Proof body of `Vault.roundedDepositAmount_integral`. -/
+theorem Vault.roundedDepositAmount_integral_proof (v : Vault) (amountDeposit : STAmount)
     (hint : amountDeposit.integral = true) (hnz : amountDeposit.isZero = false) :
-    lv.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) := by
-  rw [roundedDepositAmount_ok lv amountDeposit amountDeposit
-      (roundToVaultExponent_integral amountDeposit lv.assetsTotal hint),
+    v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) := by
+  rw [roundedDepositAmount_ok v amountDeposit amountDeposit
+      (roundToVaultExponent_integral amountDeposit v.assetsTotal hint),
     if_neg (by rw [hnz]; exact Bool.false_ne_true)]
 
 /-- The shares side of the exchange always packs through `ofNumber .int64`, so a
 successful result is a canonical `int64` record. -/
-lemma assetsToSharesDeposit_int64_canonical (lv : LawfulVault) (amount shares : STAmount)
-    (hok : assetsToSharesDeposit lv amount = .ok shares) :
+lemma assetsToSharesDeposit_int64_canonical (v : Vault) (amount shares : STAmount)
+    (hok : assetsToSharesDeposit v amount = .ok shares) :
     shares.IntegralCanonical ∧ shares.mNumericType = .int64 := by
   unfold assetsToSharesDeposit at hok
-  by_cases hmz : lv.assetsTotal.mantissa_ = 0
+  by_cases hmz : v.assetsTotal.mantissa_ = 0
   · rw [if_pos hmz] at hok
     obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -1097,12 +1097,12 @@ lemma assetsToSharesDeposit_int64_canonical (lv : LawfulVault) (amount shares : 
 /-- On an integral vault, the charge side of the exchange packs through
 `checked`/`ofNumber` on the vault's type, so a successful result is a canonical
 integral record of the vault's type. -/
-lemma sharesToAssetsDeposit_integral_canonical (lv : LawfulVault) (shares c : STAmount)
-    (hvint : lv.numericType.isIntegral = true)
-    (hok : sharesToAssetsDeposit lv shares = .ok c) :
-    c.IntegralCanonical ∧ c.mNumericType = lv.numericType := by
+lemma sharesToAssetsDeposit_integral_canonical (v : Vault) (shares c : STAmount)
+    (hvint : v.numericType.isIntegral = true)
+    (hok : sharesToAssetsDeposit v shares = .ok c) :
+    c.IntegralCanonical ∧ c.mNumericType = v.numericType := by
   unfold sharesToAssetsDeposit at hok
-  by_cases hmz : lv.assetsTotal.mantissa_ = 0
+  by_cases hmz : v.assetsTotal.mantissa_ = 0
   · rw [if_pos hmz] at hok
     obtain ⟨c', hc, hlast⟩ := bind_ok_peel _ _ _ hok
     have heq : c' = c :=
@@ -1110,8 +1110,8 @@ lemma sharesToAssetsDeposit_integral_canonical (lv : LawfulVault) (shares c : ST
     rw [heq] at hc
     rw [STAmount.checked] at hc
     exact STAmount.canonicalize_integral_canonical _ c .to_nearest
-      (show (STAmount.unchecked lv.numericType shares.mantissa
-        (shares.exponent - (lv.scale.toNat : ℤ)) false).integral = true from hvint) hc
+      (show (STAmount.unchecked v.numericType shares.mantissa
+        (shares.exponent - (v.scale.toNat : ℤ)) false).integral = true from hvint) hc
   · rw [if_neg hmz] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
     obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -1121,7 +1121,7 @@ lemma sharesToAssetsDeposit_integral_canonical (lv : LawfulVault) (shares c : ST
     have heq : c' = c :=
       Except.ok.inj (show Except.ok c' = .ok c from hlast)
     rw [heq] at hc
-    exact STAmount.ofNumber_integral_canonical lv.numericType n4 .upward c hvint hc
+    exact STAmount.ofNumber_integral_canonical v.numericType n4 .upward c hvint hc
 
 /-- The two modeled integral asset types both fit `maxRep`. -/
 lemma NumericType.maxValue_le_maxRep_of_real (nt : NumericType)
@@ -1129,40 +1129,40 @@ lemma NumericType.maxValue_le_maxRep_of_real (nt : NumericType)
     nt.maxValue.toNat ≤ maxRep.toNat := by
   rcases hnt with h | h <;> rw [h] <;> decide
 
-/-- Proof body of `LawfulVault.deposit_vault_updates_integral`: in-domain integer sums
+/-- Proof body of `Vault.deposit_vault_updates_integral`: in-domain integer sums
 are stored exactly. -/
-theorem LawfulVault.deposit_vault_updates_integral_proof (lv : LawfulVault) (amountDeposit : STAmount)
+theorem Vault.deposit_vault_updates_integral_proof (v : Vault) (amountDeposit : STAmount)
     (isDonation : Bool) (r : DepositResult)
-    (hnt : lv.numericType = .int64 ∨ lv.numericType = .native)
+    (hnt : v.numericType = .int64 ∨ v.numericType = .native)
     (hcanon : amountDeposit.IntegralCanonical)
-    (hty : amountDeposit.mNumericType = lv.numericType)
-    (hdenA : lv.assetsTotal.toRat.den = 1)
-    (hdenAv : lv.assetsAvailable.toRat.den = 1)
-    (hok : lv.deposit amountDeposit isDonation = .ok r) (herr : r.error = none)
-    (hsz : lv.toExact.assetsTotal + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = lv.toExact.assetsTotal + r.amountDeposit'.toRat ∧
-    r.vault'.assetsAvailable.toRat = lv.toExact.assetsAvailable + r.amountDeposit'.toRat := by
+    (hty : amountDeposit.mNumericType = v.numericType)
+    (hdenA : v.assetsTotal.toRat.den = 1)
+    (hdenAv : v.assetsAvailable.toRat.den = 1)
+    (hok : v.deposit amountDeposit isDonation = .ok r) (herr : r.error = none)
+    (hsz : v.toExact.assetsTotal + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
+    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal + r.amountDeposit'.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable + r.amountDeposit'.toRat := by
   obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, hanz, _, _, hdon, hcd,
     hcN, hsN, hat, hav, hst, hmaxg, hamt, _, hr⟩ :=
-    LawfulVault.deposit_success_reduces lv amountDeposit isDonation r hok herr
-  have hvint : lv.numericType.isIntegral = true := by
+    Vault.deposit_success_reduces v amountDeposit isDonation r hok herr
+  have hvint : v.numericType.isIntegral = true := by
     rcases hnt with h | h <;> rw [h] <;> decide
   -- the amount passes through `roundToVaultExponent` unchanged
   have hameq : amount = amountDeposit := by
-    rw [roundToVaultExponent_integral amountDeposit lv.assetsTotal hcanon.is_integral] at hround
+    rw [roundToVaultExponent_integral amountDeposit v.assetsTotal hcanon.is_integral] at hround
     exact (Except.ok.inj hround).symm
   -- the taken amount is a canonical integral record of the vault's type
-  have hcfacts : c.IntegralCanonical ∧ c.mNumericType = lv.numericType := by
+  have hcfacts : c.IntegralCanonical ∧ c.mNumericType = v.numericType := by
     by_cases hd : isDonation = true
     · obtain ⟨hceq, _⟩ := hdon hd
       rw [hceq, hameq]
       exact ⟨hcanon, hty⟩
     · have hcd' := hcd (by simpa using hd)
-      obtain ⟨shares, _, _, hsta, _, _⟩ := computeDeposit_success_reduces lv amount c sh hcd'
-      exact sharesToAssetsDeposit_integral_canonical lv shares c hvint hsta
+      obtain ⟨shares, _, _, hsta, _, _⟩ := computeDeposit_success_reduces v amount c sh hcd'
+      exact sharesToAssetsDeposit_integral_canonical v shares c hvint hsta
   obtain ⟨hcc, hcty⟩ := hcfacts
   have hcmax : c.mNumericType.maxValue.toNat ≤ maxRep.toNat := by
-    rw [hcty]; exact NumericType.maxValue_le_maxRep_of_real lv.numericType hnt
+    rw [hcty]; exact NumericType.maxValue_le_maxRep_of_real v.numericType hnt
   -- `toNumber` of the taken amount is exact, normalized, integer-valued
   obtain ⟨cN', hcN', hcNval, hcNnorm, hcden⟩ :=
     STAmount.toNumber_integral_exact c .to_nearest hcc hcmax
@@ -1178,51 +1178,51 @@ theorem LawfulVault.deposit_vault_updates_integral_proof (lv : LawfulVault) (amo
     · rw [show (NumericType.native.maxValue).toNat = 100000000000000000 from by decide]
       norm_num
   have hc_r : r.amountDeposit' = c := hamt
-  have hsz' : lv.assetsTotal.toRat + c.toRat ≤ 2 ^ 63 - 1 := by
+  have hsz' : v.assetsTotal.toRat + c.toRat ≤ 2 ^ 63 - 1 := by
     rw [hc_r] at hsz; exact hsz
-  have hA0 : (0 : ℚ) ≤ lv.assetsTotal.toRat := lv.exact.assetsTotal_nonneg
-  have hAv0 : (0 : ℚ) ≤ lv.assetsAvailable.toRat := lv.exact.assetsAvailable_nonneg
-  have hAvA : lv.assetsAvailable.toRat ≤ lv.assetsTotal.toRat := lv.exact.assetsAvailable_le
+  have hA0 : (0 : ℚ) ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
+  have hAv0 : (0 : ℚ) ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hAvA : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
   have hcden' : cN.toRat.den = 1 := by rw [hcNval]; exact hcden
   -- exact stored total
-  have hboundA : (lv.assetsTotal.toRat + cN.toRat).num.natAbs < 2 ^ 63 := by
+  have hboundA : (v.assetsTotal.toRat + cN.toRat).num.natAbs < 2 ^ 63 := by
     refine Rat.num_natAbs_lt_of_abs_le _ (Rat.den_one_add _ _ hdenA hcden') ?_
     rw [hcNval, abs_le]
     have hclo := (abs_le.mp habs_c).1
     constructor
     · linarith
     · linarith
-  obtain ⟨hatval, _⟩ := operator_add_exact_int lv.assetsTotal cN at'
-    lv.wf.assetsTotal_norm hcNnorm hdenA hcden' hboundA hat
+  obtain ⟨hatval, _⟩ := operator_add_exact_int v.assetsTotal cN at'
+    v.wf.assetsTotal_norm hcNnorm hdenA hcden' hboundA hat
   -- exact stored available
-  have hboundAv : (lv.assetsAvailable.toRat + cN.toRat).num.natAbs < 2 ^ 63 := by
+  have hboundAv : (v.assetsAvailable.toRat + cN.toRat).num.natAbs < 2 ^ 63 := by
     refine Rat.num_natAbs_lt_of_abs_le _ (Rat.den_one_add _ _ hdenAv hcden') ?_
     rw [hcNval, abs_le]
     have hclo := (abs_le.mp habs_c).1
     constructor
     · linarith
     · linarith
-  obtain ⟨havval, _⟩ := operator_add_exact_int lv.assetsAvailable cN av'
-    lv.wf.assetsAvailable_norm hcNnorm hdenAv hcden' hboundAv hav
+  obtain ⟨havval, _⟩ := operator_add_exact_int v.assetsAvailable cN av'
+    v.wf.assetsAvailable_norm hcNnorm hdenAv hcden' hboundAv hav
   constructor
-  · show r.vault'.assetsTotal.toRat = lv.assetsTotal.toRat + r.amountDeposit'.toRat
+  · show r.vault'.assetsTotal.toRat = v.assetsTotal.toRat + r.amountDeposit'.toRat
     rw [hc_r, hr]
-    show at'.toRat = lv.assetsTotal.toRat + c.toRat
+    show at'.toRat = v.assetsTotal.toRat + c.toRat
     rw [hatval, hcNval]
-  · show r.vault'.assetsAvailable.toRat = lv.assetsAvailable.toRat + r.amountDeposit'.toRat
+  · show r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat + r.amountDeposit'.toRat
     rw [hc_r, hr]
-    show av'.toRat = lv.assetsAvailable.toRat + c.toRat
+    show av'.toRat = v.assetsAvailable.toRat + c.toRat
     rw [havval, hcNval]
 
-/-- Proof body of `LawfulVault.roundedDepositAmount_bounds`: the rounded amount is
+/-- Proof body of `Vault.roundedDepositAmount_bounds`: the rounded amount is
 `amountDeposit` floored onto a `10 ^ s` grid no coarser than the amount itself. -/
-theorem LawfulVault.roundedDepositAmount_bounds_proof (lv : LawfulVault) (amountDeposit roundedAmount : STAmount)
+theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
     (hcanon : amountDeposit.integral = false → amountDeposit.IOUCanonical)
-    (hrounded : lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
     (∃ s : ℤ, RoundsToRepresentableAt roundedAmount amountDeposit.toRat s .downward ∧
       (10 : ℚ) ^ s ≤ |roundedAmount.toRat|) ∧
     roundedAmount.isZero = false := by
-  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded lv amountDeposit roundedAmount hrounded
+  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   refine ⟨?_, hnz⟩
   have hmv : roundedAmount.mValue ≠ 0 := by
     intro h0
@@ -1238,7 +1238,7 @@ theorem LawfulVault.roundedDepositAmount_bounds_proof (lv : LawfulVault) (amount
     exact ⟨roundedAmount.exponent, STAmount.self_grid roundedAmount,
       STAmount.ulp_le_abs_toRat roundedAmount hmv⟩
   by_cases hint : amountDeposit.integral = true
-  · rw [roundToVaultExponent_integral amountDeposit lv.assetsTotal hint] at hround
+  · rw [roundToVaultExponent_integral amountDeposit v.assetsTotal hint] at hround
     exact hself (Except.ok.inj hround).symm
   · have hfr : amountDeposit.integral = false := by
       rcases hb : amountDeposit.integral with _ | _
@@ -1308,18 +1308,18 @@ theorem LawfulVault.roundedDepositAmount_bounds_proof (lv : LawfulVault) (amount
       nlinarith
 
 /-- A successful donation takes exactly `roundedAmount` and issues no shares. -/
-theorem LawfulVault.deposit_donation_proof (lv : LawfulVault) (amountDeposit roundedAmount : STAmount)
+theorem Vault.deposit_donation_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
     (r : DepositResult)
-    (hrounded : lv.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
-    (hok : lv.deposit amountDeposit true = .ok r) (herr : r.error = none) :
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
+    (hok : v.deposit amountDeposit true = .ok r) (herr : r.error = none) :
     r.amountDeposit' = roundedAmount ∧ r.sharesIssued = STAmount.zero .int64 := by
-  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded lv amountDeposit roundedAmount hrounded
+  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   -- A donation into a share-free vault would be rejected with `tecNO_PERMISSION`.
-  have hsh : lv.sharesTotal.mantissa_ ≠ 0 := by
+  have hsh : v.sharesTotal.mantissa_ ≠ 0 := by
     intro h0
-    rw [LawfulVault.deposit_donation_no_shares_proof lv amountDeposit roundedAmount hrounded h0] at hok
+    rw [Vault.deposit_donation_no_shares_proof v amountDeposit roundedAmount hrounded h0] at hok
     injection hok with h; rw [← h] at herr; exact absurd (show some _ = none from herr) (Option.some_ne_none _)
-  unfold LawfulVault.deposit at hok
+  unfold Vault.deposit at hok
   simp only [] at hok
   rw [hround] at hok
   simp only [ok_bind] at hok
@@ -1333,7 +1333,7 @@ theorem LawfulVault.deposit_donation_proof (lv : LawfulVault) (amountDeposit rou
   obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
   split at hok
   · injection hok with h; rw [← h] at herr; exact absurd (show some _ = none from herr) (Option.some_ne_none _)
-  · obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+  · obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
     injection hok with h; rw [← h]; exact ⟨rfl, rfl⟩
 
 /-! ## Net-asset-value subtraction facts (shared by the shares and charge sides) -/
@@ -1342,20 +1342,20 @@ theorem LawfulVault.deposit_donation_proof (lv : LawfulVault) (amountDeposit rou
 vault.** It is normalized, equal to the exact positive `depositNav`, so within any
 `to_nearest` budget of it (there is no subtraction stage under cash-basis). The `hnavm` witness (that the difference
 did not round to zero) is available from any success that divides by it. -/
-lemma LawfulVault.depositNav_facts (lv : LawfulVault) (navN : Number)
-    (hmz : lv.assetsTotal.mantissa_ ≠ 0)
+lemma Vault.depositNav_facts (v : Vault) (navN : Number)
+    (hmz : v.assetsTotal.mantissa_ ≠ 0)
     (_hnavm : navN.mantissa_ ≠ 0)
-    (hnavN : navN = lv.assetsTotal) :
+    (hnavN : navN = v.assetsTotal) :
     navN.isNormalized ∧
-      |navN.toRat - lv.depositNav| ≤ lv.depositNav * (6 / (2 ^ 63 - 3)) ∧
-      0 < lv.depositNav ∧ 0 < navN.toRat := by
-  have hApos : 0 < lv.toExact.assetsTotal := by
-    rcases lt_or_eq_of_le lv.exact.assetsTotal_nonneg with h | h
+      |navN.toRat - v.depositNav| ≤ v.depositNav * (6 / (2 ^ 63 - 3)) ∧
+      0 < v.depositNav ∧ 0 < navN.toRat := by
+  have hApos : 0 < v.toExact.assetsTotal := by
+    rcases lt_or_eq_of_le v.exact.assetsTotal_nonneg with h | h
     · exact h
-    · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero lv.assetsTotal hmz)
-  have hnav_pos : 0 < lv.depositNav := by unfold RawVault.depositNav; exact hApos
-  have hnavN_eqNav : navN.toRat = lv.depositNav := by rw [hnavN]; rfl
-  refine ⟨by rw [hnavN]; exact lv.wf.assetsTotal_norm, ?_, hnav_pos, ?_⟩
+    · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
+  have hnav_pos : 0 < v.depositNav := by unfold RawVault.depositNav; exact hApos
+  have hnavN_eqNav : navN.toRat = v.depositNav := by rw [hnavN]; rfl
+  refine ⟨by rw [hnavN]; exact v.wf.assetsTotal_norm, ?_, hnav_pos, ?_⟩
   · rw [hnavN_eqNav, sub_self, abs_zero]
     exact mul_nonneg (le_of_lt hnav_pos) (by norm_num)
   · rw [hnavN_eqNav]; exact hnav_pos

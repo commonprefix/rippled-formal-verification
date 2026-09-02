@@ -2,7 +2,7 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/TER.h>
@@ -14,7 +14,7 @@
 
 extern "C" {
 lean_object*
-lean_vault_deposit(lean_object* lv, lean_object* amount, uint8_t isDonation);
+lean_vault_deposit(lean_object* v, lean_object* amount, uint8_t isDonation);
 lean_object*
 lean_rounded_deposit_amount(lean_object* vault, lean_object* amount);
 
@@ -69,7 +69,7 @@ struct LeanDepositResult
     std::optional<TER> error;
     STAmount amountDeposit{};
     STAmount sharesIssued{};
-    LawfulVault vault;
+    Vault vault;
 };
 
 class DepositResultFFI : public LeanObjectFFI
@@ -86,15 +86,15 @@ public:
                            : std::nullopt,
             .amountDeposit = leanGetObj<STAmountFFI>(lean_deposit_result_amount),
             .sharesIssued = leanGetObj<STAmountFFI>(lean_deposit_result_shares),
-            .vault = leanGetObj<LawfulVaultFFI>(lean_deposit_result_vault),
+            .vault = leanGetObj<VaultFFI>(lean_deposit_result_vault),
         };
     }
 };
 
 inline LeanDepositResult
-leanVaultDeposit(LawfulVault const& state, STAmount const& amount, bool isDonation)
+leanVaultDeposit(Vault const& state, STAmount const& amount, bool isDonation)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful};
     LeanExcept<DepositResultFFI> const e = readExcept<DepositResultFFI>(leanCall(
@@ -108,9 +108,9 @@ leanVaultDeposit(LawfulVault const& state, STAmount const& amount, bool isDonati
 }
 
 inline LeanRoundedDepositAmountResult
-leanRoundedDepositAmount(LawfulVault const& state, STAmount const& amount)
+leanRoundedDepositAmount(Vault const& state, STAmount const& amount)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful, .error = std::nullopt, .amount = std::nullopt};
     LeanExcept<RoundedDepositResultFFI> const e = readExcept<RoundedDepositResultFFI>(

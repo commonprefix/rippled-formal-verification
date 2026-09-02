@@ -1,6 +1,6 @@
 import XRPL.Model.Vault.VaultDeposit
 
-/-! # Monadic reduction toolkit for `LawfulVault.deposit`
+/-! # Monadic reduction toolkit for `Vault.deposit`
 
 Building blocks for stepping the `Except Error` do-blocks of the deposit
 pipeline: the two `Except` bind identities (both `rfl`), a clean `if`-form
@@ -31,27 +31,27 @@ theorem bind_ok_peel {α β} (x : Except Error α) (f : α → Except Error β) 
   | ok a => rw [hx, ok_bind] at h; exact ⟨a, rfl, h⟩
 
 /-- Clean `if`-form of `roundedDepositAmount` when `roundToVaultExponent` succeeds. -/
-theorem roundedDepositAmount_ok (lv : LawfulVault) (amountDeposit ra' : STAmount)
-    (hr : roundToVaultExponent amountDeposit lv.assetsTotal = .ok ra') :
-    lv.roundedDepositAmount amountDeposit =
+theorem roundedDepositAmount_ok (v : Vault) (amountDeposit ra' : STAmount)
+    (hr : roundToVaultExponent amountDeposit v.assetsTotal = .ok ra') :
+    v.roundedDepositAmount amountDeposit =
       (if ra'.isZero then .ok (.rejected .tecPRECISION_LOSS) else .ok (.rounded ra')) := by
-  simp only [LawfulVault.roundedDepositAmount, hr, ok_bind]; rfl
+  simp only [Vault.roundedDepositAmount, hr, ok_bind]; rfl
 
 /-- `roundedDepositAmount` propagates a `roundToVaultExponent` error. -/
-theorem roundedDepositAmount_err (lv : LawfulVault) (amountDeposit : STAmount) (e : Error)
-    (hr : roundToVaultExponent amountDeposit lv.assetsTotal = .error e) :
-    lv.roundedDepositAmount amountDeposit = .error e := by
-  simp only [LawfulVault.roundedDepositAmount, hr, err_bind]
+theorem roundedDepositAmount_err (v : Vault) (amountDeposit : STAmount) (e : Error)
+    (hr : roundToVaultExponent amountDeposit v.assetsTotal = .error e) :
+    v.roundedDepositAmount amountDeposit = .error e := by
+  simp only [Vault.roundedDepositAmount, hr, err_bind]
 
 /-- A `rounded` outcome means `roundToVaultExponent` produced exactly that nonzero
 amount. -/
-theorem roundedDepositAmount_rounded (lv : LawfulVault) (amountDeposit ra : STAmount)
-    (h : lv.roundedDepositAmount amountDeposit = .ok (.rounded ra)) :
-    roundToVaultExponent amountDeposit lv.assetsTotal = .ok ra ∧ ra.isZero = false := by
-  cases hr : roundToVaultExponent amountDeposit lv.assetsTotal with
-  | error e => rw [roundedDepositAmount_err lv amountDeposit e hr] at h; exact absurd h (by simp)
+theorem roundedDepositAmount_rounded (v : Vault) (amountDeposit ra : STAmount)
+    (h : v.roundedDepositAmount amountDeposit = .ok (.rounded ra)) :
+    roundToVaultExponent amountDeposit v.assetsTotal = .ok ra ∧ ra.isZero = false := by
+  cases hr : roundToVaultExponent amountDeposit v.assetsTotal with
+  | error e => rw [roundedDepositAmount_err v amountDeposit e hr] at h; exact absurd h (by simp)
   | ok ra' =>
-    rw [roundedDepositAmount_ok lv amountDeposit ra' hr] at h
+    rw [roundedDepositAmount_ok v amountDeposit ra' hr] at h
     split at h
     · exact absurd h (by simp)
     · rename_i hz
@@ -61,14 +61,14 @@ theorem roundedDepositAmount_rounded (lv : LawfulVault) (amountDeposit ra : STAm
 
 /-- A `rejected` outcome pins the code to `tecPRECISION_LOSS` and means
 `roundToVaultExponent` produced a zero amount. -/
-theorem roundedDepositAmount_rejected (lv : LawfulVault) (amountDeposit : STAmount) (ter : TER)
-    (h : lv.roundedDepositAmount amountDeposit = .ok (.rejected ter)) :
-    ∃ ra, roundToVaultExponent amountDeposit lv.assetsTotal = .ok ra ∧ ra.isZero = true ∧
+theorem roundedDepositAmount_rejected (v : Vault) (amountDeposit : STAmount) (ter : TER)
+    (h : v.roundedDepositAmount amountDeposit = .ok (.rejected ter)) :
+    ∃ ra, roundToVaultExponent amountDeposit v.assetsTotal = .ok ra ∧ ra.isZero = true ∧
       ter = .tecPRECISION_LOSS := by
-  cases hr : roundToVaultExponent amountDeposit lv.assetsTotal with
-  | error e => rw [roundedDepositAmount_err lv amountDeposit e hr] at h; exact absurd h (by simp)
+  cases hr : roundToVaultExponent amountDeposit v.assetsTotal with
+  | error e => rw [roundedDepositAmount_err v amountDeposit e hr] at h; exact absurd h (by simp)
   | ok ra' =>
-    rw [roundedDepositAmount_ok lv amountDeposit ra' hr] at h
+    rw [roundedDepositAmount_ok v amountDeposit ra' hr] at h
     split at h
     · rename_i hz
       rw [Except.ok.injEq, RoundedDepositResult.rejected.injEq] at h

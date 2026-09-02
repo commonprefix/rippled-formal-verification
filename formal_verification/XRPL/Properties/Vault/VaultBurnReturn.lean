@@ -2,62 +2,62 @@ import XRPL.Model.Vault.VaultBurn
 import XRPL.Properties.Vault.Common.BurnExits
 import XRPL.Properties.Vault.Common.Preservation
 
-/-! # `LawfulVault.burnShares` exits -/
+/-! # `Vault.burnShares` exits -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-variable (lv : LawfulVault)
+variable (v : Vault)
 
-/-! ## `LawfulVault.canBurnShares` -/
+/-! ## `Vault.canBurnShares` -/
 
 /-- `tecNO_PERMISSION` is the only rejection `canBurnShares` can return. -/
-theorem LawfulVault.canBurnShares_rejected_code (ter : TER)
-    (hok : lv.canBurnShares = .ok (.error ter)) :
+theorem Vault.canBurnShares_rejected_code (ter : TER)
+    (hok : v.canBurnShares = .ok (.error ter)) :
     ter = .tecNO_PERMISSION :=
-  LawfulVault.canBurnShares_rejected_code_proof lv ter hok
+  Vault.canBurnShares_rejected_code_proof v ter hok
 
 /-- Force-burning shares is allowed only when shares are outstanding while both
 asset totals are zero. When `sharesTotal` is zero, or `assetsTotal` or
 `assetsAvailable` is nonzero: `.error .tecNO_PERMISSION`. -/
-theorem LawfulVault.canBurnShares_no_permission
-    (hperm : lv.sharesTotal.mantissa_ = 0 ∨
-      lv.assetsTotal.mantissa_ ≠ 0 ∨ lv.assetsAvailable.mantissa_ ≠ 0) :
-    lv.canBurnShares = .ok (.error .tecNO_PERMISSION) :=
-  LawfulVault.canBurnShares_no_permission_proof lv hperm
+theorem Vault.canBurnShares_no_permission
+    (hperm : v.sharesTotal.mantissa_ = 0 ∨
+      v.assetsTotal.mantissa_ ≠ 0 ∨ v.assetsAvailable.mantissa_ ≠ 0) :
+    v.canBurnShares = .ok (.error .tecNO_PERMISSION) :=
+  Vault.canBurnShares_no_permission_proof v hperm
 
 /-- The vault has outstanding shares and both `assetsTotal` and
 `assetsAvailable` are zero: the result is the whole `sharesTotal` converted
 to an `int64` amount. -/
-theorem LawfulVault.canBurnShares_ok (sharesTotalAmount : STAmount)
-    (hsh : lv.sharesTotal.mantissa_ ≠ 0)
-    (hat : lv.assetsTotal.mantissa_ = 0)
-    (hav : lv.assetsAvailable.mantissa_ = 0)
-    (hshares : STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount) :
-    lv.canBurnShares = .ok (.assets sharesTotalAmount) :=
-  LawfulVault.canBurnShares_ok_proof lv sharesTotalAmount hsh hat hav hshares
+theorem Vault.canBurnShares_ok (sharesTotalAmount : STAmount)
+    (hsh : v.sharesTotal.mantissa_ ≠ 0)
+    (hat : v.assetsTotal.mantissa_ = 0)
+    (hav : v.assetsAvailable.mantissa_ = 0)
+    (hshares : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount) :
+    v.canBurnShares = .ok (.assets sharesTotalAmount) :=
+  Vault.canBurnShares_ok_proof v sharesTotalAmount hsh hat hav hshares
 
-/-! ## `LawfulVault.burnShares` -/
+/-! ## `Vault.burnShares` -/
 
 /-- `burnShares` stores the rounded difference `sharesTotal - sharesDestroyed`
-and changes no other field. The post-state is a `LawfulVault` (`lv'`): the in-op
+and changes no other field. The post-state is a `Vault` (`v'`): the in-op
 `to_lawful` re-check succeeds via `burnShares_poststate_lawful`. -/
-theorem LawfulVault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
+theorem Vault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
     (sharesDestroyedNumber st' : Number)
-    (hcan : lv.canBurnShares = .ok (.assets sharesTotalAmount))
+    (hcan : v.canBurnShares = .ok (.assets sharesTotalAmount))
     (hcanon : sharesDestroyed.IntegralCanonical)
     (hnn : sharesDestroyed.negative = false)
     (hle : sharesDestroyed.toRat ≤ sharesTotalAmount.toRat)
-    (hfit : (lv.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
+    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
     (hnum : sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
-    (hst : lv.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
-    ∃ lv' : LawfulVault, lv.burnShares sharesDestroyed = .ok lv' ∧
-      lv'.toRawVault = { lv.toRawVault with sharesTotal := st' } := by
-  obtain ⟨lv', htl, hlv'eq⟩ := LawfulVault.burnShares_poststate_lawful lv sharesDestroyed sharesTotalAmount
+    (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
+    ∃ v' : Vault, v.burnShares sharesDestroyed = .ok v' ∧
+      v'.toRawVault = { v.toRawVault with sharesTotal := st' } := by
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_poststate_lawful v sharesDestroyed sharesTotalAmount
     sharesDestroyedNumber st' hcan hcanon hnn hle hfit hnum hst
-  refine ⟨lv', ?_, hlv'eq⟩
-  unfold LawfulVault.burnShares
+  refine ⟨v', ?_, hlv'eq⟩
+  unfold Vault.burnShares
   simp only []
   rw [hnum, ok_bind, hst, ok_bind, htl]
 

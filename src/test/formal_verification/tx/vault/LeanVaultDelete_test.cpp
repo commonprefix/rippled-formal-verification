@@ -1,6 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultDeleteFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/ter.h>
 
@@ -10,9 +10,7 @@
 #include <cstdint>
 #include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 class LeanVaultDelete_test : public LeanSuite
 {
@@ -38,12 +36,12 @@ class LeanVaultDelete_test : public LeanSuite
             Number{available},
             static_cast<std::uint64_t>(shares)));
 
-        LawfulVault const state = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const state = readVaultState(env, vaultKeylet, asset.raw());
         auto const lean = leanCanVaultDelete(state);
         expectLawful(lean);
         TER const leanTer = lean.ter;
 
-        env(Vault::del({.owner = owner, .id = vaultKeylet.key}), jtx::Ter(std::ignore));
+        env(jtx::Vault::del({.owner = owner, .id = vaultKeylet.key}), jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         env.close();
 
@@ -91,4 +89,4 @@ class LeanVaultDelete_test : public LeanSuite
 
 BEAST_DEFINE_TESTSUITE(LeanVaultDelete, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

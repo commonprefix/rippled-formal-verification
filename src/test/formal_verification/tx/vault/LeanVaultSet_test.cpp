@@ -1,5 +1,5 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Env.h>
@@ -14,9 +14,7 @@
 #include <cstdint>
 #include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 class LeanVaultSet_test : public LeanSuite
 {
@@ -41,13 +39,13 @@ class LeanVaultSet_test : public LeanSuite
             Number{assetsTotal},
             static_cast<std::uint64_t>(assetsTotal)));
 
-        LawfulVault const state = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const state = readVaultState(env, vaultKeylet, asset.raw());
         Number const cap{assetsMaximum};
         auto const lean = leanCanVaultSet(state, cap);
         expectLawful(lean);
         TER const leanTer = lean.ter;
 
-        auto tx = Vault::set({.owner = owner, .id = vaultKeylet.key});
+        auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
         tx[sfAssetsMaximum] = cap;
         env(tx, jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
@@ -111,4 +109,4 @@ class LeanVaultSet_test : public LeanSuite
 
 BEAST_DEFINE_TESTSUITE(LeanVaultSet, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

@@ -19,10 +19,10 @@ open XRPL.Model.Protocol
 deriving instance DecidableEq for Except
 deriving instance DecidableEq for RawVault
 
--- `LawfulVault` carries proof fields (`wf`, `valid`), so it cannot auto-derive
+-- `Vault` carries proof fields (`wf`, `valid`), so it cannot auto-derive
 -- `DecidableEq`. Two lawful vaults are equal exactly when their raw records are:
 -- the proofs are irrelevant.
-instance : DecidableEq LawfulVault := fun a b =>
+instance : DecidableEq Vault := fun a b =>
   decidable_of_iff (a.toRawVault = b.toRawVault)
     ⟨fun h => by obtain ⟨av, _, _⟩ := a; obtain ⟨bv, _, _⟩ := b; cases h; rfl,
      fun h => by rw [h]⟩

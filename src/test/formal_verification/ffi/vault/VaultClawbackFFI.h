@@ -2,7 +2,7 @@
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/TER.h>
@@ -14,9 +14,9 @@
 
 extern "C" {
 lean_object*
-lean_vault_clawback(lean_object* lv, lean_object* assets, lean_object* holderShares);
+lean_vault_clawback(lean_object* v, lean_object* assets, lean_object* holderShares);
 lean_object*
-lean_vault_burn_shares(lean_object* lv, lean_object* sharesDestroyed);
+lean_vault_burn_shares(lean_object* v, lean_object* sharesDestroyed);
 lean_object*
 lean_can_burn_shares(lean_object* vault);
 
@@ -43,7 +43,7 @@ struct LeanClawbackResult
     std::optional<TER> error;
     STAmount assets{};
     STAmount shares{};
-    LawfulVault vault;
+    Vault vault;
 };
 
 class ClawbackResultFFI : public LeanObjectFFI
@@ -60,15 +60,15 @@ public:
                            : std::nullopt,
             .assets = leanGetObj<STAmountFFI>(lean_clawback_result_assets),
             .shares = leanGetObj<STAmountFFI>(lean_clawback_result_shares),
-            .vault = leanGetObj<LawfulVaultFFI>(lean_clawback_result_vault),
+            .vault = leanGetObj<VaultFFI>(lean_clawback_result_vault),
         };
     }
 };
 
 inline LeanClawbackResult
-leanVaultClawback(LawfulVault const& state, STAmount const& assets, STAmount const& holderShares)
+leanVaultClawback(Vault const& state, STAmount const& assets, STAmount const& holderShares)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful};
     LeanExcept<ClawbackResultFFI> const e = readExcept<ClawbackResultFFI>(leanCall(
@@ -85,16 +85,16 @@ leanVaultClawback(LawfulVault const& state, STAmount const& assets, STAmount con
 struct LeanBurnResult
 {
     std::optional<LeanError> leanError;
-    LawfulVault vault;
+    Vault vault;
 };
 
 inline LeanBurnResult
-leanBurnShares(LawfulVault const& state, STAmount const& sharesDestroyed)
+leanBurnShares(Vault const& state, STAmount const& sharesDestroyed)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful};
-    LeanExcept<LawfulVaultFFI> const e = readExcept<LawfulVaultFFI>(
+    LeanExcept<VaultFFI> const e = readExcept<VaultFFI>(
         leanCall(lean_vault_burn_shares, *lawful, STAmountFFI::build(sharesDestroyed)));
     if (!e.value)
         return {.leanError = e.error};
@@ -126,9 +126,9 @@ public:
 };
 
 inline LeanCanBurnResult
-leanCanBurnShares(LawfulVault const& state)
+leanCanBurnShares(Vault const& state)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful, .error = std::nullopt, .assets = std::nullopt};
     LeanExcept<CanBurnResultFFI> const e =

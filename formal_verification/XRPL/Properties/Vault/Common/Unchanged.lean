@@ -16,24 +16,24 @@ open XRPL.Model.Protocol
 
 /-- A deposit returning a `TER` leaves the vault unchanged and reports zero
 amounts. -/
-theorem LawfulVault.deposit_error_rejected_proof (lv : LawfulVault) (amountDeposit : STAmount)
+theorem Vault.deposit_error_rejected_proof (v : Vault) (amountDeposit : STAmount)
     (isDonation : Bool) (r : DepositResult)
-    (hok : lv.deposit amountDeposit isDonation = .ok r)
+    (hok : v.deposit amountDeposit isDonation = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.amountDeposit' = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.amountDeposit' = STAmount.zero v.numericType ∧
     r.sharesIssued = STAmount.zero .int64 := by
-  have key : (r.vault' = lv ∧ r.amountDeposit' = STAmount.zero lv.numericType ∧
+  have key : (r.vault' = v ∧ r.amountDeposit' = STAmount.zero v.numericType ∧
       r.sharesIssued = STAmount.zero .int64) ∨ r.error = none := by
-    unfold LawfulVault.deposit at hok
+    unfold Vault.deposit at hok
     simp only [] at hok
     obtain ⟨amount, _, hok⟩ := bind_ok_peel _ _ _ hok
     by_cases h1 : amount.isZero = true
     · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
     · rw [if_neg h1] at hok
-      by_cases h2 : (isDonation && lv.sharesTotal.mantissa_ == 0) = true
+      by_cases h2 : (isDonation && v.sharesTotal.mantissa_ == 0) = true
       · rw [if_pos h2] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
       · rw [if_neg h2] at hok
-        by_cases h3 : (lv.isInsolvent && !isDonation) = true
+        by_cases h3 : (v.isInsolvent && !isDonation) = true
         · rw [if_pos h3] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
         · rw [if_neg h3] at hok
           simp only [pure_bind] at hok
@@ -45,10 +45,10 @@ theorem LawfulVault.deposit_error_rejected_proof (lv : LawfulVault) (amountDepos
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : ((lv.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (lv.assetsMaximum.getD Number.zero)) = true
+            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
             · rw [if_neg hm] at hok
-              obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
               injection hok with h; rw [← h]; exact .inr rfl
           · rw [if_neg hd] at hok
             obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
@@ -63,32 +63,32 @@ theorem LawfulVault.deposit_error_rejected_proof (lv : LawfulVault) (amountDepos
               obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-              by_cases hm : ((lv.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (lv.assetsMaximum.getD Number.zero)) = true
+              by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
               · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
               · rw [if_neg hm] at hok
-                obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+                obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
                 injection hok with h; rw [← h]; exact .inr rfl
   rcases key with h | h
   · exact h
   · rw [h] at herr; simp at herr
 
 /-- A deposit returning a `TER` leaves the vault unchanged. -/
-theorem LawfulVault.deposit_error_unchanged_proof (lv : LawfulVault) (amountDeposit : STAmount)
-    (isDonation : Bool) (r : DepositResult) (hok : lv.deposit amountDeposit isDonation = .ok r)
-    (herr : r.error.isSome = true) : r.vault' = lv :=
-  (LawfulVault.deposit_error_rejected_proof lv amountDeposit isDonation r hok herr).1
+theorem Vault.deposit_error_unchanged_proof (v : Vault) (amountDeposit : STAmount)
+    (isDonation : Bool) (r : DepositResult) (hok : v.deposit amountDeposit isDonation = .ok r)
+    (herr : r.error.isSome = true) : r.vault' = v :=
+  (Vault.deposit_error_rejected_proof v amountDeposit isDonation r hok herr).1
 
 /-- A withdrawal returning a `TER` leaves the vault unchanged and reports zero
 amounts. -/
-theorem LawfulVault.withdraw_error_rejected_proof (lv : LawfulVault) (amount : WithdrawAmount)
+theorem Vault.withdraw_error_rejected_proof (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r)
+    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.assets' = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.assets' = STAmount.zero v.numericType ∧
     r.sharesBurned = STAmount.zero .int64 := by
-  have key : (r.vault' = lv ∧ r.assets' = STAmount.zero lv.numericType ∧
+  have key : (r.vault' = v ∧ r.assets' = STAmount.zero v.numericType ∧
       r.sharesBurned = STAmount.zero .int64) ∨ r.error = none := by
-    unfold LawfulVault.withdraw at hok
+    unfold Vault.withdraw at hok
     simp only [] at hok
     cases amount
     all_goals {
@@ -98,17 +98,17 @@ theorem LawfulVault.withdraw_error_rejected_proof (lv : LawfulVault) (amount : W
       · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
       · rw [if_neg h1] at hok; try simp only [pure_bind] at hok
         obtain ⟨assetsNumber', _, hok⟩ := bind_ok_peel _ _ _ hok
-        by_cases h2 : lv.assetsAvailable.operator_lt assetsNumber' = true
+        by_cases h2 : v.assetsAvailable.operator_lt assetsNumber' = true
         · rw [if_pos h2] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
         · rw [if_neg h2] at hok; try simp only [pure_bind] at hok
           obtain ⟨sta, _, hok⟩ := bind_ok_peel _ _ _ hok
           by_cases h3 : result.sharesRedeemed.operator_eq sta = true
           · rw [if_pos h3] at hok
-            by_cases h4 : lv.lossUnrealized.operator_ne Number.zero = true
+            by_cases h4 : v.lossUnrealized.operator_ne Number.zero = true
             · rw [if_pos h4] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
             · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
               obtain ⟨allAvail, _, hok⟩ := bind_ok_peel _ _ _ hok
-              obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
               injection hok with h; rw [← h]; exact .inr rfl
           · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
             obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -120,7 +120,7 @@ theorem LawfulVault.withdraw_error_rejected_proof (lv : LawfulVault) (amount : W
             · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
               obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-              obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
               injection hok with h; rw [← h]; exact .inr rfl
     }
   rcases key with h | h
@@ -128,22 +128,22 @@ theorem LawfulVault.withdraw_error_rejected_proof (lv : LawfulVault) (amount : W
   · rw [h] at herr; simp at herr
 
 /-- A withdrawal returning a `TER` leaves the vault unchanged. -/
-theorem LawfulVault.withdraw_error_unchanged_proof (lv : LawfulVault) (amount : WithdrawAmount)
+theorem Vault.withdraw_error_unchanged_proof (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r)
-    (herr : r.error.isSome = true) : r.vault' = lv :=
-  (LawfulVault.withdraw_error_rejected_proof lv amount waiveUnrealizedLoss r hok herr).1
+    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r)
+    (herr : r.error.isSome = true) : r.vault' = v :=
+  (Vault.withdraw_error_rejected_proof v amount waiveUnrealizedLoss r hok herr).1
 
 /-- A clawback returning a `TER` leaves the vault unchanged and reports zero
 amounts. -/
-theorem LawfulVault.clawback_error_rejected_proof (lv : LawfulVault) (assets holderShares : STAmount)
-    (r : ClawbackResult) (hok : lv.clawback assets holderShares = .ok r)
+theorem Vault.clawback_error_rejected_proof (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r)
     (herr : r.error.isSome = true) :
-    r.vault' = lv ∧ r.assetsRecovered = STAmount.zero lv.numericType ∧
+    r.vault' = v ∧ r.assetsRecovered = STAmount.zero v.numericType ∧
     r.sharesDestroyed = STAmount.zero .int64 := by
-  have key : (r.vault' = lv ∧ r.assetsRecovered = STAmount.zero lv.numericType ∧
+  have key : (r.vault' = v ∧ r.assetsRecovered = STAmount.zero v.numericType ∧
       r.sharesDestroyed = STAmount.zero .int64) ∨ r.error = none := by
-    unfold LawfulVault.clawback at hok
+    unfold Vault.clawback at hok
     simp only [] at hok
     obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok
     by_cases h1 : result.error.isSome = true
@@ -162,7 +162,7 @@ theorem LawfulVault.clawback_error_rejected_proof (lv : LawfulVault) (assets hol
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
           obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨lv', _, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
           injection hok with h; rw [← h]
           cases hre : result.error with
           | none => exact .inr rfl
@@ -172,9 +172,9 @@ theorem LawfulVault.clawback_error_rejected_proof (lv : LawfulVault) (assets hol
   · rw [h] at herr; simp at herr
 
 /-- A clawback returning a `TER` leaves the vault unchanged. -/
-theorem LawfulVault.clawback_error_unchanged_proof (lv : LawfulVault) (assets holderShares : STAmount)
-    (r : ClawbackResult) (hok : lv.clawback assets holderShares = .ok r)
-    (herr : r.error.isSome = true) : r.vault' = lv :=
-  (LawfulVault.clawback_error_rejected_proof lv assets holderShares r hok herr).1
+theorem Vault.clawback_error_unchanged_proof (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult) (hok : v.clawback assets holderShares = .ok r)
+    (herr : r.error.isSome = true) : r.vault' = v :=
+  (Vault.clawback_error_rejected_proof v assets holderShares r hok herr).1
 
 end XRPL.Model.SingleAssetVault

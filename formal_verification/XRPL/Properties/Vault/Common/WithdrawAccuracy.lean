@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Common.WithdrawDefs
-import XRPL.Properties.Vault.LawfulVaultValid
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawReduction
 import XRPL.Properties.Vault.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
@@ -12,7 +12,7 @@ import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 
-/-! # `LawfulVault.withdraw` accuracy proofs
+/-! # `Vault.withdraw` accuracy proofs
 
 Proof bodies behind the accuracy headlines in `VaultWithdraw.lean`. -/
 
@@ -542,15 +542,15 @@ lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
 /-- **Proof body of `withdraw_sharesBurned_exact`.** A successful share-denominated
 withdrawal burns exactly the named shares: the reduction echoes the named amount
 through `computeWithdrawByShares`. -/
-theorem LawfulVault.withdraw_sharesBurned_exact_proof (lv : LawfulVault) (shares : STAmount)
+theorem Vault.withdraw_sharesBurned_exact_proof (v : Vault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hok : lv.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
+    (hok : v.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
     (herr : r.error = none) :
     r.sharesBurned = shares := by
   obtain ⟨cw, an, sta, hcomp, herr2, -, -, -, hsb, -⟩ :=
-    LawfulVault.withdraw_success_reduces lv (.vaultShares shares) waiveUnrealizedLoss r hok herr
+    Vault.withdraw_success_reduces v (.vaultShares shares) waiveUnrealizedLoss r hok herr
   obtain ⟨-, hshares⟩ :=
-    computeWithdrawByShares_none_reduces lv shares waiveUnrealizedLoss cw hcomp herr2
+    computeWithdrawByShares_none_reduces v shares waiveUnrealizedLoss cw hcomp herr2
   rw [hsb, hshares]
 
 /-! ## `withdraw_vault_updates_integral` proof body -/
@@ -558,40 +558,40 @@ theorem LawfulVault.withdraw_sharesBurned_exact_proof (lv : LawfulVault) (shares
 /-- The `sharesToAssetsWithdraw` output for an integral vault is an offset-`0`
 amount of the vault's numeric type within `maxRep`: the zero-NAV exit returns
 the canonical zero, the regular exit an integral `ofNumber` result. -/
-lemma LawfulVault.sharesToAssetsWithdraw_integral_shape (lv : LawfulVault) (sh assets : STAmount)
+lemma Vault.sharesToAssetsWithdraw_integral_shape (v : Vault) (sh assets : STAmount)
     (waiveUnrealizedLoss : Bool)
-    (hint : lv.numericType.isIntegral = true)
-    (hok : lv.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok assets) :
-    assets.mNumericType = lv.numericType ∧ assets.mOffset = 0 ∧
+    (hint : v.numericType.isIntegral = true)
+    (hok : v.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok assets) :
+    assets.mNumericType = v.numericType ∧ assets.mOffset = 0 ∧
     assets.mValue.toNat ≤ maxRep.toNat := by
   obtain ⟨nav, -, hcase⟩ :=
-    LawfulVault.sharesToAssetsWithdraw_ok_reduces lv sh assets waiveUnrealizedLoss hok
+    Vault.sharesToAssetsWithdraw_ok_reduces v sh assets waiveUnrealizedLoss hok
   rcases hcase with ⟨-, hzero⟩ | ⟨-, sn, nv, an, -, -, -, hof⟩
   · subst hzero
     refine ⟨?_, ?_, ?_⟩
-    · cases lv.numericType with
+    · cases v.numericType with
       | fractional => rfl
       | integral mv mo ms msh => rfl
-    · cases hnt : lv.numericType with
+    · cases hnt : v.numericType with
       | fractional => rw [hnt] at hint; exact absurd hint (by decide)
       | integral mv mo ms msh => rfl
     · rw [STAmount.zero_mValue]
       exact Nat.zero_le _
-  · exact STAmount.ofNumber_integral_facts lv.numericType an .downward assets hint hof
+  · exact STAmount.ofNumber_integral_facts v.numericType an .downward assets hint hof
 
 /-- **Proof body of `withdraw_vault_updates_integral`.** -/
-theorem LawfulVault.withdraw_vault_updates_integral_proof (lv : LawfulVault) (amount : WithdrawAmount)
+theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
-    (hint : lv.numericType.isIntegral = true)
-    (hok : lv.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
+    (hint : v.numericType.isIntegral = true)
+    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hnn : 0 ≤ r.assets'.toRat)
-    (hst : STAmount.ofNumber .int64 lv.sharesTotal .to_nearest = .ok sharesTotalAmount)
+    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false)
-    (hsz : lv.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = lv.toExact.assetsTotal - r.assets'.toRat ∧
-    r.vault'.assetsAvailable.toRat = lv.toExact.assetsAvailable - r.assets'.toRat := by
+    (hsz : v.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
+    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat := by
   obtain ⟨cw, aN, sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
-    LawfulVault.withdraw_success_reduces lv amount waiveUnrealizedLoss r hok herr
+    Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
   -- the share total conversion is deterministic
   have hsta_eq : sta = sharesTotalAmount := by
     rw [hst] at hsta
@@ -605,19 +605,19 @@ theorem LawfulVault.withdraw_vault_updates_integral_proof (lv : LawfulVault) (am
     exact absurd hfin (by simp)
   -- the paid amount came from `sharesToAssetsWithdraw`
   have hassets : ∃ sh : STAmount,
-      lv.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok cw.assets' := by
+      v.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok cw.assets' := by
     cases amount with
     | vaultAssets a =>
       obtain ⟨shares, -, -, hs, -⟩ :=
-        computeWithdrawByAssets_none_reduces lv a waiveUnrealizedLoss cw hcomp herr2
+        computeWithdrawByAssets_none_reduces v a waiveUnrealizedLoss cw hcomp herr2
       exact ⟨shares, hs⟩
     | vaultShares s =>
       obtain ⟨hs, -⟩ :=
-        computeWithdrawByShares_none_reduces lv s waiveUnrealizedLoss cw hcomp herr2
+        computeWithdrawByShares_none_reduces v s waiveUnrealizedLoss cw hcomp herr2
       exact ⟨s, hs⟩
   obtain ⟨sh, hsh⟩ := hassets
   obtain ⟨hshape_nt, hshape_off, hshape_val⟩ :=
-    LawfulVault.sharesToAssetsWithdraw_integral_shape lv sh cw.assets' waiveUnrealizedLoss hint hsh
+    Vault.sharesToAssetsWithdraw_integral_shape v sh cw.assets' waiveUnrealizedLoss hint hsh
   -- `toNumber` of the paid amount is exact
   obtain ⟨sn, hsn_ok, hsn_val, hsn_norm, hsn_den⟩ :=
     STAmount.toNumber_integral_exact' cw.assets' .to_nearest
@@ -630,33 +630,33 @@ theorem LawfulVault.withdraw_vault_updates_integral_proof (lv : LawfulVault) (am
   set k : ℚ := cw.assets'.toRat with hk_def
   have hknn : 0 ≤ k := by rw [hk_def, ← hr_assets]; exact hnn
   -- the assetsAvailable guard caps the paid value
-  have hk_le_AA : k ≤ lv.assetsAvailable.toRat := by
-    have hbridge := operator_lt_iff lv.assetsAvailable aN
-      lv.wf.assetsAvailable_norm hsn_norm
+  have hk_le_AA : k ≤ v.assetsAvailable.toRat := by
+    have hbridge := operator_lt_iff v.assetsAvailable aN
+      v.wf.assetsAvailable_norm hsn_norm
     by_contra hc
     push_neg at hc
-    have : lv.assetsAvailable.operator_lt aN = true := by
+    have : v.assetsAvailable.operator_lt aN = true := by
       rw [hbridge, hsn_val]
       exact hc
     rw [this] at hlt
     exact absurd hlt (by simp)
-  have hAA_le_A : lv.assetsAvailable.toRat ≤ lv.assetsTotal.toRat :=
-    lv.exact.assetsAvailable_le
-  have hA_nn : 0 ≤ lv.assetsTotal.toRat := lv.exact.assetsTotal_nonneg
-  have hsz' : lv.assetsTotal.toRat ≤ 2 ^ 63 - 1 := hsz
+  have hAA_le_A : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat :=
+    v.exact.assetsAvailable_le
+  have hA_nn : 0 ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
+  have hsz' : v.assetsTotal.toRat ≤ 2 ^ 63 - 1 := hsz
   -- both subtractions are exact
-  have hat_exact : at'.toRat = lv.assetsTotal.toRat - k :=
-    operator_sub_exact_int_le lv.assetsTotal aN at' k lv.wf.assetsTotal_norm hsz'
+  have hat_exact : at'.toRat = v.assetsTotal.toRat - k :=
+    operator_sub_exact_int_le v.assetsTotal aN at' k v.wf.assetsTotal_norm hsz'
       hsn_norm (by rw [hsn_val]) hsn_den hknn (le_trans hk_le_AA hAA_le_A) hat
-  have hav_exact : av'.toRat = lv.assetsAvailable.toRat - k :=
-    operator_sub_exact_int_le lv.assetsAvailable aN av' k lv.wf.assetsAvailable_norm
+  have hav_exact : av'.toRat = v.assetsAvailable.toRat - k :=
+    operator_sub_exact_int_le v.assetsAvailable aN av' k v.wf.assetsAvailable_norm
       (le_trans hAA_le_A hsz') hsn_norm (by rw [hsn_val]) hsn_den hknn hk_le_AA hav
   constructor
   · rw [hr, hr_assets]
-    show at'.toRat = lv.toExact.assetsTotal - cw.assets'.toRat
+    show at'.toRat = v.toExact.assetsTotal - cw.assets'.toRat
     exact hat_exact
   · rw [hr, hr_assets]
-    show av'.toRat = lv.toExact.assetsAvailable - cw.assets'.toRat
+    show av'.toRat = v.toExact.assetsAvailable - cw.assets'.toRat
     exact hav_exact
 
 end XRPL.Model.SingleAssetVault

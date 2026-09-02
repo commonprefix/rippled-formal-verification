@@ -6,5 +6,5 @@ open XRPL.Model.Protocol (Number NumericType Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_can_vault_delete]
-def lean_can_vault_delete (lv : LawfulVault) : Int32 :=
-  lv.canVaultDelete.code
+def lean_can_vault_delete (v : Vault) : Int32 :=
+  v.canVaultDelete.code

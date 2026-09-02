@@ -13,14 +13,14 @@ inductive CanBurnSharesResult where
 
 -- The owner may force-burn shares only when shares are outstanding while both
 -- asset totals are zero. On success returns the whole share total.
-def LawfulVault.canBurnShares (lv : LawfulVault) : Except Error CanBurnSharesResult := do
-  let vault := lv.toRawVault
+def Vault.canBurnShares (v : Vault) : Except Error CanBurnSharesResult := do
+  let vault := v.toRawVault
   if vault.sharesTotal.mantissa_ == 0 || (vault.assetsTotal.mantissa_ != 0 || vault.assetsAvailable.mantissa_ != 0) then do
     return .error .tecNO_PERMISSION
   return .assets (← STAmount.ofNumber .int64 vault.sharesTotal .to_nearest)
 
-def LawfulVault.burnShares (lv : LawfulVault) (sharesDestroyed : STAmount) : Except Error LawfulVault := do
-  let vault := lv.toRawVault
+def Vault.burnShares (v : Vault) (sharesDestroyed : STAmount) : Except Error Vault := do
+  let vault := v.toRawVault
   let sharesDestroyedNumber ← sharesDestroyed.toNumber .to_nearest
   let vault' := {
     vault with

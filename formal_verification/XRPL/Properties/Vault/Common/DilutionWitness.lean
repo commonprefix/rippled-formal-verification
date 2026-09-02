@@ -2,7 +2,7 @@ import XRPL.Model.Vault.VaultDeposit
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Model.Vault.VaultClawback
 import XRPL.Properties.Vault.Defs
-import XRPL.Properties.Vault.LawfulVaultValid
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawDefs
 import XRPL.Properties.Vault.Common.DepositDefs
 import XRPL.Properties.Vault.Common.STAmountToNumber
@@ -91,19 +91,19 @@ def depAmt : STAmount := STAmount.unchecked .fractional 1587033500000000 (-12) f
 /-- Witness clawback amount `1000.917`. -/
 def clawAmt : STAmount := STAmount.unchecked .fractional 1000917000000000 (-12) false
 
-/-- Witness holder-shares balance passed to `LawfulVault.clawback`. Unused on this
+/-- Witness holder-shares balance passed to `Vault.clawback`. Unused on this
 run since `clawAmt` is nonzero (the zero-amount "claw all" branch never fires). -/
 def clawHolderShares : STAmount := STAmount.zero .int64
 
 /-- Witness withdrawal share count `1003103695`. -/
 def shAmt : STAmount := STAmount.unchecked .int64 1003103695 0 false
 
-/-- The base witness vault as a `LawfulVault`.
+/-- The base witness vault as a `Vault`.
 
 `native_decide` (`Lean.ofReduceBool`) closes the operator forms `WF` and `Valid`,
-both Model-side computable; `LawfulVault.exact` (via `valid_iff_exact`) then supplies
+both Model-side computable; `Vault.exact` (via `valid_iff_exact`) then supplies
 the exact-rational invariant wherever a proof consumes it. -/
-def baseLV : LawfulVault := ⟨baseV, by native_decide, by native_decide⟩
+def baseLV : Vault := ⟨baseV, by native_decide, by native_decide⟩
 
 /-- The deposit result. `getD` never fires (the run succeeds); the fallback keeps
 the definition total. -/
@@ -196,38 +196,38 @@ theorem reachable_chain_facts :
 /-! ## The `*_witness` existentials the headlines delegate to -/
 
 theorem deposit_dilution_witness :
-    ∃ (lv : LawfulVault) (amountDeposit : STAmount) (r : DepositResult),
+    ∃ (v : Vault) (amountDeposit : STAmount) (r : DepositResult),
       0 < amountDeposit.toRat ∧
-      lv.deposit amountDeposit false = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (lv.toExact.sharesTotal : ℚ) <
-        lv.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨baseLV, depAmt, depR, depR_dilutes.1, depR_dilutes.2.1, depR_dilutes.2.2.1,
     depR_dilutes.2.2.2⟩
 
 theorem withdraw_dilution_witness :
-    ∃ (lv : LawfulVault) (amount : WithdrawAmount) (r : WithdrawResult),
-      lv.withdraw amount false = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (lv.toExact.sharesTotal : ℚ) <
-        lv.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+    ∃ (v : Vault) (amount : WithdrawAmount) (r : WithdrawResult),
+      v.withdraw amount false = .ok r ∧ r.error = none ∧
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨baseLV, .vaultShares shAmt, wdR, wdR_dilutes.1, wdR_dilutes.2.1, wdR_dilutes.2.2⟩
 
 theorem clawback_dilution_witness :
-    ∃ (lv : LawfulVault) (assets holderShares : STAmount) (r : ClawbackResult),
-      lv.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      r.vault'.withdrawNav * (lv.toExact.sharesTotal : ℚ) <
-        lv.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨baseLV, clawAmt, clawHolderShares, clawR, clawR_dilutes.1, clawR_dilutes.2.1,
     clawR_dilutes.2.2⟩
 
 theorem clawback_zero_dilution_witness :
-    ∃ (lv : LawfulVault) (assets holderShares : STAmount) (r : ClawbackResult),
+    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
       assets.isZero = true ∧
       holderShares.IntegralCanonical ∧ holderShares.Canonical ∧
       holderShares.negative = false ∧
-      lv.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.sharesDestroyed = holderShares ∧
-      r.vault'.withdrawNav * (lv.toExact.sharesTotal : ℚ) <
-        lv.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) <
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) :=
   ⟨baseLV, clawA0, clawZeroShares, clawR0, clawR0_dilutes⟩
 
 /-- Witness backing `ReachableFromIn.dilution_attained`: the two-deposit history
@@ -235,15 +235,15 @@ from `baseV` whose endpoint `r2.vault'` strictly dilutes against `baseV`. Each
 `.deposit` step's `hcnz` sub-witness is a `by native_decide` (`Lean.ofReduceBool`)
 on the concrete run. -/
 theorem dilution_attained_witness :
-    ∃ (lw u : LawfulVault) (n : ℕ),
-      1 < n ∧ LawfulVault.ReachableFromIn lw u n ∧
+    ∃ (lw u : Vault) (n : ℕ),
+      1 < n ∧ Vault.ReachableFromIn lw u n ∧
       u.withdrawNav * (lw.toExact.sharesTotal : ℚ) <
         lw.withdrawNav * (u.toExact.sharesTotal : ℚ) := by
   obtain ⟨⟨h1run, h1can, h1pos, -, -, -, -, h1sz⟩,
          ⟨h2run, h2can, h2pos, -, -, -, -, h2sz⟩, hdil⟩ := reachable_chain_facts
   refine ⟨baseLV, r2.vault', 2, by norm_num, ?_, hdil⟩
-  have s0 : LawfulVault.ReachableFromIn baseLV baseLV 0 := .refl baseLV
-  have s1 : LawfulVault.ReachableFromIn baseLV depR.vault' 1 :=
+  have s0 : Vault.ReachableFromIn baseLV baseLV 0 := .refl baseLV
+  have s1 : Vault.ReachableFromIn baseLV depR.vault' 1 :=
     .deposit baseLV baseLV 0 depAmt false depR s0 h1run h1can h1pos (by native_decide) h1sz
   exact .deposit baseLV depR.vault' 1 depAmt false r2 s1 h2run h2can h2pos (by native_decide) h2sz
 

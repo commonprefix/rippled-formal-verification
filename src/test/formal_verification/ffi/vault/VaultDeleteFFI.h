@@ -1,7 +1,7 @@
 #pragma once
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
-#include <test/formal_verification/ffi/vault/LawfulVaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 
 #include <xrpl/protocol/TER.h>
 
@@ -17,9 +17,9 @@ lean_can_vault_delete(lean_object* vault);
 namespace xrpl::test::formal_verification {
 
 [[nodiscard]] inline LawfulTerResult
-leanCanVaultDelete(LawfulVault const& state)
+leanCanVaultDelete(Vault const& state)
 {
-    auto lawful = LawfulVaultFFI::build(state);
+    auto lawful = VaultFFI::build(state);
     if (!lawful)
         return {.leanError = LeanError::notLawful};
     int32_t const code = leanCall(lean_can_vault_delete, *lawful);
