@@ -13,19 +13,9 @@ absolute value, and multiplication. They're used to reduce the signed
 rational arithmetic in `operator_mul_rounding_bound_to_nearest` to non-negative
 mantissa arithmetic over `ℚ`. -/
 
-/-- `Number.zero.toRat = 0`. Manually splits to avoid exposing `10^2147483648`
-(the C++ `INT_MIN` exponent sentinel). -/
+/-- `Number.zero.toRat = 0`, immediate from the `mantissa = 0` guard. -/
 lemma Number.toRat_zero : Number.zero.toRat = 0 := by
-  change (let sign : Int := if Number.zero.negative_ then -1 else 1
-          let m : Int := Number.zero.mantissa_.toNat
-          if Number.zero.exponent_ ≥ 0 then
-            mkRat (sign * m * (10 : Int) ^ Number.zero.exponent_.toNat) 1
-          else
-            mkRat (sign * m) ((10 : Nat) ^ (-Number.zero.exponent_).toNat)) = 0
-  have hm : Number.zero.mantissa_.toNat = 0 := rfl
-  have hneg : Number.zero.negative_ = false := rfl
-  simp only [hneg, hm, Nat.cast_zero, if_false, Bool.false_eq_true]
-  split_ifs <;> simp
+  unfold Number.toRat; rw [if_pos (show Number.zero.mantissa_ = 0 from rfl)]
 
 /-- Extract mantissa bounds from `isNormalized` when mantissa is nonzero. -/
 lemma Number.isNormalized.mantissaBounds {n : Number}
@@ -62,6 +52,9 @@ lemma mantissa_toNat_pos_of_bounds {n : Number}
 lemma abs_toRat_eq (n : Number) :
     |n.toRat| = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := by
   unfold Number.toRat
+  rcases eq_or_ne n.mantissa_ 0 with hm | hm
+  · rw [if_pos hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
+  rw [if_neg hm]
   split_ifs with hneg hexp hexp
   · rw [Rat.mkRat_one]
     have h_to : n.exponent_ = (n.exponent_.toNat : ℤ) := (Int.toNat_of_nonneg hexp).symm
@@ -106,7 +99,9 @@ lemma abs_toRat_eq (n : Number) :
 lemma Number.toRat_nonpos_of_negative (n : Number) (hneg : n.negative_ = true) :
     n.toRat ≤ 0 := by
   unfold Number.toRat
-  rw [hneg]; simp only [if_true]
+  rcases eq_or_ne n.mantissa_ 0 with hm | hm
+  · simp [hm]
+  rw [if_neg hm, hneg]; simp only [if_true]
   split_ifs with hexp
   · rw [Rat.mkRat_one]; push_cast
     have : (0 : ℚ) ≤ (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_.toNat := by positivity
@@ -125,7 +120,9 @@ lemma Number.toRat_nonpos_of_negative (n : Number) (hneg : n.negative_ = true) :
 lemma Number.toRat_nonneg_of_nonnegative (n : Number) (hneg : n.negative_ = false) :
     0 ≤ n.toRat := by
   unfold Number.toRat
-  rw [hneg]; simp only [Bool.false_eq_true, if_false]
+  rcases eq_or_ne n.mantissa_ 0 with hm | hm
+  · simp [hm]
+  rw [if_neg hm, hneg]; simp only [Bool.false_eq_true, if_false]
   split_ifs
   · rw [Rat.mkRat_one]; push_cast; positivity
   · rw [Rat.mkRat_eq_div]; push_cast; positivity
@@ -134,6 +131,9 @@ lemma Number.toRat_nonneg_of_nonnegative (n : Number) (hneg : n.negative_ = fals
 lemma Number.toRat_of_nonneg (n : Number) (hneg : n.negative_ = false) :
     n.toRat = (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_ := by
   unfold Number.toRat
+  rcases eq_or_ne n.mantissa_ 0 with hm | hm
+  · rw [if_pos hm]; simp [show n.mantissa_.toNat = 0 by rw [hm]; rfl]
+  rw [if_neg hm]
   simp only [hneg]
   by_cases hexp : n.exponent_ ≥ 0
   · rw [if_pos hexp, Rat.mkRat_one]
@@ -201,10 +201,8 @@ lemma Number.toRat_eq_zero_iff {n : Number} :
     have : n.mantissa_.toNat = 0 := by exact_mod_cast hm_zero
     exact UInt64.ext this
   · intro h
-    have hm : n.mantissa_.toNat = 0 := by rw [h]; rfl
     unfold Number.toRat
-    simp only [hm, Nat.cast_zero]
-    split_ifs <;> simp
+    rw [if_pos h]
 
 /-- `n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0` — the contrapositive of `toRat_eq_zero_iff`.
 Absorbs the recurring "mantissa is nonzero because the value is nonzero/pos/neg"

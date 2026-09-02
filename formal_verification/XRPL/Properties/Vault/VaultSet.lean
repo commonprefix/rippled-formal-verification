@@ -2,7 +2,7 @@ import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.Common.GuardProofs
 import XRPL.Model.Vault.VaultSet
 
-/-! # `Vault.canVaultSet` exits -/
+/-! # `RawVault.canVaultSet` exits -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -37,12 +37,11 @@ theorem Vault.canVaultSet_error_codes (assetsMaximum : Number) :
 
 /-- On a lawful vault, a normalized new maximum passes exactly when it is zero
 or at least the exact assets total. -/
-theorem Vault.lawful_canVaultSet_iff
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.lawful_canVaultSet_iff (v : Vault)
     (assetsMaximum : Number)
     (hnorm : assetsMaximum.isNormalized) : -- the new maximum is normalized
     v.canVaultSet assetsMaximum = .tesSUCCESS ↔
       assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat :=
-  Vault.lawful_canVaultSet_iff_proof v hv assetsMaximum hnorm
+  Vault.lawful_canVaultSet_iff_proof v assetsMaximum hnorm
 
 end XRPL.Model.SingleAssetVault

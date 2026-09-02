@@ -448,6 +448,7 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
     (hok : v.deposit amountDeposit isDonation = .ok r) :
     r.vault'.assetsAvailable = r.vault'.assetsTotal := by
   unfold Vault.deposit at hok
+  simp only [] at hok
   obtain ⟨amount, _, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases h1 : amount.isZero = true
   · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact hAV
@@ -472,7 +473,9 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
           have hae : av' = at' := (Except.ok.inj hav).symm
           by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
-          · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact hae
+          · rw [if_neg hm] at hok
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]; exact hae
         · rw [if_neg hd] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           cases cres with
@@ -490,7 +493,9 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
             have hae : av' = at' := (Except.ok.inj hav).symm
             by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
-            · rw [if_neg hm] at hok; injection hok with h; rw [← h]; exact hae
+            · rw [if_neg hm] at hok
+              obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+              injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]; exact hae
 
 /-- A withdrawal preserves record-level asset parity. -/
 theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
@@ -499,6 +504,7 @@ theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
     (hok : v.withdraw amount waive = .ok r) :
     r.vault'.assetsAvailable = r.vault'.assetsTotal := by
   unfold Vault.withdraw at hok
+  simp only [] at hok
   cases amount
   all_goals {
     simp only [] at hok
@@ -517,7 +523,8 @@ theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
           · rw [if_pos h4] at hok; injection hok with h; rw [← h]; exact hAV
           · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
             obtain ⟨allAvail, hall, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h; rw [← h]
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
           obtain ⟨sN, hsN, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
@@ -528,9 +535,10 @@ theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
           · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
             rw [hAV, hat] at hav
             have hae : av' = at' := (Except.ok.inj hav).symm
-            injection hok with h; rw [← h]; exact hae
+            injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]; exact hae
   }
 
 /-- A clawback preserves record-level asset parity. -/
@@ -540,6 +548,7 @@ theorem Vault.clawback_asset_parity (v : Vault) (assets holderShares : STAmount)
     (hok : v.clawback assets holderShares = .ok r) :
     r.vault'.assetsAvailable = r.vault'.assetsTotal := by
   unfold Vault.clawback at hok
+  simp only [] at hok
   obtain ⟨result, _, hok⟩ := bind_ok_peel _ _ _ hok
   by_cases h1 : result.error.isSome = true
   · rw [if_pos h1] at hok; injection hok with h; rw [← h]; exact hAV
@@ -557,9 +566,10 @@ theorem Vault.clawback_asset_parity (v : Vault) (assets holderShares : STAmount)
       · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
         obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
         obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
         rw [hAV, hat] at hav
         have hae : av' = at' := (Except.ok.inj hav).symm
-        injection hok with h; rw [← h]; exact hae
+        injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]; exact hae
 
 /-- A share burn preserves record-level asset parity: it writes only
 `sharesTotal`. -/
@@ -568,8 +578,9 @@ theorem Vault.burnShares_asset_parity (v : Vault) (sharesDestroyed : STAmount)
     (hok : v.burnShares sharesDestroyed = .ok v') :
     v'.assetsAvailable = v'.assetsTotal := by
   unfold Vault.burnShares at hok
+  simp only [] at hok
   obtain ⟨sdn, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-  injection hok with h; rw [← h]; exact hAV
+  rw [(RawVault.to_lawful_ok hok).1]; exact hAV
 
 end XRPL.Model.SingleAssetVault

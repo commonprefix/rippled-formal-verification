@@ -10,6 +10,11 @@ open XRPL.Model.Protocol (Number largeRange rounding_mode Error)
 def lean_number_build (negative : UInt8) (mantissa : UInt64) (exponent : Int64) : Number :=
   Number.unchecked (negative != 0) mantissa exponent.toInt
 
+@[export lean_number_build_norm]
+def lean_number_build_norm (negative : UInt8) (mantissa : UInt64) (exponent : Int64) : Number :=
+  (Number.normalized (negative != 0) mantissa exponent.toInt
+    largeRange.min largeRange.max .to_nearest).toOption.getD Number.zero
+
 @[export lean_number_negative]
 def lean_number_negative (n : Number) : UInt8 := if n.negative_ then 1 else 0
 

@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.OfNumberBoundary
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.SubZeroShape
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
@@ -93,8 +94,7 @@ amount `c = sharesToAssetsDeposit v shares` overshoots the exact charge by less
 than one whole unit plus the relative stage error: the empty branch is exact, and
 the nonempty branch is `⌈nav·shares/sharesTotal⌉` (upward `ofNumber`), whose
 integer ceiling adds at most `1` on top of the `depositε` pipeline error. -/
-lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
-    (_amount shares c : STAmount)
+lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (_amount shares c : STAmount)
     (hint : v.numericType.isIntegral = true)
     (hshc : shares.IntegralCanonical) (hshnt : shares.mNumericType = .int64)
     (hshpos : 0 < shares.toRat)
@@ -113,10 +113,10 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
   · -- empty vault: `c = shares` exactly, `idealCharge = shares` (scale 0)
     have hA0 : v.toExact.assetsTotal = 0 :=
       Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal hmz
-    have hscale : v.scale = 0 := hv.wf.scale_integral hint
+    have hscale : v.scale = 0 := v.wf.scale_integral hint
     have hshexp : shares.exponent = 0 := hshc.offset_zero
     have hideal : v.idealChargeDeposit shares.toRat = shares.toRat := by
-      unfold Vault.idealChargeDeposit
+      unfold RawVault.idealChargeDeposit
       rw [if_pos hA0, hscale]
       show shares.toRat / (10 : ℚ) ^ (0 : UInt8).toNat = shares.toRat
       norm_num
@@ -158,23 +158,23 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
     set s : ℚ := shares.toRat with hs_def
     set ST : ℚ := v.sharesTotal.toRat with hST_def
     have hApos : 0 < v.toExact.assetsTotal := by
-      rcases lt_or_eq_of_le hv.valid.assetsTotal_nonneg with h | h
+      rcases lt_or_eq_of_le v.exact.assetsTotal_nonneg with h | h
       · exact h
       · exact absurd h.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.assetsTotal hmz)
     have hnav_pos : 0 < nav := by
-      rw [hnav_def]; unfold Vault.depositNav; exact hApos
+      rw [hnav_def]; unfold RawVault.depositNav; exact hApos
     have hST_pos : 0 < ST := by
       have hne : v.toExact.sharesTotal ≠ 0 := by
         intro h0
-        exact absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
-      have hcast := Vault.WF.toExact_sharesTotal v hv.wf
+        exact absurd (v.exact.empty_shares h0).1 (ne_of_gt hApos)
+      have hcast := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
       have : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by
         have : 0 < v.toExact.sharesTotal := Nat.pos_of_ne_zero hne
         exact_mod_cast this
       rw [hST_def, ← hcast]; exact this
     have hideal : v.idealChargeDeposit shares.toRat = nav * s / ST := by
-      unfold Vault.idealChargeDeposit
-      rw [if_neg (ne_of_gt hApos), Vault.WF.toExact_sharesTotal v hv.wf]
+      unfold RawVault.idealChargeDeposit
+      rw [if_neg (ne_of_gt hApos), RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
     have hidpos : 0 < nav * s / ST := div_pos (mul_pos hnav_pos hshpos) hST_pos
     have hideal_nonneg : 0 ≤ v.idealChargeDeposit shares.toRat := by
       rw [hideal]; exact le_of_lt hidpos
@@ -202,7 +202,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
     · -- genuine charge: run the relative composition
       have hQm : Q.mantissa_ ≠ 0 :=
         STAmount.ofNumber_integral_source_ne_zero v.numericType Q .upward c hint hc hc0
-      have hnavnorm : navN.isNormalized := by rw [hnavN_eq]; exact hv.wf.assetsTotal_norm
+      have hnavnorm : navN.isNormalized := by rw [hnavN_eq]; exact v.wf.assetsTotal_norm
       obtain ⟨sn, hsn, hsnval, hsnnorm, _⟩ :=
         STAmount.toNumber_integral_exact shares .to_nearest hshc (by rw [hshnt]; decide)
       have hshNeq : sn = shN := by rw [hsn] at hshN; exact Except.ok.inj hshN
@@ -211,7 +211,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
       have hshN_pos : 0 < shN.toRat := by rw [hshN_val]; exact hshpos
       have hshNm : shN.mantissa_ ≠ 0 :=
         Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [hshN_val]; exact ne_of_gt hshpos)
-      have hSTnorm : v.sharesTotal.isNormalized := hv.wf.sharesTotal_norm
+      have hSTnorm : v.sharesTotal.isNormalized := v.wf.sharesTotal_norm
       have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
         Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [← hST_def]; exact ne_of_gt hST_pos)
       have hPm : P.mantissa_ ≠ 0 :=
@@ -220,7 +220,7 @@ lemma sharesToAssetsDeposit_charge_integral_bound (v : Vault) (hv : v.Lawful)
       obtain ⟨hnavm, _⟩ :=
         operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
       obtain ⟨_, hnavbound, _, hnavN_pos⟩ :=
-        Vault.depositNav_facts v hv navN hmz hnavm hnavN_eq
+        Vault.depositNav_facts v navN hmz hnavm hnavN_eq
       have hPnorm : P.isNormalized :=
         operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
       have hQnorm : Q.isNormalized :=

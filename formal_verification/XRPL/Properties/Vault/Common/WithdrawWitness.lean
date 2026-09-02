@@ -32,13 +32,16 @@ open XRPL.Model.Protocol
 set_option linter.style.nativeDecide false
 
 /-- The shared withdraw witness vault: 3 assets, 7·10¹⁵ shares. -/
-def wvW : Vault :=
+def wvW : RawVault :=
   { assetsTotal := ⟨false, 3000000000000000000, -18⟩
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
   , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 7000000000000000000, -3⟩
   , lossUnrealized := Number.zero }
+
+/-- The withdraw witness vault as a `Vault`. -/
+def wvWL : Vault := ⟨wvW, by native_decide, by native_decide⟩
 
 /-- The asset-denominated witness amount, `1` of the IOU. -/
 def waW : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
@@ -54,7 +57,7 @@ def wpW : STAmount := STAmount.unchecked .fractional 9999999999999998 (-16) fals
 def wstW : STAmount := STAmount.unchecked .int64 7000000000000000 0 false
 
 /-- The post-withdrawal vault of the asset-denominated run. -/
-def wvW' : Vault :=
+def wvW' : RawVault :=
   { assetsTotal := ⟨false, 2000000000000000200, -18⟩
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
   , assetsReserved := Number.zero
@@ -62,8 +65,11 @@ def wvW' : Vault :=
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
   , lossUnrealized := Number.zero }
 
+/-- The post-withdrawal vault as a `Vault` (the op re-validates). -/
+def wvW'L : Vault := ⟨wvW', by native_decide, by native_decide⟩
+
 /-- The witness result of the asset-denominated run. -/
-def wrW : WithdrawResult := ⟨none, wvW', wpW, wshW⟩
+def wrW : WithdrawResult := ⟨none, wvW'L, wpW, wshW⟩
 
 /-- The share-denominated witness shares of the vault-updates run,
 `2333333333333`. -/
@@ -75,7 +81,7 @@ def wp4W : STAmount := STAmount.unchecked .fractional 9999999999998571 (-19) fal
 
 /-- The post-withdrawal vault of the vault-updates run. Its stored
 `assetsTotal` is the 19-digit rounding of the exact difference. -/
-def wv4W' : Vault :=
+def wv4W' : RawVault :=
   { assetsTotal := ⟨false, 2999000000000000143, -18⟩
   , assetsAvailable := ⟨false, 2999000000000000143, -18⟩
   , assetsReserved := Number.zero
@@ -83,8 +89,11 @@ def wv4W' : Vault :=
   , sharesTotal := ⟨false, 6997666666666667000, -3⟩
   , lossUnrealized := Number.zero }
 
+/-- The vault-updates post-withdrawal vault as a `Vault` (the op re-validates). -/
+def wv4W'L : Vault := ⟨wv4W', by native_decide, by native_decide⟩
+
 /-- The witness result of the vault-updates run. -/
-def wr4W : WithdrawResult := ⟨none, wv4W', wp4W, wsh4W⟩
+def wr4W : WithdrawResult := ⟨none, wv4W'L, wp4W, wsh4W⟩
 
 /-! ## The `*_attained` witnesses -/
 
@@ -93,12 +102,12 @@ set_option maxRecDepth 10000
 /-- Witness data for `Vault.sharesToAssetsWithdraw_attained`. -/
 theorem Vault.sharesToAssetsWithdraw_witness :
     ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      v.Lawful ∧ 0 < shares.toRat ∧
+      0 < shares.toRat ∧
       v.WithdrawNavExact waiveUnrealizedLoss ∧
       v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
       RoundsWithinWitness assets
         (v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat) depositε := by
-  refine ⟨wvW, wshW, wpW, false, by native_decide, by native_decide, ?_,
+  refine ⟨wvWL, wshW, wpW, false, by native_decide, ?_,
     by native_decide, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -106,12 +115,12 @@ theorem Vault.sharesToAssetsWithdraw_witness :
 /-- Witness data for `Vault.withdraw_sharesBurned_attained`. -/
 theorem Vault.withdraw_sharesBurned_witness :
     ∃ (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) (r : WithdrawResult),
-      v.Lawful ∧ 0 < assets.toRat ∧
+      0 < assets.toRat ∧
       v.WithdrawNavExact waiveUnrealizedLoss ∧
       v.withdraw (.vaultAssets assets) waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesBurned
         (v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat) depositε := by
-  refine ⟨wvW, waW, false, wrW, by native_decide, by native_decide, ?_,
+  refine ⟨wvWL, waW, false, wrW, by native_decide, ?_,
     by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -120,13 +129,13 @@ theorem Vault.withdraw_sharesBurned_witness :
 theorem Vault.withdraw_payout_witness :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (sharesTotalAmount : STAmount) (r : WithdrawResult),
-      v.Lawful ∧ v.WithdrawNavExact waiveUnrealizedLoss ∧
+      v.WithdrawNavExact waiveUnrealizedLoss ∧
       v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
       RoundsWithinWitness r.assets'
         (v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat) depositε := by
-  refine ⟨wvW, .vaultAssets waW, false, wstW, wrW, by native_decide, ?_,
+  refine ⟨wvWL, .vaultAssets waW, false, wstW, wrW, ?_,
     by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
@@ -135,11 +144,11 @@ theorem Vault.withdraw_payout_witness :
 theorem Vault.withdraw_vault_updates_witness :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (sharesTotalAmount : STAmount) (r : WithdrawResult),
-      v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
+      v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
-  ⟨wvW, .vaultShares wsh4W, false, wstW, wr4W, by native_decide⟩
+  ⟨wvWL, .vaultShares wsh4W, false, wstW, wr4W, by native_decide⟩
 
 /-- The vault-updates payout re-rounded to the vault scale,
 `0.000999999999999`. -/
@@ -157,12 +166,12 @@ theorem Vault.withdraw_applied_delta_witness :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (assets'' : STAmount) (r : WithdrawResult)
       (deltaTotal : Number) (deltaAmount : STAmount),
-      v.Lawful ∧ v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
+      v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       roundToVaultExponent r.assets' v.assetsTotal = .ok assets'' ∧
       assets''.operator_eq r.assets' = false ∧
       v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
       STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
       deltaAmount.operator_eq r.assets' = false :=
-  ⟨wvW, .vaultShares wsh4W, false, wpr4W, wr4W, wdn4W, wda4W, by native_decide⟩
+  ⟨wvWL, .vaultShares wsh4W, false, wpr4W, wr4W, wdn4W, wda4W, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

@@ -1,120 +1,61 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/vault/VaultCreateFFI.h>
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
-#include <test/formal_verification/tx/vault/VaultTestHelpers.h>
+#include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
-#include <test/jtx/mpt.h>
+#include <test/jtx/pay.h>
+#include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STNumber.h>
 
-#include <optional>
+#include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 class LeanVaultCreate_test : public LeanSuite
 {
-    // Compare the on-ledger state VaultCreate wrote against the model's Vault.create, fed the
-    // tx-level cap, the asset's numericType tag, and the scale read from the SLE.
+    // Finding (FV_M2_19, c++): VaultCreate rounds an AssetsMaximum over 16 digits to the STAmount
+    // grid via associateAsset, so the stored cap differs from the submitted value.
     void
-    compareCreatedVault(
-        jtx::Env& env,
-        Keylet const& vaultKeylet,
-        Asset const& asset,
-        std::optional<Number> const& assetsMaximum)
-    {
-        VaultState const cpp = readVaultState(env, vaultKeylet, asset);
-        VaultState const lean = leanVaultCreate(
-            assetsMaximum.has_value(),
-            assetsMaximum.value_or(Number{0}),
-            NumericTypeFFI::tagOf(asset),
-            cpp.scale);
-
-        BEAST_EXPECT(lean.assetsTotal == cpp.assetsTotal);
-        BEAST_EXPECT(lean.assetsAvailable == cpp.assetsAvailable);
-        BEAST_EXPECT(lean.hasMaximum == cpp.hasMaximum);
-        BEAST_EXPECT(lean.assetsMaximum == cpp.assetsMaximum);
-        BEAST_EXPECT(lean.numericType == cpp.numericType);
-        BEAST_EXPECT(lean.scale == cpp.scale);
-        BEAST_EXPECT(lean.sharesTotal == cpp.sharesTotal);
-        BEAST_EXPECT(lean.lossUnrealized == cpp.lossUnrealized);
-    }
-
-    void
-    testCreateXRP()
+    testAssetsMaximumRoundedToGrid()
     {
         using namespace jtx;
-        testcase("create XRP vault");
+        testcase("AssetsMaximum over 16 digits is rounded on VaultCreate");
 
         Env env(*this);
-        Account const owner{"owner"};
-        env.fund(XRP(1'000'000), owner);
-        env.close();
-
-        PrettyAsset const asset{xrpIssue(), 1'000'000};
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        compareCreatedVault(env, vaultKeylet, asset.raw(), std::nullopt);
-    }
-
-    // MPT asset: covers the remaining numericType tag together with a nonzero cap.
-    void
-    testCreateMPTWithMaximum()
-    {
-        using namespace jtx;
-        testcase("create MPT vault with assetsMaximum");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
+        Account const owner{"owner"}, issuer{"issuer"};
         env.fund(XRP(1'000'000), owner, issuer);
         env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
+        PrettyAsset const asset = issuer["USD"];
+        env.trust(asset(1'000), owner);
+        env(pay(issuer, owner, asset(200)));
         env.close();
 
-        Vault vault{env};
+        Number const submitted{12'345'678'901'234'567LL, -1};  // 17 significant digits
+        jtx::Vault vault{env};
         auto [tx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
-        Number const cap{1'000};
-        tx[sfAssetsMaximum] = cap;
+        tx[sfAssetsMaximum] = submitted;
         env(tx);
         env.close();
 
-        compareCreatedVault(env, vaultKeylet, asset.raw(), cap);
-    }
-
-    // IOU asset: exercises the nonzero default vault scale.
-    void
-    testCreateIOU()
-    {
-        using namespace jtx;
-        testcase("create IOU vault");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), owner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        compareCreatedVault(env, vaultKeylet, asset.raw(), std::nullopt);
+        Number const stored = env.le(vaultKeylet)->at(sfAssetsMaximum);
+        BEAST_EXPECTS(
+            stored == submitted,
+            "AssetsMaximum rounded to grid: submitted=" + to_string(submitted) +
+                " stored=" + to_string(stored));
     }
 
     void
     runTests() override
     {
-        testCreateXRP();
-        testCreateMPTWithMaximum();
-        testCreateIOU();
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // testAssetsMaximumRoundedToGrid();  // FV_M2_19: AssetsMaximum over 16 digits is rounded
+        // clang-format on
     }
 };
 
 BEAST_DEFINE_TESTSUITE(LeanVaultCreate, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.VaultDeposit
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.RoundCanonical
 import XRPL.Properties.Vault.Common.ClawbackAccuracy
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
@@ -26,12 +27,10 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-variable (v : Vault)
-
 /-- **Grid-step and ceiling bound for a surviving fractional donation.** For the
 post-deposit scale `s`, the surviving rounded amount is at least one grid step
 `10 ^ s ≤ rounded`, and the pre-deposit stored total is under `2·10^16·10^s`. -/
-lemma Vault.donation_grid_bound (hv : v.Lawful)
+lemma Vault.donation_grid_bound (v : Vault)
     (amountDeposit rounded : STAmount)
     (hcanon : amountDeposit.Canonical) (hfr : amountDeposit.integral = false)
     (hpos : 0 < amountDeposit.toRat)
@@ -45,7 +44,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
   have hiou : amountDeposit.IOUCanonical := hcanon.2 hfr
   have hmv : rounded.mValue ≠ 0 := by unfold STAmount.isZero at hnz; exact ne_of_beq_false hnz
   have hrnn : 0 ≤ rounded.toRat :=
-    Vault.roundToVaultExponent_nonneg amountDeposit rounded v.assetsTotal hcanon (le_of_lt hpos) hround
+    RawVault.roundToVaultExponent_nonneg amountDeposit rounded v.assetsTotal hcanon (le_of_lt hpos) hround
   have hrcanon : rounded.Canonical := by
     rcases roundToVaultExponent_canonical_or_isZero amountDeposit rounded v.assetsTotal hcanon hround with hc | hz
     · exact hc
@@ -71,10 +70,10 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
   have haN_val : amountNumber.toRat = amountDeposit.toRat := by rw [haN_eq]; exact hsn_val
   have haN_norm : amountNumber.isNormalized := by rw [haN_eq]; exact hsn_norm
   have haN_nn : 0 ≤ amountNumber.toRat := by rw [haN_val]; exact le_of_lt hpos
-  have hAnn : 0 ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
+  have hAnn : 0 ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
   -- operator_add bound
   have hadd := operator_add_nonneg_rounds v.assetsTotal amountNumber assetsTotal'
-    hv.wf.assetsTotal_norm haN_norm hAnn haN_nn hAT'
+    v.wf.assetsTotal_norm haN_norm hAnn haN_nn hAT'
   simp only [RoundsWithin, RatValued.toRat] at hadd
   rw [← hδ_def] at hadd
   have hT_nn : 0 ≤ v.assetsTotal.toRat + amountNumber.toRat := add_nonneg hAnn haN_nn
@@ -101,7 +100,7 @@ lemma Vault.donation_grid_bound (hv : v.Lawful)
     Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hAT'_pos)
   have hAT'_norm : assetsTotal'.isNormalized :=
     operator_add_isNormalized_to_nearest v.assetsTotal amountNumber assetsTotal'
-      hv.wf.assetsTotal_norm haN_norm hAT' hAT'_ne
+      v.wf.assetsTotal_norm haN_norm hAT' hAT'_ne
   have hAT'_neg : assetsTotal'.negative_ = false :=
     Number.negative_false_of_norm_nonneg assetsTotal' hAT'_norm (le_of_lt hAT'_pos)
   obtain ⟨hM_lo, hM_hi⟩ := hAT'_norm.mantissaBounds_nat hAT'_ne

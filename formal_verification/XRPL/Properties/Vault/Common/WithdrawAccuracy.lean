@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.WithdrawDefs
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawReduction
 import XRPL.Properties.Vault.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
@@ -581,7 +582,7 @@ lemma Vault.sharesToAssetsWithdraw_integral_shape (v : Vault) (sh assets : STAmo
 /-- **Proof body of `withdraw_vault_updates_integral`.** -/
 theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
-    (hv : v.Lawful) (hint : v.numericType.isIntegral = true)
+    (hint : v.numericType.isIntegral = true)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hnn : 0 ≤ r.assets'.toRat)
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
@@ -598,7 +599,7 @@ theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdr
   subst hsta_eq
   -- the run is not final
   rcases hdisj with ⟨hfin', -⟩ | ⟨-, sbn, at', av', st', atr, atr',
-      -, hat, -, -, -, hav, -, hr⟩
+      -, hat, -, -, -, hav, -, hr_assets, hr⟩
   · rw [← hsb] at hfin'
     rw [hfin'] at hfin
     exact absurd hfin (by simp)
@@ -627,12 +628,11 @@ theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdr
   subst haN_eq
   -- the paid value
   set k : ℚ := cw.assets'.toRat with hk_def
-  have hr_assets : r.assets' = cw.assets' := by rw [hr]
   have hknn : 0 ≤ k := by rw [hk_def, ← hr_assets]; exact hnn
   -- the assetsAvailable guard caps the paid value
   have hk_le_AA : k ≤ v.assetsAvailable.toRat := by
     have hbridge := operator_lt_iff v.assetsAvailable aN
-      hv.wf.assetsAvailable_norm hsn_norm
+      v.wf.assetsAvailable_norm hsn_norm
     by_contra hc
     push_neg at hc
     have : v.assetsAvailable.operator_lt aN = true := by
@@ -641,21 +641,21 @@ theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdr
     rw [this] at hlt
     exact absurd hlt (by simp)
   have hAA_le_A : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat :=
-    hv.valid.assetsAvailable_le
-  have hA_nn : 0 ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
+    v.exact.assetsAvailable_le
+  have hA_nn : 0 ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
   have hsz' : v.assetsTotal.toRat ≤ 2 ^ 63 - 1 := hsz
   -- both subtractions are exact
   have hat_exact : at'.toRat = v.assetsTotal.toRat - k :=
-    operator_sub_exact_int_le v.assetsTotal aN at' k hv.wf.assetsTotal_norm hsz'
+    operator_sub_exact_int_le v.assetsTotal aN at' k v.wf.assetsTotal_norm hsz'
       hsn_norm (by rw [hsn_val]) hsn_den hknn (le_trans hk_le_AA hAA_le_A) hat
   have hav_exact : av'.toRat = v.assetsAvailable.toRat - k :=
-    operator_sub_exact_int_le v.assetsAvailable aN av' k hv.wf.assetsAvailable_norm
+    operator_sub_exact_int_le v.assetsAvailable aN av' k v.wf.assetsAvailable_norm
       (le_trans hAA_le_A hsz') hsn_norm (by rw [hsn_val]) hsn_den hknn hk_le_AA hav
   constructor
-  · rw [hr]
+  · rw [hr, hr_assets]
     show at'.toRat = v.toExact.assetsTotal - cw.assets'.toRat
     exact hat_exact
-  · rw [hr]
+  · rw [hr, hr_assets]
     show av'.toRat = v.toExact.assetsAvailable - cw.assets'.toRat
     exact hav_exact
 

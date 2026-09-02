@@ -1,5 +1,6 @@
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.DepositReduction
 
 /-! # Guard-extraction reductions for `Vault.withdraw`
@@ -236,8 +237,8 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
         v.lossUnrealized.operator_ne Number.zero = false ∧
         ∃ allAvailable : STAmount,
           STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok allAvailable ∧
-          r = ⟨none, { v with assetsTotal := Number.zero, assetsAvailable := Number.zero,
-                              sharesTotal := Number.zero }, allAvailable, cw.sharesRedeemed⟩) ∨
+          r.assets' = allAvailable ∧
+          r.vault'.toRawVault = { v.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero }) ∨
        (cw.sharesRedeemed.operator_eq sharesTotalAmount = false ∧
         ∃ (sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
           (assetsTotalRounded assetsTotalRounded' : STAmount),
@@ -249,10 +250,11 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
             assetsTotalRounded.operator_eq assetsTotalRounded') = false ∧
           v.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable' ∧
           v.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal' ∧
-          r = ⟨none, { v with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable',
-                              sharesTotal := sharesTotal' }, cw.assets', cw.sharesRedeemed⟩)) := by
+          r.assets' = cw.assets' ∧
+          r.vault'.toRawVault = { v.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' })) := by
   cases amount <;>
   · unfold Vault.withdraw at hok
+    simp only [] at hok
     obtain ⟨cw, hcomp, hok⟩ := bind_ok_peel _ _ _ hok
     simp only [pure_bind] at hok
     by_cases he : cw.error.isSome = true
@@ -284,10 +286,10 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
             exact absurd herr (by simp [WithdrawResult.rejected])
           · rw [if_neg hloss] at hok
             obtain ⟨aa, haa, hok⟩ := bind_ok_peel _ _ _ hok
-            have hr := (Except.ok.inj hok).symm
-            subst hr
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain rfl := Except.ok.inj hok
             exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
-              Or.inl ⟨hfin, by simpa using hloss, aa, haa, rfl⟩⟩
+              Or.inl ⟨hfin, by simpa using hloss, aa, haa, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
         · rw [if_neg hfin] at hok
           obtain ⟨sbn, hsbn, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
@@ -301,10 +303,10 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
           · rw [if_neg hg] at hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            have hr := (Except.ok.inj hok).symm
-            subst hr
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain rfl := Except.ok.inj hok
             exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
               Or.inr ⟨by simpa using hfin, sbn, at', av', st', atr, atr', hsbn, hat,
-                hatr, hatr', by simpa using hg, hav, hst, rfl⟩⟩
+                hatr, hatr', by simpa using hg, hav, hst, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
 
 end XRPL.Model.SingleAssetVault

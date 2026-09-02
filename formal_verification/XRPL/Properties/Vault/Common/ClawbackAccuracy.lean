@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.ClawbackDefs
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.ClawbackReduction
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
 import XRPL.Properties.Vault.Common.WithdrawBounds
@@ -34,7 +35,7 @@ nonzero result, there is a `q` (the pre-conversion share `Number`) within
 the floor (`truncateShares`) or a to-nearest whole share. -/
 lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
     (truncateShares : Bool)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false)
+    (hnav : v.WithdrawNavExact false)
     (hnn : 0 ≤ assets.toRat)
     (hanexact : ∃ an : Number, assets.toNumber .to_nearest = .ok an ∧
       an.toRat = assets.toRat ∧ an.isNormalized)
@@ -58,31 +59,31 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
       han, hmul, hdiv, htrunc, hofn⟩
   · exfalso; rw [hzero, STAmount.zero_mValue] at hmv; exact hmv rfl
   have hnav_nn : (0 : ℚ) ≤ v.withdrawNav := by
-    unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+    unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
   have hnav2_pos : 0 < nav2.toRat := by
     have hne : nav2.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero nav2 hnz2
     rw [hnav2val] at hne
     rw [hnav2val]; exact lt_of_le_of_ne hnav_nn (Ne.symm hne)
   have hnav_pos : 0 < v.withdrawNav := by rw [← hnav2val]; exact hnav2_pos
   have hS_pos : 0 < v.sharesTotal.toRat := by
-    rcases lt_or_eq_of_le hv.wf.sharesTotal_nonneg with h | h
+    rcases lt_or_eq_of_le v.wf.sharesTotal_nonneg with h | h
     · exact h
     · exfalso
       have hz : v.toExact.sharesTotal = 0 := by
         show v.sharesTotal.toRat.num.toNat = 0
         rw [← h]; rfl
-      obtain ⟨hAT, hAA⟩ := hv.valid.empty_shares hz
+      obtain ⟨hAT, hAA⟩ := v.exact.empty_shares hz
       have hle0 : v.withdrawNav ≤ 0 := by
-        unfold Vault.withdrawNav
+        unfold RawVault.withdrawNav
         rw [hAT]
-        have hl := hv.valid.lossUnrealized_nonneg
+        have hl := v.exact.lossUnrealized_nonneg
         linarith
       linarith [hnav_pos]
   have hS_one : 1 ≤ v.sharesTotal.toRat := by
     have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hS_pos
     have hcast : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
       conv_lhs => rw [← Rat.num_div_den v.sharesTotal.toRat]
-      rw [hv.wf.sharesTotal_int]; simp
+      rw [v.wf.sharesTotal_int]; simp
     rw [hcast]; exact_mod_cast hnum_pos
   have hSm : v.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hS_pos.ne'
   obtain ⟨an', han', hanval, hannorm⟩ := hanexact
@@ -90,7 +91,7 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
   rw [haneq] at hanval hannorm
   have hnav2norm : nav2.isNormalized :=
     operator_sub_isNormalized_to_nearest_sz v.assetsTotal v.lossUnrealized nav2
-      hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
+      v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub
   have hQm : sharesNumber.mantissa_ ≠ 0 := by
     have hsn' : sharesNumber'.mantissa_ ≠ 0 :=
       STAmount.ofNumber_integral_source_ne_zero .int64 sharesNumber' .to_nearest shares
@@ -137,7 +138,7 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
   have hPm : sharesAssets.mantissa_ ≠ 0 := by
     intro h0
     have hsmall := operator_mul_underflow_truth_small v.sharesTotal assetsNumber sharesAssets
-      .to_nearest hv.wf.sharesTotal_norm hannorm hSm hAm hmul h0
+      .to_nearest v.wf.sharesTotal_norm hannorm hSm hAm hmul h0
     have hcombo : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
         = (10 : ℚ) ^ (-32750 : ℤ) := by
       rw [← zpow_natCast (10 : ℚ) 18, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
@@ -152,12 +153,12 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
       zpow_le_zpow_right₀ (by norm_num) (by norm_num)
     linarith
   obtain ⟨hQnorm, hQpos, hQbound⟩ :=
-    Vault.exchange_pipeline_within v.sharesTotal assetsNumber nav2 sharesAssets sharesNumber
-      hv.wf.sharesTotal_norm hannorm hnav2norm hS_pos hApos hnav2_pos hmul hdiv hPm hQm
+    RawVault.exchange_pipeline_within v.sharesTotal assetsNumber nav2 sharesAssets sharesNumber
+      v.wf.sharesTotal_norm hannorm hnav2norm hS_pos hApos hnav2_pos hmul hdiv hPm hQm
   have hideal_eq : v.sharesTotal.toRat * assetsNumber.toRat / nav2.toRat
       = v.idealSharesClawback assets.toRat := by
-    unfold Vault.idealSharesClawback
-    rw [Vault.WF.toExact_sharesTotal v hv.wf, hanval, hnav2val]
+    unfold RawVault.idealSharesClawback
+    rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, hanval, hnav2val]
   have hideal_pos : 0 < v.idealSharesClawback assets.toRat := by rw [← hideal_eq]; positivity
   rw [hideal_eq] at hQbound
   refine ⟨sharesNumber.toRat, hideal_pos, hQbound, ?_⟩
@@ -193,7 +194,7 @@ lemma assetsToSharesWithdraw_spec (v : Vault) (assets shares : STAmount)
 theorem Vault.clawback_sharesDestroyed_proof (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hshares : assetsToSharesWithdraw v assets false false = .ok sharesDestroyed)
     (hassets : v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
@@ -217,7 +218,7 @@ theorem Vault.clawback_sharesDestroyed_proof (v : Vault)
     have hnn : 0 ≤ assets.toRat := by
       rw [STAmount.toRat_of_nonneg assets (show assets.mIsNegative = false from hnegf)]; positivity
     obtain ⟨q, -, hqbound, hmatch, hden, hnn2⟩ :=
-      assetsToSharesWithdraw_spec v assets sharesDestroyed false hv hnav hnn
+      assetsToSharesWithdraw_spec v assets sharesDestroyed false hnav hnn
         (STAmount.toNumber_canonical_exact assets .to_nearest hc)
         (fun hmv => STAmount.Canonical.abs_toRat_ge assets hc hmv) hshares hsdnz
     have hm2 : |sharesDestroyed.toRat - q| ≤ 1 / 2 := hmatch
@@ -237,7 +238,7 @@ canonical (nonzero-or-zero) `ofNumber` output priced through the shares side. -/
 theorem Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false)
+    (hnav : v.WithdrawNavExact false)
     (hshares : assetsToSharesWithdraw v assets false false = .ok sharesDestroyed)
     (hassets : v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
@@ -267,13 +268,13 @@ theorem Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
     have hrsd : r.sharesDestroyed = sd' := by rw [hsd_eq, hcrsd]
     have hsdnz : sd'.isZero = false := by rw [← hcrsd]; exact hcrnz
     have hAA_neg : v.assetsAvailable.negative_ = false :=
-      Number.negative_false_of_norm_nonneg v.assetsAvailable hv.wf.assetsAvailable_norm
-        hv.valid.assetsAvailable_nonneg
+      Number.negative_false_of_norm_nonneg v.assetsAvailable v.wf.assetsAvailable_norm
+        v.exact.assetsAvailable_nonneg
     obtain ⟨hnn, hexact, hfloor⟩ :=
       STAmount.ofNumber_input_spec v.numericType v.assetsAvailable .to_nearest assetsRecovered'
-        hv.wf.assetsAvailable_norm hAA_neg hclamped
+        v.wf.assetsAvailable_norm hAA_neg hclamped
     obtain ⟨q, hideal_pos, hqbound, hmatch, hden, hnn2⟩ :=
-      assetsToSharesWithdraw_spec v assetsRecovered' sd' true hv hnav hnn hexact hfloor hshareT hsdnz
+      assetsToSharesWithdraw_spec v assetsRecovered' sd' true hnav hnn hexact hfloor hshareT hsdnz
     have hqfloor : sd'.toRat = (⌊q⌋ : ℚ) := hmatch
     set ideal : ℚ := v.idealSharesClawback assetsRecovered'.toRat with hideal_def
     obtain ⟨hlo_b, hhi_b⟩ := abs_le.mp hqbound
@@ -290,7 +291,7 @@ theorem Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
 /-- **Proof body of `clawback_vault_updates_integral`.** -/
 theorem Vault.clawback_vault_updates_integral_proof (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hint : v.numericType.isIntegral = true)
+    (hint : v.numericType.isIntegral = true)
     (hznz : assets.isZero = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none)
     (hnn : 0 ≤ r.assetsRecovered.toRat)
@@ -331,7 +332,7 @@ theorem Vault.clawback_vault_updates_integral_proof (v : Vault) (assets holderSh
       · rw [← hvalA, hsn_ok] at hnum'
         rw [show arn' = sn from (Except.ok.inj hnum').symm] at hgt'
         exact hgt'
-    have hbridge := operator_gt_iff sn v.assetsAvailable hsn_norm hv.wf.assetsAvailable_norm
+    have hbridge := operator_gt_iff sn v.assetsAvailable hsn_norm v.wf.assetsAvailable_norm
     by_contra hc
     push_neg at hc
     have : sn.operator_gt v.assetsAvailable = true := by
@@ -340,37 +341,37 @@ theorem Vault.clawback_vault_updates_integral_proof (v : Vault) (assets holderSh
     rw [this] at hgt
     exact absurd hgt (by simp)
   have hAA_le_A : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat :=
-    hv.valid.assetsAvailable_le
+    v.exact.assetsAvailable_le
   have hsz' : v.assetsTotal.toRat ≤ 2 ^ 63 - 1 := hsz
   have hat_exact : at'.toRat = v.assetsTotal.toRat - k :=
-    operator_sub_exact_int_le v.assetsTotal sn at' k hv.wf.assetsTotal_norm hsz'
+    operator_sub_exact_int_le v.assetsTotal sn at' k v.wf.assetsTotal_norm hsz'
       hsn_norm (by rw [hsn_val]) hsn_den hknn (le_trans hk_le_AA hAA_le_A) hat
   have hav_exact : av'.toRat = v.assetsAvailable.toRat - k :=
-    operator_sub_exact_int_le v.assetsAvailable sn av' k hv.wf.assetsAvailable_norm
+    operator_sub_exact_int_le v.assetsAvailable sn av' k v.wf.assetsAvailable_norm
       (le_trans hAA_le_A hsz') hsn_norm (by rw [hsn_val]) hsn_den hknn hk_le_AA hav
   constructor
-  · rw [hr]
+  · rw [hr, hra]
     show at'.toRat = v.toExact.assetsTotal - cr.assetsRecovered.toRat
     exact hat_exact
-  · rw [hr]
+  · rw [hr, hra]
     show av'.toRat = v.toExact.assetsAvailable - cr.assetsRecovered.toRat
     exact hav_exact
 
 /-! ## `clawback_assetsRecovered` / `clawback_vault_updates` support -/
 
 /-- **Proof body of `idealAssetsClawback_idealSharesClawback`.** -/
-theorem Vault.idealAssetsClawback_idealSharesClawback_proof (v : Vault) (assets : ℚ)
-    (hnav : v.withdrawNav ≠ 0) (hsh : v.toExact.sharesTotal ≠ 0) :
-    v.idealAssetsClawback (v.idealSharesClawback assets) = assets := by
-  unfold Vault.idealAssetsClawback Vault.idealSharesClawback
-  have hsh' : ((v.toExact.sharesTotal : ℕ) : ℚ) ≠ 0 := Nat.cast_ne_zero.mpr hsh
+theorem RawVault.idealAssetsClawback_idealSharesClawback_proof (rv : RawVault) (assets : ℚ)
+    (hnav : rv.withdrawNav ≠ 0) (hsh : rv.toExact.sharesTotal ≠ 0) :
+    rv.idealAssetsClawback (rv.idealSharesClawback assets) = assets := by
+  unfold RawVault.idealAssetsClawback RawVault.idealSharesClawback
+  have hsh' : ((rv.toExact.sharesTotal : ℕ) : ℚ) ≠ 0 := Nat.cast_ne_zero.mpr hsh
   field_simp
 
 /-- The clawback recovery ideal coincides with the withdraw ideal at
 `waiveUnrealizedLoss = false`: both price shares at `withdrawNav`. -/
-lemma Vault.idealAssetsClawback_eq_withdraw (v : Vault) (shares : ℚ) :
-    v.idealAssetsClawback shares = v.idealAssetsWithdraw false shares := by
-  unfold Vault.idealAssetsClawback Vault.idealAssetsWithdraw
+lemma RawVault.idealAssetsClawback_eq_withdraw (rv : RawVault) (shares : ℚ) :
+    rv.idealAssetsClawback shares = rv.idealAssetsWithdraw false shares := by
+  unfold RawVault.idealAssetsClawback RawVault.idealAssetsWithdraw
   rw [if_neg (by decide : ¬ ((false : Bool) = true))]
 
 /-- **A priced recovery whose `to_nearest` lift did not exceed `assetsAvailable`
@@ -378,23 +379,23 @@ lands at or below `assetsAvailable`.** The `operator_gt = false` guard (the run 
 not take the second-excess `tecINTERNAL` branch) bridges to `≤` through the payout's
 exact `toNumber` value; a zero payout is trivially below the nonnegative
 `assetsAvailable`. -/
-lemma Vault.sharesToAssetsWithdraw_le_assetsAvailable (v : Vault) (hv : v.Lawful)
+lemma Vault.sharesToAssetsWithdraw_le_assetsAvailable (v : Vault)
     (shares assets : STAmount) (arn : Number) (hc : shares.Canonical)
     (hprice : v.sharesToAssetsWithdraw shares false = .ok assets)
     (hnum : assets.toNumber .to_nearest = .ok arn)
     (hgt : arn.operator_gt v.assetsAvailable = false) :
     assets.toRat ≤ v.assetsAvailable.toRat := by
-  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
+  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
   by_cases hz : assets.mValue = 0
   · rw [STAmount.toRat_signed, hz]; simpa using hAA_nn
   · obtain ⟨an, hnum', hval, hnorm⟩ :=
-      Vault.sharesToAssetsWithdraw_toNumber_exact_of_ne v hv shares assets false hc hprice hz
+      Vault.sharesToAssetsWithdraw_toNumber_exact_of_ne v shares assets false hc hprice hz
     have han_eq : an = arn := Except.ok.inj (hnum'.symm.trans hnum)
     have harn_val : arn.toRat = assets.toRat := by rw [← han_eq]; exact hval
     rw [← harn_val]
     by_contra hlt
     push_neg at hlt
-    have hbridge := operator_gt_iff arn v.assetsAvailable (han_eq ▸ hnorm) hv.wf.assetsAvailable_norm
+    have hbridge := operator_gt_iff arn v.assetsAvailable (han_eq ▸ hnorm) v.wf.assetsAvailable_norm
     have : arn.operator_gt v.assetsAvailable = true := hbridge.mpr hlt
     rw [this] at hgt; exact absurd hgt (by decide)
 
@@ -405,7 +406,7 @@ would otherwise have failed with `tecINTERNAL`). Covers both the direct and the
 recompute-from-`assetsAvailable` branches uniformly. -/
 lemma Vault.clawback_recovery_priced (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hznz : assets.isZero = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     0 ≤ r.sharesDestroyed.toRat ∧ r.sharesDestroyed.Canonical ∧
@@ -424,10 +425,10 @@ lemma Vault.clawback_recovery_priced (v : Vault) (assets holderShares : STAmount
     intro X hXnn hq
     by_contra h; push_neg at h
     have hnum_nn : 0 ≤ v.sharesTotal.toRat * X.toRat :=
-      mul_nonneg hv.wf.sharesTotal_nonneg hXnn
+      mul_nonneg v.wf.sharesTotal_nonneg hXnn
     have : v.idealSharesClawback X.toRat ≤ 0 := by
-      unfold Vault.idealSharesClawback
-      rw [Vault.WF.toExact_sharesTotal v hv.wf]
+      unfold RawVault.idealSharesClawback
+      rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
       exact div_nonpos_of_nonneg_of_nonpos hnum_nn h
     linarith
   have hmain :
@@ -442,7 +443,7 @@ lemma Vault.clawback_recovery_priced (v : Vault) (assets holderShares : STAmount
       have hnn_assets : 0 ≤ assets.toRat := by
         rw [STAmount.toRat_of_nonneg assets (show assets.mIsNegative = false from hnegf)]; positivity
       obtain ⟨_, hq_pos, _, _, _, hnn_sd⟩ :=
-        assetsToSharesWithdraw_spec v assets sd false hv hnav hnn_assets
+        assetsToSharesWithdraw_spec v assets sd false hnav hnn_assets
           (STAmount.toNumber_canonical_exact assets .to_nearest hc)
           (fun hmv => STAmount.Canonical.abs_toRat_ge assets hc hmv) hshares hsdnz'
       have hnav_pos : 0 < v.withdrawNav := hnavpos_of_q assets hnn_assets hq_pos
@@ -452,20 +453,20 @@ lemma Vault.clawback_recovery_priced (v : Vault) (assets holderShares : STAmount
         rw [hcr_sd, hcr_ar]; exact hprice
       have hle : cr.assetsRecovered.toRat ≤ v.assetsAvailable.toRat := by
         rw [hcr_ar]
-        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v hv sd ar arn2
+        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v sd ar arn2
           hcanon_sd hprice hnum2 hgtF
       exact ⟨by rw [hcr_sd]; exact hnn_sd, by rw [hcr_sd]; exact hcanon_sd, hprice_cr, hle, hnav_pos⟩
     · -- recompute branch: shares priced from the clamped `assetsAvailable`
       have hsdnz : cr.sharesDestroyed.isZero = false := hcrnz
       have hsdnz' : sd'.isZero = false := by rw [← hcr_sd]; exact hsdnz
       have hAA_neg : v.assetsAvailable.negative_ = false :=
-        Number.negative_false_of_norm_nonneg v.assetsAvailable hv.wf.assetsAvailable_norm
-          hv.valid.assetsAvailable_nonneg
+        Number.negative_false_of_norm_nonneg v.assetsAvailable v.wf.assetsAvailable_norm
+          v.exact.assetsAvailable_nonneg
       obtain ⟨hnn_cl, hexact_cl, hfloor_cl⟩ :=
         STAmount.ofNumber_input_spec v.numericType v.assetsAvailable .to_nearest clamped
-          hv.wf.assetsAvailable_norm hAA_neg hclamp
+          v.wf.assetsAvailable_norm hAA_neg hclamp
       obtain ⟨_, hq_pos, _, _, _, hnn_sd⟩ :=
-        assetsToSharesWithdraw_spec v clamped sd' true hv hnav hnn_cl hexact_cl hfloor_cl hshareT hsdnz'
+        assetsToSharesWithdraw_spec v clamped sd' true hnav hnn_cl hexact_cl hfloor_cl hshareT hsdnz'
       have hnav_pos : 0 < v.withdrawNav := hnavpos_of_q clamped hnn_cl hq_pos
       have hcanon_sd : sd'.Canonical :=
         assetsToSharesWithdraw_shares_canonical v clamped sd' true false hshareT hsdnz'
@@ -473,7 +474,7 @@ lemma Vault.clawback_recovery_priced (v : Vault) (assets holderShares : STAmount
         rw [hcr_sd, hcr_ar]; exact hprice'
       have hle : cr.assetsRecovered.toRat ≤ v.assetsAvailable.toRat := by
         rw [hcr_ar]
-        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v hv sd' ar' arn'
+        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v sd' ar' arn'
           hcanon_sd hprice' hnum' hgtF
       exact ⟨by rw [hcr_sd]; exact hnn_sd, by rw [hcr_sd]; exact hcanon_sd, hprice_cr, hle, hnav_pos⟩
   obtain ⟨h1, h2, h3, h4, h5⟩ := hmain
@@ -486,7 +487,7 @@ destroys the holder's shares directly, so the holder balance side conditions
 NAV: a zero amount can claw a worthless holding whose recovery prices to zero. -/
 lemma Vault.clawback_recovery_priced_zero (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false)
+    (hnav : v.WithdrawNavExact false)
     (hz : assets.isZero = true)
     (hSc : holderShares.Canonical) (hSnn : holderShares.negative = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
@@ -514,7 +515,7 @@ lemma Vault.clawback_recovery_priced_zero (v : Vault) (assets holderShares : STA
         rw [hcr_sd, hcr_ar]; exact hprice
       have hle : cr.assetsRecovered.toRat ≤ v.assetsAvailable.toRat := by
         rw [hcr_ar]
-        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v hv holderShares ar arn2
+        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v holderShares ar arn2
           hSc hprice hnum2 hgtF
       exact ⟨by rw [hcr_sd]; exact hnn_sd, by rw [hcr_sd]; exact hSc, hprice_cr, hle⟩
     · -- recompute branch: shares priced from the clamped `assetsAvailable`,
@@ -522,13 +523,13 @@ lemma Vault.clawback_recovery_priced_zero (v : Vault) (assets holderShares : STA
       have hsdnz : cr.sharesDestroyed.isZero = false := hcrnz
       have hsdnz' : sd'.isZero = false := by rw [← hcr_sd]; exact hsdnz
       have hAA_neg : v.assetsAvailable.negative_ = false :=
-        Number.negative_false_of_norm_nonneg v.assetsAvailable hv.wf.assetsAvailable_norm
-          hv.valid.assetsAvailable_nonneg
+        Number.negative_false_of_norm_nonneg v.assetsAvailable v.wf.assetsAvailable_norm
+          v.exact.assetsAvailable_nonneg
       obtain ⟨hnn_cl, hexact_cl, hfloor_cl⟩ :=
         STAmount.ofNumber_input_spec v.numericType v.assetsAvailable .to_nearest clamped
-          hv.wf.assetsAvailable_norm hAA_neg hclamp
+          v.wf.assetsAvailable_norm hAA_neg hclamp
       obtain ⟨_, hq_pos, _, _, _, hnn_sd⟩ :=
-        assetsToSharesWithdraw_spec v clamped sd' true hv hnav hnn_cl hexact_cl hfloor_cl
+        assetsToSharesWithdraw_spec v clamped sd' true hnav hnn_cl hexact_cl hfloor_cl
           hshareT hsdnz'
       have hcanon_sd : sd'.Canonical :=
         assetsToSharesWithdraw_shares_canonical v clamped sd' true false hshareT hsdnz'
@@ -537,7 +538,7 @@ lemma Vault.clawback_recovery_priced_zero (v : Vault) (assets holderShares : STA
         rw [hcr_sd, hcr_ar]; exact hprice'
       have hle : cr.assetsRecovered.toRat ≤ v.assetsAvailable.toRat := by
         rw [hcr_ar]
-        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v hv sd' ar' arn'
+        exact Vault.sharesToAssetsWithdraw_le_assetsAvailable v sd' ar' arn'
           hcanon_sd hprice' hnum' hgtF
       exact ⟨by rw [hcr_sd]; exact hnn_sd, by rw [hcr_sd]; exact hcanon_sd, hprice_cr, hle⟩
   obtain ⟨h1, h2, h3, h4⟩ := hmain
@@ -549,7 +550,7 @@ nonzero amount hypothesis: the holder balance side conditions carry the zero
 arm, and the positive NAV conjunct is dropped (it fails on the zero arm). -/
 lemma Vault.clawback_recovery_priced' (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hSc : holderShares.Canonical) (hSnn : holderShares.negative = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     0 ≤ r.sharesDestroyed.toRat ∧ r.sharesDestroyed.Canonical ∧
@@ -557,10 +558,10 @@ lemma Vault.clawback_recovery_priced' (v : Vault) (assets holderShares : STAmoun
     r.assetsRecovered.toRat ≤ v.assetsAvailable.toRat ∧
     r.sharesDestroyed.isZero = false := by
   by_cases hz : assets.isZero = true
-  · exact Vault.clawback_recovery_priced_zero v assets holderShares r hv hnav hz hSc hSnn
+  · exact Vault.clawback_recovery_priced_zero v assets holderShares r hnav hz hSc hSnn
       hok herr
   · obtain ⟨h1, h2, h3, h4, h5, -⟩ :=
-      Vault.clawback_recovery_priced v assets holderShares r hv hnav hc (by simpa using hz)
+      Vault.clawback_recovery_priced v assets holderShares r hnav hc (by simpa using hz)
         hok herr
     exact ⟨h1, h2, h3, h4, h5⟩
 
@@ -578,7 +579,7 @@ worth splits on the payout:
   `withdrawNav = 0.8·10⁻⁸¹` sits below the grid minimum `10⁻⁸¹`. -/
 theorem Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hznz : assets.isZero = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     r.assetsRecovered.toRat ≤ v.toExact.assetsAvailable ∧
@@ -593,19 +594,19 @@ theorem Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : 
       v.idealAssetsClawback r.sharesDestroyed.toRat * (1 - depositε) <
         if v.numericType.isIntegral then 1 else (10 : ℚ) ^ (-81 : ℤ)) := by
   obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz, hnav_pos⟩ :=
-    Vault.clawback_recovery_priced v assets holderShares r hv hnav hc hznz hok herr
+    Vault.clawback_recovery_priced v assets holderShares r hnav hc hznz hok herr
   obtain ⟨hrec_nn, hrec_le, hrec_shortfall⟩ :=
-    Vault.sharesToAssetsWithdraw_bounds_proof v r.sharesDestroyed r.assetsRecovered hv false
+    Vault.sharesToAssetsWithdraw_bounds_proof v r.sharesDestroyed r.assetsRecovered false
       hnn_sd hcanon_sd hnav hprice
   refine ⟨hle_AA, hrec_nn, ?_, ?_, ?_⟩
-  · rw [Vault.idealAssetsClawback_eq_withdraw]; exact hrec_le
+  · rw [RawVault.idealAssetsClawback_eq_withdraw]; exact hrec_le
   · -- nonzero payout: the interior stage error plus 2 ULP
     intro hrz
-    rw [Vault.idealAssetsClawback_eq_withdraw]
+    rw [RawVault.idealAssetsClawback_eq_withdraw]
     exact hrec_shortfall hrz
   · -- zero payout: the ideal is below the smallest positive representable of the type
     intro hrz
-    rw [Vault.idealAssetsClawback_eq_withdraw]
+    rw [RawVault.idealAssetsClawback_eq_withdraw]
     set ideal : ℚ := v.idealAssetsWithdraw false r.sharesDestroyed.toRat with hideal_def
     have hmv : r.sharesDestroyed.mValue ≠ 0 := ne_of_beq_false hsdnz
     have hshpos : 0 < r.sharesDestroyed.toRat := by
@@ -616,12 +617,12 @@ theorem Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : 
         linarith [show (0:ℚ) < 10 ^ (-81:ℤ) from zpow_pos (by norm_num) _]
     have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
     have hideal_nn : 0 ≤ ideal :=
-      (Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
+      (Vault.sharesToAssetsWithdraw_spec v r.sharesDestroyed r.assetsRecovered false
         hnn_sd hcanon_sd hnav hprice).2.1
     have hzmv : r.assetsRecovered.mValue = 0 := by
       have := hrz; rw [STAmount.isZero] at this; exact beq_iff_eq.mp this
     obtain ⟨aN, hof, hnzcase, hzcase⟩ :=
-      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hv hnav hcanon_sd
+      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hnav hcanon_sd
         hnav_pos hshpos hprice
     by_cases haN0 : aN.mantissa_ = 0
     · -- the `Number` pipeline underflowed: the ideal is `Number`-tiny, below either grid step
@@ -657,14 +658,14 @@ theorem Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : 
 /-- **Proof body of `clawback_assetsRecovered_integral`.** -/
 theorem Vault.clawback_assetsRecovered_integral_proof (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hint : v.numericType.isIntegral = true)
+    (hnav : v.WithdrawNavExact false) (hint : v.numericType.isIntegral = true)
     (hc : assets.Canonical) (hznz : assets.isZero = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat ≤
       1 + v.idealAssetsClawback r.sharesDestroyed.toRat * depositε := by
   obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz, hnav_pos⟩ :=
-    Vault.clawback_recovery_priced v assets holderShares r hv hnav hc hznz hok herr
-  rw [Vault.idealAssetsClawback_eq_withdraw]
+    Vault.clawback_recovery_priced v assets holderShares r hnav hc hznz hok herr
+  rw [RawVault.idealAssetsClawback_eq_withdraw]
   set ideal : ℚ := v.idealAssetsWithdraw false r.sharesDestroyed.toRat with hideal_def
   have hmv : r.sharesDestroyed.mValue ≠ 0 := ne_of_beq_false hsdnz
   have hshpos : 0 < r.sharesDestroyed.toRat := by
@@ -675,12 +676,12 @@ theorem Vault.clawback_assetsRecovered_integral_proof (v : Vault) (assets holder
       linarith [show (0:ℚ) < 10 ^ (-81:ℤ) from zpow_pos (by norm_num) _]
   have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hideal_nn : 0 ≤ ideal :=
-    (Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
+    (Vault.sharesToAssetsWithdraw_spec v r.sharesDestroyed r.assetsRecovered false
       hnn_sd hcanon_sd hnav hprice).2.1
   by_cases hrz : r.assetsRecovered.isZero = false
   · -- nonzero payout: the `.downward` floor within one integral ULP (`10^0 = 1`)
     obtain ⟨-, -, -, h4⟩ :=
-      Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
+      Vault.sharesToAssetsWithdraw_spec v r.sharesDestroyed r.assetsRecovered false
         hnn_sd hcanon_sd hnav hprice
     obtain ⟨-, hexp0, -⟩ :=
       Vault.sharesToAssetsWithdraw_integral_shape v r.sharesDestroyed r.assetsRecovered false hint hprice
@@ -692,7 +693,7 @@ theorem Vault.clawback_assetsRecovered_integral_proof (v : Vault) (assets holder
       by_contra hne; exact hrz (by simp [STAmount.isZero, hne])
     have hrec0 : r.assetsRecovered.toRat = 0 := by rw [STAmount.toRat_signed, hzmv]; simp
     obtain ⟨aN, hof, hnzcase, hzcase⟩ :=
-      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hv hnav hcanon_sd
+      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hnav hcanon_sd
         hnav_pos hshpos hprice
     by_cases haN0 : aN.mantissa_ = 0
     · have hidsmall := hzcase haN0
@@ -794,7 +795,7 @@ the stored value minus the recovery within `depositε`, and the `sharesTotal`
 update is the exact integer difference on the share domain. -/
 theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false)
+    (hnav : v.WithdrawNavExact false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none)
     (hnn_sd : 0 ≤ r.sharesDestroyed.toRat) (hcanon_sd : r.sharesDestroyed.Canonical)
     (hprice : v.sharesToAssetsWithdraw r.sharesDestroyed false = .ok r.assetsRecovered)
@@ -815,15 +816,15 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
   -- the recovery `Number` `arn` is value-exact and normalized
   have hnum_r : r.assetsRecovered.toNumber .to_nearest = .ok arn := by rw [hra_eq]; exact harn
   obtain ⟨harn_val, harn_norm⟩ :=
-    Vault.sharesToAssetsWithdraw_toNumber_facts v hv r.sharesDestroyed r.assetsRecovered false arn
+    Vault.sharesToAssetsWithdraw_toNumber_facts v r.sharesDestroyed r.assetsRecovered false arn
       hcanon_sd hprice hnum_r
   have hrec_nn : 0 ≤ r.assetsRecovered.toRat :=
-    (Vault.sharesToAssetsWithdraw_spec v hv r.sharesDestroyed r.assetsRecovered false
+    (Vault.sharesToAssetsWithdraw_spec v r.sharesDestroyed r.assetsRecovered false
       hnn_sd hcanon_sd hnav hprice).1
   -- clean `ℚ` sign/order facts on the stored fields
-  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
-  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := hv.valid.assetsAvailable_le
+  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
+  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
   -- the destroyed shares clear the `10⁻⁸¹` magnitude floor, so are positive
   have hshpos : 0 < r.sharesDestroyed.toRat :=
     STAmount.Canonical.toRat_pos_of_nonneg r.sharesDestroyed hcanon_sd hnn_sd hsdnz
@@ -834,14 +835,14 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
       (10 : ℚ) ^ (-81 : ℤ) ≤ |r.assetsRecovered.toRat| := by
     intro hp_pos
     obtain ⟨-, -, hp_up, -⟩ :=
-      Vault.sharesToAssetsWithdraw_spec_raw v hv r.sharesDestroyed r.assetsRecovered false
+      Vault.sharesToAssetsWithdraw_spec_raw v r.sharesDestroyed r.assetsRecovered false
         hnn_sd hcanon_sd hnav hprice
     have hS_nn : (0 : ℚ) ≤ (v.toExact.sharesTotal : ℚ) := by exact_mod_cast Nat.zero_le _
     have hnav_pos : 0 < v.withdrawNav := by
       by_contra h
       push_neg at h
       have hideal_np : v.idealAssetsWithdraw false r.sharesDestroyed.toRat ≤ 0 := by
-        unfold Vault.idealAssetsWithdraw
+        unfold RawVault.idealAssetsWithdraw
         rw [if_neg (by decide : ¬((false : Bool) = true))]
         exact div_nonpos_iff.mpr (Or.inr ⟨mul_nonpos_iff.mpr (Or.inr ⟨h, hnn_sd⟩), hS_nn⟩)
       have hIc : v.idealAssetsWithdraw false r.sharesDestroyed.toRat
@@ -849,7 +850,7 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
         mul_nonpos_iff.mpr (Or.inr ⟨hideal_np, by norm_num⟩)
       linarith [hp_up, hp_pos]
     obtain ⟨aN, hof, hnzcase, -⟩ :=
-      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hv hnav hcanon_sd
+      Vault.recovery_pipeline_bound v r.sharesDestroyed r.assetsRecovered hnav hcanon_sd
         hnav_pos hshpos hprice
     have hmv : r.assetsRecovered.mValue ≠ 0 := hmv_of hp_pos.ne'
     have haNnz : aN.mantissa_ ≠ 0 :=
@@ -863,9 +864,9 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
   have harn_neg : arn.negative_ = false :=
     Number.negative_false_of_norm_nonneg arn harn_norm (by rw [harn_val]; exact hrec_nn)
   have hAT_neg : v.assetsTotal.negative_ = false :=
-    Number.negative_false_of_norm_nonneg v.assetsTotal hv.wf.assetsTotal_norm hAT_nn
+    Number.negative_false_of_norm_nonneg v.assetsTotal v.wf.assetsTotal_norm hAT_nn
   have hAA_neg : v.assetsAvailable.negative_ = false :=
-    Number.negative_false_of_norm_nonneg v.assetsAvailable hv.wf.assetsAvailable_norm hAA_nn
+    Number.negative_false_of_norm_nonneg v.assetsAvailable v.wf.assetsAvailable_norm hAA_nn
   -- a nonzero recovery Number forces a positive payout, hence positive stored fields
   have hrec_pos_of : arn.mantissa_ ≠ 0 → 0 < r.assetsRecovered.toRat := by
     intro hm
@@ -892,23 +893,23 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
     rw [abs_of_nonneg hrec_nn] at hrec'
     have hAT_ge : (10 : ℚ) ^ (-81 : ℤ) ≤ |v.assetsTotal.toRat| := by
       rw [abs_of_nonneg hAT_nn]; linarith [le_trans hle_AA hAA_le_AT]
-    exact Number.exponent_ge_of_abs_toRat_ge v.assetsTotal hv.wf.assetsTotal_norm (hxm_AT hm) hAT_ge
+    exact Number.exponent_ge_of_abs_toRat_ge v.assetsTotal v.wf.assetsTotal_norm (hxm_AT hm) hAT_ge
   have hEAA_floor : arn.mantissa_ ≠ 0 → (-99 : ℤ) ≤ v.assetsAvailable.exponent_ := by
     intro hm
     have hrec' := hfloor_rec (hrec_pos_of hm)
     rw [abs_of_nonneg hrec_nn] at hrec'
     have hAA_ge : (10 : ℚ) ^ (-81 : ℤ) ≤ |v.assetsAvailable.toRat| := by
       rw [abs_of_nonneg hAA_nn]; linarith [hle_AA]
-    exact Number.exponent_ge_of_abs_toRat_ge v.assetsAvailable hv.wf.assetsAvailable_norm
+    exact Number.exponent_ge_of_abs_toRat_ge v.assetsAvailable v.wf.assetsAvailable_norm
       (hxm_AA hm) hAA_ge
   -- the two subtractions round within `depositε`
   have hround_AT : RoundsWithin at' (v.assetsTotal.toRat - arn.toRat) .to_nearest depositε :=
     Number.sub_recovery_rounds_within v.assetsTotal arn at' (-99)
-      hv.wf.assetsTotal_norm hAT_neg hxm_AT harn_norm harn_neg hEAT_floor hEarn_floor
+      v.wf.assetsTotal_norm hAT_neg hxm_AT harn_norm harn_neg hEAT_floor hEarn_floor
       (by norm_num [minExponent]) hat
   have hround_AA : RoundsWithin av' (v.assetsAvailable.toRat - arn.toRat) .to_nearest depositε :=
     Number.sub_recovery_rounds_within v.assetsAvailable arn av' (-99)
-      hv.wf.assetsAvailable_norm hAA_neg hxm_AA harn_norm harn_neg hEAA_floor hEarn_floor
+      v.wf.assetsAvailable_norm hAA_neg hxm_AA harn_norm harn_neg hEAA_floor hEarn_floor
       (by norm_num [minExponent]) hav
   have hv'_AT : r.vault'.assetsTotal = at' := by rw [hr]
   have hv'_AA : r.vault'.assetsAvailable = av' := by rw [hr]
@@ -917,7 +918,7 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
   · rw [hv'_AA]; rw [harn_val] at hround_AA; exact hround_AA
   · rintro ⟨hk_le, hS_le⟩
     have hSeq : ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat :=
-      Vault.WF.toExact_sharesTotal v hv.wf
+      RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
     have hkle_S : r.sharesDestroyed.toRat ≤ v.sharesTotal.toRat := by rw [← hSeq]; exact hk_le
     have hS_bound : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by rw [← hSeq]; exact hS_le
     -- shares `Number` `sbn` is value-exact, normalized, integer-valued
@@ -931,7 +932,7 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
       STAmount.IntegralCanonical.den_eq_one r.sharesDestroyed hint_sd
     have hst_val : st'.toRat = v.sharesTotal.toRat - r.sharesDestroyed.toRat :=
       operator_sub_exact_int_le v.sharesTotal sbn st' r.sharesDestroyed.toRat
-        hv.wf.sharesTotal_norm hS_bound hsbn_norm hsbn_val_r hkden hnn_sd hkle_S hst
+        v.wf.sharesTotal_norm hS_bound hsbn_norm hsbn_val_r hkden hnn_sd hkle_S hst
     have hv'ST : r.vault'.sharesTotal = st' := by rw [hr]
     have hlhs : (r.vault'.toExact.sharesTotal : ℚ)
         = v.sharesTotal.toRat - r.sharesDestroyed.toRat := by
@@ -939,7 +940,7 @@ theorem Vault.clawback_vault_updates_core (v : Vault) (assets holderShares : STA
         = v.sharesTotal.toRat - r.sharesDestroyed.toRat
       rw [hv'ST]
       exact Number.natCast_num_toNat_of_int_sub st' v.sharesTotal.toRat r.sharesDestroyed.toRat
-        hst_val hv.wf.sharesTotal_int hkden hkle_S
+        hst_val v.wf.sharesTotal_int hkden hkle_S
     rw [hlhs, hSeq]
 
 /-- **Proof body of `clawback_vault_updates`.** `assetsTotal` and `assetsAvailable`
@@ -949,7 +950,7 @@ that never underflows the difference to zero), and the `sharesTotal` update is t
 exact integer difference on the share domain. -/
 theorem Vault.clawback_vault_updates_proof (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hznz : assets.isZero = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
     RoundsWithin r.vault'.assetsTotal
@@ -961,8 +962,8 @@ theorem Vault.clawback_vault_updates_proof (v : Vault) (assets holderShares : ST
       (r.vault'.toExact.sharesTotal : ℚ) =
         (v.toExact.sharesTotal : ℚ) - r.sharesDestroyed.toRat) := by
   obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz, -⟩ :=
-    Vault.clawback_recovery_priced v assets holderShares r hv hnav hc hznz hok herr
-  exact Vault.clawback_vault_updates_core v assets holderShares r hv hnav hok herr
+    Vault.clawback_recovery_priced v assets holderShares r hnav hc hznz hok herr
+  exact Vault.clawback_vault_updates_core v assets holderShares r hnav hok herr
     hnn_sd hcanon_sd hprice hle_AA hsdnz
     (Vault.clawback_shares_intCanonical v assets holderShares r hznz hok herr)
 
@@ -970,7 +971,7 @@ theorem Vault.clawback_vault_updates_proof (v : Vault) (assets holderShares : ST
 side conditions carry the zero-amount (claw all holder shares) arm. -/
 theorem Vault.clawback_vault_updates_proof' (v : Vault) (assets holderShares : STAmount)
     (r : ClawbackResult)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
+    (hnav : v.WithdrawNavExact false) (hc : assets.Canonical)
     (hSic : holderShares.IntegralCanonical) (hSc : holderShares.Canonical)
     (hSnn : holderShares.negative = false)
     (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
@@ -983,8 +984,8 @@ theorem Vault.clawback_vault_updates_proof' (v : Vault) (assets holderShares : S
       (r.vault'.toExact.sharesTotal : ℚ) =
         (v.toExact.sharesTotal : ℚ) - r.sharesDestroyed.toRat) := by
   obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz⟩ :=
-    Vault.clawback_recovery_priced' v assets holderShares r hv hnav hc hSc hSnn hok herr
-  exact Vault.clawback_vault_updates_core v assets holderShares r hv hnav hok herr
+    Vault.clawback_recovery_priced' v assets holderShares r hnav hc hSc hSnn hok herr
+  exact Vault.clawback_vault_updates_core v assets holderShares r hnav hok herr
     hnn_sd hcanon_sd hprice hle_AA hsdnz
     (Vault.clawback_shares_intCanonical' v assets holderShares r hSic hok herr)
 

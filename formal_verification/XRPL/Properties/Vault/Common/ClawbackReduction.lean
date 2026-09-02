@@ -1,5 +1,6 @@
 import XRPL.Model.Vault.VaultClawback
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.DepositReduction
 import XRPL.Properties.Vault.Common.WithdrawReduction
 
@@ -276,10 +277,9 @@ theorem Vault.clawback_success_reduces (v : Vault) (assets holderShares : STAmou
           assetsTotalRounded.operator_eq assetsTotalRounded') = false ∧
         v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok sharesTotal' ∧
         v.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest = .ok assetsAvailable' ∧
-        r = ⟨none, { v with sharesTotal := sharesTotal', assetsAvailable := assetsAvailable',
-                            assetsTotal := assetsTotal' },
-              cr.assetsRecovered, cr.sharesDestroyed⟩ := by
+        r.vault'.toRawVault = { v.toRawVault with sharesTotal := sharesTotal', assetsAvailable := assetsAvailable', assetsTotal := assetsTotal' } := by
   unfold Vault.clawback at hok
+  simp only [] at hok
   obtain ⟨cr, hcomp, hok⟩ := bind_ok_peel _ _ _ hok
   simp only [pure_bind] at hok
   by_cases he : cr.error.isSome = true
@@ -313,11 +313,11 @@ theorem Vault.clawback_success_reduces (v : Vault) (assets holderShares : STAmou
       · rw [if_neg hg] at hok
         obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
         obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
-        have hr := (Except.ok.inj hok).symm
-        subst hr
+        obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain rfl := Except.ok.inj hok
         exact ⟨cr, hcomp, herr2, by simpa using hz, rfl, rfl,
           sbn, arn, at', st', av', atr, atr', hsbn, harn, hat, hatr, hatr',
-          by simpa using hg, hst, hav, rfl⟩
+          by simpa using hg, hst, hav, (RawVault.to_lawful_ok htl).1⟩
 
 /-- **Proof body of `clawback_zero_all_shares`.** -/
 theorem Vault.clawback_zero_all_shares_proof (v : Vault)

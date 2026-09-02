@@ -22,7 +22,7 @@ private def checkPrecisionFields (principal : Number) (fees : LoanFees) (checkFn
   return .tesSUCCESS
 
 -- LoanSet -> preclaim
-def Loan.canCreate (vault : Vault) (principalRequested : Number) (fees : LoanFees) (schedule : LoanSchedule)
+def Loan.canCreate (vault : RawVault) (principalRequested : Number) (fees : LoanFees) (schedule : LoanSchedule)
     (ledgerCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
   let scheduleTer := schedule.checkTimeAvailability
   if !scheduleTer.isTesSuccess then return scheduleTer
@@ -109,7 +109,7 @@ def LoanBroker.checkLimits (broker : LoanBroker) (nt : NumericType) (newDebtTota
 
 inductive LoanCreateResult where
   | rejected (ter : TER)
-  | created (loan : Loan) (vault' : Vault) (broker' : LoanBroker)
+  | created (loan : Loan) (vault' : RawVault) (broker' : LoanBroker)
 
 def buildLoan (computed : LoanComputed) (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule)
     (allowsOverpayment isPending : Bool) : Loan := {
@@ -131,7 +131,7 @@ def buildLoan (computed : LoanComputed) (rates : LoanRates) (fees : LoanFees) (s
 }
 
 -- LoanSet -> doApply
-def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
+def Loan.create (vault : RawVault) (broker : LoanBroker) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
     : Except Error LoanCreateResult := do
   if vault.assetsAvailable.operator_lt principal then return .rejected .tecINSUFFICIENT_FUNDS
@@ -163,12 +163,12 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
 
   return .created loan vault' broker'
 
-def Loan.createPending (vault : Vault) (broker : LoanBroker) (principal : Number)
+def Loan.createPending (vault : RawVault) (broker : LoanBroker) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
     : Except Error LoanCreateResult :=
   Loan.create vault broker principal rates fees schedule allowsOverpayment true
 
-def Loan.createImmediate (vault : Vault) (broker : LoanBroker) (principal : Number)
+def Loan.createImmediate (vault : RawVault) (broker : LoanBroker) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
     : Except Error LoanCreateResult :=
   Loan.create vault broker principal rates fees schedule allowsOverpayment false

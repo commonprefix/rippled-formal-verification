@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Defs
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Model.Vault.VaultDeposit
 import XRPL.Properties.Approx
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
@@ -18,7 +19,7 @@ open XRPL.Model.Protocol
 
 variable (v : Vault)
 
-/-! ## `Vault.roundedDepositAmount` -/
+/-! ## `RawVault.roundedDepositAmount` -/
 
 /-- `roundedAmount` is `amountDeposit` with every digit below some grid step
 `10 ^ s` discarded and the digits above kept unchanged, and it is nonzero. As an
@@ -40,7 +41,6 @@ theorem Vault.roundedDepositAmount_bounds (amountDeposit roundedAmount : STAmoun
 lawful vault and an `amountDeposit` exist where digits are actually dropped. -/
 theorem Vault.roundedDepositAmount_truncation_attained :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount),
-      v.Lawful ∧
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
       roundedAmount.toRat < amountDeposit.toRat :=
   Vault.roundedDepositAmount_truncation_witness
@@ -66,15 +66,15 @@ theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (r : Dep
 /-- When the vault's exchange rate still equals `10 ^ scale`, the ideal share
 amount is the empty-vault formula: pricing an empty vault at `10 ^ scale` is
 the special case of the general formula, not a different rule. -/
-theorem Vault.idealSharesDeposit_initial_rate (amount : ℚ)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.idealSharesDeposit_initial_rate (v : Vault) (amount : ℚ)
+    -- the starting vault is lawful
     (hrate : (v.toExact.sharesTotal : ℚ) = v.depositNav * (10 : ℚ) ^ v.scale.toNat) :
     v.idealSharesDeposit amount = amount * (10 : ℚ) ^ v.scale.toNat :=
-  Vault.idealSharesDeposit_initial_rate_proof v hv amount hrate
+  Vault.idealSharesDeposit_initial_rate_proof v amount hrate
 
 /-- A larger rounded amount never buys fewer shares from the same vault. -/
-theorem Vault.deposit_shares_monotone
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_shares_monotone (v : Vault)
+    -- the starting vault is lawful
     (amountDeposit₁ amountDeposit₂ roundedAmount₁ roundedAmount₂ : STAmount)
     (r₁ r₂ : DepositResult)
     -- both rounded amounts are stored canonically and are positive
@@ -83,14 +83,14 @@ theorem Vault.deposit_shares_monotone
     -- both amounts round to a nonzero roundedAmount
     (hrounded₁ : v.roundedDepositAmount amountDeposit₁ = .ok (.rounded roundedAmount₁))
     (hrounded₂ : v.roundedDepositAmount amountDeposit₂ = .ok (.rounded roundedAmount₂))
-    -- both deposits succeed, each starting from the same vault v
+    -- both deposits succeed, each starting from the same vault v.toRawVault
     (hok₁ : v.deposit amountDeposit₁ false = .ok r₁) (herr₁ : r₁.error = none)
     (hok₂ : v.deposit amountDeposit₂ false = .ok r₂) (herr₂ : r₂.error = none)
     -- the first rounded amount is at most the second
     (hle : roundedAmount₁.toRat ≤ roundedAmount₂.toRat) :
     -- the first deposit is issued at most as many shares
     r₁.sharesIssued.toRat ≤ r₂.sharesIssued.toRat :=
-  Vault.deposit_shares_monotone_proof v hv amountDeposit₁ amountDeposit₂
+  Vault.deposit_shares_monotone_proof v amountDeposit₁ amountDeposit₂
     roundedAmount₁ roundedAmount₂ r₁ r₂ hcanon₁ hcanon₂ hposR₁ hposR₂
     hrounded₁ hrounded₂ hok₁ herr₁ hok₂ herr₂ hle
 
@@ -98,8 +98,8 @@ theorem Vault.deposit_shares_monotone
 `roundedAmount` up to the `Number` stage error and the final truncation: at
 most `depositε` relatively above, less than one whole share plus `depositε`
 below. -/
-theorem Vault.deposit_sharesIssued (amountDeposit roundedAmount : STAmount) (r : DepositResult)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_sharesIssued (v : Vault) (amountDeposit roundedAmount : STAmount) (r : DepositResult)
+    -- the starting vault is lawful
     (hcanon : roundedAmount.Canonical) -- the rounded amount is stored canonically
     (hpos : 0 < roundedAmount.toRat) -- the rounded amount is positive, the preflight guard
     -- the net asset value clears the deep-underflow threshold of the Number line
@@ -109,14 +109,14 @@ theorem Vault.deposit_sharesIssued (amountDeposit roundedAmount : STAmount) (r :
     r.sharesIssued.toRat.den = 1 ∧ 0 ≤ r.sharesIssued.toRat ∧
     v.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 < r.sharesIssued.toRat ∧
     r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + depositε) :=
-  Vault.deposit_sharesIssued_proof v amountDeposit roundedAmount r hv hcanon hpos hnav
+  Vault.deposit_sharesIssued_proof v amountDeposit roundedAmount r hcanon hpos hnav
     hrounded hok herr
 
 /-- Witness: the truncation term in `deposit_sharesIssued` cannot be dropped, a
 run exists whose share error exceeds the relative `depositε` bound alone. -/
 theorem Vault.deposit_sharesIssued_attained :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (r : DepositResult),
-      v.Lawful ∧ 0 < amountDeposit.toRat ∧
+      0 < amountDeposit.toRat ∧
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
       v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesIssued
@@ -126,8 +126,8 @@ theorem Vault.deposit_sharesIssued_attained :
 /-- The taken amount `amountDeposit'` never exceeds `amountDeposit`, is at
 most `depositε` relatively below the exact value of the issued shares, and
 overpays it by at most the stage budget plus 2 ULP. -/
-theorem Vault.deposit_charge (amountDeposit : STAmount) (r : DepositResult)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_charge (v : Vault) (amountDeposit : STAmount) (r : DepositResult)
+    -- the starting vault is lawful
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
@@ -149,14 +149,14 @@ theorem Vault.deposit_charge (amountDeposit : STAmount) (r : DepositResult)
     r.amountDeposit'.toRat - v.idealChargeDeposit r.sharesIssued.toRat ≤
       v.idealChargeDeposit r.sharesIssued.toRat * depositε +
         2 * (10 : ℚ) ^ r.amountDeposit'.exponent :=
-  Vault.deposit_charge_proof v amountDeposit r hv hcanon hpos hok herr
+  Vault.deposit_charge_proof v amountDeposit r hcanon hpos hok herr
 
 /-- Witness: the ULP term in `deposit_charge` cannot be dropped, a run exists
 whose taken amount misses the exact share value by more than `depositε`
 relative. -/
 theorem Vault.deposit_charge_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (r : DepositResult),
-      v.Lawful ∧ 0 < amountDeposit.toRat ∧
+      0 < amountDeposit.toRat ∧
       v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.amountDeposit'
         (v.idealChargeDeposit r.sharesIssued.toRat) depositε :=
@@ -164,21 +164,21 @@ theorem Vault.deposit_charge_attained :
 
 /-- Integral strengthening of `deposit_charge`: the overcharge stays below
 one whole unit plus the stage error. -/
-theorem Vault.deposit_charge_integral (amountDeposit : STAmount) (r : DepositResult)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_charge_integral (v : Vault) (amountDeposit : STAmount) (r : DepositResult)
+    -- the starting vault is lawful
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hint : v.numericType.isIntegral = true) -- the vault holds an integral asset
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
     r.amountDeposit'.toRat - v.idealChargeDeposit r.sharesIssued.toRat ≤
       1 + v.idealChargeDeposit r.sharesIssued.toRat * depositε :=
-  Vault.deposit_charge_integral_proof v amountDeposit r hv hcanon hint hpos hok herr
+  Vault.deposit_charge_integral_proof v amountDeposit r hcanon hint hpos hok herr
 
 /-- Both stored totals are the old value plus `amountDeposit'`, up to the
 `depositε` relative error of the `Number` addition, and the share total
 update is exact whenever the sum is representable. -/
-theorem Vault.deposit_vault_updates (amountDeposit : STAmount) (isDonation : Bool)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_vault_updates (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
+    -- the starting vault is lawful
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
     (hpos : 0 < amountDeposit.toRat) -- the deposited amount is positive, the preflight guard
     (r : DepositResult)
@@ -194,7 +194,7 @@ theorem Vault.deposit_vault_updates (amountDeposit : STAmount) (isDonation : Boo
     ((v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 →
       (r.vault'.toExact.sharesTotal : ℚ) =
         (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat) :=
-  Vault.deposit_vault_updates_proof v amountDeposit isDonation hv hcanon hpos r hok herr
+  Vault.deposit_vault_updates_proof v amountDeposit isDonation hcanon hpos r hok herr
 
 /-- Witness: the error term in `deposit_vault_updates` cannot be dropped, a run
 exists where the stored total is not the exact sum. The int64 witness `wvDVU`
@@ -202,7 +202,7 @@ donates `9000000000000000006`; the stored total `18000000000000000010` differs
 from the exact sum `18000000000000000013`. -/
 theorem Vault.deposit_vault_updates_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (r : DepositResult),
-      v.Lawful ∧ v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
+      v.deposit amountDeposit isDonation = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal + r.amountDeposit'.toRat :=
   Vault.deposit_vault_updates_witness
 
@@ -215,7 +215,6 @@ and the stored totals move by the different on-ledger amount
 theorem Vault.deposit_applied_delta_attained :
     ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
       (deltaTotal : Number) (deltaAmount : STAmount),
-      v.Lawful ∧
       v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
       v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
       roundToVaultExponent r.amountDeposit' v.assetsTotal = .ok amountDeposit'' ∧
@@ -227,8 +226,8 @@ theorem Vault.deposit_applied_delta_attained :
 
 /-- Integral strengthening of `deposit_vault_updates`: in-domain integer
 sums are stored exactly. -/
-theorem Vault.deposit_vault_updates_integral (amountDeposit : STAmount) (isDonation : Bool)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_vault_updates_integral (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
+    -- the starting vault is lawful
     (r : DepositResult)
     (hnt : v.numericType = .int64 ∨ v.numericType = .native) -- the vault holds an integral asset
     (hcanon : amountDeposit.IntegralCanonical) -- an integral vault's amounts are integral
@@ -241,7 +240,7 @@ theorem Vault.deposit_vault_updates_integral (amountDeposit : STAmount) (isDonat
     (hsz : v.toExact.assetsTotal + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.assetsTotal.toRat = v.toExact.assetsTotal + r.amountDeposit'.toRat ∧
     r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable + r.amountDeposit'.toRat :=
-  Vault.deposit_vault_updates_integral_proof v amountDeposit isDonation hv r hnt hcanon hty
+  Vault.deposit_vault_updates_integral_proof v amountDeposit isDonation r hnt hcanon hty
     hdenA hdenAv hok herr hsz
 
 /-- The `assetsMaximum` guard checks `assetsTotal'`, which the caller cannot
@@ -250,8 +249,8 @@ and rounding it cannot cross the maximum: a lawful `assetsMaximum` is
 normalized, so it lies on the `Number` line, and rounding to nearest never
 lands above a point of the line the true value was at or under. No error
 margin is needed. -/
-theorem Vault.deposit_under_maximum (amountDeposit roundedAmount : STAmount) (isDonation : Bool)
-    (hv : v.Lawful) -- the starting vault is lawful
+theorem Vault.deposit_under_maximum (v : Vault) (amountDeposit roundedAmount : STAmount) (isDonation : Bool)
+    -- the starting vault is lawful
     (r : DepositResult)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hcanon : amountDeposit.Canonical) -- the deposit amount is stored canonically
@@ -261,7 +260,7 @@ theorem Vault.deposit_under_maximum (amountDeposit roundedAmount : STAmount) (is
       v.toExact.assetsTotal + roundedAmount.toRat ≤ m.toRat) :
     -- the assetsMaximum guard cannot fire
     r.error ≠ some .tecLIMIT_EXCEEDED :=
-  Vault.deposit_under_maximum_proof v amountDeposit roundedAmount isDonation hv r hrounded
+  Vault.deposit_under_maximum_proof v amountDeposit roundedAmount isDonation r hrounded
     hcanon hok hmargin
 
 end XRPL.Model.SingleAssetVault

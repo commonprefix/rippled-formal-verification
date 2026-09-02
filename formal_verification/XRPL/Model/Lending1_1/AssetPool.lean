@@ -7,7 +7,7 @@ open XRPL.Model.Lending (AssetPool)
 open XRPL.Model.SingleAssetVault (Vault)
 
 instance : AssetPool Vault where
-  assets := Vault.assetsTotal
-  numericType := Vault.numericType
+  assets := (·.assetsTotal)
+  numericType := (·.numericType)
 
 end XRPL.Model.Lending1_1

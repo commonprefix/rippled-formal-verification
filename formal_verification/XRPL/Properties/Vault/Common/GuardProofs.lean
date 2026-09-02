@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Defs
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Model.Vault.VaultSet
@@ -82,12 +83,11 @@ theorem Vault.canVaultSet_error_codes_proof (v : Vault) (assetsMaximum : Number)
 
 /-- **Proof body of `lawful_canVaultSet_iff`.** -/
 theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
-    (hv : v.Lawful)
     (assetsMaximum : Number)
     (hnorm : assetsMaximum.isNormalized) :
     v.canVaultSet assetsMaximum = .tesSUCCESS ↔
       assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat := by
-  have htotal : v.assetsTotal.isNormalized := hv.wf.assetsTotal_norm
+  have htotal : v.assetsTotal.isNormalized := v.wf.assetsTotal_norm
   -- the nonzero guard vanishes exactly at rational zero
   have hb1 : assetsMaximum.operator_ne Number.zero = false ↔ assetsMaximum.toRat = 0 :=
     Number.operator_ne_zero_eq_false_iff assetsMaximum hnorm
@@ -121,19 +121,18 @@ theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
 already forces `assetsAvailable = 0`. The redundant middle conjunct is dropped:
 the success condition is `assetsTotal = 0 ∧ sharesTotal = 0`, and the
 `assetsAvailable` guard (checked first) is discharged from `assetsTotal = 0`. -/
-theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault)
-    (hv : v.Lawful) :
+theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault) :
     v.canVaultDelete = .tesSUCCESS ↔
       v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 := by
-  have hav := Number.operator_ne_zero_eq_false_iff v.assetsAvailable hv.wf.assetsAvailable_norm
-  have hat := Number.operator_ne_zero_eq_false_iff v.assetsTotal hv.wf.assetsTotal_norm
-  have hst := Number.operator_ne_zero_eq_false_iff v.sharesTotal hv.wf.sharesTotal_norm
+  have hav := Number.operator_ne_zero_eq_false_iff v.assetsAvailable v.wf.assetsAvailable_norm
+  have hat := Number.operator_ne_zero_eq_false_iff v.assetsTotal v.wf.assetsTotal_norm
+  have hst := Number.operator_ne_zero_eq_false_iff v.sharesTotal v.wf.sharesTotal_norm
   have hshares : v.toExact.sharesTotal = 0 ↔ v.sharesTotal.toRat = 0 := by
-    rw [← Vault.WF.toExact_sharesTotal v hv.wf, Nat.cast_eq_zero]
+    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, Nat.cast_eq_zero]
   -- on a lawful vault `assetsTotal = 0` forces `assetsAvailable = 0`
   have hAV0 : v.assetsTotal.toRat = 0 → v.assetsAvailable.toRat = 0 := fun h => by
-    have hle : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := hv.valid.assetsAvailable_le
-    have hnn : 0 ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
+    have hle : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
+    have hnn : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
     rw [h] at hle
     exact le_antisymm hle hnn
   show v.canVaultDelete = .tesSUCCESS ↔

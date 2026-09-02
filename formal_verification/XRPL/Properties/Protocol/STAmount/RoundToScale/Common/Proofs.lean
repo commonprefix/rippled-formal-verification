@@ -306,6 +306,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
       rw [h_sum_neg]
       show value.mIsNegative ≠ !value.mIsNegative
       rcases hb : value.mIsNegative with _ | _ <;> simp
+    clear_value s1n s2n
     -- The exact difference: τ = ±k·10^s.
     have h_pow_s_pos : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
     have h_sum_val : sum.toRat

@@ -1,6 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
-#include <test/formal_verification/ffi/vault/VaultStateFFI.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
@@ -14,9 +14,7 @@
 #include <cstdint>
 #include <string>
 
-namespace xrpl::test {
-
-using namespace formal_verification;
+namespace xrpl::test::formal_verification {
 
 class LeanVaultSet_test : public LeanSuite
 {
@@ -41,11 +39,13 @@ class LeanVaultSet_test : public LeanSuite
             Number{assetsTotal},
             static_cast<std::uint64_t>(assetsTotal)));
 
-        VaultState const state = readVaultState(env, vaultKeylet, asset.raw());
+        Vault const state = readVaultState(env, vaultKeylet, asset.raw());
         Number const cap{assetsMaximum};
-        TER const leanTer = leanCanVaultSet(state, cap);
+        auto const lean = leanCanVaultSet(state, cap);
+        expectLawful(lean);
+        TER const leanTer = lean.ter;
 
-        auto tx = Vault::set({.owner = owner, .id = vaultKeylet.key});
+        auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
         tx[sfAssetsMaximum] = cap;
         env(tx, jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
@@ -95,6 +95,38 @@ class LeanVaultSet_test : public LeanSuite
         runVaultSet(100, 101, tesSUCCESS);
     }
 
+    // Finding (FV_M2_19, c++): VaultSet rounds an AssetsMaximum over 16 digits to the STAmount
+    // grid via associateAsset, so the stored cap differs from the submitted value.
+    void
+    testAssetsMaximumRoundedToGrid()
+    {
+        using namespace jtx;
+        testcase("AssetsMaximum over 16 digits is rounded on VaultSet");
+
+        Env env(*this);
+        Account const owner{"owner"}, issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+        PrettyAsset const asset = issuer["USD"];
+        env.trust(asset(1'000), owner);
+        env(pay(issuer, owner, asset(200)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+
+        Number const submitted{12'345'678'901'234'567LL, -1};  // 17 significant digits
+        auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
+        tx[sfAssetsMaximum] = submitted;
+        env(tx);
+        env.close();
+
+        Number const stored = env.le(vaultKeylet)->at(sfAssetsMaximum);
+        BEAST_EXPECTS(
+            stored == submitted,
+            "AssetsMaximum rounded to grid: submitted=" + to_string(submitted) +
+                " stored=" + to_string(stored));
+    }
+
     void
     runTests() override
     {
@@ -104,9 +136,14 @@ class LeanVaultSet_test : public LeanSuite
         testCapBelowTotal();
         testCapEqualsTotal();
         testCapAboveTotal();
+
+        // Known discrepancies, each fails until the C++ code is fixed.
+        // clang-format off
+        // testAssetsMaximumRoundedToGrid();  // FV_M2_19: AssetsMaximum over 16 digits is rounded
+        // clang-format on
     }
 };
 
 BEAST_DEFINE_TESTSUITE(LeanVaultSet, formal_verification, xrpl);
 
-}  // namespace xrpl::test
+}  // namespace xrpl::test::formal_verification

@@ -15,7 +15,7 @@ def Loan.canAccept (loan : Loan) (ledgerCloseTime : UInt32) : TER :=
   else .tesSUCCESS
 
 -- LoanAccept -> doApply
-def Loan.accept (loan : Loan) (vault : Vault) : Except Error (Loan × Vault) := do
+def Loan.accept (loan : Loan) (vault : RawVault) : Except Error (Loan × RawVault) := do
   let reservedAfter ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
   return ({ loan with isPending := false }, { vault with assetsReserved := reservedAfter })
 

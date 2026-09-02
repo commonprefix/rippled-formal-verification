@@ -4,8 +4,7 @@ import XRPL.Properties.Vault.Common.Unchanged
 
 When an operation returns a `TER` in its result, the vault is the starting
 vault and both amount fields are zero: nothing moved and the record says so.
-A thrown error needs no theorem because the model returns no result at all.
-These theorems hold for arbitrary vaults, lawful or not. -/
+A thrown error needs no theorem because the model returns no result at all. -/
 
 namespace XRPL.Model.SingleAssetVault
 

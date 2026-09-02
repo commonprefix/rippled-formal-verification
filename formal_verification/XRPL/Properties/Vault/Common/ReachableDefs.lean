@@ -1,5 +1,7 @@
 import XRPL.Properties.Vault.Common.WithdrawDefs
-import XRPL.Model.Vault.VaultCreate
+import XRPL.Model.Vault.VaultDeposit
+import XRPL.Model.Vault.VaultWithdraw
+import XRPL.Properties.Vault.Common.Create
 import XRPL.Model.Vault.VaultBurn
 import XRPL.Model.Vault.VaultClawback
 
@@ -7,7 +9,7 @@ import XRPL.Model.Vault.VaultClawback
 
 The two inductive families the reachability and dilution proof trees induct on.
 `Vault.Reachable` (used in `Reachable.lean`) collects the states reachable from a
-`Vault.create` under the vault operations; `Vault.ReachableFromIn` (used in
+`Vault.create_lawful` under the vault operations; `Vault.ReachableFromIn` (used in
 `Dilution.lean`) additionally tracks the source vault and the operation count, and
 restricts to margin-respecting, non-loss-waiving histories. They live here, apart
 from the headline files, so the induction proofs can be extracted into `Common`
@@ -17,13 +19,14 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- States reachable from `VaultCreate` under all operations. -/
+/-- Lawful states reachable from `Vault.create_lawful` under all operations. The ops
+return `Vault`, so every reachable state is lawful by construction -/
 inductive Vault.Reachable : Vault → Prop where
   | create (nt : NumericType) (scale : UInt8) (assetsMaximum : Option Number)
       (hmax_norm : ∀ m ∈ assetsMaximum, m.isNormalized)
       (hmax_pos : ∀ m ∈ assetsMaximum, 0 < m.toRat)
       (hscale_int : nt.isIntegral = true → scale = 0) (hscale_le : scale.toNat ≤ 18) :
-      Vault.Reachable (Vault.create nt scale assetsMaximum)
+      Vault.Reachable (Vault.create_lawful nt scale assetsMaximum hmax_norm hmax_pos hscale_int hscale_le)
   | deposit (v : Vault) (amount : STAmount) (isDonation : Bool) (r : DepositResult) :
       Vault.Reachable v → v.deposit amount isDonation = .ok r →
       amount.Canonical → -- the deposit amount is a stored-canonical user input

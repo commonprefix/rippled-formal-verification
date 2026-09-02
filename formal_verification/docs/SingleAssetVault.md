@@ -71,14 +71,14 @@ With all of that being said, the Single Asset Vault in Lean 4 still resembles th
 `Vault.lean` holds the structure that describes the Vault state. This state is expected to be loaded by the caller.
 
 ```lean4
-structure Vault where
+structure RawVault where
   assetsTotal : Number
   assetsAvailable : Number
+  assetsReserved : Number
   assetsMaximum : Option Number
   numericType : NumericType
   scale : UInt8
   sharesTotal : Number
-  interestUnrealized : Number
   lossUnrealized : Number
 ```
 
@@ -98,20 +98,20 @@ Also, we have modeled Vault creation. While this is in principle only a storage 
 The [Vault properties](../XRPL/Properties/Vault) hold theorems about the Vault. Most notably, the properties introduce the idea of a **lawful** Vault. A lawful Vault is one that is both well-formed and, when represented in rational numbers, valid:
 
 ```lean4
-structure Vault.WF (v : Vault) : Prop where
+structure RawVault.WF (v : RawVault) : Prop where
   assetsTotal_norm : v.assetsTotal.isNormalized
   assetsAvailable_norm : v.assetsAvailable.isNormalized
   assetsMaximum_norm : ∀ m ∈ v.assetsMaximum, m.isNormalized
   sharesTotal_norm : v.sharesTotal.isNormalized
-  interestUnrealized_norm : v.interestUnrealized.isNormalized
   lossUnrealized_norm : v.lossUnrealized.isNormalized
   sharesTotal_nonneg : 0 ≤ v.sharesTotal.toRat
   sharesTotal_int : v.sharesTotal.toRat.den = 1
   scale_integral : v.numericType.isIntegral = true → v.scale = 0
   scale_le : v.scale.toNat ≤ 18
+  assetsTotal_sub_ok : ∃ d, v.assetsTotal.operator_sub v.assetsAvailable .downward = .ok d
 
 -- Exact means it's represented in toRat
-structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
+structure RawVault.Exact.Valid (s : RawVault.Exact) : Prop where
   assetsTotal_nonneg : 0 ≤ s.assetsTotal
   assetsAvailable_nonneg : 0 ≤ s.assetsAvailable
   assetsAvailable_le : s.assetsAvailable ≤ s.assetsTotal
@@ -120,16 +120,12 @@ structure Vault.Exact.Valid (s : Vault.Exact) : Prop where
   cap : ∀ m ∈ s.assetsMaximum, s.assetsTotal ≤ m
   lossUnrealized_nonneg : 0 ≤ s.lossUnrealized
   lossUnrealized_le : s.lossUnrealized ≤ s.assetsTotal - s.assetsAvailable
-  interestUnrealized_nonneg : 0 ≤ s.interestUnrealized
-  interestUnrealized_le : s.interestUnrealized ≤ s.assetsTotal - s.assetsAvailable
-  deposit_nav_pos : 0 < s.assetsTotal → s.interestUnrealized < s.assetsTotal
-  withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.interestUnrealized - s.lossUnrealized
-  interest_shares : 0 < s.interestUnrealized → 0 < s.sharesTotal
+  withdraw_nav_nonneg : 0 ≤ s.assetsTotal - s.lossUnrealized
 ```
 
-In `Reachable.lean` we have proved that any reachable state of a lawful Vault is a lawful Vault.
+In `Reachable.lean`, `Reachable` is a predicate on lawful vaults, and each operation carries a `Vault` to a `Vault`, so every state reachable from creation is lawful by construction.
 
-The reason we have separated the lawfulness of the Vault from the `Vault` structure (which may hold even an unlawful vault) is twofold:
+The reason we have separated the lawfulness of the Vault from the `RawVault` structure (which may hold even an unlawful vault) is twofold:
 
 1. to allow us to reason about an unlawful Vault as well,
 2. to make it easier to change the rules of the Vault without changing the code that uses it.
@@ -148,7 +144,7 @@ We prove theorems for each of the operations:
 - Set
 - Withdraw
 
-For some of these, namely Delete and Set, we only provide helper functions used to check whether a Vault can be modified or deleted when it is in a particular state.
+For some of these, namely Create, Delete and Set, we only provide constructor or helper functions: Delete and Set check whether a Vault can be modified or deleted when it is in a particular state, and Create builds the empty lawful vault.
 For others, we provide two types of theorems:
 
 - Vault accuracy theorems, which characterize arithmetic properties of the Vault.
@@ -164,12 +160,10 @@ Some theorems here are proven, but need to be tightened as the bugs are fixed, n
 
 | File                 | Theorem                                                           | Description                                                                                                                                                                                                                                                                                                      | Status         |
 | -------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `Reachable.lean`     | `Vault.Reachable.lawful`                                          | every vault reachable from creation by a sequence of operations is lawful                                                                                                                                                                                                                                        | Proven         |
-|                      | `Vault.Reachable.asset_parity`                                    | every reachable vault has available assets equal to total assets                                                                                                                                                                                                                                                 | Proven         |
+| `Reachable.lean`     | `Vault.Reachable.asset_parity`                                    | every reachable vault has available assets equal to total assets                                                                                                                                                                                                                                                 | Proven         |
 |                      | `Vault.Reachable.lossUnrealized_zero`                             | every reachable vault has zero unrealized loss                                                                                                                                                                                                                                                                   | Proven         |
-|                      | `Vault.Reachable.interestUnrealized_zero`                         | every reachable vault has zero unrealized interest                                                                                                                                                                                                                                                               | Proven         |
-| `Lawful.lean`        | `Vault.{create,deposit,withdraw,clawback,burnShares}_lawful`      | every operation (create, deposit, withdraw, clawback, burn shares) preserves lawfulness                                                                                                                                                                                                                          | Proven         |
-| `VaultCreate.lean`   | `Vault.create_toExact`                                            | a newly created vault has zero assets and shares, with the given maximum and asset type                                                                                                                                                                                                                          | Proven         |
+| `Preservation.lean`  | `Vault.{deposit,withdraw,clawback,burnShares}_poststate_lawful`   | each operation's resulting state re-validates as a lawful vault via the `to_lawful` re-check, so every operation preserves lawfulness                                                                                                                                                                            | Proven         |
+|                      | `Vault.withdraw_final_poststate_lawful`                           | the final withdrawal zeroes all stored fields, and the all-zero result re-validates like a freshly created vault                                                                                                                                                                                                 | Proven         |
 | `Vault.lean`         | `Vault.isInsolvent_iff`                                           | on a lawful vault, `isInsolvent` is true exactly when `assetsTotal` is zero and `sharesTotal` is positive                                                                                                                                                                                                        | Proven         |
 | `VaultDeposit.lean`  | `Vault.roundedDepositAmount_bounds` + `_truncation_attained`      | the rounded amount is the requested amount rounded down to the vault's stored precision, and is nonzero; witness: a requested amount that is strictly rounded down                                                                                                                                               | Proven         |
 |                      | `Vault.roundedDepositAmount_integral`                             | for an integral asset, rounding leaves the requested amount unchanged                                                                                                                                                                                                                                            | Proven         |
@@ -197,7 +191,7 @@ Some theorems here are proven, but need to be tightened as the bugs are fixed, n
 |                      | `Vault.withdraw_final_payout`                                     | the final withdrawal pays out all remaining assets, within the rounding bound; the lower bound applies when the available assets are nonzero                                                                                                                                                                     | Proven         |
 |                      | `Vault.withdraw_can_empty`                                        | "every lawful vault can be fully emptied by redeeming all its shares" -- FALSE: interior mul/div overshoot can reject a full redemption with `tecINSUFFICIENT_FUNDS`; commented out in the code                                                                                                                  | False          |
 |                      | `Vault.Reachable.canEmpty` (int64)                                | proven for `.int64` vaults. A reachable `.int64` vault within the int64 cap (`assetsTotal <= 2^63-1`, MPT max) can be emptied by a finite withdrawal sequence.                                                                                                                                                   | Proven (int64) |
-| `VaultClawback.lean` | `Vault.idealAssetsClawback_idealSharesClawback`                   | converting assets to ideal shares destroyed and back to ideal assets recovered returns the original amount                                                                                                                                                                                                       | Proven         |
+| `VaultClawback.lean` | `RawVault.idealAssetsClawback_idealSharesClawback`                | converting assets to ideal shares destroyed and back to ideal assets recovered returns the original amount                                                                                                                                                                                                       | Proven         |
 |                      | `Vault.clawback_sharesDestroyed` + `_attained`                    | the shares destroyed match the ideal proportional amount for the clawed assets within the bound; witness: a run where the error reaches the bound                                                                                                                                                                | Proven         |
 |                      | `Vault.clawback_sharesDestroyed_clamped` + `_attained`            | when the clawed amount exceeds the available assets, the shares destroyed match the ideal for the available assets instead; witness: a run where the error reaches the bound                                                                                                                                     | Proven         |
 |                      | `Vault.clawback_assetsRecovered` + `_attained`                    | the assets recovered match the ideal proportional value within the bound; if they round to zero, the ideal was below the smallest representable amount; witness: a run where the error reaches the bound                                                                                                         | Proven         |
@@ -206,48 +200,48 @@ Some theorems here are proven, but need to be tightened as the bugs are fixed, n
 |                      | `Vault.clawback_vault_updates_integral`                           | for an integral asset, the stored totals decrease by exactly the recovery                                                                                                                                                                                                                                        | Proven         |
 | `VaultBurn.lean`     | `Vault.canBurnShares_assets_exact`                                | the burn permission check reports the vault's share total exactly                                                                                                                                                                                                                                                | Proven         |
 |                      | `Vault.burnShares_sharesTotal_exact`                              | burning subtracts exactly the destroyed shares from the total                                                                                                                                                                                                                                                    | Proven         |
-| `Dilution.lean`      | `Vault.deposit_no_dilution` + `Vault.deposit_dilution_attained`   | on a vault with no unrealized interest or loss, a deposit cannot lower the per-share value by more than a small rounding error; witness: a deposit that does lower it slightly                                                                                                                                   | Proven         |
+| `Dilution.lean`      | `Vault.deposit_no_dilution` + `Vault.deposit_dilution_attained`   | on a vault with no unrealized loss, a deposit cannot lower the per-share value by more than a small rounding error; witness: a deposit that does lower it slightly                                                                                                                                               | Proven         |
 |                      | `Vault.deposit_donation_no_dilution`                              | a donation strictly increases the per-share value (integral vaults require the total to stay within the integer domain)                                                                                                                                                                                          | Proven         |
-|                      | `Vault.withdraw_no_dilution` + `Vault.withdraw_dilution_attained` | on a vault with no unrealized interest or loss, a withdrawal that burns at most half the shares cannot lower the per-share value by more than a small rounding error; witness: a withdrawal that does lower it slightly                                                                                          | Proven         |
-|                      | `Vault.clawback_no_dilution` + `Vault.clawback_dilution_attained` | on a vault with no unrealized interest or loss, a clawback that destroys at most half the shares cannot lower the per-share value by more than a small rounding error; witness: a clawback that does lower it slightly                                                                                           | Proven         |
-|                      | `Vault.ReachableFromIn.no_dilution` + `_dilution_attained`        | starting from a lawful vault with no unrealized interest or loss and equal total and available assets, over any sequence of margin-respecting operations the per-share value drops by at most the accumulated rounding error; witness: a sequence whose rounding error accumulates                               | Proven         |
+|                      | `Vault.withdraw_no_dilution` + `Vault.withdraw_dilution_attained` | on a vault with no unrealized loss, a withdrawal that burns at most half the shares cannot lower the per-share value by more than a small rounding error; witness: a withdrawal that does lower it slightly                                                                                                      | Proven         |
+|                      | `Vault.clawback_no_dilution` + `Vault.clawback_dilution_attained` | on a vault with no unrealized loss, a clawback that destroys at most half the shares cannot lower the per-share value by more than a small rounding error; witness: a clawback that does lower it slightly                                                                                                       | Proven         |
+|                      | `Vault.ReachableFromIn.no_dilution` + `_dilution_attained`        | starting from a lawful vault with no unrealized loss and equal total and available assets, over any sequence of margin-respecting operations the per-share value drops by at most the accumulated rounding error; witness: a sequence whose rounding error accumulates                                           | Proven         |
 | `Roundtrip.lean`     | `Vault.deposit_withdraw_roundtrip` + `_attained`                  | depositing then withdrawing returns almost the original amount, losing at most the combined rounding error of the two operations (unless the payout underflows to zero); witness: a deposit-then-withdraw that loses a little                                                                                    | Proven         |
 
 ### Return Theorems
 
-| File                       | Theorem                                             | Exit condition                                                    | Status |
-| -------------------------- | --------------------------------------------------- | ----------------------------------------------------------------- | ------ |
-| `VaultDepositReturn.lean`  | `Vault.roundedDepositAmount_rejected_code`          | rounding rejects only with `tecPRECISION_LOSS`                    | Proven |
-|                            | `Vault.deposit_rejected_request`                    | amount rejected at rounding → `tecINTERNAL`                       | Proven |
-|                            | `Vault.deposit_rounded_zero`                        | amount rounds to zero → `tecINTERNAL`                             | Proven |
-|                            | `Vault.deposit_donation_no_shares`                  | donation into a vault with no shares → `tecNO_PERMISSION`         | Proven |
-|                            | `Vault.deposit_insolvent`                           | non-donation into an insolvent vault → `tecLOCKED`                | Proven |
-|                            | `Vault.deposit_maximum_exceeded`                    | new total exceeds the maximum → `tecLIMIT_EXCEEDED`               | Proven |
-|                            | `Vault.deposit_donation_maximum`                    | donation exceeds the maximum → `tecLIMIT_EXCEEDED`                | Proven |
-|                            | `Vault.deposit_success`                             | all guards pass → exact updated vault and amounts                 | Proven |
-|                            | `Vault.deposit_donation_success`                    | donation guards pass → exact updated vault                        | Proven |
-|                            | `Vault.deposit_error_codes`                         | the full set of deposit return codes                              | Proven |
-| `VaultWithdrawReturn.lean` | `Vault.sharesToAssetsWithdraw_zero_nav`             | zero net asset value → zero payout                                | Proven |
-|                            | `Vault.withdraw_insufficient_funds`                 | payout exceeds available → `tecINSUFFICIENT_FUNDS`                | Proven |
-|                            | `Vault.withdraw_final_nonzero_loss`                 | final withdrawal with a nonzero loss → `tefINTERNAL`              | Proven |
-|                            | `Vault.withdraw_final`                              | final withdrawal, no loss → empties the vault, pays all available | Proven |
-|                            | `Vault.withdraw_payout_too_small`                   | payout too small to move the total → `tecPRECISION_LOSS`          | Proven |
-|                            | `Vault.withdraw_success`                            | all guards pass → exact updated vault and payout                  | Proven |
-|                            | `Vault.withdraw_error_codes`                        | the full set of withdraw return codes                             | Proven |
-| `VaultClawbackReturn.lean` | `Vault.clawback_negative_amount`                    | negative amount → `tecINTERNAL`, unchanged                        | Proven |
-|                            | `Vault.clawback_zero_shares`                        | destroys zero shares → `tecPRECISION_LOSS`, unchanged             | Proven |
-|                            | `Vault.clawback_recovery_too_small`                 | recovery too small to move the total → `tecPRECISION_LOSS`        | Proven |
-|                            | `Vault.clawback_success`                            | all guards pass → exact updated vault and recovery                | Proven |
-|                            | `Vault.clawback_error_codes`                        | the full set of clawback return codes                             | Proven |
-| `VaultBurnReturn.lean`     | `Vault.canBurnShares_rejected_code`                 | the only burn-check rejection is `tecNO_PERMISSION`               | Proven |
-|                            | `Vault.canBurnShares_no_permission`                 | no shares, or shares with nonzero assets → `tecNO_PERMISSION`     | Proven |
-|                            | `Vault.canBurnShares_ok`                            | shares present, assets zero → returns the whole share total       | Proven |
-|                            | `Vault.burnShares_ok`                               | stores `sharesTotal - sharesDestroyed`                            | Proven |
-| `VaultSet.lean`            | `Vault.canVaultSet_below_total`                     | new maximum below the total → `tecLIMIT_EXCEEDED`                 | Proven |
-|                            | `Vault.canVaultSet_success`                         | otherwise → `tesSUCCESS`                                          | Proven |
-|                            | `Vault.canVaultSet_error_codes`                     | success or `tecLIMIT_EXCEEDED`                                    | Proven |
-|                            | `Vault.lawful_canVaultSet_iff`                      | success ⟺ the new maximum is zero or at least the total           | Proven |
-| `VaultDelete.lean`         | `Vault.lawful_canVaultDelete_iff`                   | success ⟺ the vault is empty                                      | Proven |
-|                            | `Vault.canVaultDelete_error_codes`                  | success or `tecHAS_OBLIGATIONS`                                   | Proven |
-|                            | `Vault.canVaultDelete_has_obligations_iff`          | `tecHAS_OBLIGATIONS` ⟺ some stored field is nonzero               | Proven |
-| `Unchanged.lean`           | `Vault.{deposit,withdraw,clawback}_error_unchanged` | any rejected deposit / withdrawal / clawback → vault unchanged    | Proven |
+| File                       | Theorem                                             | Exit condition                                                 | Status |
+| -------------------------- | --------------------------------------------------- | -------------------------------------------------------------- | ------ |
+| `VaultDepositReturn.lean`  | `Vault.roundedDepositAmount_rejected_code`          | rounding rejects only with `tecPRECISION_LOSS`                 | Proven |
+|                            | `Vault.deposit_rejected_request`                    | amount rejected at rounding → `tecINTERNAL`                    | Proven |
+|                            | `Vault.deposit_rounded_zero`                        | amount rounds to zero → `tecINTERNAL`                          | Proven |
+|                            | `Vault.deposit_donation_no_shares`                  | donation into a vault with no shares → `tecNO_PERMISSION`      | Proven |
+|                            | `Vault.deposit_insolvent`                           | non-donation into an insolvent vault → `tecLOCKED`             | Proven |
+|                            | `Vault.deposit_maximum_exceeded`                    | new total exceeds the maximum → `tecLIMIT_EXCEEDED`            | Proven |
+|                            | `Vault.deposit_donation_maximum`                    | donation exceeds the maximum → `tecLIMIT_EXCEEDED`             | Proven |
+|                            | `Vault.deposit_success`                             | all guards pass → exact updated vault and amounts              | Proven |
+|                            | `Vault.deposit_donation_success`                    | donation guards pass → exact updated vault                     | Proven |
+|                            | `Vault.deposit_error_codes`                         | the full set of deposit return codes                           | Proven |
+| `VaultWithdrawReturn.lean` | `RawVault.sharesToAssetsWithdraw_zero_nav`          | zero net asset value → zero payout                             | Proven |
+|                            | `Vault.withdraw_insufficient_funds`                 | payout exceeds available → `tecINSUFFICIENT_FUNDS`             | Proven |
+|                            | `Vault.withdraw_final_nonzero_loss`                 | final withdrawal with a nonzero loss → `tefINTERNAL`           | Proven |
+|                            | `Vault.withdraw_final`                              | final withdrawal, no loss → vault zeroed, pays all available   | Proven |
+|                            | `Vault.withdraw_payout_too_small`                   | payout too small to move the total → `tecPRECISION_LOSS`       | Proven |
+|                            | `Vault.withdraw_success`                            | all guards pass → exact updated vault and payout               | Proven |
+|                            | `Vault.withdraw_error_codes`                        | the full set of withdraw return codes                          | Proven |
+| `VaultClawbackReturn.lean` | `Vault.clawback_negative_amount`                    | negative amount → `tecINTERNAL`, unchanged                     | Proven |
+|                            | `Vault.clawback_zero_shares`                        | destroys zero shares → `tecPRECISION_LOSS`, unchanged          | Proven |
+|                            | `Vault.clawback_recovery_too_small`                 | recovery too small to move the total → `tecPRECISION_LOSS`     | Proven |
+|                            | `Vault.clawback_success`                            | all guards pass → exact updated vault and recovery             | Proven |
+|                            | `Vault.clawback_error_codes`                        | the full set of clawback return codes                          | Proven |
+| `VaultBurnReturn.lean`     | `Vault.canBurnShares_rejected_code`                 | the only burn-check rejection is `tecNO_PERMISSION`            | Proven |
+|                            | `Vault.canBurnShares_no_permission`                 | no shares, or shares with nonzero assets → `tecNO_PERMISSION`  | Proven |
+|                            | `Vault.canBurnShares_ok`                            | shares present, assets zero → returns the whole share total    | Proven |
+|                            | `Vault.burnShares_ok`                               | stores `sharesTotal - sharesDestroyed`                         | Proven |
+| `VaultSet.lean`            | `Vault.canVaultSet_below_total`                     | new maximum below the total → `tecLIMIT_EXCEEDED`              | Proven |
+|                            | `Vault.canVaultSet_success`                         | otherwise → `tesSUCCESS`                                       | Proven |
+|                            | `Vault.canVaultSet_error_codes`                     | success or `tecLIMIT_EXCEEDED`                                 | Proven |
+|                            | `Vault.lawful_canVaultSet_iff`                      | success ⟺ the new maximum is zero or at least the total        | Proven |
+| `VaultDelete.lean`         | `Vault.lawful_canVaultDelete_iff`                   | success ⟺ the vault is empty                                   | Proven |
+|                            | `Vault.canVaultDelete_error_codes`                  | success or `tecHAS_OBLIGATIONS`                                | Proven |
+|                            | `Vault.canVaultDelete_has_obligations_iff`          | `tecHAS_OBLIGATIONS` ⟺ some stored field is nonzero            | Proven |
+| `Unchanged.lean`           | `Vault.{deposit,withdraw,clawback}_error_unchanged` | any rejected deposit / withdrawal / clawback → vault unchanged | Proven |

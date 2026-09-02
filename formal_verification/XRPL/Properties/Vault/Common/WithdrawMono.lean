@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.PricingMono
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawBounds
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangePos
@@ -262,7 +263,7 @@ open XRPL.Model.Protocol
 
 /-- Full nonzero-payout pricing chain of `sharesToAssetsWithdraw` with every stage's
 normalization / nonzero-mantissa / positivity fact. -/
-lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+lemma withdraw_chain_facts (v : Vault) (waiveUnrealizedLoss : Bool)
     (shares assets : STAmount) (hc : shares.Canonical) (hnn : 0 ≤ shares.toRat)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
@@ -284,19 +285,19 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
     cases waiveUnrealizedLoss with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
     cases waiveUnrealizedLoss with
-    | false => rw [if_neg (by decide)]; exact hv.valid.withdraw_nav_nonneg
+    | false => rw [if_neg (by decide)]; exact v.exact.withdraw_nav_nonneg
     | true =>
-      rw [if_pos rfl]; show 0 ≤ v.depositNav; unfold Vault.depositNav
-      exact hv.valid.assetsTotal_nonneg
+      rw [if_pos rfl]; show 0 ≤ v.depositNav; unfold RawVault.depositNav
+      exact v.exact.assetsTotal_nonneg
   rcases hcase with ⟨_, hzero⟩ | ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · rw [hzero, STAmount.zero_isZero] at hnz; exact absurd hnz (by decide)
   · have hres_ne : assets.mValue ≠ 0 := ne_of_beq_false hnz
@@ -309,8 +310,8 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
     have hsnval : sharesNumber.toRat = shares.toRat := by rw [← hsn_eq]; exact hsn0val
     have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
       operator_div_divisor_ne_zero NAVShares v.sharesTotal assetsNumber .to_nearest
-        hv.wf.sharesTotal_norm hdiv
-    have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne hv.wf.sharesTotal_nonneg
+        v.wf.sharesTotal_norm hdiv
+    have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne v.wf.sharesTotal_nonneg
       (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.sharesTotal hSTm))
     have hanm : assetsNumber.mantissa_ ≠ 0 :=
       STAmount.ofNumber_source_ne_zero v.numericType assetsNumber .downward assets hof hres_ne
@@ -325,7 +326,7 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
         hnav2norm hsnnorm hnav2m hsn_m hmul hNAVm
     have hANnorm : assetsNumber.isNormalized :=
       operator_div_result_isNormalized NAVShares v.sharesTotal assetsNumber .to_nearest
-        hNAVnorm hv.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
+        hNAVnorm v.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
     have hNAVpos : 0 < NAVShares.toRat := by
       have hb : |NAVShares.toRat - nav2.toRat * sharesNumber.toRat|
           ≤ |nav2.toRat * sharesNumber.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
@@ -338,7 +339,7 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
       have hb : |assetsNumber.toRat - NAVShares.toRat / v.sharesTotal.toRat|
           ≤ |NAVShares.toRat / v.sharesTotal.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) :=
         operator_div_rounds_to_nearest NAVShares v.sharesTotal assetsNumber
-          hNAVnorm hv.wf.sharesTotal_norm hdiv hanm
+          hNAVnorm v.wf.sharesTotal_norm hdiv hanm
       rw [abs_of_pos hqp] at hb
       have hab := abs_le.mp hb
       nlinarith [hqp]
@@ -350,7 +351,7 @@ lemma withdraw_chain_facts (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bo
 `shares.toNumber`, then either the zero-`nav` early exit or the raw
 `mul`/`div`/`ofNumber` pricing chain (no nonzero-mantissa facts). Companion to
 `withdraw_chain_facts` for a run whose payout may floor to zero. -/
-lemma withdraw_nav_pricing_reduces (v : Vault) (hv : v.Lawful) (waive : Bool)
+lemma withdraw_nav_pricing_reduces (v : Vault) (waive : Bool)
     (shares assets : STAmount) (hc : shares.Canonical) (hnav : v.WithdrawNavExact waive)
     (hok : v.sharesToAssetsWithdraw shares waive = .ok assets) :
     ∃ (nav2 sn : Number),
@@ -369,11 +370,11 @@ lemma withdraw_nav_pricing_reduces (v : Vault) (hv : v.Lawful) (waive : Bool)
     cases waive with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
@@ -392,7 +393,7 @@ covered: run 1's nonzero payout anchors the exact quotient above `10^-81` (grid
 minimum), astronomically above the `Number` underflow `σ = 10^-32750`, so pricing
 monotonicity keeps run 2's product and quotient above `σ` and its pre-floor quotient
 stays nonzero, letting the pricing- and floor-monotonicity lemmas apply. -/
-lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+lemma sharesToAssetsWithdraw_mono (v : Vault) (waiveUnrealizedLoss : Bool)
     (shares₁ shares₂ assets₁ assets₂ : STAmount)
     (hc₁ : shares₁.Canonical) (hnn₁ : 0 ≤ shares₁.toRat)
     (hc₂ : shares₂.Canonical) (hnn₂ : 0 ≤ shares₂.toRat)
@@ -402,7 +403,7 @@ lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLo
     (hle : shares₁.toRat ≤ shares₂.toRat) : assets₁.toRat ≤ assets₂.toRat := by
   -- the larger run's payout is always non-negative
   have hr2nn : 0 ≤ assets₂.toRat :=
-    (Vault.sharesToAssetsWithdraw_spec v hv shares₂ assets₂ waiveUnrealizedLoss hnn₂ hc₂ hnav hok₂).1
+    (Vault.sharesToAssetsWithdraw_spec v shares₂ assets₂ waiveUnrealizedLoss hnn₂ hc₂ hnav hok₂).1
   by_cases hz₁ : assets₁.isZero = true
   · have hmv : assets₁.mValue = 0 := by
       have := hz₁; unfold STAmount.isZero at this; exact beq_iff_eq.mp this
@@ -412,10 +413,10 @@ lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLo
   obtain ⟨nav2a, sn₁, NV₁, aN₁, hnav2na, hnav2ma, hnav2pa, hnav2vala,
       hsn₁, hsnval₁, hsnn₁, hsnm₁, hsnp₁, hSTm, hSTp,
       hmul₁, hNVn₁, hNVm₁, hdiv₁, hANn₁, hANm₁, hANp₁, hof₁⟩ :=
-    withdraw_chain_facts v hv waiveUnrealizedLoss shares₁ assets₁ hc₁ hnn₁ hnav hok₁ hz₁'
+    withdraw_chain_facts v waiveUnrealizedLoss shares₁ assets₁ hc₁ hnn₁ hnav hok₁ hz₁'
   set ST : ℚ := v.sharesTotal.toRat with hST_def
   have hST1 : 1 ≤ ST := by
-    have hden : v.sharesTotal.toRat.den = 1 := hv.wf.sharesTotal_int
+    have hden : v.sharesTotal.toRat.den = 1 := v.wf.sharesTotal_int
     have heq : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
       rw [← Rat.num_div_den v.sharesTotal.toRat, hden]; simp
     rw [hST_def, heq]
@@ -427,7 +428,7 @@ lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLo
     ofNumber_downward_source_ge_min v.numericType aN₁ assets₁ hANn₁ haN₁neg hof₁ hz₁'
   -- run 2: nav2 + burned shares + raw pricing chain (payout may floor to zero)
   obtain ⟨nav2b, sn₂, hnav2nb, hnav2valb, hsn₂, hsnn₂, hsnval₂, hcase₂⟩ :=
-    withdraw_nav_pricing_reduces v hv waiveUnrealizedLoss shares₂ assets₂ hc₂ hnav hok₂
+    withdraw_nav_pricing_reduces v waiveUnrealizedLoss shares₂ assets₂ hc₂ hnav hok₂
   have hnav2eq : nav2a = nav2b := hnav2na.toRat_inj hnav2nb (by rw [hnav2vala, hnav2valb])
   subst hnav2eq
   have hpricing : nav2a.mantissa_ ≠ 0 ∧ ∃ NV aN : Number,
@@ -470,7 +471,7 @@ lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLo
       have h : |aN₁.toRat - NV₁.toRat / v.sharesTotal.toRat|
           ≤ |NV₁.toRat / v.sharesTotal.toRat| * (6 / (2 ^ 63 - 3)) :=
         operator_div_rounds_to_nearest NV₁ v.sharesTotal aN₁ hNVn₁
-          hv.wf.sharesTotal_norm hdiv₁ hANm₁
+          v.wf.sharesTotal_norm hdiv₁ hANm₁
       rwa [← hST_def, abs_of_pos (by positivity : (0 : ℚ) < NV₁.toRat / ST)] at h
     have hrw : aN₁.toRat * ST - NV₁.toRat = (aN₁.toRat - NV₁.toRat / ST) * ST := by field_simp
     rw [hrw, abs_mul, abs_of_pos hstpos]
@@ -529,17 +530,17 @@ lemma sharesToAssetsWithdraw_mono (v : Vault) (hv : v.Lawful) (waiveUnrealizedLo
   have haNm₂ : aN₂.mantissa_ ≠ 0 := by
     intro h0
     have hlt := operator_div_underflow_truth_small NV₂ v.sharesTotal aN₂ .to_nearest hNVn₂
-      hv.wf.sharesTotal_norm hNVm₂ hSTm hdiv₂ h0
+      v.wf.sharesTotal_norm hNVm₂ hSTm hdiv₂ h0
     rw [← hST_def, abs_of_pos (div_pos hNV2pos hstpos)] at hlt
     rw [div_lt_iff₀ hstpos] at hlt
     linarith [hσST, hlt]
   have hANn₂ : aN₂.isNormalized :=
     operator_div_result_isNormalized NV₂ v.sharesTotal aN₂ .to_nearest hNVn₂
-      hv.wf.sharesTotal_norm hNVm₂ hSTm hdiv₂ haNm₂
+      v.wf.sharesTotal_norm hNVm₂ hSTm hdiv₂ haNm₂
   -- pricing chain monotone, then downward floor monotone
   have haNle : aN₁.toRat ≤ aN₂.toRat :=
     Number.mul_div_num_mono nav2a v.sharesTotal sn₁ sn₂ NV₁ NV₂ aN₁ aN₂
-      hnav2na hnav2ma hnav2neg hv.wf.sharesTotal_norm hSTm hSTneg
+      hnav2na hnav2ma hnav2neg v.wf.sharesTotal_norm hSTm hSTneg
       hsnn₁ hsnm₁ hsn₁neg hsnn₂ hsn₂m hsn₂neg
       hmul₁ hNVm₁ hmul₂ hNVm₂ hdiv₁ hANm₁ hdiv₂ haNm₂ hsnle
   exact ofNumber_downward_toRat_mono v.numericType aN₁ aN₂ assets₁ assets₂
@@ -570,7 +571,7 @@ added inputs over the headline: `r_i.sharesBurned.Canonical` and
 `0 ≤ r_i.sharesBurned.toRat` (as in the sibling `sharesToAssetsWithdraw_bounds`). The
 larger run's payout may floor to zero. -/
 theorem Vault.withdraw_payout_monotone_proof (v : Vault) (amount₁ amount₂ : WithdrawAmount)
-    (hv : v.Lawful) (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
+    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
     (r₁ r₂ : WithdrawResult)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hcb₁ : r₁.sharesBurned.Canonical) (hcb₂ : r₂.sharesBurned.Canonical)
@@ -592,7 +593,7 @@ theorem Vault.withdraw_payout_monotone_proof (v : Vault) (amount₁ amount₂ : 
       Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
     have hsta_eq : staR = sharesTotalAmount := Except.ok.inj (hstR.symm.trans hst)
     rcases hdisj with ⟨hfinR, _⟩ |
-      ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, hreq⟩
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, hreq, _⟩
     · exfalso
       rw [hsbeq, ← hsta_eq] at hfin
       rw [hfinR] at hfin; exact absurd hfin (by decide)
@@ -601,7 +602,7 @@ theorem Vault.withdraw_payout_monotone_proof (v : Vault) (amount₁ amount₂ : 
       rw [hasset, hsbeq]; exact hprice_cw
   have hp₁ := hprice amount₁ r₁ hok₁ herr₁ hfin₁
   have hp₂ := hprice amount₂ r₂ hok₂ herr₂ hfin₂
-  exact sharesToAssetsWithdraw_mono v hv waiveUnrealizedLoss
+  exact sharesToAssetsWithdraw_mono v waiveUnrealizedLoss
     r₁.sharesBurned r₂.sharesBurned r₁.assets' r₂.assets'
     hcb₁ hnnb₁ hcb₂ hnnb₂ hnav hp₁ hp₂ hle
 

@@ -173,6 +173,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     have h_eq : v1n.negative_ = v2n.negative_ := h_same_sign
     rw [h_eq] at h_signs
     rcases hb : v2n.negative_ with _ | _ <;> rw [hb] at h_signs <;> simp at h_signs
+  clear_value v1n v2n
   -- The exact sum and its magnitude decomposition.
   set V : ℚ := |value.toRat| with hV_def
   set E : ℤ := s - 3 with hE_def

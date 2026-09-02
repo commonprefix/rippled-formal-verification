@@ -777,7 +777,7 @@ pass is the identity; the fractional pass rounds down onto the post-deposit grid
 which never turns a nonnegative amount negative. The scale range `[-96, 80]` (or the
 early-exit sentinel `-100`) is read off the packed exponent, and the truncation core
 is `STAmount.roundToExponent_downward_nonneg`. -/
-theorem Vault.roundToVaultExponent_nonneg (amountDeposit result : STAmount) (assetsTotal : Number)
+theorem RawVault.roundToVaultExponent_nonneg (amountDeposit result : STAmount) (assetsTotal : Number)
     (hc : amountDeposit.Canonical) (hnn : 0 ≤ amountDeposit.toRat)
     (hok : roundToVaultExponent amountDeposit assetsTotal = .ok result) :
     0 ≤ result.toRat := by
@@ -820,7 +820,7 @@ theorem Vault.roundToVaultExponent_nonneg (amountDeposit result : STAmount) (ass
 is the identity; the fractional pass rounds down onto the post-deposit grid, which
 never exceeds the input. So `result.toRat ≤ amountDeposit.toRat`, over the full
 `Canonical` range (the deposit charge's conjunct-1 chain `charge ≤ rounded ≤ raw`). -/
-theorem Vault.roundToVaultExponent_le (amountDeposit result : STAmount) (assetsTotal : Number)
+theorem RawVault.roundToVaultExponent_le (amountDeposit result : STAmount) (assetsTotal : Number)
     (hc : amountDeposit.Canonical) (hnn : 0 ≤ amountDeposit.toRat)
     (hok : roundToVaultExponent amountDeposit assetsTotal = .ok result) :
     result.toRat ≤ amountDeposit.toRat := by

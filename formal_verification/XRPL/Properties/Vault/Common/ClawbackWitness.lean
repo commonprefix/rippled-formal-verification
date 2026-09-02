@@ -19,7 +19,7 @@ open XRPL.Model.Protocol
 /-! ## The witness vaults, amounts, and results -/
 
 /-- The shared witness vault: 3 assets, 3 available, 7·10¹⁵ shares. -/
-def cwv : Vault :=
+def cwv : RawVault :=
   { assetsTotal := ⟨false, 3000000000000000000, -18⟩
   , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
   , assetsReserved := Number.zero
@@ -28,8 +28,12 @@ def cwv : Vault :=
   , lossUnrealized := Number.zero }
 
 /-- The clamped-run vault: the same vault with only `0.0001` available. -/
-def cwvB : Vault :=
+def cwvB : RawVault :=
   { cwv with assetsAvailable := ⟨false, 1000000000000000000, -22⟩ }
+
+/-- Lawful-vault witnesses. -/
+def cwvL : Vault := ⟨cwv, by native_decide, by native_decide⟩
+def cwvBL : Vault := ⟨cwvB, by native_decide, by native_decide⟩
 
 /-- The clawed amount, `1` of the IOU. -/
 def cwa1 : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
@@ -54,7 +58,7 @@ def cwsh2 : STAmount := STAmount.unchecked .int64 233333333333 0 false
 def cwar2 : STAmount := STAmount.unchecked .fractional 9999999999985714 (-20) false
 
 /-- The `cwv` post-clawback vault. -/
-def cwv1' : Vault :=
+def cwv1' : RawVault :=
   { assetsTotal := ⟨false, 2000000000000000200, -18⟩
   , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
   , assetsReserved := Number.zero
@@ -62,19 +66,25 @@ def cwv1' : Vault :=
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
   , lossUnrealized := Number.zero }
 
+/-- The `cwv` post-clawback vault as a `Vault` (the op re-validates). -/
+def cwv1'L : Vault := ⟨cwv1', by native_decide, by native_decide⟩
+
 /-- The `cwv` clawback result. -/
-def cwr1 : ClawbackResult := ⟨none, cwv1', cwar1, cwsh1⟩
+def cwr1 : ClawbackResult := ⟨none, cwv1'L, cwar1, cwsh1⟩
 
 /-- The `cwvB` post-clawback vault. -/
-def cwvB' : Vault :=
+def cwvB' : RawVault :=
   { assetsTotal := ⟨false, 2999900000000000143, -18⟩
   , assetsAvailable := ⟨false, 1428600000000000000, -34⟩
   , assetsReserved := Number.zero, assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6999766666666667000, -3⟩
   , lossUnrealized := Number.zero }
 
+/-- The `cwvB` post-clawback vault as a `Vault` (the op re-validates). -/
+def cwvB'L : Vault := ⟨cwvB', by native_decide, by native_decide⟩
+
 /-- The `cwvB` clawback result. -/
-def cwr2 : ClawbackResult := ⟨none, cwvB', cwar2, cwsh2⟩
+def cwr2 : ClawbackResult := ⟨none, cwvB'L, cwar2, cwsh2⟩
 
 /-! ## The `*_attained` witnesses -/
 
@@ -85,7 +95,7 @@ half-share rounding error `1/3` exceeds the relative budget alone. -/
 theorem Vault.clawback_sharesDestroyed_witness :
     ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (assetsRecoveredNumber : Number) (r : ClawbackResult),
-      v.Lawful ∧ v.WithdrawNavExact false ∧
+      v.WithdrawNavExact false ∧
       assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
@@ -93,8 +103,8 @@ theorem Vault.clawback_sharesDestroyed_witness :
       v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesDestroyed
         (v.idealSharesClawback assets.toRat) depositε := by
-  refine ⟨cwv, cwa1, cwHolderShares, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
-    by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
+  refine ⟨cwvL, cwa1, cwHolderShares, cwsh1, cwar1, ⟨false, 9999999999999998000, -19⟩, cwr1,
+    ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
 
@@ -104,7 +114,7 @@ relative budget alone. -/
 theorem Vault.clawback_sharesDestroyed_clamped_witness :
     ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
       (assetsRecoveredNumber : Number) (r : ClawbackResult),
-      v.Lawful ∧ v.WithdrawNavExact false ∧
+      v.WithdrawNavExact false ∧
       assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
@@ -113,8 +123,8 @@ theorem Vault.clawback_sharesDestroyed_clamped_witness :
       v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesDestroyed
         (v.idealSharesClawback assetsRecovered'.toRat) depositε := by
-  refine ⟨cwvB, cwa1, cwHolderShares, cwsh1, cwar1, cwclamp, ⟨false, 9999999999999998000, -19⟩, cwr2,
-    by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
+  refine ⟨cwvBL, cwa1, cwHolderShares, cwsh1, cwar1, cwclamp, ⟨false, 9999999999999998000, -19⟩, cwr2,
+    ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
 
@@ -123,12 +133,12 @@ recovery misses the destroyed shares' exact worth by more than the relative
 budget. -/
 theorem Vault.clawback_assetsRecovered_witness :
     ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
-      v.Lawful ∧ v.WithdrawNavExact false ∧ v.clawback assets holderShares = .ok r ∧
+      v.WithdrawNavExact false ∧ v.clawback assets holderShares = .ok r ∧
       r.error = none ∧
       RoundsWithinWitness r.assetsRecovered
         (v.idealAssetsClawback r.sharesDestroyed.toRat) depositε := by
-  refine ⟨cwv, cwa1, cwHolderShares, cwr1,
-    by native_decide, ?_, by unfold RoundsWithinWitness; native_decide⟩
+  refine ⟨cwvL, cwa1, cwHolderShares, cwr1,
+    ?_, by unfold RoundsWithinWitness; native_decide⟩
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
 
@@ -136,9 +146,9 @@ theorem Vault.clawback_assetsRecovered_witness :
 stored total is not the exact difference. -/
 theorem Vault.clawback_vault_updates_witness :
     ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
-      v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
-  ⟨cwvB, cwa1, cwHolderShares, cwr2, by native_decide⟩
+  ⟨cwvBL, cwa1, cwHolderShares, cwr2, by native_decide⟩
 
 /-- The `cwvB` recovery re-rounded to the vault scale, `0.000099999999999`. -/
 def cwrr2 : STAmount := STAmount.unchecked .fractional 9999999999900000 (-20) false
@@ -155,12 +165,34 @@ amount. -/
 theorem Vault.clawback_applied_delta_witness :
     ∃ (v : Vault) (assets holderShares assetsRecovered' : STAmount) (r : ClawbackResult)
       (deltaTotal : Number) (deltaAmount : STAmount),
-      v.Lawful ∧ v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
       roundToVaultExponent r.assetsRecovered v.assetsTotal = .ok assetsRecovered' ∧
       assetsRecovered'.operator_eq r.assetsRecovered = false ∧
       v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
       STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
       deltaAmount.operator_eq r.assetsRecovered = false :=
-  ⟨cwvB, cwa1, cwHolderShares, cwrr2, cwr2, cwdn2, cwda2, by native_decide⟩
+  ⟨cwvBL, cwa1, cwHolderShares, cwrr2, cwr2, cwdn2, cwda2, by native_decide⟩
+
+/-! ## Clawback-all empty-shares dust witness -/
+
+/-- Dust witness vault: π assets/available (16-digit IOU), 7000025 shares. -/
+def clawbackDustVault : RawVault :=
+  { assetsTotal := ⟨false, 3141592653589793000, -18⟩
+  , assetsAvailable := ⟨false, 3141592653589793000, -18⟩
+  , assetsReserved := Number.zero
+  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , sharesTotal := ⟨false, 7000025000000000000, -12⟩
+  , lossUnrealized := Number.zero }
+
+/-- The dust witness vault as a `Vault`. -/
+def clawbackDustVaultL : Vault := ⟨clawbackDustVault, by decide, by decide⟩
+
+/-- Witness that `clawback_success`'s `hempty` is meaningful: clawing back all
+shares of a lawful vault can leave sub-ULP `assetsTotal` dust (`sharesTotal' = 0`,
+`assetsTotal' ≠ 0`), so `to_lawful` rejects with `notLawful`. -/
+theorem Vault.clawback_dust_witness :
+    clawbackDustVaultL.clawback (STAmount.zero .fractional)
+        (STAmount.unchecked .int64 7000025 0 false) = .error .notLawful := by
+  native_decide
 
 end XRPL.Model.SingleAssetVault

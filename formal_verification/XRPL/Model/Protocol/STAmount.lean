@@ -45,13 +45,16 @@ def STAmount.signedDrops (s : STAmount) : Int :=
 def STAmount.areComparable (lhs rhs : STAmount) : Bool :=
   lhs.mNumericType == rhs.mNumericType
 
+-- Short-circuits `mValue = 0`, mirroring `Number.toRat`'s guard.
 def STAmount.toRat (s : STAmount) : ℚ :=
-  let sign : Int := if s.mIsNegative then -1 else 1
-  let m : Int := s.mValue.toNat
-  if s.mOffset ≥ 0 then
-    mkRat (sign * m * (10 : Int) ^ s.mOffset.toNat) 1
+  if s.mValue = 0 then 0
   else
-    mkRat (sign * m) ((10 : Nat) ^ (-s.mOffset).toNat)
+    let sign : Int := if s.mIsNegative then -1 else 1
+    let m : Int := s.mValue.toNat
+    if s.mOffset ≥ 0 then
+      mkRat (sign * m * (10 : Int) ^ s.mOffset.toNat) 1
+    else
+      mkRat (sign * m) ((10 : Nat) ^ (-s.mOffset).toNat)
 
 def STAmount.clear (nt : NumericType) : STAmount :=
   { mNumericType := nt
@@ -152,6 +155,12 @@ def STAmount.equalAfterNumberConvert (nt : NumericType) (value : Number) : Excep
   let stValue ← STAmount.ofNumber nt value .to_nearest
   let numValue ← stValue.toNumber .to_nearest
   return numValue.operator_eq value
+
+-- Checks if Number will be rounded when converted to STAmount
+def STAmount.isRounded (nt : NumericType) (value : Number) : Bool :=
+  match STAmount.equalAfterNumberConvert nt value with
+  | .ok isEqual => !isEqual
+  | .error _ => true
 
 def STAmount.operator_eq (lhs rhs : STAmount) : Bool :=
   STAmount.areComparable lhs rhs &&

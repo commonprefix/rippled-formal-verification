@@ -16,6 +16,7 @@ theorem Vault.canBurnShares_rejected_code_proof (v : Vault) (ter : TER)
     (hok : v.canBurnShares = .ok (.error ter)) :
     ter = .tecNO_PERMISSION := by
   unfold Vault.canBurnShares at hok
+  simp only [] at hok
   by_cases hg : (v.sharesTotal.mantissa_ == 0 ||
       (v.assetsTotal.mantissa_ != 0 || v.assetsAvailable.mantissa_ != 0)) = true
   · rw [if_pos hg] at hok
@@ -42,6 +43,7 @@ theorem Vault.canBurnShares_no_permission_proof (v : Vault)
     · rw [bne_iff_ne.mpr h, Bool.true_or, Bool.or_true]
     · rw [bne_iff_ne.mpr h, Bool.or_true, Bool.or_true]
   unfold Vault.canBurnShares
+  simp only []
   rw [if_pos hguard]
   rfl
 
@@ -59,19 +61,9 @@ theorem Vault.canBurnShares_ok_proof (v : Vault) (sharesTotalAmount : STAmount)
     rw [beq_eq_false_iff_ne.mpr hsh, bne_eq_false_iff_eq.mpr hat,
       bne_eq_false_iff_eq.mpr hav, Bool.false_or, Bool.false_or]
   unfold Vault.canBurnShares
+  simp only []
   rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
   rw [hshares, ok_bind]
-  rfl
-
-/-- **Proof body of `burnShares_ok`.** `burnShares` stores the rounded difference
-`sharesTotal - sharesDestroyed` and changes no other field. -/
-theorem Vault.burnShares_ok_proof (v : Vault) (sharesDestroyed : STAmount)
-    (sharesDestroyedNumber st' : Number)
-    (hnum : sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
-    (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
-    v.burnShares sharesDestroyed = .ok { v with sharesTotal := st' } := by
-  unfold Vault.burnShares
-  rw [hnum, ok_bind, hst, ok_bind]
   rfl
 
 end XRPL.Model.SingleAssetVault

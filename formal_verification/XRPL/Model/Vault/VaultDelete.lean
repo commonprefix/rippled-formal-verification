@@ -6,13 +6,13 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
--- Vault related checks from VaultDelete::preclaim, in C++ order.
-def Vault.canVaultDelete (vault : Vault) : TER :=
-  if vault.assetsAvailable.operator_ne Number.zero then
+-- Checks from VaultDelete::preclaim, in C++ order.
+def Vault.canVaultDelete (v : Vault) : TER :=
+  if v.assetsAvailable.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
-  else if vault.assetsTotal.operator_ne Number.zero then
+  else if v.assetsTotal.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
-  else if vault.sharesTotal.operator_ne Number.zero then
+  else if v.sharesTotal.operator_ne Number.zero then
     .tecHAS_OBLIGATIONS
   else
     .tesSUCCESS

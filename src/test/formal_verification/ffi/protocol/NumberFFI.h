@@ -13,6 +13,8 @@
 extern "C" {
 lean_object*
 lean_number_build(uint8_t negative, uint64_t mantissa, int64_t exponent);
+lean_object*
+lean_number_build_norm(uint8_t negative, uint64_t mantissa, int64_t exponent);
 uint8_t
 lean_rounding_mode_build(uint8_t mode);
 uint8_t
@@ -50,7 +52,7 @@ public:
         std::uint8_t negative = m < 0 ? 1 : 0;
         std::uint64_t magnitude =
             m < 0 ? 0u - static_cast<std::uint64_t>(m) : static_cast<std::uint64_t>(m);
-        return NumberFFI(lean_number_build(negative, magnitude, n.exponent()));
+        return NumberFFI(lean_number_build_norm(negative, magnitude, n.exponent()));
     }
 
     Number

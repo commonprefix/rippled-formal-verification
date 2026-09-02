@@ -11,9 +11,9 @@ vault needs the opposite: that the one-share run *reaches* a success. This file
 supplies the reusable forward facts that do not touch the well-founded `Number`
 rounding pipeline:
 
-* subtracting a mantissa-zero `Number` (the reachable vault's zero interest and
-  loss) is the identity and total, so the two pricing subtractions of
-  `sharesToAssetsWithdraw` collapse to `nav = assetsTotal`, and
+* subtracting a mantissa-zero `Number` (the reachable vault's zero loss) is the
+  identity and total, so the pricing subtraction of
+  `sharesToAssetsWithdraw` collapses to `nav = assetsTotal`, and
 * the try/catch wrapper `computeWithdrawByShares` forwards a successful
   `sharesToAssetsWithdraw` to a no-error record.
 
@@ -36,7 +36,7 @@ theorem Number.operator_add_zero_right (x : Number) (mode : rounding_mode) :
   rfl
 
 /-- Subtracting a mantissa-zero `Number` is the identity, and total. This is how
-a reachable vault's zero interest and zero loss drop out of the pricing prefix. -/
+a reachable vault's zero loss drops out of the pricing prefix. -/
 theorem Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mode)
     (h : y.mantissa_ = 0) :
     x.operator_sub y mode = .ok x := by

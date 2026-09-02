@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Protocol.STAmount.Compare.Compare
 
 /-! # Guard-extraction reductions for `Vault.deposit`
@@ -129,9 +130,11 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
       v.sharesTotal.operator_add sN .to_nearest = .ok st' ∧
       ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
         at'.operator_gt (v.assetsMaximum.getD Number.zero)) = false ∧
-      r = ⟨none, { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' },
-             assetDeposited, sharesCreated⟩ := by
+      r.amountDeposit' = assetDeposited ∧ r.sharesIssued = sharesCreated ∧
+      r.vault'.toRawVault =
+        { v.toRawVault with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by
   unfold Vault.deposit at hok
+  simp only [] at hok
   obtain ⟨amount, hround, hok⟩ := bind_ok_peel _ _ _ hok
   have hcontra : ∀ ter, DepositResult.rejected v ter = r → False := by
     intro ter h; rw [← h] at herr; simp [DepositResult.rejected] at herr
@@ -163,11 +166,13 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
             have hsh : v.sharesTotal.mantissa_ ≠ 0 := by
               intro h0
               rw [h0] at h2; simp [hd] at h2
-            refine ⟨amount, amount, STAmount.zero .int64, n1, n3, at', av', st',
+            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain rfl := Except.ok.inj hok
+            exact ⟨amount, amount, STAmount.zero .int64, n1, n3, at', av', st',
               hround, by simpa using h1, fun _ => hsh, fun h => absurd h (by rw [hd]; decide),
               fun _ => ⟨rfl, rfl⟩, fun h => absurd h (by rw [hd]; decide),
-              hn1, hn3, hat, hav, hst, by simpa using hm, ?_⟩
-            exact (Except.ok.inj hok).symm
+              hn1, hn3, hat, hav, hst, by simpa using hm,
+              rfl, rfl, (RawVault.to_lawful_ok htl).1⟩
         · -- real deposit: assetDeposited, sharesCreated from computeDeposit success
           rw [if_neg hd] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
@@ -192,12 +197,14 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
               have hins : v.isInsolvent = false := by
                 have hnd : isDonation = false := by simpa using hd
                 rw [hnd] at h3; simpa using h3
-              refine ⟨amount, a, s, n1, n3, at', av', st',
+              obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain rfl := Except.ok.inj hok
+              exact ⟨amount, a, s, n1, n3, at', av', st',
                 hround, by simpa using h1,
                 fun h => absurd h (by simp [hd]),
                 fun _ => hins,
                 fun h => absurd h (by simp [hd]),
-                fun _ => hcd, hn1, hn3, hat, hav, hst, by simpa using hm, ?_⟩
-              exact (Except.ok.inj hok).symm
+                fun _ => hcd, hn1, hn3, hat, hav, hst, by simpa using hm,
+                rfl, rfl, (RawVault.to_lawful_ok htl).1⟩
 
 end XRPL.Model.SingleAssetVault

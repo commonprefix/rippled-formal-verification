@@ -73,13 +73,37 @@ def Number.isnormal (n : Number) : Prop :=
 
 abbrev Number.isNormalized (n : Number) : Prop := n.isnormal
 
+-- `Number.isnormal` is a decidable arithmetic condition.
+instance Number.instDecidableIsnormal (n : Number) : Decidable n.isnormal := by
+  unfold Number.isnormal; infer_instance
+
+-- `∀ d, e = .ok d → p d` over an `Except Error Number` is decidable: vacuous on
+-- error, `p d` on the single `ok` value.
+instance {e : Except Error Number} {p : Number → Prop} [∀ d, Decidable (p d)] :
+    Decidable (∀ d, e = .ok d → p d) :=
+  match e with
+  | .error _ => isTrue (fun _ h => by simp at h)
+  | .ok d0 =>
+    decidable_of_iff (p d0)
+      ⟨fun hp d hd => by injection hd with hd'; exact hd' ▸ hp, fun h => h d0 rfl⟩
+
+-- `∃ d, e = .ok d` over an `Except Error Number` is decidable: true exactly when `e` is `.ok`.
+instance {e : Except Error Number} : Decidable (∃ d, e = .ok d) :=
+  match e with
+  | .error _ => isFalse (by rintro ⟨d, h⟩; simp at h)
+  | .ok d0 => isTrue ⟨d0, rfl⟩
+
+-- For Number.zero we have `mantissa = 0`, whose exponent is `-2^31` that
+-- would build `10 ^ 2^31` in the denominator at runtime, so we early exit
 def Number.toRat (n : Number) : ℚ :=
-  let sign : Int := if n.negative_ then -1 else 1
-  let m : Int := n.mantissa_.toNat
-  if n.exponent_ ≥ 0 then
-    mkRat (sign * m * (10 : Int) ^ n.exponent_.toNat) 1
+  if n.mantissa_ = 0 then 0
   else
-    mkRat (sign * m) ((10 : Nat) ^ (-n.exponent_).toNat)
+    let sign : Int := if n.negative_ then -1 else 1
+    let m : Int := n.mantissa_.toNat
+    if n.exponent_ ≥ 0 then
+      mkRat (sign * m * (10 : Int) ^ n.exponent_.toNat) 1
+    else
+      mkRat (sign * m) ((10 : Nat) ^ (-n.exponent_).toNat)
 
 def divu10 (u : UInt64) : UInt64 × UInt64 := (u / 10, u % 10)
 

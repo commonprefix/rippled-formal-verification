@@ -32,21 +32,21 @@ def depositε : ℚ := (10 : ℚ) ^ (-17 : ℤ)
 
 /-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
-def Vault.depositNav (v : Vault) : ℚ :=
-  v.toExact.assetsTotal
+def RawVault.depositNav (rv : RawVault) : ℚ :=
+  rv.toExact.assetsTotal
 
 /-- The exact share amount for a deposit, before any rounding. The XLS-0065
 exchange formula: an empty vault issues `amount * 10 ^ scale` shares, otherwise
 `sharesTotal * amount / nav`. -/
-def Vault.idealSharesDeposit (v : Vault) (amount : ℚ) : ℚ :=
-  if v.toExact.assetsTotal = 0 then amount * (10 : ℚ) ^ v.scale.toNat
-  else v.toExact.sharesTotal * amount / v.depositNav
+def RawVault.idealSharesDeposit (rv : RawVault) (amount : ℚ) : ℚ :=
+  if rv.toExact.assetsTotal = 0 then amount * (10 : ℚ) ^ rv.scale.toNat
+  else rv.toExact.sharesTotal * amount / rv.depositNav
 
 /-- The exact `amountDeposit'` for issuing `shares`, before any rounding. The
 XLS-0065 exchange formula: an empty vault takes `shares / 10 ^ scale`, otherwise
 `nav * shares / sharesTotal`. -/
-def Vault.idealChargeDeposit (v : Vault) (shares : ℚ) : ℚ :=
-  if v.toExact.assetsTotal = 0 then shares / (10 : ℚ) ^ v.scale.toNat
-  else v.depositNav * shares / v.toExact.sharesTotal
+def RawVault.idealChargeDeposit (rv : RawVault) (shares : ℚ) : ℚ :=
+  if rv.toExact.assetsTotal = 0 then shares / (10 : ℚ) ^ rv.scale.toNat
+  else rv.depositNav * shares / rv.toExact.sharesTotal
 
 end XRPL.Model.SingleAssetVault

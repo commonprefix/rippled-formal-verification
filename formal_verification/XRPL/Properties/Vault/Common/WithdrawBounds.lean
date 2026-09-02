@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
+import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawReduction
 import XRPL.Properties.Vault.Common.WithdrawExits
 import XRPL.Properties.Vault.Common.OfNumberBoundary
@@ -118,7 +119,7 @@ the shares' worth by more than `depositε` relatively, and when nonzero falls sh
 of it by at most the interior stage error plus one ULP: the pricing collapses to
 the exact `nav`, the `mul`/`div` stages round within `depositε`, and the final
 `.downward` `ofNumber` floors within one ULP. -/
-theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
+theorem Vault.sharesToAssetsWithdraw_spec (v : Vault)
     (shares assets : STAmount) (waiveUnrealizedLoss : Bool)
     (hnn : 0 ≤ shares.toRat) (hc : shares.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
@@ -141,11 +142,11 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
     cases waiveUnrealizedLoss with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   -- `nav` is non-negative on a lawful vault
@@ -154,12 +155,12 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
     | false =>
       rw [if_neg (by decide)]
       show 0 ≤ v.withdrawNav
-      unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+      unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
     | true =>
       rw [if_pos rfl]
       show 0 ≤ v.depositNav
-      unfold Vault.depositNav
-      exact hv.valid.assetsTotal_nonneg
+      unfold RawVault.depositNav
+      exact v.exact.assetsTotal_nonneg
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   rcases hcase with ⟨hnav2m, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
@@ -179,7 +180,7 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
     exact absurd hf (by decide)
   · -- genuine pricing: run the relative composition, then the downward floor
     set ST : ℚ := (v.toExact.sharesTotal : ℚ) with hST_def
-    have hST_eq : ST = v.sharesTotal.toRat := Vault.WF.toExact_sharesTotal v hv.wf
+    have hST_eq : ST = v.sharesTotal.toRat := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
     have hideal_eq : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat = nav * shares.toRat / ST := rfl
     obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsn_eq : sn0 = sharesNumber := by rw [hsn0ok] at hsn; exact Except.ok.inj hsn
@@ -197,16 +198,16 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
         rw [hnav_def]
         cases waiveUnrealizedLoss with
         | true =>
-          rw [if_pos rfl]; show v.depositNav ≤ _; unfold Vault.depositNav
+          rw [if_pos rfl]; show v.depositNav ≤ _; unfold RawVault.depositNav
           linarith
         | false =>
-          rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold Vault.withdrawNav
-          linarith [hv.valid.lossUnrealized_nonneg]
+          rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold RawVault.withdrawNav
+          linarith [v.exact.lossUnrealized_nonneg]
       linarith
     have hST_pos : 0 < ST := by
       rw [hST_def]
       have hne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
-        absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
+        absurd (v.exact.empty_shares h0).1 (ne_of_gt hApos)
       exact_mod_cast Nat.pos_of_ne_zero hne
     have hSTne : v.sharesTotal.toRat ≠ 0 := hST_eq ▸ ne_of_gt hST_pos
     have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
@@ -232,7 +233,7 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
       have hT0_pos : 0 < T0 := mul_pos hnav_pos hshares_pos
       have hANnorm : assetsNumber.isNormalized :=
         operator_div_result_isNormalized NAVShares v.sharesTotal assetsNumber .to_nearest
-          hNAVnorm hv.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
+          hNAVnorm v.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
       -- stage bounds
       have hmulb : |NAVShares.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by
         have hmulraw : |NAVShares.toRat - nav2.toRat * sharesNumber.toRat| ≤
@@ -251,7 +252,7 @@ theorem Vault.sharesToAssetsWithdraw_spec (v : Vault) (hv : v.Lawful)
         have h : |assetsNumber.toRat - NAVShares.toRat / v.sharesTotal.toRat| ≤
             |NAVShares.toRat / v.sharesTotal.toRat| * (6 / (2 ^ 63 - 3)) :=
           operator_div_rounds_to_nearest NAVShares v.sharesTotal assetsNumber
-            hNAVnorm hv.wf.sharesTotal_norm hdiv hanm
+            hNAVnorm v.wf.sharesTotal_norm hdiv hanm
         rw [← hST_eq] at h
         rwa [abs_of_pos hAN_ST_pos] at h
       have hANpos : 0 < assetsNumber.toRat := by
@@ -327,7 +328,7 @@ lemma withdraw_pipeline_lo12 :
 the raw `mul`/`div` pipeline constant `12/(2^63-3)` rather than the widened
 `depositε`. The dilution composition needs this tighter granularity; the
 `depositε`-level lemma stays as the headline-grade statement. -/
-theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
+theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault)
     (shares assets : STAmount) (waiveUnrealizedLoss : Bool)
     (hnn : 0 ≤ shares.toRat) (hc : shares.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
@@ -350,11 +351,11 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
     cases waiveUnrealizedLoss with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   obtain ⟨hnav2norm, hnav2_val⟩ := hnav2facts
   -- `nav` is non-negative on a lawful vault
@@ -363,12 +364,12 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
     | false =>
       rw [if_neg (by decide)]
       show 0 ≤ v.withdrawNav
-      unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+      unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
     | true =>
       rw [if_pos rfl]
       show 0 ≤ v.depositNav
-      unfold Vault.depositNav
-      exact hv.valid.assetsTotal_nonneg
+      unfold RawVault.depositNav
+      exact v.exact.assetsTotal_nonneg
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   rcases hcase with ⟨hnav2m, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
@@ -388,7 +389,7 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
     exact absurd hf (by decide)
   · -- genuine pricing: run the relative composition, then the downward floor
     set ST : ℚ := (v.toExact.sharesTotal : ℚ) with hST_def
-    have hST_eq : ST = v.sharesTotal.toRat := Vault.WF.toExact_sharesTotal v hv.wf
+    have hST_eq : ST = v.sharesTotal.toRat := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
     have hideal_eq : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat = nav * shares.toRat / ST := rfl
     obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsn_eq : sn0 = sharesNumber := by rw [hsn0ok] at hsn; exact Except.ok.inj hsn
@@ -406,16 +407,16 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
         rw [hnav_def]
         cases waiveUnrealizedLoss with
         | true =>
-          rw [if_pos rfl]; show v.depositNav ≤ _; unfold Vault.depositNav
+          rw [if_pos rfl]; show v.depositNav ≤ _; unfold RawVault.depositNav
           linarith
         | false =>
-          rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold Vault.withdrawNav
-          linarith [hv.valid.lossUnrealized_nonneg]
+          rw [if_neg (by decide)]; show v.withdrawNav ≤ _; unfold RawVault.withdrawNav
+          linarith [v.exact.lossUnrealized_nonneg]
       linarith
     have hST_pos : 0 < ST := by
       rw [hST_def]
       have hne : v.toExact.sharesTotal ≠ 0 := fun h0 =>
-        absurd (hv.valid.empty_shares h0).1 (ne_of_gt hApos)
+        absurd (v.exact.empty_shares h0).1 (ne_of_gt hApos)
       exact_mod_cast Nat.pos_of_ne_zero hne
     have hSTne : v.sharesTotal.toRat ≠ 0 := hST_eq ▸ ne_of_gt hST_pos
     have hSTm : v.sharesTotal.mantissa_ ≠ 0 :=
@@ -441,7 +442,7 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
       have hT0_pos : 0 < T0 := mul_pos hnav_pos hshares_pos
       have hANnorm : assetsNumber.isNormalized :=
         operator_div_result_isNormalized NAVShares v.sharesTotal assetsNumber .to_nearest
-          hNAVnorm hv.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
+          hNAVnorm v.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
       -- stage bounds
       have hmulb : |NAVShares.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by
         have hmulraw : |NAVShares.toRat - nav2.toRat * sharesNumber.toRat| ≤
@@ -460,7 +461,7 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
         have h : |assetsNumber.toRat - NAVShares.toRat / v.sharesTotal.toRat| ≤
             |NAVShares.toRat / v.sharesTotal.toRat| * (6 / (2 ^ 63 - 3)) :=
           operator_div_rounds_to_nearest NAVShares v.sharesTotal assetsNumber
-            hNAVnorm hv.wf.sharesTotal_norm hdiv hanm
+            hNAVnorm v.wf.sharesTotal_norm hdiv hanm
         rw [← hST_eq] at h
         rwa [abs_of_pos hAN_ST_pos] at h
       have hANpos : 0 < assetsNumber.toRat := by
@@ -527,7 +528,7 @@ theorem Vault.sharesToAssetsWithdraw_spec_raw (v : Vault) (hv : v.Lawful)
 /-- **Proof body of `Vault.sharesToAssetsWithdraw_bounds`.** Drops the internal
 `0 ≤ ideal` conjunct of the spec and widens the ULP term to `2` ULP. -/
 theorem Vault.sharesToAssetsWithdraw_bounds_proof (v : Vault)
-    (shares assets : STAmount) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+    (shares assets : STAmount) (waiveUnrealizedLoss : Bool)
     (hnn : 0 ≤ shares.toRat) (hc : shares.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
@@ -538,7 +539,7 @@ theorem Vault.sharesToAssetsWithdraw_bounds_proof (v : Vault)
         v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat * depositε +
           2 * (10 : ℚ) ^ assets.exponent) := by
   obtain ⟨h1, -, h3, h4⟩ :=
-    Vault.sharesToAssetsWithdraw_spec v hv shares assets waiveUnrealizedLoss hnn hc hnav hok
+    Vault.sharesToAssetsWithdraw_spec v shares assets waiveUnrealizedLoss hnn hc hnav hok
   refine ⟨h1, h3, fun hz => ?_⟩
   have hpow : (0 : ℚ) ≤ (10 : ℚ) ^ assets.exponent := le_of_lt (zpow_pos (by norm_num) _)
   linarith [h4 hz]
@@ -553,7 +554,7 @@ a positive integer sitting within `depositε` relatively plus half a share of
 `idealSharesWithdraw`. The withdraw analog of `assetsToSharesWithdraw_spec`. -/
 lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     (waiveUnrealizedLoss : Bool)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
+    (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hpos : 0 < assets.toRat) (hc : assets.Canonical)
     (hok : assetsToSharesWithdraw v assets false waiveUnrealizedLoss = .ok shares)
     (hnz : shares.isZero = false) :
@@ -570,21 +571,21 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     cases waiveUnrealizedLoss with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
     cases waiveUnrealizedLoss with
     | false =>
       rw [if_neg (by decide)]; show 0 ≤ v.withdrawNav
-      unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+      unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
     | true =>
       rw [if_pos rfl]; show 0 ≤ v.depositNav
-      unfold Vault.depositNav
-      exact hv.valid.assetsTotal_nonneg
+      unfold RawVault.depositNav
+      exact v.exact.assetsTotal_nonneg
   set navval : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnavval_def
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   rcases hcase with ⟨hzm, hzero⟩ | ⟨hnz2, assetsNumber, sharesAssets, sharesNumber, sharesNumber',
@@ -596,26 +597,26 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
     rw [hnav2val] at hne ⊢; exact lt_of_le_of_ne hnav_nonneg (Ne.symm hne)
   -- shares total positive integer
   have hS_pos : 0 < v.sharesTotal.toRat := by
-    rcases lt_or_eq_of_le hv.wf.sharesTotal_nonneg with h | h
+    rcases lt_or_eq_of_le v.wf.sharesTotal_nonneg with h | h
     · exact h
     · exfalso
       have hz : v.toExact.sharesTotal = 0 := by
         show v.sharesTotal.toRat.num.toNat = 0; rw [← h]; rfl
-      obtain ⟨hAT, -⟩ := hv.valid.empty_shares hz
+      obtain ⟨hAT, -⟩ := v.exact.empty_shares hz
       have hle0 : navval ≤ 0 := by
         rw [hnavval_def]
         cases waiveUnrealizedLoss with
         | false =>
-          rw [if_neg (by decide)]; unfold Vault.withdrawNav; rw [hAT]
-          linarith [hv.valid.lossUnrealized_nonneg]
+          rw [if_neg (by decide)]; unfold RawVault.withdrawNav; rw [hAT]
+          linarith [v.exact.lossUnrealized_nonneg]
         | true =>
-          rw [if_pos rfl]; unfold Vault.depositNav; rw [hAT]
+          rw [if_pos rfl]; unfold RawVault.depositNav; rw [hAT]
       rw [hnav2val] at hnav2_pos; linarith
   have hS_one : 1 ≤ v.sharesTotal.toRat := by
     have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hS_pos
     have hcast : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
       conv_lhs => rw [← Rat.num_div_den v.sharesTotal.toRat]
-      rw [hv.wf.sharesTotal_int]; simp
+      rw [v.wf.sharesTotal_int]; simp
     rw [hcast]; exact_mod_cast hnum_pos
   have hSm : v.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hS_pos.ne'
   -- assets lift
@@ -641,7 +642,7 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
   have hPm : sharesAssets.mantissa_ ≠ 0 := by
     intro h0
     have hsmall := operator_mul_underflow_truth_small v.sharesTotal assetsNumber sharesAssets
-      .to_nearest hv.wf.sharesTotal_norm hannorm hSm hAm hmul h0
+      .to_nearest v.wf.sharesTotal_norm hannorm hSm hAm hmul h0
     have hcombo : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
         = (10 : ℚ) ^ (-32750 : ℤ) := by
       rw [← zpow_natCast (10 : ℚ) 18, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
@@ -656,12 +657,12 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
       zpow_le_zpow_right₀ (by norm_num) (by norm_num)
     linarith
   obtain ⟨hQnorm, hQpos, hQbound⟩ :=
-    Vault.exchange_pipeline_within v.sharesTotal assetsNumber nav2 sharesAssets sharesNumber
-      hv.wf.sharesTotal_norm hannorm hnav2norm hS_pos hApos hnav2_pos hmul hdiv hPm hQm
+    RawVault.exchange_pipeline_within v.sharesTotal assetsNumber nav2 sharesAssets sharesNumber
+      v.wf.sharesTotal_norm hannorm hnav2norm hS_pos hApos hnav2_pos hmul hdiv hPm hQm
   have hideal_eq : v.sharesTotal.toRat * assetsNumber.toRat / nav2.toRat
       = v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat := by
-    unfold Vault.idealSharesWithdraw
-    rw [hanval, Vault.WF.toExact_sharesTotal v hv.wf, hnav2val, ← hnavval_def]
+    unfold RawVault.idealSharesWithdraw
+    rw [hanval, RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, hnav2val, ← hnavval_def]
   have hideal_pos : 0 < v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat := by
     rw [← hideal_eq]; exact div_pos (mul_pos hS_pos hApos) hnav2_pos
   rw [hideal_eq] at hQbound
@@ -691,7 +692,7 @@ lemma Vault.assetsToSharesWithdraw_within (v : Vault) (assets shares : STAmount)
 /-- **Proof body of `Vault.withdraw_sharesBurned`.** The named asset amount prices
 through `assetsToSharesWithdraw` into the burned shares. -/
 theorem Vault.withdraw_sharesBurned_proof (v : Vault) (assets : STAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful) (r : WithdrawResult)
+    (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
     (hpos : 0 < assets.toRat) (hc : assets.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw (.vaultAssets assets) waiveUnrealizedLoss = .ok r)
@@ -705,7 +706,7 @@ theorem Vault.withdraw_sharesBurned_proof (v : Vault) (assets : STAmount)
     computeWithdrawByAssets_none_reduces v assets waiveUnrealizedLoss cw hcomp herr2
   have hrsb : r.sharesBurned = shares := by rw [hsb, hsr]
   obtain ⟨-, hden, hsh_pos, hbound⟩ :=
-    Vault.assetsToSharesWithdraw_within v assets shares waiveUnrealizedLoss hv hnav hpos hc
+    Vault.assetsToSharesWithdraw_within v assets shares waiveUnrealizedLoss hnav hpos hc
       hshares hsnz
   rw [hrsb]
   exact ⟨hden, hsh_pos, by linarith [hbound]⟩
@@ -734,7 +735,7 @@ lemma Vault.withdraw_payout_priced (v : Vault) (amount : WithdrawAmount)
         computeWithdrawByShares_none_reduces v s waiveUnrealizedLoss cw hcomp herr2
       rw [hsr]; exact hs
   rcases hdisj with ⟨hfin', -⟩ | ⟨-, sbn, at', av', st', atr, atr',
-      -, hat, -, -, -, hav, -, hr⟩
+      -, hat, -, -, -, hav, -, hr, -⟩
   · exfalso
     rw [hsta_eq, ← hsb] at hfin'
     rw [hfin'] at hfin; exact absurd hfin (by simp)
@@ -743,7 +744,7 @@ lemma Vault.withdraw_payout_priced (v : Vault) (amount : WithdrawAmount)
 /-- **Proof body of `Vault.withdraw_payout`.** Reprices the burned shares through
 `sharesToAssetsWithdraw_spec`. -/
 theorem Vault.withdraw_payout_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful) (sharesTotalAmount : STAmount)
+    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
     (r : WithdrawResult)
     (hnn : 0 ≤ r.sharesBurned.toRat) (hc : r.sharesBurned.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
@@ -757,7 +758,7 @@ theorem Vault.withdraw_payout_proof (v : Vault) (amount : WithdrawAmount)
       v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat - r.assets'.toRat ≤
         v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * depositε +
           2 * (10 : ℚ) ^ r.assets'.exponent) :=
-  Vault.sharesToAssetsWithdraw_bounds_proof v r.sharesBurned r.assets' hv waiveUnrealizedLoss
+  Vault.sharesToAssetsWithdraw_bounds_proof v r.sharesBurned r.assets' waiveUnrealizedLoss
     hnn hc hnav
     (Vault.withdraw_payout_priced v amount waiveUnrealizedLoss sharesTotalAmount r hok herr hst hfin)
 
@@ -765,12 +766,12 @@ theorem Vault.withdraw_payout_proof (v : Vault) (amount : WithdrawAmount)
 
 /-- **Waive-general recovery-pipeline bound.** The general-`waiveUnrealizedLoss`
 companion of the shared `false`-only `recovery_pipeline_bound`: the payout is
-`ofNumber v.numericType aN .downward`, and the exact `sharesToAssetsWithdraw`
+`ofNumber rv.numericType aN .downward`, and the exact `sharesToAssetsWithdraw`
 ideal sits within `depositε` of `aN` when `aN` is nonzero, or is `Number`-underflow
 tiny when `aN` is zero. -/
 lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
     (waiveUnrealizedLoss : Bool)
-    (hv : v.Lawful) (hnav : v.WithdrawNavExact waiveUnrealizedLoss) (hc : shares.Canonical)
+    (hnav : v.WithdrawNavExact waiveUnrealizedLoss) (hc : shares.Canonical)
     (hnav_pos : 0 < (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav))
     (hshpos : 0 < shares.toRat)
     (hprice : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
@@ -789,42 +790,42 @@ lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
     cases waiveUnrealizedLoss with
     | false =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm
-        hv.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
+        v.wf.lossUnrealized_norm hsub, by rw [hval]; exact heval⟩
     | true =>
       have hval : nav2 = nv := Except.ok.inj (hsub.symm.trans he)
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub,
+      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
         by rw [hval]; exact heval⟩
   set navval : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnavval_def
   obtain ⟨hnav2norm, hnav2val⟩ := hnav2facts
   have hnav2_pos : 0 < nav2.toRat := by rw [hnav2val]; exact hnav_pos
   have hST_pos : 0 < v.sharesTotal.toRat := by
-    rcases lt_or_eq_of_le hv.wf.sharesTotal_nonneg with h | h
+    rcases lt_or_eq_of_le v.wf.sharesTotal_nonneg with h | h
     · exact h
     · exfalso
       have hz : v.toExact.sharesTotal = 0 := by
         show v.sharesTotal.toRat.num.toNat = 0; rw [← h]; rfl
-      obtain ⟨hAT, -⟩ := hv.valid.empty_shares hz
+      obtain ⟨hAT, -⟩ := v.exact.empty_shares hz
       have hle0 : navval ≤ 0 := by
         rw [hnavval_def]
         cases waiveUnrealizedLoss with
         | false =>
-          rw [if_neg (by decide)]; unfold Vault.withdrawNav; rw [hAT]
-          linarith [hv.valid.lossUnrealized_nonneg]
+          rw [if_neg (by decide)]; unfold RawVault.withdrawNav; rw [hAT]
+          linarith [v.exact.lossUnrealized_nonneg]
         | true =>
-          rw [if_pos rfl]; unfold Vault.depositNav; rw [hAT]
+          rw [if_pos rfl]; unfold RawVault.depositNav; rw [hAT]
       rw [hnav2val] at hnav2_pos; linarith
   have hST_one : 1 ≤ v.sharesTotal.toRat := by
     have hnum_pos : 0 < v.sharesTotal.toRat.num := Rat.num_pos.mpr hST_pos
     have hcast : v.sharesTotal.toRat = (v.sharesTotal.toRat.num : ℚ) := by
       conv_lhs => rw [← Rat.num_div_den v.sharesTotal.toRat]
-      rw [hv.wf.sharesTotal_int]; simp
+      rw [v.wf.sharesTotal_int]; simp
     rw [hcast]; exact_mod_cast hnum_pos
   have hSTm : v.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hST_pos.ne'
   set ideal : ℚ := v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat with hideal_def
   have hideal_eq : ideal = nav2.toRat * shares.toRat / v.sharesTotal.toRat := by
-    rw [hideal_def]; unfold Vault.idealAssetsWithdraw
-    rw [hnav2val, ← hnavval_def, Vault.WF.toExact_sharesTotal v hv.wf]
+    rw [hideal_def]; unfold RawVault.idealAssetsWithdraw
+    rw [hnav2val, ← hnavval_def, RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
   rcases hcase with ⟨hnav2m0, hzero⟩ |
       ⟨hnav2m, sharesNumber, NAVShares, assetsNumber, hsn, hmul, hdiv, hof⟩
   · exfalso
@@ -844,8 +845,8 @@ lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hdiv hQm
       obtain ⟨hnav2_m', hsn_m⟩ := operator_mul_operands_ne_zero hnav2norm hsnnorm hmul hNAVm
       obtain ⟨hQnorm, hQpos, hQbound⟩ :=
-        Vault.exchange_pipeline_within nav2 sharesNumber v.sharesTotal NAVShares assetsNumber
-          hnav2norm hsnnorm hv.wf.sharesTotal_norm hnav2_pos hsn_pos hST_pos hmul hdiv hNAVm hQm
+        RawVault.exchange_pipeline_within nav2 sharesNumber v.sharesTotal NAVShares assetsNumber
+          hnav2norm hsnnorm v.wf.sharesTotal_norm hnav2_pos hsn_pos hST_pos hmul hdiv hNAVm hQm
       rw [← hideal_eq'] at hQbound
       have hANneg : assetsNumber.negative_ = false := Number.negative_false_of_pos assetsNumber hQpos
       obtain ⟨_, hhi⟩ := abs_le.mp hQbound
@@ -879,7 +880,7 @@ lemma Vault.recovery_pipeline_bound_gen (v : Vault) (shares assets : STAmount)
               hnav2norm hsnnorm (Number.mantissa_ne_zero_of_toRat_ne_zero hnav2_pos.ne')
               (Number.mantissa_ne_zero_of_toRat_ne_zero hsn_pos.ne') hmul hPm0
           have hsmall := operator_div_underflow_truth_small NAVShares v.sharesTotal assetsNumber
-            .to_nearest hNAVnorm hv.wf.sharesTotal_norm hPm0 hSTm hdiv hQm0
+            .to_nearest hNAVnorm v.wf.sharesTotal_norm hPm0 hSTm hdiv hQm0
           have hmulbound : |NAVShares.toRat - nav2.toRat * sharesNumber.toRat|
               ≤ |nav2.toRat * sharesNumber.toRat| * (5 / (2 ^ 63 + 7)) :=
             operator_mul_rounds_to_nearest nav2 sharesNumber NAVShares hnav2norm hsnnorm hmul hPm0
@@ -901,7 +902,7 @@ one whole unit (`10 ^ 0 = 1`): a nonzero payout uses the one-ULP spec conjunct a
 exponent `0`, a zero payout uses `recovery_pipeline_bound_gen` and the integral
 zero-floor (`aN < 1`). -/
 theorem Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful) (sharesTotalAmount : STAmount) (r : WithdrawResult)
+    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
     (hint : v.numericType.isIntegral = true)
     (hnn : 0 ≤ r.sharesBurned.toRat) (hc : r.sharesBurned.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
@@ -914,11 +915,11 @@ theorem Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmoun
     Vault.withdraw_payout_priced v amount waiveUnrealizedLoss sharesTotalAmount r hok herr hst hfin
   have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hideal_nn : 0 ≤ v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat :=
-    (Vault.sharesToAssetsWithdraw_spec v hv r.sharesBurned r.assets' waiveUnrealizedLoss
+    (Vault.sharesToAssetsWithdraw_spec v r.sharesBurned r.assets' waiveUnrealizedLoss
       hnn hc hnav hprice).2.1
   by_cases hrz : r.assets'.isZero = false
   · obtain ⟨-, -, -, h4⟩ :=
-      Vault.sharesToAssetsWithdraw_spec v hv r.sharesBurned r.assets' waiveUnrealizedLoss
+      Vault.sharesToAssetsWithdraw_spec v r.sharesBurned r.assets' waiveUnrealizedLoss
         hnn hc hnav hprice
     obtain ⟨-, hexp0, -⟩ :=
       Vault.sharesToAssetsWithdraw_integral_shape v r.sharesBurned r.assets' waiveUnrealizedLoss
@@ -937,21 +938,21 @@ theorem Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmoun
       have hnav_nonneg : 0 ≤ (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
         cases waiveUnrealizedLoss with
         | false =>
-          rw [if_neg (by decide)]; unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+          rw [if_neg (by decide)]; unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
         | true =>
-          rw [if_pos rfl]; unfold Vault.depositNav
-          exact hv.valid.assetsTotal_nonneg
+          rw [if_pos rfl]; unfold RawVault.depositNav
+          exact v.exact.assetsTotal_nonneg
       have hnavpos : 0 < (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) := by
         rcases lt_or_eq_of_le hnav_nonneg with h | h
         · exact h
-        · exact absurd (by unfold Vault.idealAssetsWithdraw; rw [← h, zero_mul, zero_div]) hid0
+        · exact absurd (by unfold RawVault.idealAssetsWithdraw; rw [← h, zero_mul, zero_div]) hid0
       have hshpos : 0 < r.sharesBurned.toRat := by
         rcases lt_or_eq_of_le hnn with h | h
         · exact h
-        · exact absurd (by unfold Vault.idealAssetsWithdraw; rw [← h, mul_zero, zero_div]) hid0
+        · exact absurd (by unfold RawVault.idealAssetsWithdraw; rw [← h, mul_zero, zero_div]) hid0
       obtain ⟨aN, hof, hnzcase, hzcase⟩ :=
         Vault.recovery_pipeline_bound_gen v r.sharesBurned r.assets' waiveUnrealizedLoss
-          hv hnav hc hnavpos hshpos hprice
+          hnav hc hnavpos hshpos hprice
       by_cases haN0 : aN.mantissa_ = 0
       · have hidsmall := hzcase haN0
         have hle1 : (10 : ℚ) ^ (-32700 : ℤ) ≤ 1 := by
@@ -1008,9 +1009,9 @@ value. The single subtraction is correctly rounded within `6 / (2⁶³ - 3)` rel
 its operands (about `15×` under `depositε`), and the flush-to-zero degeneracy is ruled
 out by lawfulness: an underflow to zero forces `lossUnrealized = 0` with a zero
 `assetsTotal`, contradicting the nonzero-`nav2` branch. This is the `navSlack` half of
-`sharesToAssetsWithdraw_total`; `v.navSlack = depositε · (assetsTotal + assetsTotal)`
+`sharesToAssetsWithdraw_total`; `rv.navSlack = depositε · (assetsTotal + assetsTotal)`
 dominates `depositε · assetsTotal` since `assetsTotal ≥ 0`. -/
-lemma Vault.withdraw_nav_within (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+lemma Vault.withdraw_nav_within (v : Vault) (waiveUnrealizedLoss : Bool)
     (nav2 : Number)
     (hsub : v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized)
@@ -1020,9 +1021,9 @@ lemma Vault.withdraw_nav_within (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss
       ≤ depositε * v.assetsTotal.toRat := by
   set a := v.assetsTotal.toRat with ha_def
   set l := v.lossUnrealized.toRat with hl_def
-  have ha_nn : 0 ≤ a := hv.valid.assetsTotal_nonneg
-  have hl_nn : 0 ≤ l := hv.valid.lossUnrealized_nonneg
-  have hwd_nn : 0 ≤ a - l := hv.valid.withdraw_nav_nonneg
+  have ha_nn : 0 ≤ a := v.exact.assetsTotal_nonneg
+  have hl_nn : 0 ≤ l := v.exact.lossUnrealized_nonneg
+  have hwd_nn : 0 ≤ a - l := v.exact.withdraw_nav_nonneg
   have hεnn : (0 : ℚ) ≤ depositε := by rw [depositε_eq]; norm_num
   have hε'le : (6 / (2 ^ 63 - 3 : ℚ)) ≤ depositε := by rw [depositε_eq]; norm_num
   cases waiveUnrealizedLoss with
@@ -1059,7 +1060,7 @@ lemma Vault.withdraw_nav_within (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss
             ham hlm heq hsub
         rw [this] at hgen; exact hgen rfl
       have hr := operator_sub_rounds_to_nearest v.assetsTotal v.lossUnrealized nav2
-        hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm ham hlm hne hsub hgen
+        v.wf.assetsTotal_norm v.wf.lossUnrealized_norm ham hlm hne hsub hgen
       have hr' : |nav2.toRat - (a - l)| ≤ |a - l| * (6 / (2 ^ 63 - 3 : ℚ)) := hr
       rw [abs_of_nonneg hwd_nn] at hr'
       calc |nav2.toRat - (a - l)| ≤ (a - l) * (6 / (2 ^ 63 - 3 : ℚ)) := hr'
@@ -1138,40 +1139,40 @@ lemma Number.operator_sub_nonneg_le (x y result : Number)
     exact Number.operator_sub_to_nearest_le x y x result hx hy hx hxm hym hne hok hresm
       (by linarith [hynn])
 
-lemma Vault.withdraw_nav2_nonneg (v : Vault) (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+lemma Vault.withdraw_nav2_nonneg (v : Vault) (waiveUnrealizedLoss : Bool)
     (nav2 : Number)
     (hsub : v.assetsTotal.operator_sub
         (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized)
         .to_nearest = .ok nav2) :
     0 ≤ nav2.toRat := by
-  set lv := (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized) with hlv_def
-  have hlv_norm : lv.isNormalized := by
+  set nl := (match waiveUnrealizedLoss with | true => Number.zero | false => v.lossUnrealized) with hnl_def
+  have hnl_norm : nl.isNormalized := by
     cases waiveUnrealizedLoss with
     | true => exact Or.inl rfl
-    | false => exact hv.wf.lossUnrealized_norm
-  have hlv_nn : 0 ≤ lv.toRat := by
+    | false => exact v.wf.lossUnrealized_norm
+  have hnl_nn : 0 ≤ nl.toRat := by
     cases waiveUnrealizedLoss with
-    | true => rw [show lv = Number.zero from rfl, Number.toRat_zero]
-    | false => exact hv.valid.lossUnrealized_nonneg
-  have hsub_nn : 0 ≤ v.assetsTotal.toRat - lv.toRat := by
+    | true => rw [show nl = Number.zero from rfl, Number.toRat_zero]
+    | false => exact v.exact.lossUnrealized_nonneg
+  have hsub_nn : 0 ≤ v.assetsTotal.toRat - nl.toRat := by
     cases waiveUnrealizedLoss with
-    | true => rw [show lv = Number.zero from rfl, Number.toRat_zero, sub_zero]; exact hv.valid.assetsTotal_nonneg
-    | false => rw [show lv = v.lossUnrealized from rfl]; exact hv.valid.withdraw_nav_nonneg
+    | true => rw [show nl = Number.zero from rfl, Number.toRat_zero, sub_zero]; exact v.exact.assetsTotal_nonneg
+    | false => rw [show nl = v.lossUnrealized from rfl]; exact v.exact.withdraw_nav_nonneg
   by_cases hn2m : nav2.mantissa_ = 0
   · rw [Number.toRat_eq_zero_of_mantissa_zero nav2 hn2m]
-  · by_cases hlvm : lv.mantissa_ = 0
-    · have hz : nav2 = v.assetsTotal := Number.operator_sub_zero_right v.assetsTotal lv nav2 hlvm hsub
-      rw [hz]; exact hv.valid.assetsTotal_nonneg
+  · by_cases hnlm : nl.mantissa_ = 0
+    · have hz : nav2 = v.assetsTotal := Number.operator_sub_zero_right v.assetsTotal nl nav2 hnlm hsub
+      rw [hz]; exact v.exact.assetsTotal_nonneg
     · have ham : v.assetsTotal.mantissa_ ≠ 0 := by
         intro ha0
         have haz : v.assetsTotal.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero v.assetsTotal ha0
-        exact hlvm (Number.toRat_eq_zero_iff.mp (by linarith))
-      by_cases heq : v.assetsTotal.operator_eq lv = true
+        exact hnlm (Number.toRat_eq_zero_iff.mp (by linarith))
+      by_cases heq : v.assetsTotal.operator_eq nl = true
       · have hz0 : nav2 = Number.zero :=
-          Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal lv nav2 ham hlvm heq hsub
+          Number.operator_sub_eq_zero_of_operator_eq v.assetsTotal nl nav2 ham hnlm heq hsub
         rw [hz0, Number.toRat_zero]
-      · have := Number.operator_sub_to_nearest_ge v.assetsTotal lv Number.zero nav2
-          hv.wf.assetsTotal_norm hlv_norm (Or.inl rfl) ham hlvm heq hsub hn2m
+      · have := Number.operator_sub_to_nearest_ge v.assetsTotal nl Number.zero nav2
+          v.wf.assetsTotal_norm hnl_norm (Or.inl rfl) ham hnlm heq hsub hn2m
           (by rw [Number.toRat_zero]; linarith)
         rwa [Number.toRat_zero] at this
 
@@ -1183,7 +1184,7 @@ actually computed `nav2`, which sits within `depositε · assetsTotal ≤ navSla
 of the exact pricing and stays nonnegative on a lawful vault. -/
 
 theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : STAmount)
-    (hv : v.Lawful) (waiveUnrealizedLoss : Bool)
+    (waiveUnrealizedLoss : Bool)
     (hnn : 0 ≤ shares.toRat) (hc : shares.Canonical)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets) :
     assets.toRat ≤
@@ -1200,15 +1201,15 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
   -- exact-pricing net asset value facts
   set a := v.assetsTotal.toRat with ha_def
   set l := v.lossUnrealized.toRat with hl_def
-  have ha_nn : 0 ≤ a := hv.valid.assetsTotal_nonneg
-  have hl_nn : 0 ≤ l := hv.valid.lossUnrealized_nonneg
+  have ha_nn : 0 ≤ a := v.exact.assetsTotal_nonneg
+  have hl_nn : 0 ≤ l := v.exact.lossUnrealized_nonneg
   set nav : ℚ := (if waiveUnrealizedLoss then v.depositNav else v.withdrawNav) with hnav_def
   have hnav_nonneg : 0 ≤ nav := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false => rw [if_neg (by decide)]; show 0 ≤ v.withdrawNav
-               unfold Vault.withdrawNav; exact hv.valid.withdraw_nav_nonneg
+               unfold RawVault.withdrawNav; exact v.exact.withdraw_nav_nonneg
     | true => rw [if_pos rfl]; show 0 ≤ v.depositNav
-              unfold Vault.depositNav; exact hv.valid.assetsTotal_nonneg
+              unfold RawVault.depositNav; exact v.exact.assetsTotal_nonneg
   have hnav_le_a : nav ≤ a := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false => rw [if_neg (by decide)]
@@ -1218,11 +1219,11 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
               have hdn : v.depositNav = a := rfl
               rw [hdn]
   have hnavSlack_eq : v.navSlack = depositε * (a + a) := by
-    unfold Vault.navSlack Vault.toExact; rw [ha_def]
+    unfold RawVault.navSlack RawVault.toExact; rw [ha_def]
   have hnavSlack_nn : 0 ≤ v.navSlack := by rw [hnavSlack_eq]; positivity
   have hda_le_slack : depositε * a ≤ v.navSlack := by rw [hnavSlack_eq]; nlinarith [ha_nn, hεnn]
   set ST : ℚ := (v.toExact.sharesTotal : ℚ) with hST_def
-  have hST_eq : ST = v.sharesTotal.toRat := Vault.WF.toExact_sharesTotal v hv.wf
+  have hST_eq : ST = v.sharesTotal.toRat := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
   have hideal_eq : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat = nav * shares.toRat / ST := rfl
   have hST_nn : 0 ≤ ST := by rw [hST_def]; positivity
   have hideal_nn : 0 ≤ v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat := by
@@ -1241,19 +1242,19 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
   · -- genuine pricing: run the pipeline against the computed nav2
     have hnav2_nn : 0 ≤ nav2.toRat := by
       cases waiveUnrealizedLoss with
-      | true => exact Vault.withdraw_nav2_nonneg v hv true nav2 hsub
-      | false => exact Vault.withdraw_nav2_nonneg v hv false nav2 hsub
+      | true => exact Vault.withdraw_nav2_nonneg v true nav2 hsub
+      | false => exact Vault.withdraw_nav2_nonneg v false nav2 hsub
     have hnav2_pos : 0 < nav2.toRat :=
       lt_of_le_of_ne hnav2_nn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero nav2 hnav2m))
     have hnav_within : |nav2.toRat - nav| ≤ depositε * a := by
       cases waiveUnrealizedLoss with
-      | true => exact Vault.withdraw_nav_within v hv true nav2 hsub hnav2m
-      | false => exact Vault.withdraw_nav_within v hv false nav2 hsub hnav2m
+      | true => exact Vault.withdraw_nav_within v true nav2 hsub hnav2m
+      | false => exact Vault.withdraw_nav_within v false nav2 hsub hnav2m
     obtain ⟨hw_lo, hw_hi⟩ := abs_le.mp hnav_within
     have hnav2norm : nav2.isNormalized := by
       cases waiveUnrealizedLoss with
-      | false => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
-      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub
+      | false => exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub
+      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub
     obtain ⟨sn0, hsn0ok, hsn0val, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsn_eq : sn0 = sharesNumber := by rw [hsn0ok] at hsn; exact Except.ok.inj hsn
     have hsnnorm : sharesNumber.isNormalized := by rw [← hsn_eq]; exact hsn0norm
@@ -1266,7 +1267,7 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
       have hST_ne : ¬ v.sharesTotal.operator_eq Number.zero = true := by
         intro heq0; unfold Number.operator_div at hdiv; rw [if_pos heq0] at hdiv; exact absurd hdiv (by simp)
       have hSTm : v.sharesTotal.mantissa_ ≠ 0 := fun h0 =>
-        hST_ne (by rw [Number.eq_zero_of_mantissa_zero v.sharesTotal hv.wf.sharesTotal_norm h0]; decide)
+        hST_ne (by rw [Number.eq_zero_of_mantissa_zero v.sharesTotal v.wf.sharesTotal_norm h0]; decide)
       have hNAVm : NAVShares.mantissa_ ≠ 0 :=
         operator_div_numerator_ne_zero_sz NAVShares v.sharesTotal assetsNumber .to_nearest
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hdiv hanm
@@ -1276,11 +1277,11 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
         rw [hsnval] at hsnne ⊢; exact lt_of_le_of_ne hnn (Ne.symm hsnne)
       have hshares_pos : 0 < shares.toRat := by rw [← hsnval]; exact hsn_pos
       have hSTr_pos : 0 < v.sharesTotal.toRat :=
-        lt_of_le_of_ne hv.wf.sharesTotal_nonneg (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.sharesTotal hSTm))
+        lt_of_le_of_ne v.wf.sharesTotal_nonneg (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero v.sharesTotal hSTm))
       have hST_pos : 0 < ST := by rw [hST_eq]; exact hSTr_pos
       obtain ⟨hQnorm, hQpos, hQbound0⟩ :=
-        Vault.exchange_pipeline_within nav2 sharesNumber v.sharesTotal NAVShares assetsNumber
-          hnav2norm hsnnorm hv.wf.sharesTotal_norm hnav2_pos hsn_pos hSTr_pos hmul hdiv hNAVm hanm
+        RawVault.exchange_pipeline_within nav2 sharesNumber v.sharesTotal NAVShares assetsNumber
+          hnav2norm hsnnorm v.wf.sharesTotal_norm hnav2_pos hsn_pos hSTr_pos hmul hdiv hNAVm hanm
       -- central pipeline value P = nav2 * shares / ST
       rw [hsnval, ← hST_eq] at hQbound0
       set P : ℚ := nav2.toRat * shares.toRat / ST with hP_def
@@ -1365,7 +1366,7 @@ theorem Vault.sharesToAssetsWithdraw_total_proof (v : Vault) (shares assets : ST
 payout packs through `ofNumber v.numericType (NAVShares/sharesTotal) .downward`; its
 division source is normalized, so the nonzero output is `IOUCanonical` or
 `IntegralCanonical`. Feeds the `10⁻⁸¹` magnitude floor. -/
-lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault) (hv : v.Lawful)
+lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault)
     (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (hc : shares.Canonical)
     (hok : v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets)
     (hne : assets.mValue ≠ 0) :
@@ -1378,8 +1379,8 @@ lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault) (hv : v.Lawful)
   · have hnav2norm : nav2.isNormalized := by
       cases waiveUnrealizedLoss with
       | false =>
-        exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm hv.wf.lossUnrealized_norm hsub
-      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ hv.wf.assetsTotal_norm (Or.inl rfl) hsub
+        exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub
+      | true => exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub
     obtain ⟨sn0, hsn0ok, -, hsn0norm⟩ := STAmount.toNumber_canonical_exact shares .to_nearest hc
     have hsnnorm : sharesNumber.isNormalized := by
       rw [show sharesNumber = sn0 from (Except.ok.inj (hsn0ok.symm.trans hsn)).symm]; exact hsn0norm
@@ -1389,7 +1390,7 @@ lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault) (hv : v.Lawful)
       intro h0; unfold Number.operator_div at hdiv; rw [if_pos h0] at hdiv; exact absurd hdiv (by simp)
     have hSTm : v.sharesTotal.mantissa_ ≠ 0 := by
       intro h0
-      exact hST_ne (by rw [Number.eq_zero_of_mantissa_zero v.sharesTotal hv.wf.sharesTotal_norm h0]; decide)
+      exact hST_ne (by rw [Number.eq_zero_of_mantissa_zero v.sharesTotal v.wf.sharesTotal_norm h0]; decide)
     have hNAVm : NAVShares.mantissa_ ≠ 0 :=
       operator_div_numerator_ne_zero_sz NAVShares v.sharesTotal assetsNumber .to_nearest hST_ne hdiv hanm
     obtain ⟨hnav2_m', hsn_m⟩ := operator_mul_operands_ne_zero hnav2norm hsnnorm hmul hNAVm
@@ -1398,7 +1399,7 @@ lemma Vault.sharesToAssetsWithdraw_disj_canonical (v : Vault) (hv : v.Lawful)
         hnav2norm hsnnorm hnav2_m' hsn_m hmul hNAVm
     have hANnorm : assetsNumber.isNormalized :=
       operator_div_result_isNormalized NAVShares v.sharesTotal assetsNumber .to_nearest
-        hNAVnorm hv.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
+        hNAVnorm v.wf.sharesTotal_norm hNAVm hSTm hdiv hanm
     exact STAmount.ofNumber_disj_canonical v.numericType assetsNumber .downward assets hANnorm hof hne
 
 /-- **Proof body of `Vault.withdraw_vault_updates`.** The withdraw analog of
@@ -1407,7 +1408,7 @@ within `depositε` (a `to_nearest` subtraction of a nonnegative payout that, whe
 nonzero, sits `≥ 10⁻⁸¹` on a grid that never underflows the difference to zero), and
 the `sharesTotal` update is the exact integer difference on the share domain. -/
 theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful) (sharesTotalAmount : STAmount)
+    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
     (r : WithdrawResult)
     (hpnn : 0 ≤ r.assets'.toRat) (hnn : 0 ≤ r.sharesBurned.toRat)
     (hc : r.sharesBurned.Canonical) (hSnt : r.sharesBurned.mNumericType = .int64)
@@ -1425,30 +1426,30 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
   have hsta_eq : sta = sharesTotalAmount := Except.ok.inj (hsta.symm.trans hst)
   subst hsta_eq
   rcases hdisj with ⟨hfin', -⟩ | ⟨-, sbn, at', av', st', atr, atr',
-      hsbn, hat, -, -, -, hav, hst2, hr⟩
+      hsbn, hat, -, -, -, hav, hst2, hras, hr⟩
   · exfalso; rw [← hsb] at hfin'; rw [hfin'] at hfin; exact absurd hfin (by simp)
   -- payout priced from the burned shares
   have hprice : v.sharesToAssetsWithdraw r.sharesBurned waiveUnrealizedLoss = .ok r.assets' :=
     Vault.withdraw_payout_priced v amount waiveUnrealizedLoss sta r hok herr hst hfin
-  have hr_assets : r.assets' = cw.assets' := by rw [hr]
+  have hr_assets : r.assets' = cw.assets' := hras
   have hnum_r : r.assets'.toNumber .to_nearest = .ok aN := by rw [hr_assets]; exact han
   obtain ⟨haN_val, haN_norm⟩ :=
-    Vault.sharesToAssetsWithdraw_toNumber_facts v hv r.sharesBurned r.assets' waiveUnrealizedLoss
+    Vault.sharesToAssetsWithdraw_toNumber_facts v r.sharesBurned r.assets' waiveUnrealizedLoss
       aN hc hprice hnum_r
   -- payout magnitude floor
   have hfloor_rec : r.assets'.mValue ≠ 0 → (10 : ℚ) ^ (-81 : ℤ) ≤ |r.assets'.toRat| := fun hmv =>
     STAmount.canonical_disj_abs_toRat_ge r.assets'
-      (Vault.sharesToAssetsWithdraw_disj_canonical v hv r.sharesBurned r.assets' waiveUnrealizedLoss
+      (Vault.sharesToAssetsWithdraw_disj_canonical v r.sharesBurned r.assets' waiveUnrealizedLoss
         hc hprice hmv) hmv
   have hmv_of : r.assets'.toRat ≠ 0 → r.assets'.mValue ≠ 0 := fun hne hmv0 =>
     hne (by rw [STAmount.toRat_signed, hmv0]; simp)
   -- clean sign/order facts
-  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
-  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := hv.valid.assetsAvailable_le
+  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
+  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
   -- payout ≤ assetsAvailable (the funds guard passed)
   have hle_AA : r.assets'.toRat ≤ v.assetsAvailable.toRat := by
-    have hbridge := operator_lt_iff v.assetsAvailable aN hv.wf.assetsAvailable_norm haN_norm
+    have hbridge := operator_lt_iff v.assetsAvailable aN v.wf.assetsAvailable_norm haN_norm
     by_contra hc'; push_neg at hc'
     have : v.assetsAvailable.operator_lt aN = true := by rw [hbridge, haN_val]; exact hc'
     rw [this] at hlt; exact absurd hlt (by simp)
@@ -1456,9 +1457,9 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
   have haN_neg : aN.negative_ = false :=
     wb_neg_false_of_norm_nonneg aN haN_norm (by rw [haN_val]; exact hpnn)
   have hAT_neg : v.assetsTotal.negative_ = false :=
-    wb_neg_false_of_norm_nonneg v.assetsTotal hv.wf.assetsTotal_norm hAT_nn
+    wb_neg_false_of_norm_nonneg v.assetsTotal v.wf.assetsTotal_norm hAT_nn
   have hAA_neg : v.assetsAvailable.negative_ = false :=
-    wb_neg_false_of_norm_nonneg v.assetsAvailable hv.wf.assetsAvailable_norm hAA_nn
+    wb_neg_false_of_norm_nonneg v.assetsAvailable v.wf.assetsAvailable_norm hAA_nn
   -- a nonzero payout Number forces positive stored fields
   have hrec_pos_of : aN.mantissa_ ≠ 0 → 0 < r.assets'.toRat := fun hm => by
     have hne : r.assets'.toRat ≠ 0 := by
@@ -1479,21 +1480,21 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
     have hrec' := hfloor_rec hmv; rw [abs_of_nonneg hpnn] at hrec'
     have hAT_ge : (10 : ℚ) ^ (-81 : ℤ) ≤ |v.assetsTotal.toRat| := by
       rw [abs_of_nonneg hAT_nn]; linarith [le_trans hle_AA hAA_le_AT]
-    exact wb_exp_ge_of_abs v.assetsTotal hv.wf.assetsTotal_norm (hxm_AT hm) hAT_ge
+    exact wb_exp_ge_of_abs v.assetsTotal v.wf.assetsTotal_norm (hxm_AT hm) hAT_ge
   have hEAA_floor : aN.mantissa_ ≠ 0 → (-99 : ℤ) ≤ v.assetsAvailable.exponent_ := fun hm => by
     have hmv := hmv_of (hrec_pos_of hm).ne'
     have hrec' := hfloor_rec hmv; rw [abs_of_nonneg hpnn] at hrec'
     have hAA_ge : (10 : ℚ) ^ (-81 : ℤ) ≤ |v.assetsAvailable.toRat| := by
       rw [abs_of_nonneg hAA_nn]; linarith [hle_AA]
-    exact wb_exp_ge_of_abs v.assetsAvailable hv.wf.assetsAvailable_norm (hxm_AA hm) hAA_ge
+    exact wb_exp_ge_of_abs v.assetsAvailable v.wf.assetsAvailable_norm (hxm_AA hm) hAA_ge
   -- the two subtractions round within depositε
   have hround_AT : RoundsWithin at' (v.assetsTotal.toRat - aN.toRat) .to_nearest depositε :=
     Number.sub_recovery_rounds_within v.assetsTotal aN at' (-99)
-      hv.wf.assetsTotal_norm hAT_neg hxm_AT haN_norm haN_neg hEAT_floor hEarn_floor
+      v.wf.assetsTotal_norm hAT_neg hxm_AT haN_norm haN_neg hEAT_floor hEarn_floor
       (by norm_num [minExponent]) hat
   have hround_AA : RoundsWithin av' (v.assetsAvailable.toRat - aN.toRat) .to_nearest depositε :=
     Number.sub_recovery_rounds_within v.assetsAvailable aN av' (-99)
-      hv.wf.assetsAvailable_norm hAA_neg hxm_AA haN_norm haN_neg hEAA_floor hEarn_floor
+      v.wf.assetsAvailable_norm hAA_neg hxm_AA haN_norm haN_neg hEAA_floor hEarn_floor
       (by norm_num [minExponent]) hav
   refine ⟨?_, ?_, ?_⟩
   · rw [show r.vault'.assetsTotal = at' from by rw [hr]]
@@ -1503,7 +1504,7 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
   · intro hS_le
     -- conjunct 3: exact integer subtraction on the share domain
     have hStot_le : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by
-      rw [Vault.WF.toExact_sharesTotal v hv.wf] at hS_le; exact hS_le
+      rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf] at hS_le; exact hS_le
     have hint_sb : r.sharesBurned.integral = true := by
       show r.sharesBurned.mNumericType.isIntegral = true; rw [hSnt]; decide
     obtain ⟨hic, hmax⟩ := hc.1 hint_sb
@@ -1530,14 +1531,14 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
     have hsbn_norm : sbn.isNormalized := by rw [← hsbn_eq]; exact hsbn0norm
     -- the difference fits the integer domain
     have hdden : (v.sharesTotal.toRat - r.sharesBurned.toRat).den = 1 := by
-      rw [wb_eq_intCast_of_den_one hv.wf.sharesTotal_int, wb_eq_intCast_of_den_one hkden,
+      rw [wb_eq_intCast_of_den_one v.wf.sharesTotal_int, wb_eq_intCast_of_den_one hkden,
         ← Int.cast_sub]
       exact Rat.den_intCast _
     have hdnum_q : ((v.sharesTotal.toRat - r.sharesBurned.toRat).num : ℚ)
         = v.sharesTotal.toRat - r.sharesBurned.toRat := (wb_eq_intCast_of_den_one hdden).symm
     have hlo' : -(2 ^ 63 - 1 : ℤ) ≤ (v.sharesTotal.toRat - r.sharesBurned.toRat).num := by
       have : (-(2 ^ 63 - 1 : ℤ) : ℚ) ≤ ((v.sharesTotal.toRat - r.sharesBurned.toRat).num : ℚ) := by
-        rw [hdnum_q]; push_cast; linarith [hv.wf.sharesTotal_nonneg, hsb_le]
+        rw [hdnum_q]; push_cast; linarith [v.wf.sharesTotal_nonneg, hsb_le]
       exact_mod_cast this
     have hhi' : (v.sharesTotal.toRat - r.sharesBurned.toRat).num ≤ (2 ^ 63 - 1 : ℤ) := by
       have : ((v.sharesTotal.toRat - r.sharesBurned.toRat).num : ℚ) ≤ (2 ^ 63 - 1 : ℤ) := by
@@ -1545,10 +1546,10 @@ theorem Vault.withdraw_vault_updates_proof (v : Vault) (amount : WithdrawAmount)
       exact_mod_cast this
     have hbound : (v.sharesTotal.toRat - r.sharesBurned.toRat).num.natAbs < 2 ^ 63 := by omega
     obtain ⟨hst_val, -⟩ :=
-      operator_sub_exact_int v.sharesTotal sbn st' hv.wf.sharesTotal_norm hsbn_norm
-        hv.wf.sharesTotal_int (by rw [hsbn_val]; exact hkden) (by rw [hsbn_val]; exact hbound) hst2
+      operator_sub_exact_int v.sharesTotal sbn st' v.wf.sharesTotal_norm hsbn_norm
+        v.wf.sharesTotal_int (by rw [hsbn_val]; exact hkden) (by rw [hsbn_val]; exact hbound) hst2
     rw [show r.vault'.sharesTotal = st' from by rw [hr], hst_val, hsbn_val,
-      Vault.WF.toExact_sharesTotal v hv.wf]
+      RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
 
 /-! ## `withdraw_payout_decreases_assets` -/
 
@@ -1561,7 +1562,7 @@ fire on a positive payout, so `ofNumber assetsTotal ≠ ofNumber assetsTotal'`, 
 by `Number.isNormalized.toRat_inj`). `assetsAvailable` is left at the weak `≤`: its
 strict decrease is a finer-grid tie-exclusion the guard alone does not deliver. -/
 theorem Vault.withdraw_payout_decreases_assets_proof (v : Vault) (amount : WithdrawAmount)
-    (hv : v.Lawful) (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
+    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount)
     (r : WithdrawResult) (hc : r.sharesBurned.Canonical)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hpay : 0 < r.assets'.toRat)
@@ -1574,24 +1575,24 @@ theorem Vault.withdraw_payout_decreases_assets_proof (v : Vault) (amount : Withd
   have hsta_eq : sta = sharesTotalAmount := Except.ok.inj (hsta.symm.trans hst)
   subst hsta_eq
   rcases hdisj with ⟨hfin', -⟩ | ⟨-, sbn, at', av', st', atr, atr',
-      hsbn, hat, hatr, hatr', hguard, hav, hst2, hr⟩
+      hsbn, hat, hatr, hatr', hguard, hav, hst2, hras, hr⟩
   · exfalso; rw [← hsb] at hfin'; rw [hfin'] at hfin; exact absurd hfin (by simp)
   -- pricing / payout facts
   have hprice : v.sharesToAssetsWithdraw r.sharesBurned waiveUnrealizedLoss = .ok r.assets' :=
     Vault.withdraw_payout_priced v amount waiveUnrealizedLoss sta r hok herr hst hfin
-  have hr_assets : r.assets' = cw.assets' := by rw [hr]
+  have hr_assets : r.assets' = cw.assets' := hras
   have hnum_r : r.assets'.toNumber .to_nearest = .ok aN := by rw [hr_assets]; exact han
   obtain ⟨haN_val, haN_norm⟩ :=
-    Vault.sharesToAssetsWithdraw_toNumber_facts v hv r.sharesBurned r.assets' waiveUnrealizedLoss
+    Vault.sharesToAssetsWithdraw_toNumber_facts v r.sharesBurned r.assets' waiveUnrealizedLoss
       aN hc hprice hnum_r
   have haN_pos : 0 < aN.toRat := by rw [haN_val]; exact hpay
   have haN_m : aN.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero haN_pos.ne'
   -- order facts on the stored asset fields
-  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := hv.valid.assetsAvailable_nonneg
-  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := hv.valid.assetsTotal_nonneg
-  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := hv.valid.assetsAvailable_le
+  have hAA_nn : (0 : ℚ) ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
+  have hAA_le_AT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
   have hle_AA : r.assets'.toRat ≤ v.assetsAvailable.toRat := by
-    have hbridge := operator_lt_iff v.assetsAvailable aN hv.wf.assetsAvailable_norm haN_norm
+    have hbridge := operator_lt_iff v.assetsAvailable aN v.wf.assetsAvailable_norm haN_norm
     by_contra hc'; push_neg at hc'
     have hb : v.assetsAvailable.operator_lt aN = true := by rw [hbridge, haN_val]; exact hc'
     rw [hb] at hlt; exact absurd hlt (by simp)
@@ -1603,18 +1604,18 @@ theorem Vault.withdraw_payout_decreases_assets_proof (v : Vault) (amount : Withd
     Number.mantissa_ne_zero_of_toRat_ne_zero hAA_pos.ne'
   -- neither field increases
   have hAT_le : at'.toRat ≤ v.assetsTotal.toRat :=
-    Number.operator_sub_nonneg_le v.assetsTotal aN at' hv.wf.assetsTotal_norm haN_norm
+    Number.operator_sub_nonneg_le v.assetsTotal aN at' v.wf.assetsTotal_norm haN_norm
       hAT_m haN_m hAT_nn (le_of_lt haN_pos) hat
   have hAA_le : av'.toRat ≤ v.assetsAvailable.toRat :=
-    Number.operator_sub_nonneg_le v.assetsAvailable aN av' hv.wf.assetsAvailable_norm haN_norm
+    Number.operator_sub_nonneg_le v.assetsAvailable aN av' v.wf.assetsAvailable_norm haN_norm
       hAA_m haN_m hAA_nn (le_of_lt haN_pos) hav
   -- strict decrease of assetsTotal from the precision-loss guard
   have hAT_ne : at'.toRat ≠ v.assetsTotal.toRat := by
     intro heqval
     have hat_norm : at'.isNormalized :=
       operator_sub_isNormalized_to_nearest_sz v.assetsTotal aN at'
-        hv.wf.assetsTotal_norm haN_norm hat
-    have hateq : at' = v.assetsTotal := hat_norm.toRat_inj hv.wf.assetsTotal_norm heqval
+        v.wf.assetsTotal_norm haN_norm hat
+    have hateq : at' = v.assetsTotal := hat_norm.toRat_inj v.wf.assetsTotal_norm heqval
     have hatr_eq : atr' = atr :=
       Except.ok.inj (hatr'.symm.trans (by rw [hateq]; exact hatr))
     rw [hatr_eq] at hguard
@@ -1640,7 +1641,7 @@ withdrawal prices `shares` into a payout at most the shares' worth times
 fire, and every other exit reports a different code. -/
 theorem Vault.withdraw_under_available_proof (v : Vault) (shares : STAmount)
     (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-    (hv : v.Lawful) (hpos : 0 < shares.toRat) (hc : shares.Canonical)
+    (hpos : 0 < shares.toRat) (hc : shares.Canonical)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     (hok : v.withdraw (.vaultShares shares) waiveUnrealizedLoss = .ok r)
     (hmargin : v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat *
@@ -1668,12 +1669,12 @@ theorem Vault.withdraw_under_available_proof (v : Vault) (shares : STAmount)
       obtain ⟨hprice, -⟩ :=
         computeWithdrawByShares_none_reduces v shares waiveUnrealizedLoss result hres herr2
       obtain ⟨-, hbound_up, -⟩ :=
-        Vault.sharesToAssetsWithdraw_bounds_proof v shares result.assets' hv waiveUnrealizedLoss
+        Vault.sharesToAssetsWithdraw_bounds_proof v shares result.assets' waiveUnrealizedLoss
           (le_of_lt hpos) hc hnav hprice
       obtain ⟨hanval, hannorm⟩ :=
-        Vault.sharesToAssetsWithdraw_toNumber_facts v hv shares result.assets' waiveUnrealizedLoss
+        Vault.sharesToAssetsWithdraw_toNumber_facts v shares result.assets' waiveUnrealizedLoss
           an hc hprice han
-      have hlt := (operator_lt_iff v.assetsAvailable an hv.wf.assetsAvailable_norm hannorm).mp h2
+      have hlt := (operator_lt_iff v.assetsAvailable an v.wf.assetsAvailable_norm hannorm).mp h2
       rw [hanval] at hlt
       have hAA : v.toExact.assetsAvailable = v.assetsAvailable.toRat := rfl
       rw [hAA] at hmargin
@@ -1689,6 +1690,7 @@ theorem Vault.withdraw_under_available_proof (v : Vault) (shares : STAmount)
         · rw [if_neg h4] at hok
           try simp only [pure_bind] at hok
           obtain ⟨allAvail, -, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨v', -, hok⟩ := bind_ok_peel _ _ _ hok
           injection hok with h; rw [← h] at hbad; simp at hbad
       · rw [if_neg h3] at hok
         try simp only [pure_bind] at hok
@@ -1703,6 +1705,7 @@ theorem Vault.withdraw_under_available_proof (v : Vault) (shares : STAmount)
           try simp only [pure_bind] at hok
           obtain ⟨av', -, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', -, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨v', -, hok⟩ := bind_ok_peel _ _ _ hok
           injection hok with h; rw [← h] at hbad; simp at hbad
 
 /-! ## `withdraw_final_iff` -/
@@ -1712,7 +1715,7 @@ positive `Int64`-typed canonical burned-shares amount and the round-to-nearest
 `ofNumber .int64` of the fitting stored share total, the field-level `operator_eq`
 is faithful: it is `true` exactly when the two amounts share a rational value. The
 positivity discharges both zero-sign obligations of `CmpFaithful`. -/
-lemma Vault.operator_eq_total_iff (v : Vault) (hv : v.Lawful)
+lemma Vault.operator_eq_total_iff (v : Vault)
     (sharesTotalAmount sharesBurned : STAmount)
     (hpos : 0 < sharesBurned.toRat) (hc : sharesBurned.Canonical)
     (hSnt : sharesBurned.mNumericType = .int64)
@@ -1726,7 +1729,7 @@ lemma Vault.operator_eq_total_iff (v : Vault) (hv : v.Lawful)
       (by decide) hst
   have hsta_val : sharesTotalAmount.toRat = v.sharesTotal.toRat :=
     STAmount.ofNumber_integral_exact .int64 v.sharesTotal .to_nearest sharesTotalAmount
-      (by decide) hv.wf.sharesTotal_norm hv.wf.sharesTotal_int hst
+      (by decide) v.wf.sharesTotal_norm v.wf.sharesTotal_int hst
   have hsta_sz : sharesTotalAmount.mValue.toNat ≤ 2 ^ 63 - 1 := by
     have h := hstaIC.in_range
     rw [hstaNT] at h
@@ -1767,7 +1770,7 @@ withdraw branch the stored `sharesTotal'` is the exact integer difference
 `sharesTotal - sharesBurned` (both operands `Int64` integers), so it is `Number.zero`
 only when the burned shares equal the whole total, which `operator_eq_total_iff`
 would report as `true`, contradicting the non-final guard. -/
-lemma Vault.sharesTotal_sub_burned_ne_zero (v : Vault) (hv : v.Lawful)
+lemma Vault.sharesTotal_sub_burned_ne_zero (v : Vault)
     (sharesTotalAmount sharesBurned : STAmount) (sbn st' : Number)
     (hpos : 0 < sharesBurned.toRat) (hc : sharesBurned.Canonical)
     (hSnt : sharesBurned.mNumericType = .int64)
@@ -1804,14 +1807,14 @@ lemma Vault.sharesTotal_sub_burned_ne_zero (v : Vault) (hv : v.Lawful)
           exact_mod_cast hmv_le
   -- the difference fits the integer domain
   have hdden : (v.sharesTotal.toRat - sharesBurned.toRat).den = 1 := by
-    rw [wb_eq_intCast_of_den_one hv.wf.sharesTotal_int, wb_eq_intCast_of_den_one hkden,
+    rw [wb_eq_intCast_of_den_one v.wf.sharesTotal_int, wb_eq_intCast_of_den_one hkden,
       ← Int.cast_sub]
     exact Rat.den_intCast _
   have hdnum_q : ((v.sharesTotal.toRat - sharesBurned.toRat).num : ℚ)
       = v.sharesTotal.toRat - sharesBurned.toRat := (wb_eq_intCast_of_den_one hdden).symm
   have hlo' : -(2 ^ 63 - 1 : ℤ) ≤ (v.sharesTotal.toRat - sharesBurned.toRat).num := by
     have h : (-(2 ^ 63 - 1 : ℤ) : ℚ) ≤ ((v.sharesTotal.toRat - sharesBurned.toRat).num : ℚ) := by
-      rw [hdnum_q]; push_cast; linarith [hv.wf.sharesTotal_nonneg, hsb_le]
+      rw [hdnum_q]; push_cast; linarith [v.wf.sharesTotal_nonneg, hsb_le]
     exact_mod_cast h
   have hhi' : (v.sharesTotal.toRat - sharesBurned.toRat).num ≤ (2 ^ 63 - 1 : ℤ) := by
     have h : ((v.sharesTotal.toRat - sharesBurned.toRat).num : ℚ) ≤ (2 ^ 63 - 1 : ℤ) := by
@@ -1819,28 +1822,27 @@ lemma Vault.sharesTotal_sub_burned_ne_zero (v : Vault) (hv : v.Lawful)
     exact_mod_cast h
   have hbound : (v.sharesTotal.toRat - sharesBurned.toRat).num.natAbs < 2 ^ 63 := by omega
   obtain ⟨hst_val, -⟩ :=
-    operator_sub_exact_int v.sharesTotal sbn st' hv.wf.sharesTotal_norm hsbn_norm
-      hv.wf.sharesTotal_int (by rw [hsbn_val]; exact hkden) (by rw [hsbn_val]; exact hbound) hst2
+    operator_sub_exact_int v.sharesTotal sbn st' v.wf.sharesTotal_norm hsbn_norm
+      v.wf.sharesTotal_int (by rw [hsbn_val]; exact hkden) (by rw [hsbn_val]; exact hbound) hst2
   have hval_eq : sharesBurned.toRat = v.sharesTotal.toRat := by
     have hz : st'.toRat = 0 := by rw [h0]; exact Number.toRat_zero
     rw [hst_val, hsbn_val] at hz; linarith
   have heq_true :=
-    (Vault.operator_eq_total_iff v hv sharesTotalAmount sharesBurned hpos hc hSnt hst).mpr hval_eq
+    (Vault.operator_eq_total_iff v sharesTotalAmount sharesBurned hpos hc hSnt hst).mpr hval_eq
   exact absurd (hfin.symm.trans heq_true) (by decide)
 
 /-- **Proof body of `Vault.withdraw_final_iff`.** The forward direction is the two-way
 case split of the success reduction; the backward direction rules out the non-final
 branch by `sharesTotal_sub_burned_ne_zero`. -/
 theorem Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful)
+    (waiveUnrealizedLoss : Bool)
     (sharesTotalAmount : STAmount) (r : WithdrawResult)
     (hpos : 0 < r.sharesBurned.toRat) (hc : r.sharesBurned.Canonical)
     (hSnt : r.sharesBurned.mNumericType = .int64)
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount) :
     r.sharesBurned.operator_eq sharesTotalAmount = true ↔
-      r.vault' = { v with assetsTotal := Number.zero, assetsAvailable := Number.zero,
-                          sharesTotal := Number.zero } := by
+      r.vault'.toRawVault = { v.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero } := by
   obtain ⟨cw, an', sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
   have hsta_eq : sta = sharesTotalAmount := Except.ok.inj (hsta.symm.trans hst)
@@ -1850,7 +1852,7 @@ theorem Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount)
       (by decide) hst
   have hsta_val : sharesTotalAmount.toRat = v.sharesTotal.toRat :=
     STAmount.ofNumber_integral_exact .int64 v.sharesTotal .to_nearest sharesTotalAmount
-      (by decide) hv.wf.sharesTotal_norm hv.wf.sharesTotal_int hst
+      (by decide) v.wf.sharesTotal_norm v.wf.sharesTotal_int hst
   have hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1 := by
     rw [← hsta_val, STAmount.IntegralCanonical.toRat_eq_signedDrops sharesTotalAmount hstaIC]
     have hmv_le : sharesTotalAmount.mValue.toNat ≤ 9223372036854775807 := by
@@ -1868,23 +1870,23 @@ theorem Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount)
           exact_mod_cast hmv_le
   constructor
   · intro heq
-    rcases hdisj with ⟨-, -, allAvail, -, hr⟩ | ⟨hfin, -⟩
+    rcases hdisj with ⟨-, -, allAvail, -, -, hr⟩ | ⟨hfin, -⟩
     · rw [hr]
     · exfalso
       rw [hsb] at heq; rw [← hsta_eq] at heq
       exact absurd (hfin.symm.trans heq) (by decide)
   · intro hvault
     rcases hdisj with ⟨hfin, -, -, -, -⟩ |
-        ⟨hfin, sbn, at', av', st', atr, atr', hsbn, hat, hatr, hatr', hg, hav, hst2, hr⟩
+        ⟨hfin, sbn, at', av', st', atr, atr', hsbn, hat, hatr, hatr', hg, hav, hst2, -, hr⟩
     · rw [hsb, ← hsta_eq]; exact hfin
     · exfalso
-      have hrv : r.vault' =
-          { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by rw [hr]
-      have hst_zero : st' = Number.zero := congrArg Vault.sharesTotal (hrv.symm.trans hvault)
+      have hrv : r.vault'.toRawVault =
+          { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := hr
+      have hst_zero : st' = Number.zero := congrArg RawVault.sharesTotal (hrv.symm.trans hvault)
       have hfin' : r.sharesBurned.operator_eq sharesTotalAmount = false := by
         rw [hsb, ← hsta_eq]; exact hfin
       have hsbn' : r.sharesBurned.toNumber .to_nearest = .ok sbn := by rw [hsb]; exact hsbn
-      exact Vault.sharesTotal_sub_burned_ne_zero v hv sharesTotalAmount r.sharesBurned sbn st'
+      exact Vault.sharesTotal_sub_burned_ne_zero v sharesTotalAmount r.sharesBurned sbn st'
         hpos hc hSnt hfit hst hfin' hsbn' hst2 hst_zero
 
 /-! ## `withdraw_final_payout` -/
@@ -1893,15 +1895,15 @@ theorem Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount)
 amounts of the same numeric type keep `exponent` (`= mOffset`) order under value order:
 integral amounts share offset `0`, fractional amounts are 16-digit banded, so a larger
 exponent forces a larger magnitude. -/
-lemma Vault.payout_exponent_le (v : Vault) (a b : STAmount)
-    (hnt_a : a.mNumericType = v.numericType) (hnt_b : b.mNumericType = v.numericType)
+lemma RawVault.payout_exponent_le (rv : RawVault) (a b : STAmount)
+    (hnt_a : a.mNumericType = rv.numericType) (hnt_b : b.mNumericType = rv.numericType)
     (hca : a.IOUCanonical ∨ a.IntegralCanonical) (hcb : b.IOUCanonical ∨ b.IntegralCanonical)
     (hann : 0 ≤ a.toRat) (hbnn : 0 ≤ b.toRat) (hle : a.toRat ≤ b.toRat) :
     (10 : ℚ) ^ a.exponent ≤ (10 : ℚ) ^ b.exponent := by
   have hoff : a.mOffset ≤ b.mOffset := by
     by_contra hlt
     push_neg at hlt
-    by_cases hint : v.numericType.isIntegral = true
+    by_cases hint : rv.numericType.isIntegral = true
     · have ha0 : a.mOffset = 0 := (hca.resolve_left (fun hio => by
         have h1 : a.mNumericType = .fractional := hio.is_fractional
         rw [hnt_a] at h1; rw [h1] at hint; exact absurd hint (by decide))).offset_zero
@@ -1909,8 +1911,8 @@ lemma Vault.payout_exponent_le (v : Vault) (a b : STAmount)
         have h1 : b.mNumericType = .fractional := hio.is_fractional
         rw [hnt_b] at h1; rw [h1] at hint; exact absurd hint (by decide))).offset_zero
       rw [ha0, hb0] at hlt; exact absurd hlt (lt_irrefl 0)
-    · have hfr : v.numericType = .fractional := by
-        cases hnt : v.numericType with
+    · have hfr : rv.numericType = .fractional := by
+        cases hnt : rv.numericType with
         | fractional => rfl
         | integral mv mo ms msh => rw [hnt] at hint; exact absurd rfl hint
       have haIou : a.IOUCanonical := hca.resolve_right (fun hii => by
@@ -1930,7 +1932,7 @@ Burning the whole share total makes the ideal collapse to the pricing `nav`, and
 the funds guard (`priced ≤ assetsAvailable`) and the `sharesToAssetsWithdraw` accuracy
 window, with the ULP compared through `payout_exponent_le`. -/
 theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (hv : v.Lawful) (r : WithdrawResult)
+    (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
     (hpos : 0 < r.sharesBurned.toRat) (hc : r.sharesBurned.Canonical)
     (hSnt : r.sharesBurned.mNumericType = .int64)
     (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
@@ -1952,7 +1954,7 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
     have hic := STAmount.ofNumber_integral_canonical .int64 v.sharesTotal .to_nearest sta
       (by decide) hsta
     have hex := STAmount.ofNumber_integral_exact .int64 v.sharesTotal .to_nearest sta
-      (by decide) hv.wf.sharesTotal_norm hv.wf.sharesTotal_int hsta
+      (by decide) v.wf.sharesTotal_norm v.wf.sharesTotal_int hsta
     have hle := STAmount.IntegralCanonical.abs_toRat_le sta hic.1
     rw [hic.2, show (NumericType.int64.maxValue).toNat = 9223372036854775807 from by decide] at hle
     rw [← hex]
@@ -1970,31 +1972,31 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
       obtain ⟨hs, hsr⟩ :=
         computeWithdrawByShares_none_reduces v s waiveUnrealizedLoss cw hcomp herr2
       rw [hsr]; exact hs
-  rcases hdisj with ⟨hfin, hloss, allAvail, hallAvail, hr⟩ |
-      ⟨hfin_nf, sbn, at', av', st', atr, atr', hsbn, hat, hatr, hatr', hg, hav, hst2, hr_nf⟩
+  rcases hdisj with ⟨hfin, hloss, allAvail, hallAvail, hra0, hr⟩ |
+      ⟨hfin_nf, sbn, at', av', st', atr, atr', hsbn, hat, hatr, hatr', hg, hav, hst2, -, hr_nf⟩
   swap
   · -- non-final branch is ruled out by `hfinal`
     exfalso
-    have hrv : r.vault' =
-        { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by rw [hr_nf]
+    have hrv : r.vault'.toRawVault =
+        { v with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := hr_nf
     have hst_zero : st' = Number.zero :=
-      (congrArg Vault.sharesTotal hrv).symm.trans hfinal
-    exact Vault.sharesTotal_sub_burned_ne_zero v hv sta r.sharesBurned sbn st'
+      (congrArg RawVault.sharesTotal hrv).symm.trans hfinal
+    exact Vault.sharesTotal_sub_burned_ne_zero v sta r.sharesBurned sbn st'
       hpos hc hSnt hfit' hsta (by rw [hsb]; exact hfin_nf) (by rw [hsb]; exact hsbn) hst2 hst_zero
   -- final branch
-  have hra : r.assets' = allAvail := by rw [hr]
+  have hra : r.assets' = allAvail := hra0
   have hsb_eq_red : cw.sharesRedeemed = r.sharesBurned := hsb.symm
   -- burned shares equal the whole stored total
   have hSb_eq : r.sharesBurned.toRat = v.sharesTotal.toRat :=
-    (Vault.operator_eq_total_iff v hv sta r.sharesBurned hpos hc hSnt hsta).mp
+    (Vault.operator_eq_total_iff v sta r.sharesBurned hpos hc hSnt hsta).mp
       (by rw [hsb]; exact hfin)
   have hST_pos : 0 < v.sharesTotal.toRat := hSb_eq ▸ hpos
-  have hST_eq : (v.toExact.sharesTotal : ℚ) = v.sharesTotal.toRat := Vault.WF.toExact_sharesTotal v hv.wf
+  have hST_eq : (v.toExact.sharesTotal : ℚ) = v.sharesTotal.toRat := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
   -- the unrealized loss is zero on the final branch
   have hloss_val : v.lossUnrealized.toRat = 0 := by
     by_contra hne
     have hne' : v.lossUnrealized.operator_ne Number.zero = true :=
-      (operator_ne_iff v.lossUnrealized Number.zero hv.wf.lossUnrealized_norm (Or.inl rfl)).mpr
+      (operator_ne_iff v.lossUnrealized Number.zero v.wf.lossUnrealized_norm (Or.inl rfl)).mpr
         (by rw [Number.toRat_zero]; exact hne)
     rw [hne'] at hloss; exact absurd hloss (by decide)
   -- the pricing `nav` and the collapsed ideal
@@ -2002,16 +2004,16 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
   have hnav_eq_ai : nav = v.toExact.assetsTotal := by
     rw [hnav_def]; cases waiveUnrealizedLoss with
     | false =>
-      rw [if_neg (by decide)]; unfold Vault.withdrawNav
+      rw [if_neg (by decide)]; unfold RawVault.withdrawNav
       rw [show v.toExact.lossUnrealized = 0 from hloss_val]; ring
     | true => rw [if_pos rfl]; rfl
   have hideal_eq : v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat = nav := by
-    unfold Vault.idealAssetsWithdraw
+    unfold RawVault.idealAssetsWithdraw
     rw [← hnav_def, hSb_eq, hST_eq, mul_div_assoc, div_self hST_pos.ne', mul_one]
   -- `nav` is non-negative and dominates `assetsAvailable`
-  have hAA_nn : 0 ≤ v.toExact.assetsAvailable := hv.valid.assetsAvailable_nonneg
+  have hAA_nn : 0 ≤ v.toExact.assetsAvailable := v.exact.assetsAvailable_nonneg
   have hAA_le_nav : v.toExact.assetsAvailable ≤ nav := by
-    rw [hnav_eq_ai]; exact hv.valid.assetsAvailable_le
+    rw [hnav_eq_ai]; exact v.exact.assetsAvailable_le
   have hnav_nn : 0 ≤ nav := le_trans hAA_nn hAA_le_nav
   -- the paid amount is exactly `assetsAvailable`
   have haa_val : allAvail.toRat = v.toExact.assetsAvailable := hAAc allAvail hallAvail
@@ -2024,17 +2026,17 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
   rw [hideal_eq, hpaid]
   -- funds guard: the priced payout is under `assetsAvailable`
   obtain ⟨hanval, hannorm⟩ :=
-    Vault.sharesToAssetsWithdraw_toNumber_facts v hv cw.sharesRedeemed cw.assets' waiveUnrealizedLoss
+    Vault.sharesToAssetsWithdraw_toNumber_facts v cw.sharesRedeemed cw.assets' waiveUnrealizedLoss
       an' (hsb ▸ hc) hstw han
   have hpriced_le : cw.assets'.toRat ≤ v.toExact.assetsAvailable := by
     have hnot : ¬ (v.assetsAvailable.toRat < an'.toRat) := fun hcmp =>
-      absurd (((operator_lt_iff v.assetsAvailable an' hv.wf.assetsAvailable_norm hannorm).mpr hcmp).symm.trans hlt)
+      absurd (((operator_lt_iff v.assetsAvailable an' v.wf.assetsAvailable_norm hannorm).mpr hcmp).symm.trans hlt)
         (by decide)
     rw [hanval] at hnot
     exact not_lt.mp hnot
   -- accuracy window of the priced payout
   obtain ⟨hprice_nn, hideal_price_nn, -, hprice_short⟩ :=
-    Vault.sharesToAssetsWithdraw_spec v hv cw.sharesRedeemed cw.assets' waiveUnrealizedLoss
+    Vault.sharesToAssetsWithdraw_spec v cw.sharesRedeemed cw.assets' waiveUnrealizedLoss
       (le_of_lt (hsb_eq_red ▸ hpos)) (hsb ▸ hc) hnav hstw
   have hideal_price_eq : v.idealAssetsWithdraw waiveUnrealizedLoss cw.sharesRedeemed.toRat = nav := by
     rw [hsb_eq_red]; exact hideal_eq
@@ -2057,13 +2059,13 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
     have haa_nt : allAvail.mNumericType = v.numericType :=
       STAmount.ofNumber_mNumericType v.numericType v.assetsAvailable .to_nearest allAvail hallAvail
     have hcw_can : cw.assets'.IOUCanonical ∨ cw.assets'.IntegralCanonical :=
-      Vault.sharesToAssetsWithdraw_disj_canonical v hv cw.sharesRedeemed cw.assets'
+      Vault.sharesToAssetsWithdraw_disj_canonical v cw.sharesRedeemed cw.assets'
         waiveUnrealizedLoss (hsb ▸ hc) hstw hcw_ne
     have haa_can : allAvail.IOUCanonical ∨ allAvail.IntegralCanonical :=
       STAmount.ofNumber_disj_canonical v.numericType v.assetsAvailable .to_nearest allAvail
-        hv.wf.assetsAvailable_norm hallAvail hallAvail_ne
+        v.wf.assetsAvailable_norm hallAvail hallAvail_ne
     have hexp_le : (10 : ℚ) ^ cw.assets'.exponent ≤ (10 : ℚ) ^ allAvail.exponent :=
-      Vault.payout_exponent_le v cw.assets' allAvail hcw_nt haa_nt hcw_can haa_can
+      RawVault.payout_exponent_le v.toRawVault cw.assets' allAvail hcw_nt haa_nt hcw_can haa_can
         hprice_nn (haa_val ▸ le_of_lt hAA_pos) (haa_val ▸ hpriced_le)
     have hexp_pos : (0 : ℚ) < (10 : ℚ) ^ allAvail.exponent := zpow_pos (by norm_num) _
     have hrexp : r.assets'.exponent = allAvail.exponent := by rw [hra]
@@ -2104,13 +2106,13 @@ theorem Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)
       rw [haa_val] at hz0; linarith [hAApos]
     have haa_can : allAvail.IOUCanonical ∨ allAvail.IntegralCanonical :=
       STAmount.ofNumber_disj_canonical v.numericType v.assetsAvailable .to_nearest allAvail
-        hv.wf.assetsAvailable_norm hallAvail hallAvail_ne
+        v.wf.assetsAvailable_norm hallAvail hallAvail_ne
     have haa_nt : allAvail.mNumericType = v.numericType :=
       STAmount.ofNumber_mNumericType v.numericType v.assetsAvailable .to_nearest allAvail hallAvail
     -- `nav` bound from the zero priced payout
     obtain ⟨aN, hof, hnzcase, hzcase⟩ :=
       Vault.recovery_pipeline_bound_gen v cw.sharesRedeemed cw.assets' waiveUnrealizedLoss
-        hv hnav (hsb ▸ hc) hnav_pos_if (hsb_eq_red ▸ hpos) hstw
+        hnav (hsb ▸ hc) hnav_pos_if (hsb_eq_red ▸ hpos) hstw
     rw [hideal_price_eq] at hnzcase hzcase
     have heq : nav * (1 - depositε) = nav - nav * depositε := by ring
     by_cases hint : v.numericType.isIntegral = true
