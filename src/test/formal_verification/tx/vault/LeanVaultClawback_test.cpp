@@ -12,6 +12,7 @@
 #include <test/jtx/trust.h>
 
 #include <xrpl/basics/Number.h>
+#include <xrpl/beast/utility/Journal.h>
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/SField.h>
@@ -38,6 +39,41 @@ class LeanVaultClawback_test : public LeanSuite
         auto const share = shareIssue(env, vaultKeylet);
         auto const sleToken = env.le(keylet::mptoken(share.getMptID(), holder.id()));
         return STAmount{share, sleToken ? sleToken->at(sfMPTAmount) : 0};
+    }
+
+    // Stage a vault whose whole share supply is held by `holder`, so an amount-0 clawback burns
+    // every share.
+    static bool
+    stageSoleHolderVault(
+        jtx::Env& env,
+        Keylet const& vaultKeylet,
+        jtx::Account const& holder,
+        Number const& assetsTotal,
+        Number const& lossUnrealized,
+        std::uint64_t sharesTotal)
+    {
+        return env.app().getOpenLedger().modify(  //
+            [&](OpenView& view, beast::Journal) -> bool {
+                Sandbox sb(&view, TapNone);
+                auto vaultSle = sb.peek(vaultKeylet);
+                if (!vaultSle)
+                    return false;
+                auto const shareId = vaultSle->at(sfShareMPTID);
+                auto issuance = sb.peek(keylet::mptokenIssuance(shareId));
+                auto holderShares = sb.peek(keylet::mptoken(shareId, holder.id()));
+                if (!issuance || !holderShares)
+                    return false;
+                vaultSle->at(sfAssetsTotal) = assetsTotal;
+                vaultSle->at(sfAssetsAvailable) = assetsTotal - lossUnrealized;
+                vaultSle->at(sfLossUnrealized) = lossUnrealized;
+                issuance->setFieldU64(sfOutstandingAmount, sharesTotal);
+                holderShares->setFieldU64(sfMPTAmount, sharesTotal);
+                sb.update(vaultSle);
+                sb.update(issuance);
+                sb.update(holderShares);
+                sb.apply(view);
+                return true;
+            });
     }
 
     void
@@ -423,6 +459,52 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{2, -6}), tecPRECISION_LOSS);
     }
 
+    // Finding (FV_M2_17/18, c++): a final clawback (amount 0) leaves a nonzero sfAssetsTotal with 0
+    // shares (tecINVARIANT_FAILED) because VaultClawback lacks VaultWithdraw's final-share rule.
+    void
+    testClawbackAllLeavesAssets(
+        Number const& assetsTotal,
+        Number const& lossUnrealized,
+        std::uint64_t sharesTotal)
+    {
+        using namespace jtx;
+        testcase("clawback all leaves assets (total " + to_string(assetsTotal) + ")");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(Number{2, 6})));
+        env.close();
+        env(pay(issuer, holder, asset(Number{1, 6})));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        BEAST_EXPECT(stageSoleHolderVault(
+            env, vaultKeylet, holder, assetsTotal, lossUnrealized, sharesTotal));
+
+        // Amount 0 claws the whole balance, so every share burns.
+        env(jtx::Vault::clawback(
+                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = asset(0)}),
+            jtx::Ter(std::ignore));
+
+        // The payout rounds below sfAssetsTotal, leaving a nonzero total while shares hit 0.
+        BEAST_EXPECTS(
+            env.ter() == tecPRECISION_LOSS,
+            std::string("clawback returned ") + transToken(env.ter()));
+    }
+
     // Finding (FV_M2_10, regression vs develop): an issuer VaultClawback with amount 0 should claw
     // the holder's full balance, but this branch does not.
     // C++-only: the model treats amount 0 literally (tecPRECISION_LOSS), so there is no Lean bug.
@@ -674,6 +756,8 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
         // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
         // testClawbackAppliedDelta();      // total moves by more than recovered (both)
+        // testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000);                 // FV_M2_17 (unrealized loss)
+        // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793LL, -18}, Number{0}, 7'000'025);  // FV_M2_18 (>16 digit dust)
 
         // Fixed discrepancies, kept as regression tests.
         testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 claws the full balance
