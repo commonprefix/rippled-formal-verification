@@ -16,6 +16,7 @@ Release/
 /.venv/
 /build/
 /db/
+.lake
 /out.txt
 /Testing/
 /tmp/
@@ -97,3 +98,5 @@ target/
 
 # Rust build directory
 crates/target
+
+.devcontainer/devcontainer.json
