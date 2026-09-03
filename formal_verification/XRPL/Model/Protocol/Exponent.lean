@@ -8,4 +8,11 @@ def numberExponent (amount : Number) (nt : NumericType) : Except Error Int := do
   let a ← STAmount.ofNumber nt amount .to_nearest
   return a.exponent
 
+def postSumExponent (amount : Number) (amountDelta : STAmount)
+    : Except Error Int := do
+  let numericType := amountDelta.numericType
+  let amountDelta ← amountDelta.toNumber .to_nearest
+  let sum ← amount.operator_add amountDelta .to_nearest
+  numberExponent sum numericType
+
 end XRPL.Model.Protocol

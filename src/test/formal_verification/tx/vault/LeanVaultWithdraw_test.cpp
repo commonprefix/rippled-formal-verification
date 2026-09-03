@@ -7,6 +7,7 @@
 #include <test/jtx/TestHelpers.h>
 #include <test/jtx/amount.h>
 #include <test/jtx/fee.h>
+#include <test/jtx/flags.h>
 #include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
 #include <test/jtx/sig.h>
@@ -22,6 +23,7 @@
 #include <xrpl/protocol/SeqProxy.h>
 #include <xrpl/protocol/TER.h>
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -391,6 +393,8 @@ class LeanVaultWithdraw_test : public LeanSuite
         env.close();
 
         PrettyAsset const asset = issuer["USD"];
+        env(fset(issuer, asfDefaultRipple));
+        env.close();
         env(trust(lender, asset(10'000'000)));
         env(trust(borrower, asset(10'000'000)));
         env.close();
@@ -399,11 +403,20 @@ class LeanVaultWithdraw_test : public LeanSuite
         env.close();
 
         // The lender is the sole shareholder.
-        auto const vaultKeylet = createVault(env, lender, asset.raw());
+        jtx::Vault vault{env};
+        auto const investmentWindow = std::chrono::seconds{1'000'000};
+        auto const [createTx, vaultKeylet, subscriptionDate] = vault.createClosedEnded(
+            {.owner = lender,
+             .asset = asset.raw(),
+             .subscriptionOffset = std::chrono::seconds{60},
+             .investmentWindow = investmentWindow});
+        env(createTx);
+        env.close();
         env(jtx::Vault::deposit(
                 {.depositor = lender, .id = vaultKeylet.key, .amount = asset(5'000)}),
             jtx::Ter(tesSUCCESS));
         env.close();
+        vault.closePastSubscription(subscriptionDate);
 
         // A loan impaired immediately gives the vault a real unrealized loss.
         auto const brokerID =
@@ -433,9 +446,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             env.close();
         }
         BEAST_EXPECT(env.le(vaultKeylet)->at(sfLossUnrealized) != Number{0});
+        env.close(subscriptionDate + investmentWindow + std::chrono::seconds{1});
 
-        // Sole shareholder withdraws shares: model waives the loss (higher payout), C++ doApply
-        // applies it (lower payout).
         STAmount const shares{shareIssue(env, vaultKeylet), 100'000'000};
         compareWithdraw(env, vaultKeylet, lender, asset.raw(), shares, tesSUCCESS, true);
     }

@@ -593,4 +593,10 @@ def kURateOne : UInt64 :=
   let one : STAmount := STAmount.unchecked .int64 1 0 false
   STAmount.getRate one one .to_nearest
 
+def STAmount.isFractionalNonPositive (amount : STAmount) : Except Error Bool :=
+  if amount.integral then
+    .ok false
+  else
+    amount.operator_le (STAmount.zero amount.numericType)
+
 end XRPL.Model.Protocol

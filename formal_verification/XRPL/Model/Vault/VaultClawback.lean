@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -28,26 +29,29 @@ def assetsToSharesClawback (v : Vault) (assets holderShares : STAmount) : Except
   if assets.isZero then
     -- zero means destroy "all" holder shares
     return holderShares
-  assetsToSharesWithdraw v assets false false
+  assetsToSharesWithdraw v assets true false
 
 def computeClawback (v : Vault) (assets holderShares : STAmount) : Except Error ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.zero v.numericType, STAmount.zero .int64⟩
   if assets.negative then
     return {result with error := some .tecINTERNAL}
   try
-    let sharesDestroyed ← assetsToSharesClawback v assets holderShares
-    let assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
+    let mut sharesDestroyed ← assetsToSharesClawback v assets holderShares
+    let mut assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
 
     let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
     if assetsRecoveredNumber.operator_gt v.assetsAvailable then
-      let assetsRecovered ← STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest
-      let sharesDestroyed ← assetsToSharesWithdraw v assetsRecovered true false
-      let assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
+      assetsRecovered ← STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest
+      sharesDestroyed ← assetsToSharesWithdraw v assetsRecovered true false
+      assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
 
       let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
       if assetsRecoveredNumber.operator_gt v.assetsAvailable then
         return {result with error := some .tecINTERNAL}
-      return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
+
+    assetsRecovered ← clampToSumExponent v.assetsTotal assetsRecovered.operator_neg
+    if ← assetsRecovered.isFractionalNonPositive then
+      return {result with error := some .tecPRECISION_LOSS}
     return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
   catch e =>
     if isOverflow e then
@@ -69,7 +73,6 @@ def Vault.clawback (v : Vault) (assets holderShares : STAmount) : Except Error C
   let assetsRecoveredNumber ← result.assetsRecovered.toNumber .to_nearest
   let assetsTotal' ← vault.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest
 
-  -- (waiting the C++ fix) reject a recovery too small to reduce the stored assetsTotal
   let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
   let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
   if assetsRecoveredNumber.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then

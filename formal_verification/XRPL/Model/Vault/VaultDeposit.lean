@@ -1,5 +1,6 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Result
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -13,11 +14,8 @@ open XRPL.Model.Result
 def roundToVaultExponent (amountDeposit : STAmount) (assetsTotal : Number) : Except Error STAmount := do
   if amountDeposit.integral then
     return amountDeposit
-  let amountNumber ← amountDeposit.toNumber .to_nearest
-  let assetsTotal' ← Number.operator_add assetsTotal amountNumber .to_nearest
-  let postScale ← exponent assetsTotal' amountDeposit.numericType
-  let rounded ← STAmount.roundToExponent amountDeposit postScale .downward
-  return rounded
+  let postExponent ← postSumExponent assetsTotal amountDeposit
+  STAmount.roundToExponent amountDeposit postExponent .downward
 
 /-- The preclaim check on a deposit amount. An IOU vault cannot track digits
 below the exponent its `assetsTotal` will have after the deposit, so any such
@@ -101,18 +99,22 @@ def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : E
   if v.isInsolvent && !isDonation then
     return .rejected v .tecLOCKED
 
-  let (assetDeposited, sharesCreated) ←
-    if isDonation then
-      pure (amount, STAmount.zero .int64)
-    else
-      match ← computeDeposit v amount with
-      | .error e => return .rejected v e
-      | .success a s => pure (a, s)
+  let mut assetDeposited := amount
+  let mut sharesCreated := STAmount.zero .int64
+  if !isDonation then
+    match ← computeDeposit v amount with
+    | .error e => return .rejected v e
+    | .success assets shares =>
+      assetDeposited ← clampToSumExponent vault.assetsTotal assets
+      if ← assetDeposited.isFractionalNonPositive then
+        return .rejected v .tecPRECISION_LOSS
+      sharesCreated := shares
 
+  let assetDepositedNumber ← assetDeposited.toNumber .to_nearest
   let vault' : RawVault := {
     vault with
-    assetsTotal := ← vault.assetsTotal.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
-    assetsAvailable := ← vault.assetsAvailable.operator_add (← assetDeposited.toNumber .to_nearest) .to_nearest
+    assetsTotal := ← vault.assetsTotal.operator_add assetDepositedNumber .to_nearest
+    assetsAvailable := ← vault.assetsAvailable.operator_add assetDepositedNumber .to_nearest
     sharesTotal := ← vault.sharesTotal.operator_add (← sharesCreated.toNumber .to_nearest) .to_nearest
   }
 

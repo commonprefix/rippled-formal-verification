@@ -1,4 +1,5 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
@@ -58,7 +59,6 @@ def assetsToSharesWithdraw (v : Vault) (assets : STAmount) (truncateShares waive
 
   STAmount.ofNumber .int64 sharesNumber .to_nearest
 
-
 structure ComputeWithdrawResult where
   error : Option TER
   assets' : STAmount
@@ -68,8 +68,7 @@ structure ComputeWithdrawResult where
 
 def computeWithdrawByAssets (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) : Except Error ComputeWithdrawResult := do
   try
-    -- truncateShares = false in fn call
-    let shares ← assetsToSharesWithdraw v assets false waiveUnrealizedLoss
+    let shares ← assetsToSharesWithdraw v assets true waiveUnrealizedLoss
     if shares.isZero then
       return ⟨some .tecPRECISION_LOSS, STAmount.zero v.numericType, STAmount.zero .int64⟩
 
@@ -125,10 +124,14 @@ def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : 
     let v' ← vault'.to_lawful
     return ⟨none, v', assets', result.sharesRedeemed⟩
 
+  let assets' ← clampToSumExponent vault.assetsTotal result.assets'.operator_neg
+  if ← assets'.isFractionalNonPositive then
+    return .rejected v .tecPRECISION_LOSS
+  let assetsNumber' ← assets'.toNumber .to_nearest
+
   let sharesBurnedNumber ← result.sharesRedeemed.toNumber .to_nearest
   let assetsTotal' ← vault.assetsTotal.operator_sub assetsNumber' .to_nearest
 
-  -- (waiting the C++ fix) reject a payout too small to reduce the stored assetsTotal
   let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
   let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
   if assetsNumber'.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
@@ -140,7 +143,7 @@ def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : 
     sharesTotal := ← vault.sharesTotal.operator_sub sharesBurnedNumber .to_nearest,}
 
   let v' ← vault'.to_lawful
-  return ⟨none, v', result.assets', result.sharesRedeemed⟩
+  return ⟨none, v', assets', result.sharesRedeemed⟩
 
 
 end XRPL.Model.SingleAssetVault

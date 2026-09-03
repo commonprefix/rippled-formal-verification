@@ -1,3 +1,4 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.TER
@@ -18,7 +19,7 @@ def Loan.canDelete (loan : Loan) : TER :=
 -- bug: C++ hardcodes the accrual formula here, which is wrong for cash-basis vaults
 def deletePendingLoan (loan : Loan) (vault : RawVault) (broker : LoanBroker)
     : Except Error (RawVault × LoanBroker) := do
-  let vaultExponent ← exponent vault.assetsTotal vault.numericType
+  let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
   let availableAfter ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
   let reservedAfter ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
   let vault' := { vault with assetsAvailable := availableAfter, assetsReserved := reservedAfter }

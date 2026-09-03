@@ -1,3 +1,4 @@
+import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
@@ -135,7 +136,7 @@ def Loan.create (vault : RawVault) (broker : LoanBroker) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
     : Except Error LoanCreateResult := do
   if vault.assetsAvailable.operator_lt principal then return .rejected .tecINSUFFICIENT_FUNDS
-  let vaultExponent ← exponent vault.assetsTotal vault.numericType
+  let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
 
   let computed ← computeLoanProperties vault.numericType principal rates.interestRate
     schedule.paymentInterval schedule.paymentTotal broker.managementFeeRate vaultExponent
