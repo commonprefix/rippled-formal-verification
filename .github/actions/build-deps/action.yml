@@ -14,6 +14,10 @@ inputs:
     description: 'Force building of all dependencies ("true", "false").'
     required: false
     default: "false"
+  formal_verification:
+    description: 'Resolve the formal-verification dependencies, lean4 and mathlib ("true", "false").'
+    required: false
+    default: "false"
   log_verbosity:
     description: "The logging verbosity."
     required: false
@@ -32,6 +36,8 @@ runs:
         BUILD_NPROC: ${{ inputs.build_nproc }}
         BUILD_OPTION: ${{ inputs.force_build == 'true' && '*' || 'missing' }}
         BUILD_TYPE: ${{ inputs.build_type }}
+        # Conan's boolean options take True/False, not the action's true/false.
+        FORMAL_VERIFICATION: ${{ inputs.formal_verification == 'true' && 'True' || 'False' }}
         LOG_VERBOSITY: ${{ inputs.log_verbosity }}
         SANITIZERS: ${{ inputs.sanitizers }}
       run: |
@@ -40,6 +46,7 @@ runs:
             --build="${BUILD_OPTION}" \
             --options:host='&:tests=True' \
             --options:host='&:xrpld=True' \
+            --options:host="&:formal_verification=${FORMAL_VERIFICATION}" \
             --settings:all build_type="${BUILD_TYPE}" \
             --conf:all tools.build:jobs=${BUILD_NPROC} \
             --conf:all tools.build:verbosity="${LOG_VERBOSITY}" \

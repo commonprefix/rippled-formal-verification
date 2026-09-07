@@ -22,13 +22,19 @@ rm -f conan.lock
 # Create a new lockfile that is compatible with Linux, macOS, and Windows. The
 # first create command will create a new lockfile, while the subsequent create
 # commands will merge any additional dependencies into the created lockfile.
+#
+# formal_verification is locked on Linux and macOS only: it pulls in lean4 and
+# lean4-deps, which have no Windows packages, so enabling it there would fail to
+# resolve. Locking it at all is what lets developers drop --lockfile-partial.
 conan lock create . \
     --options '&:jemalloc=True' \
     --options '&:rocksdb=True' \
+    --options '&:formal_verification=True' \
     --profile:all=conan/lockfile/linux.profile
 conan lock create . \
     --options '&:jemalloc=True' \
     --options '&:rocksdb=True' \
+    --options '&:formal_verification=True' \
     --profile:all=conan/lockfile/macos.profile
 conan lock create . \
     --options '&:jemalloc=True' \

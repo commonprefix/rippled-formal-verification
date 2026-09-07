@@ -117,3 +117,89 @@ jobs:
           CONAN_LOGIN_USERNAME_XRPLF: ${{ secrets.NEXUS_REMOTE_USERNAME }}
           CONAN_PASSWORD_XRPLF: ${{ secrets.NEXUS_REMOTE_PASSWORD }}
         run: conan upload "*" --remote="${CONAN_REMOTE_NAME}" --confirm ${FORCE_OPTION}
+
+  # Build and upload the formal-verification dependencies (lean4, lean4-deps).
+  #
+  # Deliberately a separate job rather than extra entries in the matrix above:
+  # these packages are keyed only on os/arch, so one build per platform covers
+  # every compiler and build type. Folding them into the matrix would rebuild
+  # and re-upload multi-GB packages from a dozen configurations for no benefit.
+  #
+  # Without this job the recipes exist on the remote but no binary does, and
+  # every developer enabling formal_verification compiles mathlib's ~7,650
+  # objects locally.
+  run-upload-conan-deps-fv:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ["self-hosted", "Linux", "X64", "heavy"]
+            image: ghcr.io/xrplf/xrpld/nix-ubuntu:sha-fecfc0c
+            compiler: gcc
+          - platform: linux/arm64
+            runner: ["self-hosted", "Linux", "ARM64", "heavy-arm64"]
+            image: ghcr.io/xrplf/xrpld/nix-ubuntu:sha-fecfc0c
+            compiler: gcc
+          - platform: macos/arm64
+            runner: ["self-hosted", "macOS", "ARM64", "macos-26-apple-clang-21"]
+            image: ""
+            compiler: ""
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image || null }}
+    steps:
+      - name: Cleanup workspace (macOS)
+        if: ${{ runner.os == 'macOS' }}
+        uses: XRPLF/actions/cleanup-workspace@c7d9ce5ebb03c752a354889ecd870cadfc2b1cd4
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare runner
+        uses: XRPLF/actions/prepare-runner@c00c22ada3bd6bcda48fcb0d62fbbab49fec8a0f
+        with:
+          enable_ccache: false
+
+      - name: Get number of processors
+        uses: XRPLF/actions/get-nproc@cf0433aa74563aead044a1e395610c96d65a37cf
+        id: nproc
+        with:
+          subtract: ${{ env.NPROC_SUBTRACT }}
+
+      - name: Set compiler environment (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        uses: ./.github/actions/set-compiler-env
+        with:
+          compiler: ${{ matrix.compiler }}
+
+      - name: Setup Conan
+        uses: ./.github/actions/setup-conan
+        with:
+          remote_name: ${{ env.CONAN_REMOTE_NAME }}
+          remote_url: ${{ env.CONAN_REMOTE_URL }}
+
+      - name: Build dependencies
+        uses: ./.github/actions/build-deps
+        with:
+          build_nproc: ${{ steps.nproc.outputs.nproc }}
+          build_type: Release
+          force_build: ${{ github.event.inputs.force_source_build == 'true' }}
+          formal_verification: "true"
+          log_verbosity: verbose
+
+      - name: Log into Conan remote
+        if: ${{ github.repository == 'XRPLF/rippled' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        run: conan remote login "${CONAN_REMOTE_NAME}" "${{ secrets.NEXUS_REMOTE_USERNAME }}" --password "${{ secrets.NEXUS_REMOTE_PASSWORD }}"
+
+      - name: Upload Conan packages
+        if: ${{ github.repository == 'XRPLF/rippled' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        env:
+          FORCE_OPTION: ${{ github.event.inputs.force_upload == 'true' && '--force' || '' }}
+          CONAN_LOGIN_USERNAME_XRPLF: ${{ secrets.NEXUS_REMOTE_USERNAME }}
+          CONAN_PASSWORD_XRPLF: ${{ secrets.NEXUS_REMOTE_PASSWORD }}
+        # `conan upload` takes a single pattern, so one invocation each. Scoped
+        # to the two FV packages: everything else in this graph is already
+        # uploaded by the job above.
+        run: |
+          conan upload "lean4/*" --remote="${CONAN_REMOTE_NAME}" --confirm ${FORCE_OPTION}
+          conan upload "lean4-deps/*" --remote="${CONAN_REMOTE_NAME}" --confirm ${FORCE_OPTION}

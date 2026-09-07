@@ -97,10 +97,11 @@ formal_verification/                    Lean4 project
 │   ├── FFI/                            FFI exports
 │   └── Properties/                     Theorems about the model
 ├── lakefile.toml                       lake build config
+├── lake-manifest.json                  pins mathlib and its dependency closure
 └── lean-toolchain                      pins the Lean4 version
 
-external/lean4/conanfile.py             Conan recipe
-external/lean4-deps/conanfile.py        Conan recipe (prebuilt mathlib)
+The lean4 and lean4-deps Conan recipes live in XRPLF/conan-center-index and are
+served from the xrplf remote; they are not vendored in this repository.
 
 src/test/formal_verification/           C++ cross-validation tests
 ├── common/                             Common code for testing
@@ -252,31 +253,57 @@ model's raw fields to the C++ oracle.
 The Lean4 side is heavy: it depends on `mathlib`, which contains thousands of files that are slow to compile. The strategy is to compile it **once** and keep it warm.
 
 Our model is built **in-tree** by CMake when `formal_verification=ON`, while
-mathlib's native objects come prebuilt from the `lean4-deps` Conan package.
-`conan install` pulls the toolchain, `lean4-deps`, and `xrpld`'s own dependencies,
-and after that, editing a `.lean` file and running `cmake --build` rebuilds only
-what changed.
+mathlib arrives fully prebuilt from the `lean4-deps` Conan package. `conan install`
+pulls the toolchain, `lean4-deps`, and `xrpld`'s own dependencies, and after that,
+editing a `.lean` file and running `cmake --build` rebuilds only what changed.
 
-### Compile mathlib once, keep edits incremental
+### Nothing about mathlib is built locally
 
-`lake exe cache get` downloads mathlib's _elaboration_ artifacts (`.olean`), so the objects are compiled locally.
+The `lean4-deps` package ships both halves of the work:
 
-On first build, `lean4-deps` compiles mathlib's modules and caches them for reuse later.
+- the **elaboration artifacts** (`.olean`), so lake can resolve the model's
+  imports without re-elaborating mathlib;
+- the **native objects**, bundled into a single `libLeanDeps.a`.
 
-Two properties keep compilation after edit fast:
+Both are produced once per Lean release by CI (see
+`.github/workflows/upload-conan-deps.yml`) and downloaded thereafter, so no
+developer compiles mathlib's ~7,650 objects.
+
+Two properties keep compilation after an edit fast:
 
 - **lake is incremental** so editing the model rebuilds only the changed model
   modules; mathlib is never rebuilt.
 - **the dependency objects are prebuilt** so a model edit just rebuilds the
-  model and relinks the library.
+  model and relinks.
 
-We link the objects into a **shared** library, passing the ~8,000 object paths in a file
-instead of on the command line.
+Producing that archive inside the `lean4-deps` recipe needs two workarounds, both
+caused by its size: `llvm-ar` rejects a batch of ~8,000 objects with long member
+names, so each gets a short-named symlink, and the full path list overflows
+`ARG_MAX`, so it is passed via an `@response` file rather than on the command
+line. Together these are why lake's own `:static` facet cannot archive mathlib.
 
-8,000 paths on one command line overflow the OS limit (`ARG_MAX`), which is why both `ar` and lake's own `:shared` facet fails on mathlib, so CMake links them itself.
+The Lean4 build writes its artifacts into `formal_verification/.lake/` (gitignored),
+where `.lake/packages` is a symlink into the `lean4-deps` package.
 
-The Lean4 build writes its artifacts into `formal_verification/.lake/` (gitignored).
-Building `xrpld` needs no separate Lean4 toolchain installed, Conan provides it.
+Building `xrpld` needs no separately installed Lean4 toolchain; Conan provides
+it. The build always uses that toolchain and never a `lean`/`lake` found on
+`PATH`: lake records Lean's githash in its build traces, so a same-version but
+differently-built toolchain would invalidate the prebuilt mathlib and silently
+re-elaborate all of it.
+
+> **NixOS.** The upstream Lean release names the FHS loader
+> `/lib64/ld-linux-x86-64.so.2` in `PT_INTERP`, and NixOS does not ship one, so
+> the toolchain cannot execute out of the box. Enable
+> [nix-ld](https://github.com/nix-community/nix-ld) system-wide:
+>
+> ```nix
+> programs.nix-ld.enable = true;
+> ```
+>
+> Other distributions already provide the loader, and the CI images install it
+> from the Nix store (see `nix/docker/Dockerfile`). CMake checks this at
+> configure time and fails with a pointed message rather than part-way through
+> the build.
 
 ### Wiring into xrpld
 
@@ -296,16 +323,13 @@ From a fresh checkout:
 ```bash
 mkdir .build && cd .build
 
-# Register the lean4 toolchain and dependencies recipes in the Conan cache (once per machine).
-conan export ../external/lean4
-conan export ../external/lean4-deps
-
-# Resolve and build dependencies. Runs once and pulls the lean4 toolchain and lean4-deps.
+# Resolve dependencies. Downloads the lean4 toolchain and the prebuilt mathlib
+# from the xrplf remote; nothing here compiles mathlib.
 conan install .. --output-folder . --build missing --settings build_type=Release \
-    -o formal_verification=True --lockfile-partial
+    -o formal_verification=True
 
-# Configure, then build. CMake builds the Lean4 model and links the shared
-# library. lake keeps later builds incremental.
+# Configure, then build. CMake builds the Lean4 model and links it into xrpld.
+# lake keeps later builds incremental.
 cmake -DCMAKE_TOOLCHAIN_FILE:FILEPATH=build/generators/conan_toolchain.cmake \
     -DCMAKE_BUILD_TYPE=Release -Dxrpld=ON -Dtests=ON -Dformal_verification=ON ..
 cmake --build . --parallel N
@@ -314,11 +338,15 @@ cmake --build . --parallel N
 ./xrpld --unittest=formal_verification
 ```
 
-`-o formal_verification=True` pulls the `lean4` toolchain and `lean4-deps`
-into the graph, and the matching `-Dformal_verification=ON` tells CMake to build
-and link the Lean4 side.
+`-o formal_verification=True` pulls the `lean4` toolchain and `lean4-deps` into the
+graph, and the matching `-Dformal_verification=ON` tells CMake to build and link
+the Lean4 side. Both recipes live on the `xrplf` remote, which `conan/init.sh`
+already configures, so there is no per-machine setup step.
 
-`--lockfile-partial` lets Conan add `lean4` and `lean4-deps`, which are opt-in and not pinned in `conan.lock`.
+Note that `formal_verification/lake-manifest.json` must stay at the revision the
+`lean4-deps` package was built against. CMake compares the two at configure time
+and fails loudly on a mismatch, because otherwise lake would silently re-resolve
+the graph and rebuild mathlib from source.
 
 ## Testing Principles
 

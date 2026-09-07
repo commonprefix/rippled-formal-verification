@@ -1,9 +1,12 @@
+import json
 import os
 import re
+from pathlib import Path
 
 from conan.tools.cmake import CMake, CMakeToolchain, cmake_layout
 
 from conan import ConanFile
+from conan.errors import ConanException
 
 
 class Xrpl(ConanFile):
@@ -140,12 +143,46 @@ class Xrpl(ConanFile):
         with open(path, encoding="utf-8") as f:
             return f.read().strip().split(":v")[1]
 
+    def _assert_lake_closure(self, package_manifest):
+        # lean4-deps' prebuilt oleans are only usable if lake resolves the same
+        # dependency closure they were built from. If our manifest pins anything
+        # different, lake re-resolves and re-elaborates all of mathlib -- hours,
+        # with no error, just a build that mysteriously stopped being fast.
+        # A lean-toolchain bump is already caught by the version pin below; this
+        # covers the remaining case, a `lake update` within the same version.
+        ours = json.loads(
+            Path(
+                self.recipe_folder, "formal_verification", "lake-manifest.json"
+            ).read_text(encoding="utf-8")
+        )["packages"]
+        theirs = json.loads(
+            Path(package_manifest).read_text(encoding="utf-8")
+        )["packages"]
+        pins = lambda pkgs: {p["name"]: p["rev"] for p in pkgs}
+        if pins(ours) != pins(theirs):
+            drifted = [
+                f"{name}: ours {rev}, lean4-deps {pins(theirs).get(name, 'absent')}"
+                for name, rev in pins(ours).items()
+                if pins(theirs).get(name) != rev
+            ] or [f"only in lean4-deps: {set(pins(theirs)) - set(pins(ours))}"]
+            raise ConanException(
+                "formal_verification/lake-manifest.json pins a different Lean "
+                "dependency closure than the lean4-deps package was built "
+                "against, so its prebuilt artifacts cannot be used:\n  "
+                + "\n  ".join(drifted)
+                + "\nRebuild and republish lean4-deps from this manifest, or "
+                "restore the manifest to the pinned revisions."
+            )
+
     def requirements(self):
         if self.options.benchmark:
             self.requires("benchmark/1.9.5")
         self.requires("boost/1.91.0", force=True, transitive_headers=True)
         self.requires("date/3.0.4", transitive_headers=True)
         if self.options.formal_verification:
+            # lean4-deps' version tracks the Lean toolchain, so one pin drives
+            # both: formal_verification/lean-toolchain is the single source of
+            # truth. Both recipes come from the xrplf remote.
             self.requires(f"lean4/{self._lean_version()}", transitive_headers=True)
             self.requires(f"lean4-deps/{self._lean_version()}")
         if self.options.jemalloc:
@@ -186,9 +223,9 @@ class Xrpl(ConanFile):
         if self.options.formal_verification:
             lean4 = self.dependencies["lean4"].cpp_info
             lean4_deps = self.dependencies["lean4-deps"].cpp_info
+            self._assert_lake_closure(lean4_deps.get_property("lake_manifest"))
             tc.variables["LEAN4_BINDIR"] = lean4.bindirs[0]
             tc.variables["LEAN4_DEPS_PACKAGES"] = lean4_deps.get_property("packages")
-            tc.variables["LEAN4_DEPS_ARCHIVE"] = lean4_deps.get_property("archive")
         tc.variables["jemalloc"] = self.options.jemalloc
         tc.variables["rocksdb"] = self.options.rocksdb
         tc.variables["BUILD_SHARED_LIBS"] = self.options.shared
