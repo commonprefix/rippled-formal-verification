@@ -4,11 +4,11 @@ import XRPL.Model.Protocol.TenthBips
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.CashBasis
 import XRPL.Model.Lending.Interest
-import XRPL.Model.Lending.Loan
-import XRPL.Model.Lending.LoanBroker
-import XRPL.Model.Lending.LoanSet
-import XRPL.Model.Lending.LoanState
-import XRPL.Model.Lending.LoanResult
+import XRPL.Model.Lending.Loan.Loan
+import XRPL.Model.Lending.Loan.LoanResult
+import XRPL.Model.Lending.Loan.LoanSet
+import XRPL.Model.Lending.Loan.LoanState
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 

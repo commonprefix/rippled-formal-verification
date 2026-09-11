@@ -5,11 +5,11 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.Amortization
-import XRPL.Model.Lending.BrokerCover
 import XRPL.Model.Lending.Interest
-import XRPL.Model.Lending.Loan
-import XRPL.Model.Lending.LoanBroker
-import XRPL.Model.Lending.LoanResult
+import XRPL.Model.Lending.Loan.Loan
+import XRPL.Model.Lending.Loan.LoanResult
+import XRPL.Model.Lending.LoanBroker.BrokerCover
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 

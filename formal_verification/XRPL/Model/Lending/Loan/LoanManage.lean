@@ -1,4 +1,4 @@
-import XRPL.Model.Lending.LoanPay
+import XRPL.Model.Lending.Loan.LoanPay
 
 namespace XRPL.Model.Lending
 

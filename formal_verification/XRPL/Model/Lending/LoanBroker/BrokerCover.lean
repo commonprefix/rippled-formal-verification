@@ -5,7 +5,7 @@ import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
-import XRPL.Model.Lending.LoanBroker
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 

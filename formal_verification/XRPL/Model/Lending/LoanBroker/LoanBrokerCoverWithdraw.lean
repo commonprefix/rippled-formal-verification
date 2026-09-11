@@ -3,7 +3,7 @@ import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Lending.AssetPool
-import XRPL.Model.Lending.BrokerCover
+import XRPL.Model.Lending.LoanBroker.BrokerCover
 
 namespace XRPL.Model.Lending
 

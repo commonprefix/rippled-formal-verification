@@ -1,8 +1,8 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
-import XRPL.Model.Lending.Loan
-import XRPL.Model.Lending.LoanResult
+import XRPL.Model.Lending.Loan.Loan
+import XRPL.Model.Lending.Loan.LoanResult
 
 namespace XRPL.Model.Lending
 

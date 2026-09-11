@@ -3,9 +3,9 @@ import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.Vault
-import XRPL.Model.Lending.BrokerCover
-import XRPL.Model.Lending.LoanBroker
-import XRPL.Model.Lending.LoanResult
+import XRPL.Model.Lending.Loan.LoanResult
+import XRPL.Model.Lending.LoanBroker.BrokerCover
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 

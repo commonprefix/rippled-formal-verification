@@ -1,7 +1,7 @@
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
-import XRPL.Model.Lending.Loan
-import XRPL.Model.Lending.LoanBroker
+import XRPL.Model.Lending.Loan.Loan
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
