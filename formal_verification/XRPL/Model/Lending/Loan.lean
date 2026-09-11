@@ -14,8 +14,8 @@ def defaultGracePeriod : UInt32 := 60      -- seconds
 -- UInt32 max (2³² − 1)
 def maxTime : UInt32 := 4_294_967_295
 
-def hasExpired (ledgerCloseTime expTime : UInt32) : Bool :=
-  ledgerCloseTime ≥ expTime
+def hasExpired (ledgerCloseTime expTime : UInt32) (exclusive : Bool := false) : Bool :=
+  if exclusive then ledgerCloseTime > expTime else ledgerCloseTime ≥ expTime
 
 -- 1/10 bips: 0.1 bp = 0.001% = 0.00001
 structure LoanRates where
@@ -55,7 +55,7 @@ def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
   let timeAvailable := maxTime - schedule.startDate
   if schedule.gracePeriod > timeAvailable
       || schedule.paymentInterval > timeAvailable
-      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds
+      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds?
       || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
     .tecKILLED
   else

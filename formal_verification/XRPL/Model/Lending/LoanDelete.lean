@@ -5,6 +5,7 @@ import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.Loan
 import XRPL.Model.Lending.LoanBroker
+import XRPL.Model.Lending.LoanResult
 
 namespace XRPL.Model.Lending
 
@@ -17,27 +18,30 @@ def Loan.canDelete (loan : Loan) : TER :=
   else .tesSUCCESS
 
 -- bug: C++ hardcodes the accrual formula here, which is wrong for cash-basis vaults
-def deletePendingLoan (loan : Loan) (vault : RawVault) (broker : LoanBroker)
-    : Except Error (RawVault × LoanBroker) := do
+def Loan.deletePending (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) := do
   let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
   let availableAfter ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
   let reservedAfter ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
-  let vault' := { vault with assetsAvailable := availableAfter, assetsReserved := reservedAfter }
+
+  let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := availableAfter, assetsReserved := reservedAfter }
+  let vault' ← rawVault'.to_lawful
 
   let debtAfter ← adjustImpreciseNumber vault.numericType broker.debtTotal
     loan.principalOutstanding.operator_neg vaultExponent
-  return (vault', { broker with debtTotal := debtAfter,
-                                loanCount := broker.loanCount - 1 })
+  let broker' := { broker with debtTotal := debtAfter, loanCount := broker.loanCount - 1 }
 
-def deleteActiveLoan (vault : RawVault) (broker : LoanBroker) : Except Error (RawVault × LoanBroker) :=
+  return .ok { vault := vault', broker := broker' }
+
+def Loan.deleteActive (vault : Vault) (broker : LoanBroker) : LoanResult BrokerVault :=
   let loanCount := broker.loanCount - 1
   let newDebt := if loanCount == 0 then Number.zero else broker.debtTotal
-  .ok (vault, { broker with loanCount := loanCount, debtTotal := newDebt })
+
+  let broker' := { broker with loanCount := loanCount, debtTotal := newDebt }
+  .ok { vault := vault, broker := broker' }
 
 -- LoanDelete -> doApply
-def Loan.delete (loan : Loan) (vault : RawVault) (broker : LoanBroker)
-    : Except Error (RawVault × LoanBroker) :=
-  if loan.isPending then deletePendingLoan loan vault broker
-  else deleteActiveLoan vault broker
+def Loan.delete (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) :=
+  if loan.isPending then loan.deletePending vault broker
+  else .ok (Loan.deleteActive vault broker)
 
 end XRPL.Model.Lending

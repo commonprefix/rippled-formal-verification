@@ -17,6 +17,12 @@ def isRounded (nt : NumericType) (value : Number) (scale : Int) : Except Error B
   let up ← STAmount.roundToNumericType nt value .upward (some scale)
   return down.operator_eq up
 
+-- Round a value at the scale, then clamp it into [0, cap].
+def roundAndClamp (value cap : Number) (mode : rounding_mode) (nt : NumericType) (scale : Int)
+    : Except Error Number := do
+  let rounded ← STAmount.roundToNumericType nt value mode (some scale)
+  return Number.clamp rounded Number.zero cap
+
 private def sumAndRoundToExponent (amount : Number) (amountDelta : STAmount)
     (exponent : Int) (rounding : rounding_mode) : Except Error Number := do
   let numericType := amountDelta.numericType
