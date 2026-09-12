@@ -38,6 +38,14 @@ structure LoanBroker.WF (lb : LoanBroker) : Prop where
   debtMaximum_norm : lb.debtMaximum.isNormalized
   coverAvailable_norm : lb.coverAvailable.isNormalized
 
+instance LoanBroker.instDecidableWF (lb : LoanBroker) : Decidable lb.WF :=
+  decidable_of_iff
+    (lb.debtTotal.isNormalized ∧ lb.debtMaximum.isNormalized ∧
+      lb.coverAvailable.isNormalized)
+    ⟨fun ⟨debtTotal_norm, debtMaximum_norm, coverAvailable_norm⟩ =>
+        ⟨debtTotal_norm, debtMaximum_norm, coverAvailable_norm⟩,
+      fun h => ⟨h.debtTotal_norm, h.debtMaximum_norm, h.coverAvailable_norm⟩⟩
+
 /-- The broker invariant in exact arithmetic. -/
 structure LoanBroker.Exact.Valid (s : LoanBroker.Exact) : Prop where
   debtTotal_nonneg : 0 ≤ s.debtTotal
@@ -51,6 +59,28 @@ structure LoanBroker.Exact.Valid (s : LoanBroker.Exact) : Prop where
   coverMin_cap : s.coverRateMinimum ≤ maxCoverRate
   coverLiq_cap : s.coverRateLiquidation ≤ maxCoverRate
   rate_coupling : s.coverRateMinimum = 0 ↔ s.coverRateLiquidation = 0
+
+instance LoanBroker.Exact.instDecidableValid (s : LoanBroker.Exact) : Decidable s.Valid :=
+  decidable_of_iff
+    (0 ≤ s.debtTotal ∧ 0 ≤ s.debtMaximum ∧ 0 ≤ s.coverAvailable ∧
+      s.debtMaximum ≤ (2 : ℚ) ^ 63 - 1 ∧
+      (s.debtMaximum ≠ 0 → s.debtTotal ≤ s.debtMaximum) ∧
+      s.debtTotal * (s.coverRateMinimum : ℚ) ≤ 100000 * s.coverAvailable ∧
+      (s.loanCount = 0 → s.debtTotal = 0) ∧
+      s.managementFeeRate ≤ maxManagementFeeRate ∧
+      s.coverRateMinimum ≤ maxCoverRate ∧
+      s.coverRateLiquidation ≤ maxCoverRate ∧
+      (s.coverRateMinimum = 0 ↔ s.coverRateLiquidation = 0))
+    ⟨fun ⟨debtTotal_nonneg, debtMaximum_nonneg, coverAvailable_nonneg,
+        debtMaximum_cap, debt_within_cap, cover_floor, empty_broker, mgmtFee_cap,
+        coverMin_cap, coverLiq_cap, rate_coupling⟩ =>
+        ⟨debtTotal_nonneg, debtMaximum_nonneg, coverAvailable_nonneg,
+          debtMaximum_cap, debt_within_cap, cover_floor, empty_broker, mgmtFee_cap,
+          coverMin_cap, coverLiq_cap, rate_coupling⟩,
+      fun h => ⟨h.debtTotal_nonneg, h.debtMaximum_nonneg,
+        h.coverAvailable_nonneg, h.debtMaximum_cap, h.debt_within_cap,
+        h.cover_floor, h.empty_broker, h.mgmtFee_cap, h.coverMin_cap,
+        h.coverLiq_cap, h.rate_coupling⟩⟩
 
 /-- `LoanBroker.Exact.Valid`, restated with the modeled `Number` operators on the
 stored fields. -/
@@ -77,6 +107,10 @@ structure LoanBroker.Lawful (lb : LoanBroker) : Prop where
   wf : lb.WF
   valid : lb.toExact.Valid
 
+instance LoanBroker.instDecidableLawful (lb : LoanBroker) : Decidable lb.Lawful :=
+  decidable_of_iff (lb.WF ∧ lb.toExact.Valid)
+    ⟨fun ⟨wf, valid⟩ => ⟨wf, valid⟩, fun h => ⟨h.wf, h.valid⟩⟩
+
 /-- A broker bundled with its lawfulness proof. -/
 def LawfulLoanBroker : Type := {lb : LoanBroker // lb.Lawful}
 
@@ -86,10 +120,8 @@ def LawfulLoanBroker.val (lb : LawfulLoanBroker) : LoanBroker := Subtype.val lb
 /-- Lawfulness proof of a lawful broker. -/
 def LawfulLoanBroker.lawful (lb : LawfulLoanBroker) : lb.val.Lawful := Subtype.property lb
 
-/-- The untrusted-boundary check: promote a raw broker to a `LawfulLoanBroker` if it
-is lawful. TODO: derive the `Decidable` instance so this is usable without
-`Classical`. -/
-def LoanBroker.validate (lb : LoanBroker) [Decidable lb.Lawful] : Option LawfulLoanBroker :=
+/-- Promote a raw broker when its lawfulness check succeeds. -/
+def LoanBroker.validate (lb : LoanBroker) : Option LawfulLoanBroker :=
   if h : lb.Lawful then some ⟨lb, h⟩ else none
 
 end XRPL.Model.Lending
