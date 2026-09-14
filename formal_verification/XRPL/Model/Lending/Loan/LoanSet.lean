@@ -29,10 +29,6 @@ def Loan.canCreate (vault : Vault) (principalRequested : Number) (fees : LoanFee
   let scheduleTer := schedule.checkTimeAvailability
   if !scheduleTer.isTesSuccess then return scheduleTer
 
-  let assetsMaximum := vault.assetsMaximum.getD Number.zero
-  if assetsMaximum.operator_ne Number.zero && vault.assetsTotal.operator_ge assetsMaximum then
-    return .tecLIMIT_EXCEEDED
-
   let precisionTer ← checkPrecisionFields principalRequested fees
     (STAmount.equalAfterNumberConvert vault.numericType)
   if !precisionTer.isTesSuccess then return precisionTer

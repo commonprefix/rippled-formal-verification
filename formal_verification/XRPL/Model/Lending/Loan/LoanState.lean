@@ -34,6 +34,15 @@ structure PaymentAmounts where
   interestPaid : Number
   feePaid : Number
 
+def PaymentAmounts.zero : PaymentAmounts :=
+  { principalPaid := Number.zero, interestPaid := Number.zero, feePaid := Number.zero }
+
+-- Sum two payment amounts, so a transaction can settle the vault and broker once on the total
+def PaymentAmounts.add (a b : PaymentAmounts) : Except Error PaymentAmounts := do
+  return { principalPaid := ← a.principalPaid.operator_add b.principalPaid .to_nearest,
+           interestPaid := ← a.interestPaid.operator_add b.interestPaid .to_nearest,
+           feePaid := ← a.feePaid.operator_add b.feePaid .to_nearest }
+
 def LoanState.build (valueOutstanding principalOutstanding managementFeeDue : Number)
     : Except Error LoanState := do
   let valueAfterPrincipal ← valueOutstanding.operator_sub principalOutstanding .to_nearest

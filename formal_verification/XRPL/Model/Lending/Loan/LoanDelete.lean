@@ -18,7 +18,6 @@ def Loan.canDelete (loan : Loan) : TER :=
   else .tesSUCCESS
 
 -- Undo the bookkeeping of a pending loan: the principal returns from reserved to available and leaves the debt.
--- bug: C++ hardcodes the accrual formula here, which is wrong for cash-basis vaults
 def Loan.deletePending (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) := do
   let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
   let assetsAvailable' ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
