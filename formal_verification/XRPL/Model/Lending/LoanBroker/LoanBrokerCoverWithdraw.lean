@@ -3,12 +3,14 @@ import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Lending.AssetPool
+import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.LoanBroker.BrokerCover
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
+-- LoanBrokerCoverWithdraw -> preclaim
 def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
     (amount : STAmount) : Except Error TER := do
   let nt := AssetPool.numericType pool
@@ -31,12 +33,12 @@ def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (po
 
   return .tesSUCCESS
 
-
+-- LoanBrokerCoverWithdraw -> doApply
 def LoanBroker.coverWithdraw (lb : LoanBroker) (numericType : NumericType) (amount : STAmount)
-    : Except Error LoanBrokerCoverResult := do
+    : Except Error (LoanResult LoanBrokerCoverResult) := do
   let amount ← match (← lb.roundedCoverAmount numericType amount) with
-    | .rejected _ => return { status := .tecINTERNAL, loanBroker' := lb, amount' := STAmount.zero numericType }
+    | .rejected _ => return .rejected .tecINTERNAL
     | .rounded amount => .pure amount
-  lb.applyCoverTransaction .debit amount
+  return .ok (← lb.applyCoverTransaction .debit amount)
 
 end XRPL.Model.Lending

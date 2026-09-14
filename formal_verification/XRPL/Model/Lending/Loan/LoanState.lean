@@ -12,14 +12,27 @@ structure LoanState where
   interestDue : Number
   managementFeeDue : Number
 
+-- The change in each tracked component between two loan states
 structure LoanStateDeltas where
-  totalValue : Number := Number.zero
-  principal : Number := Number.zero
-  interest : Number := Number.zero
+  principal : Number
+  interest : Number
+  managementFee : Number
+
+-- One instalment broken down: the deltas taken off the loan, plus untracked amounts paid to the vault and broker
+structure PaymentComponents where
+  totalValueDelta : Number
+  principalDelta : Number
+  managementFeeDelta : Number
   untrackedInterest : Number := Number.zero
-  managementFee : Number := Number.zero
   untrackedManagementFee : Number := Number.zero
-  isFinal : Bool := false
+  -- the final instalment clears the whole balance and closes the loan
+  isFinal : Bool
+
+-- What a payment moves: principal and interest to the vault, fees to the broker
+structure PaymentAmounts where
+  principalPaid : Number
+  interestPaid : Number
+  feePaid : Number
 
 def LoanState.build (valueOutstanding principalOutstanding managementFeeDue : Number)
     : Except Error LoanState := do
@@ -59,26 +72,28 @@ def LoanState.buildTheoretical (periodicPayment periodicRate : Number) (paymentR
     managementFeeDue := managementFeeDue
   }
 
-def LoanState.grossInterestOutstanding (x : LoanState) : Except Error Number :=
-  x.valueOutstanding.operator_sub x.principalOutstanding .to_nearest
+-- Interest still owed by the borrower, the net interest plus the management fee on it
+def LoanState.grossInterestOutstanding (state : LoanState) : Except Error Number :=
+  state.valueOutstanding.operator_sub state.principalOutstanding .to_nearest
 
-def LoanStateDeltas.totalValueOutstanding (deltas : LoanStateDeltas) : Except Error Number := do
+def LoanState.calculateDeltas (x y : LoanState) : Except Error LoanStateDeltas := do
+  return { principal := ← x.principalOutstanding.operator_sub y.principalOutstanding .to_nearest,
+           interest := ← x.interestDue.operator_sub y.interestDue .to_nearest,
+           managementFee := ← x.managementFeeDue.operator_sub y.managementFeeDue .to_nearest }
+
+def LoanStateDeltas.total (deltas : LoanStateDeltas) : Except Error Number := do
   let principalPlusInterest ← deltas.principal.operator_add deltas.interest .to_nearest
   principalPlusInterest.operator_add deltas.managementFee .to_nearest
 
--- The tracked interest a payment covers
-def LoanStateDeltas.trackedInterest (deltas : LoanStateDeltas) : Except Error Number := do
-  let valueAfterPrincipal ← deltas.totalValue.operator_sub deltas.principal .to_nearest
-  valueAfterPrincipal.operator_sub deltas.managementFee .to_nearest
-
--- The amount due from the borrower: total value plus the untracked interest and fee.
-def LoanStateDeltas.amountDue (deltas : LoanStateDeltas) : Except Error Number := do
-  let valuePlusInterest ← deltas.totalValue.operator_add deltas.untrackedInterest .to_nearest
-  valuePlusInterest.operator_add deltas.untrackedManagementFee .to_nearest
+def LoanState.addDeltas (x : LoanState) (deltas : LoanStateDeltas) : Except Error LoanState := do
+  let total ← deltas.total
+  return { valueOutstanding := ← x.valueOutstanding.operator_add total .to_nearest,
+           principalOutstanding := ← x.principalOutstanding.operator_add deltas.principal .to_nearest,
+           interestDue := ← x.interestDue.operator_add deltas.interest .to_nearest,
+           managementFeeDue := ← x.managementFeeDue.operator_add deltas.managementFee .to_nearest }
 
 def LoanStateDeltas.nonNegative (deltas : LoanStateDeltas) : LoanStateDeltas :=
-  { deltas with
-    principal := if deltas.principal.signum < 0 then Number.zero else deltas.principal
+  { principal := if deltas.principal.signum < 0 then Number.zero else deltas.principal
     interest := if deltas.interest.signum < 0 then Number.zero else deltas.interest
     managementFee := if deltas.managementFee.signum < 0 then Number.zero else deltas.managementFee }
 
@@ -97,18 +112,16 @@ def LoanStateDeltas.reduceByExcess (deltas : LoanStateDeltas) (excess : Number) 
   let (interest, excess) ← reduceCapped deltas.interest excess
   let (managementFee, excess) ← reduceCapped deltas.managementFee excess
   let (principal, _) ← reduceCapped deltas.principal excess
-  return { deltas with principal, interest, managementFee }
+  return { principal, interest, managementFee }
 
-def LoanState.calculateDeltas (x y : LoanState) : Except Error LoanStateDeltas := do
-  return { principal := ← x.principalOutstanding.operator_sub y.principalOutstanding .to_nearest,
-           interest := ← x.interestDue.operator_sub y.interestDue .to_nearest,
-           managementFee := ← x.managementFeeDue.operator_sub y.managementFeeDue .to_nearest }
+-- The interest part of the value delta, what is left after the principal and management fee
+def PaymentComponents.interestDelta (components : PaymentComponents) : Except Error Number := do
+  let valueAfterPrincipal ← components.totalValueDelta.operator_sub components.principalDelta .to_nearest
+  valueAfterPrincipal.operator_sub components.managementFeeDelta .to_nearest
 
-def LoanState.addDeltas (x : LoanState) (deltas : LoanStateDeltas) : Except Error LoanState := do
-  let tot ← deltas.totalValueOutstanding
-  return { valueOutstanding := ← x.valueOutstanding.operator_add tot .to_nearest,
-           principalOutstanding := ← x.principalOutstanding.operator_add deltas.principal .to_nearest,
-           interestDue := ← x.interestDue.operator_add deltas.interest .to_nearest,
-           managementFeeDue := ← x.managementFeeDue.operator_add deltas.managementFee .to_nearest }
+-- The full amount due from the borrower: the value delta plus the untracked interest and fee
+def PaymentComponents.totalDue (components : PaymentComponents) : Except Error Number := do
+  let valuePlusInterest ← components.totalValueDelta.operator_add components.untrackedInterest .to_nearest
+  valuePlusInterest.operator_add components.untrackedManagementFee .to_nearest
 
 end XRPL.Model.Lending

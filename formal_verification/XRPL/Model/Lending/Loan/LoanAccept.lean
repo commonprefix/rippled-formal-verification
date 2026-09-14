@@ -15,10 +15,10 @@ def Loan.canAccept (loan : Loan) (ledgerCloseTime : UInt32) : TER :=
   else if hasExpired ledgerCloseTime loan.schedule.startDate then .tecEXPIRED
   else .tesSUCCESS
 
--- LoanAccept -> doApply
+-- LoanAccept -> doApply. The principal leaves the reserved assets and the loan becomes active.
 def Loan.accept (loan : Loan) (vault : Vault) : Except Error (LoanResult LoanVault) := do
-  let reservedAfter ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
-  let rawVault' : RawVault := { vault.toRawVault with assetsReserved := reservedAfter }
+  let assetsReserved' ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
+  let rawVault' : RawVault := { vault.toRawVault with assetsReserved := assetsReserved' }
 
   let vault' ← rawVault'.to_lawful
   let loan' := { loan with isPending := false }

@@ -17,26 +17,28 @@ def Loan.canDelete (loan : Loan) : TER :=
   if !loan.isPending && loan.paymentRemaining > 0 then .tecHAS_OBLIGATIONS
   else .tesSUCCESS
 
+-- Undo the bookkeeping of a pending loan: the principal returns from reserved to available and leaves the debt.
 -- bug: C++ hardcodes the accrual formula here, which is wrong for cash-basis vaults
 def Loan.deletePending (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) := do
   let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
-  let availableAfter ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
-  let reservedAfter ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
+  let assetsAvailable' ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
+  let assetsReserved' ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
 
-  let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := availableAfter, assetsReserved := reservedAfter }
+  let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
   let vault' ← rawVault'.to_lawful
 
-  let debtAfter ← adjustImpreciseNumber vault.numericType broker.debtTotal
+  let debtTotal' ← adjustImpreciseNumber vault.numericType broker.debtTotal
     loan.principalOutstanding.operator_neg vaultExponent
-  let broker' := { broker with debtTotal := debtAfter, loanCount := broker.loanCount - 1 }
+  let broker' := { broker with debtTotal := debtTotal', loanCount := broker.loanCount - 1 }
 
   return .ok { vault := vault', broker := broker' }
 
+-- Delete a paid-off loan. With no loans left, any debt still on the broker is dust and is ignored.
 def Loan.deleteActive (vault : Vault) (broker : LoanBroker) : LoanResult BrokerVault :=
   let loanCount := broker.loanCount - 1
-  let newDebt := if loanCount == 0 then Number.zero else broker.debtTotal
+  let debtTotal' := if loanCount == 0 then Number.zero else broker.debtTotal
 
-  let broker' := { broker with loanCount := loanCount, debtTotal := newDebt }
+  let broker' := { broker with loanCount := loanCount, debtTotal := debtTotal' }
   .ok { vault := vault, broker := broker' }
 
 -- LoanDelete -> doApply

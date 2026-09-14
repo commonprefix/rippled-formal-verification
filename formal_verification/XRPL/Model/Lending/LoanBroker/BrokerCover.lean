@@ -5,6 +5,7 @@ import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
+import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
@@ -42,7 +43,6 @@ def LoanBroker.roundedCoverAmount (lb : LoanBroker) (nt : NumericType) (amount :
   return .rounded rounded
 
 structure LoanBrokerCoverResult where
-  status : TER := .tesSUCCESS
   amount' : STAmount
   loanBroker' : LoanBroker
 
@@ -57,7 +57,6 @@ def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirecti
   let coverAvailable' ← match direction with
     | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
     | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
-  return { status := .tesSUCCESS, amount' := amount,
-           loanBroker' := { lb with coverAvailable := coverAvailable' } }
+  return { amount' := amount, loanBroker' := { lb with coverAvailable := coverAvailable' } }
 
 end XRPL.Model.Lending

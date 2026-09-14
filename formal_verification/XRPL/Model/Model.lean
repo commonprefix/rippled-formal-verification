@@ -5,6 +5,7 @@ import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan.Loan
 import XRPL.Model.Lending.Loan.LoanAccept
 import XRPL.Model.Lending.Loan.LoanDelete
+import XRPL.Model.Lending.Loan.LoanManage
 import XRPL.Model.Lending.Loan.LoanPay
 import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.Loan.LoanSet

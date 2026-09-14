@@ -2,6 +2,8 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
+import XRPL.Model.Lending.Interest
+import XRPL.Model.Lending.Loan.LoanState
 
 namespace XRPL.Model.Lending
 
@@ -10,6 +12,9 @@ open XRPL.Model.Protocol
 def defaultPaymentTotal : UInt32 := 1      -- payments count
 def defaultPaymentInterval : UInt32 := 60  -- seconds
 def defaultGracePeriod : UInt32 := 60      -- seconds
+
+-- The most scheduled instalments for one LoanPay transaction
+def maxPaymentsPerTransaction : Nat := 100
 
 -- UInt32 max (2³² − 1)
 def maxTime : UInt32 := 4_294_967_295
@@ -80,5 +85,14 @@ structure Loan where
   isImpaired : Bool
   isDefault : Bool
   allowsOverpayment : Bool
+
+def Loan.periodicRate (loan : Loan) : Except Error Number :=
+  loanPeriodicRate loan.rates.interestRate loan.schedule.paymentInterval
+
+def Loan.state (loan : Loan) : Except Error LoanState :=
+  LoanState.build loan.totalValueOutstanding loan.principalOutstanding loan.managementFeeOutstanding
+
+def Loan.isPaymentLate (loan : Loan) (now : UInt32) : Bool :=
+  loan.nextPaymentDueDate < now
 
 end XRPL.Model.Lending

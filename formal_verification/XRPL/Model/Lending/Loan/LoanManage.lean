@@ -13,10 +13,10 @@ inductive LoanManageAction where
 -- Amount of the default the broker's first-loss cover absorbs
 private def defaultCoveredAmount (broker : LoanBroker) (totalDefaultAmount : Number) (nt : NumericType) (scale : Int)
     : Except Error Number := do
-  let minCoverAmount ← tenthBipsOfValue broker.debtTotal broker.coverRateMinimum .upward
-  let liqAmount ← tenthBipsOfValue minCoverAmount broker.coverRateLiquidation .upward
+  let minimumCover ← tenthBipsOfValue broker.debtTotal broker.coverRateMinimum .upward
+  let liquidationAmount ← tenthBipsOfValue minimumCover broker.coverRateLiquidation .upward
 
-  let coveredAmount := Number.min liqAmount totalDefaultAmount
+  let coveredAmount := Number.min liquidationAmount totalDefaultAmount
   let coveredAmount' ← STAmount.roundToNumericType nt coveredAmount .upward (some scale)
 
   return Number.min coveredAmount' broker.coverAvailable
