@@ -1,3 +1,4 @@
+import XRPL.Properties.Vault.Common.CmpFaithfulCanonical
 import XRPL.Properties.Vault.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
@@ -697,5 +698,94 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
         rw [abs_le]
         clear hno_cusp hb hok hrep
         constructor <;> linarith
+
+/-- **The clamp preserves the numeric type.** Three branches, all type-stable:
+the integral early return hands back the delta (or its negation, which only
+toggles the sign flag); the negative branch is a `roundToExponent`, reachable
+here only on a zero delta, where it exits early with its input; the positive
+branch is an `ofNumber` at the delta's own type.
+
+The sign hypothesis is the weak one a caller can actually produce from
+`0 ≤ delta.toRat` — a signed zero is admitted, and harmless. -/
+lemma clampToSumExponent_mNumericType (amount : Number) (delta c : STAmount)
+    (hsgn : delta.mValue = 0 ∨ delta.negative = false)
+    (hok : clampToSumExponent amount delta = .ok c) :
+    c.mNumericType = delta.mNumericType := by
+  unfold clampToSumExponent at hok
+  simp only [] at hok
+  by_cases hneg : delta.negative = true
+  · -- a set sign flag forces a zero delta, where `operator_neg` is the identity
+    have hmv : delta.mValue = 0 := by
+      rcases hsgn with h | h
+      · exact h
+      · exact absurd hneg (by rw [h]; exact Bool.false_ne_true)
+    have hzid : delta.operator_neg = delta := by
+      unfold STAmount.operator_neg; rw [if_pos (beq_iff_eq.mpr hmv)]
+    rw [if_pos hneg, hzid] at hok
+    by_cases hint : delta.integral = true
+    · rw [if_pos hint] at hok
+      rw [← Except.ok.inj hok]
+    · rw [if_neg hint] at hok
+      obtain ⟨-, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+      obtain ⟨pe, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+      split at hok
+      · -- `roundToExponent` returns a zero input unchanged
+        have hrte : STAmount.roundToExponent delta pe .downward = .ok delta := by
+          unfold STAmount.roundToExponent
+          rw [if_neg hint, if_pos (show delta.isZero = true from beq_iff_eq.mpr hmv)]
+        rw [hrte] at hok
+        rw [← Except.ok.inj hok]
+      · rename_i hc; exact absurd hneg hc
+  · rw [if_neg hneg] at hok
+    by_cases hint : delta.integral = true
+    · rw [if_pos hint] at hok
+      rw [← Except.ok.inj hok]
+    · rw [if_neg hint] at hok
+      obtain ⟨pe, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+      split at hok
+      · rename_i hc; exact absurd hc hneg
+      · obtain ⟨sum, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+        obtain ⟨n, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+        obtain ⟨m, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+        exact STAmount.ofNumber_mNumericType delta.numericType m .to_nearest c hok
+
+/-! ## Cashing in the `isFractionalNonPositive` guard
+
+`clampToSumExponent`'s output is not obviously nonnegative from the arithmetic —
+the sum is rounded down onto a grid that can be coarser than `amount`'s own. The
+deposit/withdraw/clawback paths do not need it to be: each guards the clamped
+value with `isFractionalNonPositive` and rejects on `true`, so every successful
+run carries the fact below.
+
+The proof is by computation rather than through `CmpFaithful`, deliberately:
+`STAmount.operator_lt` short-circuits on a zero operand *before* it reaches the
+offset comparison, so faithfulness against zero does not need
+`CmpFaithful.offset_or_band` — which a fractional zero cannot satisfy, since
+`Banded` demands a mantissa in `[10¹⁵, 10¹⁶)`. -/
+
+/-- The canonical zero carries the requested numeric type, a zero mantissa, and a
+clear sign flag. -/
+private lemma STAmount.zero_fields (nt : NumericType) :
+    (STAmount.zero nt).mNumericType = nt ∧ (STAmount.zero nt).mValue = 0 ∧
+    (STAmount.zero nt).mIsNegative = false := by
+  cases nt with
+  | fractional => exact ⟨rfl, rfl, rfl⟩
+  | integral mv mo ms msh => exact ⟨rfl, rfl, rfl⟩
+
+/-- **A non-integral amount that passes `isFractionalNonPositive` is positive.** -/
+lemma STAmount.pos_of_isFractionalNonPositive_false (c : STAmount)
+    (hfr : c.integral = false) (hg : c.isFractionalNonPositive = .ok false) :
+    0 < c.toRat := by
+  obtain ⟨hnt, hzv, hzn⟩ := STAmount.zero_fields c.numericType
+  have hnt' : (STAmount.zero c.numericType).mNumericType = c.mNumericType := hnt
+  by_cases hmv : c.mValue = 0
+  · exfalso
+    simp [STAmount.isFractionalNonPositive, STAmount.operator_le, STAmount.operator_lt,
+      STAmount.areComparable, hfr, hmv, hzv, hzn, hnt'] at hg
+  · by_cases hng : c.mIsNegative = true
+    · exfalso
+      simp [STAmount.isFractionalNonPositive, STAmount.operator_le, STAmount.operator_lt,
+        STAmount.areComparable, hfr, hng, hzn, hnt'] at hg
+    · exact STAmount.toRat_pos_of c (by simpa using hng) hmv
 
 end XRPL.Model.Protocol

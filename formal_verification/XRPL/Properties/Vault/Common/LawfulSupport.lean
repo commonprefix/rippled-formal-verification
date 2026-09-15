@@ -461,35 +461,37 @@ theorem Vault.deposit_asset_parity (v : Vault) (amountDeposit : STAmount)
       · rw [if_neg h3] at hok
         simp only [pure_bind] at hok
         by_cases hd : isDonation = true
-        · rw [if_pos hd] at hok
+        · rw [if_neg (show ¬((!isDonation) = true) by simp [hd])] at hok
           obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-          have hn21 : n2 = n1 := by rw [hn1] at hn2; exact (Except.ok.inj hn2).symm
-          rw [hn21, hAV, hat] at hav
+          rw [hAV, hat] at hav
           have hae : av' = at' := (Except.ok.inj hav).symm
           by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
           · rw [if_neg hm] at hok
             obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]; exact hae
-        · rw [if_neg hd] at hok
+        · rw [if_pos (show (!isDonation) = true by
+            simp [show isDonation = false by simpa using hd])] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           cases cres with
           | error e => injection hok with h; rw [← h]; exact hAV
           | success a sh =>
             simp only [] at hok
+            obtain ⟨ad, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hfnp : fnp = true
+            · rw [if_pos hfnp] at hok; injection hok with h; rw [← h]; exact hAV
+            rw [if_neg hfnp] at hok
             obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            have hn21 : n2 = n1 := by rw [hn1] at hn2; exact (Except.ok.inj hn2).symm
-            rw [hn21, hAV, hat] at hav
+            rw [hAV, hat] at hav
             have hae : av' = at' := (Except.ok.inj hav).symm
             by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
             · rw [if_pos hm] at hok; injection hok with h; rw [← h]; exact hAV
@@ -526,11 +528,17 @@ theorem Vault.withdraw_asset_parity (v : Vault) (amount : WithdrawAmount)
             obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h, (RawVault.to_lawful_ok htl).1]
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
+          obtain ⟨clamped, _, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+          by_cases hfnp : fnp = true
+          · rw [if_pos hfnp] at hok; injection hok with h; rw [← h]; exact hAV
+          rw [if_neg hfnp] at hok; try simp only [pure_bind] at hok
+          obtain ⟨cN, hcN, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨sN, hsN, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨atr, hatr, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨atr', hatr', hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases h5 : (aN.mantissa_ != 0 && atr.operator_eq atr') = true
+          by_cases h5 : (cN.mantissa_ != 0 && atr.operator_eq atr') = true
           · rw [if_pos h5] at hok; injection hok with h; rw [← h]; exact hAV
           · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok

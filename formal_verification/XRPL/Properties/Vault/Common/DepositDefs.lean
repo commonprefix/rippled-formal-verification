@@ -30,6 +30,19 @@ computation below chains more than three stages, so `10 ^ (-17)` covers every
 composition. -/
 def depositε : ℚ := (10 : ℚ) ^ (-17 : ℤ)
 
+/-- Grid-alignment budget of `clampToSumExponent`. The clamp snaps the charge or
+payout onto the 16-digit grid of the POST-SUM amount, so the error it introduces
+is measured against `assetsTotal`, not against the amount being reported: two
+ULP of a 16-digit mantissa. It is used in two shapes — as a relative factor on
+the over-report side (where the snap is bounded by the amount itself) and scaled
+by the stored total on the under-report side (where the downward rounding of the
+sum can lose a full ULP of the sum).
+
+Distinct from `depositε`, which is a per-stage arithmetic rounding budget; a
+clamp is a deliberate quantization, not a rounding error, and folding it into
+`depositε` would overstate the accuracy of the `Number` pipeline by 100×. -/
+def clampε : ℚ := (10 : ℚ) ^ (-14 : ℤ)
+
 /-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
 def RawVault.depositNav (rv : RawVault) : ℚ :=

@@ -18,7 +18,7 @@ theorem computeWithdrawByAssets_codes (v : Vault) (assets : STAmount) (waive : B
     cw.error = none ∨ cw.error = some .tecPRECISION_LOSS ∨ cw.error = some .tecPATH_DRY := by
   unfold computeWithdrawByAssets at hok
   obtain ⟨rr, htc, hK⟩ := bind_ok_peel _ _ _ hok
-  cases hats : assetsToSharesWithdraw v assets false waive with
+  cases hats : assetsToSharesWithdraw v assets true waive with
   | error e =>
     rw [hats, err_bind, tryCatch_error] at htc
     by_cases hov : isOverflow e = true
@@ -139,18 +139,25 @@ theorem Vault.withdraw_error_codes_proof (v : Vault) (amount : WithdrawAmount)
             obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h]; exact .inl rfl
         · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
-          obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr, _, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr', _, hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases h5 : (assetsNumber'.mantissa_ != 0 && atr.operator_eq atr') = true
-          · rw [if_pos h5] at hok; injection hok with h; rw [← h]
+          obtain ⟨clamped, _, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+          by_cases h4 : fnp = true
+          · rw [if_pos h4] at hok; injection hok with h; rw [← h]
             exact .inr (.inl rfl)
-          · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
-            obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
-            injection hok with h; rw [← h]; exact .inl rfl
+          · rw [if_neg h4] at hok; try simp only [pure_bind] at hok
+            obtain ⟨clampedNumber, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨atr, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨atr', _, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases h5 : (clampedNumber.mantissa_ != 0 && atr.operator_eq atr') = true
+            · rw [if_pos h5] at hok; injection hok with h; rw [← h]
+              exact .inr (.inl rfl)
+            · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
+              obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
+              injection hok with h; rw [← h]; exact .inl rfl
   }
 
 /-- **Proof body of `sharesToAssetsWithdraw_zero_nav`.** -/
@@ -229,8 +236,8 @@ theorem Vault.withdraw_final_nonzero_loss_proof (v : Vault) (amount : WithdrawAm
 /-- **Proof body of `withdraw_payout_too_small`.** -/
 theorem Vault.withdraw_payout_too_small_proof (v : Vault) (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult)
-    (assetsNumber' sharesBurnedNumber assetsTotal' : Number)
-    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
+    (assetsNumber' clampedNumber sharesBurnedNumber assetsTotal' : Number)
+    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' clamped : STAmount)
     (hcomp : (match amount with
         | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
         | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
@@ -241,10 +248,14 @@ theorem Vault.withdraw_payout_too_small_proof (v : Vault) (amount : WithdrawAmou
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
     (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
-    (hat : v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
+    -- the payout is clamped onto the post-sum grid before it reaches the stored fields
+    (hclamp : clampToSumExponent v.assetsTotal cw.assets'.operator_neg = .ok clamped)
+    (hfnp : clamped.isFractionalNonPositive = .ok false)
+    (hcNc : clamped.toNumber .to_nearest = .ok clampedNumber)
+    (hat : v.assetsTotal.operator_sub clampedNumber .to_nearest = .ok assetsTotal')
     (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
     (hrt' : STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsNumber'.mantissa_ != 0 &&
+    (hguard : (clampedNumber.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
     v.withdraw amount waiveUnrealizedLoss =
       .ok (.rejected v .tecPRECISION_LOSS) := by
@@ -260,7 +271,8 @@ theorem Vault.withdraw_payout_too_small_proof (v : Vault) (amount : WithdrawAmou
     try simp only [pure_bind]
     rw [hst, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
     try simp only [pure_bind]
-    simp only [hsN, hat, hrt, hrt', ok_bind]
+    rw [hclamp, ok_bind, hfnp, ok_bind, if_neg (by decide : ¬((false : Bool) = true))]
+    simp only [hcNc, hsN, hat, hrt, hrt', ok_bind]
     rw [if_pos hguard]
     rfl
   }

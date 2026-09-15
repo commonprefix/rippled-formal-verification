@@ -53,13 +53,17 @@ def wshW : STAmount := STAmount.unchecked .int64 2333333333333333 0 false
 `0.9999999999999998`. -/
 def wpW : STAmount := STAmount.unchecked .fractional 9999999999999998 (-16) false
 
+/-- The payout `wpW` clamped down to the post-sum grid, `0.999999999999999`.
+This is what the withdrawal actually pays out; `wpW` is the raw pricing. -/
+def wpcW : STAmount := STAmount.unchecked .fractional 9999999999999990 (-16) false
+
 /-- The stored share total as an int64 amount, `7000000000000000`. -/
 def wstW : STAmount := STAmount.unchecked .int64 7000000000000000 0 false
 
 /-- The post-withdrawal vault of the asset-denominated run. -/
 def wvW' : RawVault :=
-  { assetsTotal := ⟨false, 2000000000000000200, -18⟩
-  , assetsAvailable := ⟨false, 2000000000000000200, -18⟩
+  { assetsTotal := ⟨false, 2000000000000001000, -18⟩
+  , assetsAvailable := ⟨false, 2000000000000001000, -18⟩
   , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 4666666666666667000, -3⟩
@@ -69,21 +73,21 @@ def wvW' : RawVault :=
 def wvW'L : Vault := ⟨wvW', by native_decide, by native_decide⟩
 
 /-- The witness result of the asset-denominated run. -/
-def wrW : WithdrawResult := ⟨none, wvW'L, wpW, wshW⟩
+def wrW : WithdrawResult := ⟨none, wvW'L, wpcW, wshW⟩
 
 /-- The share-denominated witness shares of the vault-updates run,
 `2333333333333`. -/
 def wsh4W : STAmount := STAmount.unchecked .int64 2333333333333 0 false
 
 /-- The payout of the vault-updates run: `3 · 2333333333333 / 7·10¹⁵` rounded
-downward at 16 digits, `0.0009999999999998571`. -/
-def wp4W : STAmount := STAmount.unchecked .fractional 9999999999998571 (-19) false
+downward at 16 digits, then clamped down to the post-sum grid,
+`0.000999999999999`. -/
+def wp4W : STAmount := STAmount.unchecked .fractional 9999999999990000 (-19) false
 
-/-- The post-withdrawal vault of the vault-updates run. Its stored
-`assetsTotal` is the 19-digit rounding of the exact difference. -/
+/-- The post-withdrawal vault of the vault-updates run. -/
 def wv4W' : RawVault :=
-  { assetsTotal := ⟨false, 2999000000000000143, -18⟩
-  , assetsAvailable := ⟨false, 2999000000000000143, -18⟩
+  { assetsTotal := ⟨false, 2999000000000001000, -18⟩
+  , assetsAvailable := ⟨false, 2999000000000001000, -18⟩
   , assetsReserved := Number.zero
   , assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 6997666666666667000, -3⟩
@@ -140,38 +144,36 @@ theorem Vault.withdraw_payout_witness :
   exact ⟨⟨false, 3000000000000000000, -18⟩,
     by native_decide, by native_decide⟩
 
-/-- Witness data for `Vault.withdraw_vault_updates_attained`. -/
-theorem Vault.withdraw_vault_updates_witness :
+/-- **The stored totals now move by exactly the reported payout.**
+`clampToSumExponent` aligns the payout to the post-sum grid, so on the former
+vault-updates counterexample (`wvW` holding `3`, `2333333333333` shares
+redeemed) both asset fields decrease by exactly `r.assets'`. Replaces the old
+inequality witness, which the clamp made unattainable. -/
+theorem Vault.withdraw_vault_updates_exact_witness :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (sharesTotalAmount : STAmount) (r : WithdrawResult),
       v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
-  ⟨wvWL, .vaultShares wsh4W, false, wstW, wr4W, by native_decide⟩
+      r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
+      r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat :=
+  ⟨wvWL, .vaultShares wsh4W, false, wstW,
+    (wvWL.withdraw (.vaultShares wsh4W) false).toOption.getD
+      (WithdrawResult.rejected wvWL .tecINTERNAL),
+    by native_decide, by native_decide, by native_decide, by native_decide,
+    by native_decide, by native_decide⟩
 
-/-- The vault-updates payout re-rounded to the vault scale,
-`0.000999999999999`. -/
-def wpr4W : STAmount := STAmount.unchecked .fractional 9999999999990000 (-19) false
-
-/-- The applied total delta of the vault-updates run, `0.000999999999999857`,
-as a `Number`. -/
-def wdn4W : Number := ⟨false, 9999999999998570000, -22⟩
-
-/-- The applied delta as an on-ledger amount, one step below the payout. -/
-def wda4W : STAmount := STAmount.unchecked .fractional 9999999999998570 (-19) false
-
-/-- Witness data for `Vault.withdraw_applied_delta_attained`. -/
-theorem Vault.withdraw_applied_delta_witness :
+/-- **The applied total delta matches the reported payout.** Same run as
+`withdraw_vault_updates_exact_witness`, read through the on-ledger
+`operator_sub`/`ofNumber` pair the applied-delta headline uses. -/
+theorem Vault.withdraw_applied_delta_exact_witness :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (assets'' : STAmount) (r : WithdrawResult)
-      (deltaTotal : Number) (deltaAmount : STAmount),
+      (r : WithdrawResult),
       v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
-      roundToVaultExponent r.assets' v.assetsTotal = .ok assets'' ∧
-      assets''.operator_eq r.assets' = false ∧
-      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
-      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
-      deltaAmount.operator_eq r.assets' = false :=
-  ⟨wvWL, .vaultShares wsh4W, false, wpr4W, wr4W, wdn4W, wda4W, by native_decide⟩
+      v.toExact.assetsTotal - r.vault'.assetsTotal.toRat = r.assets'.toRat :=
+  ⟨wvWL, .vaultShares wsh4W, false,
+    (wvWL.withdraw (.vaultShares wsh4W) false).toOption.getD
+      (WithdrawResult.rejected wvWL .tecINTERNAL),
+    by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

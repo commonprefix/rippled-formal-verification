@@ -58,20 +58,22 @@ theorem Vault.deposit_insolvent (amountDeposit roundedAmount : STAmount)
   Vault.deposit_insolvent_proof v amountDeposit roundedAmount hrounded hins
 
 /-- The updated total exceeds `assetsMaximum`: `tecLIMIT_EXCEEDED`. -/
-theorem Vault.deposit_maximum_exceeded (amountDeposit roundedAmount c s : STAmount)
+theorem Vault.deposit_maximum_exceeded (amountDeposit roundedAmount c cc s : STAmount)
     (cN sN at' av' st' : Number)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hins : v.isInsolvent = false)
     (hcomp : computeDeposit v roundedAmount = .ok (.success c s))
-    (hcN : c.toNumber .to_nearest = .ok cN)
+    (hclamp : clampToSumExponent v.assetsTotal c = .ok cc)
+    (hfnp : cc.isFractionalNonPositive = .ok false)
+    (hcN : cc.toNumber .to_nearest = .ok cN)
     (hsN : s.toNumber .to_nearest = .ok sN)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
     (hst : v.sharesTotal.operator_add sN .to_nearest = .ok st')
     (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero && at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true) :
     v.deposit amountDeposit false = .ok (.rejected v .tecLIMIT_EXCEEDED) :=
-  Vault.deposit_maximum_exceeded_proof v amountDeposit roundedAmount c s cN sN at' av' st'
-    hrounded hins hcomp hcN hsN hat hav hst hmax
+  Vault.deposit_maximum_exceeded_proof v amountDeposit roundedAmount c cc s cN sN at' av' st'
+    hrounded hins hcomp hclamp hfnp hcN hsN hat hav hst hmax
 
 /-- A donation pushes the total above `assetsMaximum`: `tecLIMIT_EXCEEDED`. -/
 theorem Vault.deposit_donation_maximum (amountDeposit roundedAmount : STAmount)
@@ -91,14 +93,16 @@ theorem Vault.deposit_donation_maximum (amountDeposit roundedAmount : STAmount)
 /-- Every guard passes: the deposit returns the exact updated vault (still a
 `Vault`), the taken `amountDeposit'`, and the issued shares. The
 `to_lawful` re-check is proven to succeed via `deposit_poststate_lawful`. -/
-theorem Vault.deposit_success (amountDeposit roundedAmount c s : STAmount)
+theorem Vault.deposit_success (amountDeposit roundedAmount cp c s : STAmount)
     (cN sN at' av' st' : Number)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanonA : amountDeposit.Canonical) (hnnA : 0 ≤ amountDeposit.toRat)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hins : v.isInsolvent = false)
-    (hcomp : computeDeposit v roundedAmount = .ok (.success c s))
+    (hcomp : computeDeposit v roundedAmount = .ok (.success cp s))
+    (hclamp : clampToSumExponent v.assetsTotal cp = .ok c)
+    (hfnp : c.isFractionalNonPositive = .ok false)
     (hcN : c.toNumber .to_nearest = .ok cN)
     (hsN : s.toNumber .to_nearest = .ok sN)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
@@ -110,9 +114,9 @@ theorem Vault.deposit_success (amountDeposit roundedAmount c s : STAmount)
       v'.toRawVault = { v.toRawVault with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by
   obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   obtain ⟨v', htl, hlv'eq⟩ := Vault.deposit_poststate_lawful v amountDeposit false hL hAV hcanonA hnnA
-    roundedAmount c s cN sN at' av' st' hround hnz
+    roundedAmount cp c s cN sN at' av' st' hround hnz
     (fun h => absurd h (by decide)) (fun h => absurd h (by decide))
-    (fun _ => hcomp) hcN hsN hat hav hst hmax hSsz
+    (fun _ => hcomp) (fun _ => hclamp) (fun _ => hfnp) hcN hsN hat hav hst hmax hSsz
   refine ⟨v', ?_, hlv'eq⟩
   unfold Vault.deposit
   simp only []
@@ -120,8 +124,10 @@ theorem Vault.deposit_success (amountDeposit roundedAmount c s : STAmount)
   rw [if_neg (by rw [Bool.false_and]; exact Bool.false_ne_true)]
   rw [if_neg (by rw [hins, Bool.false_and]; exact Bool.false_ne_true)]
   simp only [pure_bind]
-  rw [if_neg Bool.false_ne_true]
+  rw [if_pos (by decide : (!false) = true)]
   rw [hcomp, ok_bind]
+  simp only []
+  rw [hclamp, ok_bind, hfnp, ok_bind, if_neg (by decide : ¬((false : Bool) = true))]
   simp only [hcN, hsN, hat, hav, hst, ok_bind]
   rw [if_neg (by rw [hmax]; exact Bool.false_ne_true), htl]
   rfl
@@ -146,8 +152,10 @@ theorem Vault.deposit_donation_success (amountDeposit roundedAmount : STAmount)
       v'.toRawVault = { v.toRawVault with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by
   obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
   obtain ⟨v', htl, hlv'eq⟩ := Vault.deposit_poststate_lawful v amountDeposit true hL hAV hcanonA hnnA
-    roundedAmount roundedAmount (STAmount.zero .int64) aN zN at' av' st' hround hnz
-    (fun _ => hsh) (fun _ => ⟨rfl, rfl⟩) (fun h => absurd h (by decide)) haN hzN hat hav hst hmax hSsz
+    roundedAmount roundedAmount roundedAmount (STAmount.zero .int64) aN zN at' av' st' hround hnz
+    (fun _ => hsh) (fun _ => ⟨rfl, rfl⟩) (fun h => absurd h (by decide))
+    (fun h => absurd h (by decide)) (fun h => absurd h (by decide))
+    haN hzN hat hav hst hmax hSsz
   refine ⟨v', ?_, hlv'eq⟩
   unfold Vault.deposit
   simp only []
@@ -155,7 +163,7 @@ theorem Vault.deposit_donation_success (amountDeposit roundedAmount : STAmount)
   rw [if_neg (by rw [Bool.true_and]; exact fun h => hsh (beq_iff_eq.mp h))]
   rw [if_neg (by rw [Bool.not_true, Bool.and_false]; exact Bool.false_ne_true)]
   simp only [pure_bind]
-  rw [if_pos trivial]
+  rw [if_neg (by decide : ¬((!true) = true))]
   simp only [haN, hzN, hat, hav, hst, ok_bind]
   rw [if_neg (by rw [hmax]; exact Bool.false_ne_true), htl]
   rfl

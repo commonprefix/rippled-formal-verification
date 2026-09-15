@@ -329,7 +329,7 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
           + (10 : ℚ) ^ r₂.assets'.exponent + (10 : ℚ) ^ r₁.amountDeposit'.exponent) := by
   -- destructure the deposit result so its scalar fields are concrete
   obtain ⟨re, rlv, rad, rsc⟩ := r₁
-  obtain ⟨am, aD, sC, cN, sN, at', av', st', hround, hamz, _hshdon, hinsolv, _hdon,
+  obtain ⟨am, aP, aD, sC, cN, sN, at', av', st', hround, hamz, _hshdon, hinsolv, _hdon,
     hcomp, hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
     Vault.deposit_success_reduces v amountDeposit false _ hok₁ herr₁
   -- read the component facts through the constructor projections, then substitute
@@ -348,7 +348,7 @@ theorem Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAm
     obtain rfl : rr = V' := hrlv
     rfl
   have hinsolv' : v.isInsolvent = false := hinsolv rfl
-  obtain ⟨shares, hats, hshz, hsad, _hgt, hseq⟩ := computeDeposit_success_reduces v am aD sC (hcomp rfl)
+  obtain ⟨shares, hats, hshz, hsad, _hgt, hseq⟩ := computeDeposit_success_reduces v am aP sC (hcomp rfl).1
   obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v am shares hats
   have hamCanon : am.Canonical := by
     rcases roundToVaultExponent_canonical_or_isZero amountDeposit am v.assetsTotal hcanon hround with hc | hz
@@ -663,13 +663,42 @@ private theorem wvF_Valid : wvF.Valid := by
 so the witness deposit/withdraw runs stay computable under `native_decide`. -/
 private def wvF_lawful' : Vault := ⟨wvF, wvF_WF, wvF_Valid⟩
 
+/-- The round-trip witness vault: `3` assets against `10¹⁸` shares.
+
+`wvF` (`7·10¹⁵` shares) no longer works: there `clampToSumExponent` puts the
+charge on the post-sum grid, and redeeming the issued shares pays back exactly
+that, so the round trip is lossless. Coarser shares reintroduce a gap. -/
+def rtV : RawVault :=
+  { assetsTotal := ⟨false, 3000000000000000000, -18⟩
+  , assetsAvailable := ⟨false, 3000000000000000000, -18⟩
+  , assetsReserved := Number.zero
+  , assetsMaximum := none, numericType := .fractional, scale := 0
+  , sharesTotal := ⟨false, 1000000000000000000, 0⟩
+  , lossUnrealized := Number.zero }
+
+set_option linter.style.nativeDecide false in
+/-- The round-trip witness vault as a `Vault`. -/
+def rtVL : Vault := ⟨rtV, by native_decide, by native_decide⟩
+
+/-- The round-trip witness deposit amount, `1` of the IOU. -/
+def rtAmt : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
+
+/-- The round-trip deposit result. `getD` never fires (the run succeeds). -/
+def rtR₁ : DepositResult :=
+  (rtVL.deposit rtAmt false).toOption.getD (DepositResult.rejected rtVL .tecINTERNAL)
+
+/-- The round-trip withdrawal result, redeeming exactly the issued shares. -/
+def rtR₂ : WithdrawResult :=
+  (rtR₁.vault'.withdraw (.vaultShares rtR₁.sharesIssued) false).toOption.getD
+    (WithdrawResult.rejected rtR₁.vault' .tecINTERNAL)
+
 set_option linter.style.nativeDecide false in
 /-- **Proof body of `Vault.deposit_withdraw_roundtrip_attained`.** Instantiates the
-round trip at the `wvF` witness: deposit `waF` into `wvF` yields `wrF` (charge
-`wcF`), and redeeming the issued `wsF` shares from `wvF'` misses `wcF` by a full
-16-digit ULP, past the relative band. The concrete deposit/withdraw runs and the
-strict miss are settled by `native_decide` (compiler axioms admitted here only,
-per the approved witness policy). -/
+round trip at the `rtV` witness: depositing `1` and immediately redeeming the
+issued shares does not pay the charge back, and the miss clears the relative band.
+The concrete deposit/withdraw runs and the strict miss are settled by
+`native_decide` (compiler axioms admitted here only, per the approved witness
+policy). -/
 theorem Vault.deposit_withdraw_roundtrip_attained_proof :
     ∃ (v : Vault) (amountDeposit : STAmount) (r₁ : DepositResult) (r₂ : WithdrawResult),
       0 < amountDeposit.toRat ∧
@@ -678,9 +707,8 @@ theorem Vault.deposit_withdraw_roundtrip_attained_proof :
       r₁.vault'.withdraw (.vaultShares r₁.sharesIssued) false = .ok r₂ ∧
       r₂.error = none ∧
       RoundsWithinWitness r₂.assets' r₁.amountDeposit'.toRat (2 * depositε) := by
-  refine ⟨wvF_lawful', waF, wrF,
-    (wvF'L.withdraw (.vaultShares wsF) false).toOption.getD ⟨none, wvF'L, wcF, wsF⟩,
-    ?_, ?_, ?_, rfl, ?_, ?_, ?_⟩
+  refine ⟨rtVL, rtAmt, rtR₁, rtR₂, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · native_decide
   · native_decide
   · native_decide
   · native_decide

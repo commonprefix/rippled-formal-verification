@@ -38,10 +38,9 @@ theorem Vault.deposit_error_rejected_proof (v : Vault) (amountDeposit : STAmount
         · rw [if_neg h3] at hok
           simp only [pure_bind] at hok
           by_cases hd : isDonation = true
-          · rw [if_pos hd] at hok
+          · rw [if_neg (show ¬((!isDonation) = true) by simp [hd])] at hok
             obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -50,16 +49,22 @@ theorem Vault.deposit_error_rejected_proof (v : Vault) (amountDeposit : STAmount
             · rw [if_neg hm] at hok
               obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
               injection hok with h; rw [← h]; exact .inr rfl
-          · rw [if_neg hd] at hok
+          · rw [if_pos (show (!isDonation) = true by
+              simp [show isDonation = false by simpa using hd])] at hok
             obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
             cases cres with
             | error e =>
               injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
             | success a s =>
               simp only [] at hok
+              obtain ⟨ad, _, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+              by_cases hfnp : fnp = true
+              · rw [if_pos hfnp] at hok; injection hok with h; rw [← h]
+                exact .inl ⟨rfl, rfl, rfl⟩
+              rw [if_neg hfnp] at hok
               obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-              obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
               obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -111,11 +116,17 @@ theorem Vault.withdraw_error_rejected_proof (v : Vault) (amount : WithdrawAmount
               obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
               injection hok with h; rw [← h]; exact .inr rfl
           · rw [if_neg h3] at hok; try simp only [pure_bind] at hok
+            obtain ⟨clamped, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hfnp : fnp = true
+            · rw [if_pos hfnp] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
+            rw [if_neg hfnp] at hok; try simp only [pure_bind] at hok
+            obtain ⟨clampedNumber, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨sbn, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨atr, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨atr', _, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases h5 : (assetsNumber'.mantissa_ != 0 && atr.operator_eq atr') = true
+            by_cases h5 : (clampedNumber.mantissa_ != 0 && atr.operator_eq atr') = true
             · rw [if_pos h5] at hok; injection hok with h; rw [← h]; exact .inl ⟨rfl, rfl, rfl⟩
             · rw [if_neg h5] at hok; try simp only [pure_bind] at hok
               obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok

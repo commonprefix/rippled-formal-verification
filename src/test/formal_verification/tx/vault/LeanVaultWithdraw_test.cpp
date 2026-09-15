@@ -757,14 +757,14 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
-        // testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
-        // testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
-        // testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
-        // testWithdrawAppliedDelta();      // totals move by more than paid out (both)
+        testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
+        testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
+        testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
+        testWithdrawAppliedDelta();      // totals move by more than paid out (both)
 
         // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
-        // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
-        // testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
+        testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
+        testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
 
         // Fixed discrepancies, kept as regression tests.
         testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit with a loss

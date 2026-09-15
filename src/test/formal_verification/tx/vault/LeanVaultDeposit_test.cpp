@@ -811,15 +811,15 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
-        // testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
-        // testVaultDonationInsolvent();        // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
-        // testDepositDilution();               // FV_M2_8: deposit lowers the share price (both)
-        // testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
-        // testDepositAppliedDelta();           // totals move by more than paid (both)
+        testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
+        testVaultDonationInsolvent();        // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
+        testDepositDilution();               // FV_M2_8: deposit lowers the share price (both)
+        testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
+        testDepositAppliedDelta();           // totals move by more than paid (both)
 
         // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
-        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
-        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);
+        testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
+        testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);
         // clang-format on
     }
 };

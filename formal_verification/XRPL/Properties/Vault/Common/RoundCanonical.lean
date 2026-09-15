@@ -1,5 +1,6 @@
 import XRPL.Properties.Vault.Common.OfNumberBoundary
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.Common.SubZeroShape
 import XRPL.Properties.Protocol.STAmount.Div.Common.IOU
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
 import XRPL.Properties.Protocol.STAmount.Sub.RoundsWithin
@@ -230,6 +231,170 @@ lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : round
     have hcneg : result.mIsNegative = false := by rw [← heq]; exact hneg_false
     rw [STAmount.toRat_of_nonneg result hcneg]; positivity
 
+/-- A nonnegative amount either is zero or has its sign flag clear. Feeds the
+`clampToSumExponent` identity lemmas, which cannot be confused by a signed zero
+(`operator_neg` is the identity there). -/
+lemma STAmount.sign_clear_of_nonneg (s : STAmount) (h : 0 ≤ s.toRat) :
+    s.mValue = 0 ∨ s.mIsNegative = false := by
+  by_cases hmv : s.mValue = 0
+  · exact Or.inl hmv
+  refine Or.inr ?_
+  by_contra hc
+  have hneg : s.mIsNegative = true := by simpa using hc
+  have hsn : s.operator_neg.mIsNegative = false := by
+    rw [STAmount.operator_neg_of_ne s hmv]
+    show (!s.mIsNegative) = false
+    rw [hneg]; rfl
+  have hmv' : s.operator_neg.mValue ≠ 0 := by rw [STAmount.operator_neg_mValue]; exact hmv
+  have hp := STAmount.toRat_pos_of s.operator_neg hsn hmv'
+  rw [STAmount.operator_neg_toRat] at hp
+  linarith
+
+/-! ## `normalize` never flushes a normalized nonzero `Number` -/
+
+/-- A normalized nonzero `Number` is at or above the smallest magnitude the
+19-digit `normalize` pipeline can represent. -/
+lemma Number.abs_toRat_ge_min_of_normalized (n : Number)
+    (hn : n.isNormalized) (hne : n.mantissa_ ≠ 0) :
+    (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ |n.toRat| := by
+  obtain ⟨hm_lo, -⟩ := hn.mantissaBounds_nat hne
+  have hexp : minExponent ≤ n.exponent_ := by
+    rcases hn with h0 | ⟨_, _, _, hlo, _⟩
+    · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hne
+    · exact hlo
+  have habs : |n.toRat| = (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_ := by
+    cases hneg : n.negative_ with
+    | false => rw [Number.toRat_of_nonneg n hneg, abs_of_nonneg (by positivity)]
+    | true => rw [Number.toRat_of_neg n hneg, abs_neg, abs_of_nonneg (by positivity)]
+  rw [habs]
+  have h1 : (10 : ℚ) ^ (18 : ℕ) ≤ (n.mantissa_.toNat : ℚ) := by exact_mod_cast hm_lo
+  have h3 : (0 : ℚ) < (10 : ℚ) ^ (minExponent : ℤ) := zpow_pos (by norm_num) _
+  have h2 : (10 : ℚ) ^ (minExponent : ℤ) ≤ (10 : ℚ) ^ n.exponent_ :=
+    zpow_le_zpow_right₀ (by norm_num) hexp
+  have hmnn : (0 : ℚ) ≤ (n.mantissa_.toNat : ℚ) := by positivity
+  calc (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
+      ≤ (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ (minExponent : ℤ) :=
+        mul_le_mul_of_nonneg_right h1 (le_of_lt h3)
+    _ ≤ (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_ :=
+        mul_le_mul_of_nonneg_left h2 hmnn
+
+/-- **`normalize` never flushes a normalized nonzero `Number` to zero.** The
+underflow characterisation puts a flushed input strictly below
+`10 ^ 18 * 10 ^ minExponent`, a magnitude every normalized nonzero `Number`
+attains. This is the fact that lets the post-sum grid step be bounded against
+the stored total: without it the flushed `ofNumber` output has an unpinned
+exponent. -/
+lemma Number.normalize_ne_zero_of_normalized (n result : Number) (mode : rounding_mode)
+    (hn : n.isNormalized) (hne : n.mantissa_ ≠ 0)
+    (hok : n.normalize largeRange.min largeRange.max mode = .ok result) :
+    result.mantissa_ ≠ 0 := fun h0 =>
+  absurd (normalize_underflow_truth_small n result mode hne hok h0)
+    (not_lt.mpr (Number.abs_toRat_ge_min_of_normalized n hn hne))
+
+/-- Magnitude-hypothesis variant of `normalize_ne_zero_of_normalized`, for inputs
+that are not themselves 19-digit normalized (the `ofMantissaExp` re-lift). -/
+lemma Number.normalize_ne_zero_of_abs_ge (n result : Number) (mode : rounding_mode)
+    (hne : n.mantissa_ ≠ 0)
+    (hge : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ |n.toRat|)
+    (hok : n.normalize largeRange.min largeRange.max mode = .ok result) :
+    result.mantissa_ ≠ 0 := fun h0 =>
+  absurd (normalize_underflow_truth_small n result mode hne hok h0) (not_lt.mpr hge)
+
+/-- **A flushed `ofMantissaExp` output carries the canonical zero exponent.**
+Strengthens `ofMantissaExp_exponent_cases`, which leaves the `-100` disjunct
+untied to the mantissa. A zero output mantissa can only arise from the
+zero-input exit or the `cMinOffset` flush, both returning `IOUAmount.zero`; the
+third exit returns a 16-digit-normalized record whose mantissa clears
+`cMinValue`, provided the input magnitude clears the 19-digit representable
+floor. -/
+lemma IOUAmount.ofMantissaExp_zero_exponent (m : Int64) (e : Int) (mode : rounding_mode)
+    (i : IOUAmount)
+    (hbig : m ≠ 0 →
+      (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
+        ≤ (m.toInt.natAbs : ℚ) * (10 : ℚ) ^ e)
+    (hok : IOUAmount.ofMantissaExp m e mode = .ok i) (h0 : i.mantissa_ = 0) :
+    i.exponent_ = -100 := by
+  unfold IOUAmount.ofMantissaExp IOUAmount.normalize at hok
+  by_cases hm : (m == 0) = true
+  · rw [if_pos hm] at hok
+    rw [← Except.ok.inj hok]; rfl
+  · rw [if_neg hm] at hok
+    have hm_ne : m ≠ 0 := by simpa using hm
+    cases hfr : Number.from_rep m e largeRange.min largeRange.max mode with
+    | error e' => rw [hfr] at hok; exact absurd hok (by simp)
+    | ok v =>
+      rw [hfr] at hok
+      simp only [] at hok
+      cases hfn : IOUAmount.fromNumber v mode with
+      | error e' => rw [hfn] at hok; exact absurd hok (by simp)
+      | ok r =>
+        rw [hfn] at hok
+        simp only [] at hok
+        by_cases hhi : r.exponent_ > cMaxOffset
+        · rw [if_pos hhi] at hok; exact absurd hok (by simp)
+        rw [if_neg hhi] at hok
+        by_cases hlo : r.exponent_ < cMinOffset
+        · rw [if_pos hlo] at hok
+          rw [← Except.ok.inj hok]; rfl
+        · rw [if_neg hlo] at hok
+          exfalso
+          have hir : i = r := (Except.ok.inj hok).symm
+          have hb : m.toInt.natAbs < 2 ^ 64 := by
+            have h1 := Int64.le_toInt m
+            have h2 := Int64.toInt_lt m
+            omega
+          have hmt : m.toInt.natAbs.toUInt64.toNat = m.toInt.natAbs :=
+            UInt64.toNat_ofNat_of_lt hb
+          have hna_pos : m.toInt.natAbs ≠ 0 := by
+            intro hz
+            have hz' : m.toInt = 0 := Int.natAbs_eq_zero.mp hz
+            exact hm_ne (Int64.toInt_inj.mp (by rw [hz']; decide))
+          have hun_ne : (Number.unchecked (m < 0) m.toInt.natAbs.toUInt64 e).mantissa_ ≠ 0 := by
+            show m.toInt.natAbs.toUInt64 ≠ 0
+            intro hz
+            rw [hz] at hmt
+            exact hna_pos (by simpa using hmt.symm)
+          have hfr' : (Number.unchecked (m < 0) m.toInt.natAbs.toUInt64 e).normalize
+              largeRange.min largeRange.max mode = .ok v := hfr
+          have hun_abs : |(Number.unchecked (m < 0) m.toInt.natAbs.toUInt64 e).toRat|
+              = (m.toInt.natAbs : ℚ) * (10 : ℚ) ^ e := by
+            cases hneg : (Number.unchecked (m < 0) m.toInt.natAbs.toUInt64 e).negative_ with
+            | false =>
+              rw [Number.toRat_of_nonneg _ hneg, abs_of_nonneg (by positivity)]
+              show ((m.toInt.natAbs.toUInt64.toNat : ℚ)) * (10 : ℚ) ^ e = _
+              rw [hmt]
+            | true =>
+              rw [Number.toRat_of_neg _ hneg, abs_neg, abs_of_nonneg (by positivity)]
+              show ((m.toInt.natAbs.toUInt64.toNat : ℚ)) * (10 : ℚ) ^ e = _
+              rw [hmt]
+          have hv_ne : v.mantissa_ ≠ 0 :=
+            Number.normalize_ne_zero_of_abs_ge _ v mode hun_ne
+              (by rw [hun_abs]; exact hbig hm_ne) hfr'
+          have hv_norm : v.isNormalized :=
+            normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
+          obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv_ne
+          have hexp_lo : minExponent ≤ v.exponent_ := by
+            rcases hv_norm with hz | ⟨_, _, _, hlo', _⟩
+            · exact absurd (show v.mantissa_ = 0 by rw [hz]; rfl) hv_ne
+            · exact hlo'
+          unfold IOUAmount.fromNumber at hfn
+          cases hnr : v.normalizeToRange cMinValue cMaxValue mode with
+          | error e' => rw [hnr] at hfn; exact absurd hfn (by simp)
+          | ok me =>
+            obtain ⟨mm, ee⟩ := me
+            rw [hnr] at hfn
+            simp only [] at hfn
+            have hrm : r.mantissa_ = mm := by rw [← Except.ok.inj hfn]
+            have hexp_hi3 : v.exponent_ + 3 ≤ maxExponent :=
+              normalizeToRange_iou_exp_hi v mode mm ee hvm_lo hvm_hi hnr
+            obtain ⟨⟨hmlo, -⟩, -, -⟩ :=
+              normalizeToRange_iou_ok_facts v mode mm ee hvm_lo hvm_hi (by omega) hexp_hi3 hnr
+            have hmm0 : mm = 0 := by rw [← hrm, ← hir]; exact h0
+            rw [hmm0] at hmlo
+            have : cMinValue.toNat = 10 ^ 15 := by decide
+            simp only [this] at hmlo
+            exact absurd hmlo (by decide)
+
 /-! ## Canonical-or-zero for a fractional STAmount -/
 
 /-- A deposit-ready fractional amount: fractional type and stored canonically or
@@ -282,6 +447,150 @@ lemma STAmount.canonicalize_fczr (s result : STAmount) (mode : rounding_mode)
       rw [hres]
       show (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64 = 0
       rw [hz]; split <;> decide
+
+/-- **A flushed fractional `canonicalize` output carries the canonical zero
+offset.** Strengthens `canonicalize_fractional_offset` by tying its `-100`
+disjunct to the mantissa, which is what lets the post-sum grid step be bounded.
+`hbig` says the packed magnitude clears the 19-digit representable floor; it is
+discharged from `isNormalized` at the `ofNumber` level. -/
+lemma STAmount.canonicalize_fractional_zero_offset (s result : STAmount) (mode : rounding_mode)
+    (hfr : s.mNumericType = .fractional)
+    (hsz : s.mValue.toNat < 10 ^ 16)
+    (hbig : s.mValue ≠ 0 →
+      (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
+        ≤ (s.mValue.toNat : ℚ) * (10 : ℚ) ^ s.mOffset)
+    (hok : s.canonicalize mode = .ok result)
+    (h0 : result.mValue = 0) :
+    result.mOffset = -100 := by
+  have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
+  unfold STAmount.canonicalize at hok
+  rw [if_neg hint] at hok
+  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
+    unfold STAmount.iou; rw [if_neg hint]
+  rw [hiou] at hok
+  cases hone : IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode with
+  | error e => rw [hone] at hok; exact absurd hok (by simp)
+  | ok i =>
+    rw [hone] at hok
+    simp only [] at hok
+    have heq := Except.ok.inj hok
+    have hres : result.mOffset = i.exponent_ := by rw [← heq]
+    have hresv : result.mValue
+        = (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64 := by rw [← heq]
+    have hsd : s.signedDrops.toInt64.toInt = s.signedDrops :=
+      STAmount.signedDrops_toInt64_toInt s hsz
+    have hna : s.signedDrops.toInt64.toInt.natAbs = s.mValue.toNat := by
+      rw [hsd]; unfold STAmount.signedDrops; split <;> omega
+    have hone' : IOUAmount.normalize ⟨s.signedDrops.toInt64, s.mOffset⟩ mode = .ok i := hone
+    rcases IOUAmount.normalize_InRange16_or_zero _ mode i hone' with hr | hz
+    · -- a 16-digit-canonical output has a nonzero magnitude, contradicting `h0`
+      exfalso
+      have h_fit : i.mantissa_.toInt.natAbs < 2 ^ 63 := by have := hr.mant_hi; omega
+      have h_absToNat := IOUAmount.absMant_toNat i h_fit
+      have hval : result.mValue.toNat = i.mantissa_.toInt.natAbs := by rw [hresv, h_absToNat]
+      rw [h0] at hval
+      have hlo := hr.mant_lo
+      simp only [UInt64.toNat_ofNat] at hval
+      omega
+    · rw [hres]
+      refine IOUAmount.ofMantissaExp_zero_exponent _ s.mOffset mode i ?_ hone hz
+      intro hm
+      rw [hna]
+      refine hbig ?_
+      intro hzv
+      apply hm
+      have hsz0 : s.signedDrops = 0 := by
+        unfold STAmount.signedDrops; rw [hzv]; split <;> simp
+      rw [hsz0]; rfl
+
+/-- **A flushed fractional `ofNumber` output carries the canonical zero offset.**
+The `-100` disjunct of `ofNumber_fractional_offset`, now tied to the mantissa. A
+normalized nonzero operand clears the 19-digit representable floor, so the only
+way to a zero output is one of the two exits that return `IOUAmount.zero`. -/
+lemma STAmount.ofNumber_iou_zero_offset (n : Number) (mode : rounding_mode) (A : STAmount)
+    (hn : n.isNormalized)
+    (hok : STAmount.ofNumber .fractional n mode = .ok A)
+    (h0 : A.mValue = 0) : A.mOffset = -100 := by
+  by_cases hmz : n.mantissa_ = 0
+  · -- a normalized zero-mantissa operand is `Number.zero`, which packs to the
+    -- canonical zero record
+    rw [Number.eq_zero_of_mantissa_zero n hn hmz] at hok
+    rw [show STAmount.ofNumber .fractional Number.zero mode
+        = .ok ⟨.fractional, 0, -100, false⟩ from by cases mode <;> rfl] at hok
+    rw [← Except.ok.inj hok]
+  have hne : n.mantissa_ ≠ 0 := hmz
+  obtain ⟨hm_lo, hm_hi⟩ := hn.mantissaBounds_nat hne
+  have hexp_lo : minExponent ≤ n.exponent_ := by
+    rcases hn with hz | ⟨_, _, _, hlo, _⟩
+    · exact absurd (show n.mantissa_ = 0 by rw [hz]; rfl) hne
+    · exact hlo
+  unfold STAmount.ofNumber at hok
+  rw [if_neg (by decide : ¬ NumericType.fractional.isIntegral = true)] at hok
+  set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw_def
+  have hw_mant : w.mantissa_ = n.mantissa_ := by
+    rw [hw_def]; split
+    · exact Number.operator_neg_mantissa_of_ne n hne
+    · rfl
+  have hw_exp : w.exponent_ = n.exponent_ := by
+    rw [hw_def]; split
+    · unfold Number.operator_neg; rw [if_neg (by simpa using hne)]
+    · rfl
+  have hw_neg : w.negative_ = false := by
+    rw [hw_def]; split
+    · rename_i hc
+      rw [Number.signum_neg_decide] at hc
+      rw [Number.operator_neg_negative_of_ne n hne, hc]; rfl
+    · rename_i hc
+      rw [Number.signum_neg_decide] at hc
+      simpa using hc
+  have hw_lo : 10 ^ 18 ≤ w.mantissa_.toNat := by rw [hw_mant]; exact hm_lo
+  have hw_hi : w.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hm_hi
+  cases hnr : w.normalizeToRange kMinValue kMaxValue mode with
+  | error e => rw [hnr] at hok; exact absurd hok (by simp)
+  | ok me =>
+    obtain ⟨mant, exp⟩ := me
+    rw [hnr] at hok
+    simp only [] at hok
+    rw [STAmount.checked] at hok
+    have hnr' : w.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnr
+    have hexp_hi3 : w.exponent_ + 3 ≤ maxExponent :=
+      normalizeToRange_iou_exp_hi w mode mant exp hw_lo hw_hi hnr'
+    obtain ⟨⟨hmlo, hmhi⟩, ⟨hexp_lo3, -⟩, hsgn⟩ :=
+      normalizeToRange_iou_ok_facts w mode mant exp hw_lo hw_hi (by omega) hexp_hi3 hnr'
+    have hmant_pos : 0 ≤ mant.toInt := hsgn hw_neg
+    have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
+      have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
+    refine STAmount.canonicalize_fractional_zero_offset _ A mode rfl ?_ ?_ hok h0
+    · -- the packed magnitude is a 16-digit mantissa
+      show mant.toUInt64.toNat < 10 ^ 16
+      rw [← hmant_natAbs]
+      have hcmax : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
+      rw [hcmax] at hmhi; omega
+    · -- and it clears the 19-digit representable floor
+      intro _
+      show (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
+        ≤ ((mant.toUInt64.toNat : ℕ) : ℚ) * (10 : ℚ) ^ exp
+      have hcmin : cMinValue.toNat = 10 ^ 15 := by decide
+      rw [hcmin] at hmlo
+      have hmlo' : (10 : ℚ) ^ (15 : ℕ) ≤ ((mant.toUInt64.toNat : ℕ) : ℚ) := by
+        rw [← hmant_natAbs]; exact_mod_cast hmlo
+      have hstep : minExponent + 3 ≤ exp := by rw [hw_exp] at hexp_lo3; omega
+      have hz1 : (10 : ℚ) ^ ((minExponent + 3 : ℤ)) ≤ (10 : ℚ) ^ exp :=
+        zpow_le_zpow_right₀ (by norm_num) hstep
+      have hprod : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ)
+          = (10 : ℚ) ^ (15 : ℕ) * (10 : ℚ) ^ ((minExponent + 3 : ℤ)) := by
+        rw [show ((10 : ℚ) ^ (18 : ℕ)) = (10 : ℚ) ^ ((18 : ℤ)) from by norm_num,
+          show ((10 : ℚ) ^ (15 : ℕ)) = (10 : ℚ) ^ ((15 : ℤ)) from by norm_num,
+          ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0),
+          ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+        congr 1
+        try omega
+      rw [hprod]
+      calc (10 : ℚ) ^ (15 : ℕ) * (10 : ℚ) ^ ((minExponent + 3 : ℤ))
+          ≤ ((mant.toUInt64.toNat : ℕ) : ℚ) * (10 : ℚ) ^ ((minExponent + 3 : ℤ)) :=
+            mul_le_mul_of_nonneg_right hmlo' (le_of_lt (zpow_pos (by norm_num) _))
+        _ ≤ ((mant.toUInt64.toNat : ℕ) : ℚ) * (10 : ℚ) ^ exp :=
+            mul_le_mul_of_nonneg_left hz1 (by positivity)
 
 /-- `ofIOUAmount` canonicalizes a fractional record, so its output is
 `FracCanonZero`. -/
@@ -382,6 +691,146 @@ lemma STAmount.roundToExponent_fczr (value result : STAmount) (scale : Int)
           have hsum_fczr : sum.FracCanonZero :=
             STAmount.operator_add_fczr value referenceValue sum rounding ⟨hnt, hcz⟩ hsum
           exact STAmount.operator_sub_fczr sum referenceValue result rounding hsum_fczr hok
+
+/-- `ofNumber` on the fractional type packs its result through `checked`, whose
+`canonicalize` output is `FracCanonZero`. -/
+lemma STAmount.ofNumber_fczr (n : Number) (mode : rounding_mode) (result : STAmount)
+    (hok : STAmount.ofNumber .fractional n mode = .ok result) : result.FracCanonZero := by
+  unfold STAmount.ofNumber at hok
+  simp only [show NumericType.fractional.isIntegral = false from rfl, Bool.false_eq_true,
+    if_false] at hok
+  split at hok
+  · exact absurd hok (by simp)
+  · rw [STAmount.checked] at hok
+    exact STAmount.canonicalize_fczr _ result mode rfl hok
+
+/-- **The post-sum clamp keeps a fractional delta `FracCanonZero`.** The negative
+branch rounds the magnitude with `roundToExponent`, the positive one repacks the
+recovered difference with `ofNumber`; both canonicalize their output. -/
+lemma clampToSumExponent_fczr (amount : Number) (delta c : STAmount)
+    (hd : delta.FracCanonZero)
+    (hok : clampToSumExponent amount delta = .ok c) : c.FracCanonZero := by
+  have hint : ¬ delta.integral = true := by
+    unfold STAmount.integral; rw [hd.1]; decide
+  unfold clampToSumExponent at hok
+  simp only [] at hok
+  rw [if_neg hint] at hok
+  simp only [pure_bind] at hok
+  obtain ⟨pe, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+  have habs : (if delta.negative = true then delta.operator_neg else delta).FracCanonZero := by
+    split
+    · exact STAmount.operator_neg_fczr delta hd
+    · exact hd
+  by_cases hneg : delta.negative = true
+  · rw [if_pos hneg] at hok
+    exact STAmount.roundToExponent_fczr _ c pe .downward habs hok
+  · rw [if_neg hneg] at hok
+    obtain ⟨sum, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+    obtain ⟨ada, -, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+    exact STAmount.ofNumber_fczr ada .to_nearest c
+      (by rw [show delta.numericType = .fractional from hd.1] at hok; exact hok)
+
+/-- **The post-sum clamp preserves canonical-or-zero storage.** The integral pass
+is the identity on a sign-cleared amount; the fractional pass canonicalizes. -/
+lemma clampToSumExponent_exactCanonical_or_zero (amount : Number) (a c : STAmount)
+    (ha : a.ExactCanonical ∨ (a.mNumericType = .fractional ∧ a.mValue = 0))
+    (hsgn : a.mValue = 0 ∨ a.mIsNegative = false)
+    (hok : clampToSumExponent amount a = .ok c) :
+    c.ExactCanonical ∨ (c.mNumericType = .fractional ∧ c.mValue = 0) := by
+  by_cases hint : a.integral = true
+  · rw [XRPL.Model.SingleAssetVault.clampToSumExponent_integral_pos amount a hint hsgn] at hok
+    rw [← Except.ok.inj hok]; exact ha
+  · have hnt : a.mNumericType = .fractional := by
+      cases h : a.mNumericType with
+      | fractional => rfl
+      | integral mv mo ms msh =>
+        exact absurd (show a.integral = true from by unfold STAmount.integral; rw [h]; rfl) hint
+    have hiou : a.IOUCanonical ∨ a.mValue = 0 := by
+      rcases ha with hec | ⟨-, h0⟩
+      · rcases hec with hio | ⟨hic, -⟩
+        · exact Or.inl hio
+        · exact absurd (show a.integral = true from hic.is_integral) hint
+      · exact Or.inr h0
+    obtain ⟨hntc, hczc⟩ := clampToSumExponent_fczr amount a c ⟨hnt, hiou⟩ hok
+    rcases hczc with hio | h0
+    · exact Or.inl (Or.inl hio)
+    · exact Or.inr ⟨hntc, h0⟩
+
+/-- **`toNumber` is value-exact and normalized on a canonical-or-fractional-zero
+amount.** Dispatches `toNumber_exact_canonical` and `toNumber_zero_fractional`. -/
+lemma STAmount.toNumber_exact_of_ecz (a : STAmount) (cN : Number)
+    (hecz : a.ExactCanonical ∨ (a.mNumericType = .fractional ∧ a.mValue = 0))
+    (hcN : a.toNumber .to_nearest = .ok cN) :
+    cN.toRat = a.toRat ∧ cN.isNormalized := by
+  rcases hecz with hexact | ⟨hnt, h0⟩
+  · obtain ⟨an, han, hval, hnorm⟩ := STAmount.toNumber_exact_canonical a .to_nearest hexact
+    have hcNeq : an = cN := by rw [han] at hcN; exact Except.ok.inj hcN
+    rw [← hcNeq]; exact ⟨hval, hnorm⟩
+  · have hafr : a.integral = false := by
+      show a.mNumericType.isIntegral = false
+      rw [hnt]; rfl
+    have hczero := STAmount.toNumber_zero_fractional a .to_nearest hafr h0
+    have hcNeq : cN = Number.zero := by rw [hczero] at hcN; exact (Except.ok.inj hcN).symm
+    subst hcNeq
+    refine ⟨?_, Or.inl rfl⟩
+    rw [Number.toRat_zero, STAmount.toRat_signed, h0]; simp
+
+/-- `operator_neg` only flips the sign bit, and the canonical-storage predicates
+read `mNumericType`/`mValue`/`mOffset`, so it preserves them. -/
+lemma STAmount.operator_neg_ecz (a : STAmount)
+    (ha : a.ExactCanonical ∨ (a.mNumericType = .fractional ∧ a.mValue = 0)) :
+    a.operator_neg.ExactCanonical ∨
+      (a.operator_neg.mNumericType = .fractional ∧ a.operator_neg.mValue = 0) := by
+  have hnt := STAmount.operator_neg_mNumericType a
+  have hmv := STAmount.operator_neg_mValue a
+  have hof := STAmount.operator_neg_mOffset a
+  rcases ha with hec | ⟨h1, h2⟩
+  · refine Or.inl ?_
+    rcases hec with hio | ⟨hic, hsz⟩
+    · exact Or.inl ⟨by rw [hnt]; exact hio.is_fractional, by rw [hmv]; exact hio.mant_lo,
+        by rw [hmv]; exact hio.mant_hi, by rw [hof]; exact hio.exp_lo,
+        by rw [hof]; exact hio.exp_hi⟩
+    · exact Or.inr ⟨⟨by rw [hnt]; exact hic.is_integral, by rw [hof]; exact hic.offset_zero,
+        by rw [hmv, hnt]; exact hic.in_range⟩, by rw [hmv]; exact hsz⟩
+  · exact Or.inr ⟨by rw [hnt]; exact h1, by rw [hmv]; exact h2⟩
+
+/-- **The post-sum clamp of a negative delta stores canonically or as a fractional
+zero.** Mirror of `clampToSumExponent_exactCanonical_or_zero` for the withdraw and
+clawback direction, which clamps `payout.operator_neg`.
+
+No sign hypothesis: the integral branch is the clamp's identity on the *magnitude*
+(`clampToSumExponent_integral`), and both of its outcomes -- `a` itself or its
+negation -- keep the canonical storage shape. -/
+lemma clampToSumExponent_neg_exactCanonical_or_zero (amount : Number) (a c : STAmount)
+    (ha : a.ExactCanonical ∨ (a.mNumericType = .fractional ∧ a.mValue = 0))
+    (hok : clampToSumExponent amount a.operator_neg = .ok c) :
+    c.ExactCanonical ∨ (c.mNumericType = .fractional ∧ c.mValue = 0) := by
+  by_cases hint : a.integral = true
+  · have hnegint : a.operator_neg.integral = true := by
+      show a.operator_neg.mNumericType.isIntegral = true
+      rw [STAmount.operator_neg_mNumericType]; exact hint
+    rw [XRPL.Model.SingleAssetVault.clampToSumExponent_integral amount a.operator_neg
+      hnegint] at hok
+    rw [← Except.ok.inj hok]
+    split
+    · rw [XRPL.Model.SingleAssetVault.STAmount.operator_neg_neg]; exact ha
+    · exact STAmount.operator_neg_ecz a ha
+  · have hnt : a.mNumericType = .fractional := by
+      cases h : a.mNumericType with
+      | fractional => rfl
+      | integral mv mo ms msh =>
+        exact absurd (show a.integral = true from by unfold STAmount.integral; rw [h]; rfl) hint
+    have hiou : a.IOUCanonical ∨ a.mValue = 0 := by
+      rcases ha with hec | ⟨-, h0⟩
+      · rcases hec with hio | ⟨hic, -⟩
+        · exact Or.inl hio
+        · exact absurd (show a.integral = true from hic.is_integral) hint
+      · exact Or.inr h0
+    obtain ⟨hntc, hczc⟩ := clampToSumExponent_fczr amount a.operator_neg c
+      (STAmount.operator_neg_fczr a ⟨hnt, hiou⟩) hok
+    rcases hczc with hio | h0
+    · exact Or.inl (Or.inl hio)
+    · exact Or.inr ⟨hntc, h0⟩
 
 /-- A zero-mantissa `Number` renormalizes to the zero `IOUAmount`. (The version in
 `RoundToScale.Common.Proofs` is `private`, so it is reproven here.) -/
@@ -760,13 +1209,7 @@ theorem roundToVaultExponent_canonical_or_isZero (amountDeposit rounded : STAmou
     unfold roundToVaultExponent at hok
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨postScale, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨rounded', hrx, hlast⟩ := bind_ok_peel _ _ _ hok
-    have hlast' : rounded' = rounded :=
-      Except.ok.inj (show Except.ok rounded' = .ok rounded from hlast)
-    rw [hlast'] at hrx
+    obtain ⟨postScale, _, hrx⟩ := bind_ok_peel _ _ _ hok
     have hres := STAmount.roundToExponent_fczr amountDeposit rounded postScale .downward hcz hrx
     rcases hres.2 with hc | hzero
     · left; exact STAmount.Canonical.of_iou rounded hc
@@ -797,14 +1240,11 @@ theorem RawVault.roundToVaultExponent_nonneg (amountDeposit result : STAmount) (
     unfold roundToVaultExponent at hok
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨assetsTotal', _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨postScale, hps, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨rounded', hrx, hlast⟩ := bind_ok_peel _ _ _ hok
-    have hlast' : rounded' = result :=
-      Except.ok.inj (show Except.ok rounded' = .ok result from hlast)
-    rw [hlast'] at hrx
-    have hps_nt : exponent assetsTotal' .fractional = .ok postScale := by
+    obtain ⟨postScale, hpse, hrx⟩ := bind_ok_peel _ _ _ hok
+    unfold postSumExponent at hpse
+    obtain ⟨_, _, hpse⟩ := bind_ok_peel _ _ _ hpse
+    obtain ⟨assetsTotal', _, hps⟩ := bind_ok_peel _ _ _ hpse
+    have hps_nt : numberExponent assetsTotal' .fractional = .ok postScale := by
       rw [← hiou.is_fractional]; exact hps
     rcases exponent_fractional_offset assetsTotal' postScale hps_nt with h100 | ⟨hlo, hhi⟩
     · -- the sentinel `-100`: the amount's exponent already clears it, so the amount passes through
@@ -840,14 +1280,11 @@ theorem RawVault.roundToVaultExponent_le (amountDeposit result : STAmount) (asse
     unfold roundToVaultExponent at hok
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨assetsTotal', _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨postScale, hps, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨rounded', hrx, hlast⟩ := bind_ok_peel _ _ _ hok
-    have hlast' : rounded' = result :=
-      Except.ok.inj (show Except.ok rounded' = .ok result from hlast)
-    rw [hlast'] at hrx
-    have hps_nt : exponent assetsTotal' .fractional = .ok postScale := by
+    obtain ⟨postScale, hpse, hrx⟩ := bind_ok_peel _ _ _ hok
+    unfold postSumExponent at hpse
+    obtain ⟨_, _, hpse⟩ := bind_ok_peel _ _ _ hpse
+    obtain ⟨assetsTotal', _, hps⟩ := bind_ok_peel _ _ _ hpse
+    have hps_nt : numberExponent assetsTotal' .fractional = .ok postScale := by
       rw [← hiou.is_fractional]; exact hps
     rcases exponent_fractional_offset assetsTotal' postScale hps_nt with h100 | ⟨hlo, hhi⟩
     · subst h100
@@ -869,5 +1306,324 @@ theorem Vault.roundedDepositAmount_canonical (v : Vault) (amountDeposit roundedA
     hcanon hround with hc | hz
   · exact hc
   · rw [hz] at hnz; exact absurd hnz (by decide)
+
+
+/-! ## Value bound for the post-sum clamp on a negative delta -/
+
+/-- **The post-sum clamp never raises the magnitude of a negative delta.** A
+withdrawal or clawback clamps `payout.operator_neg`, which takes the negative
+branch: a plain downward `roundToExponent` of the magnitude. So the stored amount
+is non-negative and at or below the priced one — every "never pays out more than
+the shares are worth" bound transfers verbatim.
+
+The post-sum exponent is either the flushed-to-zero `-100`, in which case the
+`exponent ≥ scale` early exit makes the clamp the identity, or a clamped IOU
+offset in `[-96, 80]`, where the directed `roundToExponent` lemmas apply. -/
+lemma clampToSumExponent_neg_le (amount : Number) (a c : STAmount)
+    (hc : a.IOUCanonical) (hnn : 0 ≤ a.toRat)
+    (hok : clampToSumExponent amount a.operator_neg = .ok c) :
+    0 ≤ c.toRat ∧ c.toRat ≤ a.toRat := by
+  have hmv : a.mValue ≠ 0 := by
+    intro h0
+    have hlo := hc.mant_lo
+    rw [h0] at hlo
+    exact absurd hlo (by decide)
+  have hsgn : a.mIsNegative = false := by
+    by_contra hcn
+    have hneg : a.mIsNegative = true := by simpa using hcn
+    have hmag : (0 : ℚ) < (a.mValue.toNat : ℚ) * (10 : ℚ) ^ a.mOffset := by
+      have h1 : 0 < a.mValue.toNat := by have := hc.mant_lo; omega
+      have h1q : (0 : ℚ) < (a.mValue.toNat : ℚ) := by exact_mod_cast h1
+      exact mul_pos h1q (zpow_pos (by norm_num) _)
+    rw [STAmount.toRat_of_neg a hneg] at hnn
+    linarith
+  have hnegT : a.operator_neg.negative = true := by
+    rw [STAmount.operator_neg_of_ne a hmv]
+    show (!a.mIsNegative) = true
+    rw [hsgn]; rfl
+  have hintN : ¬ a.operator_neg.integral = true := by
+    show ¬ a.operator_neg.mNumericType.isIntegral = true
+    rw [STAmount.operator_neg_mNumericType, hc.is_fractional]; decide
+  have hae : a.exponent = a.mOffset := rfl
+  unfold clampToSumExponent at hok
+  simp only [pure_bind] at hok
+  rw [if_neg hintN] at hok
+  obtain ⟨pe, hpe, hok⟩ := bind_ok_peel _ _ _ hok
+  simp only [hnegT, if_true, STAmount.operator_neg_neg] at hok
+  by_cases hge : a.exponent ≥ pe
+  · -- the clamp is the identity: the grid is at or below the amount's own exponent
+    have hzf : ¬ a.isZero = true := by
+      show ¬ (a.mValue == 0) = true
+      simpa using hmv
+    have hintA : ¬ a.integral = true := by
+      show ¬ a.mNumericType.isIntegral = true
+      rw [hc.is_fractional]; decide
+    unfold STAmount.roundToExponent at hok
+    rw [if_neg hintA, if_neg hzf, if_pos hge] at hok
+    rw [← Except.ok.inj hok]
+    exact ⟨hnn, le_refl _⟩
+  · push_neg at hge
+    have hrange : pe = -100 ∨ ((-96 : ℤ) ≤ pe ∧ pe ≤ 80) := by
+      unfold postSumExponent at hpe
+      simp only [] at hpe
+      obtain ⟨dn, -, hpe⟩ := bind_ok_peel _ _ _ hpe
+      obtain ⟨sum, -, hpe⟩ := bind_ok_peel _ _ _ hpe
+      refine exponent_fractional_offset sum pe ?_
+      rw [show a.operator_neg.numericType = NumericType.fractional from by
+        show a.operator_neg.mNumericType = NumericType.fractional
+        rw [STAmount.operator_neg_mNumericType]; exact hc.is_fractional] at hpe
+      exact hpe
+    have hlo : (-96 : ℤ) ≤ pe := by
+      have := hc.exp_lo; omega
+    have hhi : pe ≤ 80 := by
+      rcases hrange with h | ⟨-, h⟩
+      · exfalso; rw [h] at hge; have := hc.exp_lo; omega
+      · exact h
+    exact ⟨STAmount.roundToExponent_downward_nonneg a c pe hc hlo hhi hnn hok,
+      STAmount.roundToExponent_downward_le a c pe hc hlo hhi hnn hok⟩
+
+/-- **The post-sum clamp of a negative delta loses less than one grid step.** The
+negative branch floors the magnitude onto the post-sum grid `10 ^ pe`, so a
+nonzero stored payout sits strictly within one step of the priced one. Paired
+with `clampToSumExponent_neg_le` (`c ≤ a`) this brackets the clamp; bounding
+`10 ^ pe` against the stored total then turns it into a `clampε` statement.
+
+The zero-output case is excluded by hypothesis, which costs nothing: every
+consumer of the under-pay direction is already guarded by `assets'.isZero = false`. -/
+lemma clampToSumExponent_neg_ge_grid (amount : Number) (a c : STAmount) (pe : ℤ)
+    (hc : a.IOUCanonical) (hnn : 0 ≤ a.toRat) (hnz : c.mValue ≠ 0)
+    (hpe : postSumExponent amount a.operator_neg = .ok pe)
+    (hok : clampToSumExponent amount a.operator_neg = .ok c) :
+    a.toRat - (10 : ℚ) ^ pe < c.toRat := by
+  have hpow_pos : (0 : ℚ) < (10 : ℚ) ^ pe := zpow_pos (by norm_num) _
+  have hmv : a.mValue ≠ 0 := by
+    intro h0
+    have hlo := hc.mant_lo
+    rw [h0] at hlo
+    exact absurd hlo (by decide)
+  have hsgn : a.mIsNegative = false := by
+    by_contra hcn
+    have hneg : a.mIsNegative = true := by simpa using hcn
+    have hmag : (0 : ℚ) < (a.mValue.toNat : ℚ) * (10 : ℚ) ^ a.mOffset := by
+      have h1 : 0 < a.mValue.toNat := by have := hc.mant_lo; omega
+      have h1q : (0 : ℚ) < (a.mValue.toNat : ℚ) := by exact_mod_cast h1
+      exact mul_pos h1q (zpow_pos (by norm_num) _)
+    rw [STAmount.toRat_of_neg a hneg] at hnn
+    linarith
+  have hnegT : a.operator_neg.negative = true := by
+    rw [STAmount.operator_neg_of_ne a hmv]
+    show (!a.mIsNegative) = true
+    rw [hsgn]; rfl
+  have hintN : ¬ a.operator_neg.integral = true := by
+    show ¬ a.operator_neg.mNumericType.isIntegral = true
+    rw [STAmount.operator_neg_mNumericType, hc.is_fractional]; decide
+  unfold clampToSumExponent at hok
+  simp only [pure_bind] at hok
+  rw [if_neg hintN] at hok
+  obtain ⟨pe', hpe', hok⟩ := bind_ok_peel _ _ _ hok
+  rw [show pe' = pe from Except.ok.inj (hpe'.symm.trans hpe)] at hok
+  simp only [hnegT, if_true, STAmount.operator_neg_neg] at hok
+  by_cases hge : a.exponent ≥ pe
+  · -- the clamp is the identity: nothing is lost at all
+    have hzf : ¬ a.isZero = true := by
+      show ¬ (a.mValue == 0) = true
+      simpa using hmv
+    have hintA : ¬ a.integral = true := by
+      show ¬ a.mNumericType.isIntegral = true
+      rw [hc.is_fractional]; decide
+    unfold STAmount.roundToExponent at hok
+    rw [if_neg hintA, if_neg hzf, if_pos hge] at hok
+    rw [← Except.ok.inj hok]
+    linarith
+  · push_neg at hge
+    have hae : a.exponent = a.mOffset := rfl
+    have hrange : pe = -100 ∨ ((-96 : ℤ) ≤ pe ∧ pe ≤ 80) := by
+      unfold postSumExponent at hpe
+      simp only [] at hpe
+      obtain ⟨dn, -, hpe⟩ := bind_ok_peel _ _ _ hpe
+      obtain ⟨sum, -, hpe⟩ := bind_ok_peel _ _ _ hpe
+      refine exponent_fractional_offset sum pe ?_
+      rw [show a.operator_neg.numericType = NumericType.fractional from by
+        show a.operator_neg.mNumericType = NumericType.fractional
+        rw [STAmount.operator_neg_mNumericType]; exact hc.is_fractional] at hpe
+      exact hpe
+    have hlo : (-96 : ℤ) ≤ pe := by have := hc.exp_lo; omega
+    have hhi : pe ≤ 80 := by
+      rcases hrange with h | ⟨-, h⟩
+      · exfalso; rw [h] at hge; have := hc.exp_lo; omega
+      · exact h
+    -- `.downward` floors the magnitude onto the grid
+    have hgrid : c.toRat = (⌊a.toRat / (10 : ℚ) ^ pe⌋ : ℚ) * (10 : ℚ) ^ pe :=
+      STAmount.roundToExponent_rounded a c pe .downward hc hlo hhi hnz hok
+    have hcancel : a.toRat / (10 : ℚ) ^ pe * (10 : ℚ) ^ pe = a.toRat :=
+      div_mul_cancel₀ _ (ne_of_gt hpow_pos)
+    have hfl : a.toRat / (10 : ℚ) ^ pe - 1 < (⌊a.toRat / (10 : ℚ) ^ pe⌋ : ℚ) :=
+      Int.sub_one_lt_floor _
+    have hmul := mul_lt_mul_of_pos_right hfl hpow_pos
+    rw [sub_mul, one_mul, hcancel] at hmul
+    rw [hgrid]
+    exact hmul
+
+/-- **The post-sum clamp loses at most `assetsTotal * clampε` of a negative
+delta.** Combines the grid bound `a - 10 ^ pe < c` with a bound on the grid step
+itself: the post-sum amount is `IOUCanonical`, so `10 ^ pe ≤ |sum| / 10 ^ 15`,
+and the sum is at most `amount`. The flushed case is excluded because it forces
+`pe = -100`, below the `-96` floor of a canonical `a`. -/
+lemma clampToSumExponent_neg_ge (amount : Number) (a c : STAmount)
+    (hc : a.IOUCanonical) (hnn : 0 ≤ a.toRat) (hnz : c.mValue ≠ 0)
+    (hA_norm : amount.isNormalized) (hle : a.toRat ≤ amount.toRat)
+    (hok : clampToSumExponent amount a.operator_neg = .ok c) :
+    a.toRat - amount.toRat * clampε ≤ c.toRat := by
+  have hA_nn : 0 ≤ amount.toRat := le_trans hnn hle
+  have hcε : 0 ≤ amount.toRat * clampε := mul_nonneg hA_nn clampε_nonneg
+  have hae : a.exponent = a.mOffset := rfl
+  have hmv : a.mValue ≠ 0 := by
+    intro h0; have hlo := hc.mant_lo; rw [h0] at hlo; exact absurd hlo (by decide)
+  have hsgn : a.mIsNegative = false := by
+    by_contra hcn
+    have hneg : a.mIsNegative = true := by simpa using hcn
+    have hmag : (0 : ℚ) < (a.mValue.toNat : ℚ) * (10 : ℚ) ^ a.mOffset := by
+      have h1 : 0 < a.mValue.toNat := by have := hc.mant_lo; omega
+      have h1q : (0 : ℚ) < (a.mValue.toNat : ℚ) := by exact_mod_cast h1
+      exact mul_pos h1q (zpow_pos (by norm_num) _)
+    rw [STAmount.toRat_of_neg a hneg] at hnn
+    linarith
+  have hnegT : a.operator_neg.negative = true := by
+    rw [STAmount.operator_neg_of_ne a hmv]
+    show (!a.mIsNegative) = true
+    rw [hsgn]; rfl
+  have hintN : ¬ a.operator_neg.integral = true := by
+    show ¬ a.operator_neg.mNumericType.isIntegral = true
+    rw [STAmount.operator_neg_mNumericType, hc.is_fractional]; decide
+  have hok0 := hok
+  unfold clampToSumExponent at hok0
+  simp only [pure_bind] at hok0
+  rw [if_neg hintN] at hok0
+  obtain ⟨pe, hpe, hok1⟩ := bind_ok_peel _ _ _ hok0
+  simp only [hnegT, if_true, STAmount.operator_neg_neg] at hok1
+  by_cases hge : a.exponent ≥ pe
+  · have hzf : ¬ a.isZero = true := by
+      show ¬ (a.mValue == 0) = true
+      simpa using hmv
+    have hintA : ¬ a.integral = true := by
+      show ¬ a.mNumericType.isIntegral = true
+      rw [hc.is_fractional]; decide
+    unfold STAmount.roundToExponent at hok1
+    rw [if_neg hintA, if_neg hzf, if_pos hge] at hok1
+    rw [← Except.ok.inj hok1]
+    linarith
+  · push_neg at hge
+    have hgrid := clampToSumExponent_neg_ge_grid amount a c pe hc hnn hnz hpe hok
+    have hstep : (10 : ℚ) ^ pe ≤ amount.toRat * clampε := by
+      unfold postSumExponent at hpe
+      simp only [] at hpe
+      obtain ⟨dn, hdn, hpe1⟩ := bind_ok_peel _ _ _ hpe
+      obtain ⟨S, hS, hpe2⟩ := bind_ok_peel _ _ _ hpe1
+      rw [show a.operator_neg.numericType = NumericType.fractional from by
+        show a.operator_neg.mNumericType = NumericType.fractional
+        rw [STAmount.operator_neg_mNumericType]; exact hc.is_fractional] at hpe2
+      unfold numberExponent at hpe2
+      obtain ⟨Asum, hAsum, hpe3⟩ := bind_ok_peel _ _ _ hpe2
+      have hpe_off : Asum.mOffset = pe :=
+        Except.ok.inj (show Except.ok Asum.exponent = Except.ok pe from hpe3)
+      -- `dn` is the exact negation of `a`
+      have hnegc : a.operator_neg.IOUCanonical :=
+        { is_fractional := by rw [STAmount.operator_neg_mNumericType]; exact hc.is_fractional
+          mant_lo := by rw [STAmount.operator_neg_mValue]; exact hc.mant_lo
+          mant_hi := by rw [STAmount.operator_neg_mValue]; exact hc.mant_hi
+          exp_lo := by rw [STAmount.operator_neg_mOffset]; exact hc.exp_lo
+          exp_hi := by rw [STAmount.operator_neg_mOffset]; exact hc.exp_hi }
+      obtain ⟨dn2, hdn2, hdn_val, hdn_norm⟩ :=
+        STAmount.toNumber_exact_canonical a.operator_neg .to_nearest (Or.inl hnegc)
+      have hdn_eq : dn2 = dn := Except.ok.inj (hdn2.symm.trans hdn)
+      rw [hdn_eq] at hdn_val hdn_norm
+      rw [STAmount.operator_neg_toRat] at hdn_val
+      -- the sum is nonzero: a flushed sum would put the grid at `-100`
+      have hS_ne : S.mantissa_ ≠ 0 := by
+        intro h0
+        have hSz : S = Number.zero :=
+          Number.operator_add_zero_shape_sz amount dn S hA_norm hdn_norm hS h0
+        rw [hSz, show STAmount.ofNumber .fractional Number.zero .to_nearest
+          = .ok ⟨.fractional, 0, -100, false⟩ from rfl] at hAsum
+        have hz : Asum.mOffset = -100 := by rw [← Except.ok.inj hAsum]
+        rw [hz] at hpe_off
+        have := hc.exp_lo
+        omega
+      have hS_norm : S.isNormalized :=
+        operator_add_isNormalized_to_nearest amount dn S hA_norm hdn_norm hS hS_ne
+      obtain ⟨hSm_lo, hSm_hi⟩ := hS_norm.mantissaBounds_nat hS_ne
+      have hSexp_lo : minExponent ≤ S.exponent_ := by
+        rcases hS_norm with hz | ⟨_, _, _, hlo, _⟩
+        · exact absurd (show S.mantissa_ = 0 by rw [hz]; rfl) hS_ne
+        · exact hlo
+      have hAs_ne : Asum.mValue ≠ 0 := by
+        intro hz
+        have h100 := STAmount.ofNumber_iou_zero_offset S .to_nearest Asum hS_norm hAsum hz
+        rw [h100] at hpe_off
+        have := hc.exp_lo
+        omega
+      have hAs_c : Asum.IOUCanonical := by
+        rcases STAmount.ofNumber_iou_canonical_or_zero S .to_nearest Asum
+          hSm_lo hSm_hi hSexp_lo hAsum with h | h
+        · exact h
+        · exact absurd h hAs_ne
+      -- the sum sits in `[0, amount]`
+      have hS_nn : 0 ≤ S.toRat :=
+        operator_add_nonneg amount dn S hA_norm hdn_norm hS (by rw [hdn_val]; linarith)
+      have hS_le : S.toRat ≤ amount.toRat :=
+        operator_add_le_of_le_normalized amount dn S amount hA_norm hdn_norm hS hA_norm
+          (by rw [hdn_val]; linarith)
+      -- the packing moves the sum by at most one 16-digit step
+      have hexp4 : S.exponent_ + 4 ≤ maxExponent :=
+        STAmount.ofNumber_iou_success_exp_range S .to_nearest Asum hSm_lo hSm_hi hSexp_lo
+          hAsum hAs_ne
+      obtain ⟨hulp, -⟩ := STAmount.ofNumber_iou_within_ulp .fractional S .to_nearest Asum rfl
+        hSm_lo hSm_hi hSexp_lo hexp4 hAsum hAs_ne
+      -- `10 ^ (S.exponent_ + 3) ≤ S.toRat * 10 ^ (-15)`
+      have hSval : S.toRat = (S.mantissa_.toNat : ℚ) * (10 : ℚ) ^ S.exponent_ := by
+        rcases hsn : S.negative_ with _ | _
+        · exact Number.toRat_of_nonneg S hsn
+        · exfalso
+          rw [Number.toRat_of_neg S hsn] at hS_nn
+          have h1 : 0 < S.mantissa_.toNat := by omega
+          have h1q : (0 : ℚ) < (S.mantissa_.toNat : ℚ) := by exact_mod_cast h1
+          have := mul_pos h1q (zpow_pos (show (0:ℚ) < 10 by norm_num) S.exponent_)
+          linarith
+      have hulp_small : (10 : ℚ) ^ (S.exponent_ + 3) * (10 : ℚ) ^ (15 : ℕ) ≤ S.toRat := by
+        rw [hSval]
+        have h1 : (10 : ℚ) ^ (18 : ℕ) ≤ (S.mantissa_.toNat : ℚ) := by exact_mod_cast hSm_lo
+        have hsplit : (10 : ℚ) ^ (S.exponent_ + 3) * (10 : ℚ) ^ (15 : ℕ)
+            = (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ S.exponent_ := by
+          rw [show ((10 : ℚ) ^ (15 : ℕ)) = (10 : ℚ) ^ ((15 : ℤ)) from by norm_num,
+            show ((10 : ℚ) ^ (18 : ℕ)) = (10 : ℚ) ^ ((18 : ℤ)) from by norm_num,
+            ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0),
+            ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+          congr 1
+          try omega
+        rw [hsplit]
+        exact mul_le_mul_of_nonneg_right h1 (le_of_lt (zpow_pos (by norm_num) _))
+      -- assemble: `10 ^ pe * 10 ^ 15 ≤ |Asum| ≤ S + 10 ^ (S.exp+3) ≤ amount * 10`
+      have hAs_abs : |Asum.toRat| = (Asum.mValue.toNat : ℚ) * (10 : ℚ) ^ Asum.mOffset :=
+        STAmount.abs_toRat Asum
+      have hlow : (10 : ℚ) ^ pe * (10 : ℚ) ^ (15 : ℕ) ≤ |Asum.toRat| := by
+        rw [hAs_abs, ← hpe_off]
+        have h1 : (10 : ℚ) ^ (15 : ℕ) ≤ (Asum.mValue.toNat : ℚ) := by
+          have := hAs_c.mant_lo; exact_mod_cast this
+        calc (10 : ℚ) ^ Asum.mOffset * (10 : ℚ) ^ (15 : ℕ)
+            ≤ (10 : ℚ) ^ Asum.mOffset * (Asum.mValue.toNat : ℚ) :=
+              mul_le_mul_of_nonneg_left h1 (le_of_lt (zpow_pos (by norm_num) _))
+          _ = (Asum.mValue.toNat : ℚ) * (10 : ℚ) ^ Asum.mOffset := by ring
+      have habs_le : |Asum.toRat| ≤ S.toRat + (10 : ℚ) ^ (S.exponent_ + 3) := by
+        have := abs_le.mp hulp
+        have h2 : Asum.toRat ≤ S.toRat + (10 : ℚ) ^ (S.exponent_ + 3) := by linarith [this.2]
+        have h3 : -(S.toRat + (10 : ℚ) ^ (S.exponent_ + 3)) ≤ Asum.toRat := by
+          have hp : (0 : ℚ) < (10 : ℚ) ^ (S.exponent_ + 3) := zpow_pos (by norm_num) _
+          linarith [this.1]
+        exact abs_le.mpr ⟨h3, h2⟩
+      have h15 : (10 : ℚ) ^ (15 : ℕ) = 1000000000000000 := by norm_num
+      rw [h15] at hlow hulp_small
+      rw [clampε_eq]
+      linarith
+    linarith
 
 end XRPL.Model.SingleAssetVault

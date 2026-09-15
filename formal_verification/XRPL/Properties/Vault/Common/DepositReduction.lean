@@ -110,19 +110,26 @@ theorem computeDeposit_success_charge_le (v : Vault) (amount c s : STAmount)
 
 /-- **Deposit guard extraction.** A deposit that runs without a throw and returns
 no error code exposes: the rounded `amount` (nonzero), the passed guards, the
-exchange result (`computeDeposit` success on a real deposit, or the identity pair
-on a donation), the three `toNumber`/`operator_add` field updates, the passed
-`assetsMaximum` guard, and the exact success record. -/
+exchange result (`computeDeposit` success clamped onto the post-sum grid on a real
+deposit, or the identity pair on a donation), the three `toNumber`/`operator_add`
+field updates, the passed `assetsMaximum` guard, and the exact success record.
+
+`assetPriced` is what `computeDeposit` charges; `assetDeposited` is that charge
+after `clampToSumExponent`, and it is the one that reaches the vault and the
+result record. On a donation there is no clamp and `assetPriced` is unconstrained. -/
 theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
     (r : DepositResult) (hok : v.deposit amountDeposit isDonation = .ok r)
     (herr : r.error = none) :
-    ∃ (amount assetDeposited sharesCreated : STAmount) (cN sN at' av' st' : Number),
+    ∃ (amount assetPriced assetDeposited sharesCreated : STAmount) (cN sN at' av' st' : Number),
       roundToVaultExponent amountDeposit v.assetsTotal = .ok amount ∧
       amount.isZero = false ∧
       (isDonation = true → v.sharesTotal.mantissa_ ≠ 0) ∧
       (isDonation = false → v.isInsolvent = false) ∧
       (isDonation = true → assetDeposited = amount ∧ sharesCreated = STAmount.zero .int64) ∧
-      (isDonation = false → computeDeposit v amount = .ok (.success assetDeposited sharesCreated)) ∧
+      (isDonation = false →
+        computeDeposit v amount = .ok (.success assetPriced sharesCreated) ∧
+        clampToSumExponent v.assetsTotal assetPriced = .ok assetDeposited ∧
+        assetDeposited.isFractionalNonPositive = .ok false) ∧
       assetDeposited.toNumber .to_nearest = .ok cN ∧
       sharesCreated.toNumber .to_nearest = .ok sN ∧
       v.assetsTotal.operator_add cN .to_nearest = .ok at' ∧
@@ -149,11 +156,10 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
       · rw [if_neg h3] at hok
         simp only [pure_bind] at hok
         by_cases hd : isDonation = true
-        · -- donation: assetDeposited = amount, sharesCreated = zero
-          rw [if_pos hd] at hok
+        · -- donation: `assetDeposited = amount`, no shares, and no clamp
+          rw [if_neg (show ¬((!isDonation) = true) by simp [hd])] at hok
           obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
@@ -161,20 +167,19 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
             at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
           · rw [if_pos hm] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
           · rw [if_neg hm] at hok
-            have hn12 : n2 = n1 := by rw [hn2] at hn1; exact Except.ok.inj hn1
-            rw [hn12] at hav
             have hsh : v.sharesTotal.mantissa_ ≠ 0 := by
               intro h0
               rw [h0] at h2; simp [hd] at h2
             obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
             obtain rfl := Except.ok.inj hok
-            exact ⟨amount, amount, STAmount.zero .int64, n1, n3, at', av', st',
+            exact ⟨amount, amount, amount, STAmount.zero .int64, n1, n3, at', av', st',
               hround, by simpa using h1, fun _ => hsh, fun h => absurd h (by rw [hd]; decide),
               fun _ => ⟨rfl, rfl⟩, fun h => absurd h (by rw [hd]; decide),
               hn1, hn3, hat, hav, hst, by simpa using hm,
               rfl, rfl, (RawVault.to_lawful_ok htl).1⟩
-        · -- real deposit: assetDeposited, sharesCreated from computeDeposit success
-          rw [if_neg hd] at hok
+        · -- real deposit: the clamp sits between `computeDeposit` and the updates
+          rw [if_pos (show (!isDonation) = true by
+            simp [show isDonation = false by simpa using hd])] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           cases cres with
           | error e =>
@@ -182,29 +187,33 @@ theorem Vault.deposit_success_reduces (v : Vault) (amountDeposit : STAmount) (is
             exact absurd (Except.ok.inj hok) (hcontra _)
           | success a s =>
             simp only [] at hok
-            obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
-            at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
-            · rw [if_pos hm] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
-            · rw [if_neg hm] at hok
-              have hn12 : n2 = n1 := by rw [hn2] at hn1; exact Except.ok.inj hn1
-              rw [hn12] at hav
-              have hins : v.isInsolvent = false := by
-                have hnd : isDonation = false := by simpa using hd
-                rw [hnd] at h3; simpa using h3
-              obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
-              obtain rfl := Except.ok.inj hok
-              exact ⟨amount, a, s, n1, n3, at', av', st',
-                hround, by simpa using h1,
-                fun h => absurd h (by simp [hd]),
-                fun _ => hins,
-                fun h => absurd h (by simp [hd]),
-                fun _ => hcd, hn1, hn3, hat, hav, hst, by simpa using hm,
-                rfl, rfl, (RawVault.to_lawful_ok htl).1⟩
+            obtain ⟨ad, hclamp, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨fnp, hfnp, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hf : fnp = true
+            · rw [if_pos hf] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
+            · rw [if_neg hf] at hok
+              obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
+              by_cases hm : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
+                at'.operator_gt (v.assetsMaximum.getD Number.zero)) = true
+              · rw [if_pos hm] at hok; exact absurd (Except.ok.inj hok) (hcontra _)
+              · rw [if_neg hm] at hok
+                have hins : v.isInsolvent = false := by
+                  have hnd : isDonation = false := by simpa using hd
+                  rw [hnd] at h3; simpa using h3
+                have hfnpf : fnp = false := by simpa using hf
+                obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+                obtain rfl := Except.ok.inj hok
+                exact ⟨amount, a, ad, s, n1, n3, at', av', st',
+                  hround, by simpa using h1,
+                  fun h => absurd h (by simp [hd]),
+                  fun _ => hins,
+                  fun h => absurd h (by simp [hd]),
+                  fun _ => ⟨hcd, hclamp, by rw [← hfnpf]; exact hfnp⟩,
+                  hn1, hn3, hat, hav, hst, by simpa using hm,
+                  rfl, rfl, (RawVault.to_lawful_ok htl).1⟩
 
 end XRPL.Model.SingleAssetVault

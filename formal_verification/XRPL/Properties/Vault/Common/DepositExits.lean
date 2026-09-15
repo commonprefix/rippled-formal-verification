@@ -102,10 +102,9 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
       · rw [if_neg h3] at hok
         simp only [pure_bind] at hok
         by_cases hd : isDonation = true
-        · rw [if_pos hd] at hok
+        · rw [if_neg (show ¬((!isDonation) = true) by simp [hd])] at hok
           obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -117,7 +116,8 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
             obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h]
             exact .inl rfl
-        · rw [if_neg hd] at hok
+        · rw [if_pos (show (!isDonation) = true by simp [show isDonation = false by simpa using hd])]
+            at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           rcases computeDeposit_codes v amount cres hcd with h5 | h5 | h5 | ⟨a, s, h5⟩
           · subst h5; injection hok with h; rw [← h]
@@ -128,9 +128,15 @@ theorem Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount)
             exact .inr (.inr (.inr (.inr (.inr (.inl rfl)))))
           · subst h5
             simp only [] at hok
+            obtain ⟨ad, _, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hfnp : fnp = true
+            · rw [if_pos hfnp] at hok
+              injection hok with h; rw [← h]
+              exact .inr (.inr (.inr (.inr (.inl rfl))))
+            rw [if_neg hfnp] at hok
             obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok
@@ -198,12 +204,15 @@ theorem Vault.deposit_insolvent_proof (v : Vault) (amountDeposit roundedAmount :
   rfl
 
 /-- **Proof body of `deposit_maximum_exceeded`.** -/
-theorem Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedAmount c s : STAmount)
+theorem Vault.deposit_maximum_exceeded_proof (v : Vault)
+    (amountDeposit roundedAmount c cc s : STAmount)
     (cN sN at' av' st' : Number)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hins : v.isInsolvent = false)
     (hcomp : computeDeposit v roundedAmount = .ok (.success c s))
-    (hcN : c.toNumber .to_nearest = .ok cN)
+    (hclamp : clampToSumExponent v.assetsTotal c = .ok cc)
+    (hfnp : cc.isFractionalNonPositive = .ok false)
+    (hcN : cc.toNumber .to_nearest = .ok cN)
     (hsN : s.toNumber .to_nearest = .ok sN)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
@@ -217,8 +226,10 @@ theorem Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedA
   rw [if_neg (by rw [Bool.false_and]; exact Bool.false_ne_true)]
   rw [if_neg (by rw [hins, Bool.false_and]; exact Bool.false_ne_true)]
   simp only [pure_bind]
-  rw [if_neg Bool.false_ne_true]
+  rw [if_pos (by decide : (!false) = true)]
   rw [hcomp, ok_bind]
+  simp only []
+  rw [hclamp, ok_bind, hfnp, ok_bind, if_neg (by decide : ¬((false : Bool) = true))]
   simp only [hcN, hsN, hat, hav, hst, ok_bind]
   rw [if_pos hmax]
   rfl
@@ -242,7 +253,7 @@ theorem Vault.deposit_donation_maximum_proof (v : Vault) (amountDeposit roundedA
   rw [if_neg (by rw [Bool.true_and]; exact fun h => hsh (beq_iff_eq.mp h))]
   rw [if_neg (by rw [Bool.not_true, Bool.and_false]; exact Bool.false_ne_true)]
   simp only [pure_bind]
-  rw [if_pos trivial]
+  rw [if_neg (by decide : ¬((!true) = true))]
   simp only [haN, hzN, hat, hav, hst, ok_bind]
   rw [if_pos hmax]
   rfl

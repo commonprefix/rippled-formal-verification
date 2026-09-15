@@ -27,7 +27,7 @@ theorem Vault.deposit_preserves_unrealized (v : Vault) (amountDeposit : STAmount
   by_cases herr : r.error.isSome = true
   · rw [Vault.deposit_error_unchanged_proof v amountDeposit isDonation r hok herr]
   · -- success: the reduction pins `r.vault'` to a record that keeps `lossUnrealized`
-    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hrv⟩ :=
+    obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hrv⟩ :=
       Vault.deposit_success_reduces v amountDeposit isDonation r hok
         (Option.not_isSome_iff_eq_none.mp herr)
     rw [hrv]
@@ -43,7 +43,8 @@ theorem Vault.withdraw_preserves_unrealized (v : Vault) (amount : WithdrawAmount
     obtain ⟨cw, aN, sta, _, _, _, _, _, _, hdisj⟩ :=
       Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok
         (Option.not_isSome_iff_eq_none.mp herr)
-    rcases hdisj with ⟨_, _, _, _, _, hrv⟩ | ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hrv⟩
+    rcases hdisj with ⟨_, _, _, _, _, hrv⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hrv⟩
     · rw [hrv]
     · rw [hrv]
 
@@ -99,7 +100,7 @@ theorem Vault.deposit_result_nonneg (v : Vault) (amount : STAmount) (isDonation 
     rw [haz, hsz, STAmount.zero_toRat, STAmount.zero_int64_toRat]
     exact ⟨le_refl 0, le_refl 0⟩
   · have herr' : r.error = none := Option.not_isSome_iff_eq_none.mp herr
-    obtain ⟨am, aD, sC, cN, sN, at', av', st', hround, hamz, _hsh_don, _hins, hdon_eq, hcomp,
+    obtain ⟨am, aP, aD, sC, cN, sN, at', av', st', hround, hamz, _hsh_don, _hins, hdon_eq, hcomp,
       _hcN, _hsN, _hat, _hav, _hst, _hmax, hamt, hshr, _⟩ :=
       Vault.deposit_success_reduces v amount isDonation r hok herr'
     rw [hamt, hshr]
@@ -119,14 +120,32 @@ theorem Vault.deposit_result_nonneg (v : Vault) (amount : STAmount) (isDonation 
       · show 0 ≤ aD.toRat; rw [haD]; exact ham_nn
       · show 0 ≤ sC.toRat; rw [hsC, STAmount.zero_int64_toRat]
     · have hd' : isDonation = false := by simpa using hd
+      obtain ⟨hcdp, hclamp, hfnp⟩ := hcomp hd'
       obtain ⟨shares, hats, hshz, hsad, -, hseq⟩ :=
-        computeDeposit_success_reduces v am aD sC (hcomp hd')
+        computeDeposit_success_reduces v am aP sC hcdp
       obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v am shares hats
       have hshpos : 0 < shares.toRat :=
         assetsToSharesDeposit_pos v am shares hamCanon ham_pos hats hshz
+      have haPnn : 0 ≤ aP.toRat :=
+        sharesToAssetsDeposit_nonneg v shares aP hshc hshnt hshpos hsad
+      have hsgn : aP.mValue = 0 ∨ aP.negative = false :=
+        STAmount.sign_clear_of_nonneg aP haPnn
+      have hty : aD.mNumericType = aP.mNumericType :=
+        clampToSumExponent_mNumericType v.assetsTotal aP aD hsgn hclamp
       refine ⟨?_, ?_⟩
       · show 0 ≤ aD.toRat
-        exact sharesToAssetsDeposit_nonneg v shares aD hshc hshnt hshpos hsad
+        by_cases hint : aD.integral = true
+        · -- integral: the clamp is the identity, so the charge is the priced one
+          have haPint : aP.integral = true := by
+            show aP.mNumericType.isIntegral = true
+            rw [← hty]; exact hint
+          have haeq : aD = aP := (Except.ok.inj
+            ((clampToSumExponent_integral_pos v.assetsTotal aP haPint hsgn).symm.trans
+              hclamp)).symm
+          rw [haeq]; exact haPnn
+        · -- fractional: the guard the run passed says the clamped charge is positive
+          exact le_of_lt (STAmount.pos_of_isFractionalNonPositive_false aD
+            (by simpa using hint) hfnp)
       · show 0 ≤ sC.toRat; rw [hseq]; exact le_of_lt hshpos
 
 /-- The amount paid by a withdrawal is nonnegative, whether the run succeeds or is
@@ -155,7 +174,7 @@ theorem Vault.withdraw_assets_nonneg (v : Vault) (amount : WithdrawAmount)
       exact STAmount.ofNumber_signfalse_nonneg v.numericType v.assetsAvailable .to_nearest allAvail
         v.wf.assetsAvailable_norm hAA_neg hallAvail
     · have hfin : r.sharesBurned.operator_eq sta = false := by rw [hsb]; exact hne
-      have hprice : v.sharesToAssetsWithdraw r.sharesBurned waiveUnrealizedLoss = .ok r.assets' :=
+      obtain ⟨priced, hpriced, hcl, hfnp⟩ :=
         Vault.withdraw_payout_priced v amount waiveUnrealizedLoss sta r hok herr' hsta hfin
       have hSnn_val : 0 ≤ r.sharesBurned.toRat := STAmount.toRat_nonneg_of _ hSnn
       have hSC_canon : r.sharesBurned.Canonical := by
@@ -166,20 +185,60 @@ theorem Vault.withdraw_assets_nonneg (v : Vault) (amount : WithdrawAmount)
           exact absurd hf (by decide)
       have hnavE : v.WithdrawNavExact waiveUnrealizedLoss :=
         Vault.withdrawNavExact_of_zero v waiveUnrealizedLoss hL
-      exact (Vault.sharesToAssetsWithdraw_spec v r.sharesBurned r.assets'
-        waiveUnrealizedLoss hSnn_val hSC_canon hnavE hprice).1
+      have hpnn : 0 ≤ priced.toRat :=
+        (Vault.sharesToAssetsWithdraw_spec v r.sharesBurned priced
+          waiveUnrealizedLoss hSnn_val hSC_canon hnavE hpriced).1
+      -- an integral vault's clamp is the identity; a fractional one keeps the payout
+      -- fractional, where the `isFractionalNonPositive` guard forces positivity
+      by_cases hvint : v.numericType.isIntegral = true
+      · have hpint : priced.integral = true := by
+          show priced.mNumericType.isIntegral = true
+          rw [Vault.sharesToAssetsWithdraw_mNumericType v r.sharesBurned priced
+            waiveUnrealizedLoss hpriced]
+          exact hvint
+        rw [show r.assets' = priced from (Except.ok.inj
+          ((clampToSumExponent_integral_neg v.assetsTotal priced hpint
+            (STAmount.sign_clear_of_nonneg priced hpnn)).symm.trans hcl)).symm]
+        exact hpnn
+      · have hvfr : v.numericType = .fractional := by
+          cases h : v.numericType with
+          | fractional => rfl
+          | integral mv mo ms msh =>
+            exact absurd (show v.numericType.isIntegral = true from by rw [h]; rfl) hvint
+        have hpnt : priced.mNumericType = .fractional := by
+          rw [Vault.sharesToAssetsWithdraw_mNumericType v r.sharesBurned priced
+            waiveUnrealizedLoss hpriced]
+          exact hvfr
+        have hpfcz : priced.FracCanonZero := by
+          refine ⟨hpnt, ?_⟩
+          by_cases h0 : priced.mValue = 0
+          · exact Or.inr h0
+          · rcases Vault.sharesToAssetsWithdraw_disj_canonical v r.sharesBurned priced
+              waiveUnrealizedLoss hSC_canon hpriced h0 with h | h
+            · exact Or.inl h
+            · exact absurd (show priced.integral = true from h.is_integral)
+                (by show ¬ priced.mNumericType.isIntegral = true; rw [hpnt]; decide)
+        have hrfr : r.assets'.integral = false := by
+          show r.assets'.mNumericType.isIntegral = false
+          rw [(clampToSumExponent_fczr v.assetsTotal priced.operator_neg r.assets'
+            (STAmount.operator_neg_fczr priced hpfcz) hcl).1]
+          rfl
+        exact le_of_lt (STAmount.pos_of_isFractionalNonPositive_false r.assets' hrfr hfnp)
+
 /-- **Post-state lawfulness for `deposit`.** A successful deposit's computed record
 re-validates: its in-op `to_lawful` re-check returns `.ok v'`. -/
 theorem Vault.deposit_poststate_lawful (v : Vault) (amount : STAmount) (isDonation : Bool)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
     (hcanon : amount.Canonical) (hnn : 0 ≤ amount.toRat)
-    (am aD sC : STAmount) (cN sN at' av' st' : Number)
+    (am aP aD sC : STAmount) (cN sN at' av' st' : Number)
     (hround : roundToVaultExponent amount v.assetsTotal = .ok am)
     (hamz : am.isZero = false)
     (hsh_don : isDonation = true → v.sharesTotal.mantissa_ ≠ 0)
     (hdon_eq : isDonation = true → aD = am ∧ sC = STAmount.zero .int64)
-    (hcomp : isDonation = false → computeDeposit v am = .ok (.success aD sC))
+    (hcomp : isDonation = false → computeDeposit v am = .ok (.success aP sC))
+    (hclamp : isDonation = false → clampToSumExponent v.assetsTotal aP = .ok aD)
+    (hfnp : isDonation = false → aD.isFractionalNonPositive = .ok false)
     (hcN : aD.toNumber .to_nearest = .ok cN) (hsN : sC.toNumber .to_nearest = .ok sN)
     (hat : v.assetsTotal.operator_add cN .to_nearest = .ok at')
     (hav : v.assetsAvailable.operator_add cN .to_nearest = .ok av')
@@ -214,15 +273,35 @@ theorem Vault.deposit_poststate_lawful (v : Vault) (amount : STAmount) (isDonati
           by rw [hsC]; exact zero_int64_IntegralCanonical, by rw [hsC, STAmount.zero_int64_toRat]⟩
       · have hd' : isDonation = false := by simpa using hd
         obtain ⟨shares, hats, hshz, hsad, -, hseq⟩ :=
-          computeDeposit_success_reduces v am aD sC (hcomp hd')
+          computeDeposit_success_reduces v am aP sC (hcomp hd')
         obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v am shares hats
         have hshpos : 0 < shares.toRat :=
           assetsToSharesDeposit_pos v am shares hamCanon ham_pos hats hshz
-        obtain ⟨hcN_val, hcN_norm⟩ :=
-          sharesToAssetsDeposit_toNumber_exact v shares aD cN hshc hshnt hsad hcN
-        exact ⟨hcN_val, hcN_norm,
-          sharesToAssetsDeposit_nonneg v shares aD hshc hshnt hshpos hsad,
-          hseq ▸ hshc, by rw [hseq]; exact le_of_lt hshpos⟩
+        -- the priced charge is canonical-or-fractional-zero and non-negative, and the
+        -- clamp preserves both
+        have hPnn : 0 ≤ aP.toRat :=
+          sharesToAssetsDeposit_nonneg v shares aP hshc hshnt hshpos hsad
+        have hDecz : aD.ExactCanonical ∨ (aD.mNumericType = .fractional ∧ aD.mValue = 0) :=
+          clampToSumExponent_exactCanonical_or_zero v.assetsTotal aP aD
+            (sharesToAssetsDeposit_exactCanonical_or_fraczero v shares aP hshc hshnt hsad)
+            (STAmount.sign_clear_of_nonneg aP hPnn) (hclamp hd')
+        obtain ⟨hcN_val, hcN_norm⟩ := STAmount.toNumber_exact_of_ecz aD cN hDecz hcN
+        have hDnn : 0 ≤ aD.toRat := by
+          by_cases hfr : aD.integral = false
+          · exact le_of_lt (STAmount.pos_of_isFractionalNonPositive_false aD hfr (hfnp hd'))
+          · have hint : aD.integral = true := by simpa using hfr
+            rw [XRPL.Model.SingleAssetVault.clampToSumExponent_integral_pos v.assetsTotal aP
+              (by
+                have := clampToSumExponent_mNumericType v.assetsTotal aP aD
+                  (by
+                    rcases STAmount.sign_clear_of_nonneg aP hPnn with h | h
+                    · exact Or.inl h
+                    · exact Or.inr h) (hclamp hd')
+                show aP.mNumericType.isIntegral = true
+                rw [← this]; exact hint)
+              (STAmount.sign_clear_of_nonneg aP hPnn)] at hclamp
+            rw [← Except.ok.inj (hclamp hd')]; exact hPnn
+        exact ⟨hcN_val, hcN_norm, hDnn, hseq ▸ hshc, by rw [hseq]; exact le_of_lt hshpos⟩
     obtain ⟨hcN_val, hcN_norm, hDnn', hSc', hSnn'⟩ := hfacts
     have hST : ((v.toExact.sharesTotal : ℕ) : ℚ) = v.sharesTotal.toRat :=
       RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
@@ -255,7 +334,7 @@ theorem Vault.deposit_poststate_lawful (v : Vault) (amount : STAmount) (isDonati
         exact Number.toRat_ne_zero_of_mantissa_ne_zero _ hmant
       · have hd' : isDonation = false := by simpa using hd
         obtain ⟨shares, _, hshz, _, _, hsh_eq⟩ :=
-          computeDeposit_success_reduces v am aD sC (hcomp hd')
+          computeDeposit_success_reduces v am aP sC (hcomp hd')
         have hsC_ne : sC.toRat ≠ 0 := by
           rw [hsh_eq]
           exact STAmount.IntegralCanonical.toRat_ne_zero_of_not_isZero shares

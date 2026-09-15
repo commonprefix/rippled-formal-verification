@@ -57,13 +57,10 @@ lemma Vault.donation_grid_bound (v : Vault)
   unfold roundToVaultExponent at hround'
   rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hround'
   obtain ⟨_, _, hround'⟩ := bind_ok_peel _ _ _ hround'
-  obtain ⟨amountNumber, hamtN, hround'⟩ := bind_ok_peel _ _ _ hround'
-  obtain ⟨assetsTotal', hAT', hround'⟩ := bind_ok_peel _ _ _ hround'
-  obtain ⟨postScale, hps, hround'⟩ := bind_ok_peel _ _ _ hround'
-  obtain ⟨rounded'', hrx, hlast⟩ := bind_ok_peel _ _ _ hround'
-  have hr_eq : rounded'' = rounded :=
-    Except.ok.inj (show (Except.ok rounded'' : Except Error STAmount) = .ok rounded from hlast)
-  rw [hr_eq] at hrx
+  obtain ⟨postScale, hpse, hrx⟩ := bind_ok_peel _ _ _ hround'
+  unfold postSumExponent at hpse
+  obtain ⟨amountNumber, hamtN, hpse⟩ := bind_ok_peel _ _ _ hpse
+  obtain ⟨assetsTotal', hAT', hps⟩ := bind_ok_peel _ _ _ hpse
   -- amountNumber facts
   obtain ⟨sn, hsn, hsn_val, hsn_norm⟩ := STAmount.toNumber_canonical_exact amountDeposit .to_nearest hcanon
   have haN_eq : amountNumber = sn := Except.ok.inj (hamtN.symm.trans hsn)
@@ -110,8 +107,9 @@ lemma Vault.donation_grid_bound (v : Vault)
     · exact hlo
   -- get `a = ofNumber assetsTotal'`, `postScale = a.exponent`
   have hnum : amountDeposit.numericType = .fractional := hiou.is_fractional
-  have hps_frac : exponent assetsTotal' .fractional = .ok postScale := by rw [← hnum]; exact hps
-  unfold exponent at hps_frac
+  have hps_frac : numberExponent assetsTotal' .fractional = .ok postScale := by
+    rw [← hnum]; exact hps
+  unfold numberExponent at hps_frac
   obtain ⟨a, ha, hae⟩ := bind_ok_peel _ _ _ hps_frac
   have hae' : a.exponent = postScale :=
     Except.ok.inj (show (Except.ok a.exponent : Except Error Int) = .ok postScale from hae)

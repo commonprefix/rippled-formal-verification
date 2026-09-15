@@ -264,9 +264,11 @@ theorem Vault.deposit_shares_monotone_proof (v : Vault)
     (hok₂ : v.deposit amountDeposit₂ false = .ok r₂) (herr₂ : r₂.error = none)
     (hle : roundedAmount₁.toRat ≤ roundedAmount₂.toRat) :
     r₁.sharesIssued.toRat ≤ r₂.sharesIssued.toRat := by
-  obtain ⟨am₁, aD₁, sC₁, _, _, _, _, _, hround₁, _, _, _, _, hcomp₁, _, _, _, _, _, _, _, hr₁, _⟩ :=
+  obtain ⟨am₁, aP₁, aD₁, sC₁, _, _, _, _, _, hround₁, _, _, _, _, hcomp₁,
+    _, _, _, _, _, _, _, hr₁, _⟩ :=
     Vault.deposit_success_reduces v amountDeposit₁ false r₁ hok₁ herr₁
-  obtain ⟨am₂, aD₂, sC₂, _, _, _, _, _, hround₂, _, _, _, _, hcomp₂, _, _, _, _, _, _, _, hr₂, _⟩ :=
+  obtain ⟨am₂, aP₂, aD₂, sC₂, _, _, _, _, _, hround₂, _, _, _, _, hcomp₂,
+    _, _, _, _, _, _, _, hr₂, _⟩ :=
     Vault.deposit_success_reduces v amountDeposit₂ false r₂ hok₂ herr₂
   -- amount = roundedAmount
   have haeq₁ : am₁ = roundedAmount₁ :=
@@ -275,9 +277,9 @@ theorem Vault.deposit_shares_monotone_proof (v : Vault)
     Except.ok.inj (hround₂.symm.trans (roundedDepositAmount_roundTo v _ _ hrounded₂))
   -- computeDeposit success → assetsToSharesDeposit + shares
   obtain ⟨sh₁, hats₁, hshz₁, _, _, hseq₁⟩ :=
-    computeDeposit_success_reduces v am₁ aD₁ sC₁ (hcomp₁ rfl)
+    computeDeposit_success_reduces v am₁ aP₁ sC₁ (hcomp₁ rfl).1
   obtain ⟨sh₂, hats₂, hshz₂, _, _, hseq₂⟩ :=
-    computeDeposit_success_reduces v am₂ aD₂ sC₂ (hcomp₂ rfl)
+    computeDeposit_success_reduces v am₂ aP₂ sC₂ (hcomp₂ rfl).1
   have hsi₁ : r₁.sharesIssued = sh₁ := by rw [hr₁]; exact hseq₁
   have hsi₂ : r₂.sharesIssued = sh₂ := by rw [hr₂]; exact hseq₂
   rw [hsi₁, hsi₂]

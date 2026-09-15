@@ -160,7 +160,7 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
     (hok : computeWithdrawByAssets v assets waiveUnrealizedLoss = .ok cw)
     (herr : cw.error = none) :
     ∃ shares : STAmount,
-      assetsToSharesWithdraw v assets false waiveUnrealizedLoss = .ok shares ∧
+      assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok shares ∧
       shares.isZero = false ∧
       v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok cw.assets' ∧
       cw.sharesRedeemed = shares := by
@@ -186,7 +186,7 @@ theorem computeWithdrawByAssets_none_reduces (v : Vault) (assets : STAmount)
       exact absurd herr (by simp)
     · rw [if_neg hov, ethrow, err_bind] at htc'
       exact absurd htc' (by simp)
-  cases hs : assetsToSharesWithdraw v assets false waiveUnrealizedLoss with
+  cases hs : assetsToSharesWithdraw v assets true waiveUnrealizedLoss with
   | error e =>
     rw [hs, err_bind] at htc
     exact absurd htc (handler_err e)
@@ -240,17 +240,21 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
           r.assets' = allAvailable ∧
           r.vault'.toRawVault = { v.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero }) ∨
        (cw.sharesRedeemed.operator_eq sharesTotalAmount = false ∧
-        ∃ (sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
+        ∃ (clamped : STAmount)
+          (clampedNumber sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
           (assetsTotalRounded assetsTotalRounded' : STAmount),
+          clampToSumExponent v.assetsTotal cw.assets'.operator_neg = .ok clamped ∧
+          clamped.isFractionalNonPositive = .ok false ∧
+          clamped.toNumber .to_nearest = .ok clampedNumber ∧
           cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber ∧
-          v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal' ∧
+          v.assetsTotal.operator_sub clampedNumber .to_nearest = .ok assetsTotal' ∧
           STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded ∧
           STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded' ∧
-          (assetsNumber'.mantissa_ != 0 &&
+          (clampedNumber.mantissa_ != 0 &&
             assetsTotalRounded.operator_eq assetsTotalRounded') = false ∧
-          v.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable' ∧
+          v.assetsAvailable.operator_sub clampedNumber .to_nearest = .ok assetsAvailable' ∧
           v.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal' ∧
-          r.assets' = cw.assets' ∧
+          r.assets' = clamped ∧
           r.vault'.toRawVault = { v.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' })) := by
   cases amount <;>
   · unfold Vault.withdraw at hok
@@ -291,22 +295,34 @@ theorem Vault.withdraw_success_reduces (v : Vault) (amount : WithdrawAmount)
             exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
               Or.inl ⟨hfin, by simpa using hloss, aa, haa, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
         · rw [if_neg hfin] at hok
-          obtain ⟨sbn, hsbn, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr, hatr, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨atr', hatr', hok⟩ := bind_ok_peel _ _ _ hok
-          by_cases hg : (an.mantissa_ != 0 && atr.operator_eq atr') = true
-          · rw [if_pos hg] at hok
+          obtain ⟨cl, hcl, hok⟩ := bind_ok_peel _ _ _ hok
+          obtain ⟨fnp, hfnp, hok⟩ := bind_ok_peel _ _ _ hok
+          by_cases hfr : fnp = true
+          · rw [if_pos hfr] at hok
             have hr := (Except.ok.inj hok).symm
             rw [hr] at herr
             exact absurd herr (by simp [WithdrawResult.rejected])
-          · rw [if_neg hg] at hok
-            obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain rfl := Except.ok.inj hok
-            exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
-              Or.inr ⟨by simpa using hfin, sbn, at', av', st', atr, atr', hsbn, hat,
-                hatr, hatr', by simpa using hg, hav, hst, rfl, (RawVault.to_lawful_ok htl).1⟩⟩
+          · rw [if_neg hfr] at hok
+            have hfnp' : cl.isFractionalNonPositive = .ok false := by
+              rw [hfnp]; simpa using hfr
+            obtain ⟨cn, hcn, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨sbn, hsbn, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨atr, hatr, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨atr', hatr', hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hg : (cn.mantissa_ != 0 && atr.operator_eq atr') = true
+            · rw [if_pos hg] at hok
+              have hr := (Except.ok.inj hok).symm
+              rw [hr] at herr
+              exact absurd herr (by simp [WithdrawResult.rejected])
+            · rw [if_neg hg] at hok
+              obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain ⟨v', htl, hok⟩ := bind_ok_peel _ _ _ hok
+              obtain rfl := Except.ok.inj hok
+              exact ⟨cw, an, sta, hcomp, herr2, han, by simpa using hlt, hsta, rfl,
+                Or.inr ⟨by simpa using hfin, cl, cn, sbn, at', av', st', atr, atr',
+                  hcl, hfnp', hcn, hsbn, hat, hatr, hatr', by simpa using hg, hav, hst, rfl,
+                  (RawVault.to_lawful_ok htl).1⟩⟩
 
 end XRPL.Model.SingleAssetVault

@@ -139,7 +139,7 @@ class LeanVaultSet_test : public LeanSuite
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
-        // testAssetsMaximumRoundedToGrid();  // FV_M2_19: AssetsMaximum over 16 digits is rounded
+        testAssetsMaximumRoundedToGrid();  // FV_M2_19: AssetsMaximum over 16 digits is rounded
         // clang-format on
     }
 };

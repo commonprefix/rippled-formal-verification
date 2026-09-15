@@ -102,7 +102,9 @@ theorem Vault.withdraw_sharesBurned_exact (shares : STAmount) (waiveUnrealizedLo
 
 /-- Shares burned by an asset-denominated withdrawal are a positive integer
 matching `idealSharesWithdraw` of the named `assets` up to the `Number` stage
-error and the final rounding to the nearest whole share. -/
+error and one whole share of truncation. The bound is directed: the pipeline
+floors, so a withdrawer never receives credit for more shares than the named
+assets are worth, and loses at most one whole share to the floor. -/
 theorem Vault.withdraw_sharesBurned (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool)
     -- the starting vault is lawful
     (r : WithdrawResult)
@@ -114,12 +116,15 @@ theorem Vault.withdraw_sharesBurned (v : Vault) (assets : STAmount) (waiveUnreal
     (hok : v.withdraw (.vaultAssets assets) waiveUnrealizedLoss = .ok r)
     (herr : r.error = none) :
     r.sharesBurned.toRat.den = 1 ∧ 0 < r.sharesBurned.toRat ∧
-    |r.sharesBurned.toRat - v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat| ≤
-      1 / 2 + v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * depositε :=
+    v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * (1 - depositε) - 1
+      < r.sharesBurned.toRat ∧
+    r.sharesBurned.toRat
+      ≤ v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * (1 + depositε) :=
   Vault.withdraw_sharesBurned_proof v assets waiveUnrealizedLoss r hpos hc hnav hok herr
 
-/-- Witness: the half-share term in `withdraw_sharesBurned` cannot be dropped,
-a run exists whose share error exceeds the relative `depositε` bound alone. -/
+/-- Witness: the one-share truncation term in `withdraw_sharesBurned` cannot be
+dropped, a run exists whose share error exceeds the relative `depositε` bound
+alone. -/
 theorem Vault.withdraw_sharesBurned_attained :
     ∃ (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) (r : WithdrawResult),
       0 < assets.toRat ∧
@@ -131,8 +136,9 @@ theorem Vault.withdraw_sharesBurned_attained :
 
 /-- The `assets'` of a successful non-final withdrawal is nonnegative, never
 exceeds the burned shares' worth by more than `depositε` relatively, and when
-nonzero falls short of it by at most 2 ULP. Both `WithdrawAmount` forms share
-this bound, the asset-denominated form derives the burned shares first. -/
+nonzero falls short of it by at most 2 ULP of the payout plus one step of the
+post-sum clamp grid (`2 * assetsTotal * clampε`). Both `WithdrawAmount` forms
+share this bound, the asset-denominated form derives the burned shares first. -/
 theorem Vault.withdraw_payout (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     -- the starting vault is lawful
     (sharesTotalAmount : STAmount) (r : WithdrawResult)
@@ -149,12 +155,14 @@ theorem Vault.withdraw_payout (v : Vault) (amount : WithdrawAmount) (waiveUnreal
     -- never pays more than the burned shares' worth, up to the stage error
     r.assets'.toRat ≤
       v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * (1 + depositε) ∧
-    -- a nonzero assets' underpays the burned shares' worth by at most 2 ULP
-    -- (the other direction is already capped by the relative conjunct)
+    -- a nonzero assets' underpays the burned shares' worth by at most 2 ULP of the
+    -- payout plus one post-sum grid step (the other direction is already capped by
+    -- the relative conjunct, which the clamp cannot loosen -- it only pays less)
     (r.assets'.isZero = false →
       v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat - r.assets'.toRat ≤
         v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * depositε +
-          2 * (10 : ℚ) ^ r.assets'.exponent) :=
+          2 * (10 : ℚ) ^ r.assets'.exponent +
+          2 * v.toExact.assetsTotal * clampε) :=
   Vault.withdraw_payout_proof v amount waiveUnrealizedLoss sharesTotalAmount r
     hnn hc hnav hok herr hst hfin
 
@@ -252,33 +260,29 @@ theorem Vault.withdraw_vault_updates (v : Vault) (amount : WithdrawAmount) (waiv
   Vault.withdraw_vault_updates_proof v amount waiveUnrealizedLoss sharesTotalAmount r
     hpnn hnn hc hSnt hok herr hst hfin
 
-/-- Witness: the error term in `withdraw_vault_updates` cannot be dropped, a
-non-final run exists where the stored total is not the exact difference. -/
-theorem Vault.withdraw_vault_updates_attained :
+/-- **The stored totals move by exactly the reported payout.** The post-sum
+clamp aligns `assets'` to the grid of `assetsTotal - payout`, so on the former
+counterexample (a non-final run out of a `3`-asset vault) both asset fields
+decrease by exactly `r.assets'`. -/
+theorem Vault.withdraw_vault_updates_exact :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (sharesTotalAmount : STAmount) (r : WithdrawResult),
       v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
       r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assets'.toRat :=
-  Vault.withdraw_vault_updates_witness
+      r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
+      r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat :=
+  Vault.withdraw_vault_updates_exact_witness
 
-/-- Witness: the payout from the shares round-trip is never rounded to the
-vault scale, unlike a deposit request on entry. A run exists where re-rounding
-the payout `0.0009999999999998571` would change it, and the stored totals move
-by the different on-ledger amount `0.000999999999999857`.
-`assets''` - the payout `r.assets'` re-rounded to the vault scale -/
-theorem Vault.withdraw_applied_delta_attained :
+/-- **The applied total delta equals the reported payout.** The payout from the
+shares round-trip is still never re-rounded to the vault scale, but the post-sum
+clamp makes the stored total move by exactly the reported amount. -/
+theorem Vault.withdraw_applied_delta_exact :
     ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (assets'' : STAmount) (r : WithdrawResult)
-      (deltaTotal : Number) (deltaAmount : STAmount),
+      (r : WithdrawResult),
       v.withdraw amount waiveUnrealizedLoss = .ok r ∧ r.error = none ∧
-      roundToVaultExponent r.assets' v.assetsTotal = .ok assets'' ∧
-      assets''.operator_eq r.assets' = false ∧
-      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
-      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
-      deltaAmount.operator_eq r.assets' = false :=
-  Vault.withdraw_applied_delta_witness
+      v.toExact.assetsTotal - r.vault'.assetsTotal.toRat = r.assets'.toRat :=
+  Vault.withdraw_applied_delta_exact_witness
 
 /-- Integral strengthening of `withdraw_vault_updates`: in-domain integer
 differences are stored exactly. -/
@@ -287,7 +291,12 @@ theorem Vault.withdraw_vault_updates_integral (v : Vault) (amount : WithdrawAmou
     (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
     (hint : v.numericType.isIntegral = true) -- the vault holds an integral asset
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
-    (hnn : 0 ≤ r.assets'.toRat) -- a nonnegative payout, negative ones can leave the domain
+    -- nonnegative canonical burned shares: `assets'` reports the clamped payout
+    -- magnitude, so a bound on it would not rule out a negative priced payout; the
+    -- input sign does, and it is what a preflight check establishes
+    (hnn : 0 ≤ r.sharesBurned.toRat) (hc : r.sharesBurned.Canonical)
+    -- the subtraction computing assetsTotal minus lossUnrealized does not round
+    (hnav : v.WithdrawNavExact waiveUnrealizedLoss)
     -- not the final withdrawal, which zeroes the vault instead
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false)
@@ -296,7 +305,7 @@ theorem Vault.withdraw_vault_updates_integral (v : Vault) (amount : WithdrawAmou
     r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
     r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat :=
   Vault.withdraw_vault_updates_integral_proof v amount waiveUnrealizedLoss sharesTotalAmount r
-    hint hok herr hnn hst hfin hsz
+    hint hnn hc hnav hok herr hst hfin hsz
 
 /-- A successful non-final withdrawal with a positive `assets'` strictly decreases
 the stored `assetsTotal` and never increases the stored `assetsAvailable`: the guard
@@ -307,6 +316,7 @@ tie-exclusion the `assetsTotal` guard alone does not transfer. -/
 theorem Vault.withdraw_payout_decreases_assets (v : Vault) (amount : WithdrawAmount)
     -- the starting vault is lawful
     (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
+    (hnn : 0 ≤ r.sharesBurned.toRat) -- nonnegative shares, negative ones price negatively
     (hc : r.sharesBurned.Canonical) -- burned shares canonical, so the payout's `toNumber` is exact
     (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
     (hpay : 0 < r.assets'.toRat) -- assets' is positive
@@ -316,7 +326,7 @@ theorem Vault.withdraw_payout_decreases_assets (v : Vault) (amount : WithdrawAmo
     r.vault'.assetsTotal.toRat < v.toExact.assetsTotal ∧
     r.vault'.assetsAvailable.toRat ≤ v.toExact.assetsAvailable :=
   Vault.withdraw_payout_decreases_assets_proof v amount waiveUnrealizedLoss sharesTotalAmount r
-    hc hok herr hpay hst hfin
+    hnn hc hok herr hpay hst hfin
 
 /-- The `assetsAvailable` guard compares the stored value against the rounded
 amount, which can exceed the named shares' worth by the interior stage error.

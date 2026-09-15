@@ -729,12 +729,12 @@ theorem Vault.idealSharesDeposit_initial_rate_proof (v : Vault) (amount : ℚ)
     have hne : v.depositNav ≠ 0 := hnav.ne'
     rw [hrate]; field_simp
 
-/-- The vault `exponent` helper on a fractional asset returns `-100` (zero) or a
-clamped IOU offset in `[-96, 80]`. -/
+/-- The vault `numberExponent` helper on a fractional asset returns `-100` (zero)
+or a clamped IOU offset in `[-96, 80]`. -/
 lemma exponent_fractional_offset (n : Number) (e : Int)
-    (hok : exponent n .fractional = .ok e) :
+    (hok : numberExponent n .fractional = .ok e) :
     e = -100 ∨ ((-96 : ℤ) ≤ e ∧ e ≤ 80) := by
-  unfold exponent at hok
+  unfold numberExponent at hok
   obtain ⟨a, ha, he⟩ := bind_ok_peel _ _ _ hok
   have heq : a.exponent = e :=
     Except.ok.inj (show Except.ok a.exponent = .ok e from he)
@@ -748,6 +748,19 @@ lemma depositε_eq : depositε = 1 / 100000000000000000 := by
   unfold depositε
   rw [show ((-17) : ℤ) = -(17 : ℕ) from rfl, zpow_neg, zpow_natCast]
   norm_num
+
+/-- The clamp grid budget as a plain fraction. -/
+lemma clampε_eq : clampε = 1 / 100000000000000 := by
+  unfold clampε
+  rw [show ((-14) : ℤ) = -(14 : ℕ) from rfl, zpow_neg, zpow_natCast]
+  norm_num
+
+/-- The clamp budget is non-negative. -/
+lemma clampε_nonneg : (0 : ℚ) ≤ clampε := by rw [clampε_eq]; norm_num
+
+/-- The clamp budget dominates the per-stage arithmetic budget. -/
+lemma depositε_le_clampε : depositε ≤ clampε := by
+  rw [depositε_eq, clampε_eq]; norm_num
 
 /-- The `normalize` stage error fits the deposit budget. -/
 lemma εnorm_le_depositε : (5 : ℚ) / (2 ^ 63 + 7) ≤ depositε := by
@@ -1024,13 +1037,14 @@ theorem Vault.deposit_sharesIssued_proof (v : Vault)
     v.idealSharesDeposit roundedAmount.toRat * (1 - depositε) - 1 < r.sharesIssued.toRat ∧
     r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + depositε) := by
   obtain ⟨hround0, hnz0⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
-  obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, _, _, _, _, hcd, _, _, _, _, _, _, _, hshr, _⟩ :=
+  obtain ⟨amount, cp, c, sh, cN, sN, at', av', st', hround, _, _, _, _, hcd,
+    _, _, _, _, _, _, _, hshr, _⟩ :=
     Vault.deposit_success_reduces v amountDeposit false r hok herr
   have hameq : amount = roundedAmount := by
     rw [hround0] at hround
     exact (Except.ok.inj hround).symm
   obtain ⟨shares, hats, hsz, _, _, hsheq⟩ :=
-    computeDeposit_success_reduces v amount c sh (hcd rfl)
+    computeDeposit_success_reduces v amount cp sh (hcd rfl).1
   rw [hameq] at hats
   obtain ⟨q, hqval, hqbound, hqpos⟩ := assetsToSharesDeposit_spec v roundedAmount shares
     hcanon hpos hnav hats hsz
@@ -1142,7 +1156,7 @@ theorem Vault.deposit_vault_updates_integral_proof (v : Vault) (amountDeposit : 
     (hsz : v.toExact.assetsTotal + r.amountDeposit'.toRat ≤ 2 ^ 63 - 1) :
     r.vault'.assetsTotal.toRat = v.toExact.assetsTotal + r.amountDeposit'.toRat ∧
     r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable + r.amountDeposit'.toRat := by
-  obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, hanz, _, _, hdon, hcd,
+  obtain ⟨amount, cp, c, sh, cN, sN, at', av', st', hround, hanz, _, _, hdon, hcd,
     hcN, hsN, hat, hav, hst, hmaxg, hamt, _, hr⟩ :=
     Vault.deposit_success_reduces v amountDeposit isDonation r hok herr
   have hvint : v.numericType.isIntegral = true := by
@@ -1158,8 +1172,33 @@ theorem Vault.deposit_vault_updates_integral_proof (v : Vault) (amountDeposit : 
       rw [hceq, hameq]
       exact ⟨hcanon, hty⟩
     · have hcd' := hcd (by simpa using hd)
-      obtain ⟨shares, _, _, hsta, _, _⟩ := computeDeposit_success_reduces v amount c sh hcd'
-      exact sharesToAssetsDeposit_integral_canonical v shares c hvint hsta
+      obtain ⟨shares, _, _, hsta, _, _⟩ := computeDeposit_success_reduces v amount cp sh hcd'.1
+      obtain ⟨hcpc, hcpty⟩ := sharesToAssetsDeposit_integral_canonical v shares cp hvint hsta
+      -- an integral vault takes the clamp's identity branch, so the charged amount is
+      -- the priced one (up to a sign flip that cannot happen, and is harmless if it did)
+      have hcpint : cp.integral = true := by
+        show cp.mNumericType.isIntegral = true
+        rw [hcpty]; exact hvint
+      have hcalt : c = cp ∨ c = cp.operator_neg := by
+        have hcl := (clampToSumExponent_integral v.assetsTotal cp hcpint).symm.trans hcd'.2.1
+        by_cases hn : cp.negative = true
+        · rw [if_pos hn] at hcl; exact Or.inr (Except.ok.inj hcl).symm
+        · rw [if_neg hn] at hcl; exact Or.inl (Except.ok.inj hcl).symm
+      -- `operator_neg` touches only the sign flag, which `IntegralCanonical` ignores
+      have hnegfields : cp.operator_neg.mNumericType = cp.mNumericType ∧
+          cp.operator_neg.mOffset = cp.mOffset ∧ cp.operator_neg.mValue = cp.mValue := by
+        unfold STAmount.operator_neg
+        by_cases hz : (cp.mValue == 0) = true
+        · rw [if_pos hz]; exact ⟨rfl, rfl, rfl⟩
+        · rw [if_neg hz]; exact ⟨rfl, rfl, rfl⟩
+      rcases hcalt with h | h
+      · rw [h]; exact ⟨hcpc, hcpty⟩
+      · obtain ⟨hnt', hoff', hval'⟩ := hnegfields
+        rw [h]
+        exact ⟨⟨by rw [hnt']; exact hcpc.is_integral,
+                by rw [hoff']; exact hcpc.offset_zero,
+                by rw [hval', hnt']; exact hcpc.in_range⟩,
+               by rw [hnt']; exact hcpty⟩
   obtain ⟨hcc, hcty⟩ := hcfacts
   have hcmax : c.mNumericType.maxValue.toNat ≤ maxRep.toNat := by
     rw [hcty]; exact NumericType.maxValue_le_maxRep_of_real v.numericType hnt
@@ -1248,13 +1287,11 @@ theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit round
     unfold roundToVaultExponent at hround
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hround
     obtain ⟨_, _, hround⟩ := bind_ok_peel _ _ _ hround
-    obtain ⟨amountNumber, _, hround⟩ := bind_ok_peel _ _ _ hround
-    obtain ⟨assetsTotal', _, hround⟩ := bind_ok_peel _ _ _ hround
-    obtain ⟨postScale, hps, hround⟩ := bind_ok_peel _ _ _ hround
-    obtain ⟨rounded', hrx, hlast⟩ := bind_ok_peel _ _ _ hround
-    have hlast' : rounded' = roundedAmount :=
-      Except.ok.inj (show Except.ok rounded' = .ok roundedAmount from hlast)
-    rw [hlast'] at hrx
+    obtain ⟨postScale, hpse, hrx⟩ := bind_ok_peel _ _ _ hround
+    -- `postSumExponent` is the sum's exponent: peel it to the `numberExponent` fact
+    unfold postSumExponent at hpse
+    obtain ⟨amountNumber, _, hpse⟩ := bind_ok_peel _ _ _ hpse
+    obtain ⟨assetsTotal', _, hps⟩ := bind_ok_peel _ _ _ hpse
     -- the amount is nonzero (a zero amount would pass through and contradict `hnz`)
     have hz : amountDeposit.isZero = false := by
       rcases hb : amountDeposit.isZero with _ | _
@@ -1274,7 +1311,7 @@ theorem Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit round
         if_neg (by rw [hz]; exact Bool.false_ne_true), if_pos hge] at hrx
       exact (Except.ok.inj hrx).symm
     · -- true truncation: the packaged grid theorem at `postScale`
-      have hps_nt : exponent assetsTotal' .fractional = .ok postScale := by
+      have hps_nt : numberExponent assetsTotal' .fractional = .ok postScale := by
         have hnum : amountDeposit.numericType = .fractional := hc.is_fractional
         rw [← hnum]
         exact hps
@@ -1324,10 +1361,10 @@ theorem Vault.deposit_donation_proof (v : Vault) (amountDeposit roundedAmount : 
   rw [hround] at hok
   simp only [ok_bind] at hok
   rw [if_neg (by simp [hnz]), if_neg (by simp [hsh]), if_neg (by simp)] at hok
-  simp only [pure_bind, if_true] at hok
+  simp only [pure_bind] at hok
+  rw [if_neg (by decide : ¬((!true) = true))] at hok
   obtain ⟨n1, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨at', _, hok⟩ := bind_ok_peel _ _ _ hok
-  obtain ⟨n2, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨av', _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨n3, _, hok⟩ := bind_ok_peel _ _ _ hok
   obtain ⟨st', _, hok⟩ := bind_ok_peel _ _ _ hok

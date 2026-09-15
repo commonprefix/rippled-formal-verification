@@ -47,13 +47,13 @@ def waF : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) fals
 def wsF : STAmount := STAmount.unchecked .int64 2333333333333333 0 false
 
 /-- The taken amount: `3 · 2333333333333333 / 7·10¹⁵` rounded upward at 16
-digits, `0.9999999999999999`. -/
-def wcF : STAmount := STAmount.unchecked .fractional 9999999999999999 (-16) false
+digits, then clamped down to the post-sum grid, `0.999999999999999`. -/
+def wcF : STAmount := STAmount.unchecked .fractional 9999999999999990 (-16) false
 
 /-- The post-deposit vault. -/
 def wvF' : RawVault :=
-  { assetsTotal := ⟨false, 3999999999999999900, -18⟩
-  , assetsAvailable := ⟨false, 3999999999999999900, -18⟩
+  { assetsTotal := ⟨false, 3999999999999999000, -18⟩
+  , assetsAvailable := ⟨false, 3999999999999999000, -18⟩
   , assetsReserved := Number.zero, assetsMaximum := none, numericType := .fractional, scale := 0
   , sharesTotal := ⟨false, 9333333333333333000, -3⟩
   , lossUnrealized := Number.zero }
@@ -155,49 +155,18 @@ theorem Vault.deposit_vault_updates_witness :
 /-- The applied-delta witness request, `0.001` of the IOU. -/
 def waAD : STAmount := STAmount.unchecked .fractional 1000000000000000 (-18) false
 
-/-- The issued shares, `⌊7·10¹⁵ · 0.001 / 3⌋ = 2333333333333`. -/
-def wsAD : STAmount := STAmount.unchecked .int64 2333333333333 0 false
-
-/-- The charge: `3 · 2333333333333 / 7·10¹⁵` rounded upward at 16 digits,
-`0.0009999999999998572`. -/
-def wcAD : STAmount := STAmount.unchecked .fractional 9999999999998572 (-19) false
-
-/-- The charge re-rounded to the vault scale, `0.000999999999999`. -/
-def wcrAD : STAmount := STAmount.unchecked .fractional 9999999999990000 (-19) false
-
-/-- The post-deposit vault: both asset totals store `3.000999999999999857`,
-the exact sum rounded to 19 significant digits. -/
-def wvAD' : RawVault :=
-  { assetsTotal := ⟨false, 3000999999999999857, -18⟩
-  , assetsAvailable := ⟨false, 3000999999999999857, -18⟩
-  , assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := .fractional, scale := 0
-  , sharesTotal := ⟨false, 7002333333333333000, -3⟩
-  , lossUnrealized := Number.zero }
-
-/-- The post-deposit vault as a `Vault` (the op re-validates on success). -/
-def wvAD'L : Vault := ⟨wvAD', by native_decide, by native_decide⟩
-
-/-- The witness deposit result. -/
-def wrAD : DepositResult := ⟨none, wvAD'L, wcAD, wsAD⟩
-
-/-- The applied total delta, `3.000999999999999857 - 3` -/
-def wdnAD : Number := ⟨false, 9999999999998570000, -22⟩
-
-/-- The applied delta as an on-ledger amount. -/
-def wdaAD : STAmount := STAmount.unchecked .fractional 9999999999998570 (-19) false
-
-/-- Witness backing `Vault.deposit_applied_delta_attained`. -/
-theorem Vault.deposit_applied_delta_witness :
-    ∃ (v : Vault) (amountDeposit amountDeposit'' : STAmount) (r : DepositResult)
-      (deltaTotal : Number) (deltaAmount : STAmount),
+/-- **The applied delta matches the reported charge.** On the former
+applied-delta counterexample (`wvF` holding `3`, a `0.001` request whose share
+round-trip prices `0.0009999999999998572`, off the vault grid) the post-sum
+clamp aligns the charge, so the stored total moves by exactly the reported
+amount. Replaces the old inequality witness, which the clamp made unattainable. -/
+theorem Vault.deposit_applied_delta_exact_witness :
+    ∃ (v : Vault) (amountDeposit : STAmount) (r : DepositResult),
       v.roundedDepositAmount amountDeposit = .ok (.rounded amountDeposit) ∧
       v.deposit amountDeposit false = .ok r ∧ r.error = none ∧
-      roundToVaultExponent r.amountDeposit' v.assetsTotal = .ok amountDeposit'' ∧
-      amountDeposit''.operator_eq r.amountDeposit' = false ∧
-      r.vault'.assetsTotal.operator_sub v.assetsTotal .to_nearest = .ok deltaTotal ∧
-      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
-      deltaAmount.operator_eq r.amountDeposit' = false :=
-  ⟨wvFL, waAD, wcrAD, wrAD, wdnAD, wdaAD, by native_decide⟩
+      r.vault'.assetsTotal.toRat = v.toExact.assetsTotal + r.amountDeposit'.toRat :=
+  ⟨wvFL, waAD,
+    (wvFL.deposit waAD false).toOption.getD (DepositResult.rejected wvFL .tecINTERNAL),
+    by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

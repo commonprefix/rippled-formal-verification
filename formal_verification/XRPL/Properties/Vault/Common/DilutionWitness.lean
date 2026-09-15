@@ -13,11 +13,10 @@ import XRPL.Properties.Vault.Common.ReachableDefs
 
 The concrete lawful vault and the operations that strictly decrease per-share
 value, backing the `*_dilution_attained` headlines in `Dilution.lean`. The
-starting state `baseV` is the one the differential search
-(`scripts/DilutionSearch.lean`) produces through the public API (an IOU vault at
-scale `6`, seed deposit `899999999.876543`, donation `123.4567891`), reproduced
-here as a record literal so the run and the strict-decrease inequality are closed
-by `native_decide` on the fully concrete decision procedures.
+starting state `baseV` is an int64 vault holding `2^63 - 1` against `10^18`
+shares, reproduced here as a record literal so the run and the strict-decrease
+inequality are closed by `native_decide` on the fully concrete decision
+procedures.
 
 `native_decide` compiles the decidable propositions to native code and trusts the
 result through the `Lean.ofReduceBool` axiom. The mechanism suits the sharpness
@@ -73,30 +72,35 @@ instance RawVault.Exact.instDecidableValid (s : RawVault.Exact) : Decidable s.Va
 
 /-! ## The base witness vault, amounts, and results -/
 
-/-- The lawful IOU vault the search reaches through the public API:
-`assetsTotal = assetsAvailable = 900000123.3333321`, `sharesTotal = 899999999876543`,
-nothing unrealized or reserved, no cap, scale `6`. -/
+/-- The lawful int64 vault backing every witness: `assetsTotal = assetsAvailable
+= 2^63 - 1`, `sharesTotal = 10^18`, nothing unrealized or reserved, no cap.
+
+An integral vault is what dilution needs. `clampToSumExponent` returns integral
+deltas unchanged, so the stored-total update is a bare 19-digit `Number`
+add/subtract, and near the `2^63` ceiling that rounds against the vault. On a
+fractional vault the clamp aligns the delta to the post-sum grid first, which
+makes the update exact and leaves no room for the per-share value to fall. -/
 def baseV : RawVault :=
-  { assetsTotal := ⟨false, 9000001233333321000, -10⟩
-  , assetsAvailable := ⟨false, 9000001233333321000, -10⟩
+  { assetsTotal := ⟨false, 9223372036854775807, 0⟩
+  , assetsAvailable := ⟨false, 9223372036854775807, 0⟩
   , assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := .fractional, scale := 6
-  , sharesTotal := ⟨false, 8999999998765430000, -4⟩
+  , assetsMaximum := none, numericType := .int64, scale := 0
+  , sharesTotal := ⟨false, 1000000000000000000, 0⟩
   , lossUnrealized := Number.zero }
 
-/-- Witness deposit amount `1587.0335`: the stored-total update rounds against the
+/-- Witness deposit amount `5·10¹⁷`: the stored-total update rounds against the
 vault by more than the charge's upward surplus. -/
-def depAmt : STAmount := STAmount.unchecked .fractional 1587033500000000 (-12) false
+def depAmt : STAmount := STAmount.unchecked .int64 500000000000000000 0 false
 
-/-- Witness clawback amount `1000.917`. -/
-def clawAmt : STAmount := STAmount.unchecked .fractional 1000917000000000 (-12) false
+/-- Witness clawback amount `9999999999999999`. -/
+def clawAmt : STAmount := STAmount.unchecked .int64 9999999999999999 0 false
 
 /-- Witness holder-shares balance passed to `Vault.clawback`. Unused on this
 run since `clawAmt` is nonzero (the zero-amount "claw all" branch never fires). -/
 def clawHolderShares : STAmount := STAmount.zero .int64
 
-/-- Witness withdrawal share count `1003103695`. -/
-def shAmt : STAmount := STAmount.unchecked .int64 1003103695 0 false
+/-- Witness withdrawal share count `5·10¹⁷`. -/
+def shAmt : STAmount := STAmount.unchecked .int64 500000000000000000 0 false
 
 /-- The base witness vault as a `Vault`.
 
@@ -119,7 +123,7 @@ def clawR : ClawbackResult :=
   (baseLV.clawback clawAmt clawHolderShares).toOption.getD (ClawbackResult.rejected baseLV .tecINTERNAL)
 
 /-- Zero clawed amount for the claw all dilution run. -/
-def clawA0 : STAmount := STAmount.zero .fractional
+def clawA0 : STAmount := STAmount.zero .int64
 
 /-- Holder balance of the zero amount run. -/
 def clawZeroShares : STAmount := clawR.sharesDestroyed

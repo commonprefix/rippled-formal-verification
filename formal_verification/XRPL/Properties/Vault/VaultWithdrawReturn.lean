@@ -110,8 +110,8 @@ into the vault's `numericType`: `some .tecPRECISION_LOSS`. The guard is marked
 "(waiting the C++ fix)" in the model. -/
 theorem Vault.withdraw_payout_too_small (amount : WithdrawAmount)
     (waiveUnrealizedLoss : Bool) (cw : ComputeWithdrawResult)
-    (assetsNumber' sharesBurnedNumber assetsTotal' : Number)
-    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
+    (assetsNumber' clampedNumber sharesBurnedNumber assetsTotal' : Number)
+    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' clamped : STAmount)
     (hcomp : (match amount with
         | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
         | .vaultShares shares => computeWithdrawByShares v shares waiveUnrealizedLoss)
@@ -122,28 +122,34 @@ theorem Vault.withdraw_payout_too_small (amount : WithdrawAmount)
     (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
     (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
-    (hat : v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
+    -- the payout is clamped onto the post-sum grid before it reaches the stored fields
+    (hclamp : clampToSumExponent v.assetsTotal cw.assets'.operator_neg = .ok clamped)
+    (hfnp : clamped.isFractionalNonPositive = .ok false)
+    (hcNc : clamped.toNumber .to_nearest = .ok clampedNumber)
+    (hat : v.assetsTotal.operator_sub clampedNumber .to_nearest = .ok assetsTotal')
     (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
     (hrt' : STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsNumber'.mantissa_ != 0 &&
+    (hguard : (clampedNumber.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = true) :
     v.withdraw amount waiveUnrealizedLoss =
       .ok (.rejected v .tecPRECISION_LOSS) :=
   Vault.withdraw_payout_too_small_proof v amount waiveUnrealizedLoss cw
-    assetsNumber' sharesBurnedNumber assetsTotal' sharesTotalAmount assetsTotalRounded
-    assetsTotalRounded' hcomp herr haN hins hst hfin hsN hat hrt hrt' hguard
+    assetsNumber' clampedNumber sharesBurnedNumber assetsTotal' sharesTotalAmount
+    assetsTotalRounded assetsTotalRounded' clamped
+    hcomp herr haN hins hst hfin hsN hclamp hfnp hcNc hat hrt hrt' hguard
 
 /-- Every guard passes on a non-final withdrawal: the stored total and available
 assets each drop by the payout and the share total by the redeemed shares, the
 post-state is still a `Vault`. -/
 theorem Vault.withdraw_success (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     (cw : ComputeWithdrawResult)
-    (assetsNumber' sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' : Number)
-    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' : STAmount)
+    (assetsNumber' clampedNumber sharesBurnedNumber assetsTotal' assetsAvailable'
+      sharesTotal' : Number)
+    (sharesTotalAmount assetsTotalRounded assetsTotalRounded' clamped : STAmount)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
-    (hp_norm : assetsNumber'.isNormalized) (hp_nn : 0 ≤ assetsNumber'.toRat)
-    (hp_le : assetsNumber'.toRat ≤ v.assetsTotal.toRat)
+    (hp_norm : clampedNumber.isNormalized) (hp_nn : 0 ≤ clampedNumber.toRat)
+    (hp_le : clampedNumber.toRat ≤ v.assetsTotal.toRat)
     (hb_norm : sharesBurnedNumber.isNormalized) (hb_nn : 0 ≤ sharesBurnedNumber.toRat)
     (hb_den : sharesBurnedNumber.toRat.den = 1)
     (hb_le : sharesBurnedNumber.toRat ≤ v.sharesTotal.toRat)
@@ -157,19 +163,22 @@ theorem Vault.withdraw_success (amount : WithdrawAmount) (waiveUnrealizedLoss : 
     (hins : v.assetsAvailable.operator_lt assetsNumber' = false)
     (hstn : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
     (hfin : cw.sharesRedeemed.operator_eq sharesTotalAmount = false)
+    (hclamp : clampToSumExponent v.assetsTotal cw.assets'.operator_neg = .ok clamped)
+    (hfnp : clamped.isFractionalNonPositive = .ok false)
+    (hcNc : clamped.toNumber .to_nearest = .ok clampedNumber)
     (hsN : cw.sharesRedeemed.toNumber .to_nearest = .ok sharesBurnedNumber)
-    (hat : v.assetsTotal.operator_sub assetsNumber' .to_nearest = .ok assetsTotal')
+    (hat : v.assetsTotal.operator_sub clampedNumber .to_nearest = .ok assetsTotal')
     (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
     (hrt' : STAmount.ofNumber v.numericType assetsTotal' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsNumber'.mantissa_ != 0 &&
+    (hguard : (clampedNumber.mantissa_ != 0 &&
       assetsTotalRounded.operator_eq assetsTotalRounded') = false)
-    (hav : v.assetsAvailable.operator_sub assetsNumber' .to_nearest = .ok assetsAvailable')
+    (hav : v.assetsAvailable.operator_sub clampedNumber .to_nearest = .ok assetsAvailable')
     (hshares : v.sharesTotal.operator_sub sharesBurnedNumber .to_nearest = .ok sharesTotal')
     (hempty : sharesTotal'.toRat = 0 → assetsTotal'.toRat = 0) :
     ∃ v' : Vault,
-      v.withdraw amount waiveUnrealizedLoss = .ok ⟨none, v', cw.assets', cw.sharesRedeemed⟩ ∧
+      v.withdraw amount waiveUnrealizedLoss = .ok ⟨none, v', clamped, cw.sharesRedeemed⟩ ∧
       v'.toRawVault = { v.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.withdraw_poststate_lawful v assetsNumber'
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.withdraw_poststate_lawful v clampedNumber
     sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' hL hAV hp_norm hp_nn hp_le
     hb_norm hb_nn hb_den hb_le hfit hat hav hshares hempty
   refine ⟨v', ?_, hlv'eq⟩
@@ -185,6 +194,8 @@ theorem Vault.withdraw_success (amount : WithdrawAmount) (waiveUnrealizedLoss : 
     try simp only [pure_bind]
     rw [hstn, ok_bind, if_neg (by rw [hfin]; exact Bool.false_ne_true)]
     try simp only [pure_bind]
+    rw [hclamp, ok_bind, hfnp, ok_bind, if_neg (by decide : ¬((false : Bool) = true))]
+    rw [hcNc, ok_bind]
     rw [hsN, ok_bind, hat, ok_bind, hrt, ok_bind, hrt', ok_bind]
     rw [if_neg (by rw [hguard]; exact Bool.false_ne_true)]
     try simp only [pure_bind]

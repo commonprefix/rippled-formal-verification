@@ -11,6 +11,7 @@ import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
+import XRPL.Properties.Protocol.STAmount.Sub.Common.Neg
 
 /-! # `Vault.withdraw` accuracy proofs
 
@@ -578,85 +579,5 @@ lemma Vault.sharesToAssetsWithdraw_integral_shape (v : Vault) (sh assets : STAmo
     · rw [STAmount.zero_mValue]
       exact Nat.zero_le _
   · exact STAmount.ofNumber_integral_facts v.numericType an .downward assets hint hof
-
-/-- **Proof body of `withdraw_vault_updates_integral`.** -/
-theorem Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : WithdrawAmount)
-    (waiveUnrealizedLoss : Bool) (sharesTotalAmount : STAmount) (r : WithdrawResult)
-    (hint : v.numericType.isIntegral = true)
-    (hok : v.withdraw amount waiveUnrealizedLoss = .ok r) (herr : r.error = none)
-    (hnn : 0 ≤ r.assets'.toRat)
-    (hst : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount)
-    (hfin : r.sharesBurned.operator_eq sharesTotalAmount = false)
-    (hsz : v.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
-    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assets'.toRat ∧
-    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assets'.toRat := by
-  obtain ⟨cw, aN, sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
-    Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
-  -- the share total conversion is deterministic
-  have hsta_eq : sta = sharesTotalAmount := by
-    rw [hst] at hsta
-    exact (Except.ok.inj hsta).symm
-  subst hsta_eq
-  -- the run is not final
-  rcases hdisj with ⟨hfin', -⟩ | ⟨-, sbn, at', av', st', atr, atr',
-      -, hat, -, -, -, hav, -, hr_assets, hr⟩
-  · rw [← hsb] at hfin'
-    rw [hfin'] at hfin
-    exact absurd hfin (by simp)
-  -- the paid amount came from `sharesToAssetsWithdraw`
-  have hassets : ∃ sh : STAmount,
-      v.sharesToAssetsWithdraw sh waiveUnrealizedLoss = .ok cw.assets' := by
-    cases amount with
-    | vaultAssets a =>
-      obtain ⟨shares, -, -, hs, -⟩ :=
-        computeWithdrawByAssets_none_reduces v a waiveUnrealizedLoss cw hcomp herr2
-      exact ⟨shares, hs⟩
-    | vaultShares s =>
-      obtain ⟨hs, -⟩ :=
-        computeWithdrawByShares_none_reduces v s waiveUnrealizedLoss cw hcomp herr2
-      exact ⟨s, hs⟩
-  obtain ⟨sh, hsh⟩ := hassets
-  obtain ⟨hshape_nt, hshape_off, hshape_val⟩ :=
-    Vault.sharesToAssetsWithdraw_integral_shape v sh cw.assets' waiveUnrealizedLoss hint hsh
-  -- `toNumber` of the paid amount is exact
-  obtain ⟨sn, hsn_ok, hsn_val, hsn_norm, hsn_den⟩ :=
-    STAmount.toNumber_integral_exact' cw.assets' .to_nearest
-      (by rw [hshape_nt]; exact hint) hshape_off hshape_val
-  have haN_eq : aN = sn := by
-    rw [hsn_ok] at han
-    exact (Except.ok.inj han).symm
-  subst haN_eq
-  -- the paid value
-  set k : ℚ := cw.assets'.toRat with hk_def
-  have hknn : 0 ≤ k := by rw [hk_def, ← hr_assets]; exact hnn
-  -- the assetsAvailable guard caps the paid value
-  have hk_le_AA : k ≤ v.assetsAvailable.toRat := by
-    have hbridge := operator_lt_iff v.assetsAvailable aN
-      v.wf.assetsAvailable_norm hsn_norm
-    by_contra hc
-    push_neg at hc
-    have : v.assetsAvailable.operator_lt aN = true := by
-      rw [hbridge, hsn_val]
-      exact hc
-    rw [this] at hlt
-    exact absurd hlt (by simp)
-  have hAA_le_A : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat :=
-    v.exact.assetsAvailable_le
-  have hA_nn : 0 ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
-  have hsz' : v.assetsTotal.toRat ≤ 2 ^ 63 - 1 := hsz
-  -- both subtractions are exact
-  have hat_exact : at'.toRat = v.assetsTotal.toRat - k :=
-    operator_sub_exact_int_le v.assetsTotal aN at' k v.wf.assetsTotal_norm hsz'
-      hsn_norm (by rw [hsn_val]) hsn_den hknn (le_trans hk_le_AA hAA_le_A) hat
-  have hav_exact : av'.toRat = v.assetsAvailable.toRat - k :=
-    operator_sub_exact_int_le v.assetsAvailable aN av' k v.wf.assetsAvailable_norm
-      (le_trans hAA_le_A hsz') hsn_norm (by rw [hsn_val]) hsn_den hknn hk_le_AA hav
-  constructor
-  · rw [hr, hr_assets]
-    show at'.toRat = v.toExact.assetsTotal - cw.assets'.toRat
-    exact hat_exact
-  · rw [hr, hr_assets]
-    show av'.toRat = v.toExact.assetsAvailable - cw.assets'.toRat
-    exact hav_exact
 
 end XRPL.Model.SingleAssetVault

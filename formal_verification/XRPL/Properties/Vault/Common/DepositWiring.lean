@@ -243,60 +243,10 @@ lemma roundToVaultExponent_mNumericType (a : STAmount) (asset : Number) (r : STA
     unfold roundToVaultExponent at hok
     rw [if_neg (by rw [hfr]; exact Bool.false_ne_true)] at hok
     obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨_, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨postScale, _, hok⟩ := bind_ok_peel _ _ _ hok
-    obtain ⟨rounded', hrx, hlast⟩ := bind_ok_peel _ _ _ hok
-    have heq : rounded' = r := Except.ok.inj (show Except.ok rounded' = .ok r from hlast)
-    rw [heq] at hrx
+    obtain ⟨postScale, _, hrx⟩ := bind_ok_peel _ _ _ hok
     rw [(STAmount.roundToExponent_fczr a r postScale .downward hcz hrx).1]
     exact hcz.1.symm
 
-/-- Proof body of `Vault.deposit_charge_integral`. The rounded amount equals the
-integral input (identity pass), the issued shares are a positive `int64` count,
-and the proven `sharesToAssetsDeposit_charge_integral_bound` bounds the overcharge. -/
-theorem Vault.deposit_charge_integral_proof (v : Vault) (amountDeposit : STAmount)
-    (r : DepositResult) (hcanon : amountDeposit.Canonical)
-    (hint : v.numericType.isIntegral = true) (hpos : 0 < amountDeposit.toRat)
-    (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
-    r.amountDeposit'.toRat - v.idealChargeDeposit r.sharesIssued.toRat ≤
-      1 + v.idealChargeDeposit r.sharesIssued.toRat * depositε := by
-  obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, hanz, _, _, _, hcd, _, _, _, _, _, _, hamt, hshr, _⟩ :=
-    Vault.deposit_success_reduces v amountDeposit false r hok herr
-  obtain ⟨shares, hats, hsz, hsad, hgt, hsheq⟩ :=
-    computeDeposit_success_reduces v amount c sh (hcd rfl)
-  -- the charge is the vault's integral type, and it is comparable to `amount`
-  have hcty : c.mNumericType = v.numericType :=
-    (sharesToAssetsDeposit_integral_canonical v shares c hint hsad).2
-  have hcmp : STAmount.areComparable amount c = true := by
-    rw [STAmount.operator_gt, STAmount.operator_lt] at hgt
-    split at hgt
-    · exact absurd hgt (by simp)
-    · rename_i hcond; simpa using hcond
-  have hamt_int : amount.integral = true := by
-    have htyeq : amount.mNumericType = c.mNumericType := by
-      have := hcmp; unfold STAmount.areComparable at this
-      exact beq_iff_eq.mp this
-    unfold STAmount.integral; rw [htyeq, hcty]; exact hint
-  -- so the input is integral, `roundToVaultExponent` was the identity
-  have hameq : amount = amountDeposit := by
-    have htype := roundToVaultExponent_mNumericType amountDeposit v.assetsTotal amount hcanon hround
-    have hadint : amountDeposit.integral = true := by
-      unfold STAmount.integral at hamt_int ⊢; rw [← htype]; exact hamt_int
-    rw [roundToVaultExponent_integral amountDeposit v.assetsTotal hadint] at hround
-    exact (Except.ok.inj hround).symm
-  rw [hameq] at hats
-  -- issued shares: positive `int64` canonical count
-  obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v amountDeposit shares hats
-  have hshpos : 0 < shares.toRat :=
-    assetsToSharesDeposit_pos v amountDeposit shares hcanon hpos hats hsz
-  -- apply the proven charge bound
-  obtain ⟨_, hbound⟩ :=
-    sharesToAssetsDeposit_charge_integral_bound v amountDeposit shares c hint hshc hshnt hshpos hsad
-  have hcr : r.amountDeposit' = c := hamt
-  have hsr : r.sharesIssued = shares := by rw [hshr, hsheq]
-  rw [hcr, hsr]
-  exact hbound
 
 /-- The charge type matches the vault's numeric type: both packings route through
 `checked`/`ofNumber` on `vault.numericType`, which preserve the type. -/
@@ -378,6 +328,30 @@ lemma sharesToAssetsDeposit_exactCanonical_or_zero (v : Vault)
     have hle := sharesToAssetsDeposit_le_maxRep v shares c hshc hshnt hint hok
     calc c.mValue.toNat ≤ maxRep.toNat := hle
       _ ≤ 2 ^ 63 - 1 := by rw [maxRep_val]; norm_num
+
+/-- **The charge is `ExactCanonical` or a fractional zero.** Strengthens
+`sharesToAssetsDeposit_exactCanonical_or_zero`: a zero-magnitude integral charge
+is still `IntegralCanonical`, so the zero disjunct is only ever fractional. -/
+lemma sharesToAssetsDeposit_exactCanonical_or_fraczero (v : Vault)
+    (shares c : STAmount) (hshc : shares.IntegralCanonical) (hshnt : shares.mNumericType = .int64)
+    (hok : sharesToAssetsDeposit v shares = .ok c) :
+    c.ExactCanonical ∨ (c.mNumericType = .fractional ∧ c.mValue = 0) := by
+  by_cases hc0 : c.mValue = 0
+  · by_cases hint : c.integral = true
+    · have htyeq : c.mNumericType = v.numericType :=
+        sharesToAssetsDeposit_mNumericType v shares c hok
+      have hvint : v.numericType.isIntegral = true := by rw [← htyeq]; exact hint
+      obtain ⟨hIC, -⟩ := sharesToAssetsDeposit_integral_canonical v shares c hvint hok
+      exact Or.inl (Or.inr ⟨hIC, by rw [hc0]; exact Nat.zero_le _⟩)
+    · refine Or.inr ⟨?_, hc0⟩
+      cases hnt : c.mNumericType with
+      | fractional => rfl
+      | integral mv mo ms msh =>
+        exact absurd (show c.integral = true from by
+          unfold STAmount.integral; rw [hnt]; rfl) hint
+  · rcases sharesToAssetsDeposit_exactCanonical_or_zero v shares c hshc hshnt hok with h | h0
+    · exact Or.inl h
+    · exact absurd h0 hc0
 
 /-- **The charge converts exactly through `toNumber`.** The taken amount is stored
 canonically for its kind (or is a fractional zero, handled by
@@ -523,10 +497,9 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
       · rw [if_neg h3] at hok
         simp only [pure_bind] at hok
         by_cases hd : isDonation = true
-        · rw [if_pos hd] at hok
+        · rw [if_neg (show ¬((!isDonation) = true) by simp [hd])] at hok
           obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-          obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
           obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
@@ -547,7 +520,8 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
           · rw [if_neg hm] at hok
             obtain ⟨v', _, hok⟩ := bind_ok_peel _ _ _ hok
             injection hok with h; rw [← h] at hLE; exact absurd hLE (by simp)
-        · rw [if_neg hd] at hok
+        · rw [if_pos (show (!isDonation) = true by
+            simp [show isDonation = false by simpa using hd])] at hok
           obtain ⟨cres, hcd, hok⟩ := bind_ok_peel _ _ _ hok
           rcases computeDeposit_codes v amount cres hcd with h5 | h5 | h5 | ⟨a, sh, h5⟩
           · subst h5; injection hok with h; rw [← h] at hLE; exact absurd hLE (by simp [DepositResult.rejected])
@@ -555,9 +529,15 @@ theorem Vault.deposit_under_maximum_proof (v : Vault) (amountDeposit roundedAmou
           · subst h5; injection hok with h; rw [← h] at hLE; exact absurd hLE (by simp [DepositResult.rejected])
           · subst h5
             simp only [] at hok
+            obtain ⟨ad, hclamp, hok⟩ := bind_ok_peel _ _ _ hok
+            obtain ⟨fnp, _, hok⟩ := bind_ok_peel _ _ _ hok
+            by_cases hfnp : fnp = true
+            · rw [if_pos hfnp] at hok
+              injection hok with h; rw [← h] at hLE
+              exact absurd hLE (by simp [DepositResult.rejected])
+            rw [if_neg hfnp] at hok
             obtain ⟨n1, hn1, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨at', hat, hok⟩ := bind_ok_peel _ _ _ hok
-            obtain ⟨n2, hn2, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨av', hav, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨n3, hn3, hok⟩ := bind_ok_peel _ _ _ hok
             obtain ⟨st', hst, hok⟩ := bind_ok_peel _ _ _ hok
@@ -767,6 +747,78 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
         nlinarith
       have hQneg : Q.negative_ = false := Number.negative_false_of_pos Q hQpos
       exact STAmount.ofNumber_signfalse_nonneg v.numericType Q .upward c hQnorm hQneg hc
+
+/-- Proof body of `Vault.deposit_charge_integral`. The rounded amount equals the
+integral input (identity pass), the issued shares are a positive `int64` count,
+and the proven `sharesToAssetsDeposit_charge_integral_bound` bounds the overcharge. -/
+theorem Vault.deposit_charge_integral_proof (v : Vault) (amountDeposit : STAmount)
+    (r : DepositResult) (hcanon : amountDeposit.Canonical)
+    (hint : v.numericType.isIntegral = true) (hpos : 0 < amountDeposit.toRat)
+    (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
+    r.amountDeposit'.toRat - v.idealChargeDeposit r.sharesIssued.toRat ≤
+      1 + v.idealChargeDeposit r.sharesIssued.toRat * depositε := by
+  obtain ⟨amount, cp, c, sh, cN, sN, at', av', st', hround, hanz, _, _, _, hcd,
+    _, _, _, _, _, _, hamt, hshr, _⟩ :=
+    Vault.deposit_success_reduces v amountDeposit false r hok herr
+  obtain ⟨hcdp, hclamp, _⟩ := hcd rfl
+  obtain ⟨shares, hats, hsz, hsad, hgt, hsheq⟩ :=
+    computeDeposit_success_reduces v amount cp sh hcdp
+  -- an integral vault takes the clamp's identity branch: the charged amount is the
+  -- priced one, so the priced-side facts transfer verbatim
+  obtain ⟨hcpc, hcpty⟩ := sharesToAssetsDeposit_integral_canonical v shares cp hint hsad
+  obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v amount shares hats
+  -- the rounded amount inherits canonicality and positivity from the request
+  have hcanonA : amount.Canonical := by
+    rcases roundToVaultExponent_canonical_or_isZero amountDeposit amount v.assetsTotal
+      hcanon hround with hc | hz
+    · exact hc
+    · rw [hz] at hanz; exact absurd hanz (by decide)
+  have hposA : 0 < amount.toRat := by
+    refine lt_of_le_of_ne
+      (RawVault.roundToVaultExponent_nonneg amountDeposit amount v.assetsTotal
+        hcanon hpos.le hround) (fun h => ?_)
+    have hz : amount.isZero = true := by
+      show (amount.mValue == 0) = true
+      exact beq_iff_eq.mpr ((STAmount.toRat_eq_zero_iff amount).mp h.symm)
+    rw [hz] at hanz; exact absurd hanz (by decide)
+  have hcpnn : 0 ≤ cp.toRat :=
+    sharesToAssetsDeposit_nonneg v shares cp hshc hshnt
+      (assetsToSharesDeposit_pos v amount shares hcanonA hposA hats hsz) hsad
+  have hceq : c = cp := (Except.ok.inj
+    ((clampToSumExponent_integral_pos v.assetsTotal cp
+      (by show cp.mNumericType.isIntegral = true; rw [hcpty]; exact hint)
+      (STAmount.sign_clear_of_nonneg cp hcpnn)).symm.trans hclamp)).symm
+  subst hceq
+  have hcty : c.mNumericType = v.numericType := hcpty
+  have hcmp : STAmount.areComparable amount c = true := by
+    rw [STAmount.operator_gt, STAmount.operator_lt] at hgt
+    split at hgt
+    · exact absurd hgt (by simp)
+    · rename_i hcond; simpa using hcond
+  have hamt_int : amount.integral = true := by
+    have htyeq : amount.mNumericType = c.mNumericType := by
+      have := hcmp; unfold STAmount.areComparable at this
+      exact beq_iff_eq.mp this
+    unfold STAmount.integral; rw [htyeq, hcty]; exact hint
+  -- so the input is integral, `roundToVaultExponent` was the identity
+  have hameq : amount = amountDeposit := by
+    have htype := roundToVaultExponent_mNumericType amountDeposit v.assetsTotal amount hcanon hround
+    have hadint : amountDeposit.integral = true := by
+      unfold STAmount.integral at hamt_int ⊢; rw [← htype]; exact hamt_int
+    rw [roundToVaultExponent_integral amountDeposit v.assetsTotal hadint] at hround
+    exact (Except.ok.inj hround).symm
+  rw [hameq] at hats
+  -- issued shares: positive `int64` canonical count
+  obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v amountDeposit shares hats
+  have hshpos : 0 < shares.toRat :=
+    assetsToSharesDeposit_pos v amountDeposit shares hcanon hpos hats hsz
+  -- apply the proven charge bound
+  obtain ⟨_, hbound⟩ :=
+    sharesToAssetsDeposit_charge_integral_bound v amountDeposit shares c hint hshc hshnt hshpos hsad
+  have hcr : r.amountDeposit' = c := hamt
+  have hsr : r.sharesIssued = shares := by rw [hshr, hsheq]
+  rw [hcr, hsr]
+  exact hbound
 
 /-- Proof body of `Vault.deposit_vault_updates`. Both stored asset totals round
 `old + taken` within `depositε` (the taken amount is nonnegative, so the `Number`

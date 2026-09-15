@@ -17,7 +17,7 @@ def isRounded (nt : NumericType) (value : Number) (scale : Int) : Except Error B
   let up ← STAmount.roundToNumericType nt value .upward (some scale)
   return down.operator_eq up
 
-private def sumAndRoundToExponent (amount : Number) (amountDelta : STAmount)
+def sumAndRoundToExponent (amount : Number) (amountDelta : STAmount)
     (exponent : Int) (rounding : rounding_mode) : Except Error Number := do
   let numericType := amountDelta.numericType
   let amountDelta ← amountDelta.toNumber rounding

@@ -46,7 +46,7 @@ theorem Vault.deposit_withdrawNav_change (v : Vault) (amountDeposit : STAmount) 
     (herr : r.error = none) :
     r.vault'.withdrawNav - v.withdrawNav =
       r.vault'.toExact.assetsTotal - v.toExact.assetsTotal := by
-  obtain ⟨amount, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
+  obtain ⟨amount, aP, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
     hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
     Vault.deposit_success_reduces v amountDeposit isDonation r hok herr
   rw [hrv]
@@ -61,7 +61,7 @@ theorem Vault.deposit_withdrawNav_change (v : Vault) (amountDeposit : STAmount) 
 theorem Vault.deposit_donation_sharesTotal_eq (v : Vault) (amountDeposit : STAmount)
     (r : DepositResult) (hok : v.deposit amountDeposit true = .ok r) (herr : r.error = none) :
     r.vault'.sharesTotal = v.sharesTotal := by
-  obtain ⟨amount, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
+  obtain ⟨amount, aP, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
     hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
     Vault.deposit_success_reduces v amountDeposit true r hok herr
   obtain ⟨_, hsC⟩ := hdon rfl
@@ -197,7 +197,7 @@ theorem Vault.deposit_donation_no_dilution_proof (v : Vault) (amountDeposit : ST
       rcases hb : amountDeposit.integral with _ | _
       · rfl
       · exact absurd hb hint
-    obtain ⟨amount, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
+    obtain ⟨amount, aP, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
       hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
       Vault.deposit_success_reduces v amountDeposit true r hok herr
     obtain ⟨hAssetEq, -⟩ := hdon rfl
@@ -234,7 +234,7 @@ theorem Vault.deposit_nonneg_and_update_lower (v : Vault) (amountDeposit : STAmo
     0 < r.sharesIssued.toRat ∧
     (v.toExact.assetsTotal + r.amountDeposit'.toRat) * (1 - 6 / (2 ^ 63 - 3)) ≤
       r.vault'.toExact.assetsTotal := by
-  obtain ⟨am, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
+  obtain ⟨am, aP, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
     hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
     Vault.deposit_success_reduces v amountDeposit false r hok herr
   have hamCanon : am.Canonical := by
@@ -248,7 +248,7 @@ theorem Vault.deposit_nonneg_and_update_lower (v : Vault) (amountDeposit : STAmo
   have ham_pos : 0 < am.toRat :=
     lt_of_le_of_ne ham_nn (Ne.symm (STAmount.toRat_ne_zero am ham_ne))
   obtain ⟨shares, hats, hshz, hsad, _, hseq⟩ :=
-    computeDeposit_success_reduces v am aD sC (hcomp rfl)
+    computeDeposit_success_reduces v am aP sC (hcomp rfl).1
   obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v am shares hats
   have hshpos : 0 < shares.toRat :=
     assetsToSharesDeposit_pos v am shares hamCanon ham_pos hats hshz
@@ -284,7 +284,7 @@ theorem Vault.deposit_charge_lower (v : Vault) (amountDeposit : STAmount) (r : D
     (hok : v.deposit amountDeposit false = .ok r) (herr : r.error = none) :
     v.toExact.assetsTotal * r.sharesIssued.toRat * (1 - 19 / (2 ^ 63 - 3)) ≤
       r.amountDeposit'.toRat * (v.toExact.sharesTotal : ℚ) := by
-  obtain ⟨am, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
+  obtain ⟨am, aP, aD, sC, cN, sN, at', av', st', hround, hamz, hshdon, hinsolv, hdon, hcomp,
     hcN, hsN, hat, hav, hst, hmax, hamt, hshr, hrv⟩ :=
     Vault.deposit_success_reduces v amountDeposit false r hok herr
   have haDeq : r.amountDeposit' = aD := hamt
@@ -299,7 +299,7 @@ theorem Vault.deposit_charge_lower (v : Vault) (amountDeposit : STAmount) (r : D
   have hmz : v.assetsTotal.mantissa_ ≠ 0 :=
     Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hApos)
   obtain ⟨shares, hats, hshz, hsad, _, hseq⟩ :=
-    computeDeposit_success_reduces v am aD sC (hcomp rfl)
+    computeDeposit_success_reduces v am aP sC (hcomp rfl).1
   obtain ⟨hshc, hshnt⟩ := assetsToSharesDeposit_int64_canonical v am shares hats
   have hamCanon : am.Canonical := by
     rcases roundToVaultExponent_canonical_or_isZero amountDeposit am v.assetsTotal hcanon hround
@@ -525,24 +525,27 @@ the raw `6/(2^63-3)` stage. The payout's `toNumber` lift is value-exact and norm
 and its `disj`-canonical magnitude clears `10⁻⁸¹`, so `stored_sub_payout_raw` applies.
 Shared by the withdraw and clawback dilution proofs (both price through the same
 pipeline). -/
-lemma Vault.sharesToAssetsWithdraw_sub_stored_raw (v : Vault)
-    (shares payout : STAmount) (waive : Bool) (pn stored result : Number)
-    (hc : shares.Canonical)
-    (hprice : v.sharesToAssetsWithdraw shares waive = .ok payout)
+lemma STAmount.sub_stored_raw_of_ecz
+    (payout : STAmount) (pn stored result : Number)
+    (hecz : payout.ExactCanonical ∨ (payout.mNumericType = .fractional ∧ payout.mValue = 0))
     (hnum : payout.toNumber .to_nearest = .ok pn)
     (hpay_nn : 0 ≤ payout.toRat)
     (hstored_norm : stored.isNormalized) (hstored_nn : 0 ≤ stored.toRat)
     (hle : payout.toRat ≤ stored.toRat)
     (hsub : stored.operator_sub pn .to_nearest = .ok result) :
     RoundsWithin result (stored.toRat - payout.toRat) .to_nearest (6 / (2 ^ 63 - 3 : ℚ)) := by
-  obtain ⟨hpn_val, hpn_norm⟩ :=
-    Vault.sharesToAssetsWithdraw_toNumber_facts v shares payout waive pn hc hprice hnum
+  obtain ⟨hpn_val, hpn_norm⟩ := STAmount.toNumber_exact_of_ecz payout pn hecz hnum
   have hpn_floor : pn.mantissa_ ≠ 0 → (10 : ℚ) ^ (-81 : ℤ) ≤ |pn.toRat| := fun hm => by
     have hne : pn.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero pn hm
     have hmv : payout.mValue ≠ 0 := fun h0 => hne (by rw [hpn_val, STAmount.toRat_signed, h0]; simp)
     rw [hpn_val]
     exact STAmount.canonical_disj_abs_toRat_ge payout
-      (Vault.sharesToAssetsWithdraw_disj_canonical v shares payout waive hc hprice hmv) hmv
+      (by
+        rcases hecz with hec | ⟨-, h0⟩
+        · rcases hec with hio | ⟨hic, -⟩
+          · exact Or.inl hio
+          · exact Or.inr hic
+        · exact absurd h0 hmv) hmv
   have h := RawVault.stored_sub_payout_raw stored pn result hstored_norm hstored_nn
     hpn_norm (by rw [hpn_val]; exact hpay_nn) (by rw [hpn_val]; exact hle) hpn_floor hsub
   rwa [hpn_val] at h
@@ -560,7 +563,7 @@ theorem Vault.withdraw_withdrawNav_change (v : Vault) (amount : WithdrawAmount)
   obtain ⟨cw, aN, sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces v amount waiveUnrealizedLoss r hok herr
   rcases hdisj with ⟨-, -, allAvail, -, -, hr⟩ |
-      ⟨-, sbn, at', av', st', atr, atr', -, hat, -, -, -, hav, hst2, -, hr⟩
+      ⟨-, cl, cn, sbn, at', av', st', atr, atr', -, -, -, -, hat, -, -, -, hav, hst2, -, hr⟩
   · rw [hr]
     simp only [RawVault.withdrawNav, RawVault.toExact, Number.toRat_zero]; ring
   · rw [hr]
@@ -598,7 +601,7 @@ theorem Vault.withdraw_no_dilution_proof (v : Vault) (amount : WithdrawAmount) (
   obtain ⟨cw, aN, sta, hcomp, herr2, han, hlt, hsta, hsb, hdisj⟩ :=
     Vault.withdraw_success_reduces v amount false r hok herr
   rcases hdisj with ⟨-, -, allAvail, -, hr⟩ |
-      ⟨hfin', sbn, at', av', st', atr, atr', hsbn, hat, -, -, -, hav, hst2, hr⟩
+      ⟨hfin', cl, cn, sbn, at', av', st', atr, atr', -, -, -, hsbn, hat, -, -, -, hav, hst2, hr⟩
   · -- exact-final exit: `sharesTotal' = 0`, both sides are `0`
     have hSt0 : (r.vault'.toExact.sharesTotal : ℚ) = 0 := by
       rw [hr.2]; simp only [RawVault.toExact, Number.toRat_zero]; norm_num
@@ -716,11 +719,39 @@ theorem Vault.clawback_no_dilution_proof (v : Vault) (assets holderShares : STAm
   have hl0 : v.lossUnrealized.toRat = 0 := hL
   have hNav_v : v.withdrawNav = A := by unfold RawVault.withdrawNav; rw [hL]; ring
   -- recovery priced through the withdraw pipeline
-  obtain ⟨hnn_sd, hcanon_sd, hprice, hle_AA, hsdnz⟩ :=
+  obtain ⟨priced, hnn_sd, hcanon_sd, hprice, hcl, hfnp, hpAA, hsdnz⟩ :=
     Vault.clawback_recovery_priced' v assets holderShares r hnav hc hSc hSnn hok herr
-  obtain ⟨hp_nn, hideal_nn, hp_up, -⟩ :=
-    Vault.sharesToAssetsWithdraw_spec_raw v r.sharesDestroyed r.assetsRecovered false
+  obtain ⟨-, hideal_nn, hp_up_priced, -⟩ :=
+    Vault.sharesToAssetsWithdraw_spec_raw v r.sharesDestroyed priced false
       hnn_sd hcanon_sd hnav hprice
+  -- carry the priced bounds across the post-sum clamp: it only ever recovers less
+  have hecz : r.assetsRecovered.ExactCanonical ∨
+      (r.assetsRecovered.mNumericType = .fractional ∧ r.assetsRecovered.mValue = 0) :=
+    clampToSumExponent_neg_exactCanonical_or_zero v.assetsTotal priced r.assetsRecovered
+      (Vault.sharesToAssetsWithdraw_exactCanonical_or_fraczero v r.sharesDestroyed priced false
+        hcanon_sd hprice) hcl
+  have hpple : priced.toRat ≤ v.assetsTotal.toRat := le_trans hpAA v.exact.assetsAvailable_le
+  have hclamp_le : r.assetsRecovered.mValue ≠ 0 →
+      0 ≤ r.assetsRecovered.toRat ∧ r.assetsRecovered.toRat ≤ priced.toRat := fun hz => by
+    obtain ⟨-, -, hcnn, hcle, -⟩ :=
+      Vault.recovery_clamp_bracket v r.sharesDestroyed priced r.assetsRecovered false
+        hnn_sd hcanon_sd hprice hcl hfnp hpple hz
+    exact ⟨hcnn, hcle⟩
+  have hppnn : 0 ≤ priced.toRat :=
+    Vault.sharesToAssetsWithdraw_nonneg v r.sharesDestroyed priced false hnn_sd hcanon_sd hprice
+  have hp_nn : 0 ≤ r.assetsRecovered.toRat := by
+    by_cases hz : r.assetsRecovered.mValue = 0
+    · rw [STAmount.toRat_signed, hz]; simp
+    · exact (hclamp_le hz).1
+  have hp_le : r.assetsRecovered.toRat ≤ priced.toRat := by
+    by_cases hz : r.assetsRecovered.mValue = 0
+    · have hz0 : r.assetsRecovered.toRat = 0 := by rw [STAmount.toRat_signed, hz]; simp
+      rw [hz0]; exact hppnn
+    · exact (hclamp_le hz).2
+  have hle_AA : r.assetsRecovered.toRat ≤ v.assetsAvailable.toRat := le_trans hp_le hpAA
+  have hp_up : r.assetsRecovered.toRat ≤
+      v.idealAssetsWithdraw false r.sharesDestroyed.toRat * (1 + 12 / (2 ^ 63 - 3 : ℚ)) :=
+    le_trans hp_le hp_up_priced
   set x : ℚ := r.sharesDestroyed.toRat with hx_def
   set p : ℚ := r.assetsRecovered.toRat with hp_def
   have hideal_eq : v.idealAssetsWithdraw false x = A * x / S := by
@@ -739,8 +770,8 @@ theorem Vault.clawback_no_dilution_proof (v : Vault) (assets holderShares : STAm
   have hApm : 0 ≤ A - p := by have : p ≤ A := hle_AT; linarith
   have hround : RoundsWithin at' (v.assetsTotal.toRat - r.assetsRecovered.toRat) .to_nearest
       (6 / (2 ^ 63 - 3 : ℚ)) :=
-    Vault.sharesToAssetsWithdraw_sub_stored_raw v r.sharesDestroyed r.assetsRecovered false arn
-      v.assetsTotal at' hcanon_sd hprice hnum_r hp_nn v.wf.assetsTotal_norm
+    STAmount.sub_stored_raw_of_ecz r.assetsRecovered arn
+      v.assetsTotal at' hecz hnum_r hp_nn v.wf.assetsTotal_norm
       v.exact.assetsTotal_nonneg hle_AT hat
   have hA'_lo : (A - p) * (1 - 6 / (2 ^ 63 - 3 : ℚ)) ≤ at'.toRat := by
     have h : |at'.toRat - (A - p)| ≤ |A - p| * (6 / (2 ^ 63 - 3 : ℚ)) := hround
@@ -940,7 +971,8 @@ theorem Vault.ReachableFromIn.no_dilution_proof (v : Vault) (n : ℕ) (w : Vault
         have hsta_ec : sta.ExactCanonical := Or.inr ⟨⟨by rw [hsta_nt]; decide, hsta_off,
           by rw [hsta_nt]; show sta.mValue.toNat ≤ (2 ^ 63 - 1 : ℕ); exact hsta_mv_le⟩, hsta_mv_le⟩
         rcases hdisj with ⟨hfinT, -, allAvail, -, hr⟩ |
-            ⟨hfinF, sbn, at', av', st', atr, atr', hsbn, hat, -, -, -, hav, hst2, hr⟩
+            ⟨hfinF, cl, cn, sbn, at', av', st', atr, atr', -, -, -, hsbn, hat, -, -, -, hav,
+              hst2, hr⟩
         · exfalso
           have hcmp : STAmount.CmpFaithful r.sharesBurned sta :=
             STAmount.CmpFaithful.ofExactCanonical r.sharesBurned sta (Or.inr ⟨hSc, by
@@ -1001,7 +1033,7 @@ theorem Vault.ReachableFromIn.no_dilution_proof (v : Vault) (n : ℕ) (w : Vault
     -- success derives S_u > 0 (nonzero destroyed shares under the margin)
     have hsuc_pos : r.error = none → 0 < (u'.toExact.sharesTotal : ℚ) := by
       intro herr'
-      obtain ⟨hnn_sd, hcanon_sd, -, -, hsdnz⟩ :=
+      obtain ⟨priced, hnn_sd, hcanon_sd, -, -, -, -, hsdnz⟩ :=
         Vault.clawback_recovery_priced' u' assets holderShares r  hnav hcanon hSc hSnn
           hrun herr'
       have hxpos : 0 < r.sharesDestroyed.toRat :=
