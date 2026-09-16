@@ -16,13 +16,14 @@ open XRPL.Model.SingleAssetVault
 namespace CashBasis
 
 -- Apply the amounts one payment moves to the vault and broker
-def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts) : Except Error BrokerVault := do
+def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts)
+    : Except Error (BrokerVault × Number) := do
   let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  let cash ← amounts.principalPaid.operator_add amounts.interestPaid .to_nearest
-  let cashRounded ← STAmount.roundToNumericType vault.numericType cash .downward (some vaultScale)
+  let totalPaid ← amounts.principalPaid.operator_add amounts.interestPaid .to_nearest
+  let totalPaid' ← STAmount.roundToNumericType vault.numericType totalPaid .downward (some vaultScale)
 
   -- interest raises AssetsTotal, principal repays DebtTotal
-  let assetsAvailable ← vault.assetsAvailable.operator_add cashRounded .to_nearest
+  let assetsAvailable ← vault.assetsAvailable.operator_add totalPaid' .to_nearest
   let assetsTotal ← vault.assetsTotal.operator_add amounts.interestPaid .to_nearest
   let debtTotal ← sumRoundAndClamp broker.debtTotal amounts.principalPaid.operator_neg vaultScale vault.numericType
 
@@ -36,7 +37,7 @@ def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts
   let vault' ← rawVault'.to_lawful
   let broker' := { broker with debtTotal := debtTotal, coverAvailable := coverAvailable' }
 
-  return { vault := vault', broker := broker' }
+  return ({ vault := vault', broker := broker' }, totalPaid')
 
 end CashBasis
 

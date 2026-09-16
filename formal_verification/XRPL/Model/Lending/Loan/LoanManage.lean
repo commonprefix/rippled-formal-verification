@@ -73,6 +73,7 @@ def Loan.manageImpair (loan : Loan) (vault : Vault) (now : UInt32) : Except Erro
 
   let vault' ← ({ vault.toRawVault with lossUnrealized := lossUnrealized' } : RawVault).to_lawful
   let loan' := { loan with isImpaired := true }
+
   return .ok { loan := loan', vault := vault' }
 
 -- Reverse the paper loss an impairment recorded
@@ -86,6 +87,7 @@ def Loan.manageUnimpair (loan : Loan) (vault : Vault) : Except Error (LoanResult
 
   let vault' ← ({ vault.toRawVault with lossUnrealized := lossUnrealized' } : RawVault).to_lawful
   let loan' := { loan with isImpaired := false }
+
   return .ok { loan := loan', vault := vault' }
 
 -- Default a loan: first-loss cover absorbs part of the loss, the rest reduces the vault's AssetsTotal.
@@ -126,6 +128,7 @@ def Loan.manageDefault (loan : Loan) (vault : Vault) (broker : LoanBroker) (impa
     lossUnrealized := lossUnrealized'
   }
   let vault' ← rawVault'.to_lawful
+
   let broker' := { broker with debtTotal := debtTotal', coverAvailable := coverAvailable' }
   let loan' := { loan with
     isDefault := true
@@ -134,6 +137,7 @@ def Loan.manageDefault (loan : Loan) (vault : Vault) (broker : LoanBroker) (impa
     managementFeeOutstanding := Number.zero
     paymentRemaining := 0
     nextPaymentDueDate := 0 }
-  return .ok { vault := vault', broker := broker', loan := loan', amount := some defaultCovered }
+
+  return .ok { vault := vault', broker := broker', loan := loan', amountToVault := some defaultCovered }
 
 end XRPL.Model.Lending

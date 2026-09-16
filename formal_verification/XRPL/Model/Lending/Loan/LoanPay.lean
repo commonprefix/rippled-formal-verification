@@ -269,8 +269,10 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
 -- Settle the summed amounts against the vault and broker, then re-check the vault
 private def settlePayment (vault : Vault) (broker : LoanBroker) (loan : Loan) (amounts : PaymentAmounts)
     : Except Error (LoanResult LendingState) := do
-  let vb ← CashBasis.applyPayment vault broker amounts
-  let state : LendingState := { vault := vb.vault, broker := vb.broker, loan := loan }
+  let (vb, amountToVault) ← CashBasis.applyPayment vault broker amounts
+  let state : LendingState :=
+    { vault := vb.vault, broker := vb.broker, loan := loan
+      amountToVault := some amountToVault, amountToBroker := some amounts.feePaid }
   return validatePostPayment vault state amounts.interestPaid
 
 -- Settle one instalment if the amount covers it, then re-check the vault
