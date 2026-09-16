@@ -5,14 +5,8 @@ import XRPL.Model.Protocol.STAmount
 
 namespace XRPL.Model.Protocol
 
-def adjustImpreciseNumber (nt : NumericType) (value adjustment : Number) (scale : Int)
-    : Except Error Number := do
-  let adjusted ← value.operator_add adjustment .to_nearest
-  let rounded ← STAmount.roundToNumericType nt adjusted .to_nearest (some scale)
-  if rounded.signum < 0 then return Number.zero else return rounded
-
 -- exactly representable at scale (round-down == round-up)
-def isRounded (nt : NumericType) (value : Number) (scale : Int) : Except Error Bool := do
+def isRounded (value : Number) (scale : Int) (nt : NumericType) : Except Error Bool := do
   let down ← STAmount.roundToNumericType nt value .downward (some scale)
   let up ← STAmount.roundToNumericType nt value .upward (some scale)
   return down.operator_eq up
@@ -22,6 +16,13 @@ def roundAndClamp (value cap : Number) (mode : rounding_mode) (nt : NumericType)
     : Except Error Number := do
   let rounded ← STAmount.roundToNumericType nt value mode (some scale)
   return Number.clamp rounded Number.zero cap
+
+-- C++ `adjustImpreciseNumber`
+def sumRoundAndClamp (amount amountDelta : Number) (scale : Int) (nt : NumericType)
+    : Except Error Number := do
+  let sum ← amount.operator_add amountDelta .to_nearest
+  let sum' ← STAmount.roundToNumericType nt sum .to_nearest (some scale)
+  if sum'.signum < 0 then return Number.zero else return sum'
 
 private def sumAndRoundToExponent (amount : Number) (amountDelta : STAmount)
     (exponent : Int) (rounding : rounding_mode) : Except Error Number := do

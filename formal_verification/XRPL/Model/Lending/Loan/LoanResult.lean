@@ -20,6 +20,7 @@ structure LendingState where
   vault : Vault
   broker : LoanBroker
   loan : Loan
+  amount : Option Number := none
 
 -- The result of a lending operation (the new ledger state, or the TER that rejected it)
 inductive LoanResult (α : Type) where

@@ -24,7 +24,7 @@ def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts
   -- interest raises AssetsTotal, principal repays DebtTotal
   let assetsAvailable ← vault.assetsAvailable.operator_add cashRounded .to_nearest
   let assetsTotal ← vault.assetsTotal.operator_add amounts.interestPaid .to_nearest
-  let debtTotal ← adjustImpreciseNumber vault.numericType broker.debtTotal amounts.principalPaid.operator_neg vaultScale
+  let debtTotal ← sumRoundAndClamp broker.debtTotal amounts.principalPaid.operator_neg vaultScale vault.numericType
 
   -- if cover already meets its minimum, pay the owner, else add the fee to cover
   let minimumCover ← minimumBrokerCover vault.numericType broker.debtTotal broker.coverRateMinimum vaultScale

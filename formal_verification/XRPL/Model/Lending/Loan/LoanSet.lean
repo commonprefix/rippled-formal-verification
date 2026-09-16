@@ -150,7 +150,7 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
   let properties ← computeLoanProperties principal rates.interestRate
     schedule.paymentInterval schedule.paymentTotal broker.managementFeeRate vault.numericType vaultExponent
   let precisionTer ← checkPrecisionFields principal fees
-    (fun value => isRounded vault.numericType value properties.loanScale)
+    (fun value => isRounded value properties.loanScale vault.numericType)
   if !precisionTer.isTesSuccess then return .rejected precisionTer
 
   let guardTer ← properties.checkGuards principal rates.interestRate schedule.paymentTotal vault.numericType
@@ -169,7 +169,7 @@ def Loan.create (vault : Vault) (broker : LoanBroker) (principal : Number)
   let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
   let vault' ← rawVault'.to_lawful
 
-  let debtTotal' ← adjustImpreciseNumber vault.numericType broker.debtTotal principal vaultExponent
+  let debtTotal' ← sumRoundAndClamp broker.debtTotal principal vaultExponent vault.numericType
   let broker' := { broker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
 
   return .ok { vault := vault', broker := broker', loan := loan }

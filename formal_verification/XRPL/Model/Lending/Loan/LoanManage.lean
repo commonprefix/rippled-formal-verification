@@ -35,8 +35,8 @@ private def dustAdjustedAssetsTotal (assetsAvailable assetsTotal : Number) (nt :
     : Except Error Number := do
   if nt.isIntegral || assetsAvailable.operator_le assetsTotal then
     return assetsTotal
-  let overshoot ← assetsAvailable.operator_sub assetsTotal .to_nearest
-  let isDust := assetsAvailable.exponent_ - overshoot.exponent_ > 13
+  let assetsDiff ← assetsAvailable.operator_sub assetsTotal .to_nearest
+  let isDust := assetsAvailable.exponent_ - assetsDiff.exponent_ > 13
   return (if isDust then assetsAvailable else assetsTotal)
 
 -- LoanManage -> preclaim
@@ -55,20 +55,20 @@ def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : TE
     .tecNO_PERMISSION
   else if action == .default && !hasExpired now gracePeriodEnd (exclusive := true) then
     .tecTOO_SOON
-  else if action == .impair && !(loan.isPaymentLate now) then
-    .tecTOO_SOON
   else
     .tesSUCCESS
 
 -- Record the loan's exposure as a paper loss.
-def Loan.manageImpair (loan : Loan) (vault : Vault) : Except Error (LoanResult LoanVault) := do
-  let exposure := loan.principalOutstanding
-  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  let lossUnrealized' ← adjustImpreciseNumber vault.numericType vault.lossUnrealized exposure vaultScale
+def Loan.manageImpair (loan : Loan) (vault : Vault) (now : UInt32) : Except Error (LoanResult LoanVault) := do
+  -- a loan that is not late yet can not be impaired
+  if !(loan.isPaymentLate now) then
+    return .rejected .tecTOO_SOON
 
-  -- a loss above the vault's unavailable assets would leave it inconsistent
-  let gap ← vault.assetsTotal.operator_sub vault.assetsAvailable .to_nearest
-  if lossUnrealized'.operator_gt gap then
+  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
+  let lossUnrealized' ← sumRoundAndClamp vault.lossUnrealized loan.principalOutstanding vaultScale vault.numericType
+
+  let assetsDiff ← vault.assetsTotal.operator_sub vault.assetsAvailable .to_nearest
+  if lossUnrealized'.operator_gt assetsDiff then
     return .rejected .tecLIMIT_EXCEEDED
 
   let vault' ← ({ vault.toRawVault with lossUnrealized := lossUnrealized' } : RawVault).to_lawful
@@ -77,12 +77,13 @@ def Loan.manageImpair (loan : Loan) (vault : Vault) : Except Error (LoanResult L
 
 -- Reverse the paper loss an impairment recorded
 def Loan.manageUnimpair (loan : Loan) (vault : Vault) : Except Error (LoanResult LoanVault) := do
-  let lossReversed := loan.principalOutstanding
   let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  if vault.lossUnrealized.operator_lt lossReversed then
+  if vault.lossUnrealized.operator_lt loan.principalOutstanding then
     return .rejected .tefBAD_LEDGER
 
-  let lossUnrealized' ← adjustImpreciseNumber vault.numericType vault.lossUnrealized lossReversed.operator_neg vaultScale
+  let loanPrincipalNeg := loan.principalOutstanding.operator_neg
+  let lossUnrealized' ← sumRoundAndClamp vault.lossUnrealized loanPrincipalNeg vaultScale vault.numericType
+
   let vault' ← ({ vault.toRawVault with lossUnrealized := lossUnrealized' } : RawVault).to_lawful
   let loan' := { loan with isImpaired := false }
   return .ok { loan := loan', vault := vault' }
@@ -107,17 +108,17 @@ def Loan.manageDefault (loan : Loan) (vault : Vault) (broker : LoanBroker) (impa
   if assetsAvailable'.operator_gt assetsTotal' then
     return .rejected .tecINTERNAL
 
-  let debtTotal' ← adjustImpreciseNumber vault.numericType broker.debtTotal totalDefaultAmount.operator_neg vaultScale
-  if broker.coverAvailable.operator_lt defaultCovered then
-    return .rejected .tefBAD_LEDGER
-  let coverAvailable' ← broker.coverAvailable.operator_sub defaultCovered .to_nearest
-
   -- realize the loss only when the loan was already impaired
   if impaired && vault.lossUnrealized.operator_lt totalDefaultAmount then
     return .rejected .tefBAD_LEDGER
   let lossUnrealized' ←
-    if impaired then adjustImpreciseNumber vault.numericType vault.lossUnrealized totalDefaultAmount.operator_neg vaultScale
+    if impaired then sumRoundAndClamp vault.lossUnrealized totalDefaultAmount.operator_neg vaultScale vault.numericType
     else pure vault.lossUnrealized
+
+  let debtTotal' ← sumRoundAndClamp broker.debtTotal totalDefaultAmount.operator_neg vaultScale vault.numericType
+  if broker.coverAvailable.operator_lt defaultCovered then
+    return .rejected .tefBAD_LEDGER
+  let coverAvailable' ← broker.coverAvailable.operator_sub defaultCovered .to_nearest
 
   let rawVault' : RawVault := { vault.toRawVault with
     assetsTotal := assetsTotal'
@@ -133,6 +134,6 @@ def Loan.manageDefault (loan : Loan) (vault : Vault) (broker : LoanBroker) (impa
     managementFeeOutstanding := Number.zero
     paymentRemaining := 0
     nextPaymentDueDate := 0 }
-  return .ok { vault := vault', broker := broker', loan := loan' }
+  return .ok { vault := vault', broker := broker', loan := loan', amount := some defaultCovered }
 
 end XRPL.Model.Lending

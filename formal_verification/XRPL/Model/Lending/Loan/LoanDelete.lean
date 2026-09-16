@@ -26,8 +26,8 @@ def Loan.deletePending (loan : Loan) (vault : Vault) (broker : LoanBroker) : Exc
   let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
   let vault' ← rawVault'.to_lawful
 
-  let debtTotal' ← adjustImpreciseNumber vault.numericType broker.debtTotal
-    loan.principalOutstanding.operator_neg vaultExponent
+  let debtTotal' ← sumRoundAndClamp broker.debtTotal
+    loan.principalOutstanding.operator_neg vaultExponent vault.numericType
   let broker' := { broker with debtTotal := debtTotal', loanCount := broker.loanCount - 1 }
 
   return .ok { vault := vault', broker := broker' }
