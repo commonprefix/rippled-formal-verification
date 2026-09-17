@@ -1,6 +1,6 @@
 import XRPL.Properties.Vault.Common.OfNumberBoundary
 import XRPL.Properties.Vault.VaultValid
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 import XRPL.Properties.Protocol.Number.Mul.Common.Decompose

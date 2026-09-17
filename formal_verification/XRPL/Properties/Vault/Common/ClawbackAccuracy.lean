@@ -4,7 +4,7 @@ import XRPL.Properties.Vault.Common.ClawbackReduction
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
 import XRPL.Properties.Vault.Common.WithdrawBounds
 import XRPL.Properties.Vault.Common.OfNumberBoundary
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Vault.Common.ExchangeShared
 
 /-! # `Vault.clawback` accuracy proofs

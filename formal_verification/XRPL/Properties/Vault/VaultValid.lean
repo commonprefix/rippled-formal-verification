@@ -7,7 +7,7 @@ import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.DiffSignRepresents
 import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
 namespace XRPL.Model.Protocol
 

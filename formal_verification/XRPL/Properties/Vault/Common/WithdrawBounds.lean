@@ -5,7 +5,7 @@ import XRPL.Properties.Vault.Common.WithdrawExits
 import XRPL.Properties.Vault.Common.OfNumberBoundary
 import XRPL.Properties.Vault.Common.DepositAccuracy
 import XRPL.Properties.Vault.Common.DepositChargeProofs
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Vault.Common.ExchangeShared
 import XRPL.Properties.Vault.Common.CmpFaithfulCanonical
 

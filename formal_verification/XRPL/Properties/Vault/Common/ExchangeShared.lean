@@ -2,7 +2,7 @@ import XRPL.Properties.Vault.Common.OfNumberBoundary
 import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawAccuracy
 import XRPL.Properties.Vault.Common.DepositAccuracy
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
 /-! # Shared `ofNumber` / exchange-pipeline / grid-spacing lemmas
 

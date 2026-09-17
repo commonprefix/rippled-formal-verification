@@ -1,0 +1,44 @@
+import XRPL.Model.Protocol.Exponent
+import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.STAmount
+import XRPL.Model.Protocol.TER
+import XRPL.Model.Lending.AssetPool
+import XRPL.Model.Lending.LoanBroker.BrokerCover
+
+namespace XRPL.Model.Lending
+
+open XRPL.Model.Protocol
+
+-- LoanBrokerCoverWithdraw -> preclaim
+def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α) (amount : STAmount)
+    : Except Error TER := do
+  let nt := lb.numericType
+  let ter ← canApplyToBrokerCover nt lb.coverAvailable amount
+  if ter.operator_bool then
+    return ter
+
+  let rounded ← match (← lb.roundedCoverAmount amount) with
+    | .rejected ter => return ter
+    | .rounded amount => .pure amount
+
+  let vaultExponent ← AssetPool.exponent pool nt
+  let amountNumber ← rounded.toNumber .to_nearest
+  if lb.coverAvailable.operator_lt amountNumber then
+    return .tecINSUFFICIENT_FUNDS
+  let coverAvailable' ← lb.coverAvailable.operator_sub amountNumber .to_nearest
+  let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
+  let hasMinimumCover ← rawBroker'.hasMinimumCover vaultExponent
+  if !hasMinimumCover then
+    return .tecINSUFFICIENT_FUNDS
+
+  return .tesSUCCESS
+
+-- LoanBrokerCoverWithdraw -> doApply
+def LoanBroker.coverWithdraw (lb : LoanBroker) (amount : STAmount)
+    : Except Error LoanBrokerCoverTerResult := do
+  let amount ← match (← lb.roundedCoverAmount amount) with
+    | .rejected _ => return .error .tecINTERNAL
+    | .rounded amount => .pure amount
+  return .ok (← lb.applyCoverTransaction .debit amount)
+
+end XRPL.Model.Lending

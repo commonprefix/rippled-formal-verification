@@ -5,7 +5,7 @@ import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
-import XRPL.Model.Lending.LoanBroker
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
@@ -23,6 +23,11 @@ def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum
   let raw ← tenthBipsOfValue debtTotal coverRateMinimum .upward
   STAmount.roundToNumericType nt raw .upward (some poolExponent)
 
+-- the first-loss cover is at least the minimum the debt requires
+def RawLoanBroker.hasMinimumCover (rb : RawLoanBroker) (poolExponent : Int) : Except Error Bool := do
+  let minimumCover ← minimumBrokerCover rb.numericType rb.debtTotal rb.coverRateMinimum poolExponent
+  return minimumCover.operator_le rb.coverAvailable
+
 -- reject a cover deposit/withdraw/clawback that rounds to zero at the cover's own scale
 def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
     : Except Error TER := do
@@ -34,17 +39,18 @@ def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount :
   return .tesSUCCESS
 
 -- the cover movement actually applied: sub-scale dust is rejected rather than truncated
-def LoanBroker.roundedCoverAmount (lb : LoanBroker) (nt : NumericType) (amount : STAmount)
+def LoanBroker.roundedCoverAmount (lb : LoanBroker) (amount : STAmount)
     : Except Error RoundingResult := do
-  let rounded ← roundToCoverScale nt lb.coverAvailable amount .downward
+  let rounded ← roundToCoverScale lb.numericType lb.coverAvailable amount .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
   return .rounded rounded
 
 structure LoanBrokerCoverResult where
-  status : TER := .tesSUCCESS
   amount' : STAmount
   loanBroker' : LoanBroker
+
+abbrev LoanBrokerCoverTerResult := Except TER LoanBrokerCoverResult
 
 inductive CoverDirection where
   | credit
@@ -57,7 +63,9 @@ def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirecti
   let coverAvailable' ← match direction with
     | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
     | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
-  return { status := .tesSUCCESS, amount' := amount,
-           loanBroker' := { lb with coverAvailable := coverAvailable' } }
+  let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
+  let loanBroker' ← rawBroker'.to_lawful
+
+  return { amount' := amount, loanBroker' := loanBroker' }
 
 end XRPL.Model.Lending

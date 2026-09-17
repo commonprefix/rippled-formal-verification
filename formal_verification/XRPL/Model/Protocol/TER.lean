@@ -41,6 +41,8 @@ inductive TER where
   | temDISABLED
   | tecLIMIT_EXCEEDED
   | tecPRECISION_LOSS
+  | tecTOO_SOON
+  | tecINSUFFICIENT_PAYMENT
   deriving DecidableEq, Repr, BEq
 
 def TER.operator_bool : TER → Bool
@@ -59,7 +61,8 @@ def TER.isTec : TER → Bool
   | .tecNO_PERMISSION | .tecDUPLICATE | .tecNO_LINE_INSUF_RESERVE
   | .tecHAS_OBLIGATIONS | .tecNO_DST | .tecDST_TAG_NEEDED | .tecNO_LINE
   | .tecFAILED_PROCESSING | .tecPATH_DRY | .tecINSUFFICIENT_FUNDS
-  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED | .tecPRECISION_LOSS | .tecKILLED => true
+  | .tecFROZEN | .tecLOCKED | .tecLIMIT_EXCEEDED | .tecPRECISION_LOSS | .tecKILLED
+  | .tecTOO_SOON | .tecINSUFFICIENT_PAYMENT => true
   | _ => false
 
 def TER.code : TER → Int32
@@ -103,6 +106,8 @@ def TER.code : TER → Int32
   | .temDISABLED => -273
   | .tecLIMIT_EXCEEDED => 195
   | .tecPRECISION_LOSS => 197
+  | .tecTOO_SOON => 152
+  | .tecINSUFFICIENT_PAYMENT => 161
 
 
 end XRPL.Model.Protocol
