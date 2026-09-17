@@ -1,9 +1,11 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
 import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan.LoanState
+import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
@@ -66,7 +68,8 @@ def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
   else
     .tesSUCCESS
 
-structure Loan where
+structure RawLoan where
+  broker : LoanBroker
   rates : LoanRates
   fees : LoanFees
   schedule : LoanSchedule
@@ -85,6 +88,95 @@ structure Loan where
   isImpaired : Bool
   isDefault : Bool
   allowsOverpayment : Bool
+
+def RawLoan.interestDue (rl : RawLoan) : Except Error Number := do
+  let totalValueOutstanding' ← rl.totalValueOutstanding.operator_sub rl.principalOutstanding .to_nearest
+  totalValueOutstanding'.operator_sub rl.managementFeeOutstanding .to_nearest
+
+-- matching C++ `Number{-1, loanScale}` tolerance
+def RawLoan.interestTolerance (rl : RawLoan) : Except Error Number :=
+  if rl.broker.vault.numericType.isIntegral then .ok Number.zero
+  else Number.from_rep (-1 : Int64) rl.loanScale largeRange.min largeRange.max .to_nearest
+
+def RawLoan.interestWithinTolerance (rl : RawLoan) : Bool :=
+  match rl.interestDue, rl.interestTolerance with
+  | .ok i, .ok tol => tol.operator_le i
+  | _, _ => false
+
+structure RawLoan.WF (rl : RawLoan) : Prop where
+  periodicPayment_norm : rl.periodicPayment.isNormalized
+  principalOutstanding_norm : rl.principalOutstanding.isNormalized
+  totalValueOutstanding_norm : rl.totalValueOutstanding.isNormalized
+  managementFeeOutstanding_norm : rl.managementFeeOutstanding.isNormalized
+  originationFee_norm : rl.fees.originationFee.isNormalized
+  serviceFee_norm : rl.fees.serviceFee.isNormalized
+  latePaymentFee_norm : rl.fees.latePaymentFee.isNormalized
+  closePaymentFee_norm : rl.fees.closePaymentFee.isNormalized
+
+structure RawLoan.Valid (rl : RawLoan) : Prop where
+  -- fully paid off exactly when no payments remain
+  paid_zeroed : rl.paymentRemaining = 0 →
+    rl.totalValueOutstanding = Number.zero ∧ rl.principalOutstanding = Number.zero ∧
+      rl.managementFeeOutstanding = Number.zero
+  unpaid_nonzero : rl.paymentRemaining ≠ 0 →
+    rl.totalValueOutstanding ≠ Number.zero ∨ rl.principalOutstanding ≠ Number.zero ∨
+      rl.managementFeeOutstanding ≠ Number.zero
+  -- amounts never negative
+  principalOutstanding_nonneg : Number.zero.operator_le rl.principalOutstanding = true
+  totalValueOutstanding_nonneg : Number.zero.operator_le rl.totalValueOutstanding = true
+  managementFeeOutstanding_nonneg : Number.zero.operator_le rl.managementFeeOutstanding = true
+  serviceFee_nonneg : Number.zero.operator_le rl.fees.serviceFee = true
+  latePaymentFee_nonneg : Number.zero.operator_le rl.fees.latePaymentFee = true
+  closePaymentFee_nonneg : Number.zero.operator_le rl.fees.closePaymentFee = true
+  -- the periodic payment is strictly positive
+  periodicPayment_pos : Number.zero.operator_lt rl.periodicPayment = true
+  -- a fully paid loan carries no next due date
+  paid_no_due_date : rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0
+  -- interest due stays non-negative within the loan-scale tolerance
+  interest_within_tolerance : rl.interestWithinTolerance = true
+
+instance RawLoan.decidableWF (rl : RawLoan) : Decidable rl.WF :=
+  decidable_of_iff
+    (rl.periodicPayment.isNormalized ∧ rl.principalOutstanding.isNormalized ∧
+      rl.totalValueOutstanding.isNormalized ∧ rl.managementFeeOutstanding.isNormalized ∧
+      rl.fees.originationFee.isNormalized ∧ rl.fees.serviceFee.isNormalized ∧
+      rl.fees.latePaymentFee.isNormalized ∧ rl.fees.closePaymentFee.isNormalized)
+    ⟨fun ⟨a, b, c, d, e, f, g, h⟩ => ⟨a, b, c, d, e, f, g, h⟩,
+     fun ⟨a, b, c, d, e, f, g, h⟩ => ⟨a, b, c, d, e, f, g, h⟩⟩
+
+instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
+  decidable_of_iff
+    ((rl.paymentRemaining = 0 → rl.totalValueOutstanding = Number.zero ∧
+        rl.principalOutstanding = Number.zero ∧ rl.managementFeeOutstanding = Number.zero) ∧
+      (rl.paymentRemaining ≠ 0 → rl.totalValueOutstanding ≠ Number.zero ∨
+        rl.principalOutstanding ≠ Number.zero ∨ rl.managementFeeOutstanding ≠ Number.zero) ∧
+      Number.zero.operator_le rl.principalOutstanding = true ∧
+      Number.zero.operator_le rl.totalValueOutstanding = true ∧
+      Number.zero.operator_le rl.managementFeeOutstanding = true ∧
+      Number.zero.operator_le rl.fees.serviceFee = true ∧
+      Number.zero.operator_le rl.fees.latePaymentFee = true ∧
+      Number.zero.operator_le rl.fees.closePaymentFee = true ∧
+      Number.zero.operator_lt rl.periodicPayment = true ∧
+      (rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0) ∧
+      rl.interestWithinTolerance = true)
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩⟩
+
+structure Loan extends RawLoan where
+  wf : toRawLoan.WF
+  valid : toRawLoan.Valid
+
+def RawLoan.to_lawful (rl : RawLoan) : Except Error Loan :=
+  if h : rl.WF ∧ rl.Valid then .ok { toRawLoan := rl, wf := h.1, valid := h.2 } else .error .notLawful
+
+-- The loan with the amounts a fund-moving operation transfers (zero where nothing moves to that party)
+structure LoanWithAmounts where
+  loan' : Loan
+  amountToVault : Number
+  amountToBroker : Number
+
+abbrev LoanTerResult := Except TER Loan
+abbrev LoanWithAmountsTerResult := Except TER LoanWithAmounts
 
 def Loan.periodicRate (loan : Loan) : Except Error Number :=
   loanPeriodicRate loan.rates.interestRate loan.schedule.paymentInterval

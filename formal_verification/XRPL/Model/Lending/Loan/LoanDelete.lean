@@ -4,8 +4,6 @@ import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.Loan.Loan
-import XRPL.Model.Lending.Loan.LoanResult
-import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
@@ -18,31 +16,38 @@ def Loan.canDelete (loan : Loan) : TER :=
   else .tesSUCCESS
 
 -- Undo the bookkeeping of a pending loan: the principal returns from reserved to available and leaves the debt.
-def Loan.deletePending (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) := do
+def Loan.deletePending (loan : Loan) : Except Error LoanBroker := do
+  let broker := loan.broker
+  let vault := broker.vault
+
   let vaultExponent ← numberExponent vault.assetsTotal vault.numericType
   let assetsAvailable' ← vault.assetsAvailable.operator_add loan.principalOutstanding .to_nearest
   let assetsReserved' ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
 
-  let rawVault' : RawVault := { vault.toRawVault with assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
+  let rawVault' : RawVault := { vault.toRawVault with
+    assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
   let vault' ← rawVault'.to_lawful
 
   let debtTotal' ← sumRoundAndClamp broker.debtTotal
     loan.principalOutstanding.operator_neg vaultExponent vault.numericType
-  let broker' := { broker with debtTotal := debtTotal', loanCount := broker.loanCount - 1 }
 
-  return .ok { vault := vault', broker := broker' }
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
+    debtTotal := debtTotal', loanCount := broker.loanCount - 1
+    vault := vault' }
+  rawBroker'.to_lawful
 
 -- Delete a paid-off loan. With no loans left, any debt still on the broker is dust and is ignored.
-def Loan.deleteActive (vault : Vault) (broker : LoanBroker) : LoanResult BrokerVault :=
+def Loan.deleteActive (broker : LoanBroker) : Except Error LoanBroker :=
   let loanCount := broker.loanCount - 1
   let debtTotal' := if loanCount == 0 then Number.zero else broker.debtTotal
 
-  let broker' := { broker with loanCount := loanCount, debtTotal := debtTotal' }
-  .ok { vault := vault, broker := broker' }
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
+    loanCount := loanCount, debtTotal := debtTotal' }
+  rawBroker'.to_lawful
 
 -- LoanDelete -> doApply
-def Loan.delete (loan : Loan) (vault : Vault) (broker : LoanBroker) : Except Error (LoanResult BrokerVault) :=
-  if loan.isPending then loan.deletePending vault broker
-  else .ok (Loan.deleteActive vault broker)
+def Loan.delete (loan : Loan) : Except Error LoanBroker :=
+  if loan.isPending then loan.deletePending
+  else Loan.deleteActive loan.broker
 
 end XRPL.Model.Lending

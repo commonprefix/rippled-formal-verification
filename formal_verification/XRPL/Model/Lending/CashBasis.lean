@@ -3,7 +3,6 @@ import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Vault.Vault
-import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.Loan.LoanState
 import XRPL.Model.Lending.LoanBroker.BrokerCover
 import XRPL.Model.Lending.LoanBroker.LoanBroker
@@ -15,9 +14,9 @@ open XRPL.Model.SingleAssetVault
 
 namespace CashBasis
 
--- Apply the amounts one payment moves to the vault and broker
-def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts)
-    : Except Error (BrokerVault × Number) := do
+-- Apply the amounts one payment moves to the broker and its vault
+def applyPayment (broker : LoanBroker) (amounts : PaymentAmounts) : Except Error (LoanBroker × Number) := do
+  let vault := broker.vault
   let vaultScale ← numberExponent vault.assetsTotal vault.numericType
   let totalPaid ← amounts.principalPaid.operator_add amounts.interestPaid .to_nearest
   let totalPaid' ← STAmount.roundToNumericType vault.numericType totalPaid .downward (some vaultScale)
@@ -33,11 +32,15 @@ def applyPayment (vault : Vault) (broker : LoanBroker) (amounts : PaymentAmounts
   let coverAvailable' ← if sendFeeToOwner then pure broker.coverAvailable
                         else broker.coverAvailable.operator_add amounts.feePaid .to_nearest
 
-  let rawVault' : RawVault := { vault.toRawVault with assetsTotal := assetsTotal, assetsAvailable := assetsAvailable }
+  let rawVault' : RawVault := { vault.toRawVault with
+    assetsTotal := assetsTotal, assetsAvailable := assetsAvailable }
   let vault' ← rawVault'.to_lawful
-  let broker' := { broker with debtTotal := debtTotal, coverAvailable := coverAvailable' }
 
-  return ({ vault := vault', broker := broker' }, totalPaid')
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
+    debtTotal := debtTotal, coverAvailable := coverAvailable', vault := vault' }
+  let broker' ← rawBroker'.to_lawful
+
+  return (broker', totalPaid')
 
 end CashBasis
 

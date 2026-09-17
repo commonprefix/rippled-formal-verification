@@ -9,7 +9,6 @@ import XRPL.Model.Lending.CashBasis
 import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan.Loan
 import XRPL.Model.Lending.Loan.LoanManage
-import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.Loan.LoanSet
 import XRPL.Model.Lending.Loan.LoanState
 import XRPL.Model.Lending.LoanBroker.LoanBroker
@@ -32,8 +31,6 @@ structure Reamortization where
 
 -- A scheduled payment that has advanced the loan but not yet paid the vault and broker.
 structure UnsettledPayment where
-  vault : Vault
-  broker : LoanBroker
   loan : Loan
   amounts : PaymentAmounts
   totalPaid : Number
@@ -48,8 +45,9 @@ private def roundAndSplitInterest (interest : Number) (mgmtRate : TenthBips16) (
   return (netInterest, managementFee)
 
 -- The deltas of the next scheduled instalment, regular or final
-private def Loan.scheduledComponents (loan : Loan) (nt : NumericType) (mgmtRate : TenthBips16)
-    : Except Error PaymentComponents := do
+private def Loan.scheduledComponents (loan : Loan) : Except Error PaymentComponents := do
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
   let tvo := loan.totalValueOutstanding
   let po := loan.principalOutstanding
   let mfo := loan.managementFeeOutstanding
@@ -108,9 +106,10 @@ private def Loan.scheduledComponents (loan : Loan) (nt : NumericType) (mgmtRate 
            isFinal := false }
 
 -- The components of a late instalment
-private def Loan.lateComponents (loan : Loan) (nt : NumericType) (mgmtRate : TenthBips16) (now : UInt32)
-    : Except Error PaymentComponents := do
-  let pc ← loan.scheduledComponents nt mgmtRate
+private def Loan.lateComponents (loan : Loan) (now : UInt32) : Except Error PaymentComponents := do
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
+  let pc ← loan.scheduledComponents
 
   -- penalty interest for the overdue seconds
   let lateInterest ← loanLatePaymentInterest loan.principalOutstanding loan.rates.lateInterestRate
@@ -125,9 +124,11 @@ private def Loan.lateComponents (loan : Loan) (nt : NumericType) (mgmtRate : Ten
   return { pc with untrackedInterest := lateInterestNet, untrackedManagementFee := untrackedFee }
 
 -- The components of an early payoff
-private def Loan.fullComponents (loan : Loan) (nt : NumericType) (mgmtRate : TenthBips16) (now : UInt32)
-    : Except Error PaymentComponents := do
+private def Loan.fullComponents (loan : Loan) (now : UInt32) : Except Error PaymentComponents := do
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
   let periodicRate ← loan.periodicRate
+
   let theoreticalPO ← loanPrincipalFromPeriodicPayment loan.periodicPayment periodicRate loan.paymentRemaining
   let fullInterest ← computeFullPaymentInterest theoreticalPO periodicRate now
     loan.schedule.paymentInterval loan.previousPaymentDueDate loan.schedule.startDate loan.rates.closeInterestRate
@@ -229,18 +230,18 @@ private def processOverpayment (opc : PaymentComponents) (state : LoanState)
   }
 
 -- Re-check the vault after a payment, matching the doApply checks once amounts are rounded
-private def validatePostPayment (vault : Vault) (s : LendingState) (assetsTotalDelta : Number)
-    : LoanResult LendingState :=
-  let vault' := s.vault
+private def validatePostPayment (vault : Vault) (result : LoanWithAmounts) (assetsTotalDelta : Number)
+    : LoanWithAmountsTerResult :=
+  let vault' := result.loan'.broker.vault
   let assetsAvailableChanged := vault'.assetsAvailable.operator_ne vault.assetsAvailable
   let assetsTotalChanged := vault'.assetsTotal.operator_ne vault.assetsTotal
   let expectedChange := assetsTotalDelta.operator_ne Number.zero
 
-  if !assetsAvailableChanged then .rejected .tecPRECISION_LOSS
-  else if expectedChange && !assetsTotalChanged then .rejected .tecPRECISION_LOSS
-  else if !expectedChange && assetsTotalChanged then .rejected .tecINTERNAL
-  else if vault'.assetsAvailable.operator_gt vault'.assetsTotal then .rejected .tecINTERNAL
-  else .ok s
+  if !assetsAvailableChanged then .error .tecPRECISION_LOSS
+  else if expectedChange && !assetsTotalChanged then .error .tecPRECISION_LOSS
+  else if !expectedChange && assetsTotalChanged then .error .tecINTERNAL
+  else if vault'.assetsAvailable.operator_gt vault'.assetsTotal then .error .tecINTERNAL
+  else .ok result
 
 -- Advance the loan by one instalment and report the amounts it changes
 private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error (Loan × PaymentAmounts) := do
@@ -251,42 +252,49 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
     { principalPaid := pc.principalDelta, interestPaid := interestPaid, feePaid := feePaid }
 
   if pc.isFinal then
-    let loan' := { loan with
+    let rawLoan' : RawLoan := { loan.toRawLoan with
       totalValueOutstanding := Number.zero, principalOutstanding := Number.zero,
       managementFeeOutstanding := Number.zero, paymentRemaining := 0,
       previousPaymentDueDate := loan.nextPaymentDueDate, nextPaymentDueDate := 0 }
+    let loan' ← rawLoan'.to_lawful
     return (loan', amounts)
 
-  let loan' := { loan with
-    totalValueOutstanding := ← loan.totalValueOutstanding.operator_sub pc.totalValueDelta .to_nearest
-    principalOutstanding := ← loan.principalOutstanding.operator_sub pc.principalDelta .to_nearest
-    managementFeeOutstanding := ← loan.managementFeeOutstanding.operator_sub pc.managementFeeDelta .to_nearest
+  let totalValueOutstanding' ← loan.totalValueOutstanding.operator_sub pc.totalValueDelta .to_nearest
+  let principalOutstanding' ← loan.principalOutstanding.operator_sub pc.principalDelta .to_nearest
+  let managementFeeOutstanding' ← loan.managementFeeOutstanding.operator_sub pc.managementFeeDelta .to_nearest
+
+  let rawLoan' : RawLoan := { loan.toRawLoan with
+    totalValueOutstanding := totalValueOutstanding'
+    principalOutstanding := principalOutstanding'
+    managementFeeOutstanding := managementFeeOutstanding'
     paymentRemaining := loan.paymentRemaining - 1
     previousPaymentDueDate := loan.nextPaymentDueDate
     nextPaymentDueDate := loan.nextPaymentDueDate + loan.schedule.paymentInterval }
+  let loan' ← rawLoan'.to_lawful
   return (loan', amounts)
 
--- Settle the summed amounts against the vault and broker, then re-check the vault
-private def settlePayment (vault : Vault) (broker : LoanBroker) (loan : Loan) (amounts : PaymentAmounts)
-    : Except Error (LoanResult LendingState) := do
-  let (vb, amountToVault) ← CashBasis.applyPayment vault broker amounts
-  let state : LendingState :=
-    { vault := vb.vault, broker := vb.broker, loan := loan
-      amountToVault := some amountToVault, amountToBroker := some amounts.feePaid }
-  return validatePostPayment vault state amounts.interestPaid
+-- Settle the summed amounts against the broker and its vault, then re-check the vault
+private def Loan.settlePayment (loan : Loan) (amounts : PaymentAmounts) : Except Error LoanWithAmountsTerResult := do
+  let (broker', amountToVault) ← CashBasis.applyPayment loan.broker amounts
+
+  let rawLoan' : RawLoan := { loan.toRawLoan with broker := broker' }
+  let loan' ← rawLoan'.to_lawful
+  let result : LoanWithAmounts := { loan' := loan', amountToVault := amountToVault, amountToBroker := amounts.feePaid }
+
+  return validatePostPayment loan.broker.vault result amounts.interestPaid
 
 -- Settle one instalment if the amount covers it, then re-check the vault
-private def Loan.paySingleInstalment (loan : Loan) (vault : Vault) (broker : LoanBroker)
-    (pc : PaymentComponents) (amount : Number) : Except Error (LoanResult LendingState) := do
+private def Loan.paySingleInstalment (loan : Loan) (pc : PaymentComponents) (amount : Number)
+    : Except Error LoanWithAmountsTerResult := do
   if amount.operator_lt (← pc.totalDue) then
-    return .rejected .tecINSUFFICIENT_PAYMENT
+    return .error .tecINSUFFICIENT_PAYMENT
 
   let (loan, amounts) ← loan.doPayment pc
-  settlePayment vault broker loan amounts
+  loan.settlePayment amounts
 
 -- Pay scheduled instalments one at a time while the amount covers the next due and the loan is unpaid, up to 100.
-private def payScheduledInstalmentsLoop (instalmentsLeft : Nat) (amount serviceFee : Number) (nt : NumericType)
-    (mgmtRate : TenthBips16) (loan : Loan) (amounts : PaymentAmounts) (totalPaid : Number) (count : Nat)
+private def payScheduledInstalmentsLoop (instalmentsLeft : Nat) (amount serviceFee : Number)
+    (loan : Loan) (amounts : PaymentAmounts) (totalPaid : Number) (count : Nat)
     : Except Error (Loan × PaymentAmounts × Number × Nat) := do
   let accumulated := (loan, amounts, totalPaid, count)
 
@@ -296,7 +304,7 @@ private def payScheduledInstalmentsLoop (instalmentsLeft : Nat) (amount serviceF
     if loan.paymentRemaining == 0 then return accumulated
 
     -- compute the next scheduled instalment and its amount due
-    let pc ← loan.scheduledComponents nt mgmtRate
+    let pc ← loan.scheduledComponents
     let pc' : PaymentComponents := { pc with untrackedManagementFee := serviceFee }
     let due ← pc'.totalDue
 
@@ -311,35 +319,33 @@ private def payScheduledInstalmentsLoop (instalmentsLeft : Nat) (amount serviceF
     if pc.isFinal then
       return (loan, amounts, totalPaid, count + 1)
     else
-      payScheduledInstalmentsLoop remaining amount serviceFee nt mgmtRate loan amounts totalPaid (count + 1)
+      payScheduledInstalmentsLoop remaining amount serviceFee loan amounts totalPaid (count + 1)
 
-private def Loan.payScheduledInstalments (loan : Loan) (vault : Vault) (broker : LoanBroker)
-    (amount : Number) (now : UInt32) : Except Error (LoanResult UnsettledPayment) := do
-  if loan.nextPaymentDueDate == 0 then return .rejected .tecINTERNAL
-  if loan.isPaymentLate now then return .rejected .tecEXPIRED
+private def Loan.payScheduledInstalments (loan : Loan) (amount : Number) (now : UInt32)
+    : Except Error (Except TER UnsettledPayment) := do
+  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
+  if loan.isPaymentLate now then return .error .tecEXPIRED
 
   -- reverse any impairment before paying
   let mut loan := loan
-  let mut vault := vault
   if loan.isImpaired then
-    match ← loan.manageUnimpair vault with
-    | .rejected ter => return .rejected ter
-    | .ok lv => loan := lv.loan; vault := lv.vault
+    match ← loan.manageUnimpair with
+    | .error ter => return .error ter
+    | .ok unimpaired => loan := unimpaired
 
   let (loan', amounts, totalPaid, count) ← payScheduledInstalmentsLoop maxPaymentsPerTransaction
-    amount loan.fees.serviceFee vault.numericType broker.managementFeeRate loan PaymentAmounts.zero Number.zero 0
+    amount loan.fees.serviceFee loan PaymentAmounts.zero Number.zero 0
   if count == 0 then
-    return .rejected .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
+    return .error .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
 
-  return .ok { vault := vault, broker := broker, loan := loan', amounts := amounts,
-               totalPaid := totalPaid, count := count }
+  return .ok { loan := loan', amounts := amounts, totalPaid := totalPaid, count := count }
 
 -- Add the overpayment tail to an unsettled payment.
 private def UnsettledPayment.applyOverpayment (payment : UnsettledPayment) (amount : Number)
     : Except Error UnsettledPayment := do
   let loan := payment.loan
-  let nt := payment.vault.numericType
-  let mgmtRate := payment.broker.managementFeeRate
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
 
   -- the tail needs budget, remaining payments and room in the per-transaction cap
   if !(loan.allowsOverpayment && loan.paymentRemaining != 0 && payment.totalPaid.operator_lt amount
@@ -365,11 +371,12 @@ private def UnsettledPayment.applyOverpayment (payment : UnsettledPayment) (amou
 
   -- add the overpayment to the summed amounts and commit the re-amortized loan
   let amounts ← payment.amounts.add reamortization.amounts
-  let loan' := { loan with
+  let rawLoan' : RawLoan := { loan.toRawLoan with
     totalValueOutstanding := reamortization.state.valueOutstanding
     principalOutstanding := reamortization.state.principalOutstanding
     managementFeeOutstanding := reamortization.state.managementFeeDue
     periodicPayment := reamortization.periodicPayment }
+  let loan' ← rawLoan'.to_lawful
 
   return { payment with loan := loan', amounts := amounts }
 
@@ -385,54 +392,48 @@ def Loan.canPay (loan : Loan) (paymentType : LoanPaymentType) : TER :=
     .tesSUCCESS
 
 -- Pay one or more scheduled instalments.
-def Loan.regularPayment (loan : Loan) (vault : Vault) (broker : LoanBroker) (amount : Number) (now : UInt32)
-    : Except Error (LoanResult LendingState) := do
-  match ← loan.payScheduledInstalments vault broker amount now with
-  | .rejected ter => return .rejected ter
-  | .ok payment => settlePayment payment.vault payment.broker payment.loan payment.amounts
+def Loan.regularPayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
+  match ← loan.payScheduledInstalments amount now with
+  | .error ter => return .error ter
+  | .ok payment => payment.loan.settlePayment payment.amounts
 
 -- Pay scheduled instalments, then an overpayment tail that pays down extra principal.
-def Loan.overpayment (loan : Loan) (vault : Vault) (broker : LoanBroker) (amount : Number) (now : UInt32)
-    : Except Error (LoanResult LendingState) := do
-  match ← loan.payScheduledInstalments vault broker amount now with
-  | .rejected ter => return .rejected ter
+def Loan.overpayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
+  match ← loan.payScheduledInstalments amount now with
+  | .error ter => return .error ter
   | .ok payment =>
     let payment ← payment.applyOverpayment amount
-    settlePayment payment.vault payment.broker payment.loan payment.amounts
+    payment.loan.settlePayment payment.amounts
 
 -- Pay a late instalment: scheduled amount + penalty interest for the overdue seconds + fixed late fee.
-def Loan.latePayment (loan : Loan) (vault : Vault) (broker : LoanBroker) (amount : Number) (now : UInt32)
-    : Except Error (LoanResult LendingState) := do
-  if loan.nextPaymentDueDate == 0 then return .rejected .tecINTERNAL
-  if !(loan.isPaymentLate now) then return .rejected .tecTOO_SOON
+def Loan.latePayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
+  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
+  if !(loan.isPaymentLate now) then return .error .tecTOO_SOON
 
   -- reverse any impairment before paying
   let mut loan := loan
-  let mut vault := vault
   if loan.isImpaired then
-    match ← loan.manageUnimpair vault with
-    | .rejected ter => return .rejected ter
-    | .ok lv => loan := lv.loan; vault := lv.vault
+    match ← loan.manageUnimpair with
+    | .error ter => return .error ter
+    | .ok unimpaired => loan := unimpaired
 
-  let pc ← loan.lateComponents vault.numericType broker.managementFeeRate now
-  loan.paySingleInstalment vault broker pc amount
+  let pc ← loan.lateComponents now
+  loan.paySingleInstalment pc amount
 
 -- Pay off the loan early: clear the whole outstanding value + early-payoff interest + close fee, then close it.
-def Loan.fullPayment (loan : Loan) (vault : Vault) (broker : LoanBroker) (amount : Number) (now : UInt32)
-    : Except Error (LoanResult LendingState) := do
-  if loan.nextPaymentDueDate == 0 then return .rejected .tecINTERNAL
-  if loan.isPaymentLate now then return .rejected .tecEXPIRED
-  if loan.paymentRemaining ≤ 1 then return .rejected .tecKILLED   -- the last instalment must be a regular payment
+def Loan.fullPayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
+  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
+  if loan.isPaymentLate now then return .error .tecEXPIRED
+  if loan.paymentRemaining ≤ 1 then return .error .tecKILLED   -- the last instalment must be a regular payment
 
   -- reverse any impairment before paying
   let mut loan := loan
-  let mut vault := vault
   if loan.isImpaired then
-    match ← loan.manageUnimpair vault with
-    | .rejected ter => return .rejected ter
-    | .ok lv => loan := lv.loan; vault := lv.vault
+    match ← loan.manageUnimpair with
+    | .error ter => return .error ter
+    | .ok unimpaired => loan := unimpaired
 
-  let pc ← loan.fullComponents vault.numericType broker.managementFeeRate now
-  loan.paySingleInstalment vault broker pc amount
+  let pc ← loan.fullComponents now
+  loan.paySingleInstalment pc amount
 
 end XRPL.Model.Lending

@@ -5,7 +5,6 @@ import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
-import XRPL.Model.Lending.Loan.LoanResult
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
@@ -35,9 +34,9 @@ def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount :
   return .tesSUCCESS
 
 -- the cover movement actually applied: sub-scale dust is rejected rather than truncated
-def LoanBroker.roundedCoverAmount (lb : LoanBroker) (nt : NumericType) (amount : STAmount)
+def LoanBroker.roundedCoverAmount (lb : LoanBroker) (amount : STAmount)
     : Except Error RoundingResult := do
-  let rounded ← roundToCoverScale nt lb.coverAvailable amount .downward
+  let rounded ← roundToCoverScale lb.vault.numericType lb.coverAvailable amount .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
   return .rounded rounded
@@ -45,6 +44,8 @@ def LoanBroker.roundedCoverAmount (lb : LoanBroker) (nt : NumericType) (amount :
 structure LoanBrokerCoverResult where
   amount' : STAmount
   loanBroker' : LoanBroker
+
+abbrev LoanBrokerCoverTerResult := Except TER LoanBrokerCoverResult
 
 inductive CoverDirection where
   | credit
@@ -57,6 +58,9 @@ def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirecti
   let coverAvailable' ← match direction with
     | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
     | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
-  return { amount' := amount, loanBroker' := { lb with coverAvailable := coverAvailable' } }
+  let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
+  let loanBroker' ← rawBroker'.to_lawful
+
+  return { amount' := amount, loanBroker' := loanBroker' }
 
 end XRPL.Model.Lending
