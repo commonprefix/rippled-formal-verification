@@ -11,6 +11,19 @@ def isRounded (value : Number) (scale : Int) (nt : NumericType) : Except Error B
   let up ← STAmount.roundToNumericType nt value .upward (some scale)
   return down.operator_eq up
 
+-- One past the largest unit count an STAmount of the type can carry
+def NumericType.mantissaBound (nt : NumericType) : Nat :=
+  match nt with
+  | .fractional => 10 ^ 16
+  | .integral maxValue _ _ _ => min maxValue.toNat maxRep.toNat + 1
+
+-- The value is a whole number of units at the exponent and that count fits the type's STAmount
+def Number.isAtExponent (value : Number) (exponent : Int) (nt : NumericType) : Bool :=
+  let shift := exponent - value.exponent_
+  let units := value.mantissa_.toNat / 10 ^ shift.toNat
+  value == Number.zero ||
+    (decide (0 ≤ shift) && value.mantissa_.toNat % 10 ^ shift.toNat == 0 && decide (units < nt.mantissaBound))
+
 -- Round a value at the scale, then clamp it into [0, cap].
 def roundAndClamp (value cap : Number) (mode : rounding_mode) (nt : NumericType) (scale : Int)
     : Except Error Number := do

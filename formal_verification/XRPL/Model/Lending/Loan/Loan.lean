@@ -1,5 +1,6 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.NumericType
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
@@ -11,9 +12,11 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-def defaultPaymentTotal : UInt32 := 1      -- payments count
-def defaultPaymentInterval : UInt32 := 60  -- seconds
-def defaultGracePeriod : UInt32 := 60      -- seconds
+def defaultPaymentTotal : UInt32 := 1                  -- payments count
+def defaultPaymentInterval : UInt32 := 60              -- seconds
+def defaultGracePeriod : UInt32 := 60                  -- seconds
+def minPaymentInterval : UInt32 := 60                  -- seconds
+def maxLoanRate : TenthBips32 := kTenthBipsPerUnity    -- 100%
 
 -- The most scheduled instalments for one LoanPay transaction
 def maxPaymentsPerTransaction : Nat := 100
@@ -134,6 +137,32 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   paid_no_due_date : rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0
   -- interest due stays non-negative within the loan-scale tolerance
   interest_within_tolerance : rl.interestWithinTolerance = true
+  -- field ranges LoanSet preflight guarantees
+  interestRate_cap : rl.rates.interestRate ≤ maxLoanRate
+  lateInterestRate_cap : rl.rates.lateInterestRate ≤ maxLoanRate
+  closeInterestRate_cap : rl.rates.closeInterestRate ≤ maxLoanRate
+  overpaymentInterestRate_cap : rl.rates.overpaymentInterestRate ≤ maxLoanRate
+  overpaymentFee_cap : rl.rates.overpaymentFee ≤ maxLoanRate
+  originationFee_nonneg : Number.zero.operator_le rl.fees.originationFee = true
+  paymentTotal_pos : 0 < rl.schedule.paymentTotal
+  paymentInterval_min : minPaymentInterval ≤ rl.schedule.paymentInterval
+  -- the grace period lies between its default and the payment interval
+  gracePeriod_range : defaultGracePeriod ≤ rl.schedule.gracePeriod ∧
+    rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval
+  -- the loan scale is an STAmount exponent
+  loanScale_range : cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset
+  -- schedule bookkeeping
+  paymentRemaining_le : rl.paymentRemaining ≤ rl.schedule.paymentTotal
+  dueDates_ordered : rl.paymentRemaining ≠ 0 → rl.previousPaymentDueDate < rl.nextPaymentDueDate
+  nextPaymentDueDate_on_schedule : rl.paymentRemaining ≠ 0 →
+    rl.schedule.startDate ≤ rl.nextPaymentDueDate ∧
+      (rl.nextPaymentDueDate - rl.schedule.startDate) % rl.schedule.paymentInterval = 0
+  -- the accounting code keeps the three outstanding amounts at the loan scale
+  totalValueOutstanding_atExponent :
+    rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
+  principalOutstanding_atExponent : rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
+  managementFeeOutstanding_atExponent :
+    rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
 
 instance RawLoan.decidableWF (rl : RawLoan) : Decidable rl.WF :=
   decidable_of_iff
@@ -158,9 +187,24 @@ instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
       Number.zero.operator_le rl.fees.closePaymentFee = true ∧
       Number.zero.operator_lt rl.periodicPayment = true ∧
       (rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0) ∧
-      rl.interestWithinTolerance = true)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩⟩
+      rl.interestWithinTolerance = true ∧
+      rl.rates.interestRate ≤ maxLoanRate ∧ rl.rates.lateInterestRate ≤ maxLoanRate ∧
+      rl.rates.closeInterestRate ≤ maxLoanRate ∧ rl.rates.overpaymentInterestRate ≤ maxLoanRate ∧
+      rl.rates.overpaymentFee ≤ maxLoanRate ∧ Number.zero.operator_le rl.fees.originationFee = true ∧
+      0 < rl.schedule.paymentTotal ∧ minPaymentInterval ≤ rl.schedule.paymentInterval ∧
+      (defaultGracePeriod ≤ rl.schedule.gracePeriod ∧ rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval) ∧
+      (cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset) ∧
+      rl.paymentRemaining ≤ rl.schedule.paymentTotal ∧
+      (rl.paymentRemaining ≠ 0 → rl.previousPaymentDueDate < rl.nextPaymentDueDate) ∧
+      (rl.paymentRemaining ≠ 0 → rl.schedule.startDate ≤ rl.nextPaymentDueDate ∧
+        (rl.nextPaymentDueDate - rl.schedule.startDate) % rl.schedule.paymentInterval = 0) ∧
+      rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
+      rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
+      rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true)
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩⟩
 
 structure Loan extends RawLoan where
   wf : toRawLoan.WF

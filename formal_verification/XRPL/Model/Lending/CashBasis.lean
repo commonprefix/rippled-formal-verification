@@ -28,9 +28,8 @@ def applyPayment {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (a
   let debtTotal ← sumRoundAndClamp broker.debtTotal amounts.principalPaid.operator_neg vaultScale nt
 
   -- if cover already meets its minimum, pay the owner, else add the fee to cover
-  let minimumCover ← minimumBrokerCover nt broker.debtTotal broker.coverRateMinimum vaultScale
-  let sendFeeToOwner := minimumCover.operator_le broker.coverAvailable
-  let coverAvailable' ← if sendFeeToOwner then pure broker.coverAvailable
+  let hasMinimumCover ← broker.hasMinimumCover vaultScale
+  let coverAvailable' ← if hasMinimumCover then pure broker.coverAvailable
                         else broker.coverAvailable.operator_add amounts.feePaid .to_nearest
 
   let pool' ← AssetPool.updateAmounts pool { poolAmounts with

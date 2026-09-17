@@ -23,6 +23,11 @@ def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum
   let raw ← tenthBipsOfValue debtTotal coverRateMinimum .upward
   STAmount.roundToNumericType nt raw .upward (some poolExponent)
 
+-- the first-loss cover is at least the minimum the debt requires
+def RawLoanBroker.hasMinimumCover (rb : RawLoanBroker) (poolExponent : Int) : Except Error Bool := do
+  let minimumCover ← minimumBrokerCover rb.numericType rb.debtTotal rb.coverRateMinimum poolExponent
+  return minimumCover.operator_le rb.coverAvailable
+
 -- reject a cover deposit/withdraw/clawback that rounds to zero at the cover's own scale
 def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
     : Except Error TER := do

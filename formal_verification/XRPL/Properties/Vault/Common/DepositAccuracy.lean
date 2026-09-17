@@ -1,7 +1,7 @@
 import XRPL.Properties.Vault.Common.DepositDefs
 import XRPL.Properties.Vault.Common.Reduction
 import XRPL.Properties.Vault.Common.DepositReduction
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 import XRPL.Properties.Vault.Common.DepositExits
 import XRPL.Properties.Vault.VaultValid

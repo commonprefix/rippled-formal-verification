@@ -1,7 +1,7 @@
 import XRPL.Properties.Vault.Common.WithdrawDefs
 import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Vault.Common.WithdrawReduction
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 import XRPL.Properties.Protocol.Number.Mul.RoundsWithin
 import XRPL.Properties.Protocol.Number.Div.RoundsWithin

@@ -114,8 +114,9 @@ def LoanBroker.checkLimits (broker : LoanBroker) (newDebtTotal : Number) (vaultE
     : Except Error TER := do
   if broker.debtMaximum.operator_ne Number.zero && broker.debtMaximum.operator_lt newDebtTotal then
     return .tecLIMIT_EXCEEDED
-  let minimumCover ← minimumBrokerCover broker.numericType newDebtTotal broker.coverRateMinimum vaultExponent
-  if broker.coverAvailable.operator_lt minimumCover then return .tecINSUFFICIENT_FUNDS
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with debtTotal := newDebtTotal }
+  let hasMinimumCover ← rawBroker'.hasMinimumCover vaultExponent
+  if !hasMinimumCover then return .tecINSUFFICIENT_FUNDS
   return .tesSUCCESS
 
 -- Assemble the raw loan object from its computed properties (C++ buildLoan)

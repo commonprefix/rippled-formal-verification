@@ -22,12 +22,13 @@ def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (po
     | .rounded amount => .pure amount
 
   let vaultExponent ← AssetPool.exponent pool nt
-  let minimumCover ← minimumBrokerCover nt lb.debtTotal lb.coverRateMinimum vaultExponent
   let amountNumber ← rounded.toNumber .to_nearest
   if lb.coverAvailable.operator_lt amountNumber then
     return .tecINSUFFICIENT_FUNDS
   let coverAvailable' ← lb.coverAvailable.operator_sub amountNumber .to_nearest
-  if coverAvailable'.operator_lt minimumCover then
+  let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
+  let hasMinimumCover ← rawBroker'.hasMinimumCover vaultExponent
+  if !hasMinimumCover then
     return .tecINSUFFICIENT_FUNDS
 
   return .tesSUCCESS

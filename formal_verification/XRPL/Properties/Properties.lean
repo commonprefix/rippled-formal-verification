@@ -27,3 +27,9 @@ import XRPL.Properties.Vault.VaultClawback
 import XRPL.Properties.Vault.Dilution
 import XRPL.Properties.Vault.Roundtrip
 import XRPL.Properties.Vault.CanEmpty
+import XRPL.Properties.Lending.Loan.Defs
+import XRPL.Properties.Lending.LoanBroker.Defs
+import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
+import XRPL.Properties.Lending.Loan.LoanValid
+import XRPL.Properties.Protocol.Number.AtExponent
+import XRPL.Properties.Protocol.Number.Totality
