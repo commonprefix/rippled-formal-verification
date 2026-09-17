@@ -1,12 +1,11 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.Loan.Loan
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 -- LoanAccept -> preclaim
 def Loan.canAccept (loan : Loan) (ledgerCloseTime : UInt32) : TER :=
@@ -15,16 +14,14 @@ def Loan.canAccept (loan : Loan) (ledgerCloseTime : UInt32) : TER :=
   else .tesSUCCESS
 
 -- LoanAccept -> doApply. The principal leaves the reserved assets and the loan becomes active.
-def Loan.accept (loan : Loan) : Except Error Loan := do
-  let vault := loan.broker.vault
-  let assetsReserved' ← vault.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
-  let rawVault' : RawVault := { vault.toRawVault with assetsReserved := assetsReserved' }
-  let vault' ← rawVault'.to_lawful
+def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : Except Error (LoanWithPool α) := do
+  let poolAmounts := AssetPool.amounts pool
+  let assetsReserved' ← poolAmounts.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
+  let pool' ← AssetPool.updateAmounts pool { poolAmounts with assetsReserved := assetsReserved' }
 
-  let rawBroker' : RawLoanBroker := { loan.broker.toRawLoanBroker with vault := vault' }
-  let broker' ← rawBroker'.to_lawful
+  let rawLoan' : RawLoan := { loan.toRawLoan with isPending := false }
+  let loan' ← rawLoan'.to_lawful
 
-  let rawLoan' : RawLoan := { loan.toRawLoan with isPending := false, broker := broker' }
-  rawLoan'.to_lawful
+  return { loan' := loan', pool' := pool' }
 
 end XRPL.Model.Lending

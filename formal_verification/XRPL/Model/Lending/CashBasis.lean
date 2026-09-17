@@ -2,7 +2,7 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
-import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.Loan.LoanState
 import XRPL.Model.Lending.LoanBroker.BrokerCover
 import XRPL.Model.Lending.LoanBroker.LoanBroker
@@ -10,37 +10,37 @@ import XRPL.Model.Lending.LoanBroker.LoanBroker
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 namespace CashBasis
 
--- Apply the amounts one payment moves to the broker and its vault
-def applyPayment (broker : LoanBroker) (amounts : PaymentAmounts) : Except Error (LoanBroker × Number) := do
-  let vault := broker.vault
-  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
+-- Apply the amounts one payment moves to the broker and its pool. Also returns the amount the pool gets.
+def applyPayment {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (amounts : PaymentAmounts)
+    : Except Error (LoanBrokerWithPool α × Number) := do
+  let nt := broker.numericType
+  let poolAmounts := AssetPool.amounts pool
+  let vaultScale ← AssetPool.exponent pool nt
   let totalPaid ← amounts.principalPaid.operator_add amounts.interestPaid .to_nearest
-  let totalPaid' ← STAmount.roundToNumericType vault.numericType totalPaid .downward (some vaultScale)
+  let totalPaid' ← STAmount.roundToNumericType nt totalPaid .downward (some vaultScale)
 
   -- interest raises AssetsTotal, principal repays DebtTotal
-  let assetsAvailable ← vault.assetsAvailable.operator_add totalPaid' .to_nearest
-  let assetsTotal ← vault.assetsTotal.operator_add amounts.interestPaid .to_nearest
-  let debtTotal ← sumRoundAndClamp broker.debtTotal amounts.principalPaid.operator_neg vaultScale vault.numericType
+  let assetsAvailable ← poolAmounts.assetsAvailable.operator_add totalPaid' .to_nearest
+  let assetsTotal ← poolAmounts.assetsTotal.operator_add amounts.interestPaid .to_nearest
+  let debtTotal ← sumRoundAndClamp broker.debtTotal amounts.principalPaid.operator_neg vaultScale nt
 
   -- if cover already meets its minimum, pay the owner, else add the fee to cover
-  let minimumCover ← minimumBrokerCover vault.numericType broker.debtTotal broker.coverRateMinimum vaultScale
+  let minimumCover ← minimumBrokerCover nt broker.debtTotal broker.coverRateMinimum vaultScale
   let sendFeeToOwner := minimumCover.operator_le broker.coverAvailable
   let coverAvailable' ← if sendFeeToOwner then pure broker.coverAvailable
                         else broker.coverAvailable.operator_add amounts.feePaid .to_nearest
 
-  let rawVault' : RawVault := { vault.toRawVault with
+  let pool' ← AssetPool.updateAmounts pool { poolAmounts with
     assetsTotal := assetsTotal, assetsAvailable := assetsAvailable }
-  let vault' ← rawVault'.to_lawful
 
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
-    debtTotal := debtTotal, coverAvailable := coverAvailable', vault := vault' }
+    debtTotal := debtTotal, coverAvailable := coverAvailable' }
   let broker' ← rawBroker'.to_lawful
 
-  return (broker', totalPaid')
+  return ({ broker' := broker', pool' := pool' }, totalPaid')
 
 end CashBasis
 

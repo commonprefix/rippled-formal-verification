@@ -2,19 +2,17 @@ import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TenthBips
-import XRPL.Model.Vault.Vault
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 structure RawLoanBroker where
-  vault : Vault
+  numericType : NumericType
   managementFeeRate : TenthBips16
   coverRateMinimum : TenthBips32
   coverRateLiquidation : TenthBips32
-  -- amounts in the vault's asset
+  -- amounts in the pool's asset
   debtTotal : Number
   debtMaximum : Number
   coverAvailable : Number
@@ -45,6 +43,11 @@ structure LoanBroker extends RawLoanBroker where
 
 def RawLoanBroker.to_lawful (rb : RawLoanBroker) : Except Error LoanBroker :=
   if h : rb.WF ∧ rb.Valid then .ok { toRawLoanBroker := rb, wf := h.1, valid := h.2 } else .error .notLawful
+
+-- The broker with the pool it draws on, after an operation that changes both
+structure LoanBrokerWithPool (α : Type) where
+  broker' : LoanBroker
+  pool' : α
 
 -- XLS-66 (32): management fee on the interest, rounded down
 def computeManagementFee (nt : NumericType) (value : Number) (feeRate : TenthBips16) (exponent : Int)

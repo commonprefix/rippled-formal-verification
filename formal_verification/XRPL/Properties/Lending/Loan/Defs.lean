@@ -28,7 +28,7 @@ def RawLoan.toExact (rl : RawLoan) : RawLoan.Exact where
   totalValueOutstanding := rl.totalValueOutstanding.toRat
   managementFeeOutstanding := rl.managementFeeOutstanding.toRat
   loanScale := rl.loanScale
-  numericType := rl.broker.vault.numericType
+  numericType := rl.broker.numericType
   nextPaymentDueDate := rl.nextPaymentDueDate
   serviceFee := rl.fees.serviceFee.toRat
   latePaymentFee := rl.fees.latePaymentFee.toRat

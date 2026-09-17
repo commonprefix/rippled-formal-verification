@@ -4,14 +4,13 @@ import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TenthBips
-import XRPL.Model.Vault.Vault
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.Loan.Loan
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 -- The management action a transaction requests (only one may be set).
 inductive LoanManageAction where
@@ -19,13 +18,13 @@ inductive LoanManageAction where
   deriving DecidableEq, Repr
 
 -- Amount of the default the broker's first-loss cover absorbs
-private def defaultCoveredAmount (broker : LoanBroker) (totalDefaultAmount : Number) (nt : NumericType) (scale : Int)
+private def defaultCoveredAmount (broker : LoanBroker) (totalDefaultAmount : Number) (scale : Int)
     : Except Error Number := do
   let minimumCover ← tenthBipsOfValue broker.debtTotal broker.coverRateMinimum .upward
   let liquidationAmount ← tenthBipsOfValue minimumCover broker.coverRateLiquidation .upward
 
   let coveredAmount := Number.min liquidationAmount totalDefaultAmount
-  let coveredAmount' ← STAmount.roundToNumericType nt coveredAmount .upward (some scale)
+  let coveredAmount' ← STAmount.roundToNumericType broker.numericType coveredAmount .upward (some scale)
 
   return Number.min coveredAmount' broker.coverAvailable
 
@@ -58,95 +57,90 @@ def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : TE
     .tesSUCCESS
 
 -- Record the loan's exposure as a paper loss.
-def Loan.manageImpair (loan : Loan) (now : UInt32) : Except Error LoanTerResult := do
+def Loan.manageImpair {α : Type} [AssetPool α] (loan : Loan) (pool : α) (now : UInt32)
+    : Except Error (LoanWithPoolTerResult α) := do
   -- a loan that is not late yet can not be impaired
   if !(loan.isPaymentLate now) then
     return .error .tecTOO_SOON
 
-  let vault := loan.broker.vault
-  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  let lossUnrealized' ← sumRoundAndClamp vault.lossUnrealized loan.principalOutstanding vaultScale vault.numericType
+  let nt := loan.broker.numericType
+  let poolAmounts := AssetPool.amounts pool
+  let vaultScale ← AssetPool.exponent pool nt
+  let lossUnrealized' ← sumRoundAndClamp poolAmounts.lossUnrealized loan.principalOutstanding vaultScale nt
 
-  let assetsDiff ← vault.assetsTotal.operator_sub vault.assetsAvailable .to_nearest
+  let assetsDiff ← poolAmounts.assetsTotal.operator_sub poolAmounts.assetsAvailable .to_nearest
   if lossUnrealized'.operator_gt assetsDiff then
     return .error .tecLIMIT_EXCEEDED
 
-  let rawVault' : RawVault := { vault.toRawVault with lossUnrealized := lossUnrealized' }
-  let vault' ← rawVault'.to_lawful
+  let pool' ← AssetPool.updateAmounts pool { poolAmounts with lossUnrealized := lossUnrealized' }
 
-  let rawBroker' : RawLoanBroker := { loan.broker.toRawLoanBroker with vault := vault' }
-  let broker' ← rawBroker'.to_lawful
-
-  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := true, broker := broker' }
+  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := true }
   let loan' ← rawLoan'.to_lawful
-
-  return .ok loan'
+  return .ok { loan' := loan', pool' := pool' }
 
 -- Reverse the paper loss an impairment recorded
-def Loan.manageUnimpair (loan : Loan) : Except Error LoanTerResult := do
-  let vault := loan.broker.vault
-  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  if vault.lossUnrealized.operator_lt loan.principalOutstanding then
+def Loan.manageUnimpair {α : Type} [AssetPool α] (loan : Loan) (pool : α)
+    : Except Error (LoanWithPoolTerResult α) := do
+  let nt := loan.broker.numericType
+  let poolAmounts := AssetPool.amounts pool
+  let vaultScale ← AssetPool.exponent pool nt
+  if poolAmounts.lossUnrealized.operator_lt loan.principalOutstanding then
     return .error .tefBAD_LEDGER
 
   let loanPrincipalNeg := loan.principalOutstanding.operator_neg
-  let lossUnrealized' ← sumRoundAndClamp vault.lossUnrealized loanPrincipalNeg vaultScale vault.numericType
+  let lossUnrealized' ← sumRoundAndClamp poolAmounts.lossUnrealized loanPrincipalNeg vaultScale nt
 
-  let rawVault' : RawVault := { vault.toRawVault with lossUnrealized := lossUnrealized' }
-  let vault' ← rawVault'.to_lawful
+  let pool' ← AssetPool.updateAmounts pool { poolAmounts with lossUnrealized := lossUnrealized' }
 
-  let rawBroker' : RawLoanBroker := { loan.broker.toRawLoanBroker with vault := vault' }
-  let broker' ← rawBroker'.to_lawful
-
-  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := false, broker := broker' }
+  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := false }
   let loan' ← rawLoan'.to_lawful
-  return .ok loan'
+
+  return .ok { loan' := loan', pool' := pool' }
 
 -- Default a loan: first-loss cover absorbs part of the loss, the rest reduces the vault's AssetsTotal.
-def Loan.manageDefault (loan : Loan) : Except Error LoanWithAmountsTerResult := do
+def Loan.manageDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α)
+    : Except Error (LoanWithAmountsTerResult α) := do
   let broker := loan.broker
-  let vault := broker.vault
+  let nt := broker.numericType
+  let poolAmounts := AssetPool.amounts pool
   let totalDefaultAmount := loan.principalOutstanding
-  let defaultCovered ← defaultCoveredAmount broker totalDefaultAmount vault.numericType loan.loanScale
+  let defaultCovered ← defaultCoveredAmount broker totalDefaultAmount loan.loanScale
 
   -- the vault absorbs the remaining default amount by reducing AssetsTotal
   let vaultDefaultAmount ← totalDefaultAmount.operator_sub defaultCovered .to_nearest
-  let vaultScale ← numberExponent vault.assetsTotal vault.numericType
-  if vault.assetsTotal.operator_lt vaultDefaultAmount then
+  let vaultScale ← AssetPool.exponent pool nt
+  if poolAmounts.assetsTotal.operator_lt vaultDefaultAmount then
     return .error .tefBAD_LEDGER
 
-  let vaultDefaultAmount' ← STAmount.roundToNumericType vault.numericType vaultDefaultAmount .downward (some vaultScale)
-  let assetsTotal ← vault.assetsTotal.operator_sub vaultDefaultAmount' .to_nearest
-  let assetsAvailable' ← vault.assetsAvailable.operator_add defaultCovered .to_nearest
+  let vaultDefaultAmount' ← STAmount.roundToNumericType nt vaultDefaultAmount .downward (some vaultScale)
+  let assetsTotal ← poolAmounts.assetsTotal.operator_sub vaultDefaultAmount' .to_nearest
+  let assetsAvailable' ← poolAmounts.assetsAvailable.operator_add defaultCovered .to_nearest
 
-  let assetsTotal' ← dustAdjustedAssetsTotal assetsAvailable' assetsTotal vault.numericType
+  let assetsTotal' ← dustAdjustedAssetsTotal assetsAvailable' assetsTotal nt
   if assetsAvailable'.operator_gt assetsTotal' then
     return .error .tecINTERNAL
 
   -- realize the loss only when the loan was already impaired
-  if loan.isImpaired && vault.lossUnrealized.operator_lt totalDefaultAmount then
+  if loan.isImpaired && poolAmounts.lossUnrealized.operator_lt totalDefaultAmount then
     return .error .tefBAD_LEDGER
   let lossUnrealized' ←
     if loan.isImpaired then
-      sumRoundAndClamp vault.lossUnrealized totalDefaultAmount.operator_neg vaultScale vault.numericType
+      sumRoundAndClamp poolAmounts.lossUnrealized totalDefaultAmount.operator_neg vaultScale nt
     else
-      pure vault.lossUnrealized
+      pure poolAmounts.lossUnrealized
 
-  let debtTotal' ← sumRoundAndClamp broker.debtTotal totalDefaultAmount.operator_neg vaultScale vault.numericType
+  let debtTotal' ← sumRoundAndClamp broker.debtTotal totalDefaultAmount.operator_neg vaultScale nt
   if broker.coverAvailable.operator_lt defaultCovered then
     return .error .tefBAD_LEDGER
   let coverAvailable' ← broker.coverAvailable.operator_sub defaultCovered .to_nearest
 
-  let rawVault' : RawVault := { vault.toRawVault with
+  let pool' ← AssetPool.updateAmounts pool { poolAmounts with
     assetsTotal := assetsTotal'
     assetsAvailable := assetsAvailable'
-    lossUnrealized := lossUnrealized'
-  }
-  let vault' ← rawVault'.to_lawful
+    lossUnrealized := lossUnrealized' }
 
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
-    debtTotal := debtTotal', coverAvailable := coverAvailable'
-    vault := vault' }
+    debtTotal := debtTotal', coverAvailable := coverAvailable' }
   let broker' ← rawBroker'.to_lawful
 
   let rawLoan' : RawLoan := { loan.toRawLoan with
@@ -159,6 +153,6 @@ def Loan.manageDefault (loan : Loan) : Except Error LoanWithAmountsTerResult := 
     nextPaymentDueDate := 0 }
   let loan' ← rawLoan'.to_lawful
 
-  return .ok { loan' := loan', amountToVault := defaultCovered, amountToBroker := Number.zero }
+  return .ok { loan' := loan', pool' := pool', amountToPool := defaultCovered, amountToBroker := Number.zero }
 
 end XRPL.Model.Lending

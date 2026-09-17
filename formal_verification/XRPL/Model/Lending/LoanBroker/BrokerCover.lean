@@ -36,7 +36,7 @@ def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount :
 -- the cover movement actually applied: sub-scale dust is rejected rather than truncated
 def LoanBroker.roundedCoverAmount (lb : LoanBroker) (amount : STAmount)
     : Except Error RoundingResult := do
-  let rounded ← roundToCoverScale lb.vault.numericType lb.coverAvailable amount .downward
+  let rounded ← roundToCoverScale lb.numericType lb.coverAvailable amount .downward
   if rounded.signum == 0 then
     return .rejected .tecPRECISION_LOSS
   return .rounded rounded

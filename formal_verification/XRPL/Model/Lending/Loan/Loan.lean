@@ -95,7 +95,7 @@ def RawLoan.interestDue (rl : RawLoan) : Except Error Number := do
 
 -- matching C++ `Number{-1, loanScale}` tolerance
 def RawLoan.interestTolerance (rl : RawLoan) : Except Error Number :=
-  if rl.broker.vault.numericType.isIntegral then .ok Number.zero
+  if rl.broker.numericType.isIntegral then .ok Number.zero
   else Number.from_rep (-1 : Int64) rl.loanScale largeRange.min largeRange.max .to_nearest
 
 def RawLoan.interestWithinTolerance (rl : RawLoan) : Bool :=
@@ -169,14 +169,18 @@ structure Loan extends RawLoan where
 def RawLoan.to_lawful (rl : RawLoan) : Except Error Loan :=
   if h : rl.WF ∧ rl.Valid then .ok { toRawLoan := rl, wf := h.1, valid := h.2 } else .error .notLawful
 
--- The loan with the amounts a fund-moving operation transfers (zero where nothing moves to that party)
-structure LoanWithAmounts where
+-- The loan with the pool it draws on, after an operation that changes both
+structure LoanWithPool (α : Type) where
   loan' : Loan
-  amountToVault : Number
+  pool' : α
+
+-- The loan with the amounts a fund-moving operation transfers (zero where nothing moves to that party)
+structure LoanWithAmounts (α : Type) extends LoanWithPool α where
+  amountToPool : Number
   amountToBroker : Number
 
-abbrev LoanTerResult := Except TER Loan
-abbrev LoanWithAmountsTerResult := Except TER LoanWithAmounts
+abbrev LoanWithPoolTerResult (α : Type) := Except TER (LoanWithPool α)
+abbrev LoanWithAmountsTerResult (α : Type) := Except TER (LoanWithAmounts α)
 
 def Loan.periodicRate (loan : Loan) : Except Error Number :=
   loanPeriodicRate loan.rates.interestRate loan.schedule.paymentInterval

@@ -2,6 +2,7 @@ import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.LoanBroker.BrokerCover
 
 namespace XRPL.Model.Lending
@@ -9,8 +10,9 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 
 -- LoanBrokerCoverWithdraw -> preclaim
-def LoanBroker.canCoverWithdraw (lb : LoanBroker) (amount : STAmount) : Except Error TER := do
-  let nt := lb.vault.numericType
+def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α) (amount : STAmount)
+    : Except Error TER := do
+  let nt := lb.numericType
   let ter ← canApplyToBrokerCover nt lb.coverAvailable amount
   if ter.operator_bool then
     return ter
@@ -19,7 +21,7 @@ def LoanBroker.canCoverWithdraw (lb : LoanBroker) (amount : STAmount) : Except E
     | .rejected ter => return ter
     | .rounded amount => .pure amount
 
-  let vaultExponent ← numberExponent lb.vault.assetsTotal nt
+  let vaultExponent ← AssetPool.exponent pool nt
   let minimumCover ← minimumBrokerCover nt lb.debtTotal lb.coverRateMinimum vaultExponent
   let amountNumber ← rounded.toNumber .to_nearest
   if lb.coverAvailable.operator_lt amountNumber then

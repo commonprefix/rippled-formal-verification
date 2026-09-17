@@ -1,13 +1,11 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
-import XRPL.Model.Vault.Vault
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault
 
 def LoanBroker.canCreate (debtMaximum : Option Number) (numericType : NumericType) : Except Error TER := do
   let some dm := debtMaximum | return .tesSUCCESS
@@ -19,7 +17,7 @@ def LoanBroker.canUpdate (lb : LoanBroker) (debtMaximum : Option Number) : Excep
   let some dm := debtMaximum | return .tesSUCCESS
   if dm.signum != 0 && dm.operator_lt lb.debtTotal then
     return .tecLIMIT_EXCEEDED
-  if !(← STAmount.equalAfterNumberConvert lb.vault.numericType dm) then
+  if !(← STAmount.equalAfterNumberConvert lb.numericType dm) then
     return .tecPRECISION_LOSS
   return .tesSUCCESS
 
@@ -29,9 +27,10 @@ structure LoanBrokerSetCreate where
   coverRateMinimum : Option TenthBips32
   coverRateLiquidation : Option TenthBips32
 
-def LoanBroker.create (tx : LoanBrokerSetCreate) (vault : Vault) : Except Error LoanBroker :=
+-- LoanBrokerSet -> doApply
+def LoanBroker.create (tx : LoanBrokerSetCreate) (numericType : NumericType) : Except Error LoanBroker :=
     let rawBroker : RawLoanBroker :=
-      { vault                := vault
+      { numericType          := numericType
       , managementFeeRate    := tx.managementFeeRate.getD 0
       , coverRateMinimum     := tx.coverRateMinimum.getD 0
       , coverRateLiquidation := tx.coverRateLiquidation.getD 0
