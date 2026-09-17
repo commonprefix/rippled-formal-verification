@@ -152,15 +152,17 @@ private def Loan.fullComponents (loan : Loan) (now : UInt32) : Except Error Paym
            untrackedManagementFee := untrackedFee }
 
 -- Split an overpayment into its fee, its interest, and the principal it pays down
-private def computeOverpaymentComponents (overpayment : Number)
-    (overRate overFeeRate : TenthBips32) (mgmtRate : TenthBips16)
-    (nt : NumericType) (scale : Int) : Except Error PaymentComponents := do
-  let overpaymentFee ← tenthBipsOfValue overpayment overFeeRate .to_nearest
+private def Loan.overpaymentComponents (loan : Loan) (overpayment : Number) : Except Error PaymentComponents := do
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
+  let scale := loan.loanScale
+
+  let overpaymentFee ← tenthBipsOfValue overpayment loan.rates.overpaymentFee .to_nearest
   let overpaymentFee' ← STAmount.roundToNumericType nt overpaymentFee .to_nearest (some scale)
   let valueDelta ← overpayment.operator_sub overpaymentFee' .to_nearest
 
   -- the interest, split into net interest and its management fee
-  let overpaymentInterest ← tenthBipsOfValue overpayment overRate .to_nearest
+  let overpaymentInterest ← tenthBipsOfValue overpayment loan.rates.overpaymentInterestRate .to_nearest
   let (netInterest, managementFee) ← roundAndSplitInterest overpaymentInterest mgmtRate .to_nearest nt scale
 
   let principalAfterInterest ← overpayment.operator_sub netInterest .to_nearest
@@ -174,10 +176,17 @@ private def computeOverpaymentComponents (overpayment : Number)
            untrackedInterest := netInterest
            untrackedManagementFee := overpaymentFee' }
 
--- Re-amortize the remaining schedule after an overpayment. `none` when a guard drops the overpayment.
-private def processOverpayment (opc : PaymentComponents) (state : LoanState)
-    (periodicPayment periodicRate : Number) (paymentRemaining : UInt32) (mgmtRate : TenthBips16)
-    (nt : NumericType) (scale : Int) : Except Error (Option Reamortization) := do
+-- Re-amortize the remaining schedule after an overpayment. `none` when a guard drops it.
+private def Loan.tryOverpayment (loan : Loan) (opc : PaymentComponents)
+    : Except Error (Option Reamortization) := do
+  let nt := loan.broker.vault.numericType
+  let mgmtRate := loan.broker.managementFeeRate
+  let scale := loan.loanScale
+  let periodicPayment := loan.periodicPayment
+  let paymentRemaining := loan.paymentRemaining
+  let periodicRate ← loan.periodicRate
+  let state ← loan.state
+
   -- re-amortize for the reduced principal
   let theoreticalState ← LoanState.buildTheoretical periodicPayment periodicRate paymentRemaining mgmtRate
   let deltaErrors ← LoanState.calculateDeltas state theoreticalState
@@ -274,7 +283,8 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
   return (loan', amounts)
 
 -- Settle the summed amounts against the broker and its vault, then re-check the vault
-private def Loan.settlePayment (loan : Loan) (amounts : PaymentAmounts) : Except Error LoanWithAmountsTerResult := do
+private def Loan.settlePayment (loan : Loan) (amounts : PaymentAmounts)
+    : Except Error LoanWithAmountsTerResult := do
   let (broker', amountToVault) ← CashBasis.applyPayment loan.broker amounts
 
   let rawLoan' : RawLoan := { loan.toRawLoan with broker := broker' }
@@ -293,59 +303,57 @@ private def Loan.paySingleInstalment (loan : Loan) (pc : PaymentComponents) (amo
   loan.settlePayment amounts
 
 -- Pay scheduled instalments one at a time while the amount covers the next due and the loan is unpaid, up to 100.
-private def payScheduledInstalmentsLoop (instalmentsLeft : Nat) (amount serviceFee : Number)
-    (loan : Loan) (amounts : PaymentAmounts) (totalPaid : Number) (count : Nat)
-    : Except Error (Loan × PaymentAmounts × Number × Nat) := do
-  let accumulated := (loan, amounts, totalPaid, count)
-
+private def UnsettledPayment.payInstalments (payment : UnsettledPayment) (instalmentsLeft : Nat)
+    (amount : Number) : Except Error UnsettledPayment := do
   match instalmentsLeft with
-  | 0 => return accumulated
+  | 0 => return payment
   | remaining + 1 =>
-    if loan.paymentRemaining == 0 then return accumulated
+    let loan := payment.loan
+    if loan.paymentRemaining == 0 then return payment
 
     -- compute the next scheduled instalment and its amount due
     let pc ← loan.scheduledComponents
-    let pc' : PaymentComponents := { pc with untrackedManagementFee := serviceFee }
+    let pc' : PaymentComponents := { pc with untrackedManagementFee := loan.fees.serviceFee }
     let due ← pc'.totalDue
 
     -- stop when the remaining amount cannot cover the next instalment
-    if amount.operator_lt (← totalPaid.operator_add due .to_nearest) then return accumulated
+    if amount.operator_lt (← payment.totalPaid.operator_add due .to_nearest) then return payment
 
     -- advance the loan and add this instalment to the running totals
-    let (loan, instalment) ← loan.doPayment pc'
-    let amounts ← amounts.add instalment
-    let totalPaid ← totalPaid.operator_add due .to_nearest
+    let (loan', instalment) ← loan.doPayment pc'
+    let amounts' ← payment.amounts.add instalment
+    let totalPaid' ← payment.totalPaid.operator_add due .to_nearest
+    let payment' : UnsettledPayment :=
+      { loan := loan', amounts := amounts', totalPaid := totalPaid', count := payment.count + 1 }
 
-    if pc.isFinal then
-      return (loan, amounts, totalPaid, count + 1)
-    else
-      payScheduledInstalmentsLoop remaining amount serviceFee loan amounts totalPaid (count + 1)
+    if pc.isFinal then return payment'
+    else payment'.payInstalments remaining amount
+
+-- Reverse any impairment before paying
+private def Loan.unimpairIfImpaired (loan : Loan) : Except Error LoanTerResult :=
+  if loan.isImpaired then loan.manageUnimpair else pure (.ok loan)
 
 private def Loan.payScheduledInstalments (loan : Loan) (amount : Number) (now : UInt32)
     : Except Error (Except TER UnsettledPayment) := do
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if loan.isPaymentLate now then return .error .tecEXPIRED
 
-  -- reverse any impairment before paying
-  let mut loan := loan
-  if loan.isImpaired then
-    match ← loan.manageUnimpair with
-    | .error ter => return .error ter
-    | .ok unimpaired => loan := unimpaired
+  match ← loan.unimpairIfImpaired with
+  | .error ter => return .error ter
+  | .ok loan =>
+    let unpaid : UnsettledPayment :=
+      { loan := loan, amounts := PaymentAmounts.zero, totalPaid := Number.zero, count := 0 }
+    let payment ← unpaid.payInstalments maxPaymentsPerTransaction amount
+    if payment.count == 0 then
+      return .error .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
 
-  let (loan', amounts, totalPaid, count) ← payScheduledInstalmentsLoop maxPaymentsPerTransaction
-    amount loan.fees.serviceFee loan PaymentAmounts.zero Number.zero 0
-  if count == 0 then
-    return .error .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
-
-  return .ok { loan := loan', amounts := amounts, totalPaid := totalPaid, count := count }
+    return .ok payment
 
 -- Add the overpayment tail to an unsettled payment.
 private def UnsettledPayment.applyOverpayment (payment : UnsettledPayment) (amount : Number)
     : Except Error UnsettledPayment := do
   let loan := payment.loan
   let nt := loan.broker.vault.numericType
-  let mgmtRate := loan.broker.managementFeeRate
 
   -- the tail needs budget, remaining payments and room in the per-transaction cap
   if !(loan.allowsOverpayment && loan.paymentRemaining != 0 && payment.totalPaid.operator_lt amount
@@ -357,16 +365,12 @@ private def UnsettledPayment.applyOverpayment (payment : UnsettledPayment) (amou
   let overpayment ← STAmount.roundToNumericType nt cappedUnspent .downward (some loan.loanScale)
   if !(overpayment.operator_gt Number.zero) then return payment
 
-  -- split the overpayment into principal, interest, and fees
-  let opc ← computeOverpaymentComponents overpayment loan.rates.overpaymentInterestRate
-    loan.rates.overpaymentFee mgmtRate nt loan.loanScale
-  if !(opc.principalDelta.operator_gt Number.zero) then return payment   -- no principal left after fees and interest
+  -- split the overpayment into principal, interest, and fees. Drop it if no principal is left
+  let opc ← loan.overpaymentComponents overpayment
+  if !(opc.principalDelta.operator_gt Number.zero) then return payment
 
   -- re-amortize the remaining schedule for the reduced principal
-  let periodicRate ← loan.periodicRate
-  let oldState ← loan.state
-  let some reamortization ← processOverpayment opc oldState loan.periodicPayment periodicRate
-      loan.paymentRemaining mgmtRate nt loan.loanScale
+  let some reamortization ← loan.tryOverpayment opc
     | return payment   -- a re-amortization guard dropped the overpayment
 
   -- add the overpayment to the summed amounts and commit the re-amortized loan
@@ -405,35 +409,29 @@ def Loan.overpayment (loan : Loan) (amount : Number) (now : UInt32) : Except Err
     let payment ← payment.applyOverpayment amount
     payment.loan.settlePayment payment.amounts
 
--- Pay a late instalment: scheduled amount + penalty interest for the overdue seconds + fixed late fee.
+-- Pay a late instalment: the scheduled amount plus penalty interest for the overdue seconds and the fixed late fee.
 def Loan.latePayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if !(loan.isPaymentLate now) then return .error .tecTOO_SOON
 
-  -- reverse any impairment before paying
-  let mut loan := loan
-  if loan.isImpaired then
-    match ← loan.manageUnimpair with
-    | .error ter => return .error ter
-    | .ok unimpaired => loan := unimpaired
+  match ← loan.unimpairIfImpaired with
+  | .error ter => return .error ter
+  | .ok loan =>
+    let pc ← loan.lateComponents now
+    loan.paySingleInstalment pc amount
 
-  let pc ← loan.lateComponents now
-  loan.paySingleInstalment pc amount
-
--- Pay off the loan early: clear the whole outstanding value + early-payoff interest + close fee, then close it.
-def Loan.fullPayment (loan : Loan) (amount : Number) (now : UInt32) : Except Error LoanWithAmountsTerResult := do
+-- Pay off the loan early: clear the whole outstanding value plus early-payoff interest and the close fee
+def Loan.fullPayment (loan : Loan) (amount : Number) (now : UInt32)
+    : Except Error LoanWithAmountsTerResult := do
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if loan.isPaymentLate now then return .error .tecEXPIRED
-  if loan.paymentRemaining ≤ 1 then return .error .tecKILLED   -- the last instalment must be a regular payment
+  -- the last instalment must be a regular payment
+  if loan.paymentRemaining ≤ 1 then return .error .tecKILLED
 
-  -- reverse any impairment before paying
-  let mut loan := loan
-  if loan.isImpaired then
-    match ← loan.manageUnimpair with
-    | .error ter => return .error ter
-    | .ok unimpaired => loan := unimpaired
-
-  let pc ← loan.fullComponents now
-  loan.paySingleInstalment pc amount
+  match ← loan.unimpairIfImpaired with
+  | .error ter => return .error ter
+  | .ok loan =>
+    let pc ← loan.fullComponents now
+    loan.paySingleInstalment pc amount
 
 end XRPL.Model.Lending
