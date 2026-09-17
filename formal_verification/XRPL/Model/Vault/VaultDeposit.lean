@@ -63,8 +63,7 @@ def sharesToAssetsDeposit (v : Vault) (shares : STAmount) : Except Error STAmoun
   let sharesNumber ← shares.toNumber .to_nearest
   let assetsShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest
   let amountDepositNumber ← assetsShares.operator_div v.sharesTotal .to_nearest
-  -- (waiting the C++ fix) round the charge up so a depositor never pays less than the issued shares are worth
-  let amountDeposit ← STAmount.ofNumber v.numericType amountDepositNumber .upward
+  let amountDeposit ← STAmount.ofNumber v.numericType amountDepositNumber .to_nearest
   return amountDeposit
 
 inductive ComputeDepositResult where
