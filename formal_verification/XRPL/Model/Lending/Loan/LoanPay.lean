@@ -83,8 +83,8 @@ private def Loan.scheduledComponents (loan : Loan) : Except Error PaymentCompone
   let roomForInterest ← periodicPayment'.operator_sub cappedPrincipal .to_nearest
   let cappedInterest := Number.min (Number.min deltas.interest (Number.max Number.zero roomForInterest))
     currentState.interestDue
-  let principalPlusInterest ← cappedPrincipal.operator_add cappedInterest .to_nearest
 
+  let principalPlusInterest ← cappedPrincipal.operator_add cappedInterest .to_nearest
   let roomForFee ← periodicPayment'.operator_sub principalPlusInterest .to_nearest
   let cappedManagementFee := Number.min (Number.min deltas.managementFee roomForFee)
     currentState.managementFeeDue
@@ -253,21 +253,14 @@ private def validatePostPayment {α : Type} [AssetPool α] (pool : α) (result :
   else if poolAmounts'.assetsAvailable.operator_gt poolAmounts'.assetsTotal then .error .tecINTERNAL
   else .ok result
 
--- Advance the loan by one instalment and report the amounts it changes
-private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error (Loan × PaymentAmounts) := do
-  let interestDelta ← pc.interestDelta
-  let interestPaid ← interestDelta.operator_add pc.untrackedInterest .to_nearest
-  let feePaid ← pc.managementFeeDelta.operator_add pc.untrackedManagementFee .to_nearest
-  let amounts : PaymentAmounts :=
-    { principalPaid := pc.principalDelta, interestPaid := interestPaid, feePaid := feePaid }
-
+-- Advance the loan by one instalment.
+private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error Loan := do
   if pc.isFinal then
     let rawLoan' : RawLoan := { loan.toRawLoan with
       totalValueOutstanding := Number.zero, principalOutstanding := Number.zero,
       managementFeeOutstanding := Number.zero, paymentRemaining := 0,
       previousPaymentDueDate := loan.nextPaymentDueDate, nextPaymentDueDate := 0 }
-    let loan' ← rawLoan'.to_lawful
-    return (loan', amounts)
+    return ← rawLoan'.to_lawful
 
   let totalValueOutstanding' ← loan.totalValueOutstanding.operator_sub pc.totalValueDelta .to_nearest
   let principalOutstanding' ← loan.principalOutstanding.operator_sub pc.principalDelta .to_nearest
@@ -280,8 +273,7 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
     paymentRemaining := loan.paymentRemaining - 1
     previousPaymentDueDate := loan.nextPaymentDueDate
     nextPaymentDueDate := loan.nextPaymentDueDate + loan.schedule.paymentInterval }
-  let loan' ← rawLoan'.to_lawful
-  return (loan', amounts)
+  rawLoan'.to_lawful
 
 -- Settle the summed amounts against the broker and its pool, then re-check the pool
 private def Loan.settlePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amounts : PaymentAmounts)
@@ -302,7 +294,8 @@ private def Loan.paySingleInstalment {α : Type} [AssetPool α] (loan : Loan) (p
   if amount.operator_lt (← pc.totalDue) then
     return .error .tecINSUFFICIENT_PAYMENT
 
-  let (loan, amounts) ← loan.doPayment pc
+  let amounts ← pc.paidAmounts
+  let loan ← loan.doPayment pc
   loan.settlePayment pool amounts
 
 -- Pay scheduled instalments one at a time while the amount covers the next due and the loan is unpaid, up to 100.
@@ -323,7 +316,8 @@ private def UnsettledPayment.payInstalments {α : Type} (payment : UnsettledPaym
     if amount.operator_lt (← payment.totalPaid.operator_add due .to_nearest) then return payment
 
     -- advance the loan and add this instalment to the running totals
-    let (loan', instalment) ← loan.doPayment pc'
+    let instalment ← pc'.paidAmounts
+    let loan' ← loan.doPayment pc'
     let amounts' ← payment.amounts.add instalment
     let totalPaid' ← payment.totalPaid.operator_add due .to_nearest
     let payment' : UnsettledPayment α := { payment with
@@ -339,6 +333,8 @@ private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (po
 
 private def Loan.payScheduledInstalments {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
     (now : UInt32) : Except Error (Except TER (UnsettledPayment α)) := do
+  if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
+    return .error .tecKILLED
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if loan.isPaymentLate now then return .error .tecEXPIRED
 
@@ -359,6 +355,7 @@ private def UnsettledPayment.applyOverpayment {α : Type} (payment : UnsettledPa
     : Except Error (UnsettledPayment α) := do
   let loan := payment.loan
   let nt := loan.broker.numericType
+  let amount ← STAmount.roundToNumericType nt amount .towards_zero (some loan.loanScale)
 
   -- the tail needs budget, remaining payments and room in the per-transaction cap
   if !(loan.allowsOverpayment && loan.paymentRemaining != 0 && payment.totalPaid.operator_lt amount
@@ -419,6 +416,8 @@ def Loan.overpayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amoun
 -- Pay a late instalment: the scheduled amount plus penalty interest for the overdue seconds and the fixed late fee.
 def Loan.latePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
     (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
+  if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
+    return .error .tecKILLED
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if !(loan.isPaymentLate now) then return .error .tecTOO_SOON
 
@@ -431,6 +430,8 @@ def Loan.latePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amoun
 -- Pay off the loan early: clear the whole outstanding value plus early-payoff interest and the close fee
 def Loan.fullPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
     (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
+  if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
+    return .error .tecKILLED
   if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
   if loan.isPaymentLate now then return .error .tecEXPIRED
   -- the last instalment must be a regular payment

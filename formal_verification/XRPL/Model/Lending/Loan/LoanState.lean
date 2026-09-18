@@ -133,4 +133,10 @@ def PaymentComponents.totalDue (components : PaymentComponents) : Except Error N
   let valuePlusInterest ← components.totalValueDelta.operator_add components.untrackedInterest .to_nearest
   valuePlusInterest.operator_add components.untrackedManagementFee .to_nearest
 
+def PaymentComponents.paidAmounts (components : PaymentComponents) : Except Error PaymentAmounts := do
+  let interestDelta ← components.interestDelta
+  let interestPaid ← interestDelta.operator_add components.untrackedInterest .to_nearest
+  let feePaid ← components.managementFeeDelta.operator_add components.untrackedManagementFee .to_nearest
+  return { principalPaid := components.principalDelta, interestPaid := interestPaid, feePaid := feePaid }
+
 end XRPL.Model.Lending
