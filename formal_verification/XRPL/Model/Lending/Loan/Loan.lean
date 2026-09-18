@@ -131,13 +131,10 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   serviceFee_nonneg : Number.zero.operator_le rl.fees.serviceFee = true
   latePaymentFee_nonneg : Number.zero.operator_le rl.fees.latePaymentFee = true
   closePaymentFee_nonneg : Number.zero.operator_le rl.fees.closePaymentFee = true
-  -- the periodic payment is strictly positive
   periodicPayment_pos : Number.zero.operator_lt rl.periodicPayment = true
-  -- a fully paid loan carries no next due date
   paid_no_due_date : rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0
-  -- interest due stays non-negative within the loan-scale tolerance
   interest_within_tolerance : rl.interestWithinTolerance = true
-  -- field ranges LoanSet preflight guarantees
+  -- field ranges
   interestRate_cap : rl.rates.interestRate ≤ maxLoanRate
   lateInterestRate_cap : rl.rates.lateInterestRate ≤ maxLoanRate
   closeInterestRate_cap : rl.rates.closeInterestRate ≤ maxLoanRate
@@ -146,7 +143,6 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   originationFee_nonneg : Number.zero.operator_le rl.fees.originationFee = true
   paymentTotal_pos : 0 < rl.schedule.paymentTotal
   paymentInterval_min : minPaymentInterval ≤ rl.schedule.paymentInterval
-  -- the grace period lies between its default and the payment interval
   gracePeriod_range : defaultGracePeriod ≤ rl.schedule.gracePeriod ∧
     rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval
   -- the loan scale is an STAmount exponent
