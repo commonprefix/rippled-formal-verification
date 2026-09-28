@@ -86,6 +86,9 @@ def computeDeposit (v : Vault) (amountDeposit : STAmount) : Except Error Compute
       throw e
 
 def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
+  -- preflight: a non-positive amount is rejected
+  if amountDeposit.signum ≤ 0 then
+    return .rejected v .temBAD_AMOUNT
   let vault := v.toRawVault
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
 

@@ -96,9 +96,16 @@ inductive WithdrawAmount where
   | vaultAssets (amount : STAmount)
   | vaultShares (amount : STAmount)
 
+def WithdrawAmount.amount : WithdrawAmount → STAmount
+  | .vaultAssets a => a
+  | .vaultShares s => s
+
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
 def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except Error WithdrawResult := do
+  -- preflight: a non-positive amount is rejected
+  if amount.amount.signum ≤ 0 then
+    return .rejected v .temBAD_AMOUNT
   let vault := v.toRawVault
   let result ← match amount with
     | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss
