@@ -1,6 +1,6 @@
 import XRPL.Properties.Vault.Defs
 import XRPL.Model.Vault.VaultBurn
-import XRPL.Properties.Vault.Common.BurnAccuracy
+import XRPL.Properties.Vault.Proofs.Burn
 
 /-! # `Vault.burnShares` accuracy
 

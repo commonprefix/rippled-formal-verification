@@ -93,7 +93,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     · -- In-range: doRoundUp truncates.
       have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_no_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_tr_val
+      try simp only at h_tr_val
       refine ⟨?_, ?_⟩
       · -- Direction
         rw [h_approx, h_result_signed, h_xy_signed, h_tr_val]
@@ -196,7 +196,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
         · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_cusp_val
+          try simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
           have h_result_val : result.toRat = -((maxRepCuspTarget : ℚ) * 10 ^ ze') := by
@@ -224,7 +224,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_nc_val
+          try simp only at h_nc_val
           have h_result_val : result.toRat = -(((zm.toNat : ℚ) + 1) * 10 ^ ze') := by
             rw [h_result_signed, h_nc_val]
           refine ⟨?_, ?_⟩
@@ -260,7 +260,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
           represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_sru h_zm_le_rep
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_tr_val
+        try simp only at h_tr_val
         have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
           rw [h_result_signed, h_tr_val]
         have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
@@ -442,7 +442,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
         · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_cusp_val
+          try simp only at h_cusp_val
           have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
             rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
           have h_result_val : result.toRat = (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
@@ -470,7 +470,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
           have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
           have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
             .overflow res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_nc_val
+          try simp only at h_nc_val
           have h_result_val : result.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := by
             rw [h_result_signed, h_nc_val]
           refine ⟨?_, ?_⟩
@@ -505,7 +505,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
           represents_eq_zero_of_digits_zero_xbit_false h_dig0 h_xbit0 hf_rep
         have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_tr_val
+        try simp only at h_tr_val
         have h_result_val : result.toRat = (zm.toNat : ℚ) * 10 ^ ze' := by
           rw [h_result_signed, h_tr_val]
         have h_truth_eq_result : x.toRat + y.toRat = result.toRat := by
@@ -633,7 +633,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
     · -- In-range: doRoundUp truncates; -(zm·10^ze') sits at or above the truth.
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_no_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_tr_val
+      try simp only at h_tr_val
       have h_result_val : result.toRat = -((zm.toNat : ℚ) * 10 ^ ze') := by
         rw [h_result_signed, h_tr_val]
       refine ⟨?_, ?_⟩

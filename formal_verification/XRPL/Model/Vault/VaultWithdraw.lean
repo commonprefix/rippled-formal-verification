@@ -102,10 +102,9 @@ def WithdrawAmount.amount : WithdrawAmount → STAmount
 
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except Error WithdrawResult := do
-  -- preflight: a non-positive amount is rejected
-  if amount.amount.signum ≤ 0 then
-    return .rejected v .temBAD_AMOUNT
+-- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+    (_hpos : 0 < amount.amount.toRat) : Except Error WithdrawResult := do
   let vault := v.toRawVault
   let result ← match amount with
     | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss

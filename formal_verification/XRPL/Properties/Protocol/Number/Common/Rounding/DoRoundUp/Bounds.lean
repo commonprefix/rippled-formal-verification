@@ -87,7 +87,7 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
           = (((zm.toNat : ℚ) + f) * (10 / (2 ^ 63 - 8 : ℚ))) * 10 ^ ze from by ring]
     exact mul_le_mul_of_nonneg_right hX h10ze_nn
   unfold Guard.doRoundUp at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   by_cases hb : ((gP.round mode == 1) || ((gP.round mode == 0) && (zm % 2 == 1))) = true
   · rw [if_pos hb] at hok_pos
@@ -411,7 +411,7 @@ lemma doRoundUp_value_cuspRange_cases
             ∧ ((g.round mode == 1) || ((g.round mode == 0) && (zm % 2 == 1))) = true)) := by
   have hmaxRepUp_toNat : maxRepUp.toNat = maxRepUpNat := rfl
   unfold Guard.doRoundUp at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   have hncusp1 : ¬ zm < maxRep := by
     rw [UInt64.lt_iff_toNat_lt]
@@ -641,7 +641,7 @@ theorem doRoundUp_value_downward_truncate
     roundUp_bool_downward_false g zm h_no_roundUp
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -698,7 +698,7 @@ theorem doRoundUp_value_downward_roundUp_noCusp
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
   have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
@@ -799,7 +799,7 @@ theorem doRoundUp_value_downward_roundUp_cusp
     intro h; have := UInt64.toNat_inj.mpr h; rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
   have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .downward == 1) || ((gP.round .downward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
     rw [h_gP_ru_true] at hok
@@ -848,7 +848,7 @@ lemma doRoundUp_output_invariants_downward
     decide_eq_false h_m_not_ge_maxMant
   -- Unfold doRoundUp to extract res
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m .downward with hgP_def
   by_cases h_ru : (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true from h_ru] at hok
@@ -1107,7 +1107,7 @@ theorem doRoundUp_value_towards_zero_truncate
     roundUp_bool_towards_zero_false g zm
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -1164,7 +1164,7 @@ lemma doRoundUp_output_invariants_towards_zero
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_m_ne : m ≠ 0 := by intro h; rw [h] at h_lb; simp at h_lb
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   rw [h_pof] at hok
   rw [h_ru_false] at hok
   simp only [Bool.false_eq_true, ite_false] at hok
@@ -1371,7 +1371,7 @@ theorem doRoundUp_value_upward_truncate
       ((g.round .upward == 1) || ((g.round .upward == 0) && (zm % 2 == 1))) = false :=
     roundUp_bool_upward_false g zm h_no_roundUp
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -1423,7 +1423,7 @@ theorem doRoundUp_value_upward_roundUp_noCusp
     · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
   have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
@@ -1520,7 +1520,7 @@ theorem doRoundUp_value_upward_roundUp_cusp
     intro h; have := UInt64.toNat_inj.mpr h
     rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
   have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .upward == 1) || ((gP.round .upward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
     rw [h_gP_ru_true] at hok
@@ -1560,7 +1560,7 @@ lemma doRoundUp_output_invariants_upward
     intro h; have := UInt64.le_iff_toNat_le.mp h
     rw [hmaxMant_v] at this; rw [hmaxRep_v] at h_ub; omega
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m .upward with hgP_def
   by_cases h_ru : (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true from h_ru] at hok
@@ -1963,7 +1963,7 @@ lemma doRoundUp_flush_value_small
         exact absurd h0' hm_ne
   -- Navigate the doRoundUp leaves.
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   have h_zm_ne : zm ≠ 0 := by
     intro h

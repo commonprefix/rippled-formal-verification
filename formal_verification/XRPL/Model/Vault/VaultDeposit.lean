@@ -85,10 +85,9 @@ def computeDeposit (v : Vault) (amountDeposit : STAmount) : Except Error Compute
     else
       throw e
 
-def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
-  -- preflight: a non-positive amount is rejected
-  if amountDeposit.signum ≤ 0 then
-    return .rejected v .temBAD_AMOUNT
+-- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
+    (_hpos : 0 < amountDeposit.toRat) : Except Error DepositResult := do
   let vault := v.toRawVault
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
 

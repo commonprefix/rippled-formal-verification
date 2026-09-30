@@ -119,7 +119,6 @@ lemma reround_trace :
         = .ok { negative_ := false, mantissa_ := 1000000000000000, exponent_ := 1 } from by
       unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new; rfl]
   simp only [RoundResult.toNumber]
-  rw [if_neg (show ¬ (false = true) by decide)]
   rfl
 
 /-- Inner `Number` multiplication of the two 19-digit lifts

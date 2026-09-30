@@ -438,7 +438,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
     · have h_f_pos : 0 < f := h_sru_pos h_ru
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · have h_val := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' h_ru h_cusp loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_neg_m_lo : -(((zm.toNat : ℚ) + 1) * 10 ^ ze') < m.toRat := by
           have : -result.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := h_result_abs
@@ -475,7 +475,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
         rcases h_ru with h_round1 | h_tie
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
             h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
           have h_fze_pos : (0 : ℚ) < f * 10 ^ ze' := mul_pos h_f_pos h10ze_pos
@@ -491,7 +491,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
               _ = (maxRep.toNat : ℚ) * 10 ^ ze' := h1
           linarith
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_neg_m_lo : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < m.toRat := by
             have h_result_eq : result.toRat = -((maxRepCuspTarget : ℚ) * 10 ^ ze') := by
@@ -511,7 +511,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
     · -- Empty interval: (zm+f)*10^ze' ≤ -m < zm*10^ze' is impossible since f ≥ 0.
       exfalso
       have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       have h_neg_m_ge : ((zm.toNat : ℚ) + f) * 10 ^ ze' ≤ -m.toRat := by
         have := h_m_le_truth
@@ -536,7 +536,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
       have h_f_pos : 0 < f := h_sru_pos h_ru
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · have h_val := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' h_ru h_cusp loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_compare : (zm.toNat : ℚ) + f < (zm.toNat : ℚ) + 1 := by linarith
         have h_compare_mul : ((zm.toNat : ℚ) + f) * 10 ^ ze' < ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
@@ -548,7 +548,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
         rcases h_ru with h_round1 | h_tie
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
             h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_m_lo : (maxRep.toNat : ℚ) * 10 ^ ze' < m.toRat := by
             rw [← h_result_abs]; exact h_lt_m
@@ -565,7 +565,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
                   rw [h_maxR_v]; norm_num
           exact no_normalized_in_cusp_gap_pos ze' m h_norm h_m_pos h_m_lo h_m_hi
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
           have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
@@ -575,7 +575,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith [mul_le_mul_of_nonneg_right h_le_810 (le_of_lt h10ze_pos), h_result_abs]
     · have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       have h_m_pos : 0 < m.toRat := lt_of_le_of_lt h_result_nn h_lt_m
       have h_m_lo : (zm.toNat : ℚ) * 10 ^ ze' < m.toRat := by
@@ -729,7 +729,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · exfalso
         have h_val := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' h_ru h_cusp loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         have h_result_ge : ((zm.toNat : ℚ) + 1) * 10 ^ ze' ≤ |result.toRat| := by
           rw [h_result_abs_eq, h_result_abs, h_val]
         have h_compare : (zm.toNat : ℚ) + f < (zm.toNat : ℚ) + 1 := by linarith
@@ -745,7 +745,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
         rcases h_ru with h_round1 | h_tie
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
             h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
           have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
@@ -766,7 +766,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
           have h_m_neg : m.toRat < 0 := by linarith
           exact no_normalized_in_cusp_gap_neg ze' m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           have h_result_ge : ((zm.toNat : ℚ) + 1) * 10 ^ ze' ≤ |result.toRat| := by
             rw [h_result_abs_eq, h_result_abs, h_val]
             have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
@@ -782,7 +782,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
             rw [← h_truth_abs_eq, ← h_result_abs_eq]; exact h_abs_compare
           linarith
     · have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       have h_neg_m_lo : -(((zm.toNat : ℚ) + 1) * 10 ^ ze') < m.toRat := by
         have h_compare : (zm.toNat : ℚ) + f < (zm.toNat : ℚ) + 1 := by linarith
@@ -818,7 +818,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
     · have h_f_pos : 0 < f := h_sru_pos h_ru
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · have h_val := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' h_ru h_cusp loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_m_lo : (zm.toNat : ℚ) * 10 ^ ze' < m.toRat := by
           have h_compare : (zm.toNat : ℚ) < (zm.toNat : ℚ) + f := by linarith
@@ -857,11 +857,11 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
         rcases h_ru with h_round1 | h_tie
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
             h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           linarith
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          simp only at h_val
+          try simp only at h_val
           rw [h_val] at h_result_abs
           have h_m_hi : m.toRat < (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
             rw [← h_result_abs]; exact h_m_lt
@@ -869,7 +869,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
     · -- No round-up + truth ≤ result forces truth = result, making truth ≤ m < result empty.
       exfalso
       have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       have h_compare : (zm.toNat : ℚ) ≤ (zm.toNat : ℚ) + f := by linarith
       have h_compare_mul : (zm.toNat : ℚ) * 10 ^ ze' ≤ ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
@@ -1028,7 +1028,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · have h_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_cusp
           loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_neg_m_lo : -(((zm.toNat : ℚ) + 1) * 10 ^ ze') < m.toRat := by
           have h_result_eq : result.toRat = -(((zm.toNat : ℚ) + 1) * 10 ^ ze') := by linarith
@@ -1044,7 +1044,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_zm_eq h_sru
           loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_neg_m_lo : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < m.toRat := by
           have h_result_eq : result.toRat = -((maxRepCuspTarget : ℚ) * 10 ^ ze') := by linarith
@@ -1063,7 +1063,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
       have hf_zero : f = 0 := h_content_zero hd hxb
       have h_val := doRoundUp_value_downward_truncate g false zm ze'
         h_sru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       rw [hf_zero, add_zero] at h_truth_abs
       linarith
@@ -1077,7 +1077,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
       Bool.noConfusion (h_sbit_false ▸ h.1)
     have h_val := doRoundUp_value_downward_truncate g false zm ze'
       h_not_sru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-    simp only at h_val
+    try simp only at h_val
     rw [h_val] at h_result_abs
     have h_m_pos : 0 < m.toRat := lt_of_le_of_lt h_result_nn h_lt_m
     have h_m_lo : (zm.toNat : ℚ) * 10 ^ ze' < m.toRat := by
@@ -1237,7 +1237,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
       Bool.noConfusion (h_sbit ▸ h.1)
     have h_val := doRoundUp_value_upward_truncate g false zm ze'
       h_not_sru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-    simp only at h_val
+    try simp only at h_val
     rw [h_val] at h_result_abs
     have h_neg_m_lo : -(((zm.toNat : ℚ) + 1) * 10 ^ ze') < m.toRat := by
       have h_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
@@ -1261,7 +1261,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
       by_cases h_cusp : zm.toNat + 1 ≤ maxRep.toNat
       · have h_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_cusp
           loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_m_pos : 0 < m.toRat := lt_of_lt_of_le h_truth_pos h_truth_le_m
         have h_m_lo : (zm.toNat : ℚ) * 10 ^ ze' < m.toRat := by
@@ -1276,7 +1276,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_zm_eq h_sru
           loc res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_val
+        try simp only at h_val
         rw [h_val] at h_result_abs
         have h_m_pos : 0 < m.toRat := lt_of_lt_of_le h_truth_pos h_truth_le_m
         apply no_normalized_in_cusp_gap_pos ze' m h_norm h_m_pos
@@ -1292,7 +1292,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
       have hf_zero : f = 0 := h_content_zero hd hxb
       have h_val := doRoundUp_value_upward_truncate g false zm ze'
         h_sru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_val
+      try simp only at h_val
       rw [h_val] at h_result_abs
       rw [hf_zero, add_zero] at h_truth_abs
       linarith

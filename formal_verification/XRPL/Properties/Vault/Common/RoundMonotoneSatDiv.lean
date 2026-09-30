@@ -36,7 +36,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
     rw [le_div_iff₀ (by norm_num : (0 : ℚ) < 9223372036854775815)]
     nlinarith [hE, hzm_ge_q, hf_nn]
   unfold Guard.doRoundUp Guard.bringIntoRange at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   by_cases h_eq_up : zm = maxRepUp
   · -- zm = maxRepUp: pushOverflow no-op; both round paths land on value maxRepUp · 10^ze.
     subst h_eq_up

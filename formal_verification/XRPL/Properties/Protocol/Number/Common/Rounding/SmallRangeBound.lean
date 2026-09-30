@@ -538,7 +538,8 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
       simp only [if_pos hneg]
       have hcast : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 = (n.mantissa_.toNat : ℚ) := by
         rw [hm3]
-        have h : n.mantissa_.toNat / 1000 * 1000 = n.mantissa_.toNat := by omega
+        have h : n.mantissa_.toNat / 1000 * 1000 = n.mantissa_.toNat :=
+          Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hrem0)
         calc ((n.mantissa_.toNat / 1000 : ℕ) : ℚ) * 1000
             = ((n.mantissa_.toNat / 1000 * 1000 : ℕ) : ℚ) := by push_cast; ring
           _ = (n.mantissa_.toNat : ℚ) := by rw [h]
@@ -695,7 +696,8 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
       push_cast
       have hcast : ((n.mantissa_ / 10 / 10 / 10).toNat : ℚ) * 1000 = (n.mantissa_.toNat : ℚ) := by
         rw [hm3]
-        have h : n.mantissa_.toNat / 1000 * 1000 = n.mantissa_.toNat := by omega
+        have h : n.mantissa_.toNat / 1000 * 1000 = n.mantissa_.toNat :=
+          Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hrem0)
         calc ((n.mantissa_.toNat / 1000 : ℕ) : ℚ) * 1000
             = ((n.mantissa_.toNat / 1000 * 1000 : ℕ) : ℚ) := by push_cast; ring
           _ = (n.mantissa_.toNat : ℚ) := by rw [h]

@@ -446,11 +446,12 @@ def divQuotient128 (xm ym : UInt64) (xe ye : Int) : UInt128 × Int × Bool :=
     let correctionFactor : UInt128 := 100000    -- 10^5
     let partialNumerator := remainder * correctionFactor
     let correction := partialNumerator / ym128
-    let (zm128, ze) :=
-      if correction != 0 then (zm128 * correctionFactor + correction, ze - 5)
-      else (zm128, ze)
+    -- `dropped` does not depend on the correction branch, so it is bound before it and each
+    -- branch returns the finished triple. Do not reintroduce a `let (zm128, ze) := if …`:
+    -- a `match` on an `ite` blows the kernel's recursion guard in `divQuotient128_correct`.
     let dropped := partialNumerator % ym128 != 0
-    (zm128, ze, dropped)
+    if correction != 0 then (zm128 * correctionFactor + correction, ze - 5, dropped)
+    else (zm128, ze, dropped)
   else (zm128, ze, false)
 
 def Number.operator_div (x y : Number)

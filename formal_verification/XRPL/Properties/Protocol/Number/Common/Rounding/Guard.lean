@@ -702,17 +702,19 @@ lemma hex_lt_iff_dec_lt (d : UInt64) (hall : allNibblesAtMost9 d) :
       omega
     have h2 : nibble d 15 * 10 ^ 15
              + ∑ p ∈ Finset.range 15, nibble d p * 10 ^ p < 5 * 10 ^ 15 := by
-      have : nibble d 15 ≤ 4 := by omega
-      have : nibble d 15 * 10 ^ 15 ≤ 4 * 10 ^ 15 := Nat.mul_le_mul_right _ this
-      omega
+      have h4 : nibble d 15 ≤ 4 := by omega
+      have hhi : nibble d 15 * 10 ^ 15 ≤ 4 * 10 ^ 15 := Nat.mul_le_mul_right _ h4
+      calc nibble d 15 * 10 ^ 15 + ∑ p ∈ Finset.range 15, nibble d p * 10 ^ p
+          < 4 * 10 ^ 15 + 10 ^ 15 := Nat.add_lt_add_of_le_of_lt hhi hlt'
+        _ = 5 * 10 ^ 15 := by norm_num
     exact ⟨fun _ => h2, fun _ => h1⟩
   · have h1 : ¬ (nibble d 15 * 16 ^ 15 + d.toNat % 16 ^ 15 < 5 * 16 ^ 15) := by
       have : 5 * 16 ^ 15 ≤ nibble d 15 * 16 ^ 15 := Nat.mul_le_mul_right _ h
       omega
     have h2 : ¬ (nibble d 15 * 10 ^ 15
                  + ∑ p ∈ Finset.range 15, nibble d p * 10 ^ p < 5 * 10 ^ 15) := by
-      have : 5 * 10 ^ 15 ≤ nibble d 15 * 10 ^ 15 := Nat.mul_le_mul_right _ h
-      omega
+      have hlo : 5 * 10 ^ 15 ≤ nibble d 15 * 10 ^ 15 := Nat.mul_le_mul_right _ h
+      exact Nat.not_lt.mpr (le_trans hlo (Nat.le_add_right _ _))
     exact ⟨fun h => absurd h h1, fun h => absurd h h2⟩
 
 /-- Under nibble-validity, `d = 0x5000…` iff `decimalValue d = 5 * 10^15`. -/

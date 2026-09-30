@@ -22,7 +22,7 @@ lemma doRoundUp_exponent_le_max
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max mode loc = .ok res) :
     res.exponent_ ≤ maxExponent := by
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
@@ -109,7 +109,7 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
         right; left
         exact ⟨rfl, rfl⟩
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
@@ -247,7 +247,7 @@ lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
         right; left
         exact ⟨rfl, rfl⟩
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
@@ -373,7 +373,7 @@ lemma doRoundUp_ok_high_exp_mantissa_small
         right; left
         exact ⟨rfl, rfl⟩
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)

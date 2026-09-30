@@ -40,6 +40,41 @@ abbrev divQuotientTail (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ)
   (dropped = true ↔ r ≠ 0) ∧
   (N = 17 → r * 10 ^ 5 < ym.toNat)
 
+/-! ### Branch equations
+
+`divQuotient128` is navigated through these three `simp only` equations rather than by
+zeta-expanding its body in the main proof: each one resolves the two `if`s from the branch
+hypotheses, so the kernel only ever sees a case-resolved body. -/
+
+private lemma divQuotient128_eq_rem_zero (xm ym : UInt64) (xe ye : Int)
+    (hrem : ¬ ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true) :
+    divQuotient128 xm ym xe ye = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false) := by
+  simp only [divQuotient128, if_neg hrem]
+
+private lemma divQuotient128_eq_corr_ne (xm ym : UInt64) (xe ye : Int)
+    (hrem : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true)
+    (hcorr : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym) != 0) = true) :
+    divQuotient128 xm ym xe ye
+      = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
+           + toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym,
+         xe - ye - 17 - 5,
+         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
+  simp only [divQuotient128, if_pos hrem, if_pos hcorr]
+
+private lemma divQuotient128_eq_corr_zero (xm ym : UInt64) (xe ye : Int)
+    (hrem : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true)
+    (hcorr : ¬ ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym) != 0) = true) :
+    divQuotient128 xm ym xe ye
+      = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17,
+         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
+  simp only [divQuotient128, if_pos hrem, if_neg hcorr]
+
+/-- Branch pins. The `Div/Common/*/WitnessTrace.lean` witnesses cover `correction ≠ 0`;
+these cover the other two branches. -/
+example : divQuotient128 10 999999999999999989 0 0 = (1, -17, true) := by decide
+
+example : divQuotient128 7 100000000000000000 0 0 = (7, -17, false) := by decide
+
 set_option maxHeartbeats 3200000 in
 -- The correction path does UInt128 multiplications by 10^17/10^5; bounding them
 -- below 2^128 requires the Euclidean-division chain across two stages. The
@@ -95,145 +130,9 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           Nat.div_le_div_right (Nat.mul_le_mul_right _ hxm_bound)
       _ = 999999999999999999 := by norm_num
   -- Unfold and zeta-expand the staged body, one let per step.
-  unfold divQuotient128
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let ym128 := toUInt128 ym;
-     let f : UInt128 := 100000000000000000;
-     let fexp : Int := 17;
-     let numerator := toUInt128 xm * f;
-     let zm128 := numerator / ym128;
-     let ze : Int := xe - ye - fexp;
-     let remainder := numerator % ym128;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / ym128
-       let (zm128, ze) :=
-         if (correction != 0) = true then (zm128 * correctionFactor + correction, ze - 5)
-         else (zm128, ze)
-       let dropped := partialNumerator % ym128 != 0
-       (zm128, ze, dropped)
-     else (zm128, ze, false)) = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let f : UInt128 := 100000000000000000;
-     let fexp : Int := 17;
-     let numerator := toUInt128 xm * f;
-     let zm128 := numerator / toUInt128 ym;
-     let ze : Int := xe - ye - fexp;
-     let remainder := numerator % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then (zm128 * correctionFactor + correction, ze - 5)
-         else (zm128, ze)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (zm128, ze, false)) = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let fexp : Int := 17;
-     let numerator := toUInt128 xm * (100000000000000000 : UInt128);
-     let zm128 := numerator / toUInt128 ym;
-     let ze : Int := xe - ye - fexp;
-     let remainder := numerator % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then (zm128 * correctionFactor + correction, ze - 5)
-         else (zm128, ze)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (zm128, ze, false)) = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let numerator := toUInt128 xm * (100000000000000000 : UInt128);
-     let zm128 := numerator / toUInt128 ym;
-     let ze : Int := xe - ye - 17;
-     let remainder := numerator % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then (zm128 * correctionFactor + correction, ze - 5)
-         else (zm128, ze)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (zm128, ze, false)) = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let zm128 := toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym;
-     let ze : Int := xe - ye - 17;
-     let remainder := toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then (zm128 * correctionFactor + correction, ze - 5)
-         else (zm128, ze)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (zm128, ze, false)) = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let ze : Int := xe - ye - 17;
-     let remainder := toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then
-           (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * correctionFactor
-              + correction, ze - 5)
-         else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, ze)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, ze, false))
-    = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (let remainder := toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym;
-     if (remainder != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator := remainder * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then
-           (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * correctionFactor
-              + correction, xe - ye - 17 - 5)
-         else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false))
-    = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
-  change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-    (if (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym != 0) = true then
-       let correctionFactor : UInt128 := 100000
-       let partialNumerator :=
-         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * correctionFactor
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then
-           (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * correctionFactor
-              + correction, xe - ye - 17 - 5)
-         else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)
-     else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false))
-    = (zmq, zeq, dropped) ∧
-    divQuotientTail zmq zeq dropped N r xm ym xe ye
   -- Case split on the Stage-1 remainder.
   by_cases hrem : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym != 0) = true
   · ---- Case: remainder != 0, Stage-2 refinement ----
-    rw [if_pos hrem]
     have hrem_ne_nat : (xm.toNat * 10 ^ 17) % ym.toNat ≠ 0 := by
       intro h
       exact (bne_iff_ne.mp hrem) (by rw [BitVec.toNat_eq, hrem_nat, h]; rfl)
@@ -256,51 +155,10 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
         * (100000 : UInt128) % toUInt128 ym).toNat
         = (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 % ym.toNat := by
       rw [BitVec.toNat_umod, hpn_nat, hym_nat]
-    -- Zeta-expand the Stage-2 lets, one per step.
-    change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-      (let partialNumerator :=
-         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
-       let correction := partialNumerator / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then
-           (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
-              + correction, xe - ye - 17 - 5)
-         else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17)
-       let dropped := partialNumerator % toUInt128 ym != 0
-       (zm128, ze, dropped)) = (zmq, zeq, dropped) ∧
-      divQuotientTail zmq zeq dropped N r xm ym xe ye
-    change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-      (let correction :=
-         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
-           / toUInt128 ym
-       let (zm128, ze) :=
-         if (correction != 0) = true then
-           (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
-              + correction, xe - ye - 17 - 5)
-         else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17)
-       let dropped :=
-         toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
-           % toUInt128 ym != 0
-       (zm128, ze, dropped)) = (zmq, zeq, dropped) ∧
-      divQuotientTail zmq zeq dropped N r xm ym xe ye
-    change ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-      (((match
-          if (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
-                / toUInt128 ym != 0) = true then
-            (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
-               + toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym
-                   * (100000 : UInt128) / toUInt128 ym, xe - ye - 17 - 5)
-          else (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17) with
-        | (zm128, ze) =>
-            let dropped :=
-              toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
-                % toUInt128 ym != 0
-            (zm128, ze, dropped)) : UInt128 × Int × Bool)) = (zmq, zeq, dropped) ∧
-      divQuotientTail zmq zeq dropped N r xm ym xe ye
     by_cases hcorr : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym
         * (100000 : UInt128) / toUInt128 ym != 0) = true
     · ---- Sub-case: correction != 0, N = 22 ----
-      rw [if_pos hcorr]
+      rw [divQuotient128_eq_corr_ne xm ym xe ye hrem hcorr]
       -- The corrected quotient and its components stay below 2^128.
       have hcorr_bound : (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat < 10 ^ 5 := by
         apply Nat.div_lt_of_lt_mul
@@ -319,7 +177,11 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat < 2 ^ 128 := by
         calc (xm.toNat * 10 ^ 17) / ym.toNat * 10 ^ 5
               + (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat
-            < (xm.toNat * 10 ^ 17) / ym.toNat * 10 ^ 5 + 10 ^ 5 := by omega
+            < (xm.toNat * 10 ^ 17) / ym.toNat * 10 ^ 5 + 10 ^ 5 := by
+              refine Nat.add_lt_add_left ((Nat.div_lt_iff_lt_mul hym_pos).mpr ?_) _
+              calc (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5
+                  < ym.toNat * 10 ^ 5 := (Nat.mul_lt_mul_right (by norm_num)).mpr hrem_lt
+                _ = 10 ^ 5 * ym.toNat := by ring
           _ ≤ 999999999999999999 * 10 ^ 5 + 10 ^ 5 := by
               apply Nat.add_le_add_right; exact Nat.mul_le_mul_right _ hzm_bound
           _ < 2 ^ 128 := by norm_num
@@ -361,7 +223,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           rw [← hmod_nat, h0]
           rfl
     · ---- Sub-case: correction = 0, N = 17 with a tiny nonzero residual ----
-      rw [if_neg hcorr]
+      rw [divQuotient128_eq_corr_zero xm ym xe ye hrem hcorr]
       have hcorr_zero_nat : (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat = 0 := by
         have h0 : toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym
             * (100000 : UInt128) / toUInt128 ym = 0 := by
@@ -395,7 +257,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           omega
         exact ⟨fun _ => hrem_ne_nat, fun _ => hdropped⟩
   · ---- Case: remainder = 0, no refinement, N = 17 ----
-    rw [if_neg hrem]
+    rw [divQuotient128_eq_rem_zero xm ym xe ye hrem]
     have hrem_nat_zero : (xm.toNat * 10 ^ 17) % ym.toNat = 0 := by
       have h0 : toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym = 0 := by
         by_contra hne
@@ -404,7 +266,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
       rfl
     refine ⟨toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17,
             false, 17, 0,
-            rfl, Or.inl rfl, ?_, hym_pos, ?_, ?_, fun _ => by omega⟩
+            rfl, Or.inl rfl, ?_, hym_pos, ?_, ?_, fun _ => by simpa using hym_pos⟩
     · -- xm * 10^17 = zm_init * ym
       rw [hzm_nat, Nat.add_zero,
           Nat.mul_comm (xm.toNat * 10 ^ 17 / ym.toNat) ym.toNat]

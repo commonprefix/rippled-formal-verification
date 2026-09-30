@@ -55,7 +55,7 @@ lemma doRoundUp_value_noRoundUp
   -- Extract res = Guard.bringIntoRange ... from hok
   have hres_eq : res = Guard.bringIntoRange false m e largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [show ((g.round .to_nearest == 1) || ((g.round .to_nearest == 0) && (m % 2 == 1))) = false
         from h_ru_false] at hok
@@ -116,7 +116,7 @@ lemma doRoundUp_value_roundUp_noOverflow
   -- Extract res = Guard.bringIntoRange false (m+1) e largeRange.min
   have hres_eq : res = Guard.bringIntoRange false (m + 1) e largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [show ((g.round .to_nearest == 1) || ((g.round .to_nearest == 0) && (m % 2 == 1))) = true
         from h_ru_true] at hok
@@ -250,7 +250,7 @@ lemma doRoundUp_value_cusp
   -- Extract res from hok
   have hres_eq : res = Guard.bringIntoRange false (m / 10 + 1) (e + 1) largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [show ((g.round .to_nearest == 1) || ((g.round .to_nearest == 0) && (m % 2 == 1))) = true
         from h_ru_true] at hok
@@ -306,7 +306,7 @@ lemma doRoundUp_output_invariants_to_nearest
     decide_eq_false h_m_not_ge_maxMant
   -- Unfold doRoundUp to extract the concrete value of res
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   by_cases h_ru : ((g.pushOverflow m .to_nearest).round .to_nearest == 1
       || ((g.pushOverflow m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
   · rw [show ((g.pushOverflow m .to_nearest).round .to_nearest == 1
@@ -596,7 +596,7 @@ lemma doRoundUp_output_invariants_cusp
   have hmaxMant_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
   have hmaxRepUp_v : maxRepUp.toNat = maxRepUpNat := rfl
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   by_cases h_eq_up : m = maxRepUp
   · -- m = maxRepUp: pushOverflow is a no-op (the strict `< maxRepUp` fails).
     subst h_eq_up
@@ -851,7 +851,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
               || ((g.pushOverflow zm .to_nearest).round .to_nearest == 0 && zm % 2 == 1)) = false := by
           rcases h_pof_round with hr | hr <;> simp [hr]
         unfold Guard.doRoundUp Guard.bringIntoRange at hok_pos
-        simp only [Guard.doDropDigit] at hok_pos
+        dsimp only [Guard.doDropDigit] at hok_pos
         rw [h_roundup_false] at hok_pos
         simp only [Bool.false_eq_true, ite_false] at hok_pos
         have h_no_cusp : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
@@ -1164,7 +1164,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
     rw [le_div_iff₀ (by norm_num : (0 : ℚ) < 9223372036854775815)]
     nlinarith [hE, hzm_ge_q, hf_nn]
   unfold Guard.doRoundUp Guard.bringIntoRange at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   by_cases h_eq_up : zm = maxRepUp
   · -- zm = maxRepUp: pushOverflow no-op; both round paths land on value maxRepUp · 10^ze.
     subst h_eq_up
@@ -1454,7 +1454,7 @@ theorem doRoundUp_value_to_nearest_roundUp_cusp_round1
             && maxRep % 2 == 1)) = false := by
     rcases h_pof_round with hr | hr <;> simp [hr]
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   rw [h_roundup_false] at hok
   simp only [Bool.false_eq_true, ite_false] at hok
   have h_no_cusp : ¬ (maxRep < maxRep ∧ maxRep < maxRepUp) := by decide

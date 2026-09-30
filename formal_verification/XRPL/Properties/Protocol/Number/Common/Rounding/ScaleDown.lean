@@ -78,7 +78,7 @@ theorem scaleDown128_correct :
     obtain ⟨k, hek, hrep, hM_decomp, hrep_g, hfloor_IH⟩ := IH _ hpush
     set result := scaleDown128 (M / 10) (e + 1) (g0.push d)
     refine ⟨k + 1, ?_, hrep, ?_, ?_, ?_⟩
-    · push_cast; linarith
+    · rw [hek]; push_cast; ring
     · have hstep := nat_mod_pow_step M.toNat k
       have hM10' : (M / 10).toNat = M.toNat / 10 := hM10_nat
       calc M.toNat

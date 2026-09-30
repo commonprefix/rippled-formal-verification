@@ -326,16 +326,20 @@ lemma IOUAmount.add_sum_exponent_hi (x y : IOUAmount) (xn yn sum : Number)
   have hupper : |sum.toRat| < (10 : ℚ) ^ (maxExponent + 15) := by
     have htri : |sum.toRat| ≤ |x.toRat + y.toRat| + |x.toRat + y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) := by
       have h := abs_sub_abs_le_abs_sub sum.toRat (x.toRat + y.toRat)
-      linarith [hadd_bound]
+      linarith only [h, hadd_bound]
     have hxy : |x.toRat + y.toRat| ≤ |x.toRat| + |y.toRat| := abs_add_le _ _
     have hε : (6 / (2 ^ 63 - 3 : ℚ)) ≤ 1 := by norm_num
-    have hε0 : (0 : ℚ) ≤ (6 / (2 ^ 63 - 3 : ℚ)) := by positivity
+    have hε0 : (0 : ℚ) ≤ (6 / (2 ^ 63 - 3 : ℚ)) := by norm_num
     have habs_nn : (0 : ℚ) ≤ |x.toRat + y.toRat| := abs_nonneg _
     -- |sum| ≤ |x+y|·(1+ε) ≤ (|x|+|y|)·2 < 4·10^(maxExponent+12) < 10^(maxExponent+15)
-    have hstep1 : |sum.toRat| ≤ |x.toRat + y.toRat| * 2 := by nlinarith [htri, habs_nn]
-    have hstep2 : |x.toRat + y.toRat| * 2 ≤ (|x.toRat| + |y.toRat|) * 2 := by linarith [hxy]
+    have hmul : |x.toRat + y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) ≤ |x.toRat + y.toRat| * 1 :=
+      mul_le_mul_of_nonneg_left hε habs_nn
+    have hstep1 : |sum.toRat| ≤ |x.toRat + y.toRat| * 2 := by
+      linarith only [htri, hmul]
+    have hstep2 : |x.toRat + y.toRat| * 2 ≤ (|x.toRat| + |y.toRat|) * 2 := by
+      linarith only [hxy]
     have hstep3 : (|x.toRat| + |y.toRat|) * 2 < (10 : ℚ) ^ (maxExponent + 12) * 4 := by
-      nlinarith [hxabs, hyabs]
+      linarith only [hxabs, hyabs]
     have hpow15 : (10 : ℚ) ^ (maxExponent + 15) = (10 : ℚ) ^ (maxExponent + 12) * (10 : ℚ) ^ (3 : ℤ) := by
       rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
     have hcmp : (10 : ℚ) ^ (maxExponent + 12) * 4 < (10 : ℚ) ^ (maxExponent + 15) := by
@@ -343,8 +347,8 @@ lemma IOUAmount.add_sum_exponent_hi (x y : IOUAmount) (xn yn sum : Number)
       have h3 : (10 : ℚ) ^ (3 : ℤ) = 1000 := by norm_num
       rw [h3]
       have hpos : (0 : ℚ) < (10 : ℚ) ^ (maxExponent + 12) := zpow_pos (by norm_num) _
-      nlinarith [hpos]
-    linarith
+      linarith only [hpos]
+    linarith only [hstep1, hstep2, hstep3, hcmp]
   linarith
 
 /-- **IOU addition double-rounding composition (`to_nearest`).** Given the two

@@ -35,7 +35,7 @@ theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (alignDownSpec m e g target).2.1 = max e target := by
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
-    simp only [Guard.doDropDigit] at IH
+    dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
     -- After one step e becomes e + 1; show max (e+1) target = max e target when e < target.
@@ -57,7 +57,7 @@ theorem alignDownSpec_mantissa_le (m : UInt64) (e : Int) (g : Guard) (target : I
     (alignDownSpec m e g target).1.toNat ≤ m.toNat := by
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
-    simp only [Guard.doDropDigit] at IH
+    dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     have hstep : (m / 10).toNat ≤ m.toNat := by
       rw [UInt64.toNat_div]
@@ -77,7 +77,7 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
       = m.toNat / 10 ^ (max e target - e).toNat := by
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
-    simp only [Guard.doDropDigit] at IH
+    dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
     -- IH: result.1.toNat = (m / 10).toNat / 10 ^ (max (e+1) target - (e+1)).toNat
@@ -142,7 +142,7 @@ theorem alignDownSpec_represents
   induction m, e, g0 using alignDownSpec.induct target
     generalizing f0 with
   | case1 m e g0 hlt IH =>
-    simp only [Guard.doDropDigit] at IH
+    dsimp only [Guard.doDropDigit] at IH
     -- One step then IH.
     have h10_uval : (10 : UInt64).toNat = 10 := uint64_ten_toNat
     have hd_lt : (m % 10).toNat < 10 := by

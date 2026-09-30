@@ -1,12 +1,13 @@
 import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.VaultValid
 import XRPL.Model.Vault.VaultClawback
-import XRPL.Properties.Vault.VaultWithdraw
 import XRPL.Properties.Approx
 import XRPL.Properties.Vault.Common.ClawbackDefs
-import XRPL.Properties.Vault.Common.ClawbackReduction
-import XRPL.Properties.Vault.Common.ClawbackAccuracy
-import XRPL.Properties.Vault.Common.ClawbackWitness
+import XRPL.Properties.Vault.Proofs.Ideal
+import XRPL.Properties.Vault.Proofs.ClawbackAccuracy
+import XRPL.Properties.Vault.Proofs.ExactUpdates
+import XRPL.Properties.Vault.Proofs.ClawbackTight
+import XRPL.Properties.Vault.Proofs.ClawbackTightWitness
 
 /-! # `Vault.clawback` accuracy
 
@@ -32,175 +33,197 @@ theorem RawVault.idealAssetsClawback_idealSharesClawback (assets : ℚ)
 
 /-! ## `Vault.clawback` -/
 
-/-- Destroyed shares are a nonnegative integer matching `idealSharesClawback`
-of `assets` up to the `Number` stage error plus the final rounding to a whole
-share. The hypotheses state that the computed recovery does not exceed
-`assetsAvailable`, so the shares are priced from `assets` directly. -/
+/-- Destroyed shares are a nonnegative integer matching `idealSharesClawback` of
+`assets`: at most `sharesε` relatively above, and less than one share plus `sharesε`
+below (shares are truncated). The hypotheses state that the computed recovery does
+not exceed `assetsAvailable`, so the shares are priced from `assets` directly. -/
 theorem Vault.clawback_sharesDestroyed (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    -- the starting vault is lawful
-    -- the subtraction computing assetsTotal minus lossUnrealized
-    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
-    -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
-    -- (a non-canonical input rounds ~5e-16 and the bound below would be false)
     (hc : assets.Canonical)
-    -- the exchange computation
-    (hshares : assetsToSharesWithdraw v assets false false = .ok sharesDestroyed)
+    (hshares : assetsToSharesWithdraw v assets true false = .ok sharesDestroyed)
     (hassets : v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    -- the computed recovery does not exceed assetsAvailable
     (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
-    -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    -- the clawback succeeds
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
     r.sharesDestroyed.toRat.den = 1 ∧ 0 ≤ r.sharesDestroyed.toRat ∧
-    |r.sharesDestroyed.toRat - v.idealSharesClawback assets.toRat| ≤
-      v.idealSharesClawback assets.toRat * depositε + 1 / 2 :=
+    v.idealSharesClawback assets.toRat * (1 - sharesε) - 1 < r.sharesDestroyed.toRat ∧
+    r.sharesDestroyed.toRat ≤ v.idealSharesClawback assets.toRat * (1 + sharesε) :=
   Vault.clawback_sharesDestroyed_proof v assets holderShares sharesDestroyed assetsRecovered
-    assetsRecoveredNumber r hnav hc hshares hassets hnum hle hznz hok herr
+    assetsRecoveredNumber r hnav hc hshares hassets hnum hle hznz hnn hok herr
 
-/-- Witness: the half-share term in `clawback_sharesDestroyed` cannot be
-dropped, a run exists whose share error exceeds the relative `depositε`
-bound alone. -/
-theorem Vault.clawback_sharesDestroyed_attained :
+/-- Witness for the one-share truncation term of `clawback_sharesDestroyed`: a run
+destroys fewer shares than the ideal less the relative term less `1 - 3·10⁻¹⁷`, so the
+truncation term is attained to within `3·10⁻¹⁷` of a share. -/
+theorem Vault.clawback_sharesDestroyed_truncation_attained :
     ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
-      (assetsRecoveredNumber : Number) (r : ClawbackResult),
-      v.WithdrawNavExact false ∧
-      assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
+      (hnn : 0 ≤ assets.toRat) (assetsRecoveredNumber : Number) (r : ClawbackResult),
+      v.WithdrawNavExact false ∧ assets.Canonical ∧
+      assetsToSharesWithdraw v assets true false = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
-      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      RoundsWithinWitness r.sharesDestroyed
-        (v.idealSharesClawback assets.toRat) depositε :=
+      assets.isZero = false ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
+      r.sharesDestroyed.toRat <
+        v.idealSharesClawback assets.toRat * (1 - sharesε) - 1 + 3 * (10 : ℚ) ^ (-17 : ℤ) :=
   Vault.clawback_sharesDestroyed_witness
 
-/-- The computed recovery exceeds `assetsAvailable`, so the run prices the
-shares from `assetsAvailable` instead: the destroyed shares are the truncated
-share value of `assetsRecovered'`, at most `depositε` relatively above
-`idealSharesClawback assetsRecovered'.toRat` and less than one whole share
-plus `depositε` below it. -/
+/-- Witness for the relative `sharesε` term of `clawback_sharesDestroyed`: a run destroys
+`1.0841995·10⁻¹⁸` relatively more than the ideal, `98.56%` of `sharesε = 1.1·10⁻¹⁸`. -/
+theorem Vault.clawback_sharesDestroyed_relative_attained :
+    ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
+      (hnn : 0 ≤ assets.toRat) (assetsRecoveredNumber : Number) (r : ClawbackResult),
+      v.WithdrawNavExact false ∧ assets.Canonical ∧
+      assetsToSharesWithdraw v assets true false = .ok sharesDestroyed ∧
+      v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
+      assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧
+      assets.isZero = false ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
+      v.idealSharesClawback assets.toRat * (1 + 10841995 / 10 ^ 25) < r.sharesDestroyed.toRat :=
+  Vault.clawback_sharesDestroyed_upper_witness
+
+/-- When the first recovery exceeds `assetsAvailable`, the run reprices from
+`assetsAvailable`: destroyed shares match `idealSharesClawback` of the clamped
+recovery `assetsRecovered'` within `depositε` relatively above, and less than one
+share plus `depositε` below. -/
 theorem Vault.clawback_sharesDestroyed_clamped (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    -- the starting vault is lawful
-    -- the subtraction computing assetsTotal minus lossUnrealized
-    -- does not round (automatic when loss is zero)
     (hnav : v.WithdrawNavExact false)
-    -- the first exchange computation
-    (hshares : assetsToSharesWithdraw v assets false false = .ok sharesDestroyed)
+    (hshares : assetsToSharesWithdraw v assets true false = .ok sharesDestroyed)
     (hassets : v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    -- the computed recovery exceeds assetsAvailable, the run recomputes
     (hgt : assetsRecoveredNumber.operator_gt v.assetsAvailable = true)
-    -- the amount the recomputation prices from
     (hclamped : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest =
       .ok assetsRecovered')
-    -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    -- the clawback succeeds
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
     r.sharesDestroyed.toRat.den = 1 ∧ 0 ≤ r.sharesDestroyed.toRat ∧
     v.idealSharesClawback assetsRecovered'.toRat * (1 - depositε) - 1 <
       r.sharesDestroyed.toRat ∧
     r.sharesDestroyed.toRat ≤
       v.idealSharesClawback assetsRecovered'.toRat * (1 + depositε) :=
-  Vault.clawback_sharesDestroyed_clamped_proof v assets holderShares sharesDestroyed
-    assetsRecovered assetsRecovered' assetsRecoveredNumber r hnav hshares hassets hnum hgt
-    hclamped hznz hok herr
+  Vault.clawback_sharesDestroyed_clamped_proof v assets holderShares sharesDestroyed assetsRecovered
+    assetsRecovered' assetsRecoveredNumber r hnav hshares hassets hnum hgt hclamped hznz hnn hok
+    herr
 
 /-- Witness: the truncation term in `clawback_sharesDestroyed_clamped` cannot
 be dropped, a run that recomputes from `assetsAvailable` exists whose share
 error exceeds the relative `depositε` bound alone. -/
 theorem Vault.clawback_sharesDestroyed_clamped_attained :
     ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
-      (assetsRecoveredNumber : Number) (r : ClawbackResult),
+      (hnn : 0 ≤ assets.toRat) (assetsRecoveredNumber : Number) (r : ClawbackResult),
       v.WithdrawNavExact false ∧
-      assetsToSharesWithdraw v assets false false = .ok sharesDestroyed ∧
+      assetsToSharesWithdraw v assets true false = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = true ∧
       STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered' ∧
-      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
       RoundsWithinWitness r.sharesDestroyed
         (v.idealSharesClawback assetsRecovered'.toRat) depositε :=
   Vault.clawback_sharesDestroyed_clamped_witness
 
-/-- A zero amount claws back the holder's entire share balance: the destroyed
-shares are exactly `holderShares`, with no rounding, and the clawback prices
-them through the withdraw pipeline. -/
-theorem Vault.clawback_zero_all_shares
-    (assets holderShares assetsRecovered : STAmount)
+/-- A zero clawback amount claws back the holder's entire share balance: exactly
+`holderShares` are destroyed, and the recorded recovery is the priced recovery
+snapped to the grid of the post-clawback total (`reported`). -/
+theorem Vault.clawback_zero_all_shares (v : Vault)
+    (assets holderShares assetsRecovered reported : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    -- the zero amount selects the claw all branch
     (hz : assets.isZero = true)
-    -- the clawback computation prices the holder's shares
     (hassets : v.sharesToAssetsWithdraw holderShares false = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    -- the computed number does not exceed assetsAvailable
     (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
-    -- the clawback succeeds
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
-    r.sharesDestroyed = holderShares ∧ r.assetsRecovered = assetsRecovered ∧
+    (hclamp : clampToSumExponent v.assetsTotal assetsRecovered.operator_neg = .ok reported)
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
+    r.sharesDestroyed = holderShares ∧ r.assetsRecovered = reported ∧
     holderShares.isZero = false :=
-  Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered
-    assetsRecoveredNumber r hz hassets hnum hle hok herr
+  Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered reported
+    assetsRecoveredNumber r hz hassets hnum hle hclamp hnn hok herr
 
-/-- Recovered assets never exceed the stored `assetsAvailable`: every
-successful run passes this exact comparison, and a run whose first computed
-recovery is above `assetsAvailable` recomputes from `assetsAvailable` with
-truncated shares, returning `tecINTERNAL` when even the recomputed recovery
-lands above. The recovered assets are nonnegative and price the destroyed
-shares at `withdrawNav`: at most `depositε` relatively above
-`idealAssetsClawback` of the destroyed shares. The shortfall below the ideal
-splits on the payout: a nonzero payout is at most the interior stage error plus
-2 ULP below the ideal; a payout that underflows to the canonical zero forces the
-ideal itself below the smallest positive representable of the vault's numeric
-type (one whole unit for an integral asset, `10⁻⁸¹` for a fractional one). -/
-theorem Vault.clawback_assetsRecovered (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult)
-    -- the starting vault is lawful
-    -- the subtraction computing assetsTotal minus lossUnrealized
-    -- does not round (automatic when loss is zero)
+/-- The recovery never exceeds `assetsAvailable`, is nonnegative, exceeds the
+destroyed shares' worth by at most the stage error plus half a ULP, and falls short
+of it by at most the stage error plus the larger of half a ULP of the recovery and one
+step of the post-clawback total's grid less half a ULP. A recovery that underflows to
+zero only happens on an integral vault, whose ideal is then at most one half. -/
+theorem Vault.clawback_assetsRecovered (v : Vault) (assets holderShares : STAmount)
+    (r : ClawbackResult)
     (hnav : v.WithdrawNavExact false)
-    -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
     (hc : assets.Canonical)
-    -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
-    -- recovered assets never exceed the stored assetsAvailable, exactly
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
     r.assetsRecovered.toRat ≤ v.toExact.assetsAvailable ∧
     0 ≤ r.assetsRecovered.toRat ∧
-    -- assetsRecovered prices the destroyed shares, at most depositε relatively above
     r.assetsRecovered.toRat ≤
-      v.idealAssetsClawback r.sharesDestroyed.toRat * (1 + depositε) ∧
-    -- a nonzero payout falls short of the destroyed shares' worth by at most the
-    -- interior stage error plus 2 ULP (the other direction is capped by the relative
-    -- conjunct above)
-    (r.assetsRecovered.isZero = false →
+      v.idealAssetsClawback r.sharesDestroyed.toRat * (1 + depositε) +
+        1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent ∧
+    (∃ atr' : STAmount,
+      STAmount.ofNumber v.numericType r.vault'.assetsTotal .to_nearest = .ok atr' ∧
       v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat ≤
         v.idealAssetsClawback r.sharesDestroyed.toRat * depositε +
-          2 * (10 : ℚ) ^ r.assetsRecovered.exponent) ∧
-    -- a payout that underflows to the canonical zero forces the ideal (deflated by
-    -- depositε) below the smallest positive representable of the vault's numeric type:
-    -- one whole unit when integral, 10⁻⁸¹ when fractional (the IOU grid minimum)
+          max (1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent)
+            ((10 : ℚ) ^ atr'.exponent - 1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent)) ∧
     (r.assetsRecovered.isZero = true →
-      v.idealAssetsClawback r.sharesDestroyed.toRat * (1 - depositε) <
-        if v.numericType.isIntegral then 1 else (10 : ℚ) ^ (-81 : ℤ)) :=
-  Vault.clawback_assetsRecovered_proof v assets holderShares r hnav hc hznz hok herr
+      v.numericType.isIntegral = true ∧
+        v.idealAssetsClawback r.sharesDestroyed.toRat * (1 - depositε) ≤ 1 / 2) :=
+  Vault.clawback_assetsRecovered_proof v assets holderShares r hnav hc hznz hnn hok herr
 
-/-- Witness: the ULP term in `clawback_assetsRecovered` cannot be dropped, a
-run exists whose recovered assets miss the exact share value by more than
-`depositε` relative. -/
-theorem Vault.clawback_assetsRecovered_attained :
-    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
-      v.WithdrawNavExact false ∧ v.clawback assets holderShares = .ok r ∧
-      r.error = none ∧
-      RoundsWithinWitness r.assetsRecovered
-        (v.idealAssetsClawback r.sharesDestroyed.toRat) depositε :=
-  Vault.clawback_assetsRecovered_witness
+/-- Witness for the upper half-ULP term of `clawback_assetsRecovered`: a run's recovery
+exceeds the destroyed shares' worth plus the relative term by the half-ULP term less
+`10⁻¹⁶` (`2` for an ideal `1.5` on an int64 vault). -/
+theorem Vault.clawback_assetsRecovered_overshoot_attained :
+    ∃ (v : Vault) (assets holderShares : STAmount) (hnn : 0 ≤ assets.toRat) (r : ClawbackResult),
+      v.WithdrawNavExact false ∧ assets.Canonical ∧ assets.isZero = false ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
+      v.idealAssetsClawback r.sharesDestroyed.toRat * (1 + depositε) +
+          1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent - (10 : ℚ) ^ (-16 : ℤ) <
+        r.assetsRecovered.toRat :=
+  Vault.clawback_assetsRecovered_upper_witness
+
+/-- Witness for the half-ULP arm of the lower `clawback_assetsRecovered` bound: a run's
+recovery falls short of the destroyed shares' worth by the relative term plus the `max`
+term less `10⁻¹⁶` (`2` for an ideal `2.5` on an int64 vault). -/
+theorem Vault.clawback_assetsRecovered_round_attained :
+    ∃ (v : Vault) (assets holderShares : STAmount) (hnn : 0 ≤ assets.toRat) (r : ClawbackResult),
+      v.WithdrawNavExact false ∧ assets.Canonical ∧ assets.isZero = false ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
+      r.assetsRecovered.isZero = false ∧
+      ∃ atr' : STAmount,
+        STAmount.ofNumber v.numericType r.vault'.assetsTotal .to_nearest = .ok atr' ∧
+        v.idealAssetsClawback r.sharesDestroyed.toRat * depositε +
+            max (1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent)
+              ((10 : ℚ) ^ atr'.exponent - 1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent) -
+            (10 : ℚ) ^ (-16 : ℤ) <
+          v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat :=
+  Vault.clawback_assetsRecovered_ulp_witness
+
+/-- Witness for the grid-clamp arm of the lower `clawback_assetsRecovered` bound: a run
+snapped from `1.999999999999996` to `1` on the post-clawback grid overshoots the half-ULP
+arm alone and reaches the `max` term to within `10⁻¹⁴`. -/
+theorem Vault.clawback_assetsRecovered_clamp_attained :
+    ∃ (v : Vault) (assets holderShares : STAmount) (hnn : 0 ≤ assets.toRat) (r : ClawbackResult),
+      v.WithdrawNavExact false ∧ assets.Canonical ∧ assets.isZero = false ∧
+      v.clawback assets holderShares hnn = .ok r ∧ r.error = none ∧
+      r.assetsRecovered.isZero = false ∧
+      v.idealAssetsClawback r.sharesDestroyed.toRat * depositε +
+          1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent <
+        v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat ∧
+      ∃ atr' : STAmount,
+        STAmount.ofNumber v.numericType r.vault'.assetsTotal .to_nearest = .ok atr' ∧
+        v.idealAssetsClawback r.sharesDestroyed.toRat * depositε +
+            max (1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent)
+              ((10 : ℚ) ^ atr'.exponent - 1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent) -
+            (10 : ℚ) ^ (-14 : ℤ) <
+          v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat :=
+  Vault.clawback_assetsRecovered_clamp_witness
 
 /-- Integral strengthening of `clawback_assetsRecovered`: the shortfall
 stays below one whole unit plus the stage error. -/
@@ -215,64 +238,32 @@ theorem Vault.clawback_assetsRecovered_integral (v : Vault) (assets holderShares
     (hc : assets.Canonical)
     -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
     v.idealAssetsClawback r.sharesDestroyed.toRat - r.assetsRecovered.toRat ≤
       1 + v.idealAssetsClawback r.sharesDestroyed.toRat * depositε :=
   Vault.clawback_assetsRecovered_integral_proof v assets holderShares r hnav hint hc hznz
-    hok herr
+    hnn hok herr
 
-/-- All three stored fields are the old value minus the returned amount:
-`assetsTotal` and `assetsAvailable` are the old value minus `assetsRecovered`
-up to the `depositε` relative error of the `Number` subtraction, and the
-`sharesTotal` update is exact whenever the difference stays in the share
-domain. -/
+/-- The stored total and available assets each drop by exactly the recorded recovery
+(the grid clamp puts it on the grid of the new total, so the subtraction is exact), and
+the share total drops by exactly the destroyed shares whenever the difference stays in
+the share domain. -/
 theorem Vault.clawback_vault_updates (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult)
     -- the starting vault is lawful
-    -- the subtraction computing assetsTotal minus lossUnrealized
-    -- does not round (automatic when loss is zero)
-    (hnav : v.WithdrawNavExact false)
     -- the clawed-back amount is stored canonically, so `assets.toNumber` is exact
     (hc : assets.Canonical)
     -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none) :
-    -- assetsTotal' = assetsTotal - recovered assets, within depositε
-    RoundsWithin r.vault'.assetsTotal
-      (v.toExact.assetsTotal - r.assetsRecovered.toRat) .to_nearest depositε ∧
-    -- assetsAvailable' = assetsAvailable - recovered assets, within depositε
-    RoundsWithin r.vault'.assetsAvailable
-      (v.toExact.assetsAvailable - r.assetsRecovered.toRat) .to_nearest depositε ∧
-    -- sharesTotal' = sharesTotal - destroyed shares, exactly, whenever the
-    -- difference stays in the share domain (int64)
+    (hnn : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
+    r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assetsRecovered.toRat ∧
+    r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assetsRecovered.toRat ∧
     (r.sharesDestroyed.toRat ≤ (v.toExact.sharesTotal : ℚ) ∧
         (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 →
       (r.vault'.toExact.sharesTotal : ℚ) =
         (v.toExact.sharesTotal : ℚ) - r.sharesDestroyed.toRat) :=
-  Vault.clawback_vault_updates_proof v assets holderShares r hnav hc hznz hok herr
-
-/-- Witness: the error term in `clawback_vault_updates` cannot be dropped, a
-run exists where the stored total is not the exact difference. -/
-theorem Vault.clawback_vault_updates_attained :
-    ∃ (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult),
-      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      r.vault'.assetsTotal.toRat ≠ v.toExact.assetsTotal - r.assetsRecovered.toRat :=
-  Vault.clawback_vault_updates_witness
-
-/-- Witness: the recovery from the shares round-trip is never rounded to the
-vault scale, unlike a deposit request on entry. A run exists where re-rounding
-the recovery `0.00009999999999985714` would change it, and the stored total
-moves by the different on-ledger amount `0.000099999999999857`.
-`assetsRecovered'` - the recovery re-rounded to the vault scale -/
-theorem Vault.clawback_applied_delta_attained :
-    ∃ (v : Vault) (assets holderShares assetsRecovered' : STAmount) (r : ClawbackResult)
-      (deltaTotal : Number) (deltaAmount : STAmount),
-      v.clawback assets holderShares = .ok r ∧ r.error = none ∧
-      roundToVaultExponent r.assetsRecovered v.assetsTotal = .ok assetsRecovered' ∧
-      assetsRecovered'.operator_eq r.assetsRecovered = false ∧
-      v.assetsTotal.operator_sub r.vault'.assetsTotal .to_nearest = .ok deltaTotal ∧
-      STAmount.ofNumber v.numericType deltaTotal .to_nearest = .ok deltaAmount ∧
-      deltaAmount.operator_eq r.assetsRecovered = false :=
-  Vault.clawback_applied_delta_witness
+  Vault.clawback_vault_updates_proof v assets holderShares r hc hznz hnn hok herr
 
 /-- Integral strengthening of `clawback_vault_updates`: in-domain integer
 differences are stored exactly. -/
@@ -281,12 +272,13 @@ theorem Vault.clawback_vault_updates_integral (v : Vault) (assets holderShares :
     (hint : v.numericType.isIntegral = true) -- the vault holds an integral asset
     -- zero amount claws all holder shares
     (hznz : assets.isZero = false)
-    (hok : v.clawback assets holderShares = .ok r) (herr : r.error = none)
+    (hnnA : 0 ≤ assets.toRat)
+    (hok : v.clawback assets holderShares hnnA = .ok r) (herr : r.error = none)
     (hnn : 0 ≤ r.assetsRecovered.toRat) -- a nonnegative recovery, negative ones can leave the domain
     -- the stored total fits the asset domain (int64)
     (hsz : v.toExact.assetsTotal ≤ 2 ^ 63 - 1) :
     r.vault'.assetsTotal.toRat = v.toExact.assetsTotal - r.assetsRecovered.toRat ∧
     r.vault'.assetsAvailable.toRat = v.toExact.assetsAvailable - r.assetsRecovered.toRat :=
-  Vault.clawback_vault_updates_integral_proof v assets holderShares r hint hznz hok herr hnn hsz
+  Vault.clawback_vault_updates_integral_proof v assets holderShares r hint hznz hnnA hok herr hnn hsz
 
 end XRPL.Model.SingleAssetVault
