@@ -212,7 +212,7 @@ theorem normalize_rounding_bound_downward (n result : Number)
           exact releps_lift h_inner h10ze'_pos
         exact ⟨h_direction, h_magnitude⟩
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp — no digits were pushed, f = 0 =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
       h_zm_le_rep hzm_le_maxRep .normalize2 res_pos h_rup_pos hres_pos_mant_ne

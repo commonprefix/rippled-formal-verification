@@ -37,7 +37,7 @@ lemma exists_normalized_scaled (V : ℕ) (j : ℤ) (h1 : 1 ≤ V) (h2 : V < 2 ^ 
     have hV2 : (V : ℚ) < 2 ^ 63 := by exact_mod_cast h2
     constructor
     · by_contra hc
-      push_neg at hc
+      push Not at hc
       have : (10 : ℚ) ^ w.exponent_ ≤ 10 ^ (-19 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
       have h19 : (10 : ℚ) ^ 19 * 10 ^ (-19 : ℤ) = 1 := by norm_num
       have : (w.mantissa_.toNat : ℚ) * 10 ^ w.exponent_ < 1 := by
@@ -47,7 +47,7 @@ lemma exists_normalized_scaled (V : ℕ) (j : ℤ) (h1 : 1 ≤ V) (h2 : V < 2 ^ 
           _ = 1 := h19
       linarith
     · by_contra hc
-      push_neg at hc
+      push Not at hc
       have : (10 : ℚ) ^ (1 : ℤ) ≤ 10 ^ w.exponent_ := zpow_le_zpow_right₀ (by norm_num) (by omega)
       have : (10 : ℚ) ^ 19 ≤ (w.mantissa_.toNat : ℚ) * 10 ^ w.exponent_ := by
         calc (10 : ℚ) ^ 19 = 10 ^ 18 * 10 ^ (1 : ℤ) := by norm_num
@@ -149,7 +149,7 @@ lemma canon_band (s : STAmount) (hc : s.IOUCanonical) (hn : s.mIsNegative = fals
 lemma canon_exp_ge (s : STAmount) (hc : s.IOUCanonical) (hn : s.mIsNegative = false) (j : ℤ)
     (h : (10 : ℚ) ^ (j + 15) ≤ s.toRat) : j ≤ s.exponent := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have := (canon_band s hc hn).2
   have : (10 : ℚ) ^ (s.exponent + 16) ≤ 10 ^ (j + 15) := zpow_le_zpow_right₀ (by norm_num) (by omega)
   linarith
@@ -217,7 +217,7 @@ lemma post_exp_facts (A : Number) (p : STAmount) (e : ℤ)
   · exact he_lo
   · exact he_hi
   · by_contra hge
-    push_neg at hge
+    push Not at hge
     obtain ⟨w, hw, -, hwv⟩ := exists_normalized_scaled (10 ^ 15) (e + 1) (by norm_num) (by norm_num)
       (by omega) (by omega)
     have hwv' : w.toRat = (10 : ℚ) ^ (e + 16) := by
@@ -231,7 +231,7 @@ lemma post_exp_facts (A : Number) (p : STAmount) (e : ℤ)
       push_cast at hage; norm_num at hage ⊢; linarith)
     omega
   · by_contra hle
-    push_neg at hle
+    push Not at hle
     obtain ⟨w, hw, -, hwv⟩ := exists_normalized_scaled 999999999999999949 (e - 3) (by norm_num)
       (by norm_num) (by omega) (by omega)
     have hwv' : w.toRat = (9999999999999999490 : ℚ) * 10 ^ (e - 4) := by
@@ -260,7 +260,7 @@ lemma clamp_sum_ge (A : Number) (p c : STAmount) (e : ℤ)
   have hg : (0 : ℚ) < 10 ^ e := zpow_pos (by norm_num) _
   by_cases hsmall : p.toRat ≤ 10 ^ e
   · linarith
-  push_neg at hsmall
+  push Not at hsmall
   have hfrac : p.integral = false := by unfold STAmount.integral; rw [hp.is_fractional]; rfl
   have hbr : p.negative = false := hpneg
   have hnt : p.numericType = .fractional := hp.is_fractional
@@ -316,7 +316,7 @@ lemma clamp_sum_ge (A : Number) (p c : STAmount) (e : ℤ)
   have hrd := operator_sub_rounded_to_nearest sum3 A d hs3n hA hd
   have hsA : A.toRat < sum3.toRat := by
     by_contra hle
-    push_neg at hle
+    push Not at hle
     have := Number.RoundsToRepresentable.nonpos_of_nonpos d _ hrd (by linarith)
     linarith
   have hs3m : s3.mValue ≠ 0 := by
@@ -353,7 +353,7 @@ lemma clamp_sum_ge (A : Number) (p c : STAmount) (e : ℤ)
     linarith
   have hK1 : 1 ≤ K := by
     by_contra hlt
-    push_neg at hlt
+    push Not at hlt
     have : (K : ℚ) ≤ 0 := by exact_mod_cast (show K ≤ 0 by omega)
     have h4 : (10 : ℚ) ^ e ≤ 9999999999999999490 * 10 ^ (e - 4) := by
       rw [show e = (e - 4) + ((4 : ℕ) : ℤ) by push_cast; ring, p10]

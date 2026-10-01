@@ -145,7 +145,7 @@ lemma neg_gap_witness (x : Number) (k : ℚ) (hx : x.isNormalized) (hx0 : 0 ≤ 
   have hxv := Number.toRat_of_nonneg x hneg
   obtain ⟨hMlo, hMhi⟩ := hx.mantissaBounds_nat hm
   have he : x.exponent_ < 0 := by
-    by_contra hge; push_neg at hge
+    by_contra hge; push Not at hge
     apply hden
     rw [hxv, show x.exponent_ = ((x.exponent_.toNat : ℕ) : ℤ) by omega, zpow_natCast]
     exact_mod_cast Rat.den_natCast (x.mantissa_.toNat * 10 ^ x.exponent_.toNat)
@@ -154,12 +154,12 @@ lemma neg_gap_witness (x : Number) (k : ℚ) (hx : x.isNormalized) (hx0 : 0 ≤ 
   by_cases hhalf : x.toRat ≤ 1 / 2
   · obtain ⟨w, hw, hwv⟩ := neg_half_witness
     exact ⟨w, hw, by rw [hwv]; linarith, by rw [hwv]; norm_num⟩
-  push_neg at hhalf
+  push Not at hhalf
   obtain ⟨j, hj⟩ : ∃ j : ℕ, x.exponent_ = -(j : ℤ) := ⟨(-x.exponent_).toNat, by omega⟩
   have hpow : (10 : ℚ) ^ x.exponent_ = 1 / 10 ^ j := by
     rw [hj, zpow_neg, zpow_natCast]; ring
   have hj19 : j ≤ 19 := by
-    by_contra hj'; push_neg at hj'
+    by_contra hj'; push Not at hj'
     have h20 : (10 : ℚ) ^ 20 ≤ 10 ^ j := pow_le_pow_right₀ (by norm_num) hj'
     have hMq : (x.mantissa_.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hMhi
     rw [hxv, hpow] at hhalf
@@ -194,7 +194,7 @@ lemma sub_exact_of_nonneg (x y res : Number) (k : ℚ) (hx : x.isNormalized)
     res.toRat = x.toRat - k := by
   by_cases hkx : k ≤ x.toRat
   · exact operator_sub_exact_int_le x y res k hx hxle hy hyv hk hk0 hkx hok
-  push_neg at hkx
+  push Not at hkx
   have hrtr := operator_sub_rounded_to_nearest x y res hx hy hok
   rw [hyv] at hrtr
   obtain ⟨w, hw, h1, h2⟩ := neg_gap_witness x k hx hx0 hk hkx
@@ -376,7 +376,7 @@ lemma Vault.clawback_assetsRecovered_integral_proof (v : Vault) (assets holderSh
   · have := ClwAcc.priced_lower v hnav hint cr.sharesDestroyed priced
       ⟨by rw [hsnt]; rfl, hsoff, hsval⟩ hpr h1
     linarith
-  · push_neg at h1
+  · push Not at h1
     rcases le_or_gt 0 I with h0 | h0
     · nlinarith
     · nlinarith

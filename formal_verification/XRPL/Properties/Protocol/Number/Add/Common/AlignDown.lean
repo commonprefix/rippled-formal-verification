@@ -42,11 +42,11 @@ theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
     by_cases h2 : e + 1 ≤ target
     · rw [max_eq_right h2, hmax_r]
-    · push_neg at h2
+    · push Not at h2
       rw [max_eq_left (le_of_lt h2), hmax_r]; omega
   | case2 m e g hnlt =>
     rw [alignDownSpec_noop hnlt]
-    push_neg at hnlt
+    push Not at hnlt
     exact (max_eq_left hnlt).symm
 
 /-! ## Mantissa monotonicity / no-overflow -/
@@ -92,7 +92,7 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
       rw [hmax_r]
       by_cases h2 : e + 1 ≤ target
       · exact max_eq_right h2
-      · push_neg at h2
+      · push Not at h2
         rw [max_eq_left (le_of_lt h2)]; omega
     rw [hmax_e1]
     -- Now need: m.toNat / 10 / 10 ^ k = m.toNat / 10 ^ (k+1) where k+1 = (max e target - e).toNat.
@@ -116,7 +116,7 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
     rw [hKform]
   | case2 m e g hnlt =>
     rw [alignDownSpec_noop hnlt]
-    push_neg at hnlt
+    push Not at hnlt
     have hmax : max e target = e := max_eq_left hnlt
     rw [hmax]
     simp
@@ -162,7 +162,7 @@ theorem alignDownSpec_represents
       rw [hmax_r]
       by_cases h2 : e + 1 ≤ target
       · exact max_eq_right h2
-      · push_neg at h2
+      · push Not at h2
         rw [max_eq_left (le_of_lt h2)]; omega
     set K : ℕ := (max e target - e).toNat with hK_def
     have hK_pos : 0 < K := by
@@ -211,7 +211,7 @@ theorem alignDownSpec_represents
     exact hIH
   | case2 m e g0 hnlt =>
     rw [alignDownSpec_noop hnlt]
-    push_neg at hnlt
+    push Not at hnlt
     have hmax : max e target = e := max_eq_left hnlt
     have hk0 : (max e target - e).toNat = 0 := by rw [hmax]; simp
     rw [hk0]
@@ -247,7 +247,7 @@ theorem alignDownSpec_steps_ge_17_of_xbit
   have hxpos : x > 0 := hxbit_iff.mp hxbit
   -- Suppose for contradiction k ≤ 16.
   by_contra hk_le
-  push_neg at hk_le
+  push Not at hk_le
   have hk16 : k ≤ 16 := by omega
   -- Name decimalValue guard as a fresh Nat N (keeps field_simp from unfolding alignDown).
   obtain ⟨N, hN_def⟩ :

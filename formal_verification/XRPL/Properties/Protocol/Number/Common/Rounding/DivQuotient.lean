@@ -233,7 +233,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
         rfl
       have hpn_lt : (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 < ym.toNat := by
         by_contra hge
-        push_neg at hge
+        push Not at hge
         have := Nat.div_pos hge hym_pos
         omega
       refine ⟨toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17,

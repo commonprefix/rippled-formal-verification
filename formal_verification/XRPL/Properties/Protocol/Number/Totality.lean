@@ -242,7 +242,7 @@ theorem scaleDown128_output_bound (M : UInt128) (e : Int) (g0 : Guard) :
   obtain ⟨k, hek, hm, hinv⟩ := scaleDown128_forward_exp_bound M e g0
   have hk20 : k ≤ 20 := by
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     have hk1 : 20 ≤ k - 1 := by omega
     have hpow : (10 : ℕ) ^ 20 ≤ 10 ^ (k - 1) :=
       Nat.pow_le_pow_right (by norm_num) hk1
@@ -594,7 +594,7 @@ headroom.** The same shape as the capped version below, with the exponent bound 
 needs given directly: 22 steps below `maxExponent`. A zero subtrahend is the identity, otherwise
 the negated subtrahend has the opposite sign to `x` and the different-sign add is total. -/
 theorem Number.operator_sub_ok_of_normalized_exp (x y : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
+    (_hx : x.isNormalized) (_hy : y.isNormalized)
     (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
     (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
     ∃ result, x.operator_sub y mode = .ok result := by

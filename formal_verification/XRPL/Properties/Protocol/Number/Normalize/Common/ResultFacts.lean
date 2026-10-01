@@ -150,11 +150,11 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
           omega
         have hzm_ge_rep : maxRep.toNat ≤ m.toNat := by
           by_contra hlt
-          push_neg at hlt
+          push Not at hlt
           exact hC1 ⟨hzm_lt_max, UInt64.lt_iff_toNat_lt.mpr hlt⟩
         have hzm_cases : m.toNat = maxRep.toNat ∨ m.toNat = maxRepUp.toNat := by
           by_contra hno
-          push_neg at hno
+          push Not at hno
           apply hC2
           constructor
           · rw [UInt64.lt_iff_toNat_lt]; omega
@@ -475,7 +475,7 @@ lemma doRoundUp_stage_truth_top (truth : ℚ) (g : Guard) (neg : Bool) (zm : UIn
       ring
     rw [h_eq] at h_lt
     exact h_lt
-  · push_neg at h_ze_top
+  · push Not at h_ze_top
     have h1 : zm.toNat ≤ 9223372036854775810 := by
       have h_v : maxRepUp.toNat = maxRepUpNat := rfl
       omega
@@ -529,7 +529,7 @@ theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
     have : Number.zero = result := Except.ok.inj hok
     rw [← this] at hresult
     exact absurd rfl hresult
-  · push_neg at hzero
+  · push Not at hzero
     obtain ⟨he2_ge, hm2_ge⟩ := hzero
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by
       rw [Bool.or_eq_false_iff]

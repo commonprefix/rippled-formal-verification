@@ -117,7 +117,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
               mul_le_mul_of_nonneg_right h_inner h10ze'_nn
           _ = (((zm.toNat : ℚ) + f)) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
     · -- Cusp range: maxRep < zm ≤ maxRepUp; truncate clamps stay below the truth.
-      push_neg at h_zm_le_rep
+      push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
         h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
@@ -269,7 +269,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
         rw [h_approx, ← h_truth_eq_result, show (x.toRat + y.toRat) - (x.toRat + y.toRat) = 0 from by ring]
         exact mul_nonneg (abs_nonneg _) h_eps_nn
     · -- ===== cusp range: maxRep < zm ≤ maxRepUp =====
-      push_neg at h_zm_le_rep
+      push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
         h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
@@ -515,7 +515,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
             show (x.toRat + y.toRat) - (x.toRat + y.toRat) = 0 from by ring]
         exact mul_nonneg (abs_nonneg _) h_eps_nn
     · -- ===== cusp range: maxRep < zm ≤ maxRepUp =====
-      push_neg at h_zm_le_rep
+      push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
         h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
@@ -656,7 +656,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
         nlinarith [hf_lt1, hf_nn]
     · -- Cusp range: maxRep < zm ≤ maxRepUp; truncate clamps stay at or below the
       -- truth's magnitude, hence at or above the truth.
-      push_neg at h_zm_le_rep
+      push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
         h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
       obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep

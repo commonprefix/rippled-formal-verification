@@ -55,7 +55,7 @@ lemma sum_exp_anti (x y₁ y₂ s₁ s₂ : Number)
   obtain ⟨r₁, hr₁, rfl⟩ := hpeel s₁ e₁ he₁
   obtain ⟨r₂, hr₂, rfl⟩ := hpeel s₂ e₂ he₂
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   set t₁ := x.toRat + y₁.toRat with ht₁
   set t₂ := x.toRat + y₂.toRat with ht₂
   have ht : t₂ ≤ t₁ := by rw [ht₁, ht₂]; linarith
@@ -72,7 +72,7 @@ lemma sum_exp_anti (x y₁ y₂ s₁ s₂ : Number)
     (exp_ge_iff s₂ r₂ hs₂n hs₂nn hr₂ j hj_lo).mp (by omega)
   have hC₁ : s₁.toRat < carryPt j := by
     by_contra h
-    push_neg at h
+    push Not at h
     have := (exp_ge_iff s₁ r₁ hs₁n hs₁nn hr₁ j hj_lo).mpr h
     omega
   -- the carry point and its lower grid neighbour
@@ -93,13 +93,13 @@ lemma sum_exp_anti (x y₁ y₂ s₁ s₂ : Number)
   -- run 1 truth below the carry point, run 2 truth above its neighbour
   have ht₁J : t₁ < carryPt j := by
     by_contra h
-    push_neg at h
+    push Not at h
     have := operator_add_ge_of_ge_normalized x y₁ s₁ _ hx hy₁ hok₁ hJ (by rw [hJv]; exact h)
     rw [hJv] at this
     linarith
   have ht₂M : (9999999999999999490 : ℚ) * 10 ^ j < t₂ := by
     by_contra h
-    push_neg at h
+    push Not at h
     have := operator_add_le_of_le_normalized x y₂ s₂ _ hx hy₂ hok₂ hM (by rw [hMv]; exact h)
     rw [hMv] at this
     linarith

@@ -104,7 +104,7 @@ lemma Guard.bringIntoRange_cases (neg : Bool) (m : UInt64) (e : Int) (minM : UIn
   by_cases hz : e' < minExponent ∨ m' = 0
   · rw [if_pos hz]; exact Or.inl rfl
   · rw [if_neg hz]
-    push_neg at hz
+    push Not at hz
     exact Or.inr hz.2
 
 /-- A mantissa-`0` `doRoundUp` result converts to the literal `Number.zero`. -/

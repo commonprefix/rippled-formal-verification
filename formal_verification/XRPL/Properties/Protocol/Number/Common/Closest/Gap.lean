@@ -70,7 +70,7 @@ theorem no_normalized_in_open_ulp_gap_pos
       have : (N : ℚ) < ((k + 1 : ℕ) : ℚ) := by push_cast; exact h_N_lt
       exact_mod_cast this
     omega
-  · push_neg at h_exp_ge
+  · push Not at h_exp_ge
     have h_exp_le : n.exponent_ ≤ e - 1 := by linarith
     have h_pow_mono : (10 : ℚ) ^ n.exponent_ ≤ (10 : ℚ) ^ (e - 1) := by
       apply zpow_le_zpow_right₀ (by norm_num : (1 : ℚ) ≤ 10) h_exp_le
@@ -176,7 +176,7 @@ theorem no_normalized_in_open_ulp_gap_pos_zm
       have : (N : ℚ) < ((k + 1 : ℕ) : ℚ) := by push_cast; exact h_N_lt
       exact_mod_cast this
     omega
-  · push_neg at h_exp_ge
+  · push Not at h_exp_ge
     have h_exp_le : n.exponent_ ≤ e - 1 := by linarith
     have h_diff_pos : (0 : ℤ) < e - n.exponent_ := by linarith
     set d : ℕ := (e - n.exponent_).toNat with hd_def
@@ -330,7 +330,7 @@ theorem no_normalized_in_ulp_gap_at_floor_pos
       have : (N : ℚ) < ((k + 1 : ℕ) : ℚ) := by push_cast; exact h_N_lt
       exact_mod_cast this
     omega
-  · push_neg at h_exp_ge
+  · push Not at h_exp_ge
     have h_diff_pos : (0 : ℤ) < e - n.exponent_ := by linarith
     set d : ℕ := (e - n.exponent_).toNat with hd_def
     have h_d_cast : ((d : ℤ) : ℤ) = e - n.exponent_ := Int.toNat_of_nonneg (by linarith)
@@ -507,7 +507,7 @@ theorem no_normalized_in_cusp_gap_pos
         calc (10 : ℕ) ^ 19 = 10 ^ 18 * 10 := by ring
           _ ≤ n.mantissa_.toNat * 10 ^ d := Nat.mul_le_mul h_m_min h_pow_ge
       omega
-  · push_neg at h_exp_ge
+  · push Not at h_exp_ge
     have h_diff_pos : (0 : ℤ) < e - n.exponent_ := by linarith
     set d : ℕ := (e - n.exponent_).toNat with hd_def
     have h_d_cast : ((d : ℤ) : ℤ) = e - n.exponent_ := Int.toNat_of_nonneg (by linarith)
@@ -612,7 +612,7 @@ theorem no_normalized_in_upper_cusp_gap_pos
         calc (10 : ℕ) ^ 19 = 10 ^ 18 * 10 := by ring
           _ ≤ n.mantissa_.toNat * 10 ^ d := Nat.mul_le_mul h_m_min h_pow_ge
       omega
-  · push_neg at h_exp_ge
+  · push Not at h_exp_ge
     have h_diff_pos : (0 : ℤ) < e - n.exponent_ := by linarith
     set d : ℕ := (e - n.exponent_).toNat with hd_def
     have h_d_cast : ((d : ℤ) : ℤ) = e - n.exponent_ := Int.toNat_of_nonneg (by linarith)

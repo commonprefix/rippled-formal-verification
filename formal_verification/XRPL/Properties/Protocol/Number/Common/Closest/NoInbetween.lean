@@ -139,7 +139,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
     rw [abs_of_neg h_result_neg] at h_result_abs
     have h_f_le : f ≤ 0 := by
       by_contra h_pos
-      push_neg at h_pos
+      push Not at h_pos
       have h_lt : (zm.toNat : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
         mul_lt_mul_of_pos_right (by linarith) h10ze_pos
       linarith
@@ -297,7 +297,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
     rw [abs_of_nonneg h_result_nn] at h_result_abs
     have h_f_le : f ≤ 0 := by
       by_contra h_pos
-      push_neg at h_pos
+      push Not at h_pos
       have h_lt : (zm.toNat : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
         mul_lt_mul_of_pos_right (by linarith) h10ze_pos
       linarith
@@ -468,7 +468,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
         · have h_zm_ge_strict : mantissaFloorSucc ≤ zm.toNat := by omega
           exact no_normalized_in_open_ulp_gap_neg_zm ze' zm.toNat
             h_zm_ge_strict h_zm_lt m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := by
           have h_eq_nat : zm.toNat = maxRep.toNat := by omega
           exact UInt64.toNat.inj h_eq_nat
@@ -542,7 +542,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
         have h_compare_mul : ((zm.toNat : ℚ) + f) * 10 ^ ze' < ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
           mul_lt_mul_of_pos_right h_compare h10ze_pos
         linarith [h_result_abs]
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_m_pos : 0 < m.toRat := lt_of_le_of_lt h_result_nn h_lt_m
         rcases h_ru with h_round1 | h_tie
@@ -740,7 +740,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
         have h_neg_compare : -truth < -result.toRat := by
           rw [← h_truth_abs_eq, ← h_result_abs_eq]; exact h_abs_compare
         linarith
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         rcases h_ru with h_round1 | h_tie
         · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
@@ -842,7 +842,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
         · have h_zm_ge_strict : mantissaFloorSucc ≤ zm.toNat := by omega
           exact no_normalized_in_open_ulp_gap_pos_zm ze' zm.toNat
             h_zm_ge_strict h_zm_lt m h_norm h_m_pos h_m_lo h_m_hi
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_m_lo : (maxRep.toNat : ℚ) * 10 ^ ze' < m.toRat := by
           have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
@@ -1040,7 +1040,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
           linarith
         exact no_normalized_in_open_ulp_gap_neg_zm ze' zm.toNat
           hzm_succ h_zm_lt m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_zm_eq h_sru
           loc res_pos h_rup_pos hres_pos_mant_ne
@@ -1272,7 +1272,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
           rw [← h_result_abs]; exact h_m_lt
         exact no_normalized_in_open_ulp_gap_pos_zm ze' zm.toNat
           hzm_succ h_zm_lt m h_norm h_m_pos h_m_lo h_m_hi
-      · push_neg at h_cusp
+      · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_zm_eq h_sru
           loc res_pos h_rup_pos hres_pos_mant_ne

@@ -190,7 +190,7 @@ theorem scaleDown128_lower_bound :
       unfold scaleDown128
       simp only [hcond]
       exact h_rec
-    · push_neg at h_next_gt
+    · push Not at h_next_gt
       have h_div_ge : M.toNat / 10 ≥ (maxRepUp.toNat + 1) / 10 :=
         Nat.div_le_div_right _hM_gt
       unfold scaleDown128

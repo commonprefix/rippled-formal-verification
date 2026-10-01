@@ -106,7 +106,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
       have h_inner : f < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) := f_lt_releps hzm_q_ge hf_lt1
       exact releps_lift h_inner h10ze'_pos
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
       h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     rw [hv_val]

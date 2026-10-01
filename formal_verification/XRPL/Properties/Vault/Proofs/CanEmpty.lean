@@ -164,11 +164,11 @@ lemma price_oneShare (v : Vault) (hL0 : v.lossUnrealized.mantissa_ = 0)
     obtain ⟨hw1a, hw1b⟩ := abs_lt.mp hw1
     refine ⟨assets, aN, rfl, haN, haNn, haNv, by rw [haNv]; exact hden, hic, hnt, ?_, ?_⟩
     · by_contra hc
-      push_neg at hc
+      push Not at hc
       have := rat_one_le_sub_of_lt 0 assets.toRat rfl hden hc
       linarith
     · by_contra hc
-      push_neg at hc
+      push Not at hc
       have := rat_one_le_sub_of_lt assets.toRat v.assetsTotal.toRat hden hAint hc
       linarith
 

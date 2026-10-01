@@ -28,7 +28,7 @@ lemma Number.exponent_fn_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
     by_cases hgt : n.mantissa_ > maxRep
     · rw [if_pos hgt]
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hexp_nn : (0 : ℤ) ≤ n.exponent_ := by omega
       have hpow_ge1 : (1 : ℚ) ≤ (10 : ℚ) ^ n.exponent_ := by
         rw [show n.exponent_ = ((n.exponent_.toNat : ℤ)) from by omega, zpow_natCast]
@@ -47,7 +47,7 @@ lemma Number.exponent_fn_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
       norm_num at this
     · rw [if_neg hgt]
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hm_nat : (1000000000000000000 : ℕ) ≤ n.mantissa_.toNat := by
         have := UInt64.le_iff_toNat_le.mp hmlo; rwa [largeRange_min_val] at this
       have hm_q : (1000000000000000000 : ℚ) ≤ (n.mantissa_.toNat : ℚ) := by exact_mod_cast hm_nat
@@ -381,7 +381,7 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
       rw [hval, Int.floor_natCast]
       exact ⟨rfl, fun _ => hn⟩
   · rw [if_neg hg] at hok
-    push_neg at hg
+    push Not at hg
     obtain ⟨hexp_neg', hm_ne⟩ := hg
     have hexp_neg : n.exponent_ < 0 := by omega
     -- expose the truncated pair
@@ -588,7 +588,7 @@ lemma Number.operator_sub_to_nearest_le (x y z result : Number)
     (hz_ge : x.toRat - y.toRat ≤ z.toRat) :
     result.toRat ≤ z.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have hyneg_norm : (y.operator_neg).isNormalized := Number.operator_neg_isNormalized y hy
   have hyneg_m : (y.operator_neg).mantissa_ ≠ 0 := by
     rw [Number.operator_neg_mantissa_of_ne y hym]; exact hym
@@ -802,7 +802,7 @@ lemma Number.exists_normalized_scaled (J : ℕ) (ec : ℤ)
   set L := Nat.log 10 J with hL_def
   have hL_le : L ≤ 18 := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have : (10 : ℕ) ^ 19 ≤ 10 ^ L := Nat.pow_le_pow_right (by norm_num) (by omega)
     omega
   set k : ℕ := 18 - L with hk_def
@@ -903,7 +903,7 @@ lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
   set eA := x.exponent_ with heA_def
   have heA_le : eA ≤ 0 := by
     by_contra hc
-    push_neg at hc
+    push Not at hc
     have h10 : (10 : ℚ) ^ (1 : ℤ) ≤ (10 : ℚ) ^ eA := zpow_le_zpow_right₀ (by norm_num) (by omega)
     have hm18 : ((10 : ℕ) ^ 18 : ℚ) ≤ (x.mantissa_.toNat : ℚ) := by exact_mod_cast hmA_lo
     rw [hx_val] at hxle
@@ -911,7 +911,7 @@ lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
     nlinarith [hxle, h10, hm18]
   have heA_ge : (-18 : ℤ) ≤ eA := by
     by_contra hc
-    push_neg at hc
+    push Not at hc
     have h10 : (10 : ℚ) ^ eA ≤ (10 : ℚ) ^ (-19 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
     have hm19 : (x.mantissa_.toNat : ℚ) < ((10 : ℕ) ^ 19 : ℚ) := by exact_mod_cast hmA_hi
     have hxlt : x.toRat < 1 := by
@@ -968,13 +968,13 @@ lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
     by_cases hJle : J ≤ maxRep.toNat
     · exact Or.inl hJle
     · right
-      push_neg at hJle
+      push Not at hJle
       have hmA_gt : maxRep.toNat < x.mantissa_.toNat := by
         have : J ≤ x.mantissa_.toNat := by rw [hJ_def]; omega
         omega
       have heA_neg : eA ≤ -1 := by
         by_contra hc
-        push_neg at hc
+        push Not at hc
         have heA0 : eA = 0 := by omega
         have hxq : x.toRat = (x.mantissa_.toNat : ℚ) := by
           rw [hx_val, heA0]; norm_num
@@ -1067,7 +1067,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
   by_cases hexp0 : 0 ≤ n.exponent
   · rw [to_rep_exact_of_exponent_nonneg n .to_nearest r hn hexp0 hok, sub_self, abs_zero]
     norm_num
-  · push_neg at hexp0
+  · push Not at hexp0
     unfold Number.to_rep at hok
     simp only at hok
     by_cases hz : (n.mantissa == 0) = true
@@ -1122,7 +1122,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
         have h2 : n.mantissa.toInt ≤ (maxRep.toNat : ℤ) := by omega
         have hsp_lt_int : sp.1.toInt < (maxRep.toNat : ℤ) := by
           by_contra hcon
-          push_neg at hcon
+          push Not at hcon
           have hmul_le : sp.1.toInt * 10 ^ k ≤ n.mantissa.toInt := by
             rw [hDf]; exact Int.ediv_mul_le _ (by positivity)
           have h10k_ge : (10 : ℤ) ≤ 10 ^ k := by
@@ -1171,7 +1171,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
       · -- no round up: fraction ≤ 1/2
         have hfrac_le : frac ≤ (1 / 2 : ℚ) := by
           by_contra hcon
-          push_neg at hcon
+          push Not at hcon
           have : sp.2.round .to_nearest = 1 := represents_f_gt_half hrep hcon
           rw [this] at hb; simp at hb
         rw [if_neg hb] at hok

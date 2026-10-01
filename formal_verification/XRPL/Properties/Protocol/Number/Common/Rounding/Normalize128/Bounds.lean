@@ -121,11 +121,11 @@ theorem doNormalize128_rounds_to_nearest
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by
         by_contra h
-        push_neg at h
+        push Not at h
         exact absurd (decide_eq_true h) (by rw [hund1]; simp)
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
@@ -386,11 +386,11 @@ theorem doNormalize128_rounds_any
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by
         by_contra h
-        push_neg at h
+        push Not at h
         exact absurd (decide_eq_true h) (by rw [hund1]; simp)
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
@@ -653,7 +653,7 @@ theorem doNormalize128_rounds_direction
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
@@ -732,7 +732,7 @@ theorem doNormalize128_rounds_direction
             have h10pos : (0 : ℚ) < (10 : ℚ) ^ cp.2.1 := zpow_pos (by norm_num) _
             have habs_le : |φ₃ - ftilde₃| ≤ 0 := by
               by_contra hgt
-              push_neg at hgt
+              push Not at hgt
               nlinarith [h_chain, h10pos]
             have habs0 : |φ₃ - ftilde₃| = 0 := le_antisymm habs_le (abs_nonneg _)
             have hd0 := abs_eq_zero.mp habs0
@@ -803,7 +803,7 @@ theorem doNormalize128_rounds_direction
                     h_no_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                   rw [h_tr]
                   exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
-                · push_neg at h_zm_le_rep
+                · push Not at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
                     cp.2.1 .downward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
@@ -866,7 +866,7 @@ theorem doNormalize128_rounds_direction
                     have h_tr := doRoundUp_value_downward_truncate cp.2.2 false cp.1 cp.2.1
                       h_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                     rw [h_tr, hφ0, add_zero]
-                · push_neg at h_zm_le_rep
+                · push Not at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
                     cp.2.1 .downward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
@@ -973,7 +973,7 @@ theorem doNormalize128_rounds_direction
                     have h_tr := doRoundUp_value_upward_truncate cp.2.2 false cp.1 cp.2.1
                       h_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                     rw [h_tr, hφ0, add_zero]
-                · push_neg at h_zm_le_rep
+                · push Not at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
                     cp.2.1 .upward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
@@ -1037,7 +1037,7 @@ theorem doNormalize128_rounds_direction
                     h_no_sru h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                   rw [h_tr]
                   exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
-                · push_neg at h_zm_le_rep
+                · push Not at h_zm_le_rep
                   obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
                     cp.2.1 .upward h_zm_le_rep h3le .normalize2 res_pos
                     h_rup_pos hres_pos_mant
@@ -1077,7 +1077,7 @@ theorem doNormalize128_rounds_direction
                   h_zm_le_rep .normalize2 res_pos h_rup_pos hres_pos_mant
                 rw [h_tr]
                 exact mul_le_mul_of_nonneg_right (by linarith [h3nn]) h10cp_nn
-              · push_neg at h_zm_le_rep
+              · push Not at h_zm_le_rep
                 obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases cp.2.2 cp.1
                   cp.2.1 .towards_zero h_zm_le_rep h3le .normalize2 res_pos
                   h_rup_pos hres_pos_mant

@@ -110,7 +110,7 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
             mul_lt_mul_of_pos_right h_inner h10ze'_pos
         _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
       h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     rw [hv_val]

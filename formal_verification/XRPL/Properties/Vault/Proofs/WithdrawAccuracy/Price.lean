@@ -52,7 +52,7 @@ lemma int_gap (x : Number) (hx : x.isNormalized) (hxnn : 0 ≤ x.toRat) (k : ℚ
     have := rat_one_le_sub_of_lt k 0 hk rfl (lt_of_le_of_lt hxnn hlt); linarith
   by_cases hsmall : x.toRat < 1 / 2
   · generalize (10 : ℚ) ^ (-40 : ℤ) = g at hp ⊢; linarith
-  push_neg at hsmall
+  push Not at hsmall
   have hm : x.mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero x h] at hsmall; norm_num at hsmall
   have hneg := Number.negative_false_of_normalized_nonneg x hx hxnn
@@ -66,7 +66,7 @@ lemma int_gap (x : Number) (hx : x.isNormalized) (hxnn : 0 ≤ x.toRat) (k : ℚ
       exact_mod_cast Rat.den_natCast (M * 10 ^ e.toNat)
     have := rat_one_le_sub_of_lt k x.toRat hk hden hlt
     generalize (10 : ℚ) ^ (-40 : ℤ) = g at hp ⊢; linarith
-  push_neg at he0
+  push Not at he0
   set n := (-e).toNat with hn
   have hen : e = -(n : ℤ) := by rw [hn, Int.toNat_of_nonneg (by omega)]; ring
   have hpow : (10 : ℚ) ^ e = 1 / 10 ^ n := by rw [hen, zpow_neg, zpow_natCast]; ring
@@ -74,7 +74,7 @@ lemma int_gap (x : Number) (hx : x.isNormalized) (hxnn : 0 ≤ x.toRat) (k : ℚ
   -- the exponent is at least `-20`, since `x ≥ 1/2` and `M < 10 ^ 19`
   have hn20 : n ≤ 20 := by
     by_contra hc
-    push_neg at hc
+    push Not at hc
     have h1 : (10 : ℚ) ^ 21 ≤ 10 ^ n := pow_le_pow_right₀ (by norm_num) hc
     have h2 : (M : ℚ) < 10 ^ 19 := by exact_mod_cast hMhi
     rw [hval, hpow] at hsmall
@@ -105,7 +105,7 @@ lemma le_of_sub_nonneg (x y r : Number) (hx : x.isNormalized) (hxnn : 0 ≤ x.to
     (hok : x.operator_sub y .to_nearest = .ok r) (hr : 0 ≤ r.toRat) :
     y.toRat ≤ x.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have hgap := int_gap x hx hxnn y.toRat hyd hlt
   obtain ⟨w, hw, -, -, hwv, -⟩ := exists_normalized_of_int_mul_pow 1 (-40) le_rfl (by norm_num)
     (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)

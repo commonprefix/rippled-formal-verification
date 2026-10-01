@@ -88,7 +88,7 @@ lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
         (by rwa [abs_of_pos h_truth_pos] at h_small)
     · rw [h_res0, Number.toRat_zero]
   · rw [if_neg h_truth_nn]
-    push_neg at h_truth_nn
+    push Not at h_truth_nn
     refine ⟨Number.zero, ?_, ?_⟩
     · exact Number.upper_eq_zero_of_neg_small _ h_truth_nn
         (by rwa [abs_of_neg h_truth_nn] at h_small)
@@ -155,7 +155,7 @@ theorem operator_div_rounded_towards_zero_proof (x y result : Number)
       (operator_div_no_inbetween_below_towards_zero x y result hx hy hxz hyz
         hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
-    push_neg at h_truth_nn
+    push Not at h_truth_nn
     have h_truth_np : x.toRat / y.toRat ≤ 0 := le_of_lt h_truth_nn
     -- Direction: truth = −|truth| ≤ −|result| ≤ result.
     have h_round_up : x.toRat / y.toRat ≤ result.toRat := by

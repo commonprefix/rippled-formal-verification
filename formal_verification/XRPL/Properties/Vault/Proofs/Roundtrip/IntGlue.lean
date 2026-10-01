@@ -310,7 +310,7 @@ lemma int_cap (nt : NumericType) (hint : nt.isIntegral = true) (n : Number) (a :
         rw [show maxRep.toNat = 9223372036854775807 by decide]; norm_num] at this
       exact this
   have hzn' := abs_le.mp hzn
-  by_contra h; push_neg at h
+  by_contra h; push Not at h
   obtain ⟨w, hw⟩ := num_int_of_ge n hn (by linarith)
   have := int_eq_of_close z w (by rw [← hw]; exact hzn)
   subst this

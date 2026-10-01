@@ -100,7 +100,7 @@ theorem operator_div_algorithmic_facts_represents
         _ ≤ x.mantissa_.toNat * 10 ^ 22 := Nat.mul_le_mul_right _ hxm_min
   have hM_pos : 1 ≤ zmq.toNat := by
     by_contra h
-    push_neg at h
+    push Not at h
     have h0 : zmq.toNat = 0 := by omega
     rw [h0, Nat.zero_mul, Nat.zero_add] at heuc
     omega
@@ -108,7 +108,7 @@ theorem operator_div_algorithmic_facts_represents
   have hN_le : N ≤ 22 := by rcases hN with rfl | rfl <;> norm_num
   have hM_lt : zmq.toNat < 10 ^ 23 := by
     by_contra h
-    push_neg at h
+    push Not at h
     have h1 : 10 ^ 23 * 10 ^ 18 ≤ zmq.toNat * y.mantissa_.toNat :=
       Nat.mul_le_mul h hym_min
     have h2 : x.mantissa_.toNat * 10 ^ N ≤ (10 ^ 19 - 1) * 10 ^ 22 :=
@@ -122,7 +122,7 @@ theorem operator_div_algorithmic_facts_represents
       · -- Stage-1-only: tiny residual r·10^5 < ym against M ≥ 10^16.
         have hM_ge : 10 ^ 16 ≤ zmq.toNat := by
           by_contra hlt
-          push_neg at hlt
+          push Not at hlt
           have h1 : zmq.toNat * y.mantissa_.toNat ≤ (10 ^ 16 - 1) * (10 ^ 19 - 1) :=
             Nat.mul_le_mul (by omega) hym_le
           omega
@@ -135,7 +135,7 @@ theorem operator_div_algorithmic_facts_represents
       · -- Corrected stage: M ≥ 10^21 swallows r ≤ ym − 1.
         have hM_ge : 10 ^ 21 ≤ zmq.toNat := by
           by_contra hlt
-          push_neg at hlt
+          push Not at hlt
           have h1 : zmq.toNat * y.mantissa_.toNat ≤ (10 ^ 21 - 1) * (10 ^ 19 - 1) :=
             Nat.mul_le_mul (by omega) hym_le
           have h2 : 10 ^ 18 * 10 ^ 22 ≤ x.mantissa_.toNat * 10 ^ 22 :=

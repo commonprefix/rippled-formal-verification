@@ -23,7 +23,7 @@ lemma fnp_true (s : STAmount) (h : s.integral = false ∧ s.toRat ≤ 0) :
     s.isFractionalNonPositive = .ok true := by
   refine WdMono.fnp_nonpos s (frac_of_not_integral s h.1) ?_
   by_contra hc
-  push_neg at hc
+  push Not at hc
   obtain ⟨hz, hn⟩ := hc
   have := WdMono.pos_of_nonneg s (STAmount.toRat_nonneg_of s (by simpa using hn)) hz
   linarith [h.2]

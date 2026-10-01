@@ -94,7 +94,7 @@ lemma add_cusp (x y A : Number) (hx : x.isNormalized) (hy : y.isNormalized)
   have hzhi' : (zm.toNat : ℚ) ≤ 9223372036854775810 := by exact_mod_cast hzhi
   -- a sum from `maxRepUp` on packs to at least `maxRepUp`
   have hv810 : v < 9223372036854775810 := by
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     have hN : (⟨false, 9223372036854775810, 0⟩ : Number).isNormalized := by decide
     have hNv : (⟨false, 9223372036854775810, 0⟩ : Number).toRat = 9223372036854775810 := by
       rw [Number.toRat_of_nonneg _ rfl]
@@ -122,7 +122,7 @@ lemma add_cusp (x y A : Number) (hx : x.isNormalized) (hy : y.isNormalized)
       have : k = 0 := by omega
       rw [this]; simp
     rw [hf, add_zero] at hval
-    by_contra hgt; push_neg at hgt
+    by_contra hgt; push Not at hgt
     have hz809 : zm = 9223372036854775809 := by
       have h1 : (9223372036854775808 : ℚ) < zm.toNat := by linarith
       have h2 : (zm.toNat : ℚ) < 9223372036854775810 := by linarith
@@ -202,7 +202,7 @@ lemma add_err (T cN A : Number) (hT : T.isNormalized) (hT0 : 0 < T.toRat) (hcN :
   by_cases hnM : n ≤ 9223372036854775807
   · have := hlo hnM
     exact ⟨by linarith, by linarith, Or.inl (by linarith)⟩
-  push_neg at hnM
+  push Not at hnM
   have hvM : (9223372036854775808 : ℚ) ≤ v := by
     have : (9223372036854775808 : ℤ) ≤ n := by omega
     have : (9223372036854775808 : ℚ) ≤ n := by exact_mod_cast this
@@ -211,7 +211,7 @@ lemma add_err (T cN A : Number) (hT : T.isNormalized) (hT0 : 0 < T.toRat) (hcN :
     have := Number.RoundsToRepresentable.ge_of_ge_normalized A v hrr _ hmx (by rw [hmxv]; linarith)
     rwa [hmxv] at this
   have hv810 : v < 9223372036854775810 := by
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     have hN : (⟨false, 9223372036854775810, 0⟩ : Number).isNormalized := by decide
     have hNv : (⟨false, 9223372036854775810, 0⟩ : Number).toRat = 9223372036854775810 := by
       rw [Number.toRat_of_nonneg _ rfl]
@@ -245,7 +245,7 @@ lemma add_err (T cN A : Number) (hT : T.isNormalized) (hT0 : 0 < T.toRat) (hcN :
     linarith
   · right
     have hT81 : T.toRat < 922337203685477581 := by
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       exact hTi (num_int_of_ge T hT h)
     linarith
 

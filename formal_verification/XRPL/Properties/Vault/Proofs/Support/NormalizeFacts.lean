@@ -586,7 +586,7 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
   refine ⟨?_, hupper⟩
   by_cases hexp0 : 0 ≤ n.exponent
   · rw [to_rep_exact_of_exponent_nonneg n .downward r hn hexp0 hok]
-  · push_neg at hexp0
+  · push Not at hexp0
     unfold Number.to_rep at hok
     simp only at hok
     by_cases hz : (n.mantissa == 0) = true

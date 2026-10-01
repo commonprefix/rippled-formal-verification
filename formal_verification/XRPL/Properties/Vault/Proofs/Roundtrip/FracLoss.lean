@@ -52,7 +52,7 @@ lemma frac_grid (c a : STAmount) (t : ℤ) (R : ℚ) (hc : c.IOUCanonical) (ha :
   have hua : (0 : ℚ) < 10 ^ ea := zpow_pos (by norm_num) _
   -- the payout's grid is at most one decade finer
   have hea : ec - 1 ≤ ea := by
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     have h1 : (10 : ℚ) ^ ea * 100 ≤ 10 ^ ec := by
       rw [show ec = ea + 2 + (ec - ea - 2) by ring, zpow_add₀ (by norm_num), zpow_add₀ (by norm_num)]
       have : (1 : ℚ) ≤ 10 ^ (ec - ea - 2) := one_le_zpow₀ (by norm_num) (by omega)
@@ -72,7 +72,7 @@ lemma frac_grid (c a : STAmount) (t : ℤ) (R : ℚ) (hc : c.IOUCanonical) (ha :
     rcases le_total (1 / 2 * (10 : ℚ) ^ ea) ((10 : ℚ) ^ t - 1 / 2 * (10 : ℚ) ^ ea) with hmx | hmx
     · rw [max_eq_right hmx]
       have hte : ea ≤ t := by
-        by_contra h; push_neg at h
+        by_contra h; push Not at h
         have : (10 : ℚ) ^ t < 10 ^ ea := zpow_lt_zpow_right₀ (by norm_num) h
         linarith
       obtain ⟨kt, hkt⟩ := pow_split t m (le_trans (min_le_right _ _) hte)

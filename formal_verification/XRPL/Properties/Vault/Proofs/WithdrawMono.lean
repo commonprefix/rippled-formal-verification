@@ -146,7 +146,7 @@ lemma Vault.withdraw_payout_monotone_proof (v : Vault) (amount₁ amount₂ : Wi
     obtain ⟨hpn₂n, hpn₂v⟩ := hp₂n pn₂ hpn₂
     have hav : pn₂.toRat ≤ v.assetsAvailable.toRat := by
       by_contra h
-      push_neg at h
+      push Not at h
       have := (operator_lt_iff _ _ v.wf.assetsAvailable_norm hpn₂n).mpr h
       rw [hav₂] at this; exact absurd this (by decide)
     have haT : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le

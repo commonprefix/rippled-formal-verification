@@ -229,7 +229,7 @@ lemma Vault.deposit_charge_proof (v : Vault) (amountDeposit : STAmount) (r : Dep
           rw [h9]; push_cast; ring
         have hQG : 9999999999999999 * (10 : ℚ) ^ (p.exponent - 1) < Qn.toRat := by
           by_contra hle
-          push_neg at hle
+          push Not at hle
           have := STAmount.ofNumber_frac_le_canonical Qn _ p hQn hQneg hGc rfl (by rw [hGv]; exact hle) hQc
           rw [hGv] at this
           have h1 := (canon_band p hpc hpneg).1
@@ -265,7 +265,7 @@ lemma Vault.deposit_charge_proof (v : Vault) (amountDeposit : STAmount) (r : Dep
       · have := hQle hce
         have : (0 : ℚ) ≤ 10 ^ c.exponent := le_of_lt (zpow_pos (by norm_num) _)
         linarith
-      · push_neg at hce
+      · push Not at hce
         have : (10 : ℚ) ^ p.exponent ≤ 10 ^ c.exponent := zpow_le_zpow_right₀ (by norm_num) hce
         linarith
 

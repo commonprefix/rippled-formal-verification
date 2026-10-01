@@ -145,7 +145,7 @@ lemma charge_nonempty_sharp (v : Vault) (shares c : STAmount)
     calc |Q.toRat * ST - nav * s| ≤ nav * s * (2 / 10 ^ 18) := hcomp
       _ = nav * s / ST * (2 / 10 ^ 18) * ST := by field_simp
   · right
-    push_neg at hQm
+    push Not at hQm
     refine ⟨hQm, ?_⟩
     rw [hideal]
     have hunit : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) = (10 : ℚ) ^ (-32750 : ℤ) := by
@@ -349,7 +349,7 @@ lemma charge_sharp (v : Vault) (amountDeposit : STAmount) (r : DepositResult)
           rw [h9]; push_cast; ring
         have hQG : 9999999999999999 * (10 : ℚ) ^ (p.exponent - 1) < Qn.toRat := by
           by_contra hle
-          push_neg at hle
+          push Not at hle
           have := STAmount.ofNumber_frac_le_canonical Qn _ p hQn hQneg hGc rfl (by rw [hGv]; exact hle) hQc
           rw [hGv] at this
           have h1 := (canon_band p hpc hpneg).1
@@ -380,7 +380,7 @@ lemma charge_sharp (v : Vault) (amountDeposit : STAmount) (r : DepositResult)
       · have := hQle hce
         have : (0 : ℚ) ≤ 10 ^ c.exponent := le_of_lt (zpow_pos (by norm_num) _)
         linarith
-      · push_neg at hce
+      · push Not at hce
         have : (10 : ℚ) ^ p.exponent ≤ 10 ^ c.exponent := zpow_le_zpow_right₀ (by norm_num) hce
         linarith
     · rcases lt_or_eq_of_le hpe_le with hlt | heq

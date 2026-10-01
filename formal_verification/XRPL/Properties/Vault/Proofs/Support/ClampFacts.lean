@@ -150,7 +150,7 @@ lemma STAmount.roundToExponent_downward_nonneg (value result : STAmount) (s : �
   by_cases h_exp : value.exponent ≥ s
   · rw [if_pos h_exp] at hok; rw [← Except.ok.inj hok]; exact hnn
   · rw [if_neg h_exp] at hok
-    push_neg at h_exp
+    push Not at h_exp
     have h_ev : value.mOffset < s := h_exp
     have href_eq : STAmount.checked value.mNumericType kMinValue s value.negative .downward
         = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ := by
@@ -270,7 +270,7 @@ lemma STAmount.roundToExponent_downward_le (value result : STAmount) (s : ℤ)
   by_cases h_exp : value.exponent ≥ s
   · rw [if_pos h_exp] at hok; rw [← Except.ok.inj hok]
   · rw [if_neg h_exp] at hok
-    push_neg at h_exp
+    push Not at h_exp
     have h_ev : value.mOffset < s := h_exp
     have href_eq : STAmount.checked value.mNumericType kMinValue s value.negative .downward
         = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ := by

@@ -75,7 +75,7 @@ lemma add_nearestTo_below_carry (x y s : Number)
       refine ⟨by rw [hs_abs, doRoundUp_value_no_roundUp g zm ze' hru (by omega) _ res_pos
         hrounds hresne], ?_⟩
       by_contra hgt
-      push_neg at hgt
+      push Not at hgt
       exact hru (Or.inl (hf1 hgt))
   exact Number.nearestTo_of_gap t f zm ze' s hpos htv hf_nn hf_lt hsucc
     (by omega) hcase

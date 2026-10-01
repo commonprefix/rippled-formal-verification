@@ -407,7 +407,7 @@ lemma STAmount.checked_iou_zero_exp (mant : UInt64) (exp : Int) (neg : Bool) (mo
     (hz : result.mValue = 0) :
     exp < cMinOffset := by
   by_contra hnlt
-  push_neg at hnlt
+  push Not at hnlt
   have h_fit : mant.toNat < 2 ^ 63 := by omega
   have hint : ¬ (STAmount.unchecked .fractional mant exp neg).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]

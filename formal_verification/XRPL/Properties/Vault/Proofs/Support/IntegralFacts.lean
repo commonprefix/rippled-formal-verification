@@ -453,7 +453,7 @@ lemma STAmount.ofNumber_frac_le_canonical (n : Number) (g result : STAmount)
       rcases hk with h | h
       · omega
       · by_contra hcon
-        push_neg at hcon
+        push Not at hcon
         have hMd : M / 1000 = mg := by omega
         have hmod : M % 1000 = 0 := by omega
         -- the source is exactly on the 16-digit grid, so `to_nearest` cannot carry

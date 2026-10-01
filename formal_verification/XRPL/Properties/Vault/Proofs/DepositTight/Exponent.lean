@@ -114,7 +114,7 @@ lemma postSumExponent_mono (A : Number) (p x : STAmount) (ep ex : ℤ)
         rw [show ep - 3 = (ep - 4) + ((1 : ℕ) : ℤ) by push_cast; ring, p10]; push_cast; ring
       rw [← hwv']
       exact Number.RoundsToRepresentable.ge_of_ge_normalized sx _ hrsx w hw (by rw [hwv']; exact hbig)
-    · push_neg at hbig
+    · push Not at hbig
       have hmono : sp.toRat ≤ sx.toRat := by
         by_cases hAm : A.mantissa_ = 0
         · -- a zero total: both sums are exact

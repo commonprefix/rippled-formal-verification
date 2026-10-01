@@ -81,7 +81,7 @@ theorem operator_add_post_subtract
     rw [hexact] at hL_pos
     have hR1_pos : 1 ≤ R.1.toNat := by
       by_contra h0
-      push_neg at h0
+      push Not at h0
       have h : R.1.toNat = 0 := by omega
       rw [h] at hL_pos
       norm_num at hL_pos
@@ -150,7 +150,7 @@ theorem operator_add_post_subtract
           linarith [this ▸ hq, hf'_nn]
         have hk4 : k ≤ 4 := by
           by_contra hk
-          push_neg at hk
+          push Not at hk
           have h5 : (10 : ℚ) ^ 5 ≤ (10 : ℚ) ^ (k : ℕ) :=
             pow_le_pow_right₀ (by norm_num) hk
           nlinarith [hcore, hZ_low, hR_hi, h5]
@@ -393,7 +393,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
         result hok
     exact ⟨M, ze', δ, y.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
       hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
-  · push_neg at h_xe_lt_ye
+  · push Not at h_xe_lt_ye
     by_cases h_xe_gt_ye : x.exponent_ > y.exponent_
     · -- Case 2: xe > ye, align y to xe. Aligned operand = y (smaller magnitude).
       rw [if_neg (not_lt.mpr h_xe_lt_ye), if_pos h_xe_gt_ye] at hok
@@ -507,7 +507,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       exact ⟨M, ze', δ, x.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
         hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
     · -- Case 3: xe = ye, no alignment. g = Guard.new, f_aln = 0.
-      push_neg at h_xe_gt_ye
+      push Not at h_xe_gt_ye
       have h_xe_eq_ye : x.exponent_ = y.exponent_ := le_antisymm h_xe_gt_ye h_xe_lt_ye
       rw [if_neg (not_lt.mpr h_xe_lt_ye), if_neg (not_lt.mpr h_xe_gt_ye)] at hok
       simp only at hok
@@ -568,7 +568,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
             result hok
         exact ⟨M, ze', δ, x.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
           hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
-      · push_neg at h_xm_gt
+      · push Not at h_xm_gt
         by_cases h_xm_eq : x.mantissa_.toNat = y.mantissa_.toNat
         · -- Degenerate: xm = ym ∧ xe = ye ∧ diff-sign means x = -y — contradicts h_not_zero.
           exfalso

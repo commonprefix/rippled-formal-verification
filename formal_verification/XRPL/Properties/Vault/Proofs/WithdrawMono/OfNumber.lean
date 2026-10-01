@@ -204,7 +204,7 @@ lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmoun
     subst this
     rw [Except.ok.inj (hok₁.symm.trans hok₂)]
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   by_cases hint : nt.isIntegral = true
   · obtain ⟨z₁, hz₁, -, hh₁, -⟩ := int_pack nt hint n₁ r₁ hn₁ h0 hok₁
     obtain ⟨z₂, hz₂, -, hh₂, -⟩ := int_pack nt hint n₂ r₂ hn₂ h0₂ hok₂

@@ -44,7 +44,7 @@ theorem operator_add_rounding_bound_same_sign_towards_zero (x y : Number) (resul
       exact releps_lift h_inner h10ze'_pos
     exact ⟨h_direction, h_magnitude⟩
   · -- Cusp range: maxRep < zm ≤ maxRepUp.
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .towards_zero
       h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = v * 10 ^ ze' := by

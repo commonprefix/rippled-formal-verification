@@ -166,7 +166,7 @@ lemma Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedAmo
     · exact ExitsC.fnp_false cl (Or.inl hint)
     refine ExitsC.fnp_false cl (Or.inr ?_)
     by_contra hle
-    push_neg at hle
+    push Not at hle
     obtain ⟨hcv, hcn⟩ := ExitsC.charge_frac_toNumber v roundedAmount c cl s cN hcomp hclamp
       (by simpa using hint) hcN
     have hr := operator_add_rounded_to_nearest _ _ _ v.wf.assetsTotal_norm hcn hat

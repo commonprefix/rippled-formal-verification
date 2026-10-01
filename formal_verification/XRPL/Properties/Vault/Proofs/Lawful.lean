@@ -45,7 +45,7 @@ lemma Vault.burnShares_lawful (v : Vault)
     · rw [if_pos hg, pure_ok] at hcan
       exact absurd (Except.ok.inj hcan) (fun h => CanBurnSharesResult.noConfusion h)
     · rw [Bool.or_eq_true, Bool.or_eq_true] at hg
-      push_neg at hg
+      push Not at hg
       obtain ⟨h1, h2, h3⟩ := hg
       exact ⟨fun h => h1 (by rw [h]; rfl), by by_contra h; exact h2 (by simpa using h),
         by by_contra h; exact h3 (by simpa using h)⟩

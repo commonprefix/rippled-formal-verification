@@ -118,7 +118,7 @@ lemma Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmount)
     have h1 := STAmount.ofNumber_integral_within_one _ _ _ _ hint hann hanneg hof
     have := (abs_lt.mp h1).1
     nlinarith
-  · push_neg at hI
+  · push Not at hI
     nlinarith
 
 lemma Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount)

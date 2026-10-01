@@ -217,7 +217,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
             apply div_pos (by norm_num) h_denom_pos
           exact mul_pos h_abs_pos h_eps_pos
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp — no digits were pushed, f = 0 =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
       h_zm_le_rep hzm_le_maxRep .normalize2 res_pos h_rup_pos hres_pos_mant_ne

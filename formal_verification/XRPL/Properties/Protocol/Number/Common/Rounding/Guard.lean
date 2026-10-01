@@ -484,7 +484,7 @@ theorem represents_pop {g : Guard} {f : ℚ} (hg : represents g f) :
     · intro hxpos; linarith
     · intro h10pos
       by_contra hxnp
-      push_neg at hxnp
+      push Not at hxnp
       have hx0 : x = 0 := le_antisymm hxnp hx_nn
       rw [hx0] at h10pos
       linarith

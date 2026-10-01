@@ -257,7 +257,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
         || (g.round .to_nearest == 0 && (n.mantissa_ / 10 / 10 / 10) % 2 == 1)) = true
       → M % 1000 ≤ 500 := by
     intro htrunc
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     have hr1 : g.round .to_nearest = 1 := htail_gt_round1 (by omega)
     exact htrunc (by simp [hr1])
   have hmod_lt : M % 1000 < 1000 := Nat.mod_lt _ (by norm_num)

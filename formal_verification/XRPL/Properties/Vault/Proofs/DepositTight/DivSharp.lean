@@ -124,11 +124,11 @@ lemma doNormalize128_rounds_to_nearest_sharp
       obtain ⟨hund1, hund2⟩ := hund
       have he₂_ge : minExponent ≤ sd.2.1 := by
         by_contra h
-        push_neg at h
+        push Not at h
         exact absurd (decide_eq_true h) (by rw [hund1]; simp)
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp

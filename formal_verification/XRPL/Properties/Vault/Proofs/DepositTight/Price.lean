@@ -32,7 +32,7 @@ lemma sig16_normalized_mod1000 (a s : ℕ) (X Y : ℤ)
     exact mul_right_cancel₀ (by positivity) key
   have h3 : (3 : ℤ) ≤ Y - X := by
     by_contra hlt
-    push_neg at hlt
+    push Not at hlt
     have hle2 : Y - X ≤ 2 := by omega
     have hpow : (10 : ℚ) ^ (Y - X) ≤ (10 : ℚ) ^ (2 : ℤ) :=
       zpow_le_zpow_right₀ (by norm_num) hle2
@@ -108,7 +108,7 @@ lemma IOUAmount.normalize_sigdigits16 (M : UInt64) (e : Int) (mode : rounding_mo
     rw [← Number.toRat_of_nonneg v hvneg]; exact hvval
   have hve_le0 : v.exponent_ ≤ 0 := by
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     have hge1 : (1 : ℤ) ≤ v.exponent_ := hgt
     have hlhs : (10 : ℚ) ^ 19 ≤ (v.mantissa_.toNat : ℚ) * (10 : ℚ) ^ v.exponent_ := by
       have hm18 : (10 : ℚ) ^ 18 ≤ (v.mantissa_.toNat : ℚ) := by exact_mod_cast hvm_lo
@@ -131,7 +131,7 @@ lemma IOUAmount.normalize_sigdigits16 (M : UInt64) (e : Int) (mode : rounding_mo
     linarith
   have hve_ge : (-99 : ℤ) ≤ v.exponent_ := by
     by_contra hlt
-    push_neg at hlt
+    push Not at hlt
     have hle : v.exponent_ ≤ -100 := by omega
     have hlhs : (v.mantissa_.toNat : ℚ) * (10 : ℚ) ^ v.exponent_ < (10 : ℚ) ^ (-81 : ℤ) := by
       have hmlt : (v.mantissa_.toNat : ℚ) < (10 : ℚ) ^ 19 := by exact_mod_cast hvm_hi
@@ -551,7 +551,7 @@ lemma charge_nonempty (v : Vault) (shares c : STAmount)
     calc |Q.toRat * ST - nav * s| ≤ nav * s * depositε := hcomp
       _ = nav * s / ST * depositε * ST := by field_simp
   · right
-    push_neg at hQm
+    push Not at hQm
     refine ⟨hQm, ?_⟩
     rw [hideal]
     have hunit : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) = (10 : ℚ) ^ (-32750 : ℤ) := by

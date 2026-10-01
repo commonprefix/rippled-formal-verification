@@ -28,7 +28,7 @@ lemma doRoundUp_value_noRoundUp
     · exact pushOverflow_noop_of_lt_maxRep hlt g .to_nearest
     · have hm : m = maxRep := UInt64.toNat_inj.mp (by omega)
       subst hm
-      push_neg at h_no_ru; obtain ⟨hr1, _⟩ := h_no_ru
+      push Not at h_no_ru; obtain ⟨hr1, _⟩ := h_no_ru
       have hne_mid : ((maxRep : UInt64) == maxRep + 1) = false := by decide
       have hbump_false : (g.round .to_nearest == 1 ||
             (g.round .to_nearest == 0 && maxRep == maxRep + 1)) = false := by
@@ -45,7 +45,7 @@ lemma doRoundUp_value_noRoundUp
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_ru_false :
       ((g.round .to_nearest == 1) || ((g.round .to_nearest == 0) && (m % 2 == 1))) = false := by
-    push_neg at h_no_ru
+    push Not at h_no_ru
     obtain ⟨h1, h2⟩ := h_no_ru
     simp only [Bool.or_eq_false_iff, Bool.and_eq_false_iff, beq_eq_false_iff_ne]
     refine ⟨h1, ?_⟩
@@ -75,9 +75,9 @@ lemma doRoundUp_value_noRoundUp
     by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
     · exfalso; apply hne'
       rw [bringIntoRange_rescale_result hresc.1 hresc.2, if_pos h_under]
-    · push_neg at h_under
+    · push Not at h_under
       obtain ⟨hexp, hm10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hm10⟩)]
+      rw [if_neg (by push Not; exact ⟨hexp, hm10⟩)]
       change ((m * 10).toNat : ℚ) * 10 ^ (e - 1) = (m.toNat : ℚ) * 10 ^ e
       rw [hm_mul_10]; push_cast
       rw [show (e - 1 : ℤ) = e + (-1) from by ring,
@@ -148,18 +148,18 @@ lemma doRoundUp_value_roundUp_noOverflow
     by_cases h_under : e - 1 < minExponent ∨ (m + 1) * 10 = 0
     · exfalso; apply hne'
       rw [bringIntoRange_rescale_result hresc h_m1_ne, if_pos h_under]
-    · push_neg at h_under
+    · push Not at h_under
       obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((((m + 1) * 10)).toNat : ℚ) * 10 ^ (e - 1) = ((m.toNat : ℚ) + 1) * 10 ^ e
       rw [h_m1_mul10_toNat, hm_add1_toNat]; push_cast
       rw [show (e - 1 : ℤ) = e + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]
       field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : e < minExponent ∨ m + 1 = 0
     · exfalso; apply hne'
-      rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+      rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
       change ((m + 1).toNat : ℚ) * 10 ^ e = ((m.toNat : ℚ) + 1) * 10 ^ e
       rw [hm_add1_toNat]; push_cast; ring
@@ -273,9 +273,9 @@ lemma doRoundUp_value_cusp
   by_cases h_under : e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0
   · exfalso; apply hne'
     rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne, if_pos h_under]
-  · push_neg at h_under
+  · push Not at h_under
     obtain ⟨hexp, hne10⟩ := h_under
-    rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
     change (((m / 10 + 1) * 10).toNat : ℚ) * 10 ^ (e + 1 - 1) = maxRepCuspTarget * 10 ^ e
     rw [h_m1_mul10_toNat']
     have h_exp : (e + 1 - 1 : ℤ) = e := by ring
@@ -432,10 +432,10 @@ lemma doRoundUp_output_invariants_to_nearest
       -- which has condition (e+1-1 < minExp ∨ (m/10+1)*10 = 0)
       by_cases h_under : e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, hne10⟩ := h_under
         have h_not_under : ¬ (e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0) :=
-          by push_neg; exact ⟨hexp, hne10⟩
+          by push Not; exact ⟨hexp, hne10⟩
         simp only [if_neg h_not_under] at hok
         -- hok : (if e+1-1 > maxExponent then .error else .ok struct) = .ok res
         have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
@@ -477,10 +477,10 @@ lemma doRoundUp_output_invariants_to_nearest
           rw [h_m1_mul10_toNat, hm_add1_toNat] at hnat; omega
         by_cases h_under : e - 1 < minExponent ∨ (m + 1) * 10 = 0
         · underflow_absurd hne h_under hok
-        · push_neg at h_under
+        · push Not at h_under
           obtain ⟨hexp, hne10⟩ := h_under
           have h_not_under : ¬ (e - 1 < minExponent ∨ (m + 1) * 10 = 0) :=
-            by push_neg; exact ⟨hexp, hne10⟩
+            by push Not; exact ⟨hexp, hne10⟩
           simp only [if_neg h_not_under] at hok
           have h_no_ovf : ¬ (e - 1 > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -501,13 +501,13 @@ lemma doRoundUp_output_invariants_to_nearest
           intro ⟨h, _⟩; exact h_resc h
         rw [if_neg h_no_resc] at hok; simp only [] at hok
         have h_m1_ge_min : (m + 1).toNat ≥ largeRange.min.toNat := by
-          by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+          by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
         by_cases h_under : e < minExponent ∨ m + 1 = 0
         · underflow_absurd hne h_under hok
-        · push_neg at h_under
+        · push Not at h_under
           obtain ⟨hexp, hm1ne⟩ := h_under
           have h_not_under : ¬ (e < minExponent ∨ m + 1 = 0) :=
-            by push_neg; exact ⟨hexp, hm1ne⟩
+            by push Not; exact ⟨hexp, hm1ne⟩
           simp only [if_neg h_not_under] at hok
           have h_no_ovf : ¬ (e > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -536,10 +536,10 @@ lemma doRoundUp_output_invariants_to_nearest
         rw [h_m_mul10_toNat] at hnat; omega
       by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, hne10⟩ := h_under
         have h_not_under : ¬ (e - 1 < minExponent ∨ m * 10 = 0) :=
-          by push_neg; exact ⟨hexp, hne10⟩
+          by push Not; exact ⟨hexp, hne10⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -560,13 +560,13 @@ lemma doRoundUp_output_invariants_to_nearest
         intro ⟨h, _⟩; exact h_resc h
       rw [if_neg h_no_resc] at hok; simp only [] at hok
       have h_m_ge_min : m.toNat ≥ largeRange.min.toNat := by
-        by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+        by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
       by_cases h_under : e < minExponent ∨ m = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, hmne⟩ := h_under
         have h_not_under : ¬ (e < minExponent ∨ m = 0) :=
-          by push_neg; exact ⟨hexp, hmne⟩
+          by push Not; exact ⟨hexp, hmne⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -626,10 +626,10 @@ lemma doRoundUp_output_invariants_cusp
         simp only [] at hok
         by_cases h_under : e + 1 - 1 < minExponent ∨ (maxRepUp / 10 + 1) * 10 = 0
         · underflow_absurd hne h_under hok
-        · push_neg at h_under
+        · push Not at h_under
           obtain ⟨hexp, -⟩ := h_under
           have h_not_under : ¬ (e + 1 - 1 < minExponent ∨ (maxRepUp / 10 + 1) * 10 = 0) := by
-            push_neg; exact ⟨hexp, by decide⟩
+            push Not; exact ⟨hexp, by decide⟩
           simp only [if_neg h_not_under] at hok
           have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -649,10 +649,10 @@ lemma doRoundUp_output_invariants_cusp
         simp only [] at hok
         by_cases h_under : e + 1 - 1 < minExponent ∨ (maxRepUp / 10) * 10 = 0
         · underflow_absurd hne h_under hok
-        · push_neg at h_under
+        · push Not at h_under
           obtain ⟨hexp, -⟩ := h_under
           have h_not_under : ¬ (e + 1 - 1 < minExponent ∨ (maxRepUp / 10) * 10 = 0) := by
-            push_neg; exact ⟨hexp, by decide⟩
+            push Not; exact ⟨hexp, by decide⟩
           simp only [if_neg h_not_under] at hok
           have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -673,10 +673,10 @@ lemma doRoundUp_output_invariants_cusp
       simp only [] at hok
       by_cases h_under : e < minExponent ∨ (maxRepUp : UInt64) = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (e < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -708,10 +708,10 @@ lemma doRoundUp_output_invariants_cusp
       simp only [] at hok
       by_cases h_under : e < minExponent ∨ (maxRepUp : UInt64) = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (e < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -732,10 +732,10 @@ lemma doRoundUp_output_invariants_cusp
       simp only [] at hok
       by_cases h_under : e < minExponent ∨ (maxRep : UInt64) = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (e < minExponent ∨ (maxRep : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -761,7 +761,7 @@ lemma doRoundUp_output_invariants_to_nearest_upTo_maxRepUp
     (res.mantissa_.toNat > maxRep.toNat → res.mantissa_.toNat % 10 = 0) := by
   by_cases h_le : m.toNat ≤ maxRep.toNat
   · exact doRoundUp_output_invariants_to_nearest g neg m e h_lb h_le loc res hok hne
-  · push_neg at h_le
+  · push Not at h_le
     exact doRoundUp_output_invariants_cusp g neg m e .to_nearest h_le h_ub loc res hok hne
 
 /-- Supremum-tight relative error bound `5 / (2^63 + 7)`, using the floor-residue
@@ -863,7 +863,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
           rw [h_zm_eq_maxRep, maxRep_val, largeRange_min_val] at this; omega
         rw [if_neg h_no_resc] at hok_pos
         have h_not_under : ¬ (ze < minExponent ∨ zm = 0) := by
-          push_neg
+          push Not
           constructor
           · by_contra hlt
             have hlt' : ze < minExponent := by omega
@@ -1036,7 +1036,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
             exact_mod_cast h_zm_ge_even
           have h_no_ru : ¬ (g.round .to_nearest = 1 ∨
               (g.round .to_nearest = 0 ∧ zm % 2 = 1)) := by
-            push_neg
+            push Not
             refine ⟨?_, ?_⟩
             · intro heq; rw [heq] at h_tie; exact absurd h_tie (by norm_num)
             · intro _; exact h_odd
@@ -1060,7 +1060,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_ne (g : Guard) (zm : UInt64) (ze : In
       · have hf_lt : f < 1/2 := hround_neg.mp h_down
         have h_no_ru : ¬ (g.round .to_nearest = 1 ∨
             (g.round .to_nearest = 0 ∧ zm % 2 = 1)) := by
-          push_neg
+          push Not
           refine ⟨?_, ?_⟩
           · intro heq; rw [heq] at h_down; exact absurd h_down (by norm_num)
           · intro heq; rw [heq] at h_down; exact absurd h_down (by norm_num)
@@ -1220,10 +1220,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze + 1 - 1 < minExponent ∨ (maxRepUp / 10) * 10 = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze + 1 - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -1256,10 +1256,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -1301,10 +1301,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -1337,10 +1337,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp (g : Guard) (zm : UInt64) (ze : 
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRep : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -1377,7 +1377,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp
   by_cases h_le : zm.toNat ≤ maxRep.toNat
   · exact doRoundUp_rounds_to_nearest_supTight g zm ze f hf_rep h_zm_ge h_le
       h_floor_constraint loc res_pos hok_pos hres_pos_mant_ne
-  · push_neg at h_le
+  · push Not at h_le
     exact doRoundUp_rounds_to_nearest_supTight_cusp g zm ze f hf_rep h_le h_zm_le_max
       loc res_pos hok_pos hres_pos_mant_ne
 
@@ -1462,7 +1462,7 @@ theorem doRoundUp_value_to_nearest_roundUp_cusp_round1
   have h_no_resc : ¬ (maxRep < largeRange.min ∧ maxRep ≠ 0) := by decide
   rw [if_neg h_no_resc] at hok
   have h_not_under : ¬ (ze' < minExponent ∨ (maxRep : UInt64) = 0) := by
-    push_neg; constructor
+    push Not; constructor
     · by_contra hlt
       have hlt' : ze' < minExponent := by omega
       rw [if_pos (Or.inl hlt')] at hok

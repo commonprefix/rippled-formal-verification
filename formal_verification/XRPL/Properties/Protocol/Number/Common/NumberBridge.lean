@@ -81,7 +81,7 @@ lemma Number.exists_normalized_of_pos_nat (V : ℕ) (h1 : 1 ≤ V) (h2 : V < 2 ^
   set L := Nat.log 10 V with hL_def
   have hL_le : L ≤ 18 := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have : (10 : ℕ) ^ 19 ≤ 10 ^ L := Nat.pow_le_pow_right (by norm_num) (by omega)
     have h63 : (2 : ℕ) ^ 63 < 10 ^ 19 := by norm_num
     omega

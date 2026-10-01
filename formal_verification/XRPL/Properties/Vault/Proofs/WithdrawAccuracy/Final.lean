@@ -20,7 +20,7 @@ the larger exponent. -/
 lemma iou_offset_le (a b : STAmount) (ha : a.IOUCanonical) (hb : b.IOUCanonical)
     (ha0 : 0 ≤ a.toRat) (hle : a.toRat ≤ b.toRat) : a.mOffset ≤ b.mOffset := by
   by_contra h
-  push_neg at h
+  push Not at h
   have := STAmount.abs_lt_of_offset_lt b a ⟨hb.mant_lo, hb.mant_hi⟩ ⟨ha.mant_lo, ha.mant_hi⟩ h
   rw [abs_of_nonneg (le_trans ha0 hle), abs_of_nonneg ha0] at this
   linarith
@@ -44,14 +44,14 @@ lemma final_payout_lower (v : Vault) (sh p aa : STAmount) (w : Bool) (an : Numbe
   have hpow : (0 : ℚ) < 10 ^ aa.exponent := by positivity
   by_cases hsmall : I * (1 - depositε) ≤ AA
   · linarith
-  push_neg at hsmall
+  push Not at hsmall
   have hAAn := v.wf.assetsAvailable_norm
   have hAAm : v.assetsAvailable.mantissa_ ≠ 0 :=
     Number.mantissa_ne_zero_of_toRat_ne_zero hpos.ne'
   -- the funds guard: the priced payout's `toNumber` is at most `assetsAvailable`
   have hguard : an.isNormalized → an.toRat ≤ AA := fun hann => by
     by_contra hc'
-    push_neg at hc'
+    push Not at hc'
     have := (operator_lt_iff _ _ hAAn hann).mpr hc'
     rw [this] at hlt; exact absurd hlt (by decide)
   have hIpos : AA < I := by nlinarith [mul_nonneg (le_of_lt (lt_trans hpos hsmall)) hε0]

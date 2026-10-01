@@ -226,12 +226,12 @@ lemma OnGridAt.nat_coeff {x : ℚ} {g : ℤ} (h : OnGridAt x g) (hnn : 0 ≤ x)
   have hpos : (0 : ℚ) < 10 ^ g := zpow_pos (by norm_num) _
   have hk0 : 0 ≤ k := by
     by_contra hneg
-    push_neg at hneg
+    push Not at hneg
     have : (k : ℚ) < 0 := by exact_mod_cast hneg
     nlinarith
   have hkle : k ≤ 10 ^ 16 := by
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     have hq : ((10 : ℤ) ^ 16 + 1 : ℚ) ≤ (k : ℚ) := by exact_mod_cast hgt
     push_cast at hq
     nlinarith
@@ -325,7 +325,7 @@ lemma Number.exists_grid_witness (K : ℕ) (g E : ℤ)
   -- exponent window
   have he_hi : w.exponent_ + 3 ≤ 80 := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have h1 : (10 : ℚ) ^ (E + 1) ≤ (10 : ℚ) ^ (w.exponent_ + 3) :=
       zpow_le_zpow_right₀ (by norm_num) (by omega)
     have h2 : (10 : ℚ) ^ (E + 1) = (10 : ℚ) ^ E * 10 := by
@@ -335,7 +335,7 @@ lemma Number.exists_grid_witness (K : ℕ) (g E : ℤ)
     nlinarith
   have he_lo : (-96 : ℤ) ≤ w.exponent_ + 3 := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have h1 : (10 : ℚ) ^ (w.exponent_ + 3) ≤ (10 : ℚ) ^ (-97 : ℤ) :=
       zpow_le_zpow_right₀ (by norm_num) (by omega)
     have h2 : (10 : ℚ) ^ (-81 : ℤ) = 10 ^ 16 * (10 : ℚ) ^ (-97 : ℤ) := by
@@ -447,7 +447,7 @@ lemma Number.sub_grid_isRounded_false (X dn res : Number) (K : ℕ) (g E : ℤ)
       le_of_mul_le_mul_right hchain h96
     have hNn : (10 : ℕ) ^ 15 ≤ N := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hNle : (N : ℚ) ≤ (10 : ℚ) ^ 15 - 1 := by
         have h1 : N + 1 ≤ 10 ^ 15 := by omega
         have h2 : ((N : ℕ) : ℚ) + 1 ≤ (((10 : ℕ) ^ 15 : ℕ) : ℚ) := by exact_mod_cast h1
@@ -675,7 +675,7 @@ lemma postSumExponent_neg_bracket (T : Number) (p : STAmount) (s : ℤ)
       have hRmlo : (10 : ℚ) ^ (18 : ℕ) ≤ (R.mantissa_.toNat : ℚ) := by exact_mod_cast hRlo
       have hRexp_hi : R.exponent_ + 4 ≤ maxExponent := by
         by_contra hcon
-        push_neg at hcon
+        push Not at hcon
         have hge : (10 : ℚ) ^ (97 : ℤ) ≤ (10 : ℚ) ^ R.exponent_ :=
           zpow_le_zpow_right₀ (by norm_num) (by unfold maxExponent at hcon; omega)
         have hbig : (10 : ℚ) ^ (115 : ℤ) ≤ R.toRat := by
@@ -849,7 +849,7 @@ lemma clampToSumExponent_neg_grid (T : Number) (p d : STAmount)
           exact mul_le_mul_of_nonneg_left h1 this
         linarith [hbound, hge, hpmin]
   · -- the clamp floors the payout onto the `10 ^ s` grid
-    push_neg at hshort
+    push Not at hshort
     have hbr' : (-96 : ℤ) ≤ s ∧ s ≤ 80 ∧
         T.toRat - p.toRat ≤ (10 ^ 16 - (1 : ℚ) / 4) * 10 ^ s := by
       rcases hbr with h | ⟨hs100, -⟩

@@ -280,7 +280,7 @@ lemma IOUAmount.add_sum_exponent_hi (x y : IOUAmount) (xn yn sum : Number)
     (hadd : Number.operator_add xn yn .to_nearest = .ok sum) :
     sum.exponent_ + 4 ≤ maxExponent := by
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   -- `hcon : maxExponent < sum.exponent_ + 4`, i.e. `maxExponent - 3 ≤ sum.exponent_`.
   have hge : maxExponent - 3 ≤ sum.exponent_ := by omega
   have hsum_norm := operator_add_result_isNormalized_anyMode xn yn sum .to_nearest

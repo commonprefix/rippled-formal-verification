@@ -372,7 +372,7 @@ lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
     -- `k ≥ j`
     have hkj : j ≤ k := by
       by_contra hlt
-      push_neg at hlt
+      push Not at hlt
       have h1 : (10 : ℚ) ^ (k + 1) ≤ 10 ^ j := zpow_le_zpow_right₀ (by norm_num) (by omega)
       rw [zpow_add₀ (by norm_num), zpow_one] at h1
       nlinarith

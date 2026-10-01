@@ -130,7 +130,7 @@ lemma Vault.donation_grid_bound (v : Vault)
           omega
         have hk1q : (1 : ℚ) ≤ (⌊amountDeposit.toRat / 10 ^ postScale⌋ : ℚ) := by exact_mod_cast hk1
         rw [hval]; nlinarith [hk1q, hP_pos]
-      · push_neg at hs81
+      · push Not at hs81
         calc (10 : ℚ) ^ postScale ≤ (10 : ℚ) ^ (-81 : ℤ) :=
               zpow_le_zpow_right₀ (by norm_num) (by omega)
           _ ≤ rounded.toRat := hr_ge

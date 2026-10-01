@@ -46,7 +46,7 @@ lemma rte_facts (value result : STAmount) (s : ℤ) (hc : value.IOUCanonical)
     obtain ⟨z, hz⟩ := STAmount.exists_int_grid result
     obtain ⟨z', hz'⟩ := grid_refine z result.exponent s' (by omega)
     exact ⟨z', hz.trans hz'⟩
-  · push_neg at hge
+  · push Not at hge
     have hlo : (-96 : ℤ) ≤ s := le_trans hc.exp_lo (le_of_lt hge)
     by_cases hm : result.mValue = 0
     · have h0 : result.toRat = 0 := by rw [STAmount.toRat_signed, hm]; simp

@@ -92,7 +92,7 @@ theorem Number.lower_eq_zero_of_pos_small (q : ℚ) (hq : 0 < q)
     Number.lower q = some Number.zero := by
   have h_e_q : Int.log 10 q - mantissaLog < minExponent := by
     by_contra h_not
-    push_neg at h_not
+    push Not at h_not
     have h_log_ge : minExponent + 18 ≤ Int.log 10 q := by omega
     have h_pow_mono : (10 : ℚ) ^ (minExponent + 18) ≤ (10 : ℚ) ^ (Int.log 10 q) :=
       zpow_le_zpow_right₀ (by norm_num) h_log_ge

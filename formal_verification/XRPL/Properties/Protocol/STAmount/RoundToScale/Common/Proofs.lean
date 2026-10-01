@@ -209,7 +209,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
     · rw [h_result]
   · -- Active branch: reference, sum, subtraction.
     rw [if_neg h_exp] at hok
-    push_neg at h_exp
+    push Not at h_exp
     have h_ev : value.mOffset < s := h_exp
     rw [show STAmount.checked value.mNumericType kMinValue s value.negative mode
           = .ok ⟨value.mNumericType, kMinValue, s, value.mIsNegative⟩ from by
@@ -451,7 +451,7 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           rw [hw_exp]; unfold cMaxOffset; have := hw₀_exp_hi; omega
         have hexp_ge : cMinOffset ≤ w.exponent_ + 3 := by
           by_contra hlt
-          push_neg at hlt
+          push Not at hlt
           have h_of_zero : IOUAmount.ofNumber n₂ mode = .ok IOUAmount.zero := by
             rw [h_n₂_eq_w]
             unfold IOUAmount.ofNumber IOUAmount.fromNumber

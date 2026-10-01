@@ -204,7 +204,7 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
         have h := int_tight I c J η (q - X) (X - J) hη0 hη hI0 hc9 hI1 hJ1 hJm hqX4 (by linarith)
         have := int_gap (q - c) hqc (by linarith)
         linarith
-      · have := int_gap (q - c) hqc (by push_neg at hX93; linarith)
+      · have := int_gap (q - c) hqc (by push Not at hX93; linarith)
         linarith
     rcases lt_or_ge Y (93 * 10 ^ 16) with hY93 | hY93
     · have h := int_mid I c J η (q - X) (X - J) hη0 hη hI0 (by linarith) (by linarith)
@@ -217,9 +217,9 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
       linarith
     · have hcY2 := abs_le.mp (hc2 (by linarith) hYM)
       by_contra hgt
-      push_neg at hgt
+      push Not at hgt
       have hq2c : 2 ≤ q - c := by
-        by_contra hlt; push_neg at hlt
+        by_contra hlt; push Not at hlt
         have := int_gap (q - c) hqc hlt; linarith
       have hqX2 : q - X ≤ 1 / 2 := by
         rcases le_or_gt 9223372036854775807 X with hXM | hXM
@@ -248,9 +248,9 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
     have hYc : Y < 9223372036854775807 → Y ≤ c + 69 / 125 := fun h => by
       have := (abs_le.mp (hc1 h)).1; linarith
     rcases le_or_gt c (8 * 10 ^ 17) with hc8 | hc8
-    · have he1 : -1 ≤ e := hel1.resolve_right (by push_neg; linarith)
+    · have he1 : -1 ≤ e := hel1.resolve_right (by push Not; linarith)
       have hYM : Y < 9223372036854775807 := by
-        by_contra h; push_neg at h; have := hc3 h; linarith
+        by_contra h; push Not at h; have := hc3 h; linarith
       have hIY : I * (1 - η) ≤ 8 * 10 ^ 17 + 69 / 125 := by have := hYc hYM; linarith
       have hI8 : I ≤ 8 * 10 ^ 17 + 1 := by nlinarith
       have hIη' : I * η ≤ 1 / 2 := by
@@ -264,9 +264,9 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
       have := int_gap (c - q) hcq (by norm_num at hJη ⊢; linarith)
       linarith
     rcases le_or_gt c (10 ^ 20 / 121) with hc9 | hc9
-    · have he1 : -1 ≤ e := hel1.resolve_right (by push_neg; linarith)
+    · have he1 : -1 ≤ e := hel1.resolve_right (by push Not; linarith)
       have hYM : Y < 9223372036854775807 := by
-        by_contra h; push_neg at h; have := hc3 h; linarith
+        by_contra h; push Not at h; have := hc3 h; linarith
       have hYl : 93 * 10 ^ 15 ≤ Y := by have := (abs_le.mp (hc1 hYM)).2; linarith
       have hYu : Y < 922 * 10 ^ 15 := by have := hYc hYM; linarith
       have hcY4 := abs_le.mp (hc4 hYl hYu)
@@ -291,7 +291,7 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
     rcases lt_or_ge Y (93 * 10 ^ 16) with hY93 | hY93
     · have hYM' : Y < 9223372036854775807 := by linarith
       have hcb := abs_le.mp (hc1 hYM')
-      have he1 : -1 ≤ e := hel1.resolve_right (by push_neg; linarith)
+      have he1 : -1 ≤ e := hel1.resolve_right (by push Not; linarith)
       have hIb : I * (1 - η) ≤ 93 * 10 ^ 16 + 1 := by linarith
       have hIb' : I ≤ 93 * 10 ^ 16 + 2 := by nlinarith
       have hIη' : I * η ≤ (93 * 10 ^ 16 + 2) * (54211 / 10 ^ 23) :=
@@ -313,7 +313,7 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
           nlinarith
         have hJM : 9223372036854775807 - 51 / 10 ≤ J := hJmin _ hIM (by linarith)
         have hJup : J ≤ 9223372036854775807 + 6 := by
-          by_contra h; push_neg at h
+          by_contra h; push Not at h
           have : J * η ≤ J * (54211 / 10 ^ 23) := mul_le_mul_of_nonneg_left hη hJ0
           nlinarith
         have hXM' : 9223372036854775807 - 1012 / 100 ≤ X := by
@@ -326,9 +326,9 @@ lemma int_core (T S s I c q Y J X e η : ℚ)
           linarith
         linarith
       by_contra hgt
-      push_neg at hgt
+      push Not at hgt
       have hq2c : 2 ≤ c - q := by
-        by_contra hlt; push_neg at hlt
+        by_contra hlt; push Not at hlt
         have := int_gap (c - q) hcq hlt; linarith
       have hcY2 := abs_le.mp (hc2 (by linarith) hYM)
       have hcl : 93 * 10 ^ 16 - 1 ≤ c := by linarith
