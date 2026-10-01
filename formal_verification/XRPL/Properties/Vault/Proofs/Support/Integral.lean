@@ -1,5 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 
 /-! # Integer-valued amounts

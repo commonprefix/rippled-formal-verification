@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Proofs.WithdrawMono.Zero
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.VaultValid
 
 /-! # The `isFractionalNonPositive` guard and the cap bound -/

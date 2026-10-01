@@ -1,6 +1,6 @@
 import XRPL.Properties.Protocol.Number.Mul.RoundsWithin
 import XRPL.Properties.Protocol.Number.Div.RoundsWithin
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Vault.Common.ClawbackDefs
 import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Vault.Proofs.DepositTight.DivSharp

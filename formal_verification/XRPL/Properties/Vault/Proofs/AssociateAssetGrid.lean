@@ -8,7 +8,7 @@ import XRPL.Properties.Vault.Proofs.Support.STAmountFacts
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 import XRPL.Properties.Vault.Proofs.Support.Integral
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.STAmountToNumber
 
 /-! # Grid arithmetic for the conditional `associateAsset` results

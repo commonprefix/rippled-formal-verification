@@ -1,4 +1,4 @@
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Proofs.Support.Integral
 
 /-! # Exact `Number` subtraction on a decimal grid -/

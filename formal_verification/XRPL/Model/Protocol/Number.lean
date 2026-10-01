@@ -362,6 +362,12 @@ def Number.operator_gt (x y : Number) : Bool :=
 def Number.operator_ge (x y : Number) : Bool :=
   !(x.operator_lt y)
 
+def Number.min (x y : Number) : Number := if y.operator_lt x then y else x
+def Number.max (x y : Number) : Number := if x.operator_lt y then y else x
+
+def Number.clamp (value low high : Number) : Number :=
+  if value.operator_lt low then low else if high.operator_lt value then high else value
+
 def Number.signum (n : Number) : Int :=
   if n.negative_ then -1
   else if n.mantissa_ != 0 then 1

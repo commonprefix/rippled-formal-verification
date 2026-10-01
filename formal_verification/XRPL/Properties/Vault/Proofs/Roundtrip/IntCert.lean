@@ -1,6 +1,6 @@
 import XRPL.Properties.Vault.Proofs.Roundtrip.DivHalf
 import XRPL.Properties.Vault.Proofs.DepositTight.DivSharp
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 
 /-! # Integer rounding of a quotient

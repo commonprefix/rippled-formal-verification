@@ -1,5 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.Sub.RoundsWithin
-import XRPL.Properties.Vault.Common.SubZeroShape
+import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Vault.Proofs.Support.FracCanon
 import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts

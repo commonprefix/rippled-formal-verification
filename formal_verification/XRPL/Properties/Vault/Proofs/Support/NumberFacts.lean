@@ -1,6 +1,7 @@
+import XRPL.Properties.Protocol.Number.Totality
 import XRPL.Properties.Protocol.Number.Normalize.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.ToRep.ToRep
-import XRPL.Properties.Vault.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.RoundMonotoneSatDiv
 import XRPL.Properties.Vault.Common.WitnessSupport
 import XRPL.Properties.Vault.Proofs.Support.Basic
@@ -10,51 +11,6 @@ import XRPL.Properties.Vault.Proofs.Support.Basic
 Facts about `Number`: rounding of the arithmetic operators, `to_rep`, `truncate`, signs. -/
 
 namespace XRPL.Model.Protocol
-
-/-- `operator_neg` of a mantissa-zero `Number` is the canonical zero. -/
-lemma Number.operator_neg_of_mantissa_zero (n : Number) (h : n.mantissa_ = 0) :
-    n.operator_neg = Number.zero := by
-  unfold Number.operator_neg
-  rw [if_pos (by rw [h]; rfl)]
-
-/-- Adding the canonical zero on the right is the identity, and total. -/
-lemma Number.operator_add_zero_right (x : Number) (mode : rounding_mode) :
-    x.operator_add Number.zero mode = .ok x := by
-  unfold Number.operator_add
-  rw [if_pos (by decide : Number.zero.operator_eq Number.zero = true)]
-  rfl
-
-/-- Subtracting a mantissa-zero `Number` is the identity, and total. This is how
-a reachable vault's zero loss drops out of the pricing prefix. -/
-lemma Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mode)
-    (h : y.mantissa_ = 0) :
-    x.operator_sub y mode = .ok x := by
-  unfold Number.operator_sub
-  rw [Number.operator_neg_of_mantissa_zero y h, Number.operator_add_zero_right]
-
-/-- `operator_eq Number.zero` detects a zero mantissa, so a nonzero mantissa is not
-equal to the canonical zero. -/
-lemma Number.operator_eq_zero_false_of_mantissa_ne (n : Number) (h : n.mantissa_ ≠ 0) :
-    n.operator_eq Number.zero = false := by
-  unfold Number.operator_eq
-  have : (n.mantissa_ == Number.zero.mantissa_) = false := by
-    simp only [Number.zero]; exact beq_false_of_ne h
-  simp [this]
-
-/-- **Divide-by-zero escape.** With a nonzero divisor the divide reduces to the
-`doNormalize128` pipeline (past the divide-by-zero guard), isolating the divide
-totality to that stage. -/
-lemma Number.operator_div_of_divisor_ne (x y : Number) (mode : rounding_mode)
-    (hy : y.mantissa_ ≠ 0) :
-    x.operator_div y mode =
-      (if x.operator_eq Number.zero then pure x
-       else
-         let zn := x.negative_ != y.negative_
-         let (zm128, ze, dropped) :=
-           divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
-         doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped) := by
-  unfold Number.operator_div
-  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy, if_neg Bool.false_ne_true]
 
 /-- **Cap bounds the adjusted `Number.exponent`.** A normalized nonnegative
 `Number` whose value fits `2 ^ 63 - 1` has a nonpositive `Number.exponent`. When
