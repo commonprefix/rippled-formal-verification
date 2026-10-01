@@ -5,7 +5,7 @@ defaultTargets = ["XRPL"]
 
 [leanOptions]
 # Keep the legacy `do` lowering: 4.32+ switched to `EarlyReturnT`/`EarlyReturn.runK`, which
-# changes the desugared body the Vault proofs walk. `weak.` = ignored on 4.28/4.29, where the
+# changes the lowered body the Vault proofs walk. `weak.` = ignored on 4.28/4.29, where the
 # option does not exist (and legacy is the only behaviour anyway).
 weak.backward.do.legacy = true
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`

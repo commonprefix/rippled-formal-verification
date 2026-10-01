@@ -549,7 +549,7 @@ class LeanVaultClawback_test : public LeanSuite
         // Read before closing: stageSoleHolderVault edits the open ledger directly and those
         // edits are discarded on close.
         //
-        // A sole holder's shares are priced undiscounted, so the recovery clamps to
+        // A sole holder's shares are priced at full value, so the recovery clamps to
         // sfAssetsAvailable and the share count is re-derived from it. What survives is exactly
         // the impaired portion, still backed by shares: no zero-share vault holding assets.
         auto const sleVault = env.le(vaultKeylet);
@@ -560,8 +560,7 @@ class LeanVaultClawback_test : public LeanSuite
             env.le(keylet::mptokenIssuance(sleVault->at(sfShareMPTID)))->at(sfOutstandingAmount))};
 
         // Everything available was recovered; only the unrealized loss remains.
-        BEAST_EXPECTS(
-            afterAvailable == Number{0}, "assetsAvailable " + to_string(afterAvailable));
+        BEAST_EXPECTS(afterAvailable == Number{0}, "assetsAvailable " + to_string(afterAvailable));
         BEAST_EXPECTS(afterTotal == lossUnrealized, "assetsTotal " + to_string(afterTotal));
         BEAST_EXPECTS(afterLoss == lossUnrealized, "lossUnrealized " + to_string(afterLoss));
 
@@ -829,7 +828,7 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793'238LL, -18}, Number{0}, 7'000'025, tecPRECISION_LOSS);  // FV_M2_18 (>16 digit dust)
 
         // Fixed discrepancies, kept as regression tests.
-        // FV_M2_17: a sole holder's shares are now priced undiscounted, so the recovery clamps to
+        // FV_M2_17: a sole holder's shares are now priced at full value, so the recovery clamps to
         // sfAssetsAvailable instead of burning every share against a smaller payout.
         testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000, tesSUCCESS);
         testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 claws the full balance
