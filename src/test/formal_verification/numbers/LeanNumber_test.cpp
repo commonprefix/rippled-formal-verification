@@ -931,7 +931,7 @@ public:
         }
     }
 
-    // Cases from rippled PR 7825: Operands at opposite ends of the exponent
+    // Cases from xrpld PR 7825: Operands at opposite ends of the exponent
     void
     testAddSubExtremeExponents()
     {
