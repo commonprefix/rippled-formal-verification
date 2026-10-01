@@ -77,7 +77,7 @@ lemma STAmount.ofNumber_iou_snap_pos (nt : NumericType) (r : Number) (mode : rou
         _ ≤ (working.mantissa_.toNat : ℚ) * (10 : ℚ) ^ working.exponent_ := by gcongr
     have hmant_pos : 0 ≤ mant.toInt := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       have hmant_neg_q : (mant.toInt : ℚ) < 0 := by exact_mod_cast hc
       have hval_neg : (mant.toInt : ℚ) * 10 ^ exp < 0 :=
         mul_neg_of_neg_of_pos hmant_neg_q (zpow_pos (by norm_num) _)
@@ -180,7 +180,7 @@ lemma STAmount.ofNumber_iou_snap_mag (nt : NumericType) (r : Number) (mode : rou
         _ ≤ (working.mantissa_.toNat : ℚ) * (10 : ℚ) ^ working.exponent_ := by gcongr
     have hmant_pos : 0 ≤ mant.toInt := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       have hmant_neg_q : (mant.toInt : ℚ) < 0 := by exact_mod_cast hc
       have hval_neg : (mant.toInt : ℚ) * 10 ^ exp < 0 :=
         mul_neg_of_neg_of_pos hmant_neg_q (zpow_pos (by norm_num) _)
@@ -408,7 +408,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
       exists_normalized_grid_below Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have hbelow : ((Mr:ℚ) - 1) * (10:ℚ)^exp ≤ truth := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hge : truth ≤ m0.toRat := by rw [hm0_val]; linarith
       have hmin := Number.upper_tight truth nUp hup_eq m0 hm0_norm hge
       rw [← hr_eq, hm0_val] at hmin
@@ -438,7 +438,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
       exists_normalized_grid_above Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have habove : truth ≤ ((Mr:ℚ) + 1) * (10:ℚ)^exp := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hle : m0.toRat ≤ truth := by rw [hm0_val]; linarith
       have hmax := Number.lower_tight truth nLo hlo_eq m0 hm0_norm hle
       rw [← hr_eq, hm0_val] at hmax
@@ -469,7 +469,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
       exists_normalized_grid_above Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have habove : truth ≤ ((Mr:ℚ) + 1) * (10:ℚ)^exp := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hle : m0.toRat ≤ truth := by rw [hm0_val]; linarith
       have hmax := Number.lower_tight truth nLo hlo_eq m0 hm0_norm hle
       rw [← hr_eq, hm0_val] at hmax
@@ -631,7 +631,7 @@ lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt :
         rw [← hr_eq, hm0'_toRat] at hut; linarith [hut, hrf]
   -- |truth| ≤ (Mr+1)·10^exp via maximality against the grid point above.
   have habove : |truth| ≤ ((Mr : ℚ) + 1) * (10:ℚ) ^ exp := by
-    by_contra hcon; push_neg at hcon
+    by_contra hcon; push Not at hcon
     obtain ⟨m0, hm0_norm, hm0_neg, hm0_val⟩ :=
       exists_normalized_grid_above Mr exp hmtu_lo hmtu_hi (by unfold minExponent; omega)
         (by unfold maxExponent; omega)
@@ -788,7 +788,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
       rw [hr_mag, show ((Mr:ℚ)-1)*(10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp - (10:ℚ)^exp from by ring, hMr_val]
       nlinarith [hMgt, hexp_ge, hp]
     refine ⟨?_, ?_⟩
-    · by_contra hcon; push_neg at hcon
+    · by_contra hcon; push Not at hcon
       obtain ⟨m0, hm0_norm, hm0_neg, hm0_val⟩ :=
         exists_normalized_grid_below Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
       rcases hxor : (v1.mIsNegative != v2.mIsNegative) with _ | _
@@ -806,7 +806,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
         rw [← hr_eq] at hle_up
         -- |r| ≤ |truth| here (fine floor), and |truth| < (Mr-1)·10^exp, so |r| < (Mr-1)·10^exp; contra hup_gt.
         linarith [hle_up, htf, hrf, hcon, hup_gt]
-    · by_contra hcon; push_neg at hcon
+    · by_contra hcon; push Not at hcon
       have hlt : |r.toRat| < ((Mr : ℚ) + 1) * (10:ℚ) ^ exp := by
         rw [show ((Mr:ℚ)+1)*(10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp + (10:ℚ)^exp from by ring]
         linarith [hup_le, hpec]
@@ -866,7 +866,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
           hMr_val, hexp10]
       nlinarith [hMlt, hp]
     refine ⟨?_, ?_⟩
-    · by_contra hcon; push_neg at hcon
+    · by_contra hcon; push Not at hcon
       rcases hxor : (v1.mIsNegative != v2.mIsNegative) with _ | _
       · have hif : (if (v1.mIsNegative != v2.mIsNegative) then (-1:ℚ) else 1) = 1 := by rw [hxor]; simp
         have htf := htruth_form; rw [hif, one_mul] at htf
@@ -900,7 +900,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
         have hlt := Number.lower_tight truth n hn_eq m0' hm0'_norm hm0'_le
         rw [← hr_eq, hm0'_toRat, hm0_val] at hlt
         linarith [hlt, hdn_ge, hrf]
-    · by_contra hcon; push_neg at hcon
+    · by_contra hcon; push Not at hcon
       rcases hxor : (v1.mIsNegative != v2.mIsNegative) with _ | _
       · have hif : (if (v1.mIsNegative != v2.mIsNegative) then (-1:ℚ) else 1) = 1 := by rw [hxor]; simp
         have htf := htruth_form; rw [hif, one_mul] at htf

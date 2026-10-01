@@ -1,6 +1,5 @@
 import XRPL.Model.Vault.VaultBurn
-import XRPL.Properties.Vault.Common.BurnExits
-import XRPL.Properties.Vault.Common.Preservation
+import XRPL.Properties.Vault.Proofs.Lawful
 
 /-! # `Vault.burnShares` exits -/
 
@@ -54,7 +53,7 @@ theorem Vault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
     (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
     ∃ v' : Vault, v.burnShares sharesDestroyed = .ok v' ∧
       v'.toRawVault = { v.toRawVault with sharesTotal := st' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_poststate_lawful v sharesDestroyed sharesTotalAmount
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_lawful v sharesDestroyed sharesTotalAmount
     sharesDestroyedNumber st' hcan hcanon hnn hle hfit hnum hst
   refine ⟨v', ?_, hlv'eq⟩
   unfold Vault.burnShares

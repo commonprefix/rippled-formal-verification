@@ -91,7 +91,7 @@ private theorem operator_add_post_alignment_anyMode
       change (decide (toUInt128 largeRange.max < zm128)
               || decide (toUInt128 maxRepUp < zm128)) = true
       rw [this]; simp
-    · push_neg at hgt
+    · push Not at hgt
       have h_zm_le : zm128.toNat ≤ maxRepUp.toNat := hgt
       have h_zm_not_gt_maxRepUp : ¬ zm128 > toUInt128 maxRepUp := by
         intro h
@@ -270,7 +270,7 @@ private theorem operator_add_post_alignment_anyMode
        h_value_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hrep_new, h_res_neg_eq_xn,
        h_g_new_sbit, hzm_new_succ, h_result_norm, h_truth_top, hresult_ne⟩⟩
   · -- No drop case: zm128 ≤ maxRepUp (the cusp range (maxRep, maxRepUp] is reachable)
-    push_neg at h_drop
+    push Not at h_drop
     have h_cond_false : (zm128 > toUInt128 largeRange.max
         || zm128 > toUInt128 maxRepUp) = false := by
       rw [h_cond_iff_sum_gt_maxRepUp]
@@ -504,7 +504,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       (by rw [he_common_eq]; exact hye_max) (x.toRat + y.toRat) htruth_eq
       result hok_post
     exact h_result
-  · push_neg at h_xe_lt_ye
+  · push Not at h_xe_lt_ye
     by_cases h_xe_gt_ye : x.exponent_ > y.exponent_
     · rw [if_neg (not_lt.mpr (le_of_lt h_xe_gt_ye)), if_pos h_xe_gt_ye] at hok
       set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
@@ -578,7 +578,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
         (by rw [he_common_eq]; exact hxe_min)
         (by rw [he_common_eq]; exact hxe_max) (x.toRat + y.toRat) htruth_eq
         result hok_post
-    · push_neg at h_xe_gt_ye
+    · push Not at h_xe_gt_ye
       have h_xe_eq_ye : x.exponent_ = y.exponent_ := le_antisymm h_xe_gt_ye h_xe_lt_ye
       rw [if_neg (not_lt.mpr h_xe_lt_ye), if_neg (not_lt.mpr h_xe_gt_ye)] at hok
       set xm_a : UInt64 := x.mantissa_ with hxm_a_def

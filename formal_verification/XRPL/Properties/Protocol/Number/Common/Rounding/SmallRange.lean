@@ -361,7 +361,7 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
     simp only []
     have hM_le_up : M.toNat ≤ maxRepUp.toNat := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       exact h_cap_fire (UInt64.lt_iff_toNat_lt.mpr hc)
     rw [empty_guard_doRoundUp_id g0 mode neg M (e - 3) _ hg0_empty
         (by rw [UInt64.le_iff_toNat_le, hminN]; omega)

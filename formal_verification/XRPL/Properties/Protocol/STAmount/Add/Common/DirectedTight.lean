@@ -39,7 +39,7 @@ lemma IOUAmount.ofNumber_toRange (n : Number) (mode : rounding_mode) (r : IOUAmo
       · rw [if_neg hlo2] at hok
         have hr : (⟨m, e⟩ : IOUAmount) = r := Except.ok.inj hok
         subst hr
-        push_neg at hhi hlo2
+        push Not at hhi hlo2
         exact ⟨rfl, hlo2, hhi⟩
 
 /-- A correctly-rounded nonzero `Number` at a positive target is non-negative. -/
@@ -88,7 +88,7 @@ private lemma directed_grid_facts_pos (mant : Int64) (exp : ℤ)
   have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
   have hmant_nn : 0 ≤ mant.toInt := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have h1 : (mant.toInt : ℚ) < 0 := by exact_mod_cast hcon
     have h2 : (mant.toInt : ℚ) * (10:ℚ) ^ exp < 0 := mul_neg_of_neg_of_pos h1 hpec
     linarith [hval_nn]
@@ -109,7 +109,7 @@ private lemma directed_grid_facts_neg (mant : Int64) (exp : ℤ)
   have hpec : (0:ℚ) < (10:ℚ) ^ exp := zpow_pos (by norm_num) _
   have hmant_np : mant.toInt ≤ 0 := by
     by_contra hcon
-    push_neg at hcon
+    push Not at hcon
     have h1 : (0:ℚ) < (mant.toInt : ℚ) := by exact_mod_cast hcon
     linarith [mul_pos h1 hpec, hval_np]
   refine ⟨mant.toInt.natAbs, ?_, ?_, ?_⟩
@@ -204,7 +204,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
       exists_normalized_grid_below Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have hbelow : ((Mr:ℚ) - 1) * (10:ℚ)^exp ≤ truth := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hge : truth ≤ m0.toRat := by rw [hm0_val]; linarith
       have hmin := Number.upper_tight truth nUp hup_eq m0 hm0_norm hge
       rw [← hsum_eq, hm0_val] at hmin
@@ -241,7 +241,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
       exists_normalized_grid_above Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have habove : truth ≤ ((Mr:ℚ) + 1) * (10:ℚ)^exp := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hle : m0.toRat ≤ truth := by rw [hm0_val]; linarith
       have hmax := Number.lower_tight truth nLo hlo_eq m0 hm0_norm hle
       rw [← hsum_eq, hm0_val] at hmax
@@ -279,7 +279,7 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
       exists_normalized_grid_above Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have habove : truth ≤ ((Mr:ℚ) + 1) * (10:ℚ)^exp := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hle : m0.toRat ≤ truth := by rw [hm0_val]; linarith
       have hmax := Number.lower_tight truth nLo hlo_eq m0 hm0_norm hle
       rw [← hsum_eq, hm0_val] at hmax
@@ -403,7 +403,7 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
       exists_normalized_grid_above_neg Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have hbelow : -(((Mr:ℚ) + 1) * (10:ℚ)^exp) ≤ truth := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hge : truth ≤ m0.toRat := by rw [hm0_val]; linarith
       have hmin := Number.upper_tight truth nUp hup_eq m0 hm0_norm hge
       rw [← hsum_eq, hm0_val] at hmin
@@ -450,7 +450,7 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
       exists_normalized_grid_below_neg Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have habove : truth ≤ -(((Mr:ℚ) - 1) * (10:ℚ)^exp) := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hle : m0.toRat ≤ truth := by rw [hm0_val]; linarith
       have hmax := Number.lower_tight truth nLo hlo_eq m0 hm0_norm hle
       rw [← hsum_eq, hm0_val] at hmax
@@ -489,7 +489,7 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
       exists_normalized_grid_above_neg Mr exp hmtu_lo hmtu_hi hgb_lo hgb_hi
     have hbelow : -(((Mr:ℚ) + 1) * (10:ℚ)^exp) ≤ truth := by
       by_contra hcon
-      push_neg at hcon
+      push Not at hcon
       have hge : truth ≤ m0.toRat := by rw [hm0_val]; linarith
       have hmin := Number.upper_tight truth nUp hif m0 hm0_norm hge
       rw [← hsum_eq, hm0_val] at hmin

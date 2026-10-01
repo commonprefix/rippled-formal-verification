@@ -154,7 +154,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
       have h_min : ∀ m : Number, m.isNormalized → q ≤ m.toRat → r_pos.toRat ≤ m.toRat := by
         intro m h_norm h_m_ge
         by_contra h_not
-        push_neg at h_not
+        push Not at h_not
         have h_m_pos : 0 < m.toRat := lt_of_lt_of_le hq_pos h_m_ge
         have h_m_neg_false : m.negative_ = false := by
           by_contra hh
@@ -203,7 +203,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
       rw [h_flip_n_pos]
       have : result.toRat = -r_pos.toRat := by rw [h_r_pos_toRat]; ring
       rw [this, h_r_pos_eq_n_pos]
-    · push_neg at h_exp_gt
+    · push Not at h_exp_gt
       have h_exp_eq : r_pos.exponent_ = minExponent := le_antisymm h_exp_gt h_remin
       have h_truth_abs : |truth| = -truth := abs_of_neg h_truth_neg
       have h_diff_le : |result.toRat - truth| ≤ -truth * (11 / (2 ^ 63 - 18 : ℚ)) := by
@@ -275,7 +275,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         have h_min : ∀ m : Number, m.isNormalized → q ≤ m.toRat → r_pos.toRat ≤ m.toRat := by
           intro m h_norm h_m_ge
           by_contra h_not
-          push_neg at h_not
+          push Not at h_not
           have h_m_pos : 0 < m.toRat := lt_of_lt_of_le hq_pos h_m_ge
           have h_m_neg_false : m.negative_ = false := by
             by_contra hh
@@ -325,12 +325,12 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         have : result.toRat = -r_pos.toRat := by rw [h_r_pos_toRat]; ring
         rw [this, h_r_pos_eq_n_pos]
       · -- q < smallest_pos_rep: r_pos.mantissa_ is forced to 10^18.
-        push_neg at h_q_ge
+        push Not at h_q_ge
         -- Coarse ε can't separate 10^18 from 10^18+1; exclude the larger
         -- mantissa via no-inbetween against −smallest_pos_rep.
         have h_mant_le_pow18 : r_pos.mantissa_.toNat ≤ 10^18 := by
           by_contra h_gt
-          push_neg at h_gt
+          push Not at h_gt
           have h_mant_ge_q : ((10 : ℚ)^18 + 1) ≤ (r_pos.mantissa_.toNat : ℚ) := by
             have h1 : (10^18 + 1 : ℕ) ≤ r_pos.mantissa_.toNat := h_gt
             exact_mod_cast h1
@@ -375,7 +375,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
           rw [← h_pow_form]; exact h_q_ge
         have h_e_q_lt_min : Int.log 10 q - mantissaLog < minExponent := by
           by_contra h_not
-          push_neg at h_not
+          push Not at h_not
           have h_log_ge : minExponent + 18 ≤ Int.log 10 q := by linarith
           have h_pow_mono : (10 : ℚ) ^ (minExponent + 18) ≤ (10 : ℚ) ^ (Int.log 10 q) :=
             zpow_le_zpow_right₀ (by norm_num) h_log_ge
@@ -456,7 +456,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         rw [h_abs_result]; positivity
       -- Contradiction via rounding bound: |result - truth| ≤ |truth| * ε < |truth|.
       by_contra h_not_pos
-      push_neg at h_not_pos
+      push Not at h_not_pos
       have h_lt : result.toRat < 0 := by
         rcases lt_or_eq_of_le h_not_pos with h | h
         · exact h
@@ -524,7 +524,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
           exact mul_comm _ _
         rw [h_pow_split]
         nlinarith [h_pow_pos_m]
-      · push_neg at h_exp_lt
+      · push Not at h_exp_lt
         have h := h_truth_top h_exp_lt
         rwa [abs_of_pos h_truth_pos] at h
     obtain ⟨n_lo, h_lo_aux⟩ := lowerPosAux_isSome_of_lt_top truth h_truth_pos h_truth_lt_top
@@ -536,7 +536,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
     have h_max : ∀ m : Number, m.isNormalized → m.toRat ≤ truth → m.toRat ≤ result.toRat := by
       intro m h_norm h_m_le
       by_contra h_not
-      push_neg at h_not
+      push Not at h_not
       exact (h_no_inbetween m h_norm h_not) h_m_le
     exact Number.toRat_eq_lower_of_max truth result n_lo h_lo_eq
       h_result_norm h_round_down h_max
@@ -559,7 +559,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
     have hq_pos : 0 < q := by rw [hq_def]; linarith
     have h_result_neg_val : result.toRat < 0 := by
       by_contra h_not
-      push_neg at h_not
+      push Not at h_not
       have h_truth_abs : |truth| = -truth := abs_of_neg h_truth_neg
       have h_eps_small : (11 / (2 ^ 63 - 18 : ℚ)) < 1 := by norm_num
       have h_abs_truth_pos : 0 < |truth| := abs_pos.mpr h_truth_ne
@@ -640,7 +640,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
           exact mul_comm _ _
         rw [h_pow_split]
         nlinarith [h_pow_pos_m]
-      · push_neg at h_exp_lt
+      · push Not at h_exp_lt
         have h_r_pos_exp : r_pos.exponent_ = result.exponent_ := by rw [hr_pos_def]
         have h_e_ge : result.exponent_ ≥ maxExponent := by rw [← h_r_pos_exp]; exact h_exp_lt
         have h := h_truth_top h_e_ge
@@ -669,7 +669,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
     have h_max : ∀ m : Number, m.isNormalized → m.toRat ≤ q → m.toRat ≤ r_pos.toRat := by
       intro m h_norm h_m_le
       by_contra h_not
-      push_neg at h_not
+      push Not at h_not
       by_cases h_m_pos : 0 < m.toRat
       · have h_m_neg_false : m.negative_ = false := by
           by_contra hh
@@ -698,7 +698,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
           have hqv : q = -truth := hq_def
           linarith
         exact (h_no_inbetween m_neg h_m_neg_norm h_m_neg_lt_result) h_truth_le_m_neg
-      · push_neg at h_m_pos
+      · push Not at h_m_pos
         linarith
     have h_r_pos_eq_n_pos : r_pos.toRat = n_pos.toRat :=
       Number.toRat_eq_lower_of_max q r_pos n_pos h_n_pos_eq h_r_pos_norm h_r_pos_le_q h_max
@@ -809,11 +809,11 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
       have h_min : ∀ m : Number, m.isNormalized → truth ≤ m.toRat → result.toRat ≤ m.toRat := by
         intro m h_norm h_m_ge
         by_contra h_not
-        push_neg at h_not
+        push Not at h_not
         exact (h_no_inbetween m h_norm h_not) h_m_ge
       exact Number.toRat_eq_upper_of_min truth result n_up h_up_eq
         (by right; exact ⟨h_rmin, h_rmax, h_rcusp, h_remin, h_remax⟩) h_round_up h_min
-    · push_neg at h_exp_gt
+    · push Not at h_exp_gt
       have h_exp_eq : result.exponent_ = minExponent := le_antisymm h_exp_gt h_remin
       have h_truth_abs : |truth| = truth := abs_of_pos h_truth_pos
       have h_diff_le : |result.toRat - truth| ≤ truth * (11 / (2 ^ 63 - 18 : ℚ)) := by
@@ -867,17 +867,17 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
         have h_min : ∀ m : Number, m.isNormalized → truth ≤ m.toRat → result.toRat ≤ m.toRat := by
           intro m h_norm h_m_ge
           by_contra h_not
-          push_neg at h_not
+          push Not at h_not
           exact (h_no_inbetween m h_norm h_not) h_m_ge
         exact Number.toRat_eq_upper_of_min truth result n_up h_up_eq
           (by right; exact ⟨h_rmin, h_rmax, h_rcusp, h_remin, h_remax⟩) h_round_up h_min
       · -- truth < smallest_pos_rep: result.mantissa_ is forced to 10^18.
-        push_neg at h_truth_ge
+        push Not at h_truth_ge
         -- Coarse ε can't separate 10^18 from 10^18+1; exclude the larger
         -- mantissa via no-inbetween against +smallest_pos_rep.
         have h_mant_le_pow18 : result.mantissa_.toNat ≤ 10^18 := by
           by_contra h_gt
-          push_neg at h_gt
+          push Not at h_gt
           have h_mant_ge_q : ((10 : ℚ)^18 + 1) ≤ (result.mantissa_.toNat : ℚ) := by
             have h1 : (10^18 + 1 : ℕ) ≤ result.mantissa_.toNat := h_gt
             exact_mod_cast h1
@@ -918,7 +918,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
           rw [← h_pow_form]; exact h_truth_ge
         have h_e_q_lt_min : Int.log 10 truth - mantissaLog < minExponent := by
           by_contra h_not
-          push_neg at h_not
+          push Not at h_not
           have h_log_ge : minExponent + 18 ≤ Int.log 10 truth := by linarith
           have h_pow_mono : (10 : ℚ) ^ (minExponent + 18) ≤ (10 : ℚ) ^ (Int.log 10 truth) :=
             zpow_le_zpow_right₀ (by norm_num) h_log_ge

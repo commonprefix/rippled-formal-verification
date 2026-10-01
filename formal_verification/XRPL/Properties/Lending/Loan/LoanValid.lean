@@ -79,7 +79,7 @@ private lemma interest_exact_of_ok (tvo po mfo t i tol : Number) (s : Int) (boun
       rw [hi]; push_cast; ring
     · -- a negative first difference would leave the rounded interest below the tolerance
       exfalso
-      push_neg at hge
+      push Not at hge
       have hR := operator_sub_rounded_to_nearest t mfo i htn' hmn h2
       obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-2) s (by norm_num) hs'
       have htruth : t.toRat - mfo.toRat ≤ w.toRat := by

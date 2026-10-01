@@ -53,7 +53,7 @@ lemma doNormalize_scaleUp_exit_exp (minMant m : UInt64) (e : Int) :
     rw [doNormalize_scaleUp, if_neg hcond]
     intro hlt
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     exact hcond ⟨hlt, hgt⟩
 
 set_option maxHeartbeats 800000 in
@@ -148,7 +148,7 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
         · have hm1_le : m1 ≤ largeRange.max := by
             rw [UInt64.le_iff_toNat_le]
             by_contra hc
-            push_neg at hc
+            push Not at hc
             exact hm1_gt (UInt64.lt_iff_toNat_lt.mpr hc)
           have hid := doNormalize_scaleDown_id largeRange.max m1 e1 g0 hm1_le
           rw [hid] at hsd
@@ -180,7 +180,7 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * 10 ^ e2 := h2
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := h3
   · -- Round-stage flush: `doRoundUp_flush_value_small` pins the frame.
-    push_neg at hzero
+    push Not at hzero
     obtain ⟨he2_ge, hm2_ge⟩ := hzero
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by
       rw [Bool.or_eq_false_iff]

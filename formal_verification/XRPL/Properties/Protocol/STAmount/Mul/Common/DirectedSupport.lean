@@ -85,7 +85,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
         _ ≤ (working.mantissa_.toNat : ℚ) * (10 : ℚ) ^ working.exponent_ := by gcongr
     have hmant_pos : 0 ≤ mant.toInt := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       have hmant_neg_q : (mant.toInt : ℚ) < 0 := by exact_mod_cast hc
       have hval_neg : (mant.toInt : ℚ) * 10 ^ exp < 0 :=
         mul_neg_of_neg_of_pos hmant_neg_q (zpow_pos (by norm_num) _)
@@ -228,7 +228,7 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
         _ ≤ (working.mantissa_.toNat : ℚ) * (10 : ℚ) ^ working.exponent_ := by gcongr
     have hmant_pos : 0 ≤ mant.toInt := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       have hmant_neg_q : (mant.toInt : ℚ) < 0 := by exact_mod_cast hc
       have hval_neg : (mant.toInt : ℚ) * 10 ^ exp < 0 :=
         mul_neg_of_neg_of_pos hmant_neg_q (zpow_pos (by norm_num) _)
@@ -336,7 +336,7 @@ lemma operator_mul_exponent_hi_anyMode (n1 n2 r : Number) (E : Int) (mode : roun
     (hmul : Number.operator_mul n1 n2 mode = .ok r) :
     r.exponent_ + 4 ≤ maxExponent := by
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   have hr_norm : r.isNormalized := operator_mul_result_isNormalized n1 n2 r mode
     hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
   have hr_mant := hr_norm.mantissaBounds_nat hr_ne

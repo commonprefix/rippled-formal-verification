@@ -271,7 +271,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     · -- ===== CUSP =====
       have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_cusp_val
+      try simp only at h_cusp_val
       have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
         rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
       -- truth = (zm + f)·10^ze' = (maxRepNat + f)·10^ze'.
@@ -319,7 +319,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
       have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_nc_val
+      try simp only at h_nc_val
       have h_truth_signed : x.toRat * y.toRat
           = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
         have h1 : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_xy_eq
@@ -349,7 +349,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       exact ⟨h_direction, h_magnitude⟩
   · -- ===== NO ROUND UP (truncate) =====
     have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
-    simp only at h_tr_val
+    try simp only at h_tr_val
     -- shouldRoundUp_upward fails: sbit=true OR (digits=0 ∧ xbit=false).
     -- Direction depends on truth sign.
     by_cases h_zn : (x.negative_ != y.negative_) = true

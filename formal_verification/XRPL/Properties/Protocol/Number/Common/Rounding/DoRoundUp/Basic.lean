@@ -207,7 +207,7 @@ lemma doRoundUp_negative_of_mant_ne
     (hne : res.mantissa_ ≠ 0) :
     res.negative_ = zn := by
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   split_ifs at hok with h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 <;>
     (try (simp only [Except.ok.injEq] at hok)) <;>
     (try (simp only [reduceCtorEq] at hok)) <;>
@@ -226,7 +226,7 @@ lemma doRoundUp_false_from_ok
   -- The output mantissa/exponent are independent of `negative_`, so the `false`
   -- case succeeds with the same value. Proved by case analysis on the branches.
   unfold Guard.doRoundUp Guard.bringIntoRange at hok ⊢
-  simp only [Guard.doDropDigit] at hok ⊢
+  dsimp only [Guard.doDropDigit] at hok ⊢
   split_ifs at hok ⊢ with h1 h2 h3 h4 h5 h6 h7 h8 h9 h10 <;>
     (try (simp only [reduceCtorEq] at hok)) <;>
     (try (simp only [Except.ok.injEq] at hok)) <;>

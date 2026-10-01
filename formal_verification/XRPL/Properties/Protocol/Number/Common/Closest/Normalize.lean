@@ -46,18 +46,14 @@ lemma m_ceil_nat_bounds (q : ℚ) (hq : 0 < q) :
   obtain ⟨h_lo, h_hi⟩ := m_real_bounds q hq
   refine ⟨?_, ?_⟩
   · have h_le : ((10^18 : ℕ) : ℚ) ≤ q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog)) := by
-      have := h_lo
-      push_cast
-      convert this using 1
+      exact_mod_cast h_lo
     have h_ge_m : q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog))
         ≤ (⌈q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog))⌉₊ : ℚ) := Nat.le_ceil _
     have : ((10^18 : ℕ) : ℚ) ≤ (⌈q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog))⌉₊ : ℚ) :=
       le_trans h_le h_ge_m
     exact_mod_cast this
   · have h_le : q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog)) ≤ ((10^19 : ℕ) : ℚ) := by
-      have := le_of_lt h_hi
-      push_cast
-      convert this using 1
+      exact_mod_cast le_of_lt h_hi
     exact Nat.ceil_le.mpr h_le
 
 /-! ## Normalization and sign-flip lemmas -/

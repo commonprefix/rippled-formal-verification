@@ -77,13 +77,13 @@ lemma Number.lower_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
     · have h_eq : truncToValidMantissa m_floor_nat = m_floor_nat := by
         unfold truncToValidMantissa; rw [if_pos h1]
       rw [hm_tr_def, h_eq]; exact h_floor_ge
-    · push_neg at h1
+    · push Not at h1
       by_cases h2 : m_floor_nat < cuspMin
       · have h_eq : truncToValidMantissa m_floor_nat = maxRep.toNat := by
           unfold truncToValidMantissa
           rw [if_neg (by omega), if_pos h2]
         rw [hm_tr_def, h_eq]; omega
-      · push_neg at h2
+      · push Not at h2
         have h_eq : truncToValidMantissa m_floor_nat = (m_floor_nat / 10) * 10 := by
           unfold truncToValidMantissa
           rw [if_neg (by omega), if_neg (by omega)]
@@ -186,14 +186,14 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
       simp only at h_bump_eq
       by_cases hb3 : ((m_ceil_nat + 9) / 10) * 10 < 10^19
       · rw [if_pos hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
-      push_neg at hb3
+      push Not at hb3
       have h_div_eq : 10 * ((m_ceil_nat + 9) / 10) + (m_ceil_nat + 9) % 10 = m_ceil_nat + 9 :=
         Nat.div_add_mod (m_ceil_nat + 9) 10
       have h_mod_lt : (m_ceil_nat + 9) % 10 < 10 := Nat.mod_lt _ (by omega)
       omega
     have h_e_hi_strict : e_q + 1 ≤ n_hi.exponent_ := by
       by_contra h_not
-      push_neg at h_not
+      push Not at h_not
       have h_e_hi_eq : n_hi.exponent_ = e_q := by omega
       have h_hi_toRat : n_hi.toRat = (n_hi.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n_hi.exponent_ :=
         Number.toRat_of_nonneg n_hi h_hi_neg
@@ -246,7 +246,7 @@ lemma lowerPosAux_isSome_of_lt_top (q : ℚ) (hq : 0 < q)
     ∃ n, lowerPosAux q = some n := by
   have h_log_le : Int.log 10 q ≤ maxExponent + 18 := by
     by_contra h_not
-    push_neg at h_not
+    push Not at h_not
     have h_log_ge : maxExponent + 19 ≤ Int.log 10 q := by omega
     have h_pow_mono : (10 : ℚ) ^ (maxExponent + 19) ≤ (10 : ℚ) ^ (Int.log 10 q) :=
       zpow_le_zpow_right₀ (by norm_num) h_log_ge

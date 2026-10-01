@@ -51,7 +51,7 @@ private lemma decade_uniq {a c : ℕ} {b d : ℤ}
       omega
   by_cases hbd : b ≤ d
   · exact core a c b d ha ha' hc hbd h
-  · push_neg at hbd
+  · push Not at hbd
     obtain ⟨h1, h2⟩ := core c a d b hc hc' ha (le_of_lt hbd) h.symm
     exact ⟨h1.symm, h2.symm⟩
 

@@ -16,8 +16,10 @@ def lean_mk_withdraw_amount (amount : STAmount) (byShares : UInt8) : WithdrawAmo
   if byShares != 0 then .vaultShares amount else .vaultAssets amount
 
 @[export lean_vault_withdraw]
+-- `.error .badInput`: the amount would have failed preflight (`sfAmount > 0`).
 def lean_vault_withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : UInt8) : Except Error WithdrawResult :=
-  v.withdraw amount (waiveUnrealizedLoss != 0)
+  if h : 0 < amount.amount.toRat then v.withdraw amount (waiveUnrealizedLoss != 0) h
+  else .error .badInput
 
 @[export lean_withdraw_result_assets]
 def lean_withdraw_result_assets (r : WithdrawResult) : STAmount := r.assets'

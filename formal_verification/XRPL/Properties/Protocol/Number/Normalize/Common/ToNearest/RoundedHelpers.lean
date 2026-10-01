@@ -137,7 +137,7 @@ theorem normalize_rounded_to_nearest_proof (n result : Number)
     exact closest_lower_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_le
       (normalize_no_inbetween_below_to_nearest n result hnz hok hresult h_le)
-  · push_neg at h_le
+  · push Not at h_le
     have h_ge : n.toRat ≤ result.toRat := le_of_lt h_le
     right
     exact closest_upper_of_no_inbetween result n.toRat h_result_norm hresult

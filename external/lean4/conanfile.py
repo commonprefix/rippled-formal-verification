@@ -6,10 +6,10 @@ from conan.tools.files import copy, get
 
 # sha256-pinned Lean releases per platform (no elan installer) (bump with the lean-toolchain pin)
 _SHA256 = {
-    ("Macos", "x86_64"): "47010e6040ab2441dc96c1d9a3aca1721576fdbe4da566d938b29a26502fd378",
-    ("Macos", "armv8"): "d63a34d12978b035f871c8448d7243eb16711b8f5b27d7e9b093a210c1117e8d",
-    ("Linux", "x86_64"): "b02b74bb23e93e5b05f03f51ad06274814337d107718a02b6f89dc4db1387416",
-    ("Linux", "armv8"): "c608141afb645c7faa3845cc5dc503890ae329a82359f9bf37358d1fab499f81",
+    ("Macos", "x86_64"): "e099c2665dd6f240daa93fdd0f955298076ee96a5dbe5fcf69cdcbb477283cd8",
+    ("Macos", "armv8"): "49aa11970cf1cceba7e9c25af546e181d23ab4ef51aff3c3f23cc68b31df93e1",
+    ("Linux", "x86_64"): "3ffb3dc406912936a6b30885ce47a349c7ed8ee7e4e4dfac7361a497608bc8d1",
+    ("Linux", "armv8"): "86be153a5a57548790020af5097df2468afd032b8ecebc6be9dce0bee0799c35",
 }
 
 RELEASE_URL = "https://github.com/leanprover/lean4/releases/download/v{version}/lean-{version}-{os_tag}{arch_suffix}.zip"

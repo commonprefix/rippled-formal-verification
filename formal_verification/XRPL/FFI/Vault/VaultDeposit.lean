@@ -28,8 +28,10 @@ def lean_vault_is_insolvent (v : Vault) : Bool :=
   v.isInsolvent
 
 @[export lean_vault_deposit]
+-- `.error .badInput`: the amount would have failed preflight (`sfAmount > 0`).
 def lean_vault_deposit (v : Vault) (amountDeposit : STAmount) (isDonation : UInt8) : Except Error DepositResult :=
-  v.deposit amountDeposit (isDonation != 0)
+  if h : 0 < amountDeposit.toRat then v.deposit amountDeposit (isDonation != 0) h
+  else .error .badInput
 
 @[export lean_deposit_result_amount]
 def lean_deposit_result_amount (r : DepositResult) : STAmount := r.amountDeposit'

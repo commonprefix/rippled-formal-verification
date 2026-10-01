@@ -723,7 +723,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           have h6 : Ce.toNat % 1000 ≠ 0 := by omega
           rw [if_pos h6] at h2
           omega
-        · push_neg at hmod
+        · push Not at hmod
           rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
           have h5 := hM₁ℕ_mod_C h_dn
           have h6 : Ce.toNat % 1000 = 0 := by omega
@@ -746,7 +746,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
           have h6 : Ce.toNat % 1000 ≠ 0 := by omega
           rw [if_pos h6] at h2
           omega
-        · push_neg at hmod
+        · push Not at hmod
           rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero]
           have h5 := hM₁ℕ_mod_C h_up
           have h6 : Ce.toNat % 1000 = 0 := by omega
@@ -844,7 +844,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have h6 : Ce.toNat % 1000 ≠ 0 := by omega
         rw [if_pos h6] at h2
         omega
-      · push_neg at hmod
+      · push Not at hmod
         rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
         have h6 : Ce.toNat % 1000 = 0 := by omega
         rw [if_neg (by intro hh; exact hh h6)] at h2
@@ -865,7 +865,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have h6 : Ce.toNat % 1000 ≠ 0 := by omega
         rw [if_pos h6] at h2
         omega
-      · push_neg at hmod
+      · push Not at hmod
         rw [if_neg (by intro ⟨_, h⟩; exact h hmod), Nat.add_zero] at h_m
         have h6 : Ce.toNat % 1000 = 0 := by omega
         rw [if_neg (by intro hh; exact hh h6)] at h2

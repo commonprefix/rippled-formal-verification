@@ -36,7 +36,7 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
     rw [le_div_iff₀ (by norm_num : (0 : ℚ) < 9223372036854775815)]
     nlinarith [hE, hzm_ge_q, hf_nn]
   unfold Guard.doRoundUp Guard.bringIntoRange at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   by_cases h_eq_up : zm = maxRepUp
   · -- zm = maxRepUp: pushOverflow no-op; both round paths land on value maxRepUp · 10^ze.
     subst h_eq_up
@@ -92,10 +92,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze + 1 - 1 < minExponent ∨ (maxRepUp / 10) * 10 = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze + 1 - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -128,10 +128,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -173,10 +173,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRepUp : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -209,10 +209,10 @@ lemma doRoundUp_rounds_to_nearest_supTight_cusp_bounds (g : Guard) (zm : UInt64)
         have hzexp : ¬ ((-2147483648 : Int) > maxExponent) := by norm_num [maxExponent]
         simp only [hzexp, if_false] at hok_pos
         exact (Except.ok.inj hok_pos).symm ▸ rfl
-      · push_neg at h_under
+      · push Not at h_under
         obtain ⟨hexp, -⟩ := h_under
         have h_not_under : ¬ (ze < minExponent ∨ (maxRep : UInt64) = 0) := by
-          push_neg; exact ⟨hexp, by decide⟩
+          push Not; exact ⟨hexp, by decide⟩
         simp only [if_neg h_not_under] at hok_pos
         have h_no_ovf : ¬ (ze > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok_pos; simp at hok_pos
@@ -267,7 +267,7 @@ theorem cusp_interior_down_forces_div (g : Guard) (zm : UInt64) (f : ℚ)
     simp only [Bool.not_eq_true, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hnobump
     obtain ⟨hr1, hr0⟩ := hnobump
     have hflt : f < 1 / 2 := by
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       rcases lt_or_eq_of_le h with hgt | heq
       · exact hr1 (hf_gt hgt)
       · exact hr0 (hf_eq heq.symm)
@@ -319,7 +319,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
   -- f ≤ 1/2 whenever the guard does not decide to round up (regular)
   have hf_le_of_noRU : ¬ g.shouldRoundUp_to_nearest zm → f ≤ 1 / 2 := by
     intro hru
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     exact hru (Or.inl (hF.f_gt_half h))
   have hmaxRq : (maxRep.toNat : ℚ) = (maxRepNat : ℚ) := by exact_mod_cast maxRep_val
   have hpow : ∀ e : ℤ, (0 : ℚ) < 10 ^ e := fun e => zpow_pos (by norm_num) e
@@ -380,7 +380,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
           .normalize2 res_pos hF.rounds hF.res_mant_ne
         have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
         have hzm_ge : mantissaFloorSucc ≤ zm.toNat := by
-          by_contra h; push_neg at h
+          by_contra h; push Not at h
           have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
           have := hF.floor_cusp hzf; linarith [hf_le]
         have hzm_lt : zm.toNat < 10 ^ 19 := by
@@ -397,7 +397,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
           exact closeDown (zm.toNat : ℚ) ((zm.toNat : ℚ) + 1) ((zm.toNat : ℚ) + f) ze'
             ht_val hV hUb (by linarith [hf_le])
     · -- zm > maxRep (cusp interior / maxRepUp)
-      push_neg at hzm_le_rep
+      push Not at hzm_le_rep
       have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
       have hzmq_ge : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
         have : maxRepNat < zm.toNat := by rw [maxRep_val] at hzm_le_rep; exact hzm_le_rep
@@ -468,7 +468,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
           nlinarith [hf_lt]
         linarith [hcancel, hrhs, hf_lt]
   · -- UP
-    push_neg at hdir
+    push Not at hdir
     right
     have hnoinb := operator_div_no_inbetween_above x y r hx hy hxm hym hok hrm (le_of_lt hdir)
     obtain ⟨U, hU, hUeq⟩ :=
@@ -495,7 +495,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
       nlinarith [hkey]
     have hzc_pos : ∀ (zc : ℚ) (e : ℤ), t = zc * 10 ^ e → 0 < zc := by
       intro zc e htv
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       have : t ≤ 0 := by rw [htv]; exact mul_nonpos_of_nonpos_of_nonneg h (le_of_lt (hpow e))
       exact absurd hpos (by rw [htdef] at this ⊢; linarith)
     have closeUpMid : ∀ (V B zc : ℚ) (e : ℤ), t = zc * 10 ^ e → U.toRat = V * 10 ^ e →
@@ -537,7 +537,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
           exact closeUpMid ((zm.toNat : ℚ) + 1) (zm.toNat : ℚ) ((zm.toNat : ℚ) + f) ze'
             ht_val hUv hLb (by linarith [hf_ge])
         · -- floor band: zm = mantissaFloor, cusp cell at ze'-1
-          push_neg at hzm_ge
+          push Not at hzm_ge
           have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
           have hff : (8 : ℚ) / 10 ≤ f := hF.floor_cusp hzf
           have hzfq : (zm.toNat : ℚ) = (922337203685477580 : ℚ) := by rw [hzf]; norm_num
@@ -594,7 +594,7 @@ theorem operator_div_roundsCuspAware (x y r : Number)
         exact closeUp (maxRepUpNat : ℚ) (maxRepNat : ℚ) ((zm.toNat : ℚ) + f) ze'
           ht_val hUv hLb htiehcore
     · -- zm > maxRep: cusp interior UP (zm ∈ {maxRep+1, maxRep+2}); value maxRepUp
-      push_neg at hzm_le_rep
+      push Not at hzm_le_rep
       have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
       have hA : (0 : ℚ) < 10 ^ ze' := hpow ze'
       have hzmq_ge : (maxRepNat : ℚ) + 1 ≤ (zm.toNat : ℚ) := by

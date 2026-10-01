@@ -63,8 +63,7 @@ def sharesToAssetsDeposit (v : Vault) (shares : STAmount) : Except Error STAmoun
   let sharesNumber ← shares.toNumber .to_nearest
   let assetsShares ← v.assetsTotal.operator_mul sharesNumber .to_nearest
   let amountDepositNumber ← assetsShares.operator_div v.sharesTotal .to_nearest
-  -- (waiting the C++ fix) round the charge up so a depositor never pays less than the issued shares are worth
-  let amountDeposit ← STAmount.ofNumber v.numericType amountDepositNumber .upward
+  let amountDeposit ← STAmount.ofNumber v.numericType amountDepositNumber .to_nearest
   return amountDeposit
 
 inductive ComputeDepositResult where
@@ -86,7 +85,9 @@ def computeDeposit (v : Vault) (amountDeposit : STAmount) : Except Error Compute
     else
       throw e
 
-def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : Except Error DepositResult := do
+-- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)
+    (_hpos : 0 < amountDeposit.toRat) : Except Error DepositResult := do
   let vault := v.toRawVault
   let amount ← roundToVaultExponent amountDeposit vault.assetsTotal
 

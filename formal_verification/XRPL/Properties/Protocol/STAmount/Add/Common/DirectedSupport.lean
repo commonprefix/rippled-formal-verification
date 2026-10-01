@@ -167,7 +167,7 @@ lemma IOUAmount.add_sum_exponent_hi_anyMode (x y : IOUAmount) (xn yn sum : Numbe
     (hadd : Number.operator_add xn yn mode = .ok sum) :
     sum.exponent_ + 4 ≤ maxExponent := by
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   have hge : maxExponent - 3 ≤ sum.exponent_ := by omega
   have hsum_norm := operator_add_result_isNormalized_anyMode xn yn sum mode
     hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne

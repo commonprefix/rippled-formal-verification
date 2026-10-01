@@ -377,6 +377,38 @@ class LeanVaultWithdraw_test : public LeanSuite
             env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
+    // RECONSTRUCTION (temporary): FV_M2_4's scenario with the vault state staged directly rather
+    // than built by two deposits, so the second deposit (which trips the FV_M2_15_b invariant)
+    // is bypassed. Run against both the pre-merge total and the total the clamp would produce.
+    void
+    testWithdrawPrecisionLossStaged(Number const& assetsTotal)
+    {
+        using namespace jtx;
+        testcase("STAGED withdraw 1e-6 from total " + to_string(assetsTotal));
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        // Same first deposit as the original; only the 0.00001 top-up (which trips FV_M2_15_b)
+        // is staged instead of transacted.
+        env(jtx::Vault::deposit(
+                {.depositor = issuer,
+                 .id = vaultKeylet.key,
+                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        BEAST_EXPECT(updateVaultState(
+            env, vaultKeylet, assetsTotal, assetsTotal, 10'000'000'000'000'009ULL));
+        compareWithdraw(
+            env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
+    }
+
     // Finding (FV_M2_6, regression): preclaim computes waiveUnrealizedLoss (Yes for a sole
     // shareholder) and doApply used to ignore it, paying the withdrawer less. Both now waive.
     void
@@ -757,21 +789,28 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
-        // testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
-        // testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
-        // testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
-        // testWithdrawAppliedDelta();      // totals move by more than paid out (both)
+        testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
+        testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
+        testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
+        testWithdrawAppliedDelta();      // totals move by more than paid out (both)
 
-        // FV_M2_15: withdraw keeps the exact 17-digit difference, C++ rounds (associateAsset):
-        // testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tesSUCCESS);
-        // testWithdrawOvershoot();         // FV_M2_9: full withdrawal overshoots (both sides)
+        // testWithdrawOvershoot();      // FV_M2_9: full withdrawal overshoots (both sides)
 
         // Fixed discrepancies, kept as regression tests.
+        // FV_M2_15: a 6e-6 payout is below the 1e-5 ULP of assetsTotal; the clamp floors it to
+        // zero rather than moving the vault's books by a full ULP. Both sides reject.
+        testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tecPRECISION_LOSS);
         testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit with a loss
         testWithdrawWaiveLoss();              // FV_M2_6: doApply now honors the waiver
-        testWithdrawPrecisionLoss();          // FV_M2_4: dust withdrawal now rejects upfront
+        // FV_M2_4 is fixed, but its setup deposit trips FV_M2_15_b. The staged reconstruction
+        // below covers the same property without that dependency.
+        // testWithdrawPrecisionLoss();
         testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
         testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
+
+        // RECONSTRUCTION (temporary): FV_M2_4 with state staged, bypassing FV_M2_15_b.
+        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});  // pre-merge total
+        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});  // post-clamp total
         // clang-format on
     }
 };

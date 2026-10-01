@@ -655,7 +655,7 @@ theorem recover_decimalValue_dvd
             = 10 * decimalValue g.digits_ - nibble g.digits_ 15 * 10 ^ 16 := by omega
         rw [hsub]
         exact Nat.dvd_sub h10dv hd16
-      · push_neg at hJ
+      · push Not at hJ
         have hlt : decimalValue g.digits_ < 10 ^ 16 := decimalValue_lt_pow_16 hall
         have hdv0 : decimalValue g.digits_ = 0 := by
           rcases Nat.eq_zero_or_pos (decimalValue g.digits_) with h | h
@@ -761,7 +761,7 @@ theorem recover_value_in_unit_interval_at_exit
       rw [← pow_add]; congr 1; omega
     have hc_lt : c < 10 ^ (16 - k) := by
       by_contra hge
-      push_neg at hge
+      push Not at hge
       have h2 := Nat.mul_le_mul_left (10 ^ k) hge
       omega
     have hdv_add : decimalValue (Number.operator_add.recover upperLimit m e g fuel).2.2.digits_

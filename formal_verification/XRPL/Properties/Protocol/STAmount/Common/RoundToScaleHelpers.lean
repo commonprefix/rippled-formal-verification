@@ -68,7 +68,7 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
       constructor <;> omega
     · have h_v : 0 ≤ a.mantissa_.toInt := by
         by_contra h_c
-        push_neg at h_c
+        push Not at h_c
         apply h_lt
         rw [Int64.lt_iff_toInt_lt, (by decide : (0 : Int64).toInt = 0)]
         exact h_c

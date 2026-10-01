@@ -47,7 +47,7 @@ theorem normalized_gap_bound (a b : Number)
     · rw [h] at ha_ne; exact absurd rfl ha_ne
     · exact h.2.2.1
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   rw [ha_val] at hcon  -- hcon : maxRepNat * (b.toRat - MA*10^EA) < MA*10^EA
   by_cases hle : MA ≤ maxRepNat
   · -- M ≤ maxRep: cell (M·10^E, (M+1)·10^E)
@@ -58,7 +58,7 @@ theorem normalized_gap_bound (a b : Number)
     have hb_lo : (MA : ℚ) * 10 ^ EA < b.toRat := by rw [← ha_val]; exact hlt
     exact no_normalized_in_open_ulp_gap_pos_zm EA MA (by omega) (by omega) b hb hbpos hb_lo hb_hi
   · -- M > maxRep so M % 10 = 0: rescale, cell (M·10^E, (M+10)·10^E)
-    push_neg at hle  -- hle : maxRepNat < MA
+    push Not at hle  -- hle : maxRepNat < MA
     have hmod : MA % 10 = 0 := by
       rcases hcusp with h | h
       · exfalso; have := UInt64.le_iff_toNat_le.mp h; rw [maxRep_val] at this; omega

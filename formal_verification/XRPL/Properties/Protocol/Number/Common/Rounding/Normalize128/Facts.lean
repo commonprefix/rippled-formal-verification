@@ -207,7 +207,7 @@ theorem doNormalize_scaleDown128_repr
     obtain rfl := (Except.ok.inj hok).symm
     have h_le : m.toNat ≤ maxMantissa.toNat := by
       by_contra h
-      push_neg at h
+      push Not at h
       apply hgt
       change toUInt128 maxMantissa < m
       rw [BitVec.lt_def, toNat_toUInt128]
@@ -313,7 +313,7 @@ theorem doNormalize_capAtMaxRep_repr
     obtain rfl := (Except.ok.inj hok).symm
     have h_le_nat : m.toNat ≤ maxRepUp.toNat := by
       by_contra h
-      push_neg at h
+      push Not at h
       exact h_gt (UInt64.lt_iff_toNat_lt.mpr h)
     refine ⟨φ, ftilde, hφ_low, hφ_le, hrep, le_refl _, rfl, ?_, h_le_nat, le_refl _,
       rfl, fun hx => hx, fun h => h, fun h => h⟩

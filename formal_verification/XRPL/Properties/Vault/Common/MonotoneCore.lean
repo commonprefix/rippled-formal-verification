@@ -69,7 +69,7 @@ theorem round_mono_core (t₁ t₂ : ℚ) (r₁ r₂ : Number)
     (hle : t₁ ≤ t₂) (hdet : t₁ = t₂ → r₁.toRat = r₂.toRat) :
     r₁.toRat ≤ r₂.toRat := by
   by_contra hcon
-  push_neg at hcon
+  push Not at hcon
   -- distances, squared: `r₁` is at least as close to `t₁` as `r₂`, and vice versa
   have e1 : |r₁.toRat - t₁| ≤ |r₂.toRat - t₁| := h₁ r₂ hr₂
   have e2 : |r₂.toRat - t₂| ≤ |r₁.toRat - t₂| := h₂ r₁ hr₁
@@ -119,11 +119,11 @@ theorem Number.nearestTo_of_gap (t f : ℚ) (zm : UInt64) (ze' : Int) (r : Numbe
     · rw [abs_of_nonpos (by nlinarith [hpow, hf_nn]),
           abs_of_nonpos (by nlinarith [hpow, hmL, hf_nn])]
       nlinarith [hpow, hmL]
-    · push_neg at hmL
+    · push Not at hmL
       have hmpos : 0 < m.toRat := lt_trans (by positivity) hmL
       have hmge : ((zm.toNat : ℚ) + 1) * 10 ^ ze' ≤ m.toRat := by
         by_contra hlt
-        push_neg at hlt
+        push Not at hlt
         exact no_normalized_in_open_ulp_gap_pos_zm ze' zm.toNat hzm_lo hzm_hi m hm hmpos hmL hlt
       rw [abs_of_nonpos (by nlinarith [hpow, hf_nn]),
           abs_of_nonneg (by nlinarith [hpow, hmge])]
@@ -134,13 +134,13 @@ theorem Number.nearestTo_of_gap (t f : ℚ) (zm : UInt64) (ze' : Int) (r : Numbe
     · rw [abs_of_nonneg (by nlinarith [hpow, hf_lt]),
           abs_of_nonneg (by nlinarith [hpow, hmU, hf_lt])]
       nlinarith [hpow, hmU]
-    · push_neg at hmU
+    · push Not at hmU
       have hmle : m.toRat ≤ (zm.toNat : ℚ) * 10 ^ ze' := by
         by_cases hmpos : 0 < m.toRat
         · by_contra hgt
-          push_neg at hgt
+          push Not at hgt
           exact no_normalized_in_open_ulp_gap_pos_zm ze' zm.toNat hzm_lo hzm_hi m hm hmpos hgt hmU
-        · push_neg at hmpos
+        · push Not at hmpos
           nlinarith [hpow, hzm_pos, hmpos]
       rw [abs_of_nonneg (by nlinarith [hpow, hf_lt]),
           abs_of_nonpos (by nlinarith [hpow, hmle, hf_lt])]
@@ -174,7 +174,7 @@ theorem doRoundUp_clean_down_up (g : Guard) (zm : UInt64) (ze' : Int) (f : ℚ)
     have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le loc res_pos hrounds hres_ne
     refine ⟨by rw [habs, hval], ?_⟩
     by_contra hlt
-    push_neg at hlt
+    push Not at hlt
     exact hru (Or.inl (represents_f_gt_half hf_rep hlt))
 
 /-- **`NearestTo` for an `operator_mul` result on the regular grid range.** From the
@@ -213,7 +213,7 @@ lemma Number.operator_mul_to_nearest_le (x y z r : Number)
     (hok : Number.operator_mul x y .to_nearest = .ok r) (hres : r.mantissa_ ≠ 0)
     (hz_ge : x.toRat * y.toRat ≤ z.toRat) : r.toRat ≤ z.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have h_ge : x.toRat * y.toRat ≤ r.toRat := le_trans hz_ge (le_of_lt hlt)
   exact operator_mul_no_inbetween_above x y r hx hy hxm hym hok hres h_ge z hz hlt hz_ge
 
@@ -225,7 +225,7 @@ lemma Number.operator_mul_to_nearest_ge (x y z r : Number)
     (hok : Number.operator_mul x y .to_nearest = .ok r) (hres : r.mantissa_ ≠ 0)
     (hz_le : z.toRat ≤ x.toRat * y.toRat) : z.toRat ≤ r.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have h_le : r.toRat ≤ x.toRat * y.toRat := le_trans (le_of_lt hlt) hz_le
   exact operator_mul_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hres h_le z hz hlt hz_le
 
@@ -237,7 +237,7 @@ lemma Number.operator_div_to_nearest_le (x y z r : Number)
     (hok : Number.operator_div x y .to_nearest = .ok r) (hres : r.mantissa_ ≠ 0)
     (hz_ge : x.toRat / y.toRat ≤ z.toRat) : r.toRat ≤ z.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have h_ge : x.toRat / y.toRat ≤ r.toRat := le_trans hz_ge (le_of_lt hlt)
   exact operator_div_no_inbetween_above x y r hx hy hxm hym hok hres h_ge z hz hlt hz_ge
 
@@ -249,7 +249,7 @@ lemma Number.operator_div_to_nearest_ge (x y z r : Number)
     (hok : Number.operator_div x y .to_nearest = .ok r) (hres : r.mantissa_ ≠ 0)
     (hz_le : z.toRat ≤ x.toRat / y.toRat) : z.toRat ≤ r.toRat := by
   by_contra hlt
-  push_neg at hlt
+  push Not at hlt
   have h_le : r.toRat ≤ x.toRat / y.toRat := le_trans (le_of_lt hlt) hz_le
   exact operator_div_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hres h_le z hz hlt hz_le
 

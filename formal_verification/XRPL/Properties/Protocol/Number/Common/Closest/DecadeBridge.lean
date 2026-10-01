@@ -75,7 +75,7 @@ theorem Number.lower_eq_floor_in_decade (q : ℚ) (E : ℤ)
   have hK_hi : K < 2 * 10 ^ 18 := by
     have h1 : (K : ℚ) ≤ q / 10 ^ E := Int.floor_le _
     by_contra h_not
-    push_neg at h_not
+    push Not at h_not
     have h2 : ((2 * 10 ^ 18 : ℤ) : ℚ) ≤ (K : ℚ) := by exact_mod_cast h_not
     have h3 : ((2 * 10 ^ 18 : ℤ) : ℚ) = 2 * 10 ^ (18 : ℕ) := by norm_num
     linarith
@@ -158,7 +158,7 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
   have hC_lo : (10 ^ 18 : ℤ) ≤ C := by
     have h1 : q / 10 ^ E ≤ (C : ℚ) := Int.le_ceil _
     by_contra h_not
-    push_neg at h_not
+    push Not at h_not
     have h2 : (C : ℚ) < ((10 ^ 18 : ℤ) : ℚ) := by exact_mod_cast h_not
     have h3 : ((10 ^ 18 : ℤ) : ℚ) = (10 : ℚ) ^ (18 : ℕ) := by norm_num
     linarith
@@ -209,7 +209,7 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
         have := Int.ceil_lt_add_one (q / 10 ^ E)
         have h2 : ((C - 1 : ℤ) : ℚ) < q / 10 ^ E := by
           by_contra h_not
-          push_neg at h_not
+          push Not at h_not
           have h3 : ⌈q / 10 ^ E⌉ ≤ C - 1 := Int.ceil_le.mpr h_not
           omega
         push_cast at h2
@@ -256,7 +256,7 @@ theorem Number.lower_eq_floor_in_decade_neg (q : ℚ) (E : ℤ)
   have h_up_unfold : Number.upper (-q) = upperPosAux (-q) := by
     unfold Number.upper
     rw [if_neg (by intro h; linarith : ¬ (-q : ℚ) = 0),
-        if_neg (by push_neg; linarith : ¬ (-q : ℚ) < 0)]
+        if_neg (by push Not; linarith : ¬ (-q : ℚ) < 0)]
   rw [h_up_unfold] at hm_eq
   rw [Number.lower_neg_eq q hq_neg, hm_eq]
   refine ⟨{ m with negative_ := true }, rfl, ?_⟩
@@ -298,7 +298,7 @@ theorem Number.upper_eq_ceil_in_decade_neg (q : ℚ) (E : ℤ)
   have h_lo_unfold : Number.lower (-q) = lowerPosAux (-q) := by
     unfold Number.lower
     rw [if_neg (by intro h; linarith : ¬ (-q : ℚ) = 0),
-        if_neg (by push_neg; linarith : ¬ (-q : ℚ) < 0)]
+        if_neg (by push Not; linarith : ¬ (-q : ℚ) < 0)]
   rw [h_lo_unfold] at hm_eq
   rw [Number.upper_neg_eq q hq_neg, hm_eq]
   simp only [Option.map_some]

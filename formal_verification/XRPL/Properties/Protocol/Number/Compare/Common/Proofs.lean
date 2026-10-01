@@ -231,7 +231,7 @@ theorem operator_le_iff_proof (x y : Number)
   constructor
   · intro h
     by_contra hc
-    push_neg at hc
+    push Not at hc
     have hbt := (operator_lt_iff_proof y x hy hx).mpr hc
     unfold Number.operator_le at h
     rw [hbt] at h
@@ -259,7 +259,7 @@ theorem operator_ge_iff_proof (x y : Number)
   constructor
   · intro h
     by_contra hc
-    push_neg at hc
+    push Not at hc
     have hbt := (operator_lt_iff_proof x y hx hy).mpr hc
     unfold Number.operator_ge at h
     rw [hbt] at h

@@ -144,7 +144,7 @@ theorem operator_div_rounded_to_nearest_proof (x y result : Number)
     exact closest_lower_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_le
       (operator_div_no_inbetween_below_to_nearest x y result hx hy hxz hyz hok hresult h_le)
-  · push_neg at h_le
+  · push Not at h_le
     have h_ge : x.toRat / y.toRat ≤ result.toRat := le_of_lt h_le
     right
     exact closest_upper_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult

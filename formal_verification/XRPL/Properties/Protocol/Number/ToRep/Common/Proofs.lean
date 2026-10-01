@@ -535,9 +535,9 @@ lemma to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode : roun
     omega
   have hnpre : ¬ (maxRep < m) := by rw [UInt64.lt_iff_toNat_lt]; omega
   have hmant : (Number.unchecked neg m 0).mantissa = (if neg then -m.toInt64 else m.toInt64) := by
-    simp only [Number.mantissa, Number.unchecked, if_neg hnpre]
+    simp only [Number.mantissa, Number.unchecked, gt_iff_lt, if_neg hnpre]
   have hexp : (Number.unchecked neg m 0).exponent = 0 := by
-    simp only [Number.exponent, Number.unchecked, if_neg hnpre]
+    simp only [Number.exponent, Number.unchecked, gt_iff_lt, if_neg hnpre]
   have hneg_ : (Number.unchecked neg m 0).negative_ = neg := rfl
   unfold Number.to_rep at hok
   simp only [hmant, hexp, hneg_] at hok

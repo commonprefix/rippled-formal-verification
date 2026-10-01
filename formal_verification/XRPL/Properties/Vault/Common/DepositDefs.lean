@@ -30,6 +30,11 @@ computation below chains more than three stages, so `10 ^ (-17)` covers every
 composition. -/
 def depositε : ℚ := (10 : ℚ) ^ (-17 : ℤ)
 
+/-- Relative error budget of the two `.to_nearest` `Number` stages (`mul`, then `div`) that
+price a share count (deposit, withdrawal by assets, clawback). The worst stage error is half a step of the coarsest
+normalized grid, `5 / (2 ^ 63 + 7)`, so two stages stay below `11 / 10 ^ 19`. -/
+def sharesε : ℚ := 11 / 10 ^ 19
+
 /-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
 def RawVault.depositNav (rv : RawVault) : ℚ :=

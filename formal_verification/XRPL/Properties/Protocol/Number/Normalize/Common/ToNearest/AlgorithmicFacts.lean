@@ -291,7 +291,7 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
     simp only [if_true] at hok
     have : Number.zero = result := Except.ok.inj hok
     rw [← this] at hresult; exact absurd rfl hresult
-  · push_neg at hzero
+  · push Not at hzero
     obtain ⟨he2_ge, hm2_ge⟩ := hzero
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by
       rw [Bool.or_eq_false_iff]
@@ -370,7 +370,7 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
             rw [this, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
         rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hmr
         omega
-      · push_neg at hmr
+      · push Not at hmr
         have hm3_eq : m3.toNat = m2.toNat := by
           unfold doNormalize_capAtMaxRep at hcap
           have hmr_u : ¬ m2 > maxRepUp := by

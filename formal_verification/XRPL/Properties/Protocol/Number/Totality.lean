@@ -85,12 +85,12 @@ theorem Guard.doRoundUp_ok_of_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : 
     (he : e + 1 ≤ maxExponent) :
     ∃ res, g.doRoundUp neg m e minM maxM mode loc = .ok res := by
   unfold Guard.doRoundUp Guard.bringIntoRange
-  simp only [Guard.doDropDigit]
+  dsimp only [Guard.doDropDigit]
   unfold maxExponent minExponent at *
   split_ifs <;>
     first
       | exact ⟨_, rfl⟩
-      | (exfalso; simp only [] at *; omega)
+      | (exfalso; (try simp only [] at *); omega)
 
 /-- **`doRoundUp` output exponent bound.** The rounding step never raises the
 exponent above the source `e + 1`: `bringIntoRange` keeps or lowers it, and only
@@ -102,12 +102,12 @@ theorem Guard.doRoundUp_ok_output_exp_le (g : Guard) (neg : Bool) (m : UInt64) (
     (hok : g.doRoundUp neg m e minM maxM mode loc = .ok res) :
     res.exponent_ ≤ e + 1 := by
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   unfold maxExponent minExponent at *
   split_ifs at hok <;>
     injection hok with hok' <;>
     subst hok' <;>
-    simp only [] <;>
+    (try simp only []) <;>
     omega
 
 /-! ## Forward totality of the `doNormalize` back half
@@ -242,7 +242,7 @@ theorem scaleDown128_output_bound (M : UInt128) (e : Int) (g0 : Guard) :
   obtain ⟨k, hek, hm, hinv⟩ := scaleDown128_forward_exp_bound M e g0
   have hk20 : k ≤ 20 := by
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     have hk1 : 20 ≤ k - 1 := by omega
     have hpow : (10 : ℕ) ^ 20 ≤ 10 ^ (k - 1) :=
       Nat.pow_le_pow_right (by norm_num) hk1
@@ -594,7 +594,7 @@ headroom.** The same shape as the capped version below, with the exponent bound 
 needs given directly: 22 steps below `maxExponent`. A zero subtrahend is the identity, otherwise
 the negated subtrahend has the opposite sign to `x` and the different-sign add is total. -/
 theorem Number.operator_sub_ok_of_normalized_exp (x y : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
+    (_hx : x.isNormalized) (_hy : y.isNormalized)
     (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
     (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
     ∃ result, x.operator_sub y mode = .ok result := by
