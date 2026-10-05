@@ -53,7 +53,8 @@ lemma LoanBroker.create_cover_rates_uncoupled_proof (tx : LoanBrokerSetCreate)
 
 /-- **Proof body of `create_success`.** -/
 lemma LoanBroker.create_success_proof (tx : LoanBrokerSetCreate) (nt : NumericType)
-    (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ 0 ≤ dm.toRat ∧ dm.toRat ≤ (2 : ℚ) ^ 63 - 1)
+    (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
+      dm.operator_le debtMaximumCap = true)
     (hfee : tx.managementFeeRate.getD 0 ≤ maxManagementFeeRate)
     (hmin : tx.coverRateMinimum.getD 0 ≤ maxCoverRate)
     (hliq : tx.coverRateLiquidation.getD 0 ≤ maxCoverRate)
@@ -62,36 +63,28 @@ lemma LoanBroker.create_success_proof (tx : LoanBrokerSetCreate) (nt : NumericTy
       lb.toRawLoanBroker = LoanBroker.createRaw tx nt := by
   -- the stored maximum is the requested one, or zero when none was requested
   have hdm' : (tx.debtMaximum.getD Number.zero).isNormalized ∧
-      0 ≤ (tx.debtMaximum.getD Number.zero).toRat ∧
-      (tx.debtMaximum.getD Number.zero).toRat ≤ (2 : ℚ) ^ 63 - 1 := by
+      Number.zero.operator_le (tx.debtMaximum.getD Number.zero) = true ∧
+      (tx.debtMaximum.getD Number.zero).operator_le debtMaximumCap = true := by
     cases h : tx.debtMaximum with
     | none =>
-      simp only [Option.getD_none, Number.toRat_zero]
-      exact ⟨Number.zero_isNormalized, le_refl _, by norm_num⟩
+      have ⟨hcv, hcn⟩ := debtMaximumCap_facts
+      refine ⟨Number.zero_isNormalized, by decide, ?_⟩
+      rw [Option.getD_none, operator_le_iff _ _ Number.zero_isNormalized hcn, Number.toRat_zero, hcv]
+      norm_num
     | some dm => simpa using hdm dm h
   have hwf : (LoanBroker.createRaw tx nt).WF :=
     ⟨Number.zero_isNormalized, hdm'.1, Number.zero_isNormalized⟩
-  have he : (LoanBroker.createRaw tx nt).toExact.Valid := by
-    refine
-      { debtTotal_nonneg := ?_
-        coverAvailable_nonneg := ?_
-        debt_within_cap := ?_
-        empty_broker := ?_
-        debtMaximum_nonneg := hdm'.2.1
-        debtMaximum_cap := hdm'.2.2
-        managementFeeRate_cap := UInt16.le_iff_toNat_le.mp hfee
-        coverRateMinimum_cap := UInt32.le_iff_toNat_le.mp hmin
-        coverRateLiquidation_cap := UInt32.le_iff_toNat_le.mp hliq
-        coverRates_coupled := ?_ }
-    · show (0 : ℚ) ≤ Number.zero.toRat; rw [Number.toRat_zero]
-    · show (0 : ℚ) ≤ Number.zero.toRat; rw [Number.toRat_zero]
-    · intro _
-      show Number.zero.toRat ≤ (tx.debtMaximum.getD Number.zero).toRat
-      rw [Number.toRat_zero]; exact hdm'.2.1
-    · intro _; show Number.zero.toRat = 0; exact Number.toRat_zero
-    · show (tx.coverRateMinimum.getD 0).toNat = 0 ↔ (tx.coverRateLiquidation.getD 0).toNat = 0
-      rw [UInt32.toNat_eq_zero_iff, UInt32.toNat_eq_zero_iff]; exact hcoupled
-  have hv := (RawLoanBroker.valid_iff_exact _ hwf).mpr he
+  have hv : (LoanBroker.createRaw tx nt).Valid :=
+    { debtTotal_nonneg := (by decide : Number.zero.operator_le Number.zero = true)
+      coverAvailable_nonneg := (by decide : Number.zero.operator_le Number.zero = true)
+      debt_within_cap := fun _ => hdm'.2.1
+      empty_broker := fun _ => rfl
+      debtMaximum_nonneg := hdm'.2.1
+      debtMaximum_cap := hdm'.2.2
+      managementFeeRate_cap := hfee
+      coverRateMinimum_cap := hmin
+      coverRateLiquidation_cap := hliq
+      coverRates_coupled := hcoupled }
   unfold LoanBroker.create
   exact RawLoanBroker.to_lawful_ok_of hwf hv
 
@@ -132,25 +125,18 @@ lemma LoanBroker.update_not_lawful_proof (lb : LoanBroker) (dm : Number)
 
 /-- **Proof body of `update_success`.** -/
 lemma LoanBroker.update_success_proof (lb : LoanBroker) (dm : Number)
-    (hnorm : dm.isNormalized) (hnn : 0 ≤ dm.toRat) (hcap : dm.toRat ≤ (2 : ℚ) ^ 63 - 1)
-    (hdebt : dm.toRat = 0 ∨ lb.toExact.debtTotal ≤ dm.toRat) :
+    (hnorm : dm.isNormalized) (hnn : Number.zero.operator_le dm = true)
+    (hcap : dm.operator_le debtMaximumCap = true)
+    (hdebt : dm ≠ Number.zero → lb.debtTotal.operator_le dm = true) :
     ∃ lb', lb.update (some dm) = .ok lb' ∧
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm } := by
   have hwf : ({ lb.toRawLoanBroker with debtMaximum := dm } : RawLoanBroker).WF :=
     ⟨lb.wf.debtTotal_norm, hnorm, lb.wf.coverAvailable_norm⟩
-  have hlb := lb.exact
-  have he : ({ lb.toRawLoanBroker with debtMaximum := dm } : RawLoanBroker).toExact.Valid :=
-    { debtTotal_nonneg := hlb.debtTotal_nonneg
-      coverAvailable_nonneg := hlb.coverAvailable_nonneg
-      debt_within_cap := fun hne => hdebt.resolve_left hne
-      empty_broker := hlb.empty_broker
+  have hv : ({ lb.toRawLoanBroker with debtMaximum := dm } : RawLoanBroker).Valid :=
+    { lb.valid with
+      debt_within_cap := hdebt
       debtMaximum_nonneg := hnn
-      debtMaximum_cap := hcap
-      managementFeeRate_cap := hlb.managementFeeRate_cap
-      coverRateMinimum_cap := hlb.coverRateMinimum_cap
-      coverRateLiquidation_cap := hlb.coverRateLiquidation_cap
-      coverRates_coupled := hlb.coverRates_coupled }
-  have hv := (RawLoanBroker.valid_iff_exact _ hwf).mpr he
+      debtMaximum_cap := hcap }
   rw [LoanBroker.update_eq]
   exact RawLoanBroker.to_lawful_ok_of hwf hv
 

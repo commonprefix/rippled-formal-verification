@@ -12,7 +12,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 
 /-- The debt cap `Number` is `2^63 − 1` and normalized. -/
-private lemma debtMaximumCap_facts :
+lemma debtMaximumCap_facts :
     debtMaximumCap.toRat = (2 : ℚ) ^ 63 - 1 ∧ debtMaximumCap.isNormalized := by
   obtain ⟨r, hok, hval, hnorm⟩ := Number.from_rep_exact (9223372036854775807 : Int64) 0 .to_nearest
     (by decide) (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)

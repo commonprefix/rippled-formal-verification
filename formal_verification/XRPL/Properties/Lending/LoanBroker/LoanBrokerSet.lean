@@ -14,7 +14,9 @@ variable (lb : LoanBroker)
 /-- In-range parameters create a lawful broker holding exactly the requested
 values. -/
 theorem LoanBroker.create_success (tx : LoanBrokerSetCreate) (nt : NumericType)
-    (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ 0 ≤ dm.toRat ∧ dm.toRat ≤ (2 : ℚ) ^ 63 - 1)
+    -- a requested maximum is normalized and in `[0, 2^63 - 1]`
+    (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
+      dm.operator_le debtMaximumCap = true)
     (hfee : tx.managementFeeRate.getD 0 ≤ maxManagementFeeRate) -- at most 10%
     (hmin : tx.coverRateMinimum.getD 0 ≤ maxCoverRate) -- at most 100%
     (hliq : tx.coverRateLiquidation.getD 0 ≤ maxCoverRate) -- at most 100%
@@ -41,8 +43,9 @@ theorem LoanBroker.canCreate_debtMaximum_not_rounded (dm : Number) (nt : Numeric
 lawful broker that differs from the old one only in `debtMaximum`. -/
 theorem LoanBroker.update_success (dm : Number)
     (hnorm : dm.isNormalized) -- the new maximum is normalized
-    (hnn : 0 ≤ dm.toRat) (hcap : dm.toRat ≤ (2 : ℚ) ^ 63 - 1) -- and in `[0, 2^63 - 1]`
-    (hdebt : dm.toRat = 0 ∨ lb.toExact.debtTotal ≤ dm.toRat) : -- zero or not below the debt
+    -- and in `[0, 2^63 - 1]`
+    (hnn : Number.zero.operator_le dm = true) (hcap : dm.operator_le debtMaximumCap = true)
+    (hdebt : dm ≠ Number.zero → lb.debtTotal.operator_le dm = true) : -- zero or not below the debt
     ∃ lb', lb.update (some dm) = .ok lb' ∧
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm } :=
   LoanBroker.update_success_proof lb dm hnorm hnn hcap hdebt

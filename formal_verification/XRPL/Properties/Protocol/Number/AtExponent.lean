@@ -262,24 +262,6 @@ lemma Number.operator_sub_ok_of_lt (x y : Number) (mode : rounding_mode) (hx : x
   Number.operator_sub_ok_of_exp x y mode hx hy (Number.exponent_headroom_of_lt x hx hx0 hxlt)
     (Number.exponent_headroom_of_lt y hy hy0 hylt)
 
-/-- Subtracting a value at least as large, rounding down, never gives a positive
-result. -/
-lemma Number.signum_nonpos_of_sub_downward (x y d : Number) (hx : x.isNormalized)
-    (hy : y.isNormalized) (hsub : x.operator_sub y .downward = .ok d) (hle : x.toRat ≤ y.toRat) :
-    d.signum ≤ 0 := by
-  unfold Number.signum
-  split_ifs with hneg hm
-  · norm_num
-  · exfalso
-    have hm' : d.mantissa_ ≠ 0 := by simpa using hm
-    obtain ⟨n, hn, heq⟩ := operator_sub_rounded_downward x y d hx hy hsub hm'
-    have hdle : d.toRat ≤ x.toRat - y.toRat := heq ▸ Number.lower_le _ n hn
-    have hnn : 0 ≤ d.toRat := Number.toRat_nonneg_of_nonnegative d (by simpa using hneg)
-    have hne : d.toRat ≠ 0 := fun h => hm' (Number.toRat_eq_zero_iff.mp h)
-    have : 0 < d.toRat := lt_of_le_of_ne hnn (Ne.symm hne)
-    linarith
-  · exact le_refl _
-
 /-- Subtracting zero gives the same `Number`, in every rounding mode. -/
 lemma Number.operator_sub_zero (x : Number) (mode : rounding_mode) :
     x.operator_sub Number.zero mode = .ok x :=

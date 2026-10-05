@@ -12,9 +12,8 @@ open XRPL.Model.Result
 
 variable {α : Type} [AssetPool α]
 
-/-- No cover above the minimum: the clawback amount is rejected with
-`tecINSUFFICIENT_FUNDS`. -/
-private lemma LoanBroker.roundedCoverClawback_insufficient (lb : LoanBroker) (pool : α)
+/-- **Proof body of `roundedCoverClawback_no_excess`.** -/
+lemma LoanBroker.roundedCoverClawback_no_excess_proof (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
@@ -22,23 +21,6 @@ private lemma LoanBroker.roundedCoverClawback_insufficient (lb : LoanBroker) (po
     (hle : maxClaw.signum ≤ 0) :
     lb.roundedCoverClawback pool amount = .ok (.rejected .tecINSUFFICIENT_FUNDS) := by
   simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hle]
-
-/-- **Proof body of `roundedCoverClawback_no_excess`.** -/
-lemma LoanBroker.roundedCoverClawback_no_excess_proof (lb : LoanBroker) (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
-    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) :
-    lb.roundedCoverClawback pool amount = .ok (.rejected .tecINSUFFICIENT_FUNDS) := by
-  -- both values are nonnegative and below `10^96`, so the subtraction succeeds
-  have hmcap := LoanBroker.minimumCover_lt_cap lb e minimumCover hmin
-  obtain ⟨maxClaw, hs⟩ := Number.operator_sub_ok_of_lt lb.coverAvailable minimumCover .downward
-    lb.wf.coverAvailable_norm (minimumBrokerCover_isNormalized _ _ _ _ _ hmin)
-    lb.exact.coverAvailable_nonneg (lt_of_le_of_lt hle hmcap)
-    (LoanBroker.minimumCover_nonneg lb pool e _ hexp hmin) hmcap
-  exact LoanBroker.roundedCoverClawback_insufficient lb pool amount e minimumCover maxClaw hexp
-    hmin hs (Number.signum_nonpos_of_sub_downward _ _ _ lb.wf.coverAvailable_norm
-      (minimumBrokerCover_isNormalized _ _ _ _ _ hmin) hs hle)
 
 /-- **Proof body of `roundedCoverClawback_zero_eq_none`.** -/
 lemma LoanBroker.roundedCoverClawback_zero_eq_none_proof (lb : LoanBroker) (pool : α)
@@ -167,13 +149,14 @@ lemma LoanBroker.roundedCoverClawback_capped_proof (lb : LoanBroker) (pool : α)
 
 /-- **Proof body of `canCoverClawback_no_excess`.** -/
 lemma LoanBroker.canCoverClawback_no_excess_proof (lb : LoanBroker) (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) :
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hle : maxClaw.signum ≤ 0) :
     lb.canCoverClawback pool amount = .ok .tecINSUFFICIENT_FUNDS := by
   simp [LoanBroker.canCoverClawback,
-    LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover hexp hmin hle]
+    LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin hsub hle]
 
 /-- **Proof body of `canCoverClawback_precision_loss`.** -/
 lemma LoanBroker.canCoverClawback_precision_loss_proof (lb : LoanBroker) (pool : α)
@@ -251,13 +234,14 @@ lemma LoanBroker.coverClawback_amount_nonzero (lb : LoanBroker) (pool : α)
 
 /-- **Proof body of `coverClawback_no_excess`.** -/
 lemma LoanBroker.coverClawback_no_excess_proof (lb : LoanBroker) (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) :
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hle : maxClaw.signum ≤ 0) :
     lb.coverClawback pool amount = .ok (.error .tecINTERNAL) := by
   simp [LoanBroker.coverClawback,
-    LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover hexp hmin hle]
+    LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin hsub hle]
 
 /-- **Proof body of `coverClawback_negative_cover`.** -/
 lemma LoanBroker.coverClawback_negative_cover_proof (lb : LoanBroker) (pool : α)

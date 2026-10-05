@@ -18,13 +18,15 @@ variable (lb : LoanBroker)
 
 /-- A `coverAvailable` at most the minimum cover: `tecINSUFFICIENT_FUNDS`. -/
 theorem LoanBroker.roundedCoverClawback_no_excess (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
     -- the minimum cover the debt requires
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) : -- no cover above the minimum
+    -- the cover above the minimum, rounded down, is not positive
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hle : maxClaw.signum ≤ 0) :
     lb.roundedCoverClawback pool amount = .ok (.rejected .tecINSUFFICIENT_FUNDS) :=
-  LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover hexp hmin hle
+  LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin hsub hle
 
 /-- A zero amount is the same clawback as no amount: both take all cover above the
 minimum. -/
@@ -43,13 +45,15 @@ theorem LoanBroker.roundedCoverClawback_rejected_code (pool : α)
 
 /-- A `coverAvailable` at most the minimum cover: `tecINSUFFICIENT_FUNDS`. -/
 theorem LoanBroker.canCoverClawback_no_excess (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
     -- the minimum cover the debt requires
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) : -- no cover above the minimum
+    -- the cover above the minimum, rounded down, is not positive
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hle : maxClaw.signum ≤ 0) :
     lb.canCoverClawback pool amount = .ok .tecINSUFFICIENT_FUNDS :=
-  LoanBroker.canCoverClawback_no_excess_proof lb pool amount e minimumCover hexp hmin hle
+  LoanBroker.canCoverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin hsub hle
 
 /-- A clawed amount that is zero, or rounds to zero at the scale of
 `coverAvailable`: `tecPRECISION_LOSS`. -/
@@ -90,13 +94,15 @@ theorem LoanBroker.canCoverClawback_error_codes (pool : α)
 /-- A `coverAvailable` at most the minimum cover makes `coverClawback` fail with
 `tecINTERNAL`. -/
 theorem LoanBroker.coverClawback_no_excess (pool : α)
-    (amount : Option STAmount) (e : Int) (minimumCover : Number)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
     -- the minimum cover the debt requires
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    (hle : lb.toExact.coverAvailable ≤ minimumCover.toRat) : -- no cover above the minimum
+    -- the cover above the minimum, rounded down, is not positive
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hle : maxClaw.signum ≤ 0) :
     lb.coverClawback pool amount = .ok (.error .tecINTERNAL) :=
-  LoanBroker.coverClawback_no_excess_proof lb pool amount e minimumCover hexp hmin hle
+  LoanBroker.coverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin hsub hle
 
 /-- A clawed amount above `coverAvailable` leaves a negative `coverAvailable`:
 `.notLawful`. -/
