@@ -3,9 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.ReachableProofs
 
 /-! # `LoanBroker.roundedCoverAvailable`
 
-The cover returned on deletion is `coverAvailable` converted to the vault's
-`numericType`, rounded to nearest. It is exact when the asset holds
-`coverAvailable`, and within half a unit of the result exponent otherwise. -/
+On deletion the broker pays back `coverAvailable` rounded to nearest in the vault asset:
+exact when the asset can hold it, otherwise within half a unit. -/
 
 namespace XRPL.Model.Lending
 

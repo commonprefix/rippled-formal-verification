@@ -3,9 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.DepositWitness
 
 /-! # `LoanBroker.roundedCoverAmount` and `LoanBroker.coverDeposit`
 
-The deposit rounds the amount down to the scale of `coverAvailable` and adds it
-with 19-digit `Number` rounding, so the credit is exact only when the true sum
-fits a `Number`. `AssociateAsset.lean` covers the rounding C++ applies after. -/
+A deposit rounds the amount down to the cover scale and adds it with 19-digit `Number`
+rounding. The credit is exact only when the sum fits a `Number`. -/
 
 namespace XRPL.Model.Lending
 

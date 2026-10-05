@@ -2,7 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.CoverReduction
 
 /-! # Proof bodies for the `LoanBrokerCoverWithdraw` exits
 
-`LoanBrokerCoverWithdrawReturn.lean` states the exits and delegates here. -/
+Proofs for the withdrawal exits. -/
 
 namespace XRPL.Model.Lending
 

@@ -3,10 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverWitness
 
 /-! # `LoanBroker.HasMinimumCover`
 
-The cover floor compares `coverAvailable` with the minimum cover: `debtTotal`
-times `coverRateMinimum`, rounded up at the vault scale. More debt, a higher rate
-or a coarser vault scale never lowers the minimum cover, so a broker can meet the floor at one
-vault scale and miss it at a coarser one. -/
+The minimum cover is `debtTotal` times `coverRateMinimum`, rounded up at the vault scale.
+More debt, a higher rate or a coarser scale never lowers it. -/
 
 namespace XRPL.Model.Lending
 

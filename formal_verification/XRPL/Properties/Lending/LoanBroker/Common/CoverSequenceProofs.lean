@@ -4,8 +4,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WithdrawAccuracy
 
 /-! # Proof bodies for cover operations run one after another
 
-Undoing a cover operation, splitting one into two, and running two in either
-order. `LoanBrokerCover.lean` states the theorems and delegates here. -/
+Proofs for the theorems in `LoanBrokerCover.lean`. -/
 
 namespace XRPL.Model.Lending
 

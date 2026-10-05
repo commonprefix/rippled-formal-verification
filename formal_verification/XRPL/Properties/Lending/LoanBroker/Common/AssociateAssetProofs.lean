@@ -5,10 +5,8 @@ import XRPL.Properties.Protocol.STAmount.Common.OfNumberTotality
 
 /-! # Proof bodies for the XRP and MPT `associateAsset` theorems
 
-On an XRP or MPT broker every cover operation moves `coverAvailable` by a whole
-number. A whole `coverAvailable` within the type's bounds is stored exactly, so
-`associateAsset` leaves it alone. `AssociateAsset.lean` states the theorems and
-delegates here. -/
+Proofs for the XRP and MPT theorems in `AssociateAsset.lean`: a whole cover stays whole, so
+the asset stores it exactly. -/
 
 namespace XRPL.Model.Lending
 

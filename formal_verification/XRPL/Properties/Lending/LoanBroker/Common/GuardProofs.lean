@@ -7,8 +7,7 @@ import XRPL.Properties.Protocol.Number.Compare.Compare
 
 /-! # Proof bodies for the LoanBroker guard theorems
 
-The `canCreate`, `canUpdate` and `canDelete` exits. `LoanBrokerSetReturn.lean`
-and `LoanBrokerDeleteReturn.lean` state them and delegate here. -/
+Proofs for the `canCreate`, `canUpdate` and `canDelete` exits. -/
 
 namespace XRPL.Model.Lending
 

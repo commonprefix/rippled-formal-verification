@@ -3,19 +3,8 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
 /-! # Witnesses for the `LoanBroker.coverDeposit` theorems
 
-Concrete brokers, each run through the model and checked by `native_decide`.
-
-* Over-credit: a `coverAvailable` of `6.6 * 10^12` plus a deposit of
-  `9999999999999999 * 10^15`. The 19-digit sum rounds up, so `coverAvailable` rises
-  by `3.4 * 10^12` more than the deposit.
-* A deposit that cannot come back out: `10^-15` deposited onto `coverAvailable`
-  `9.999999999999999` lifts it to `10`. The cover scale moves from `10^-15` to
-  `10^-14`, where the same `10^-15` rounds to zero, both as a withdrawal and as a
-  clawback.
-* Off the asset grid: `9999999999999999` onto `9999999999999999` leaves a
-  17-digit cover.
-* Two deposits whose order matters: `10^-14` and `1.3 * 10^-14` onto
-  `9.99999999999999` take different totals. -/
+Concrete deposit runs showing where the deposit theorems' hypotheses are needed, checked
+by `native_decide`. -/
 
 set_option linter.style.nativeDecide false
 

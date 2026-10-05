@@ -3,10 +3,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WithdrawWitness
 
 /-! # `LoanBrokerCoverDeposit` exits
 
-`roundedCoverAmount` is the deposit check: it rounds the amount down to the
-scale of `coverAvailable` and rejects an amount that rounds to zero.
-`coverDeposit` never runs on a rejected amount, and `coverDeposit_success` shows
-the lawfulness re-check passes once `roundedCoverAmount` did. -/
+The exits of the deposit check: an amount that rounds to zero at the cover scale is rejected. -/
 
 namespace XRPL.Model.Lending
 

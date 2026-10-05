@@ -2,10 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.ClawbackExits
 
 /-! # `LoanBrokerCoverClawback` exits
 
-The clawback only takes the cover above the minimum cover (`debtTotal` times
-`coverRateMinimum`, rounded up at the vault scale). The new broker fails the
-lawfulness re-check when the clawed amount exceeds `coverAvailable`
-(`coverClawback_negative_cover`). -/
+The exits of the clawback checks. -/
 
 namespace XRPL.Model.Lending
 

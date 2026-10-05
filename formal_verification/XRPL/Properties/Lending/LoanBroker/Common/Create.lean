@@ -2,9 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.GuardProofs
 
 /-! # Proof bodies for `LoanBroker.create` and `LoanBroker.update`
 
-Both build a raw broker and re-check it with `to_lawful`. `update_eq` exposes the
-raw broker `update` checks. `LoanBrokerSet.lean` and `LoanBrokerSetReturn.lean`
-state the theorems and delegate here. -/
+Proofs for `create` and `update`. -/
 
 namespace XRPL.Model.Lending
 

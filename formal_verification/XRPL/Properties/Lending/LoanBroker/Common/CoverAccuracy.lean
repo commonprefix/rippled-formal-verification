@@ -5,9 +5,8 @@ import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 
 /-! # Proof bodies for the `roundedCoverAmount` theorems
 
-Also the facts about the amount a deposit credits. The cover scale is the exponent
-of `coverAvailable` written as an `STAmount`: `0` for XRP and MPT, `-100` for an
-empty IOU cover, otherwise in `[-96, 80]`. -/
+Proofs for the `roundedCoverAmount` theorems and the amount a deposit credits. The cover
+scale is `0` for XRP and MPT, `-100` for an empty IOU cover, otherwise in `[-96, 80]`. -/
 
 namespace XRPL.Model.Lending
 

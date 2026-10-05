@@ -7,9 +7,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.ClawbackAccuracy
 
 /-! # Reachability induction proofs
 
-Proof bodies for the `LoanBroker.ReachableFrom` corollaries in `Reachable.lean`,
-`LoanBrokerDelete.lean` and `LoanBrokerCover.lean`. Each is an induction on a
-history from `ReachableDefs.lean`, with one case per operation. -/
+Proofs for the reachability theorems, by induction over the operations. -/
 
 namespace XRPL.Model.Lending
 
@@ -37,7 +35,7 @@ private lemma LoanBroker.ReachableFrom.fixed_fields (start lb : LoanBroker)
     (hr : LoanBroker.ReachableFrom start lb) : LoanBroker.SameFixedFields start lb := by
   induction hr with
   | refl => exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
-  | update lb lb' dm _ hok ih =>
+  | update lb lb' dm _ _ hok ih =>
     exact ih.trans (LoanBroker.update_fixed_fields lb lb' dm hok).1
   | coverDeposit lb amount res _ hok ih =>
     exact ih.trans (LoanBroker.coverDeposit_fixed_fields lb amount res hok)
@@ -49,14 +47,14 @@ private lemma LoanBroker.ReachableFrom.fixed_fields (start lb : LoanBroker)
 /-- **Proof body of `Reachable.debtTotal_zero`.** -/
 lemma LoanBroker.Reachable.debtTotal_zero_proof (lb : LoanBroker) (hr : lb.Reachable) :
     lb.debtTotal = Number.zero := by
-  obtain ⟨tx, nt, start, hc, hrf⟩ := hr
+  obtain ⟨tx, nt, start, _, hc, hrf⟩ := hr
   rw [(LoanBroker.ReachableFrom.fixed_fields start lb hrf).debtTotal]
   exact (LoanBroker.create_no_exposure_proof tx nt start hc).1
 
 /-- **Proof body of `Reachable.loanCount_zero`.** -/
 lemma LoanBroker.Reachable.loanCount_zero_proof (lb : LoanBroker) (hr : lb.Reachable) :
     lb.loanCount = 0 := by
-  obtain ⟨tx, nt, start, hc, hrf⟩ := hr
+  obtain ⟨tx, nt, start, _, hc, hrf⟩ := hr
   rw [(LoanBroker.ReachableFrom.fixed_fields start lb hrf).loanCount]
   exact (LoanBroker.create_no_exposure_proof tx nt start hc).2.2
 
@@ -75,16 +73,19 @@ lemma LoanBroker.ReachableFrom.creation_rates_proof (tx : LoanBrokerSetCreate) (
   · rw [hf.coverRateMinimum]; show start.toRawLoanBroker.coverRateMinimum = _; rw [h]; rfl
   · rw [hf.coverRateLiquidation]; show start.toRawLoanBroker.coverRateLiquidation = _; rw [h]; rfl
 
-/-- Every step of a whole-cover history is an ordinary LoanBroker operation. -/
-private lemma LoanBroker.WholeCoverFrom.reachableFrom (start lb : LoanBroker)
-    (hr : LoanBroker.WholeCoverFrom start lb) : LoanBroker.ReachableFrom start lb := by
+/-- No step of a whole-cover history changes the numeric type, `debtTotal`,
+`loanCount` or the rates. -/
+private lemma LoanBroker.WholeCoverFrom.fixed_fields (start lb : LoanBroker)
+    (hr : LoanBroker.WholeCoverFrom start lb) : LoanBroker.SameFixedFields start lb := by
   induction hr with
-  | refl => exact .refl
-  | update lb lb' dm _ hok ih => exact .update lb lb' dm ih hok
-  | coverDeposit lb amount res _ hok _ _ _ _ ih => exact .coverDeposit lb amount res ih hok
-  | coverWithdraw lb amount res _ hok _ _ _ ih => exact .coverWithdraw lb amount res ih hok
+  | refl => exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+  | update lb lb' dm _ hok ih => exact ih.trans (LoanBroker.update_fixed_fields lb lb' dm hok).1
+  | coverDeposit lb amount res _ hok _ _ _ _ ih =>
+    exact ih.trans (LoanBroker.coverDeposit_fixed_fields lb amount res hok)
+  | coverWithdraw lb amount res _ hok _ _ _ ih =>
+    exact ih.trans (LoanBroker.coverWithdraw_fixed_fields lb amount res hok)
   | coverClawback lb α pool amount res _ hok _ _ _ ih =>
-    exact .coverClawback lb α pool amount res ih hok
+    exact ih.trans (LoanBroker.coverClawback_fixed_fields lb pool amount res hok)
 
 /-- A whole-number `coverAvailable` below `2^63` stays whole after a debit of a
 canonical whole amount. -/
@@ -137,8 +138,7 @@ lemma LoanBroker.WholeCoverFrom.roundedCoverAvailable_exact_proof (start lb : Lo
     s.toRat = lb.toExact.coverAvailable := by
   have hw := LoanBroker.WholeCoverFrom.whole start lb hstart hr
   have hnt : lb.numericType = start.numericType :=
-    (LoanBroker.ReachableFrom.fixed_fields start lb
-      (LoanBroker.WholeCoverFrom.reachableFrom start lb hr)).numericType
+    (LoanBroker.WholeCoverFrom.fixed_fields start lb hr).numericType
   unfold LoanBroker.roundedCoverAvailable at hok
   exact STAmount.ofNumber_integral_exact _ _ _ s (by rw [hnt]; exact hint)
     lb.wf.coverAvailable_norm hw.1 hok

@@ -3,23 +3,8 @@ import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
 
 /-! # Witnesses for the `LoanBroker.coverClawback` theorems
 
-Concrete brokers, each run through the model against `wvPool` and checked by
-`native_decide`.
-
-* Clawback below the minimum: a `debtTotal` of `5` at a 10% minimum gives a
-  minimum cover of `0.5`. `coverAvailable` `10^16` minus `0.5` rounds to nearest
-  at 16 digits to `10^16`. The clawback takes all of it and leaves
-  `coverAvailable` at zero.
-* Clawback above `coverAvailable`: a 17-digit `coverAvailable`
-  `19999999999999998` rounds up to `2 * 10^16` when converted to the asset. Clawing
-  all of it leaves a negative `coverAvailable`.
-* Inexact debit: clawing `1234.567890123456` from `10^18` lowers the cover by
-  `1235`.
-* Off the asset grid: clawing `7.5` from `10^16` leaves a 17-digit cover.
-* Two clawbacks: from `coverAvailable` `10^6`, clawing `5.1 * 10^-10` and then
-  `4.9 * 10^-10` passes both checks, while `4.9 * 10^-10` first is rejected.
-* A clawback and a deposit: clawing `7.6 * 10^-10` from `10^6` and depositing it
-  back credits only `7 * 10^-10`. -/
+Concrete clawback runs showing where the clawback theorems' hypotheses are needed, checked
+by `native_decide`. -/
 
 set_option linter.style.nativeDecide false
 

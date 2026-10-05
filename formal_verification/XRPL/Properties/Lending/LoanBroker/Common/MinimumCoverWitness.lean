@@ -2,11 +2,8 @@ import XRPL.Properties.Lending.LoanBroker.Defs
 
 /-! # Witness for the cover floor at two vault scales
 
-An IOU broker with `debtTotal` `12.34567890123`, `coverRateMinimum` `10%` and
-`coverAvailable` `1.3`, checked by `native_decide`. The debt times the rate is
-`1.234567890123`. At vault scale `10^-13` the minimum cover keeps that value and
-the cover floor holds. At vault scale `10^0` it rounds up to `2` and the floor
-fails. -/
+A broker that meets the minimum cover at one vault scale but not at a coarser one, checked
+by `native_decide`. -/
 
 set_option linter.style.nativeDecide false
 

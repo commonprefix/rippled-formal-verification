@@ -2,11 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WithdrawExits
 
 /-! # `LoanBrokerCoverWithdraw` exits
 
-`canCoverWithdraw` first rejects an amount that is zero at the scale of
-`coverAvailable`, then checks it against `coverAvailable` and the minimum cover.
-The amount itself is never rounded. `coverWithdraw` never rejects. The new broker
-fails the lawfulness re-check when the amount exceeds `coverAvailable`
-(`coverWithdraw_negative_cover`), which the checks rule out. -/
+The exits of the withdrawal checks. The amount itself is never rounded. -/
 
 namespace XRPL.Model.Lending
 

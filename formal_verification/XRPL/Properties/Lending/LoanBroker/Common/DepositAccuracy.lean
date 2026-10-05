@@ -3,8 +3,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
 /-! # Proof bodies for the `LoanBroker.coverDeposit` theorems
 
-The deposit converts the rounded amount to a `Number` and adds it with 19-digit
-rounding. The credit is exact when the true sum fits a `Number`. -/
+Proofs for the theorems in `LoanBrokerCoverDeposit.lean`. -/
 
 namespace XRPL.Model.Lending
 

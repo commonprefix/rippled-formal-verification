@@ -3,23 +3,8 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
 /-! # Witnesses for the `LoanBroker.coverWithdraw` theorems
 
-Concrete brokers, each run through the model against `wvPool` and checked by
-`native_decide`.
-
-* Two withdrawals: from `coverAvailable` `10^6`, scale `10^-9`, withdrawing
-  `5.1 * 10^-10` and then `4.9 * 10^-10` passes both checks. The first withdrawal
-  drops the cover below `10^6`, so the scale moves to `10^-10`, where the second
-  amount is no longer zero. Withdrawing `4.9 * 10^-10` first rounds to zero at
-  scale `10^-9` and is rejected.
-* A deposit and a withdrawal: on `coverAvailable` `10`, scale `10^-14`, a deposit
-  of `10^-15` rounds to zero and is rejected. After a withdrawal of `0.5` the
-  cover is `9.5`, scale `10^-15`, and the same deposit is taken whole.
-* Off the asset grid: withdrawing `7.6 * 10^-10` from `10^6` passes the checks and
-  leaves `999999.99999999924`, 17 significant digits. Depositing the same amount
-  back rounds it down at the new scale `10^-10` to `7 * 10^-10`.
-* Inexact debit: withdrawing `1234.567890123456` from `10^18` lowers the cover by
-  `1235`. The 19-digit subtraction rounds the amount to whole units, the last
-  digit of the cover. -/
+Concrete withdrawal runs showing where the withdrawal theorems' hypotheses are needed,
+checked by `native_decide`. -/
 
 set_option linter.style.nativeDecide false
 

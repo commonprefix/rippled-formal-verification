@@ -10,11 +10,8 @@ import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
 /-! # Shared reductions for the cover operations
 
-Deposit, withdraw and clawback share `applyCoverTransaction`. Withdraw and
-clawback check the amount with `canApplyToBrokerCover`. This file gives the
-`canApplyToBrokerCover` exits, inverts a successful operation into its steps,
-shows it keeps every field but `coverAvailable`, and reads the new
-`coverAvailable` when the true result fits a `Number`. -/
+Steps shared by deposit, withdraw and clawback: the scale check, unpacking a successful
+operation, and the new `coverAvailable` when the result fits a `Number`. -/
 
 namespace XRPL.Model.Lending
 

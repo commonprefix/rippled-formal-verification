@@ -3,9 +3,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
 /-! # Proof bodies for the `LoanBroker.coverClawback` theorems
 
-The clawed amount is the capped amount rounded to nearest. The capped amount is
-at most the cover above the minimum cover, so the clawback can only overshoot
-the minimum by the rounding. -/
+Proofs for the theorems in `LoanBrokerCoverClawback.lean`. -/
 
 namespace XRPL.Model.Lending
 

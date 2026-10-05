@@ -2,8 +2,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.Create
 
 /-! # `LoanBroker.create` and `LoanBroker.update`
 
-A broker created with in-range parameters is lawful and starts with no debt, no
-cover and no loans. An update writes `debtMaximum` and nothing else. -/
+A broker created with in-range parameters is lawful and starts with no debt, no cover and no
+loans. An update changes only `debtMaximum`. -/
 
 namespace XRPL.Model.Lending
 

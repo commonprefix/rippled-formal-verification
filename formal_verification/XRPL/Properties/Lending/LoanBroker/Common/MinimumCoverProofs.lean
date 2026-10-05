@@ -5,9 +5,8 @@ import XRPL.Properties.Protocol.Common.TenthBips
 
 /-! # Proof bodies for the minimum cover theorems
 
-The minimum cover is `debtTotal` times `coverRateMinimum`, rounded up, converted
-to the vault asset and rounded up to the vault scale. This file holds the facts
-the cover operations share and the proofs `LoanBroker.lean` delegates to. -/
+Proofs for the minimum cover theorems, and the minimum cover facts the cover operations
+share. -/
 
 namespace XRPL.Model.Lending
 

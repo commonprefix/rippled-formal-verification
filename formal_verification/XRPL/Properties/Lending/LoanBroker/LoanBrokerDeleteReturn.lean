@@ -2,8 +2,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.GuardProofs
 
 /-! # `LoanBroker.canDelete` exits
 
-On a lawful broker `loanCount = 0` forces `debtTotal = 0` (`empty_broker`), so
-the `debtTotal` check never fires on its own. It is a defensive check. -/
+The exits of `canDelete`. Its debt check never fires on a lawful broker, because no loans
+means no debt. -/
 
 namespace XRPL.Model.Lending
 

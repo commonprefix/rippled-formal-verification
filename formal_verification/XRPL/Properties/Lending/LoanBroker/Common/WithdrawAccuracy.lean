@@ -3,9 +3,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
 /-! # Proof bodies for the `LoanBroker.coverWithdraw` theorems
 
-The withdrawal converts the requested amount to a `Number` and subtracts it with
-19-digit rounding. The amount is not rounded first, so the debit is exact when
-the true difference fits a `Number`. -/
+Proofs for the theorems in `LoanBrokerCoverWithdraw.lean`. -/
 
 namespace XRPL.Model.Lending
 

@@ -7,11 +7,8 @@ import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
 
 /-! # Loan broker reachability
 
-`LoanBroker.ReachableFrom start lb` holds when `lb` is `start` after a sequence
-of successful `update`, `coverDeposit`, `coverWithdraw` and `coverClawback`
-calls. `LoanBroker.Reachable lb` adds that `start` came from
-`LoanBroker.create`. Loans are not part of this model, so no operation here
-changes `debtTotal` or `loanCount`. -/
+A reachable broker is built by `create` and then a sequence of successful operations.
+Loans are not modeled yet, so `debtTotal` and `loanCount` never change. -/
 
 namespace XRPL.Model.Lending
 
@@ -21,8 +18,8 @@ open XRPL.Model.Protocol
 inductive LoanBroker.ReachableFrom (start : LoanBroker) : LoanBroker → Prop where
   | refl : LoanBroker.ReachableFrom start start
   | update (lb lb' : LoanBroker) (debtMaximum : Option Number) :
-      LoanBroker.ReachableFrom start lb → lb.update debtMaximum = .ok lb' →
-      LoanBroker.ReachableFrom start lb'
+      LoanBroker.ReachableFrom start lb → lb.canUpdate debtMaximum = .ok .tesSUCCESS →
+      lb.update debtMaximum = .ok lb' → LoanBroker.ReachableFrom start lb'
   | coverDeposit (lb : LoanBroker) (amount : STAmount) (res : LoanBrokerCoverResult) :
       LoanBroker.ReachableFrom start lb → lb.coverDeposit amount = .ok (.ok res) →
       LoanBroker.ReachableFrom start res.loanBroker'
@@ -34,9 +31,10 @@ inductive LoanBroker.ReachableFrom (start : LoanBroker) : LoanBroker → Prop wh
       LoanBroker.ReachableFrom start lb → lb.coverClawback pool amount = .ok (.ok res) →
       LoanBroker.ReachableFrom start res.loanBroker'
 
-/-- Brokers reachable from a successful `LoanBroker.create`. -/
+/-- Brokers reachable from a successful `LoanBroker.create` that passed `canCreate`. -/
 def LoanBroker.Reachable (lb : LoanBroker) : Prop :=
   ∃ (tx : LoanBrokerSetCreate) (nt : NumericType) (start : LoanBroker),
+    LoanBroker.canCreate tx.debtMaximum nt = .ok .tesSUCCESS ∧
     LoanBroker.create tx nt = .ok start ∧ LoanBroker.ReachableFrom start lb
 
 /-- Brokers reachable from `start` by successful operations whose cover amounts
@@ -64,7 +62,7 @@ inductive LoanBroker.WholeCoverFrom (start : LoanBroker) : LoanBroker → Prop w
       LoanBroker.WholeCoverFrom start res.loanBroker'
 
 /-- Brokers reachable from `start` in `n` cover operations. `applied` is the net
-amount moved and `requested` the net amount asked for. Every new
+amount moved and `requested` the net amount requested. Every new
 `coverAvailable` fits a `Number`, and every step rounds by at most `unit`. -/
 inductive LoanBroker.ReachableFromIn (start : LoanBroker) (unit : ℚ) :
     LoanBroker → ℕ → ℚ → ℚ → Prop where

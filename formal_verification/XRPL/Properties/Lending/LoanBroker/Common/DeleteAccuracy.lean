@@ -4,9 +4,7 @@ import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
 
 /-! # Proof bodies for the `LoanBroker.roundedCoverAvailable` theorems
 
-The cover returned on deletion is `coverAvailable` converted to the vault's
-`numericType`, rounded to nearest. `LoanBrokerDelete.lean` states the theorems
-and delegates here. -/
+Proofs for the theorems in `LoanBrokerDelete.lean`. -/
 
 namespace XRPL.Model.Lending
 

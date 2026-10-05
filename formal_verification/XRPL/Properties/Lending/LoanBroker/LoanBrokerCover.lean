@@ -6,11 +6,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.CoverSequenceProofs
 
 /-! # Cover operations in sequence
 
-`LoanBroker.ReachableFromIn start unit lb n applied requested` follows `n` cover
-operations from `start` to `lb`. The cover is the start plus the net amount
-moved, and within `n` rounding units of the net amount requested. Undoing an
-operation restores the cover only when nothing was rounded, and the order of two
-operations can decide whether they pass their checks. -/
+Cover operations run one after another: the total over `n` operations, undoing an
+operation, splitting one in two, and changing the order. -/
 
 namespace XRPL.Model.Lending
 

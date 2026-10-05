@@ -2,10 +2,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.ReachableProofs
 
 /-! # Loan broker reachability
 
-`LoanBroker.Reachable lb` holds when `lb` came from `LoanBroker.create` followed
-by successful `update`, `coverDeposit`, `coverWithdraw` and `coverClawback`
-calls. The operations return a `LoanBroker`, so every reachable broker is lawful
-by construction. None of them writes `debtTotal`, `loanCount` or the rates. -/
+Every reachable broker is lawful and keeps the numeric type, debt, loan count and rates it
+was created with. -/
 
 namespace XRPL.Model.Lending
 

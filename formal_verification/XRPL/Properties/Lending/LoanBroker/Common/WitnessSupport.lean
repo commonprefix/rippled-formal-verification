@@ -6,8 +6,7 @@ import XRPL.Properties.Lending.LoanBroker.Defs
 
 /-! # Shared fixtures for the cover witnesses
 
-The vault the cover witnesses run against, an IOU vault holding `10^6`, and the
-brokers and amounts the withdrawal and clawback witnesses share. -/
+The vault, brokers and amounts the cover witnesses share. -/
 
 set_option linter.style.nativeDecide false
 

@@ -2,8 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
 /-! # Proof bodies for the `LoanBrokerCoverClawback` exits
 
-`LoanBrokerCoverClawbackReturn.lean` and `LoanBrokerCoverClawback.lean` state
-the theorems and delegate here. -/
+Proofs for the clawback exits. -/
 
 namespace XRPL.Model.Lending
 

@@ -3,10 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.WithdrawWitness
 
 /-! # `LoanBroker.coverWithdraw`
 
-The withdrawal subtracts the requested amount from `coverAvailable` with 19-digit
-`Number` rounding. The amount is not rounded to the scale of `coverAvailable`
-first. A withdrawal of a canonical amount whose checks passed succeeds and keeps
-the minimum cover. -/
+A withdrawal subtracts the amount as is, with 19-digit `Number` rounding. Once its checks
+pass it always succeeds and keeps the minimum cover. -/
 
 namespace XRPL.Model.Lending
 

@@ -2,8 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.CoverAccuracy
 
 /-! # Proof bodies for the `LoanBroker.coverDeposit` exits
 
-`roundedCoverAmount` is the deposit check. `LoanBrokerCoverDepositReturn.lean`
-states the exits and delegates here. -/
+Proofs for the deposit exits. -/
 
 namespace XRPL.Model.Lending
 

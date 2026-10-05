@@ -3,9 +3,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.Create
 
 /-! # `LoanBrokerSet` exits
 
-One theorem per exit of `canCreate` and `canUpdate`, and per reason `create` or
-`update` fails its lawfulness re-check. A `.notLawful` throw returns no broker.
--/
+The exits of `canCreate`, `canUpdate`, `create` and `update`. -/
 
 namespace XRPL.Model.Lending
 

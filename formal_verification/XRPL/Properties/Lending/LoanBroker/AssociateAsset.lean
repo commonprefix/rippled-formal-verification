@@ -2,21 +2,65 @@ import XRPL.Properties.Lending.LoanBroker.Common.DepositWitness
 import XRPL.Properties.Lending.LoanBroker.Common.ClawbackWitness
 import XRPL.Properties.Lending.LoanBroker.Common.WithdrawWitness
 import XRPL.Properties.Lending.LoanBroker.Common.AssociateAssetProofs
+import XRPL.Properties.Lending.LoanBroker.Common.ReachableDefs
+import XRPL.Properties.Lending.LoanBroker.Common.Create
 
 /-! # The `associateAsset` no-op invariant
 
-Every LoanBroker transactor calls `associateAsset` on the broker SLE after
-updating it, which rounds each `kSmdNeedsAsset` field (`debtTotal`,
-`debtMaximum`, `coverAvailable`) to the asset's precision. The model does not
-round, so `associateAsset` should be a no-op: `LoanBroker.assetsRounded` should
-never hold on a stored broker. When it does, C++ stores a different value than
-the model. On an IOU broker each cover operation can leave `coverAvailable` off
-the grid. On an XRP or MPT broker it stays on the grid while it fits the type. -/
+After each operation C++ rounds the broker's amounts to the asset grid (`associateAsset`).
+The model does not, so this file shows when that rounding changes a value: IOU cover
+operations can, XRP and MPT ones cannot. -/
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
+
+/-- NOT PROVABLE: **`associateAsset` is a no-op on every reachable broker.** Create and update
+are proven. Deposit, withdraw and clawback can leave `coverAvailable` off the grid. -/
+theorem LoanBroker.Reachable.associateAsset_noop (lb : LoanBroker) (hr : lb.Reachable) :
+    ¬ lb.assetsRounded := by
+  have hzero (nt : NumericType) : STAmount.isRounded nt Number.zero = false := by cases nt <;> rfl
+  obtain ⟨tx, nt, start, hcan, hc, hrf⟩ := hr
+  induction hrf with
+  | refl =>
+    -- no debt, no cover, and `debtMaximum` passed `canCreate`
+    have h := (RawLoanBroker.to_lawful_ok (by unfold LoanBroker.create at hc; exact hc)).1
+    have hdm : STAmount.isRounded nt (tx.debtMaximum.getD Number.zero) = false := by
+      cases hd : tx.debtMaximum with
+      | none => exact hzero nt
+      | some dm =>
+        rw [hd] at hcan
+        exact LoanBroker.canCreate_debtMaximum_not_rounded_proof dm nt hcan
+    unfold LoanBroker.assetsRounded
+    rw [show start.toRawLoanBroker = _ from h]
+    simp [LoanBroker.createRaw, hzero, hdm]
+  | update lb lb' dm _ hcanu hok ih =>
+    -- only `debtMaximum` changes, and it passed `canUpdate`
+    rw [LoanBroker.update_eq] at hok
+    have h := (RawLoanBroker.to_lawful_ok hok).1
+    have hdm : STAmount.isRounded lb.numericType (dm.getD lb.debtMaximum) = false := by
+      cases hd : dm with
+      | none =>
+        unfold LoanBroker.assetsRounded at ih
+        simp only [Option.getD_none]
+        cases hr : STAmount.isRounded lb.numericType lb.debtMaximum <;> simp_all
+      | some d =>
+        rw [hd] at hcanu
+        exact LoanBroker.canUpdate_debtMaximum_not_rounded_proof lb d hcanu
+    unfold LoanBroker.assetsRounded at ih ⊢
+    rw [show lb'.toRawLoanBroker = _ from h]
+    simp only [hdm, Bool.false_eq_true, false_or]
+    exact fun hor => ih (hor.elim Or.inl (fun hc => Or.inr (Or.inr hc)))
+  | coverDeposit lb amount res _ hok ih =>
+    -- the new cover can be off the grid (`coverDeposit_associateAsset_rounds`)
+    sorry
+  | coverWithdraw lb amount res _ hok ih =>
+    -- the new cover can be off the grid (`coverWithdraw_associateAsset_rounds`)
+    sorry
+  | coverClawback lb α pool amount res _ hok ih =>
+    -- the new cover can be off the grid (`coverClawback_associateAsset_rounds`)
+    sorry
 
 /-- **`associateAsset` is not a no-op after a deposit.** Depositing
 `9999999999999999` onto `9999999999999999` of IOU cover leaves `coverAvailable`

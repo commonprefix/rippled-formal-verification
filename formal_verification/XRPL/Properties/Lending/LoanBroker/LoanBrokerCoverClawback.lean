@@ -3,9 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.ClawbackWitness
 
 /-! # `LoanBroker.roundedCoverClawback` and `LoanBroker.coverClawback`
 
-The clawback takes the cover above the minimum cover, or the requested amount if
-that is less, and rounds it to nearest in the vault asset. That rounding can go
-up, so a clawback can end half a unit below the minimum cover. -/
+A clawback takes the cover above the minimum cover, or less if asked, rounded to nearest.
+That rounding can go up, so a clawback can end just below the minimum cover. -/
 
 namespace XRPL.Model.Lending
 
