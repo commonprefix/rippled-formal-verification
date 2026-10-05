@@ -50,12 +50,10 @@ plus a whole deposit is whole, so the asset stores it exactly while it fits the
 type's bounds. -/
 theorem LoanBroker.coverDeposit_associateAsset_integral (lb : LoanBroker) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hnt : lb.numericType.isIntegral = true) -- the vault asset is XRP or MPT
-    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset) -- and its offset bound is not negative
-    -- the amount is a canonical whole number
+    (hnt : lb.numericType.isIntegral = true)
+    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset)
     (hint : amount.IntegralCanonical) (hsz : amount.mValue.toNat ≤ 2 ^ 63 - 1)
-    (hcint : lb.toExact.coverAvailable.den = 1) -- `coverAvailable` is a whole number
-    -- the sum fits `2^63` and the type's maximum
+    (hcint : lb.toExact.coverAvailable.den = 1)
     (hbound : lb.toExact.coverAvailable + amount.toRat < 2 ^ 63)
     (hmax : lb.toExact.coverAvailable + amount.toRat ≤ lb.numericType.maxValue.toNat) :
     STAmount.isRounded res.loanBroker'.numericType res.loanBroker'.coverAvailable = false :=
@@ -66,13 +64,11 @@ theorem LoanBroker.coverDeposit_associateAsset_integral (lb : LoanBroker) (amoun
 less a whole withdrawal is whole and no larger, so the asset stores it exactly. -/
 theorem LoanBroker.coverWithdraw_associateAsset_integral (lb : LoanBroker) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverWithdraw amount = .ok (.ok res))
-    (hnt : lb.numericType.isIntegral = true) -- the vault asset is XRP or MPT
-    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset) -- and its offset bound is not negative
-    -- the amount is a canonical whole number, not negative
+    (hnt : lb.numericType.isIntegral = true)
+    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset)
     (hint : amount.IntegralCanonical) (hsz : amount.mValue.toNat ≤ 2 ^ 63 - 1)
     (hnn : 0 ≤ amount.toRat)
-    (hcint : lb.toExact.coverAvailable.den = 1) -- `coverAvailable` is a whole number
-    -- `coverAvailable` fits `2^63` and the type's maximum
+    (hcint : lb.toExact.coverAvailable.den = 1)
     (hbound : lb.toExact.coverAvailable < 2 ^ 63)
     (hmax : lb.toExact.coverAvailable ≤ lb.numericType.maxValue.toNat) :
     STAmount.isRounded res.loanBroker'.numericType res.loanBroker'.coverAvailable = false :=
@@ -84,14 +80,12 @@ less a whole clawed amount is whole and no larger, so the asset stores it
 exactly. -/
 theorem LoanBroker.coverClawback_associateAsset_integral (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    (hnt : lb.numericType.isIntegral = true) -- the vault asset is XRP or MPT
-    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset) -- and its offset bound is not negative
-    (hcint : lb.toExact.coverAvailable.den = 1) -- `coverAvailable` is a whole number
-    -- `coverAvailable` fits `2^63` and the type's maximum
+    (hnt : lb.numericType.isIntegral = true)
+    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset)
+    (hcint : lb.toExact.coverAvailable.den = 1)
     (hbound : lb.toExact.coverAvailable < 2 ^ 63)
     (hmax : lb.toExact.coverAvailable ≤ lb.numericType.maxValue.toNat) :
     STAmount.isRounded res.loanBroker'.numericType res.loanBroker'.coverAvailable = false :=

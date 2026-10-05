@@ -17,15 +17,15 @@ variable (lb : LoanBroker)
 /-- The rounded amount never exceeds the requested amount, and stays within one
 step `10 ^ e` of the cover scale below it. -/
 theorem LoanBroker.roundedCoverAmount_bounds (amount r : STAmount) (e : Int)
-    (hcanon : amount.integral = false → amount.IOUCanonical) -- an IOU amount is canonical
-    (hexp : numberExponent lb.coverAvailable lb.numericType = .ok e) -- the cover scale
+    (hcanon : amount.integral = false → amount.IOUCanonical)
+    (hexp : numberExponent lb.coverAvailable lb.numericType = .ok e)
     (hok : lb.roundedCoverAmount amount = .ok (.rounded r)) :
     r.toRat ≤ amount.toRat ∧ amount.toRat - r.toRat < 10 ^ e :=
   LoanBroker.roundedCoverAmount_bounds_proof lb amount r e hcanon hexp hok
 
 /-- An integral amount passes through `roundedCoverAmount` unchanged. -/
 theorem LoanBroker.roundedCoverAmount_integral (amount r : STAmount)
-    (hint : amount.integral = true) -- an XRP or MPT amount
+    (hint : amount.integral = true)
     (hok : lb.roundedCoverAmount amount = .ok (.rounded r)) : r = amount :=
   LoanBroker.roundedCoverAmount_integral_proof lb amount r hint hok
 
@@ -33,8 +33,7 @@ theorem LoanBroker.roundedCoverAmount_integral (amount r : STAmount)
 rounded amount. -/
 theorem LoanBroker.coverDeposit_credit (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    -- the true sum is a normalized `Number`
+    (hc : amount.ExactCanonical)
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat) :
     res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable = res.amount'.toRat :=
@@ -44,10 +43,9 @@ theorem LoanBroker.coverDeposit_credit (amount : STAmount)
 plus a whole deposit, below `2^63`, is credited exactly. -/
 theorem LoanBroker.coverDeposit_credit_integral (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
-    -- the amount is a canonical whole number
     (hint : amount.IntegralCanonical) (hsz : amount.mValue.toNat ≤ 2 ^ 63 - 1)
-    (hcint : lb.toExact.coverAvailable.den = 1) -- `coverAvailable` is a whole number
-    (hbound : lb.toExact.coverAvailable + amount.toRat < 2 ^ 63) : -- the sum fits
+    (hcint : lb.toExact.coverAvailable.den = 1)
+    (hbound : lb.toExact.coverAvailable + amount.toRat < 2 ^ 63) :
     res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable = amount.toRat :=
   LoanBroker.coverDeposit_credit_integral_proof lb amount res hok hint hsz hcint hbound
 
@@ -55,8 +53,7 @@ theorem LoanBroker.coverDeposit_credit_integral (amount : STAmount)
 requested amount. -/
 theorem LoanBroker.coverDeposit_credit_le_amount (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    -- the true sum is a normalized `Number`
+    (hc : amount.ExactCanonical)
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat) :
     res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable ≤ amount.toRat :=
@@ -73,17 +70,17 @@ theorem LoanBroker.coverDeposit_credit_le_amount_attained :
 /-- A deposit only raises `coverAvailable`. -/
 theorem LoanBroker.coverDeposit_increases_cover (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    (hnn : 0 ≤ amount.toRat) : -- and not negative
+    (hc : amount.ExactCanonical)
+    (hnn : 0 ≤ amount.toRat) :
     lb.toExact.coverAvailable ≤ res.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_increases_cover_proof lb amount res hok hc hnn
 
 /-- An amount that passed `roundedCoverAmount` deposits without a throw: the
 result is a lawful broker holding the rounded amount, never `.notLawful`. -/
 theorem LoanBroker.coverDeposit_total (amount r : STAmount)
-    (hrounded : lb.roundedCoverAmount amount = .ok (.rounded r)) -- the check passed
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    (hnn : 0 ≤ amount.toRat) -- and not negative
+    (hrounded : lb.roundedCoverAmount amount = .ok (.rounded r))
+    (hc : amount.ExactCanonical)
+    (hnn : 0 ≤ amount.toRat)
     -- the sum is below `10^96`, above every IOU amount
     (hcap : lb.toExact.coverAvailable + r.toRat < 10 ^ 96) :
     ∃ res, lb.coverDeposit amount = .ok (.ok res) ∧ res.amount' = r :=
@@ -92,10 +89,10 @@ theorem LoanBroker.coverDeposit_total (amount r : STAmount)
 /-- A deposit onto an empty cover is taken whole, never rounded, and becomes the
 new `coverAvailable`. An empty cover has no scale to round to. -/
 theorem LoanBroker.coverDeposit_empty (amount : STAmount) (res : LoanBrokerCoverResult)
-    (hzero : lb.coverAvailable = Number.zero) -- the broker holds no cover
+    (hzero : lb.coverAvailable = Number.zero)
     (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    (hat : amount.mNumericType = lb.numericType) : -- in the vault's type
+    (hc : amount.ExactCanonical)
+    (hat : amount.mNumericType = lb.numericType) :
     res.amount' = amount ∧ res.loanBroker'.toExact.coverAvailable = amount.toRat :=
   LoanBroker.coverDeposit_empty_proof lb amount res hzero hok hc hat
 
@@ -104,9 +101,9 @@ minimum cover, it still is, because the debt is unchanged and `coverAvailable` o
 theorem LoanBroker.coverDeposit_keeps_minimum (amount : STAmount) (res : LoanBrokerCoverResult)
     (e : Int)
     (hok : lb.coverDeposit amount = .ok (.ok res))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    (hnn : 0 ≤ amount.toRat) -- and not negative
-    (hmin : lb.HasMinimumCover e) : -- `coverAvailable` ≥ the minimum cover at the vault scale
+    (hc : amount.ExactCanonical)
+    (hnn : 0 ≤ amount.toRat)
+    (hmin : lb.HasMinimumCover e) :
     res.loanBroker'.HasMinimumCover e :=
   LoanBroker.coverDeposit_keeps_minimum_proof lb amount res e hok hc hnn hmin
 

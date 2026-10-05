@@ -19,9 +19,8 @@ variable (lb : LoanBroker)
 /-- An amount that rounds down to zero at the scale of `coverAvailable`:
 `tecPRECISION_LOSS`. -/
 theorem LoanBroker.roundedCoverAmount_precision_loss (amount r : STAmount)
-    -- the amount rounded down to the scale of `coverAvailable`
     (hdown : roundToCoverScale lb.numericType lb.coverAvailable amount .downward = .ok r)
-    (hz : r.signum = 0) : -- is zero
+    (hz : r.signum = 0) :
     lb.roundedCoverAmount amount = .ok (.rejected .tecPRECISION_LOSS) :=
   LoanBroker.roundedCoverAmount_precision_loss_proof lb amount r hdown hz
 
@@ -37,9 +36,8 @@ theorem LoanBroker.roundedCoverAmount_precision_loss_attained :
 
 /-- Otherwise the amount passes, rounded down to the scale of `coverAvailable`. -/
 theorem LoanBroker.roundedCoverAmount_rounded (amount r : STAmount)
-    -- the amount rounded down to the scale of `coverAvailable`
     (hdown : roundToCoverScale lb.numericType lb.coverAvailable amount .downward = .ok r)
-    (hnz : r.signum ≠ 0) : -- is nonzero
+    (hnz : r.signum ≠ 0) :
     lb.roundedCoverAmount amount = .ok (.rounded r) :=
   LoanBroker.roundedCoverAmount_rounded_proof lb amount r hdown hnz
 
@@ -52,7 +50,7 @@ theorem LoanBroker.roundedCoverAmount_rejected_code (amount : STAmount)
 /-- An amount that `roundedCoverAmount` rejects makes `coverDeposit` fail with
 `tecINTERNAL`: the deposit never runs on such an amount. -/
 theorem LoanBroker.coverDeposit_rejected (amount : STAmount) (ter : TER)
-    (hrej : lb.roundedCoverAmount amount = .ok (.rejected ter)) : -- the check rejected it
+    (hrej : lb.roundedCoverAmount amount = .ok (.rejected ter)) :
     lb.coverDeposit amount = .ok (.error .tecINTERNAL) :=
   LoanBroker.coverDeposit_rejected_proof lb amount ter hrej
 
@@ -60,11 +58,11 @@ theorem LoanBroker.coverDeposit_rejected (amount : STAmount) (ter : TER)
 updated broker, with `coverAvailable` set to the rounded sum `c'`. The
 `to_lawful` re-check succeeds, so the `.notLawful` throw is unreachable. -/
 theorem LoanBroker.coverDeposit_success (amount r : STAmount) (rN c' : Number)
-    (hrounded : lb.roundedCoverAmount amount = .ok (.rounded r)) -- the check passed
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    (hnn : 0 ≤ amount.toRat) -- and not negative
+    (hrounded : lb.roundedCoverAmount amount = .ok (.rounded r))
+    (hc : amount.ExactCanonical)
+    (hnn : 0 ≤ amount.toRat)
     (hnum : r.toNumber .to_nearest = .ok rN)
-    (hadd : lb.coverAvailable.operator_add rN .to_nearest = .ok c') : -- the new `coverAvailable`
+    (hadd : lb.coverAvailable.operator_add rN .to_nearest = .ok c') :
     ∃ lb' : LoanBroker, lb.coverDeposit amount = .ok (.ok ⟨r, lb'⟩) ∧
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' } :=
   LoanBroker.coverDeposit_success_proof lb amount r rN c' hrounded hc hnn hnum hadd

@@ -26,7 +26,7 @@ theorem LoanBroker.roundedCoverAvailable_exact (s : STAmount)
 `coverAvailable`. For XRP and MPT the exponent is `0`, so the bound is `1/2`. -/
 theorem LoanBroker.roundedCoverAvailable_within_half (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s)
-    (hnz : s.mValue ≠ 0) : -- the returned amount is nonzero
+    (hnz : s.mValue ≠ 0) :
     |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent :=
   LoanBroker.roundedCoverAvailable_within_half_proof lb s hok hnz
 
@@ -35,8 +35,7 @@ broker whose cover history keeps `coverAvailable` whole returns it exactly, with
 no representability condition. -/
 theorem LoanBroker.WholeCoverFrom.roundedCoverAvailable_exact (start lb : LoanBroker)
     (s : STAmount)
-    (hint : start.numericType.isIntegral = true) -- the broker holds XRP or MPT
-    -- the starting `coverAvailable` is a whole number below `2^63`
+    (hint : start.numericType.isIntegral = true)
     (hstart : start.toExact.coverAvailable.den = 1 ∧ start.toExact.coverAvailable < 2 ^ 63)
     (hr : LoanBroker.WholeCoverFrom start lb)
     (hok : lb.roundedCoverAvailable = .ok s) :

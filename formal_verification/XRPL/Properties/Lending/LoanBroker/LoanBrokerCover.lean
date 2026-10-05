@@ -32,7 +32,7 @@ theorem LoanBroker.ReachableFromIn.cover_eq (start lb : LoanBroker) (unit : ℚ)
 the starting cover plus the net requested amount. -/
 theorem LoanBroker.ReachableFromIn.cover_within (start lb : LoanBroker) (unit : ℚ) (n : ℕ)
     (applied requested : ℚ)
-    (hu0 : 0 ≤ unit) -- the rounding unit is not negative
+    (hu0 : 0 ≤ unit)
     (hr : LoanBroker.ReachableFromIn start unit lb n applied requested) :
     |lb.toExact.coverAvailable - (start.toExact.coverAvailable + requested)| ≤ n * unit :=
   LoanBroker.ReachableFromIn.cover_within_proof start unit lb n applied requested hu0 hr
@@ -44,8 +44,7 @@ theorem LoanBroker.coverDeposit_coverWithdraw_restores (lb : LoanBroker) (amount
     (hdep : lb.coverDeposit amount = .ok (.ok res))
     -- the credited amount is then withdrawn
     (hwd : res.loanBroker'.coverWithdraw res.amount' = .ok (.ok res'))
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    -- the true sum is a normalized `Number`
+    (hc : amount.ExactCanonical)
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat) :
     res'.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable :=
@@ -56,15 +55,13 @@ check at the new `coverAvailable` and `coverAvailable` was at least the minimum 
 theorem LoanBroker.coverDeposit_withdrawable (lb : LoanBroker) (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (e : Int)
     (hdep : lb.coverDeposit amount = .ok (.ok res))
-    -- the amount is stored canonically and not negative
     (hc : amount.ExactCanonical) (hnn : 0 ≤ amount.toRat)
     -- the sum is below `10^96`, above every IOU amount
     (hcap : lb.toExact.coverAvailable + res.amount'.toRat < 10 ^ 96)
-    -- the true sum is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    (hmin : lb.HasMinimumCover e) -- `coverAvailable` ≥ the minimum cover
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : lb.HasMinimumCover e)
     -- the credited amount is nonzero at the scale of the new `coverAvailable`
     (hcheck : canApplyToBrokerCover res.loanBroker'.numericType res.loanBroker'.coverAvailable
       res.amount' = .ok .tesSUCCESS) :
@@ -87,15 +84,12 @@ the minimum cover. -/
 theorem LoanBroker.coverDeposit_clawable (lb : LoanBroker) (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (e : Int) (claw : STAmount)
     (hdep : lb.coverDeposit amount = .ok (.ok res))
-    -- the amount is stored canonically in the vault's type, and not negative
     (hc : amount.ExactCanonical) (hnn : 0 ≤ amount.toRat)
     (hat : amount.mNumericType = lb.numericType)
-    -- the true sum is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    (hmin : lb.HasMinimumCover e) -- `coverAvailable` ≥ the minimum cover
-    -- the clawback of the credited amount computes an amount
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : lb.HasMinimumCover e)
     (hrr : res.loanBroker'.roundedCoverClawback pool (some res.amount') = .ok (.rounded claw))
     -- the credited amount is nonzero at the scale of the new `coverAvailable`
     (hcheck : canApplyToBrokerCover res.loanBroker'.numericType res.loanBroker'.coverAvailable
@@ -118,14 +112,12 @@ theorem LoanBroker.coverDeposit_clawable_attained :
 `coverAvailable`, when the deposit's sum fits a `Number`. -/
 theorem LoanBroker.coverDeposit_coverClawback_restores (lb : LoanBroker) (pool : α)
     (amount : STAmount) (res res' : LoanBrokerCoverResult)
-    (hdebt : lb.debtTotal = Number.zero) -- the broker has no debt
+    (hdebt : lb.debtTotal = Number.zero)
     (hdep : lb.coverDeposit amount = .ok (.ok res))
     -- the credited amount is then clawed back
     (hclaw : res.loanBroker'.coverClawback pool (some res.amount') = .ok (.ok res'))
-    -- the amount is stored canonically in the vault's type, and not negative
     (hc : amount.ExactCanonical) (hnn : 0 ≤ amount.toRat)
     (hat : amount.mNumericType = lb.numericType)
-    -- the true sum is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + res.amount'.toRat) :
     res'.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable :=
@@ -141,24 +133,18 @@ theorem LoanBroker.coverClawback_split (lb : LoanBroker) (pool : α) (a b c : ST
     (h1 : lb.coverClawback pool (some a) = .ok (.ok r1))
     (h2 : r1.loanBroker'.coverClawback pool (some b) = .ok (.ok r2))
     (h3 : lb.coverClawback pool (some c) = .ok (.ok s)) -- `c` at once
-    -- the three requests are stored canonically in the vault's type
     (hca : a.ExactCanonical) (hcb : b.ExactCanonical) (hcc : c.ExactCanonical)
     (hat : a.mNumericType = lb.numericType) (hbt : b.mNumericType = lb.numericType)
     (hct : c.mNumericType = lb.numericType)
-    -- the three requests are nonzero and not negative
     (ha0 : 0 ≤ a.toRat) (hb0 : 0 ≤ b.toRat) (hc0 : 0 ≤ c.toRat)
     (hza : a.isZero = false) (hzb : b.isZero = false) (hzc : c.isZero = false)
-    (hsum : c.toRat = a.toRat + b.toRat) -- `c` is the sum of `a` and `b`
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hsum : c.toRat = a.toRat + b.toRat)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- the sum fits under the cover above the minimum
     (hfit : c.toRat ≤ lb.toExact.coverAvailable - minimumCover.toRat)
-    -- the three clawbacks passed their checks
     (hcan1 : lb.canCoverClawback pool (some a) = .ok .tesSUCCESS)
     (hcan2 : r1.loanBroker'.canCoverClawback pool (some b) = .ok .tesSUCCESS)
     (hcan3 : lb.canCoverClawback pool (some c) = .ok .tesSUCCESS)
-    -- the true differences are normalized `Number`s
     (hx1 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - a.toRat)
     (hx2 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - c.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s.loanBroker'.toExact.coverAvailable :=
@@ -172,10 +158,8 @@ theorem LoanBroker.coverWithdraw_split (lb : LoanBroker) (a b c : STAmount)
     -- `a` then `b`
     (h1 : lb.coverWithdraw a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverWithdraw b = .ok (.ok r2))
     (h3 : lb.coverWithdraw c = .ok (.ok s)) -- `c` at once
-    -- the three amounts are stored canonically
     (hca : a.ExactCanonical) (hcb : b.ExactCanonical) (hcc : c.ExactCanonical)
-    (hsum : c.toRat = a.toRat + b.toRat) -- `c` is the sum of `a` and `b`
-    -- the true differences are normalized `Number`s
+    (hsum : c.toRat = a.toRat + b.toRat)
     (hx1 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - a.toRat)
     (hx2 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - c.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s.loanBroker'.toExact.coverAvailable :=
@@ -192,8 +176,7 @@ theorem LoanBroker.coverWithdraw_coverDeposit_restores (lb : LoanBroker) (amount
     -- the scale of the cover after the withdrawal, and the amount sits on it
     (hexp : numberExponent res.loanBroker'.coverAvailable res.loanBroker'.numericType = .ok e)
     (hgrid : e ≤ amount.exponent)
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
-    -- the true difference is a normalized `Number`
+    (hc : amount.ExactCanonical)
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable - amount.toRat) :
     res'.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable :=
@@ -216,16 +199,14 @@ the amount sits on the scale of the cover after the clawback and the clawback's
 difference fits a `Number`. -/
 theorem LoanBroker.coverClawback_coverDeposit_restores (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (res res' : LoanBrokerCoverResult) (e : Int)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hclaw : lb.coverClawback pool amount = .ok (.ok res))
     -- the clawed amount is then deposited back
     (hdep : res.loanBroker'.coverDeposit res.amount' = .ok (.ok res'))
     -- the scale of the cover after the clawback, and the amount sits on it
     (hexp : numberExponent res.loanBroker'.coverAvailable res.loanBroker'.numericType = .ok e)
     (hgrid : e ≤ res.amount'.exponent)
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    -- the true difference is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
     res'.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable :=
@@ -251,8 +232,7 @@ theorem LoanBroker.coverWithdraw_comm (lb : LoanBroker) (a b : STAmount)
     (h1 : lb.coverWithdraw a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverWithdraw b = .ok (.ok r2))
     -- `b` then `a`
     (h3 : lb.coverWithdraw b = .ok (.ok s1)) (h4 : s1.loanBroker'.coverWithdraw a = .ok (.ok s2))
-    (hca : a.ExactCanonical) (hcb : b.ExactCanonical) -- both amounts are stored canonically
-    -- the true differences are normalized `Number`s
+    (hca : a.ExactCanonical) (hcb : b.ExactCanonical)
     (hxa : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - a.toRat)
     (hxb : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - b.toRat)
     (hxab : ∃ w : Number, w.isNormalized ∧
@@ -281,22 +261,17 @@ theorem LoanBroker.coverClawback_comm (lb : LoanBroker) (pool : α) (a b : STAmo
     -- `b` then `a`
     (h3 : lb.coverClawback pool (some b) = .ok (.ok s1))
     (h4 : s1.loanBroker'.coverClawback pool (some a) = .ok (.ok s2))
-    -- both requests are stored canonically in the vault's type, nonzero and not negative
     (hca : a.ExactCanonical) (hcb : b.ExactCanonical)
     (hat : a.mNumericType = lb.numericType) (hbt : b.mNumericType = lb.numericType)
     (ha0 : 0 ≤ a.toRat) (hb0 : 0 ≤ b.toRat)
     (hza : a.isZero = false) (hzb : b.isZero = false)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- both requests together fit under the cover above the minimum
     (hfit : a.toRat + b.toRat ≤ lb.toExact.coverAvailable - minimumCover.toRat)
-    -- the four clawbacks passed their checks
     (hcan1 : lb.canCoverClawback pool (some a) = .ok .tesSUCCESS)
     (hcan2 : r1.loanBroker'.canCoverClawback pool (some b) = .ok .tesSUCCESS)
     (hcan3 : lb.canCoverClawback pool (some b) = .ok .tesSUCCESS)
     (hcan4 : s1.loanBroker'.canCoverClawback pool (some a) = .ok .tesSUCCESS)
-    -- the true differences are normalized `Number`s
     (hxa : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - a.toRat)
     (hxb : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - b.toRat)
     (hxab : ∃ w : Number, w.isNormalized ∧
@@ -343,9 +318,7 @@ theorem LoanBroker.coverDeposit_comm_cover (lb : LoanBroker) (a b : STAmount)
     (he : numberExponent lb.coverAvailable lb.numericType = .ok e)
     (hr : numberExponent r1.loanBroker'.coverAvailable lb.numericType = .ok e)
     (hs : numberExponent s1.loanBroker'.coverAvailable lb.numericType = .ok e)
-    -- both amounts are stored canonically
     (hca : a.ExactCanonical) (hcb : b.ExactCanonical)
-    -- every true sum is a normalized `Number`
     (hx1 : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable + r1.amount'.toRat)
     (hx2 : ∃ w : Number, w.isNormalized ∧

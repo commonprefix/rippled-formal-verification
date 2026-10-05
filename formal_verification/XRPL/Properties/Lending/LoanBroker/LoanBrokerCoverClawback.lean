@@ -22,14 +22,11 @@ cover, rounded down to a `Number` and then to nearest in the vault asset. A nonz
 amount is within half a unit of its exponent from that rounded-down difference. -/
 theorem LoanBroker.roundedCoverClawback_all (pool : α)
     (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- the cover above the minimum, rounded down, is positive
     (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
     (hpos : 0 < maxClaw.signum)
-    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) -- no amount, or zero
-    -- that cover converted to the vault asset
+    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
     (hclaw : STAmount.ofNumber lb.numericType maxClaw .to_nearest = .ok claw) :
     lb.roundedCoverClawback pool amount = .ok (.rounded claw) ∧
       (claw.mValue ≠ 0 →
@@ -42,16 +39,13 @@ minimum and rounded to nearest in the vault asset. A nonzero claw amount is with
 unit of its exponent from the smaller of the two. -/
 theorem LoanBroker.roundedCoverClawback_capped (pool : α) (a : STAmount)
     (e : Int) (minimumCover maxClaw magnitude : Number) (claw : STAmount)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- the cover above the minimum, rounded down, is positive
     (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
     (hpos : 0 < maxClaw.signum)
-    (hnz : a.isZero = false) -- the requested amount is nonzero
-    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat) -- canonical and not negative
+    (hnz : a.isZero = false)
+    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat)
     (hmag : a.toNumber .to_nearest = .ok magnitude)
-    -- the smaller of the two, converted to the vault asset
     (hclaw : STAmount.ofNumber lb.numericType
       (if magnitude.operator_gt maxClaw = true then maxClaw else magnitude) .to_nearest =
         .ok claw) :
@@ -65,14 +59,11 @@ theorem LoanBroker.roundedCoverClawback_capped (pool : α) (a : STAmount)
 MPT request that fits under the cover above the minimum is clawed exactly. -/
 theorem LoanBroker.roundedCoverClawback_integral (pool : α) (a claw : STAmount) (e : Int)
     (minimumCover : Number)
-    -- the request is a canonical whole number of the vault's type, not negative
     (hint : a.IntegralCanonical) (hsz : a.mValue.toNat ≤ 2 ^ 63 - 1) (ha0 : 0 ≤ a.toRat)
     (hat : a.mNumericType = lb.numericType)
-    (hza : a.isZero = false) -- the request is nonzero
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hza : a.isZero = false)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- the request fits under the cover above the minimum
     (hfit : a.toRat ≤ lb.toExact.coverAvailable - minimumCover.toRat)
     (hok : lb.roundedCoverClawback pool (some a) = .ok (.rounded claw)) :
     claw = a :=
@@ -83,11 +74,9 @@ theorem LoanBroker.roundedCoverClawback_integral (pool : α) (a claw : STAmount)
 exactly the clawed amount. -/
 theorem LoanBroker.coverClawback_debit (pool : α) (amount : Option STAmount)
     (res : LoanBrokerCoverResult)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    -- the true difference is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
     lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = res.amount'.toRat :=
@@ -97,13 +86,12 @@ theorem LoanBroker.coverClawback_debit (pool : α) (amount : Option STAmount)
 whole `coverAvailable` below `2^63` is debited exactly. -/
 theorem LoanBroker.coverClawback_debit_integral (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    (hnt : lb.numericType.isIntegral = true) -- the vault asset is XRP or MPT
-    (hcint : lb.toExact.coverAvailable.den = 1) -- `coverAvailable` is a whole number
-    (hbound : lb.toExact.coverAvailable < 2 ^ 63) : -- below `2^63`
+    (hnt : lb.numericType.isIntegral = true)
+    (hcint : lb.toExact.coverAvailable.den = 1)
+    (hbound : lb.toExact.coverAvailable < 2 ^ 63) :
     lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = res.amount'.toRat :=
   LoanBroker.coverClawback_debit_integral_proof lb pool amount res hcan hok hreq hnt hcint hbound
 
@@ -121,9 +109,8 @@ theorem LoanBroker.coverClawback_debit_attained :
 /-- A clawback only lowers `coverAvailable`. -/
 theorem LoanBroker.coverClawback_decreases_cover (pool : α) (amount : Option STAmount)
     (res : LoanBrokerCoverResult)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat) :
     res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable :=
   LoanBroker.coverClawback_decreases_cover_proof lb pool amount res hcan hok hreq
@@ -135,12 +122,10 @@ theorem LoanBroker.coverClawback_monotone (pool : α) (a b : STAmount)
     (ra rb : LoanBrokerCoverResult)
     (hoka : lb.coverClawback pool (some a) = .ok (.ok ra))
     (hokb : lb.coverClawback pool (some b) = .ok (.ok rb))
-    -- both requests are stored canonically, and `a` is of the vault's type
     (hac : a.ExactCanonical) (hbc : b.ExactCanonical) (hat : a.mNumericType = lb.numericType)
-    (ha0 : 0 ≤ a.toRat) -- `a` is not negative
-    (hza : a.isZero = false) (hzb : b.isZero = false) -- both requests are nonzero
-    (hab : a.toRat ≤ b.toRat) -- `b` is the larger request
-    -- the larger clawback passed the checks
+    (ha0 : 0 ≤ a.toRat)
+    (hza : a.isZero = false) (hzb : b.isZero = false)
+    (hab : a.toRat ≤ b.toRat)
     (hcanb : lb.canCoverClawback pool (some b) = .ok .tesSUCCESS) :
     ra.amount'.toRat ≤ rb.amount'.toRat :=
   LoanBroker.coverClawback_monotone_proof lb pool a b ra rb hoka hokb hac hbc hat ha0 hza hzb hab
@@ -151,14 +136,11 @@ a unit of the claw amount's exponent. Only the final to-nearest rounding can tak
 below the minimum. -/
 theorem LoanBroker.coverClawback_keeps_minimum_within_half (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
-    -- a nonzero request is canonical and not negative
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    -- the true difference is a normalized `Number`
     (hexact : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
     minimumCover.toRat - res.loanBroker'.toExact.coverAvailable ≤
@@ -181,11 +163,10 @@ theorem LoanBroker.coverClawback_keeps_minimum_within_half_attained :
 the minimum cover, when the asset holds the cover above the minimum exactly. -/
 theorem LoanBroker.coverClawback_all_leaves_minimum (pool : α) (amount : Option STAmount)
     (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
-    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) -- no amount, or zero
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
+    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
-    -- the minimum cover the debt requires
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
     -- `coverAvailable` minus the minimum cover is on the STAmount grid of the vault asset
     (hfit : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
@@ -197,8 +178,7 @@ theorem LoanBroker.coverClawback_all_leaves_minimum (pool : α) (amount : Option
 /-- A clawback whose checks passed runs to the end: it succeeds, or the new broker
 fails the lawfulness re-check. -/
 theorem LoanBroker.coverClawback_total (pool : α) (amount : Option STAmount)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
-    -- a nonzero request is canonical and not negative
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
     (hcap : lb.toExact.coverAvailable < 10 ^ 96) : -- below `10^96`, above every IOU amount
     (∃ res, lb.coverClawback pool amount = .ok (.ok res)) ∨
@@ -209,8 +189,7 @@ theorem LoanBroker.coverClawback_total (pool : α) (amount : Option STAmount)
 `coverAvailable` exactly: the clawed amount then never exceeds it. -/
 theorem LoanBroker.coverClawback_lawful_total (pool : α)
     (amount : Option STAmount)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS) -- the checks passed
-    -- a nonzero request is canonical and not negative
+    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
     -- `coverAvailable` is on the STAmount grid of the vault asset, so it converts without rounding
     (hrep : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
@@ -230,12 +209,11 @@ theorem LoanBroker.coverClawback_lawful_total_attained :
 /-- With no debt, a full clawback passes the checks and leaves zero cover, when the
 asset holds `coverAvailable` exactly. -/
 theorem LoanBroker.coverClawback_all (pool : α) (e : Int) (s : STAmount)
-    (hdebt : lb.debtTotal = Number.zero) -- the broker has no debt
-    -- the whole cover in the vault asset
+    (hdebt : lb.debtTotal = Number.zero)
     (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
-    (hnz : s.mValue ≠ 0) -- is nonzero
-    (hrep : s.toRat = lb.toExact.coverAvailable) -- and holds `coverAvailable` exactly
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) : -- the vault scale
+    (hnz : s.mValue ≠ 0)
+    (hrep : s.toRat = lb.toExact.coverAvailable)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e) :
     lb.canCoverClawback pool none = .ok .tesSUCCESS ∧
       ∃ res, lb.coverClawback pool none = .ok (.ok res) ∧
         res.loanBroker'.toExact.coverAvailable = 0 :=

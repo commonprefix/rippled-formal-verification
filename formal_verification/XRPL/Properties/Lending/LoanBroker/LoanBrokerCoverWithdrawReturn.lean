@@ -20,7 +20,6 @@ variable (lb : LoanBroker)
 /-- A zero amount, or one that rounds to zero at the scale of `coverAvailable`:
 `tecPRECISION_LOSS`. -/
 theorem LoanBroker.canCoverWithdraw_precision_loss (pool : α) (amount rn : STAmount)
-    -- the amount is zero, or rounds to zero at the scale of `coverAvailable`
     (hz : amount.isZero = true ∨
       (roundToCoverScale lb.numericType lb.coverAvailable amount .to_nearest = .ok rn ∧
         rn.signum = 0)) :
@@ -30,11 +29,10 @@ theorem LoanBroker.canCoverWithdraw_precision_loss (pool : α) (amount rn : STAm
 /-- An amount above `coverAvailable`: `tecINSUFFICIENT_FUNDS`. -/
 theorem LoanBroker.canCoverWithdraw_insufficient_cover (pool : α) (amount : STAmount) (e : Int)
     (aN : Number)
-    -- the amount passed the scale check
     (hcheck : canApplyToBrokerCover lb.numericType lb.coverAvailable amount = .ok .tesSUCCESS)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hnum : amount.toNumber .to_nearest = .ok aN)
-    (hlt : lb.coverAvailable.operator_lt aN = true) : -- `coverAvailable` is below the amount
+    (hlt : lb.coverAvailable.operator_lt aN = true) :
     lb.canCoverWithdraw pool amount = .ok .tecINSUFFICIENT_FUNDS :=
   LoanBroker.canCoverWithdraw_insufficient_cover_proof lb pool amount e aN hcheck hexp hnum hlt
 
@@ -43,13 +41,11 @@ theorem LoanBroker.canCoverWithdraw_insufficient_cover (pool : α) (amount : STA
 `tecINSUFFICIENT_FUNDS`. -/
 theorem LoanBroker.canCoverWithdraw_below_minimum (pool : α) (amount : STAmount) (e : Int)
     (aN c' : Number)
-    -- the amount passed the scale check
     (hcheck : canApplyToBrokerCover lb.numericType lb.coverAvailable amount = .ok .tesSUCCESS)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hnum : amount.toNumber .to_nearest = .ok aN)
-    (hge : lb.coverAvailable.operator_lt aN = false) -- `coverAvailable` covers the amount
-    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c') -- the new `coverAvailable`
-    -- is below the minimum cover
+    (hge : lb.coverAvailable.operator_lt aN = false)
+    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c')
     (hmin : ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).hasMinimumCover e =
       .ok false) :
     lb.canCoverWithdraw pool amount = .ok .tecINSUFFICIENT_FUNDS :=
@@ -59,13 +55,11 @@ theorem LoanBroker.canCoverWithdraw_below_minimum (pool : α) (amount : STAmount
 /-- Every guard passes: the withdrawal is allowed. -/
 theorem LoanBroker.canCoverWithdraw_success (pool : α) (amount : STAmount) (e : Int)
     (aN c' : Number)
-    -- the amount passed the scale check
     (hcheck : canApplyToBrokerCover lb.numericType lb.coverAvailable amount = .ok .tesSUCCESS)
-    (hexp : AssetPool.exponent pool lb.numericType = .ok e) -- the vault scale
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hnum : amount.toNumber .to_nearest = .ok aN)
-    (hge : lb.coverAvailable.operator_lt aN = false) -- `coverAvailable` covers the amount
-    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c') -- the new `coverAvailable`
-    -- keeps the minimum cover
+    (hge : lb.coverAvailable.operator_lt aN = false)
+    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c')
     (hmin : ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).hasMinimumCover e =
       .ok true) :
     lb.canCoverWithdraw pool amount = .ok .tesSUCCESS :=
@@ -82,8 +76,8 @@ theorem LoanBroker.canCoverWithdraw_error_codes (pool : α) (amount : STAmount)
 `.notLawful`. -/
 theorem LoanBroker.coverWithdraw_negative_cover (amount : STAmount) (aN c' : Number)
     (hnum : amount.toNumber .to_nearest = .ok aN)
-    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c') -- the new `coverAvailable`
-    (hneg : Number.zero.operator_le c' = false) : -- is below zero
+    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c')
+    (hneg : Number.zero.operator_le c' = false) :
     lb.coverWithdraw amount = .error .notLawful :=
   LoanBroker.coverWithdraw_negative_cover_proof lb amount aN c' hnum hsub hneg
 
@@ -91,10 +85,10 @@ theorem LoanBroker.coverWithdraw_negative_cover (amount : STAmount) (aN c' : Num
 updated broker, with `coverAvailable` set to the rounded difference `c'`. The
 `to_lawful` re-check succeeds, so the `.notLawful` throw is unreachable. -/
 theorem LoanBroker.coverWithdraw_success (amount : STAmount) (aN c' : Number)
-    (hc : amount.ExactCanonical) -- the amount is stored canonically
+    (hc : amount.ExactCanonical)
     (hnum : amount.toNumber .to_nearest = .ok aN)
-    (hge : lb.coverAvailable.operator_lt aN = false) -- `coverAvailable` covers the amount
-    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c') : -- the new `coverAvailable`
+    (hge : lb.coverAvailable.operator_lt aN = false)
+    (hsub : lb.coverAvailable.operator_sub aN .to_nearest = .ok c') :
     ∃ lb' : LoanBroker, lb.coverWithdraw amount = .ok (.ok ⟨amount, lb'⟩) ∧
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' } :=
   LoanBroker.coverWithdraw_success_proof lb amount aN c' hc hnum hge hsub

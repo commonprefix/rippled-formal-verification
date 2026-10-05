@@ -33,7 +33,7 @@ theorem LoanBroker.Reachable.loanCount_zero (hr : lb.Reachable) :
 `coverRateMinimum` and `coverRateLiquidation` never change after `create`. -/
 theorem LoanBroker.ReachableFrom.creation_rates (tx : LoanBrokerSetCreate) (nt : NumericType)
     (start lb : LoanBroker)
-    (hc : LoanBroker.create tx nt = .ok start) -- the broker was created from `tx`
+    (hc : LoanBroker.create tx nt = .ok start)
     (hr : LoanBroker.ReachableFrom start lb) :
     lb.managementFeeRate = tx.managementFeeRate.getD 0 ∧
       lb.coverRateMinimum = tx.coverRateMinimum.getD 0 ∧
