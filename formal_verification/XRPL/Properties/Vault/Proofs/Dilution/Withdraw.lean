@@ -17,8 +17,8 @@ lemma navExact_of_zero (v : Vault) (w : Bool) (hL : v.toExact.lossUnrealized = 0
     exact Number.eq_zero_of_mantissa_zero v.lossUnrealized v.wf.lossUnrealized_norm hmz
   refine ⟨v.assetsTotal, ?_, ?_⟩
   · cases w with
-    | true => exact operator_sub_zero_right _ _
-    | false => rw [hL0]; exact operator_sub_zero_right _ _
+    | true => exact Number.operator_sub_zero _ _
+    | false => rw [hL0]; exact Number.operator_sub_zero _ _
   · split
     · simp only [RawVault.depositNav, RawVault.toExact]
     · simp only [RawVault.withdrawNav, RawVault.toExact]

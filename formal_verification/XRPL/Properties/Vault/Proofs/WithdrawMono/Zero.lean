@@ -1,4 +1,5 @@
-import XRPL.Properties.Vault.Proofs.Support.FracCanon
+import XRPL.Properties.Vault.Proofs.Support.STAmountFacts
+import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Vault.Proofs.WithdrawMono.Clamp
 import XRPL.Properties.Vault.Proofs.WithdrawMono.Exponent
@@ -271,7 +272,7 @@ lemma clamp_zero_frac (T : Number) (p a atr : STAmount) (hTn : T.isNormalized)
       have := operator_sub_le_of_le_normalized sum T d Number.zero hsumv.2 hTn hd (Or.inl rfl)
         (by rw [Number.toRat_zero]; linarith [hsumv.1])
       rwa [Number.toRat_zero] at this
-    have hdnorm : d.isNormalized := operator_sub_isNormalized_to_nearest' sum T d hsumv.2 hTn hd
+    have hdnorm : d.isNormalized := operator_sub_isNormalized_to_nearest_sz sum T d hsumv.2 hTn hd
     rw [hpt] at hcl
     exact fnp_nonpos a (STAmount.ofNumber_mNumericType _ _ _ a hcl)
       (ofNumber_nonpos d a hdnorm hdn hcl)

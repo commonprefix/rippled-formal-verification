@@ -29,12 +29,12 @@ lemma Vault.canBurnShares_assets_exact_proof (v : Vault) (sharesTotalAmount : ST
   simp only [] at hok
   by_cases hg : (v.sharesTotal.mantissa_ == 0 ||
       (v.assetsTotal.mantissa_ != 0 || v.assetsAvailable.mantissa_ != 0)) = true
-  · rw [if_pos hg, pure_ok] at hok
+  · rw [if_pos hg, pure_eq] at hok
     exact CanBurnSharesResult.noConfusion (Except.ok.inj hok)
   · rw [if_neg hg] at hok
     simp only [pure_bind] at hok
     obtain ⟨sta, hofn, hok⟩ := bind_ok_peel _ _ _ hok
-    rw [pure_ok] at hok
+    rw [pure_eq] at hok
     have hsta : sta = sharesTotalAmount := CanBurnSharesResult.assets.inj (Except.ok.inj hok)
     obtain ⟨_, _, _, _, hval⟩ := STAmount.ofNumber_int64_shape v.sharesTotal .to_nearest sta
       v.wf.sharesTotal_norm v.wf.sharesTotal_nonneg v.wf.sharesTotal_int hfit' hofn

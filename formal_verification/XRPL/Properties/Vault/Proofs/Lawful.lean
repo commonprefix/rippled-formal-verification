@@ -42,7 +42,7 @@ lemma Vault.burnShares_lawful (v : Vault)
     simp only [] at hcan
     by_cases hg : (v.sharesTotal.mantissa_ == 0 ||
         (v.assetsTotal.mantissa_ != 0 || v.assetsAvailable.mantissa_ != 0)) = true
-    · rw [if_pos hg, pure_ok] at hcan
+    · rw [if_pos hg, pure_eq] at hcan
       exact absurd (Except.ok.inj hcan) (fun h => CanBurnSharesResult.noConfusion h)
     · rw [Bool.or_eq_true, Bool.or_eq_true] at hg
       push Not at hg
@@ -83,7 +83,7 @@ lemma Vault.burnShares_lawful (v : Vault)
     (rat_num_natAbs_lt_of_le _ hdiff_den hdiff_nn hdiff_le) hst
   have hst_nn : 0 ≤ st'.toRat := by rw [hst_val]; exact hdiff_nn
   have hst_norm : st'.isNormalized :=
-    operator_sub_isNormalized_to_nearest' _ _ _ hwf.sharesTotal_norm hsdn_norm hst
+    operator_sub_isNormalized_to_nearest_sz _ _ _ hwf.sharesTotal_norm hsdn_norm hst
   have hwfE : ({ v with sharesTotal := st' } : RawVault).WF :=
     ⟨hwf.assetsTotal_norm, hwf.assetsAvailable_norm, hwf.assetsMaximum_norm,
       hst_norm, hwf.lossUnrealized_norm, hst_nn, hst_den,
@@ -118,7 +118,7 @@ lemma Vault.subtract_lawful (v : Vault)
       v'.toRawVault = { v.toRawVault with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by
   -- new asset total: normalized, nonnegative, and at or below the starting total
   have hat_norm : at'.isNormalized :=
-    operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm hp_norm hat
+    operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm hp_norm hat
   have hat_nn : 0 ≤ at'.toRat :=
     operator_sub_nonneg _ _ _ v.wf.assetsTotal_norm hp_norm hat (by linarith)
   have hat_le : at'.toRat ≤ v.assetsTotal.toRat := by
@@ -144,7 +144,7 @@ lemma Vault.subtract_lawful (v : Vault)
     (rat_num_natAbs_lt_of_le _ hdiff_den (by linarith) (by linarith)) hst
   have hst_nn : 0 ≤ st'.toRat := by rw [hst_val]; linarith
   have hst_norm : st'.isNormalized :=
-    operator_sub_isNormalized_to_nearest' _ _ _ v.wf.sharesTotal_norm hb_norm hst
+    operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hb_norm hst
   -- the decremented record is well-formed and exactly valid, so `to_lawful` succeeds
   have hwfE : ({ v with assetsTotal := at', assetsAvailable := at', sharesTotal := st' } : RawVault).WF :=
     ⟨hat_norm, hat_norm, v.wf.assetsMaximum_norm, hst_norm,

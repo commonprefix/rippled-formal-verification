@@ -38,7 +38,7 @@ lemma priced_pos_canonical (T : Number) (priced reported : STAmount)
   have hnegfrac : (priced.operator_neg).mNumericType = .fractional :=
     (STAmount.operator_neg_fczr priced hpfcz).1
   have hrfrac : reported.mNumericType = .fractional :=
-    (WdAcc.clamp_frac_shape T hTnorm _ _ (STAmount.operator_neg_fczr priced hpfcz) hcl).1
+    (WdAcc.clamp_frac_shape T _ _ (STAmount.operator_neg_fczr priced hpfcz) hcl).1
   have hrint : reported.integral = false := by
     show reported.mNumericType.isIntegral = false; rw [hrfrac]; rfl
   obtain ⟨hrne, hrsgn⟩ := STAmount.fnp_false_pos reported hrint hfnp
@@ -110,13 +110,13 @@ lemma field_on_grid (v : Vault) (hfr : v.numericType = .fractional) (w : Bool)
     hpfrac hp0 (hpc (by rw [hfr]; rfl)) hcl hfnp
   have hpleA : priced.toRat ≤ v.assetsAvailable.toRat := by rw [← hprv]; exact hle
   have hTneg : v.assetsTotal.negative_ = false :=
-    Number.negative_false_of_norm_nonneg _ hTnorm hTnn
+    Number.negative_false_of_nonneg _ hTnorm hTnn
   rw [hfr] at hTgrid hXgrid
   have hXf : X.isNormalized ∧ X.negative_ = false ∧ X.toRat ≤ v.assetsTotal.toRat ∧
       priced.toRat ≤ X.toRat := by
     rcases hX with rfl | rfl
     · exact ⟨hTnorm, hTneg, le_rfl, le_trans hpleA hAle⟩
-    · exact ⟨v.wf.assetsAvailable_norm, Number.negative_false_of_norm_nonneg _
+    · exact ⟨v.wf.assetsAvailable_norm, Number.negative_false_of_nonneg _
         v.wf.assetsAvailable_norm v.exact.assetsAvailable_nonneg, hAle, hpleA⟩
   obtain ⟨hXnorm, hXneg, hXle, hpX⟩ := hXf
   exact clamped_field_on_grid v.assetsTotal X priced rep repN res hTnorm hTneg hTgrid hXnorm

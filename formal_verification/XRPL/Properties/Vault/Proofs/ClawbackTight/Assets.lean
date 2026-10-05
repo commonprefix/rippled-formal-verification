@@ -29,7 +29,7 @@ lemma frac_zero_contra (A : Number) (hA : A.isNormalized) (hA0 : 0 ≤ A.toRat) 
     (hcl : clampToSumExponent A p.operator_neg = .ok rec)
     (hfnp : rec.isFractionalNonPositive = .ok false) : False := by
   have hfc : STAmount.FracCanonZero p := ⟨hfr, Or.inr hz⟩
-  have hrc := WdAcc.clamp_frac_shape A hA p.operator_neg rec (STAmount.operator_neg_fczr p hfc) hcl
+  have hrc := WdAcc.clamp_frac_shape A p.operator_neg rec (STAmount.operator_neg_fczr p hfc) hcl
   have hrint : rec.integral = false := by
     show rec.mNumericType.isIntegral = false; rw [hrc.1]; rfl
   obtain ⟨hrm, hrn⟩ := STAmount.fnp_false_pos rec hrint hfnp

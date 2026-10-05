@@ -1,12 +1,10 @@
 import XRPL.Model.Protocol.Rounding
-import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.Common.Constants
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
 import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
-import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Protocol.Number.Totality
 
 /-! # Amounts held at an exponent
@@ -34,17 +32,6 @@ lemma NumericType.mantissaBound_le (nt : NumericType) : nt.mantissaBound ≤ 2 ^
     have h2 := Nat.min_le_right mv.toNat maxRep.toNat
     have h3 : (2 : ℕ) ^ 63 = 9223372036854775808 := by norm_num
     rw [h3]; omega
-
-private lemma zero_norm : (Number.zero).isNormalized := Or.inl rfl
-
-/-- A normalized nonnegative `Number` has a clear sign bit. -/
-private lemma neg_false_of_nonneg (n : Number) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat) :
-    n.negative_ = false := by
-  by_contra hb
-  have hb' : n.negative_ = true := by simpa using hb
-  have hle := Number.toRat_nonpos_of_negative n hb'
-  have hm0 : n.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp (le_antisymm hle h0)
-  rw [Number.eq_zero_of_mantissa_zero n hn hm0] at hb'; exact absurd hb' (by decide)
 
 /-- Every integer count below `2^63` units at a scale with exponent room is a normalized `Number`. -/
 lemma Number.exists_normalized_int_mul_pow (a : ℤ) (s : Int)
@@ -142,7 +129,7 @@ theorem Number.isAtExponent_iff (value : Number) (exponent : Int) (nt : NumericT
     simp only [true_or, true_iff]
     exact ⟨0, NumericType.mantissaBound_pos nt, by rw [Number.toRat_zero]; simp⟩
   · have hm0 : value.mantissa_ ≠ 0 := fun h => hz (Number.eq_zero_of_mantissa_zero value hn h)
-    have hneg : value.negative_ = false := neg_false_of_nonneg value hn hnn
+    have hneg : value.negative_ = false := Number.negative_false_of_nonneg value hn hnn
     have hval := Number.toRat_of_nonneg value hneg
     have hten : (10 : ℚ) ≠ 0 := by norm_num
     constructor
@@ -219,8 +206,8 @@ lemma Number.operator_sub_ok_of_grid (x y : Number) (a b : ℕ) (s : Int)
   have hpos : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
   have hxnn : 0 ≤ x.toRat := by rw [hxv]; positivity
   have hynn : 0 ≤ y.toRat := by rw [hyv]; positivity
-  have hxneg := neg_false_of_nonneg x hx hxnn
-  have hyneg := neg_false_of_nonneg y hy hynn
+  have hxneg := Number.negative_false_of_nonneg x hx hxnn
+  have hyneg := Number.negative_false_of_nonneg y hy hynn
   have hbig : ((2 : ℚ) ^ 63) < (10 : ℚ) ^ (19 : ℕ) := by norm_num
   have hxe : x.exponent_ ≤ s := by
     apply Number.exponent_le_of_toRat_lt x s hx hxneg hs'
@@ -238,7 +225,116 @@ lemma Number.operator_sub_ok_of_grid (x y : Number) (a b : ℕ) (s : Int)
     exact mul_lt_mul_of_pos_right this hpos
   have hsmax := hs.2
   unfold cMaxOffset at hsmax
-  exact Number.operator_sub_ok_of_normalized_exp x y .to_nearest hx hy hxneg hyneg
+  exact Number.operator_sub_ok_of_exp x y .to_nearest hx hy
     (by unfold maxExponent; omega) (by unfold maxExponent; omega)
+
+/-- An integer in `(-2^63, 2^63)` is a normalized `Number`. -/
+lemma Number.exists_of_int (q : ℚ) (hd : q.den = 1) (hlo : -2 ^ 63 < q) (hhi : q < 2 ^ 63) :
+    ∃ w : Number, w.isNormalized ∧ w.toRat = q := by
+  have hq : (q.num : ℚ) = q := by
+    conv_rhs => rw [← Rat.num_div_den q]
+    rw [hd, Nat.cast_one, div_one]
+  have hlo' : -2 ^ 63 < q.num := by exact_mod_cast (hq ▸ hlo : (-2 ^ 63 : ℚ) < q.num)
+  have hhi' : q.num < 2 ^ 63 := by exact_mod_cast (hq ▸ hhi : (q.num : ℚ) < 2 ^ 63)
+  obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow q.num 0 ⟨hlo', hhi'⟩
+    (by unfold minExponent maxExponent; norm_num)
+  exact ⟨w, hw, by rw [hwv, zpow_zero, mul_one, hq]⟩
+
+/-- A normalized nonnegative `Number` below `10 ^ 96` leaves the headroom
+`operator_add` needs. -/
+lemma Number.exponent_headroom_of_lt (n : Number) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
+    (hlt : n.toRat < 10 ^ 96) : n.exponent_ + 22 ≤ maxExponent := by
+  have hle := Number.exponent_le_of_toRat_lt n 78 hn (Number.negative_false_of_nonneg n hn h0)
+    (by unfold minExponent; norm_num) (by norm_num; linarith)
+  unfold maxExponent; omega
+
+/-- Adding two nonnegative normalized values below `10^96` never throws. -/
+lemma Number.operator_add_ok_of_lt (x y : Number) (mode : rounding_mode) (hx : x.isNormalized)
+    (hy : y.isNormalized) (hx0 : 0 ≤ x.toRat) (hxlt : x.toRat < 10 ^ 96) (hy0 : 0 ≤ y.toRat)
+    (hylt : y.toRat < 10 ^ 96) : ∃ result, x.operator_add y mode = .ok result :=
+  Number.operator_add_ok_of_exp x y mode hx hy
+    (Number.exponent_headroom_of_lt x hx hx0 hxlt) (Number.exponent_headroom_of_lt y hy hy0 hylt)
+
+/-- Subtracting two nonnegative normalized values below `10^96` never throws. -/
+lemma Number.operator_sub_ok_of_lt (x y : Number) (mode : rounding_mode) (hx : x.isNormalized)
+    (hy : y.isNormalized) (hx0 : 0 ≤ x.toRat) (hxlt : x.toRat < 10 ^ 96) (hy0 : 0 ≤ y.toRat)
+    (hylt : y.toRat < 10 ^ 96) : ∃ result, x.operator_sub y mode = .ok result :=
+  Number.operator_sub_ok_of_exp x y mode hx hy (Number.exponent_headroom_of_lt x hx hx0 hxlt)
+    (Number.exponent_headroom_of_lt y hy hy0 hylt)
+
+/-- Subtracting a value at least as large, rounding down, never gives a positive
+result. -/
+lemma Number.signum_nonpos_of_sub_downward (x y d : Number) (hx : x.isNormalized)
+    (hy : y.isNormalized) (hsub : x.operator_sub y .downward = .ok d) (hle : x.toRat ≤ y.toRat) :
+    d.signum ≤ 0 := by
+  unfold Number.signum
+  split_ifs with hneg hm
+  · norm_num
+  · exfalso
+    have hm' : d.mantissa_ ≠ 0 := by simpa using hm
+    obtain ⟨n, hn, heq⟩ := operator_sub_rounded_downward x y d hx hy hsub hm'
+    have hdle : d.toRat ≤ x.toRat - y.toRat := heq ▸ Number.lower_le _ n hn
+    have hnn : 0 ≤ d.toRat := Number.toRat_nonneg_of_nonnegative d (by simpa using hneg)
+    have hne : d.toRat ≠ 0 := fun h => hm' (Number.toRat_eq_zero_iff.mp h)
+    have : 0 < d.toRat := lt_of_le_of_ne hnn (Ne.symm hne)
+    linarith
+  · exact le_refl _
+
+/-- Subtracting zero gives the same `Number`, in every rounding mode. -/
+lemma Number.operator_sub_zero (x : Number) (mode : rounding_mode) :
+    x.operator_sub Number.zero mode = .ok x :=
+  Number.operator_sub_of_mantissa_zero x Number.zero mode rfl
+
+/-- Rounding up keeps the order of the values. A result that is zero, or that
+rounds a smaller nonnegative value up, is at most a result that rounds a larger
+value up. -/
+lemma Number.toRat_le_of_rounds_upward (q q' : Number) (t t' : ℚ) (hq' : q'.isNormalized)
+    (ht : 0 ≤ t) (htt : t ≤ t')
+    (hq : q.mantissa_ = 0 ∨ Number.RoundsToRepresentable q t .upward)
+    (hr' : Number.RoundsToRepresentable q' t' .upward) :
+    q.toRat ≤ q'.toRat := by
+  obtain ⟨n', hn', hv'⟩ := hr'
+  have hge' : t' ≤ q'.toRat := by rw [hv']; exact Number.le_upper _ _ hn'
+  rcases hq with h0 | ⟨n, hn, hv⟩
+  · rw [Number.toRat_eq_zero_of_mantissa_zero q h0]
+    linarith
+  · rw [hv]
+    exact Number.upper_tight t n hn q' hq' (by linarith)
+
+/-- A larger positive normalized `Number` never has a smaller exponent. -/
+lemma Number.exponent_le_of_le (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx0 : x.mantissa_ ≠ 0) (hpos : 0 < x.toRat) (hxy : x.toRat ≤ y.toRat) :
+    x.exponent_ ≤ y.exponent_ := by
+  have hy0 : y.mantissa_ ≠ 0 := by
+    intro h
+    rw [Number.toRat_eq_zero_of_mantissa_zero y h] at hxy
+    linarith
+  have hbx := mantissaBounds_nat_of (hx.mantissaBounds hx0)
+  have hby := mantissaBounds_nat_of (hy.mantissaBounds hy0)
+  have hax : x.toRat = (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_ := by
+    rw [← abs_of_pos hpos]; exact abs_toRat_eq x
+  have hay : y.toRat = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := by
+    rw [← abs_of_pos (lt_of_lt_of_le hpos hxy)]; exact abs_toRat_eq y
+  by_contra hlt
+  push Not at hlt
+  -- a 19-digit mantissa one exponent higher is already above every 19-digit mantissa
+  obtain ⟨k, hk⟩ : ∃ k : ℕ, x.exponent_ = y.exponent_ + ((k + 1 : ℕ) : ℤ) :=
+    ⟨(x.exponent_ - y.exponent_ - 1).toNat, by push_cast; omega⟩
+  rw [hax, hay, hk, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast] at hxy
+  have hp : (0 : ℚ) < 10 ^ y.exponent_ := zpow_pos (by norm_num) _
+  have hten : (10 : ℚ) ≤ 10 ^ (k + 1) := by
+    calc (10 : ℚ) = 10 ^ 1 := by norm_num
+      _ ≤ 10 ^ (k + 1) := pow_le_pow_right₀ (by norm_num) (by omega)
+  have hxl : (10 : ℚ) ^ 18 ≤ x.mantissa_.toNat := by exact_mod_cast hbx.1
+  have hyh : (y.mantissa_.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hby.2
+  have h1 : (x.mantissa_.toNat : ℚ) * 10 ^ (k + 1) ≤ y.mantissa_.toNat := by
+    have h' : ((x.mantissa_.toNat : ℚ) * 10 ^ (k + 1)) * 10 ^ y.exponent_ ≤
+        (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := by linarith
+    exact le_of_mul_le_mul_right h' hp
+  have h2 : (10 : ℚ) ^ 19 ≤ (x.mantissa_.toNat : ℚ) * 10 ^ (k + 1) := by
+    calc (10 : ℚ) ^ 19 = 10 ^ 18 * 10 := by norm_num
+      _ ≤ (x.mantissa_.toNat : ℚ) * 10 ^ (k + 1) :=
+        mul_le_mul hxl hten (by norm_num) (by positivity)
+  linarith
 
 end XRPL.Model.Protocol

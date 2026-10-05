@@ -28,7 +28,7 @@ lemma price_cases (v : Vault) (sh p : STAmount) (w : Bool)
   obtain ⟨nv, hnv, hnvq⟩ := hnav
   refine ⟨nv, hnvq, ?_⟩
   cases w <;> simp only at hnv <;>
-    refine ⟨operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm
+    refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
       (by first | exact v.wf.lossUnrealized_norm | exact Or.inl rfl) hnv, ?_⟩ <;>
     simp only [Vault.sharesToAssetsWithdraw, bind, Except.bind, pure, Except.pure] at hok <;>
     rw [hnv] at hok <;> simp only at hok <;> walk_ok
@@ -126,7 +126,7 @@ lemma price_an_lower (v : Vault) (sh p : STAmount) (w : Bool)
   obtain ⟨hdb1, -⟩ := abs_le.mp hdivb
   have hann := operator_div_result_isNormalized NS v.sharesTotal an .to_nearest hNSn
     v.wf.sharesTotal_norm hNSm hSTm hdiv hanm
-  refine ⟨an, hof, hann, Number.negative_false_of_normalized_nonneg an hann (by linarith),
+  refine ⟨an, hof, hann, Number.negative_false_of_nonneg an hann (by linarith),
     by linarith, ?_⟩
   rw [depositε_val]
   have hc1 : (1 : ℚ) - 1 / 100000000000000000 ≤ (1 - 5 / (2 ^ 63 + 7)) * (1 - 6 / (2 ^ 63 - 3)) := by

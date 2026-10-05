@@ -13,14 +13,6 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-private lemma zero_norm : (Number.zero).isNormalized := Or.inl rfl
-
-private lemma toRat_eq_zero_iff_eq_zero {n : Number} (hn : n.isNormalized) :
-    n.toRat = 0 ↔ n = Number.zero := by
-  constructor
-  · intro h; exact Number.eq_zero_of_mantissa_zero n hn (Number.toRat_eq_zero_iff.mp h)
-  · intro h; rw [h, Number.toRat_zero]
-
 private lemma scale_room (s : Int) (hs : cMinOffset ≤ s ∧ s ≤ cMaxOffset) :
     minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1 := by
   have h1 := hs.1; have h2 := hs.2
@@ -33,7 +25,7 @@ private lemma RawLoan.interestTolerance_facts (rl : RawLoan)
       tol.toRat = (if rl.broker.numericType.isIntegral then (0 : ℚ) else -((10 : ℚ) ^ rl.loanScale)) := by
   unfold RawLoan.interestTolerance
   by_cases hint : rl.broker.numericType.isIntegral = true
-  · refine ⟨Number.zero, by rw [if_pos hint], zero_norm, ?_⟩
+  · refine ⟨Number.zero, by rw [if_pos hint], Number.zero_isNormalized, ?_⟩
     rw [if_pos hint, Number.toRat_zero]
   · obtain ⟨tol, hok, hval, hnorm⟩ := Number.from_rep_exact (-1 : Int64) rl.loanScale .to_nearest
       (by decide) (scale_room _ hscale).1 (scale_room _ hscale).2
@@ -67,7 +59,7 @@ private lemma interest_exact_of_ok (tvo po mfo t i tol : Number) (s : Int) (boun
   · -- nothing to subtract: the result is the first difference
     subst hm30
     have hmz : mfo = Number.zero :=
-      (toRat_eq_zero_iff_eq_zero hmn).mp (by rw [hmv]; simp)
+      (Number.toRat_eq_zero_iff_eq_zero hmn).mp (by rw [hmv]; simp)
     have hid : t.operator_sub mfo .to_nearest = .ok t :=
       Number.operator_sub_of_mantissa_zero t mfo .to_nearest (by rw [hmz]; rfl)
     rw [hid] at h2
@@ -121,7 +113,7 @@ private lemma interest_ok_of_exact (tvo po mfo : Number) (s : Int) (bound m1 m2 
   by_cases hm30 : m3 = 0
   · subst hm30
     have hmz : mfo = Number.zero :=
-      (toRat_eq_zero_iff_eq_zero hmn).mp (by rw [hmv]; simp)
+      (Number.toRat_eq_zero_iff_eq_zero hmn).mp (by rw [hmv]; simp)
     refine ⟨t, t, h1, Number.operator_sub_of_mantissa_zero t mfo .to_nearest (by rw [hmz]; rfl), htn', ?_⟩
     rw [ht, htv, hpv, hmv]; push_cast; ring
   · -- with a fee left to subtract the first difference is nonnegative, so the second step is total
@@ -140,7 +132,9 @@ private lemma interest_ok_of_exact (tvo po mfo : Number) (s : Int) (bound m1 m2 
 private lemma RawLoan.interest_exact_of_valid (rl : RawLoan) (hwf : rl.WF) (hv : rl.Valid) :
     rl.toExact.interestTolerance ≤ rl.toExact.interestDue := by
   have nonneg : ∀ n : Number, n.isNormalized → Number.zero.operator_le n = true → 0 ≤ n.toRat :=
-    fun n hn h => by have := (operator_le_iff _ _ zero_norm hn).mp h; rwa [Number.toRat_zero] at this
+    fun n hn h => by
+      have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h
+      rwa [Number.toRat_zero] at this
   obtain ⟨m1, hm1, htv⟩ := (Number.isAtExponent_iff _ _ _ hwf.totalValueOutstanding_norm
     (nonneg _ hwf.totalValueOutstanding_norm hv.totalValueOutstanding_nonneg)).mp
     hv.totalValueOutstanding_atExponent
@@ -214,9 +208,12 @@ only on normalized `Number`s. -/
 theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
     rl.Valid ↔ rl.toExact.Valid := by
   have nonneg : ∀ n : Number, n.isNormalized → Number.zero.operator_le n = true → 0 ≤ n.toRat :=
-    fun n hn h => by have := (operator_le_iff _ _ zero_norm hn).mp h; rwa [Number.toRat_zero] at this
+    fun n hn h => by
+      have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h
+      rwa [Number.toRat_zero] at this
   have nonneg' : ∀ n : Number, n.isNormalized → 0 ≤ n.toRat → Number.zero.operator_le n = true :=
-    fun n hn h => (operator_le_iff _ _ zero_norm hn).mpr (by rw [Number.toRat_zero]; exact h)
+    fun n hn h => (operator_le_iff _ _ Number.zero_isNormalized
+        hn).mpr (by rw [Number.toRat_zero]; exact h)
   constructor
   · -- FORWARD: rl.Valid → rl.toExact.Valid
     intro hv
@@ -259,18 +256,21 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
     · -- paid off exactly when no payments remain
       intro h0
       obtain ⟨hT, hP, hM⟩ := hv.paid_zeroed h0
-      exact ⟨(toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mpr hT,
-             (toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mpr hP,
-             (toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mpr hM⟩
+      exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mpr hT,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mpr hP,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mpr hM⟩
     · -- unpaid while payments remain
       intro hne
       rcases hv.unpaid_nonzero hne with hT | hP | hM
-      · exact Or.inl fun h => hT ((toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mp h)
-      · exact Or.inr (Or.inl fun h => hP ((toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mp h))
+      · exact Or.inl fun h =>
+          hT ((Number.toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mp h)
+      · exact Or.inr (Or.inl fun h =>
+          hP ((Number.toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mp h))
       · exact Or.inr (Or.inr fun h =>
-          hM ((toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mp h))
+          hM ((Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mp h))
     · -- 0 < periodicPayment
-      have := (operator_lt_iff _ _ zero_norm hwf.periodicPayment_norm).mp hv.periodicPayment_pos
+      have := (operator_lt_iff _ _ Number.zero_isNormalized
+          hwf.periodicPayment_norm).mp hv.periodicPayment_pos
       rwa [Number.toRat_zero] at this
   · -- BACKWARD: rl.toExact.Valid → rl.Valid
     intro he
@@ -309,16 +309,19 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
           he.managementFeeOutstanding_nonneg).mpr he.managementFeeOutstanding_atExponent }
     · intro h0
       obtain ⟨hT, hP, hM⟩ := he.paid_zeroed h0
-      exact ⟨(toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mp hT,
-             (toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mp hP,
-             (toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mp hM⟩
+      exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mp hT,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mp hP,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mp hM⟩
     · intro hne
       rcases he.unpaid_nonzero hne with hT | hP | hM
-      · exact Or.inl fun h => hT ((toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mpr h)
-      · exact Or.inr (Or.inl fun h => hP ((toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mpr h))
+      · exact Or.inl fun h =>
+          hT ((Number.toRat_eq_zero_iff_eq_zero hwf.totalValueOutstanding_norm).mpr h)
+      · exact Or.inr (Or.inl fun h =>
+          hP ((Number.toRat_eq_zero_iff_eq_zero hwf.principalOutstanding_norm).mpr h))
       · exact Or.inr (Or.inr fun h =>
-          hM ((toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mpr h))
+          hM ((Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mpr h))
     · have h : (0 : ℚ) < rl.periodicPayment.toRat := he.periodicPayment_pos
-      exact (operator_lt_iff _ _ zero_norm hwf.periodicPayment_norm).mpr (by rw [Number.toRat_zero]; exact h)
+      exact (operator_lt_iff _ _ Number.zero_isNormalized
+          hwf.periodicPayment_norm).mpr (by rw [Number.toRat_zero]; exact h)
 
 end XRPL.Model.Lending

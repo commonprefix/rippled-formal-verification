@@ -17,12 +17,8 @@ def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (po
   if ter.operator_bool then
     return ter
 
-  let rounded ← match (← lb.roundedCoverAmount amount) with
-    | .rejected ter => return ter
-    | .rounded amount => .pure amount
-
   let vaultExponent ← AssetPool.exponent pool nt
-  let amountNumber ← rounded.toNumber .to_nearest
+  let amountNumber ← amount.toNumber .to_nearest
   if lb.coverAvailable.operator_lt amountNumber then
     return .tecINSUFFICIENT_FUNDS
   let coverAvailable' ← lb.coverAvailable.operator_sub amountNumber .to_nearest
@@ -36,9 +32,6 @@ def LoanBroker.canCoverWithdraw {α : Type} [AssetPool α] (lb : LoanBroker) (po
 -- LoanBrokerCoverWithdraw -> doApply
 def LoanBroker.coverWithdraw (lb : LoanBroker) (amount : STAmount)
     : Except Error LoanBrokerCoverTerResult := do
-  let amount ← match (← lb.roundedCoverAmount amount) with
-    | .rejected _ => return .error .tecINTERNAL
-    | .rounded amount => .pure amount
   return .ok (← lb.applyCoverTransaction .debit amount)
 
 end XRPL.Model.Lending

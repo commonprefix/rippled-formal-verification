@@ -104,7 +104,7 @@ lemma claw_upper (v : Vault) (hnav : v.WithdrawNavExact false) (sd priced rec : 
   have hpE : ClwTight.NumExact priced := by
     rcases hpc with ⟨hz, -⟩ | ⟨an, hann, -, -, -, -, hof⟩
     · exact ClwTight.numExact_of_zero _ hz
-    · exact ClwTight.numExact_of_ofNumber _ _ _ _ hann hof
+    · exact ClwTight.numExact_of_ofNumber _ _ _ _ hof
   have hple : priced.toRat ≤ v.assetsAvailable.toRat := by
     obtain ⟨harnn, harnv⟩ := hpE prn harn
     rw [← harnv]
@@ -122,7 +122,7 @@ lemma claw_upper (v : Vault) (hnav : v.WithdrawNavExact false) (sd priced rec : 
       obtain ⟨hrp, -, -, -⟩ := ClwTight.integral_clamp_eq v hint sd priced rec hpr hp0.ge hcl
       have : (0 : ℚ) ≤ 1 / 2 * 10 ^ rec.exponent := by positivity
       nlinarith
-    · have hp0 := ClwTight.ofNumber_nonneg _ _ _ _ hann hanneg hof
+    · have hp0 := STAmount.ofNumber_nonneg _ _ _ _ hann hanneg hof
       obtain ⟨hrp, hre, hpe, -⟩ := ClwTight.integral_clamp_eq v hint sd priced rec hpr hp0 hcl
       obtain ⟨hh, -, -⟩ := ClwTight.ofNumber_half v.numericType an priced hann ham hanneg hof
         (fun h => absurd hint (by rw [h]; decide))
@@ -139,10 +139,10 @@ lemma claw_upper (v : Vault) (hnav : v.WithdrawNavExact false) (sd priced rec : 
     obtain ⟨hh, -, hcan⟩ := ClwTight.ofNumber_half v.numericType an priced hann ham hanneg hof
       (fun _ => hpm)
     have hpcan := hcan (by rw [hfr]; rfl)
-    have hp0 := ClwTight.ofNumber_nonneg _ _ _ _ hann hanneg hof
+    have hp0 := STAmount.ofNumber_nonneg _ _ _ _ hann hanneg hof
     have hppos : 0 < priced.toRat :=
       lt_of_le_of_ne hp0 (fun h => hpm ((STAmount.toRat_eq_zero_iff _).mp h.symm))
-    have hrfc := WdAcc.clamp_frac_shape v.assetsTotal hTn priced.operator_neg rec
+    have hrfc := WdAcc.clamp_frac_shape v.assetsTotal priced.operator_neg rec
       (STAmount.operator_neg_fczr priced ⟨hpcan.is_fractional, Or.inl hpcan⟩) hcl
     have hrint : rec.integral = false := by
       show rec.mNumericType.isIntegral = false; rw [hrfc.1]; rfl

@@ -83,10 +83,10 @@ lemma post_sum_parts (A : Number) (p : STAmount) (e : ℤ)
     intro h; rw [Number.toRat_eq_zero_of_mantissa_zero sn h] at hsnv; linarith
   have hrsum := operator_add_rounded_to_nearest A sn sum hA hsnn hsum
   rw [hsnv] at hrsum
-  have hsum_norm : sum.isNormalized := operator_add_isNormalized_to_nearest' A sn sum hA hsnn hsum
+  have hsum_norm : sum.isNormalized := operator_add_isNormalized_to_nearest_sz A sn sum hA hsnn hsum
   have hsum_nn : 0 ≤ sum.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg sum _ hrsum (by linarith)
   exact ⟨sn, sum, a, hsnn, hsnv, hsm,
-    Number.negative_false_of_normalized_nonneg sn hsnn (by linarith), hsn, hsum, hrsum,
+    Number.negative_false_of_nonneg sn hsnn (by linarith), hsn, hsum, hrsum,
     hsum_norm, hsum_nn, ha, hae⟩
 
 /-- **The post-sum exponent is monotone in the delta.** -/
@@ -124,7 +124,7 @@ lemma postSumExponent_mono (A : Number) (p x : STAmount) (ep ex : ℤ)
           have h2 := Number.RoundsToRepresentable.eq_of_representable sx _ hrsx xn hxnn
             (by rw [hxnv, hA0']; ring)
           rw [h1, h2]; linarith
-        · have hAn : A.negative_ = false := Number.negative_false_of_normalized_nonneg A hA hA0
+        · have hAn : A.negative_ = false := Number.negative_false_of_nonneg A hA hA0
           have hnz : ∀ y : Number, y.mantissa_ ≠ 0 → y.negative_ = false →
               ¬ A.operator_eq y.operator_neg = true := by
             intro y hym hyn h

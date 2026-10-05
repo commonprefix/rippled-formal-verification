@@ -89,7 +89,7 @@ lemma price_toNumber (v : Vault) (sh p : STAmount) (w : Bool) (an : Number) (hc 
     an.isNormalized ∧ an.toRat = p.toRat := by
   by_cases hint : v.numericType.isIntegral = true
   · obtain ⟨hpnt, hpoff, hpmv⟩ := WdAcc.price_integral_shape v sh p w hint hok
-    obtain ⟨sn, hsn, hsnv, hsnn, -⟩ := STAmount.toNumber_integral_exact' p .to_nearest
+    obtain ⟨sn, hsn, hsnv, hsnn, -⟩ := STAmount.toNumber_offset_zero_exact p .to_nearest
       (by rw [hpnt]; exact hint) hpoff hpmv
     obtain rfl := Except.ok.inj (hsn.symm.trans han)
     exact ⟨hsnn, hsnv⟩

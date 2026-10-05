@@ -74,7 +74,7 @@ lemma final_payout_lower (v : Vault) (sh p aa : STAmount) (w : Bool) (an : Numbe
     have h1 := STAmount.ofNumber_integral_within_one _ _ _ _ hint hann hanneg hof
     obtain ⟨-, hpoff, hpmv⟩ := price_integral_shape v sh p w hint hp
     obtain ⟨hpnt, -, -⟩ := price_integral_shape v sh p w hint hp
-    obtain ⟨sn, hsn, hsnv, hsnn, -⟩ := STAmount.toNumber_integral_exact' p .to_nearest
+    obtain ⟨sn, hsn, hsnv, hsnn, -⟩ := STAmount.toNumber_offset_zero_exact p .to_nearest
       (by rw [hpnt]; exact hint) hpoff hpmv
     obtain rfl : sn = an := Except.ok.inj (hsn.symm.trans han)
     have hple : p.toRat ≤ AA := hsnv ▸ hguard hsnn

@@ -31,17 +31,17 @@ lemma computeDeposit_success_reduces (v : Vault) (amount c s : STAmount)
     intro e htc'
     rw [tryCatch_error] at htc'
     by_cases hov : isOverflow e = true
-    · rw [if_pos hov, epure] at htc'
-      rw [← Except.ok.inj htc'] at hK; exact absurd hK (by simp [epure])
-    · rw [if_neg hov, ethrow, err_bind] at htc'
+    · rw [if_pos hov, pure_eq] at htc'
+      rw [← Except.ok.inj htc'] at hK; exact absurd hK (by simp [pure_eq])
+    · rw [if_neg hov, throw_eq, err_bind] at htc'
       exact absurd htc' (by simp)
   cases hatsd : assetsToSharesDeposit v amount with
   | error e => rw [hatsd, err_bind] at htc; exact (handler_absurd e htc).elim
   | ok shares =>
-    simp only [hatsd, ok_bind, epure] at htc
+    simp only [hatsd, ok_bind, pure_eq] at htc
     by_cases hz : shares.isZero = true
     · rw [if_pos hz, tryCatch_ok] at htc
-      rw [← Except.ok.inj htc] at hK; exact absurd hK (by simp [epure])
+      rw [← Except.ok.inj htc] at hK; exact absurd hK (by simp [pure_eq])
     · rw [if_neg hz] at htc
       cases hsad : sharesToAssetsDeposit v shares with
       | error e2 => rw [hsad, err_bind] at htc; exact (handler_absurd e2 htc).elim
@@ -53,7 +53,7 @@ lemma computeDeposit_success_reduces (v : Vault) (amount c s : STAmount)
           simp only [hgt, ok_bind] at htc
           by_cases hgtb : gtb = true
           · rw [if_pos hgtb, tryCatch_ok] at htc
-            rw [← Except.ok.inj htc] at hK; exact absurd hK (by simp [epure])
+            rw [← Except.ok.inj htc] at hK; exact absurd hK (by simp [pure_eq])
           · rw [if_neg hgtb, tryCatch_ok] at htc
             have hgtf : gtb = false := by simpa using hgtb
             rw [← Except.ok.inj htc] at hK
@@ -87,18 +87,18 @@ lemma computeDeposit_codes (v : Vault) (amount : STAmount) (cres : ComputeDeposi
     intro e htc'
     rw [tryCatch_error] at htc'
     by_cases hov : isOverflow e = true
-    · rw [if_pos hov, epure] at htc'
+    · rw [if_pos hov, pure_eq] at htc'
       rw [← Except.ok.inj htc'] at hK
       have hK2 : Except.ok (ComputeDepositResult.error TER.tecPATH_DRY) = Except.ok cres := hK
       exact (Except.ok.inj hK2).symm
-    · rw [if_neg hov, ethrow, err_bind] at htc'
+    · rw [if_neg hov, throw_eq, err_bind] at htc'
       exact absurd htc' (by simp)
   cases hatsd : assetsToSharesDeposit v amount with
   | error e =>
     rw [hatsd, err_bind] at htc
     exact .inr (.inr (.inl (handler_path_dry e htc)))
   | ok shares =>
-    simp only [hatsd, ok_bind, epure] at htc
+    simp only [hatsd, ok_bind, pure_eq] at htc
     by_cases hz : shares.isZero = true
     · rw [if_pos hz, tryCatch_ok] at htc
       rw [← Except.ok.inj htc] at hK

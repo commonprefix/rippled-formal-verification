@@ -68,7 +68,7 @@ lemma Vault.withdraw_vault_updates_integral_proof (v : Vault) (amount : Withdraw
   have hcint : cw.assets'.integral = true := by
     show cw.assets'.mNumericType.isIntegral = true; rw [hpnt]; exact hint
   obtain ⟨hbnt, hboff, hbmv, -⟩ := WdAcc.clamp_integral _ _ _ hcint hcl
-  obtain ⟨sn, hsn, hsnv, hsnn, hsnd⟩ := STAmount.toNumber_integral_exact' r.assets' .to_nearest
+  obtain ⟨sn, hsn, hsnv, hsnn, hsnd⟩ := STAmount.toNumber_offset_zero_exact r.assets' .to_nearest
     (by rw [hbnt, hpnt]; exact hint) (by rw [hboff, hpoff]) (by rw [hbmv]; exact hpmv)
   obtain rfl : sn = an' := Except.ok.inj (hsn.symm.trans han')
   have hvx := v.exact
@@ -202,7 +202,7 @@ lemma Vault.withdraw_payout_decreases_assets_proof (v : Vault) (amount : Withdra
     operator_sub_le_of_le_normalized _ _ _ _ hAAn hann hav hAAn (by linarith)
   have hne : at'.toRat ≠ v.assetsTotal.toRat := by
     intro heq
-    have hatn := operator_sub_isNormalized_to_nearest' _ _ _ hATn hann hat
+    have hatn := operator_sub_isNormalized_to_nearest_sz _ _ _ hATn hann hat
     have hateq : at' = v.assetsTotal := hatn.toRat_inj hATn heq
     rw [hateq, hatr] at hatr'
     obtain rfl := Except.ok.inj hatr'

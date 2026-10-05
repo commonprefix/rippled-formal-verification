@@ -67,7 +67,7 @@ lemma int_pack (nt : NumericType) (hint : nt.isIntegral = true) (n : Number) (r 
     (hok : STAmount.ofNumber nt n .to_nearest = .ok r) :
     ∃ z : ℤ, r.toRat = z ∧ 0 ≤ z ∧ |(z : ℚ) - n.toRat| ≤ 1 / 2 ∧
       r.mOffset = 0 ∧ r.mValue.toNat ≤ maxRep.toNat ∧ r.mNumericType = nt := by
-  have hneg := Number.negative_false_of_normalized_nonneg n hn hnn
+  have hneg := Number.negative_false_of_nonneg n hn hnn
   have hneg_dec : decide (n.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hneg
   obtain ⟨hnt, hoff, hmax⟩ := STAmount.ofNumber_integral_facts nt n .to_nearest r hint hok
   unfold STAmount.ofNumber at hok
@@ -113,12 +113,6 @@ private lemma zero_frac_eq (r : STAmount)
   rw [h] at hok
   exact (Except.ok.inj hok).symm
 
-private lemma eq_zero_of_mant (n : Number) (hn : n.isNormalized) (h : n.mantissa_ = 0) :
-    n = Number.zero := by
-  rcases hn with h0 | ⟨hlo, _⟩
-  · exact h0
-  · exfalso; rw [h] at hlo; exact absurd hlo (by decide)
-
 /-- Shape of a `.to_nearest` pack of a non-negative source. -/
 lemma ofNumber_facts (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNormalized)
     (hnn : 0 ≤ n.toRat) (hok : STAmount.ofNumber nt n .to_nearest = .ok r) :
@@ -130,7 +124,7 @@ lemma ofNumber_facts (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNo
   · obtain ⟨z, hz, hz0, _, hoff, hmax, _⟩ := int_pack nt hint n r hn hnn hok
     refine ⟨by rw [hz]; exact_mod_cast hz0, hnt, fun h => absurd hint (by simp [h]), ?_⟩
     intro pn hpn
-    obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_integral_exact' r .to_nearest
+    obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_offset_zero_exact r .to_nearest
       (by rw [hnt]; exact hint) hoff hmax
     rw [Except.ok.inj (hpn.symm.trans hsn)]; exact ⟨hnorm, hval⟩
   have hfr := frac_of_not_int nt (by simpa using hint)
@@ -148,9 +142,9 @@ lemma ofNumber_facts (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNo
   · obtain ⟨a, b, c⟩ := hzero hr
     exact ⟨a, b, fun _ h => absurd hr h, c⟩
   by_cases hnz : n.mantissa_ = 0
-  · rw [eq_zero_of_mant n hn hnz] at hok
+  · rw [Number.eq_zero_of_mantissa_zero n hn hnz] at hok
     rw [zero_frac_eq r hok] at hr; exact absurd rfl hr
-  have hneg := Number.negative_false_of_normalized_nonneg n hn hnn
+  have hneg := Number.negative_false_of_nonneg n hn hnn
   obtain ⟨hc, hrneg, _, _, _⟩ := frac_pack n r hn hneg hnz hok hr
   refine ⟨by rw [STAmount.toRat_of_nonneg r hrneg]; positivity, hnt, fun _ _ => hc, ?_⟩
   intro pn hpn
@@ -176,9 +170,9 @@ lemma ofNumber_anchor (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isN
   have hfr := frac_of_not_int nt (by simpa using hint)
   subst hfr
   have hnz : n.mantissa_ ≠ 0 := by
-    intro h; rw [eq_zero_of_mant n hn h] at hok
+    intro h; rw [Number.eq_zero_of_mantissa_zero n hn h] at hok
     rw [zero_frac_eq r hok] at hr; exact hr rfl
-  have hneg := Number.negative_false_of_normalized_nonneg n hn hnn
+  have hneg := Number.negative_false_of_nonneg n hn hnn
   obtain ⟨hc, _, _, _, hk4⟩ := frac_pack n r hn hneg hnz hok hr
   have hk : -100 ≤ n.exponent_ := by have := hc.exp_lo; unfold STAmount.exponent at hk4; omega
   obtain ⟨hlo, _⟩ := hn.mantissaBounds_nat hnz
@@ -222,9 +216,9 @@ lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmoun
   by_cases hr₁ : r₁.mValue = 0
   · rw [STAmount.toRat_eq_zero_of_mValue_zero r₁ hr₁] at hlt; linarith
   have hnz₁ : n₁.mantissa_ ≠ 0 := by
-    intro h; rw [eq_zero_of_mant n₁ hn₁ h] at hok₁
+    intro h; rw [Number.eq_zero_of_mantissa_zero n₁ hn₁ h] at hok₁
     rw [zero_frac_eq r₁ hok₁] at hr₁; exact hr₁ rfl
-  have hneg₁ := Number.negative_false_of_normalized_nonneg n₁ hn₁ h0
+  have hneg₁ := Number.negative_false_of_nonneg n₁ hn₁ h0
   obtain ⟨hc₁, hs₁, hh₁, _, _⟩ := frac_pack n₁ r₁ hn₁ hneg₁ hnz₁ hok₁ hr₁
   -- exponents are ordered
   set j := r₁.exponent - 4 with hj
@@ -232,9 +226,9 @@ lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmoun
   have hC := (exp_ge_iff n₁ r₁ hn₁ h0 hok₁ j hj0).mp (by omega)
   have hE := (exp_ge_iff n₂ r₂ hn₂ h0₂ hok₂ j hj0).mpr (le_trans hC hle)
   have hnz₂ : n₂.mantissa_ ≠ 0 := by
-    intro h; rw [eq_zero_of_mant n₂ hn₂ h] at hok₂
+    intro h; rw [Number.eq_zero_of_mantissa_zero n₂ hn₂ h] at hok₂
     rw [zero_frac_eq r₂ hok₂] at hE; unfold STAmount.exponent at hE; simp at hE; omega
-  have hneg₂ := Number.negative_false_of_normalized_nonneg n₂ hn₂ h0₂
+  have hneg₂ := Number.negative_false_of_nonneg n₂ hn₂ h0₂
   have hr₂ : r₂.mValue ≠ 0 := by
     intro hz
     obtain ⟨exp, _, hres⟩ := ofNumber_frac_tn_exp n₂ r₂ hn₂ hneg₂ hnz₂ hok₂

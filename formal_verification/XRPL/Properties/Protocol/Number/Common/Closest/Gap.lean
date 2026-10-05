@@ -1,16 +1,7 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 
-
 namespace XRPL.Model.Protocol
-
-/-! ## Gap-bound lemma
-
-The gap between `Number.upper q` and `Number.lower q` is bounded by `10 × 10^e`
-where `e` is the normalized exponent of `q`. This loose bound covers all cases:
-single mantissa unit (gap = 1), cusp jump (gap = 3), and above-cusp grid (gap ≤ 10). -/
-
-/-! ### Helper: mantissa-level gap bound -/
 
 /-! ## No normalized Number in an open ULP-grid gap -/
 

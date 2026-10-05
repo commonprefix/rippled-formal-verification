@@ -136,10 +136,6 @@ private lemma STAmount.toRat_eq_abs (s : STAmount) (hn : s.mIsNegative = false) 
     s.toRat = |s.toRat| := by
   rw [abs_of_nonneg (STAmount.toRat_nonneg_of s hn)]
 
-/-- `mValue ≠ 0` iff the value is nonzero. -/
-private lemma STAmount.mValue_ne_zero_iff (s : STAmount) : s.mValue ≠ 0 ↔ s.toRat ≠ 0 :=
-  (STAmount.toRat_eq_zero_iff s).not.symm
-
 /-! ## `operator_lt` and its derived operators -/
 
 /-- **Correctness of `operator_lt`.** On well-formed comparable operands, the

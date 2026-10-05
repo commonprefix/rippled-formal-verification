@@ -11,6 +11,10 @@ brackets behind `mulRatio` rounding. -/
 
 namespace XRPL.Model.Protocol.AmountArith
 
+/-- A `UInt32` is zero exactly when its natural value is. -/
+lemma _root_.UInt32.toNat_eq_zero_iff (a : UInt32) : a.toNat = 0 ↔ a = 0 := by
+  rw [← UInt32.toNat_inj]; rfl
+
 /-- An `Int64`-range integer is its own balanced residue mod `2⁶⁴`. The no-overflow
 collapse of `Int64.toInt_{add,sub,neg,mul}`. -/
 lemma toInt_bmod_self {n : ℤ}
@@ -110,3 +114,53 @@ lemma mulRatio_int_bracket (m d r : ℤ) (hd : 0 < d) (roundUp neg : Bool)
         exact ⟨by nlinarith [hqd, hsgt, hlt], by nlinarith [hqd, hsgt, hlt]⟩
 
 end XRPL.Model.Protocol.AmountArith
+
+namespace XRPL.Model.Protocol
+
+/-- The sum of two whole numbers is whole. -/
+lemma Rat.den_one_add (a b : ℚ) (ha : a.den = 1) (hb : b.den = 1) : (a + b).den = 1 := by
+  rw [← Rat.coe_int_num_of_den_eq_one ha, ← Rat.coe_int_num_of_den_eq_one hb, ← Int.cast_add]
+  exact Rat.den_intCast _
+
+/-- The difference of two whole numbers is whole. -/
+lemma Rat.den_one_sub (a b : ℚ) (ha : a.den = 1) (hb : b.den = 1) : (a - b).den = 1 := by
+  rw [← Rat.coe_int_num_of_den_eq_one ha, ← Rat.coe_int_num_of_den_eq_one hb, ← Int.cast_sub]
+  exact Rat.den_intCast _
+
+/-- A whole number below `2 ^ 63` is at most `2 ^ 63 - 1`. -/
+lemma Rat.le_pred_of_lt {q : ℚ} (hq : q.den = 1) (h : q < 2 ^ 63) : q ≤ 2 ^ 63 - 1 := by
+  rw [← Rat.coe_int_num_of_den_eq_one hq] at h ⊢
+  have h1 : q.num < 2 ^ 63 := by exact_mod_cast h
+  have h2 : q.num ≤ 2 ^ 63 - 1 := by omega
+  exact_mod_cast h2
+
+/-- Numerator magnitude bound of a whole rational. -/
+lemma Rat.num_natAbs_lt_of_abs_le (q : ℚ) (hden : q.den = 1)
+    (h : |q| ≤ (2 : ℚ) ^ 63 - 1) : q.num.natAbs < 2 ^ 63 := by
+  have hq : q = (q.num : ℚ) := by
+    conv_lhs => rw [← Rat.num_div_den q]
+    rw [hden]; simp
+  have habs : |(q.num : ℚ)| ≤ (2 : ℚ) ^ 63 - 1 := by rw [← hq]; exact h
+  have : (|q.num| : ℚ) ≤ (2 : ℚ) ^ 63 - 1 := by exact_mod_cast habs
+  have hle : |q.num| ≤ (2 : ℤ) ^ 63 - 1 := by exact_mod_cast this
+  rw [Int.abs_eq_natAbs] at hle
+  omega
+
+/-- Rational floor of a natural division. -/
+lemma Int.floor_nat_div (a b : ℕ) (hb : 0 < b) :
+    ⌊(a : ℚ) / (b : ℚ)⌋ = ((a / b : ℕ) : ℤ) := by
+  have hbq : (0 : ℚ) < (b : ℚ) := by exact_mod_cast hb
+  rw [Int.floor_eq_iff]
+  constructor
+  · rw [le_div_iff₀ hbq]
+    exact_mod_cast Nat.div_mul_le_self a b
+  · rw [div_lt_iff₀ hbq]
+    have hlt : a < (a / b + 1) * b := by
+      have hdm := Nat.div_add_mod a b
+      have hmod := Nat.mod_lt a hb
+      calc a = b * (a / b) + a % b := hdm.symm
+        _ < b * (a / b) + b := by omega
+        _ = (a / b + 1) * b := by ring
+    exact_mod_cast hlt
+
+end XRPL.Model.Protocol

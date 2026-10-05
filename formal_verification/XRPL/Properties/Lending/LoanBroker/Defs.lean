@@ -44,4 +44,11 @@ requires, at the pool's scale. -/
 def LoanBroker.HasMinimumCover (lb : LoanBroker) (poolExponent : Int) : Prop :=
   lb.hasMinimumCover poolExponent = .ok true
 
+/-- A stored field is off the asset grid: C++ `associateAsset` would round
+`debtTotal`, `debtMaximum` or `coverAvailable` to the asset's precision. -/
+def LoanBroker.assetsRounded (lb : LoanBroker) : Prop :=
+  STAmount.isRounded lb.numericType lb.debtTotal ∨
+  STAmount.isRounded lb.numericType lb.debtMaximum ∨
+  STAmount.isRounded lb.numericType lb.coverAvailable
+
 end XRPL.Model.Lending

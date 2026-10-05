@@ -39,26 +39,6 @@ lemma Vault.clawback_sharesDestroyed_proof (v : Vault)
     obtain rfl := Except.ok.inj (hnum.symm.trans h3)
     rw [hle] at h4; exact absurd h4 (by decide)
 
-/-- The symmetric form of `clawback_sharesDestroyed_proof`. -/
-lemma ClwTight.clawback_sharesDestroyed_abs (v : Vault)
-    (assets holderShares sharesDestroyed assetsRecovered : STAmount)
-    (assetsRecoveredNumber : Number) (r : ClawbackResult)
-    (hnav : v.WithdrawNavExact false)
-    (hc : assets.Canonical)
-    (hshares : assetsToSharesWithdraw v assets true false = .ok sharesDestroyed)
-    (hassets : v.sharesToAssetsWithdraw sharesDestroyed false = .ok assetsRecovered)
-    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
-    (hznz : assets.isZero = false)
-    (hnn : 0 ≤ assets.toRat)
-    (hok : v.clawback assets holderShares hnn = .ok r) (herr : r.error = none) :
-    |r.sharesDestroyed.toRat - v.idealSharesClawback assets.toRat| ≤
-      v.idealSharesClawback assets.toRat * sharesε + 1 := by
-  obtain ⟨-, -, h1, h2⟩ := Vault.clawback_sharesDestroyed_proof v assets holderShares
-    sharesDestroyed assetsRecovered assetsRecoveredNumber r hnav hc hshares hassets hnum hle hznz
-    hnn hok herr
-  rw [abs_le]; constructor <;> linarith
-
 lemma Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
     (assetsRecoveredNumber : Number) (r : ClawbackResult)
@@ -90,9 +70,9 @@ lemma Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
   · obtain rfl := Except.ok.inj (hclamped.symm.trans h5)
     rw [hsd]
     exact ClwTight.shares_core_weak v hnav _ cr.sharesDestroyed
-      (ClwTight.numExact_of_ofNumber _ _ _ _ hAn hclamped)
-      (ClwTight.ofNumber_nonneg _ _ _ _ hAn
-        (Number.negative_false_of_normalized_nonneg _ hAn hA0) hclamped)
+      (ClwTight.numExact_of_ofNumber _ _ _ _ hclamped)
+      (STAmount.ofNumber_nonneg _ _ _ _ hAn
+        (Number.negative_false_of_nonneg _ hAn hA0) hclamped)
       hX (by simpa [STAmount.isZero] using hcnz)
 
 lemma Vault.clawback_zero_all_shares_proof (v : Vault)
@@ -152,9 +132,9 @@ lemma Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : ST
   have hsd0 : 0 ≤ cr.sharesDestroyed.toRat := by
     rcases hbr with rfl | ⟨-, -, -, -, -, -, -, h5⟩
     · exact (ClwTight.shares_core v hnav X _ (ClwTight.numExact_of_canonical X hc) hnn hX hd0).2.1
-    · exact (ClwTight.shares_core v hnav X _ (ClwTight.numExact_of_ofNumber _ _ _ _ hAn h5)
-        (ClwTight.ofNumber_nonneg _ _ _ _ hAn
-          (Number.negative_false_of_normalized_nonneg _ hAn hA0) h5) hX hd0).2.1
+    · exact (ClwTight.shares_core v hnav X _ (ClwTight.numExact_of_ofNumber _ _ _ _ h5)
+        (STAmount.ofNumber_nonneg _ _ _ _ hAn
+          (Number.negative_false_of_nonneg _ hAn hA0) h5) hX hd0).2.1
   obtain ⟨hst, hsoff, hsval⟩ := ClwAcc.shares_shape v X _ hX
   have hsdE : ClwTight.NumExact cr.sharesDestroyed :=
     ClwTight.numExact_of_integral _ (by rw [hst]; rfl) hsoff hsval
@@ -167,7 +147,7 @@ lemma Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : ST
   have hpE : ClwTight.NumExact priced := by
     rcases hpc with ⟨hz, -⟩ | ⟨an, hann, -, -, -, -, hof⟩
     · exact ClwTight.numExact_of_zero _ hz
-    · exact ClwTight.numExact_of_ofNumber _ _ _ _ hann hof
+    · exact ClwTight.numExact_of_ofNumber _ _ _ _ hof
   have hple : priced.toRat ≤ v.assetsAvailable.toRat := by
     obtain ⟨harnn, harnv⟩ := hpE arn harn
     rw [← harnv]
@@ -196,7 +176,7 @@ lemma Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : ST
         have : 0 ≤ v.idealAssetsClawback sd.toRat * depositε := mul_nonneg hI0 hε.1
         linarith
       · nlinarith
-    · have hp0 := ClwTight.ofNumber_nonneg _ _ _ _ hann hanneg hof
+    · have hp0 := STAmount.ofNumber_nonneg _ _ _ _ hann hanneg hof
       obtain ⟨hrp, hre, hpe, hrm⟩ := ClwTight.integral_clamp_eq v hint sd priced rec hpr hp0 hcl
       obtain ⟨hh, -, -⟩ := ClwTight.ofNumber_half v.numericType an priced hann ham hanneg hof
         (fun h => absurd hint (by rw [h]; decide))
@@ -219,10 +199,10 @@ lemma Vault.clawback_assetsRecovered_proof (v : Vault) (assets holderShares : ST
     obtain ⟨hh, -, hcan⟩ := ClwTight.ofNumber_half v.numericType an priced hann ham hanneg hof
       (fun _ => hpm)
     have hpcan := hcan (by rw [hfr]; rfl)
-    have hp0 := ClwTight.ofNumber_nonneg _ _ _ _ hann hanneg hof
+    have hp0 := STAmount.ofNumber_nonneg _ _ _ _ hann hanneg hof
     have hppos : 0 < priced.toRat :=
       lt_of_le_of_ne hp0 (fun h => hpm ((STAmount.toRat_eq_zero_iff _).mp h.symm))
-    have hrfc := WdAcc.clamp_frac_shape v.assetsTotal hTn priced.operator_neg rec
+    have hrfc := WdAcc.clamp_frac_shape v.assetsTotal priced.operator_neg rec
       (STAmount.operator_neg_fczr priced ⟨hpcan.is_fractional, Or.inl hpcan⟩) hcl
     have hrint : rec.integral = false := by
       show rec.mNumericType.isIntegral = false; rw [hrfc.1]; rfl

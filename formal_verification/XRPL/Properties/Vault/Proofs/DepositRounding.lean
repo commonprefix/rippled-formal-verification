@@ -260,7 +260,7 @@ lemma Vault.deposit_donation_no_dilution_proof (v : Vault) (amountDeposit : STAm
     DepRnd.donation_reduces v amountDeposit r hpos hok herr
   have hzN0 : zN = Number.zero := by
     rw [zero_int64_toNumber] at hzN; exact (Except.ok.inj hzN).symm
-  rw [hzN0, operator_add_zero_right] at hsT
+  rw [hzN0, Number.operator_add_zero_right] at hsT
   have hsT' : sT = v.sharesTotal := (Except.ok.inj hsT).symm
   rw [hr]
   refine ⟨?_, ?_⟩

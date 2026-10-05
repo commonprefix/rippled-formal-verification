@@ -10,8 +10,11 @@ namespace XRPL.Model.Protocol
 
 These `decide`/`rfl` facts are re-derived inline all over the proof tree (each
 `largeRange` `decide` is a slow 19-digit `BitVec` kernel evaluation). Centralizing
-them here — a tiny file importing only the model — lets both the `Rounding` layer
+them here, in a tiny file importing only the model, lets both the `Rounding` layer
 and the `Closest` layer share one cached copy instead of recomputing. -/
+
+/-- `Number.zero` is normalized. -/
+lemma Number.zero_isNormalized : Number.zero.isNormalized := Or.inl rfl
 
 /-- `maxRep.toNat = 2^63 - 1`. -/
 lemma maxRep_val : maxRep.toNat = maxRepNat := by decide
@@ -29,7 +32,7 @@ lemma uint64_ten_toNat : (10 : UInt64).toNat = 10 := rfl
 lemma uint64_size_val : UInt64.size = 18446744073709551616 := rfl
 
 /-- A normalized `Number` with zero mantissa is `Number.zero`. Re-derived inline
-all over the operator-rounding tree; centralized here so every layer shares it. -/
+all over the operator-rounding tree. It lives here so every layer shares it. -/
 lemma Number.eq_zero_of_mantissa_zero (n : Number) (hn : n.isNormalized)
     (h : n.mantissa_ = 0) : n = Number.zero := by
   rcases hn with h_zero | ⟨hmin, _, _, _, _⟩

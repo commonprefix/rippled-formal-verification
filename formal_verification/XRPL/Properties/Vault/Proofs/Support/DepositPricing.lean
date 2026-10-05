@@ -470,7 +470,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
   · -- nonempty vault: `c = ofNumber v.numericType Q .to_nearest` with `Q ≥ 0`. The
     -- positive, normalized `Q` is read off the `sub`/`mul`/`div` pipeline exactly as
     -- in `sharesToAssetsDeposit_charge_integral_bound` (nav > 0, shares > 0 give
-    -- `P, Q > 0`), and `ofNumber_signfalse_nonneg` then yields `0 ≤ c.toRat`.
+    -- `P, Q > 0`), and `ofNumber_nonneg` then yields `0 ≤ c.toRat`.
     -- Reusing that pipeline walk here is the remaining step.
     rw [if_neg hmz] at hsad
     obtain ⟨_, _, hsad⟩ := bind_ok_peel _ _ _ hsad
@@ -541,7 +541,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
         have := abs_le.mp hdivb
         nlinarith
       have hQneg : Q.negative_ = false := Number.negative_false_of_pos Q hQpos
-      exact STAmount.ofNumber_signfalse_nonneg v.numericType Q .to_nearest c hQnorm hQneg hc
+      exact STAmount.ofNumber_nonneg v.numericType Q .to_nearest c hQnorm hQneg hc
 
 /-- **`toNumber` is value-exact on the RECORDED deposit charge.** `computeDeposit`
 prices a charge and the model records it CLAMPED, so `sharesToAssetsDeposit`'s own

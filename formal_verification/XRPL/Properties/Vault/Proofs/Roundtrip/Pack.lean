@@ -11,7 +11,7 @@ lemma pack_setup (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
     r.IOUCanonical ∧ r.mIsNegative = false ∧ r.toRat - n.toRat ≤ 1 / 2 * 10 ^ r.exponent ∧
       ∀ j : ℤ, -100 ≤ j → j + 4 ≤ r.exponent → WdMono.carryPt j ≤ n.toRat := by
   have hnz : n.mantissa_ ≠ 0 := STAmount.ofNumber_source_ne_zero _ n .to_nearest r hok hr
-  have hneg := Number.negative_false_of_normalized_nonneg n hn hnn
+  have hneg := Number.negative_false_of_nonneg n hn hnn
   obtain ⟨hrc, hrn, hh, -, -⟩ := WdMono.frac_pack n r hn hneg hnz hok hr
   exact ⟨hrc, hrn, (abs_le.mp hh).2, fun j hj hk => (WdMono.exp_ge_iff n r hn hnn hok j hj).mp hk⟩
 

@@ -12,7 +12,7 @@ lemma ofNumber_int64_fit (n : Number) (mode : rounding_mode) (sta : STAmount)
     (hn : n.isNormalized) (hnn : 0 ≤ n.toRat) (hden : n.toRat.den = 1)
     (hok : STAmount.ofNumber .int64 n mode = .ok sta) :
     n.toRat ≤ 2 ^ 63 - 1 := by
-  have hnegf : n.negative_ = false := Number.negative_false_of_normalized_nonneg n hn hnn
+  have hnegf : n.negative_ = false := Number.negative_false_of_nonneg n hn hnn
   have hsig : decide (n.signum < 0) = false := by
     unfold Number.signum
     rw [hnegf]

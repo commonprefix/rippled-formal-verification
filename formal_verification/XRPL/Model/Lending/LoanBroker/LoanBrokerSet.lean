@@ -28,17 +28,19 @@ structure LoanBrokerSetCreate where
   coverRateLiquidation : Option TenthBips32
 
 -- LoanBrokerSet -> doApply
+def LoanBroker.createRaw (tx : LoanBrokerSetCreate) (numericType : NumericType) : RawLoanBroker :=
+  { numericType          := numericType
+  , managementFeeRate    := tx.managementFeeRate.getD 0
+  , coverRateMinimum     := tx.coverRateMinimum.getD 0
+  , coverRateLiquidation := tx.coverRateLiquidation.getD 0
+  , debtMaximum          := tx.debtMaximum.getD Number.zero
+  , debtTotal            := Number.zero
+  , coverAvailable       := Number.zero
+  , loanCount            := 0 }
+
+-- LoanBrokerSet -> doApply
 def LoanBroker.create (tx : LoanBrokerSetCreate) (numericType : NumericType) : Except Error LoanBroker :=
-    let rawBroker : RawLoanBroker :=
-      { numericType          := numericType
-      , managementFeeRate    := tx.managementFeeRate.getD 0
-      , coverRateMinimum     := tx.coverRateMinimum.getD 0
-      , coverRateLiquidation := tx.coverRateLiquidation.getD 0
-      , debtMaximum          := tx.debtMaximum.getD Number.zero
-      , debtTotal            := Number.zero
-      , coverAvailable       := Number.zero
-      , loanCount            := 0 }
-    rawBroker.to_lawful
+  (LoanBroker.createRaw tx numericType).to_lawful
 
 def LoanBroker.update (lb : LoanBroker) (debtMaximum : Option Number) : Except Error LoanBroker :=
     let rawBroker' : RawLoanBroker :=

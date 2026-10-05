@@ -89,7 +89,7 @@ lemma price_oneShare (v : Vault) (hL0 : v.lossUnrealized.mantissa_ = 0)
   · rw [if_pos (by rw [hAm0]; rfl), hint]
     have hz : STAmount.zero .int64 = ⟨.int64, 0, 0, false⟩ := by decide
     rw [hz]
-    obtain ⟨aN, h1, h2, h3, h4⟩ := STAmount.toNumber_integral_exact' (⟨.int64, 0, 0, false⟩ : STAmount)
+    obtain ⟨aN, h1, h2, h3, h4⟩ := STAmount.toNumber_offset_zero_exact (⟨.int64, 0, 0, false⟩ : STAmount)
       .to_nearest rfl rfl (by decide)
     refine ⟨_, aN, rfl, h1, h3, h2, by rw [h2]; exact h4, ⟨rfl, rfl, by decide⟩, rfl,
       by decide, ?_⟩
@@ -149,14 +149,14 @@ lemma price_oneShare (v : Vault) (hL0 : v.lossUnrealized.mantissa_ = 0)
     have hqm : q.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hq_pos.ne'
     have hqn : q.isNormalized :=
       operator_div_result_isNormalized _ _ _ _ hNSn hSnorm hNSm hSm hdiv hqm
-    have hqneg := Number.negative_false_of_normalized_nonneg q hqn hq_nn
+    have hqneg := Number.negative_false_of_nonneg q hqn hq_nn
     obtain ⟨assets, hof⟩ := STAmount.ofNumber_int64_ok q .to_nearest hqn hqneg
       (le_trans hq_le hcap)
     rw [hint, hof]
     obtain ⟨hic, hnt⟩ := STAmount.ofNumber_integral_canonical .int64 q .to_nearest assets rfl hof
     have hw1 := STAmount.ofNumber_integral_within_one .int64 q .to_nearest assets rfl hqn
       hqneg hof
-    obtain ⟨aN, haN, haNv, haNn, hden⟩ := STAmount.toNumber_integral_exact' assets .to_nearest
+    obtain ⟨aN, haN, haNv, haNn, hden⟩ := STAmount.toNumber_offset_zero_exact assets .to_nearest
       hic.is_integral hic.offset_zero (by
         have h := hic.in_range
         rw [hnt] at h
@@ -242,7 +242,7 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
     exact hale
   have hSnn : 0 ≤ v.sharesTotal.toRat := by linarith
   have hSden : v.sharesTotal.toRat.den = 1 := v.wf.sharesTotal_int
-  have hSneg := Number.negative_false_of_normalized_nonneg _ hSnorm hSnn
+  have hSneg := Number.negative_false_of_nonneg _ hSnorm hSnn
   obtain ⟨sta, hsta⟩ := STAmount.ofNumber_int64_ok v.sharesTotal .to_nearest hSnorm hSneg hScap
   obtain ⟨hsnt, hsoff, hsneg, hsmv, -⟩ :=
     STAmount.ofNumber_int64_shape v.sharesTotal .to_nearest sta hSnorm hSnn hSden hScap hsta
@@ -261,7 +261,7 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
     have hLz : v.lossUnrealized = Number.zero :=
       Number.eq_zero_of_mantissa_zero _ v.wf.lossUnrealized_norm hL0
     have hAAneg : v.assetsAvailable.negative_ = false := by
-      rw [hpar]; exact Number.negative_false_of_normalized_nonneg _ hAnorm hAnn
+      rw [hpar]; exact Number.negative_false_of_nonneg _ hAnorm hAnn
     obtain ⟨allA, hallA⟩ := STAmount.ofNumber_int64_ok v.assetsAvailable .to_nearest hAAnorm
       hAAneg (by rw [hpar]; exact hcap)
     obtain ⟨v', htl, hv'⟩ := Vault.zero_lawful v hL
@@ -297,9 +297,9 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
     obtain ⟨sn, hsn, hsnv, hsnn⟩ := oneShare_toNumber
     rw [hsn]
     simp only []
-    have hAneg := Number.negative_false_of_normalized_nonneg _ hAnorm hAnn
+    have hAneg := Number.negative_false_of_nonneg _ hAnorm hAnn
     have haNnn : 0 ≤ aN.toRat := by rw [haNv]; exact hann
-    have haNneg := Number.negative_false_of_normalized_nonneg _ haNn haNnn
+    have haNneg := Number.negative_false_of_nonneg _ haNn haNnn
     have haNcap : aN.toRat ≤ 2 ^ 63 - 1 := by rw [haNv]; linarith
     obtain ⟨at', hat⟩ := Number.operator_sub_ok_of_normalized_cap v.assetsTotal aN .to_nearest
       hAnorm haNn hAneg haNneg hcap haNcap
@@ -309,9 +309,9 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
     have hdcap : v.assetsTotal.toRat - aN.toRat ≤ 2 ^ 63 - 1 := by linarith
     obtain ⟨hatv, hatd⟩ := operator_sub_exact_int v.assetsTotal aN at' hAnorm haNn hAint haNd
       (rat_num_natAbs_lt_of_le _ hdd hdnn hdcap) hat
-    have hatn : at'.isNormalized := operator_sub_isNormalized_to_nearest' _ _ _ hAnorm haNn hat
+    have hatn : at'.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hAnorm haNn hat
     have hatnn : 0 ≤ at'.toRat := by rw [hatv]; exact hdnn
-    have hatneg := Number.negative_false_of_normalized_nonneg _ hatn hatnn
+    have hatneg := Number.negative_false_of_nonneg _ hatn hatnn
     have hatcap : at'.toRat ≤ 2 ^ 63 - 1 := by rw [hatv]; exact hdcap
     rw [hat]
     simp only []
@@ -334,7 +334,7 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
           exact ham (Number.toRat_eq_zero_iff.mp (by linarith))
         simp [STAmount.operator_eq, hne]
     have hav : v.assetsAvailable.operator_sub aN .to_nearest = .ok at' := by rw [hpar]; exact hat
-    have hsnneg := Number.negative_false_of_normalized_nonneg _ hsnn (by rw [hsnv]; norm_num)
+    have hsnneg := Number.negative_false_of_nonneg _ hsnn (by rw [hsnv]; norm_num)
     obtain ⟨st', hst⟩ := Number.operator_sub_ok_of_normalized_cap v.sharesTotal sn .to_nearest
       hSnorm hsnn hSneg hsnneg hScap (by rw [hsnv]; norm_num)
     have hsnd : sn.toRat.den = 1 := by rw [hsnv]; rfl

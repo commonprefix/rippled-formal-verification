@@ -162,7 +162,7 @@ lemma post_total_ge (A : Number) (hA : A.isNormalized) (p : STAmount) (hp : p.IO
   obtain ⟨hQc, hexp_hi⟩ := STAmount.ofNumber_iou_ok_facts sum _ Q hlo hhi hexp_lo hQ hQm
   obtain ⟨hb, he⟩ := STAmount.ofNumber_iou_within_half_ulp .fractional sum Q rfl hlo hhi
     hexp_lo hexp_hi hQ hQm
-  have hQnn := ofNumber_nonneg _ _ _ _ hsn hsneg hQ
+  have hQnn := STAmount.ofNumber_nonneg _ _ _ _ hsn hsneg hQ
   refine ⟨by have := (hr hQm).2; omega, ?_⟩
   have hQneg : Q.mIsNegative = false := by
     rcases h : Q.mIsNegative with _ | _

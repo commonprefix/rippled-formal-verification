@@ -40,9 +40,6 @@ theorem Number.operator_ne_iff_ne (x y : Number) :
   unfold Number.operator_ne
   cases x.operator_eq y <;> simp
 
-/-- `Number.zero` is normalized. -/
-theorem Number.zero_isNormalized : Number.zero.isNormalized := Or.inl rfl
-
 /-- On a normalized number, `operator_ne` against zero is false exactly at
 rational zero. -/
 theorem Number.operator_ne_zero_eq_false_iff (x : Number) (hx : x.isNormalized) :

@@ -41,7 +41,7 @@ lemma shares_exact (v : Vault) (X sd : STAmount) (w : Bool)
     have hD0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
       (operator_div_rounded_to_nearest _ _ _ hMn hnavn hdiv) (div_nonneg hM0 hnav0)
     obtain ⟨htv, htn⟩ := Number.truncate_floor _ _ hDn
-      (Number.negative_false_of_normalized_nonneg _ hDn hD0) ‹Number.truncate _ = _›
+      (Number.negative_false_of_nonneg _ hDn hD0) ‹Number.truncate _ = _›
     rename_i t _ _
     have hof := ‹STAmount.ofNumber _ t _ = _›
     by_cases htm : t.mantissa_ = 0
@@ -128,7 +128,7 @@ lemma total_exp (T : Number) (r : STAmount) (hT : T.isNormalized) (hT0 : 0 ≤ T
     (hok : STAmount.ofNumber .fractional T .to_nearest = .ok r) : T.exponent_ ≤ 100 := by
   by_cases hm : T.mantissa_ = 0
   · rw [Number.eq_zero_of_mantissa_zero T hT hm]; decide
-  have hneg := Number.negative_false_of_normalized_nonneg T hT hT0
+  have hneg := Number.negative_false_of_nonneg T hT hT0
   obtain ⟨exp, hexp, hres⟩ := WdMono.ofNumber_frac_tn_exp T r hT hneg hm hok
   have h80 := WdMono.exp_cases T r hok
   rcases hexp with ⟨h1, _⟩ | ⟨h1, _⟩ <;> rcases hres with ⟨h2, _, _⟩ | ⟨_, _, h3⟩ <;> omega
@@ -262,7 +262,7 @@ lemma payout_too_small (v : Vault) (amount : WithdrawAmount)
   obtain ⟨a, hrte⟩ := rte_ok p hpc' hpneg _ hpe_lo hpe_hi hlt
   have hcl := hcl_eq.trans hrte
   have hpf : STAmount.FracCanonZero p := ⟨by rw [hpnt, hnt], Or.inl hpc'⟩
-  have haf := WdAcc.clamp_frac_shape _ hT _ _ (STAmount.operator_neg_fczr _ hpf) hcl
+  have haf := WdAcc.clamp_frac_shape _ _ _ (STAmount.operator_neg_fczr _ hpf) hcl
   have haint : a.integral = false := by
     show a.mNumericType.isIntegral = false; rw [haf.1]; rfl
   by_cases hapos : 0 < a.toRat
@@ -294,8 +294,8 @@ lemma payout_too_small (v : Vault) (amount : WithdrawAmount)
   obtain ⟨at'', hat''⟩ := sub_ok _ _ hT hann hTe hane
   have hat''v := (Exact.updates_exact _ _ _ _ _ a.toRat hT hT le_rfl hann hanv ha0
     (le_trans hap (le_trans hpA hAT)) hgrid hat'' hat'').1
-  have hat''n := operator_sub_isNormalized_to_nearest' _ _ _ hT hann hat''
-  have hat'n := operator_sub_isNormalized_to_nearest' _ _ _ hT hpNn hat
+  have hat''n := operator_sub_isNormalized_to_nearest_sz _ _ _ hT hann hat''
+  have hat'n := operator_sub_isNormalized_to_nearest_sz _ _ _ hT hpNn hat
   have hr := operator_sub_rounded_to_nearest _ _ _ hT hpNn hat
   have h1 : assetsTotal'.toRat ≤ at''.toRat :=
     Number.RoundsToRepresentable.le_of_le_normalized _ _ hr at'' hat''n
@@ -312,7 +312,7 @@ lemma payout_too_small (v : Vault) (amount : WithdrawAmount)
     exact absurd hlt (by show ¬ p.mOffset < -100; omega)
   have hR'nz : assetsTotalRounded'.mValue ≠ 0 := by
     obtain ⟨exp, -, hres⟩ := WdMono.ofNumber_frac_tn_exp assetsTotal' _ hat'n
-      (Number.negative_false_of_normalized_nonneg _ hat'n hat'0) hAT'm hrt'F
+      (Number.negative_false_of_nonneg _ hat'n hat'0) hAT'm hrt'F
     rcases hres with ⟨-, -, he⟩ | ⟨-, hnz, -⟩
     · exact absurd hlt (by rw [he]; omega)
     · exact hnz
@@ -322,9 +322,9 @@ lemma payout_too_small (v : Vault) (amount : WithdrawAmount)
     obtain rfl := Except.ok.inj hrtF
     exact hR'nz rfl
   obtain ⟨-, -, hc1, -, -⟩ := WdMono.frac_pack v.assetsTotal _ hT
-    (Number.negative_false_of_normalized_nonneg _ hT hT0) hATm hrtF (by rw [hReq']; exact hR'nz)
+    (Number.negative_false_of_nonneg _ hT hT0) hATm hrtF (by rw [hReq']; exact hR'nz)
   obtain ⟨-, -, hc2, -, -⟩ := WdMono.frac_pack assetsTotal' _ hat'n
-    (Number.negative_false_of_normalized_nonneg _ hat'n hat'0) hAT'm hrt'F hR'nz
+    (Number.negative_false_of_nonneg _ hat'n hat'0) hAT'm hrt'F hR'nz
   rw [hReq'] at hc1
   obtain ⟨-, -, hgr, -⟩ := WdMono.rte_facts p a _ hpc' hppos hpe_hi hrte
   obtain ⟨z, hz⟩ := hgr _ le_rfl

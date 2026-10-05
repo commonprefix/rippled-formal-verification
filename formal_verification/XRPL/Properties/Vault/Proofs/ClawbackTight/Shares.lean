@@ -19,7 +19,7 @@ lemma nav_facts (v : Vault) (hnav : v.WithdrawNavExact false) (nav : Number)
   obtain ⟨n', hn', hv⟩ := hnav
   obtain rfl : n' = nav := Except.ok.inj (hn'.symm.trans h)
   simp only [Bool.false_eq_true, if_false] at hv
-  refine ⟨operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm
+  refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
     v.wf.lossUnrealized_norm h, hv, ?_⟩
   rw [hv]; exact v.exact.withdraw_nav_nonneg
 

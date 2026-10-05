@@ -115,7 +115,7 @@ lemma frac_half (nt : NumericType) (hnt : nt = .fractional) (an : Number) (p : S
     (hof : STAmount.ofNumber nt an .to_nearest = .ok p) (hpz : p.mValue ≠ 0) :
     |p.toRat - an.toRat| ≤ 1 / 2 * (10 : ℚ) ^ p.exponent := by
   subst hnt
-  exact (WdMono.frac_pack an p hann (Number.negative_false_of_normalized_nonneg an hann han0)
+  exact (WdMono.frac_pack an p hann (Number.negative_false_of_nonneg an hann han0)
     (STAmount.ofNumber_source_ne_zero _ _ _ _ hof hpz) hof hpz).2.2.1
 
 set_option maxHeartbeats 1000000 in

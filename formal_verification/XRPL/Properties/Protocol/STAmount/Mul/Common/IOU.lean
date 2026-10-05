@@ -134,6 +134,53 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
           hcid] at hok
       exact (Except.ok.inj hok).symm
 
+
+/-- `checked` of a canonical 16-digit mantissa gives a zero amount only when the
+exponent is below the IOU floor `cMinOffset`. -/
+lemma STAmount.checked_iou_zero_exp_lt (mant : UInt64) (exp : Int) (neg : Bool)
+    (mode : rounding_mode) (h_lo : 10 ^ 15 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 16)
+    (he_lo : minExponent + 3 ≤ exp) (he_hi : exp ≤ maxExponent) (result : STAmount)
+    (hok : STAmount.checked .fractional mant exp neg mode = .ok result)
+    (hz : result.mValue = 0) : exp < cMinOffset := by
+  by_contra hlo
+  have h_fit : mant.toNat < 2 ^ 63 := by omega
+  have h_int : ¬ (STAmount.unchecked .fractional mant exp neg).integral = true := by
+    simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
+  have h_sd : (STAmount.unchecked .fractional mant exp neg).signedDrops.toInt64
+      = if neg then -mant.toInt64 else mant.toInt64 := by
+    apply Int64.toInt_inj.mp
+    rw [STAmount.signedDrops_toInt64_toInt _
+          (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat < 10 ^ 16 from h_hi),
+        signed_mantissa_toInt neg mant h_fit]
+    show (STAmount.unchecked .fractional mant exp neg).signedDrops = _
+    unfold STAmount.signedDrops STAmount.unchecked
+    rcases neg <;> simp
+  have hiou : (STAmount.unchecked .fractional mant exp neg).iou mode
+      = (if exp > cMaxOffset then .error .overflow
+         else if exp < cMinOffset then .ok IOUAmount.zero
+         else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
+    unfold STAmount.iou
+    rw [if_neg h_int]
+    unfold IOUAmount.ofMantissaExp
+    rw [h_sd]
+    exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
+  by_cases hhi : exp > cMaxOffset
+  · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
+      rw [STAmount.checked]; unfold STAmount.canonicalize
+      rw [if_neg h_int, hiou, if_pos hhi]
+    rw [hb] at hok; simp at hok
+  · have hexp_lo : (-96 : ℤ) ≤ exp := by unfold cMinOffset at hlo; omega
+    have hexp_hi : exp ≤ 80 := by unfold cMaxOffset at hhi; omega
+    have hc : (⟨.fractional, mant, exp, neg⟩ : STAmount).IOUCanonical :=
+      ⟨rfl, h_lo, h_hi, hexp_lo, hexp_hi⟩
+    have hcid := STAmount.canonicalize_canonical_id ⟨.fractional, mant, exp, neg⟩ mode hc
+    rw [STAmount.checked,
+        show STAmount.unchecked .fractional mant exp neg =
+            (⟨.fractional, mant, exp, neg⟩ : STAmount) from rfl, hcid] at hok
+    rw [← Except.ok.inj hok] at hz
+    have : mant.toNat = 0 := by rw [show mant = 0 from hz]; rfl
+    omega
+
 /-- The exact 19-digit `Number` view of a canonical IOU `STAmount`: `toNumber`
 routes through `iou` (canonical round-trip) then the `×1000` lift. -/
 lemma STAmount.toNumber_iou_canonical (s : STAmount) (mode : rounding_mode)
@@ -207,7 +254,7 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     unfold Number.signum
     rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
       Bool.false_eq_true] <;> decide
-  -- `neg`/`working` as in `ofNumber`; `working = |r|` is non-negative, same magnitude/exponent.
+  -- `neg`/`working` as in `ofNumber`. `working = |r|` is non-negative, same magnitude/exponent.
   set neg : Bool := decide (r.signum < 0) with hneg_def
   set working : Number := if neg then r.operator_neg else r with hw_def
   have hw_mant : working.mantissa_ = r.mantissa_ := by

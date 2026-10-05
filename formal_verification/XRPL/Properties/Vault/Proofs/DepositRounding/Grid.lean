@@ -86,7 +86,7 @@ lemma Vault.donation_grid_bound (v : Vault)
     operator_add_isNormalized_to_nearest v.assetsTotal amountNumber assetsTotal'
       v.wf.assetsTotal_norm haN_norm hAT' hAT'_ne
   have hAT'_neg : assetsTotal'.negative_ = false :=
-    Number.negative_false_of_normalized_nonneg assetsTotal' hAT'_norm (le_of_lt hAT'_pos)
+    Number.negative_false_of_nonneg assetsTotal' hAT'_norm (le_of_lt hAT'_pos)
   obtain ⟨hM_lo, hM_hi⟩ := hAT'_norm.mantissaBounds_nat hAT'_ne
   have hE_lo : minExponent ≤ assetsTotal'.exponent_ := by
     rcases hAT'_norm with h0 | ⟨_, _, _, hlo, _⟩

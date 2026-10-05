@@ -25,7 +25,7 @@ structure STAmount.IntegralCanonical (s : STAmount) : Prop where
 /-- `result` is the value `truth` correctly rounded onto the scale grid
 `10^s·ℤ` (faithfully for `.to_nearest`: one of the two enclosing grid
 points). Discrete-grid analog of `RoundsWithin` for quantization at a fixed
-decimal scale; the grid is uniform and total, so no `Option` and no
+decimal scale. The grid is uniform and total, so no `Option` and no
 existential. -/
 def RoundsToRepresentableAt {A : Type} [RatValued A] (result : A) (truth : ℚ) (s : ℤ)
     (mode : rounding_mode) : Prop :=
@@ -38,6 +38,53 @@ def RoundsToRepresentableAt {A : Type} [RatValued A] (result : A) (truth : ℚ) 
   | .towards_zero =>
       RatValued.toRat result
         = (if truth ≥ 0 then ⌊truth / 10 ^ s⌋ else ⌈truth / 10 ^ s⌉) * 10 ^ s
+
+/-- Rounding up onto a grid never lowers a value. -/
+lemma le_ceil_grid (x : ℚ) (s : ℤ) : x ≤ (⌈x / 10 ^ s⌉ : ℚ) * 10 ^ s := by
+  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
+  have h := Int.le_ceil (x / 10 ^ s)
+  rwa [div_le_iff₀ hp] at h
+
+/-- Rounding up onto one grid keeps the order of the values. -/
+lemma ceil_grid_le_of_le (x y : ℚ) (s : ℤ) (hxy : x ≤ y) :
+    (⌈x / 10 ^ s⌉ : ℚ) * 10 ^ s ≤ (⌈y / 10 ^ s⌉ : ℚ) * 10 ^ s := by
+  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
+  have hc : ⌈x / 10 ^ s⌉ ≤ ⌈y / 10 ^ s⌉ := Int.ceil_mono (by gcongr)
+  have hc' : (⌈x / 10 ^ s⌉ : ℚ) ≤ ⌈y / 10 ^ s⌉ := by exact_mod_cast hc
+  exact mul_le_mul_of_nonneg_right hc' hp.le
+
+/-- Rounding up onto a coarser grid never gives less: every point of the
+`10^s'` grid is also a point of the finer `10^s` grid. -/
+lemma ceil_grid_le_of_scale_le (x : ℚ) (s s' : ℤ) (hle : s ≤ s') :
+    (⌈x / 10 ^ s⌉ : ℚ) * 10 ^ s ≤ (⌈x / 10 ^ s'⌉ : ℚ) * 10 ^ s' := by
+  have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
+  have hp' : (0 : ℚ) < 10 ^ s' := zpow_pos (by norm_num) _
+  -- the coarse step is a whole number of fine steps
+  have hsplit : (10 : ℚ) ^ s' = ((10 ^ (s' - s).toNat : ℕ) : ℚ) * 10 ^ s := by
+    rw [Nat.cast_pow, Nat.cast_ofNat, ← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+    congr 1
+    omega
+  set k' := ⌈x / 10 ^ s'⌉
+  set n : ℕ := 10 ^ (s' - s).toNat
+  -- the coarse grid point above `x` is a fine grid point above it
+  have hk : x / 10 ^ s ≤ ((k' * n : ℤ) : ℚ) := by
+    have h1 : x / 10 ^ s' ≤ k' := Int.le_ceil _
+    rw [div_le_iff₀ hp', hsplit] at h1
+    rw [div_le_iff₀ hp]
+    push_cast
+    linarith
+  have hc : ⌈x / 10 ^ s⌉ ≤ k' * n := Int.ceil_le.mpr hk
+  calc (⌈x / 10 ^ s⌉ : ℚ) * 10 ^ s ≤ ((k' * n : ℤ) : ℚ) * 10 ^ s := by gcongr
+    _ = (k' : ℚ) * 10 ^ s' := by rw [hsplit]; push_cast; ring
+
+/-- Rounding up onto a coarser grid never gives less. -/
+lemma RoundsToRepresentableAt.upward_mono {A : Type} [RatValued A] (r r' : A) (truth : ℚ)
+    (s s' : ℤ) (hle : s ≤ s') (hr : RoundsToRepresentableAt r truth s .upward)
+    (hr' : RoundsToRepresentableAt r' truth s' .upward) :
+    RatValued.toRat r ≤ RatValued.toRat r' := by
+  unfold RoundsToRepresentableAt at hr hr'
+  rw [hr, hr']
+  exact ceil_grid_le_of_scale_le truth s s' hle
 
 /-- An exact result rounds within zero relative error in every mode. -/
 lemma RoundsWithin_of_eq {A : Type} [RatValued A] (result : A) (truth : ℚ)
@@ -91,7 +138,7 @@ lemma RoundsWithin_abs_le_two {A : Type} [RatValued A] (result : A) (truth ε : 
 
 Rounding at `10^E` and then at `10^s = 10^(E+c)` equals rounding at `10^s`
 directly, for the directed modes. (For `to_nearest` only two-neighbor
-membership survives the composition; the main theorem handles that case by
+membership survives the composition. The main theorem handles that case by
 direct membership, not by composition.) -/
 
 /-- Floor composes through a coarser grid: `⌊⌊x⌋ / n⌋ = ⌊x / n⌋`. -/
@@ -164,16 +211,6 @@ lemma rel_error_trans {result mid truth ε₁ ε₂ : ℚ}
     _ ≤ (|truth| + |truth| * ε₁) * ε₂ + |truth| * ε₁ := by linarith
     _ = |truth| * (ε₁ + ε₂ + ε₁ * ε₂) := by ring
 
-/-- `RoundsWithin` (to_nearest) form of `rel_error_trans`, the composition an
-IOU `multiply`/`add` needs: a `Number`-operation bound (`ε₁`) then the IOU
-re-rounding bound (`ε₂`). -/
-lemma RoundsWithin_to_nearest_trans {A : Type} [RatValued A]
-    (result : A) (mid truth ε₁ ε₂ : ℚ)
-    (h1 : |mid - truth| ≤ |truth| * ε₁)
-    (h2 : |RatValued.toRat result - mid| ≤ |mid| * ε₂) (hε₂ : 0 ≤ ε₂) :
-    RoundsWithin result truth .to_nearest (ε₁ + ε₂ + ε₁ * ε₂) :=
-  rel_error_trans h1 h2 hε₂
-
 /-- `RoundsWithin` depends only on the embedded rational value: transport across an
 equal-`toRat` boundary (here `STAmount` ↔ its backing `IOUAmount`). -/
 lemma RoundsWithin_toRat_congr {A B : Type} [RatValued A] [RatValued B]
@@ -186,7 +223,7 @@ lemma RoundsWithin_toRat_congr {A B : Type} [RatValued A] [RatValued B]
 `intermediate` rounds `truth` within `ε₁` and `result` rounds `intermediate`'s value
 within `ε₂` (both in direction `mode`), then `result` rounds `truth` within
 `ε₁ + ε₂ + ε₁·ε₂`. For the directed modes the correct-side clause composes
-(`result ≤ intermediate ≤ truth`, etc.); the magnitude is `rel_error_trans`. This is
+(`result ≤ intermediate ≤ truth`, etc.), and the magnitude is `rel_error_trans`. This is
 the engine behind the directed-mode IOU headlines (`Number`-op bound ∘ re-round bound). -/
 lemma RoundsWithin_trans {A B : Type} [RatValued A] [RatValued B]
     (result : A) (intermediate : B) (truth ε₁ ε₂ : ℚ) (mode : rounding_mode)
@@ -293,7 +330,7 @@ lemma STAmount.double_round_abs_le
     _ ≤ (k : ℚ) * U := by nlinarith [hk, hU_pos]
 
 /-- **Double-rounding ⟹ tight ULP bound**, with the directed side-clause passed through.
-With `csnap = ½` (`to_nearest`) gives `k = 1`; `csnap = 1` (directed) gives `k = 2`. -/
+With `csnap = ½` (`to_nearest`) gives `k = 1`, and `csnap = 1` (directed) gives `k = 2`. -/
 lemma STAmount.RoundsToRepresentableWithin_of_double_round
     (result : STAmount) (r : Number) (truth : ℚ) (mode : rounding_mode) (k : ℕ) (csnap ε : ℚ)
     (h_dir : (match mode with
@@ -307,26 +344,5 @@ lemma STAmount.RoundsToRepresentableWithin_of_double_round
     (hk : csnap + 1 / 5 ≤ (k : ℚ)) :
     STAmount.RoundsToRepresentableWithin result truth mode k :=
   ⟨h_dir, STAmount.double_round_abs_le result r truth k csnap ε hsnap hr_ulp hop hε0 hεle hk⟩
-
-/-- Extract the magnitude bound `|result − truth| ≤ |truth|·ε` from `RoundsWithin` in
-**any** mode, when both `result` and `truth` are non-negative. (For `to_nearest` it is
-the bound directly; for the directed modes it follows from the one-sided clause.) -/
-lemma RoundsWithin_abs_diff_le_of_nonneg {A : Type} [RatValued A] (result : A) (truth ε : ℚ)
-    (mode : rounding_mode) (h : RoundsWithin result truth mode ε)
-    (hr : 0 ≤ RatValued.toRat result) (ht : 0 ≤ truth) :
-    |RatValued.toRat result - truth| ≤ |truth| * ε := by
-  unfold RoundsWithin at h
-  cases mode with
-  | to_nearest => exact h
-  | downward =>
-    obtain ⟨hle, hm⟩ := h
-    rw [abs_of_nonpos (by linarith), neg_sub]; exact hm
-  | upward =>
-    obtain ⟨hge, hm⟩ := h
-    rw [abs_of_nonneg (by linarith)]; exact hm
-  | towards_zero =>
-    obtain ⟨hle, hm⟩ := h
-    rw [abs_of_nonneg hr, abs_of_nonneg ht] at hle hm
-    rw [abs_of_nonpos (by linarith), neg_sub, abs_of_nonneg ht]; exact hm
 
 end XRPL.Model.Protocol

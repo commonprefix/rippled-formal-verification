@@ -38,7 +38,7 @@ lemma charge_frac_toNumber (v : Vault) (roundedAmount priced c s : STAmount) (cN
         have := h.is_integral
         have h2 : priced.integral = true := this
         rw [hpfr] at h2; exact absurd h2 (by decide)
-  have hcf := WdAcc.clamp_frac_shape _ v.wf.assetsTotal_norm _ _ hpf hclamp
+  have hcf := WdAcc.clamp_frac_shape _ _ _ hpf hclamp
   rcases hcf.2 with h | h
   · obtain ⟨sn, hok, hval, hnorm⟩ := STAmount.toNumber_iou_exact c .to_nearest h
     rw [show cN = sn from Except.ok.inj (hcN.symm.trans hok)]
@@ -78,7 +78,7 @@ lemma shares_update (v : Vault) (s : STAmount) (sN st' : Number)
       (by rw [abs_of_nonneg hsum_nn, hsN_val0]; exact hSsz')
   obtain ⟨hst_val, hst_den⟩ := operator_add_exact_int v.sharesTotal sN0 st'
     v.wf.sharesTotal_norm hsN_norm0 v.wf.sharesTotal_int hsN_den hsum_bound hst
-  refine ⟨operator_add_isNormalized_to_nearest' _ _ _ v.wf.sharesTotal_norm hsN_norm0 hst,
+  refine ⟨operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsN_norm0 hst,
     by rw [hst_val]; exact hsum_nn, hst_den, ?_⟩
   rw [hst_val, hsN_val0]
   exact ne_of_gt (by linarith)
@@ -98,7 +98,7 @@ lemma add_lawful (v : Vault) (cN at' av' st' : Number)
       v'.toRawVault = { v.toRawVault with assetsTotal := at', assetsAvailable := av', sharesTotal := st' } := by
   have hAT_nn : (0 : ℚ) ≤ v.assetsTotal.toRat := v.exact.assetsTotal_nonneg
   have hat_norm : at'.isNormalized :=
-    operator_add_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm hcN_norm hat
+    operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm hcN_norm hat
   have hat_nn : 0 ≤ at'.toRat :=
     operator_add_nonneg _ _ _ v.wf.assetsTotal_norm hcN_norm hat (by linarith)
   rw [hAV, hat] at hav
@@ -173,7 +173,7 @@ lemma Vault.deposit_maximum_exceeded_proof (v : Vault) (amountDeposit roundedAmo
     have hle' := Number.RoundsToRepresentable.le_of_le_normalized at' _ hr v.assetsTotal
       v.wf.assetsTotal_norm (by rw [hcv]; linarith)
     exact ExitsC.not_over_cap v at'
-      (operator_add_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm hcn hat) hle' hmax
+      (operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm hcn hat) hle' hmax
   simp only [Vault.deposit, bind, Except.bind, pure, Except.pure, hround, hnz, hins, hcomp,
     hclamp, hfnp, hcN, hsN, hat, hav, hst, hmax]
   rfl
@@ -273,7 +273,7 @@ lemma Vault.deposit_donation_success_proof (v : Vault) (amountDeposit roundedAmo
   have hzN0 : zN = Number.zero := by
     rw [zero_int64_toNumber] at hzN; exact (Except.ok.inj hzN).symm
   subst hzN0
-  rw [operator_add_zero_right] at hst
+  rw [Number.operator_add_zero_right] at hst
   obtain rfl : v.sharesTotal = st' := Except.ok.inj hst
   have hshares : v.sharesTotal.isNormalized ∧ 0 ≤ v.sharesTotal.toRat ∧
       v.sharesTotal.toRat.den = 1 ∧ v.sharesTotal.toRat ≠ 0 :=
@@ -284,7 +284,7 @@ lemma Vault.deposit_donation_success_proof (v : Vault) (amountDeposit roundedAmo
   refine ⟨v', ?_, hlv'eq⟩
   have hsh' : (v.sharesTotal.mantissa_ == 0) = false := by simpa using hsh
   simp only [Vault.deposit, bind, Except.bind, pure, Except.pure, hround, hnz, hsh', haN, hzN,
-    hat, hav, hmax, htl, operator_add_zero_right, Bool.false_eq_true, ↓reduceIte, Bool.not_true,
+    hat, hav, hmax, htl, Number.operator_add_zero_right, Bool.false_eq_true, ↓reduceIte, Bool.not_true,
     Bool.and_false]
 
 end XRPL.Model.SingleAssetVault

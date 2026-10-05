@@ -59,8 +59,8 @@ lemma sum_exp_anti (x y₁ y₂ s₁ s₂ : Number)
   set t₁ := x.toRat + y₁.toRat with ht₁
   set t₂ := x.toRat + y₂.toRat with ht₂
   have ht : t₂ ≤ t₁ := by rw [ht₁, ht₂]; linarith
-  have hs₁n : s₁.isNormalized := operator_add_isNormalized_to_nearest' x y₁ s₁ hx hy₁ hok₁
-  have hs₂n : s₂.isNormalized := operator_add_isNormalized_to_nearest' x y₂ s₂ hx hy₂ hok₂
+  have hs₁n : s₁.isNormalized := operator_add_isNormalized_to_nearest_sz x y₁ s₁ hx hy₁ hok₁
+  have hs₂n : s₂.isNormalized := operator_add_isNormalized_to_nearest_sz x y₂ s₂ hx hy₂ hok₂
   have hs₁nn : 0 ≤ s₁.toRat := operator_add_nonneg x y₁ s₁ hx hy₁ hok₁ (le_trans hnn ht)
   have hs₂nn : 0 ≤ s₂.toRat := operator_add_nonneg x y₂ s₂ hx hy₂ hok₂ hnn
   have hc₁ := exp_cases s₁ r₁ hr₁

@@ -1,6 +1,6 @@
 import XRPL.Properties.Vault.Common.VaultDecidable
 import XRPL.Properties.Vault.Common.WithdrawDefs
-import XRPL.Properties.Vault.Common.STAmountToNumber
+import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
 
 /-! # Witnesses for the round-trip bounds
 

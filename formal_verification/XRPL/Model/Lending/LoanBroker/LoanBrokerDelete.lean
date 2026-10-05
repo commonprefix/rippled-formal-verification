@@ -23,4 +23,8 @@ def LoanBroker.canDelete {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α
 
   return .tesSUCCESS
 
+-- LoanBrokerDelete -> doApply
+def LoanBroker.roundedCoverAvailable (lb : LoanBroker) : Except Error STAmount :=
+  STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest
+
 end XRPL.Model.Lending

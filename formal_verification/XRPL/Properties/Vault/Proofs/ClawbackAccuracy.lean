@@ -141,7 +141,7 @@ lemma neg_gap_witness (x : Number) (k : ℚ) (hx : x.isNormalized) (hx0 : 0 ≤ 
   have hm : x.mantissa_ ≠ 0 := by
     intro h0; apply hden
     rw [Number.toRat_eq_zero_of_mantissa_zero x h0]; rfl
-  have hneg : x.negative_ = false := Number.negative_false_of_normalized_nonneg x hx hx0
+  have hneg : x.negative_ = false := Number.negative_false_of_nonneg x hx hx0
   have hxv := Number.toRat_of_nonneg x hneg
   obtain ⟨hMlo, hMhi⟩ := hx.mantissaBounds_nat hm
   have he : x.exponent_ < 0 := by
@@ -213,9 +213,6 @@ lemma pos_half_witness : ∃ w : Number, w.isNormalized ∧ w.toRat = 1 / 2 := b
     rw [show (5000000000000000000 : UInt64).toNat = 5000000000000000000 from rfl]
     norm_num
 
-lemma mantissa_ne_zero_of_toRat_ne {n : Number} (h : n.toRat ≠ 0) : n.mantissa_ ≠ 0 :=
-  fun h0 => h (Number.toRat_eq_zero_of_mantissa_zero n h0)
-
 /-- An integral vault prices a share amount above one whole unit to within
 `depositε` relative plus one unit. -/
 lemma priced_lower (v : Vault) (hnav : v.WithdrawNavExact false)
@@ -236,11 +233,11 @@ lemma priced_lower (v : Vault) (hnav : v.WithdrawNavExact false)
   rcases hcase with ⟨hm0, -⟩ | ⟨hm, sn, nv, an, hsn, hnv, han, hof⟩
   · rw [Number.toRat_eq_zero_of_mantissa_zero _ hm0] at h1; norm_num at h1
   obtain ⟨sn0, hsn0, hsnv, hsnn, -⟩ :=
-    STAmount.toNumber_integral_exact' sd .to_nearest hsd.1 hsd.2.1 hsd.2.2
+    STAmount.toNumber_offset_zero_exact sd .to_nearest hsd.1 hsd.2.1 hsd.2.2
   have hss : sn = sn0 := Except.ok.inj (hsn.symm.trans hsn0)
   subst hss
   have hnavn : nav'.isNormalized :=
-    operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hnavok
+    operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hnavok
   have hSTn := v.wf.sharesTotal_norm
   set W := nav'.toRat with hW
   set T := v.sharesTotal.toRat with hT
@@ -261,10 +258,10 @@ lemma priced_lower (v : Vault) (hnav : v.WithdrawNavExact false)
   have hnv1 : 1 ≤ nv.toRat := by
     have := Number.RoundsToRepresentable.ge_of_ge_normalized nv _ hr1 w1 hw1 (by rw [hw1v]; exact hWs1)
     rwa [hw1v] at this
-  have hsnm : sn.mantissa_ ≠ 0 := mantissa_ne_zero_of_toRat_ne (by
+  have hsnm : sn.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by
     rw [hsnv]; intro h0; rw [h0, mul_zero] at hWs1; norm_num at hWs1)
-  have hnvm : nv.mantissa_ ≠ 0 := mantissa_ne_zero_of_toRat_ne (by linarith)
-  have hSTm : v.sharesTotal.mantissa_ ≠ 0 := mantissa_ne_zero_of_toRat_ne (by rw [← hT]; linarith)
+  have hnvm : nv.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith)
+  have hSTm : v.sharesTotal.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [← hT]; linarith)
   have hnvn : nv.isNormalized := operator_mul_result_isNormalized _ _ _ _ hnavn hsnn hm hsnm hnv hnvm
   have hw1 := operator_mul_rounds_to_nearest nav' sn nv hnavn hsnn hnv hnvm
   simp only [RoundsWithin, RatValued.toRat, hsnv] at hw1
@@ -282,7 +279,7 @@ lemma priced_lower (v : Vault) (hnav : v.WithdrawNavExact false)
     have := Number.RoundsToRepresentable.ge_of_ge_normalized an _ hr2 wh hwh
       (by rw [hwhv]; exact hq2)
     rwa [hwhv] at this
-  have hanm : an.mantissa_ ≠ 0 := mantissa_ne_zero_of_toRat_ne (by linarith)
+  have hanm : an.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith)
   have hann : an.isNormalized :=
     operator_div_result_isNormalized _ _ _ _ hnvn hSTn hnvm hSTm han hanm
   have hw2 := operator_div_rounds_to_nearest nv v.sharesTotal an hnvn hSTn han hanm
@@ -292,7 +289,7 @@ lemma priced_lower (v : Vault) (hnav : v.WithdrawNavExact false)
   have hanlo : nv.toRat / T * (1 - 6 / (2 ^ 63 - 3)) ≤ an.toRat := by
     have := (abs_le.mp hw2).1; nlinarith
   have hanneg : an.negative_ = false :=
-    Number.negative_false_of_normalized_nonneg an hann (by linarith)
+    Number.negative_false_of_nonneg an hann (by linarith)
   have hwo := STAmount.ofNumber_integral_within_one v.numericType an _ priced hint hann hanneg hof
   have hpr1 := (abs_lt.mp hwo).1
   have hchain : I * (1 - 5 / (2 ^ 63 + 7)) * (1 - 6 / (2 ^ 63 - 3)) ≤ an.toRat :=
@@ -331,7 +328,7 @@ lemma Vault.clawback_vault_updates_integral_proof (v : Vault) (assets holderShar
   obtain ⟨hrnt, hroff, hrval, -, -⟩ :=
     ClwAcc.clamp_neg_integral v.assetsTotal priced cr.assetsRecovered (hnt ▸ hint) hoff hcl
   obtain ⟨sn, hsn, hsnv, hsnn, hden⟩ :=
-    STAmount.toNumber_integral_exact' cr.assetsRecovered .to_nearest
+    STAmount.toNumber_offset_zero_exact cr.assetsRecovered .to_nearest
       (by rw [hrnt, hnt]; exact hint) hroff (by rw [hrval]; exact hval)
   have hsa : arn = sn := Except.ok.inj (harn.symm.trans hsn)
   subst hsa

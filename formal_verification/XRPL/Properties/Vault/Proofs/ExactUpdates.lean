@@ -41,7 +41,7 @@ lemma clamp_payout (v : Vault) (p a : STAmount)
     by_cases hz : p.mValue = 0
     · exact Or.inr hz
     · exact Or.inl (hpc hint' hz)⟩
-  have haf := WdAcc.clamp_frac_shape _ hT _ _ (STAmount.operator_neg_fczr _ hpf) hcl
+  have haf := WdAcc.clamp_frac_shape _ _ _ (STAmount.operator_neg_fczr _ hpf) hcl
   have haint : a.integral = false := by
     show a.mNumericType.isIntegral = false; rw [haf.1]; rfl
   obtain ⟨ham, haneg⟩ := STAmount.fnp_false_pos a haint hfnp

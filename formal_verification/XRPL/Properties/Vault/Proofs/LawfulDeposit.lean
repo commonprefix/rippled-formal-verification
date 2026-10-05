@@ -79,7 +79,7 @@ lemma Vault.deposit_lawful (v : Vault) (amount : STAmount) (isDonation : Bool)
   have hcN_nn : 0 ≤ cN.toRat := by rw [hcN_val]; exact hDnn'
   -- asset field updates
   have hat_norm : at'.isNormalized :=
-    operator_add_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm hcN_norm hat
+    operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm hcN_norm hat
   have hat_nn : 0 ≤ at'.toRat :=
     operator_add_nonneg _ _ _ v.wf.assetsTotal_norm hcN_norm hat (by linarith)
   rw [hAV, hat] at hav
@@ -92,7 +92,7 @@ lemma Vault.deposit_lawful (v : Vault) (amount : STAmount) (isDonation : Bool)
       have hsN_zero : sN = Number.zero := by
         rw [hsC, zero_int64_toNumber] at hsN
         exact (Except.ok.inj hsN).symm
-      rw [hsN_zero, operator_add_zero_right] at hst
+      rw [hsN_zero, Number.operator_add_zero_right] at hst
       have hst_eq : st' = v.sharesTotal := (Except.ok.inj hst).symm
       have hmant := hsh_don hd
       refine ⟨hst_eq ▸ v.wf.sharesTotal_norm, hst_eq ▸ hST_nn,
@@ -133,7 +133,7 @@ lemma Vault.deposit_lawful (v : Vault) (amount : STAmount) (isDonation : Bool)
       obtain ⟨hst_val, hst_den⟩ := operator_add_exact_int v.sharesTotal sN st'
         v.wf.sharesTotal_norm hsN_norm v.wf.sharesTotal_int hsN_den
         (rat_num_natAbs_lt_of_le _ hsum_den hsum_nn hsum_le) hst
-      refine ⟨operator_add_isNormalized_to_nearest' _ _ _ v.wf.sharesTotal_norm
+      refine ⟨operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm
         hsN_norm hst, by rw [hst_val]; exact hsum_nn, hst_den, ?_⟩
       rw [hst_val, hsN_val]
       have : 0 < v.sharesTotal.toRat + sC.toRat := by linarith

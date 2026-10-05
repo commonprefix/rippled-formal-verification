@@ -807,30 +807,4 @@ theorem recover_value_in_unit_interval_at_exit
       have : (e - fuel : ℤ) = e - k := by rw [← hfeq, ← hk_eq]
       omega
 
-/-! ## Recover from a zero mantissa
-
-In the degenerate case of the diff-sign branch, the input mantissa to
-`recover` is `0` (the two aligned mantissas cancel exactly). The previous
-value-preservation lemmas all require `1 ≤ m.toNat`, so we need a separate
-analysis for this case.
-
-When `m = 0`:
-* Loop entry condition `0 < largeRange.min ∧ 0 * 10 ≤ maxRep` always holds.
-* If the popped digit `d = 0`, the new mantissa `(0 * 10 - 0).toNat = 0` and
-  the loop continues.
-* If the popped digit `d ≥ 1`, the UInt64 subtraction underflows giving
-  `(0 * 10 - d).toNat = 2^64 - d ≥ 2^64 - 9 > 10^18 = largeRange.min`, so the
-  loop exits at the next iteration.
-
-The key inductive invariant is
-
-  ((decimalValue g.digits_ : ℚ) / 10^16 + x) * 10^k
-    ≤ m_out + 1 + 10^k * B
-
-where `B` is the running bound on the hidden fraction `x`. The bound holds
-because:
-* In the all-zero case, m_out = 0, but the left side is bounded by
-  `10^k * (slightly more than B)` since the captured digits get exhausted.
-* In the underflow case, m_out ≥ 2^64 - 9 dominates the left side easily. -/
-
 end XRPL.Model.Protocol

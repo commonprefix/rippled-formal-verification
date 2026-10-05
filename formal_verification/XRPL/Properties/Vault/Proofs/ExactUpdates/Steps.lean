@@ -14,12 +14,12 @@ lemma nav_nonneg (v : Vault) (w : Bool) (nav : Number)
         | false => v.lossUnrealized) .to_nearest = .ok nav) :
     nav.isNormalized ∧ 0 ≤ nav.toRat := by
   cases w
-  · exact ⟨operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm
+  · exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
         v.wf.lossUnrealized_norm hsub,
       Number.RoundsToRepresentable.nonneg_of_nonneg nav _
         (operator_sub_rounded_to_nearest _ _ nav v.wf.assetsTotal_norm v.wf.lossUnrealized_norm hsub)
         (by have := v.exact.withdraw_nav_nonneg; simpa [RawVault.toExact] using this)⟩
-  · exact ⟨operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
+  · exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub,
       Number.RoundsToRepresentable.nonneg_of_nonneg nav _
         (operator_sub_rounded_to_nearest _ _ nav v.wf.assetsTotal_norm (Or.inl rfl) hsub)
         (by have := v.exact.assetsTotal_nonneg; simpa [RawVault.toExact, Number.toRat_zero] using this)⟩
@@ -50,7 +50,7 @@ lemma price_facts (v : Vault) (w : Bool) (s p : STAmount)
     refine ⟨by rw [STAmount.toRat_eq_zero_of_mValue_zero _ hz], hnt, fun _ h => absurd hz h, ?_⟩
     intro pn hpn
     by_cases hint : v.numericType.isIntegral = true
-    · obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_integral_exact' _ .to_nearest
+    · obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_offset_zero_exact _ .to_nearest
         (by rw [hnt]; exact hint) (WdAcc.zero_mOffset _ hint) (by rw [hz]; exact Nat.zero_le _)
       rw [Except.ok.inj (hpn.symm.trans hsn)]; exact ⟨hnorm, hval⟩
     · rw [STAmount.toNumber_zero_fractional _ .to_nearest
@@ -93,7 +93,7 @@ lemma shares_nonneg (v : Vault) (X sd : STAmount) (w : Bool)
     have hD0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
       (operator_div_rounded_to_nearest _ _ _ hMn hnavn hdiv) (div_nonneg hM0 hnav0)
     obtain ⟨htv, htn⟩ := Number.truncate_floor _ _ hDn
-      (Number.negative_false_of_normalized_nonneg _ hDn hD0) ‹Number.truncate _ = _›
+      (Number.negative_false_of_nonneg _ hDn hD0) ‹Number.truncate _ = _›
     rename_i t _ _
     by_cases htm : t.mantissa_ = 0
     · rw [STAmount.toRat_eq_zero_of_mValue_zero _
@@ -105,7 +105,7 @@ lemma shares_nonneg (v : Vault) (X sd : STAmount) (w : Bool)
 lemma total_fit (nt : NumericType) (hint : nt.isIntegral = true) (T : Number) (atr : STAmount)
     (hT : T.isNormalized) (hT0 : 0 ≤ T.toRat)
     (hok : STAmount.ofNumber nt T .to_nearest = .ok atr) : T.toRat < 2 ^ 63 := by
-  have hnegf : T.negative_ = false := Number.negative_false_of_normalized_nonneg T hT hT0
+  have hnegf : T.negative_ = false := Number.negative_false_of_nonneg T hT hT0
   have hsig : decide (T.signum < 0) = false := by rw [Number.signum_neg_decide]; exact hnegf
   unfold STAmount.ofNumber at hok
   rw [hsig] at hok

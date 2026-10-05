@@ -6,7 +6,7 @@ import XRPL.Model.Vault.VaultClawback
 /-! # Shared `DecidableEq` derivations for the vault witness leaves
 
 The `native_decide` sharpness and round-trip witnesses (`DilutionWitness`,
-`RoundtripProofs`) compare concrete vault states and operation results, so they
+`RoundtripWitness`) compare concrete vault states and operation results, so they
 need `DecidableEq` for `RawVault`, `DepositResult`, `WithdrawResult`,
 `ClawbackResult`, and `Except`. Deriving those instances in a single shared
 module emits each auto-generated `decEq` aux declaration exactly once, so both

@@ -202,6 +202,4 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
       (operator_mul_no_inbetween_above_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         hok hresult h_round_up)
 
-/-! ## Main theorem: `operator_mul_rounded_to_nearest` -/
-
 end XRPL.Model.Protocol

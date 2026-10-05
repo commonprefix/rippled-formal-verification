@@ -13,50 +13,6 @@ open XRPL.Model.Protocol
 /-- The 16-digit carry threshold at scale `j`. -/
 def carryPt (j : ℤ) : ℚ := (9999999999999999500 : ℚ) * 10 ^ j
 
-private lemma cusp_eq_tn (g : Guard) (neg : Bool) (e : Int) (loc : Error)
-    (hb : (g.round .to_nearest == 1 || (g.round .to_nearest == 0 && cMaxValue % 2 == 1)) = true)
-    (hexp_lo : minExponent ≤ e + 1) :
-    g.doRoundUp neg cMaxValue e cMinValue cMaxValue .to_nearest loc
-      = if maxExponent < e + 1 then (.error loc : Except Error RoundResult)
-        else .ok { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } := by
-  have h9 : cMaxValue % 10 = 9 := by decide
-  have hdiv : cMaxValue / 10 = 999999999999999 := by decide
-  have hdivsucc : (999999999999999 : UInt64) + 1 = cMinValue := by decide
-  have hdig9 : 9 * 2 ^ 60 ≤ (g.push 9).digits_.toNat := by
-    rw [toNat_push_digits, show (9 : UInt64).toNat % 16 = 9 from by decide]; omega
-  have hne0 : (g.push 9).digits_ ≠ 0 := by
-    intro h
-    have : (g.push 9).digits_.toNat = 0 := by rw [h]; rfl
-    omega
-  have hpush_ne : (g.push 9).empty = false := by unfold Guard.empty Guard.unrecoverable; simp [hne0]
-  have hroundUp' : ((g.push 9).round .to_nearest == 1
-      || ((g.push 9).round .to_nearest == 0 && (999999999999999 : UInt64) % 2 == 1)) = true := by
-    have htn : (g.push 9).round .to_nearest = 1 := by
-      unfold Guard.round
-      rw [if_neg (by rw [hpush_ne]; exact Bool.false_ne_true),
-          if_pos (show (g.push 9).digits_ > 0x5000000000000000 from by
-            rw [gt_iff_lt, UInt64.lt_iff_toNat_lt,
-                show (0x5000000000000000 : UInt64).toNat = 5764607523034234880 from by decide]
-            omega)]
-    rw [htn]; rfl
-  unfold Guard.doRoundUp
-  simp only []
-  rw [pushOverflow_noop_of_lt_maxRep (by rw [maxRep_val, cMaxValue_val]; omega) g .to_nearest, hb]
-  simp only [if_true]
-  rw [if_neg (show ¬ (cMaxValue < cMaxValue ∧ cMaxValue < maxRep) from
-        fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
-      if_neg (show ¬ (maxRep < cMaxValue ∧ cMaxValue < maxRepUp) from fun h =>
-        absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by rw [maxRep_val, cMaxValue_val]; omega))]
-  unfold Guard.doDropDigit
-  rw [h9, hdiv]
-  simp only []
-  rw [if_pos hroundUp', hdivsucc,
-      show Guard.bringIntoRange neg cMinValue (e + 1) cMinValue
-          = { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } from by
-        rw [bringIntoRange_noscale_result
-              (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
-            if_neg (not_or.mpr ⟨by omega, by decide⟩)]]
-
 /-- The `.to_nearest` guard decision read off a dropped 3-digit tail `r/1000`. -/
 private lemma guard_round_tn (g : Guard) (r : ℕ) (hr : r < 1000)
     (hg : represents g ((r : ℚ) / 1000)) :
@@ -146,7 +102,7 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
     · have hbr : (g.round .to_nearest == 1 ||
           (g.round .to_nearest == 0 && cMaxValue % 2 == 1)) = true := by
         rw [hcusp] at hround; exact hround
-      have hcusp_eq := cusp_eq_tn g n.negative_ (n.exponent_ + 3) .normalize2 hbr (by omega)
+      have hcusp_eq := doRoundUp_small_cusp_eq g n.negative_ (n.exponent_ + 3) .to_nearest .normalize2 hbr (by omega)
       have hMk : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by
         have := congrArg UInt64.toNat hcusp; rw [hm3, hcMax] at this; exact this
       by_cases hovf : maxExponent < (n.exponent_ + 3) + 1

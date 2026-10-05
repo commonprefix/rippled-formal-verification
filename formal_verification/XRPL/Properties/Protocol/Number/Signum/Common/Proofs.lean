@@ -50,4 +50,9 @@ theorem signum_eq_zero_iff_proof (n : Number) (hn : n.isNormalized) :
   split_ifs with h1 h2 <;> simp_all
   all_goals linarith
 
+lemma signum_pos_iff_proof (n : Number) :
+    0 < n.signum ↔ n.negative_ = false ∧ n.mantissa_ ≠ 0 := by
+  unfold Number.signum
+  by_cases hneg : n.negative_ = true <;> by_cases hm : n.mantissa_ = 0 <;> simp [hneg, hm]
+
 end XRPL.Model.Protocol

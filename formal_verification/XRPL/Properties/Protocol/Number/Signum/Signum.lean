@@ -22,4 +22,9 @@ theorem signum_eq_zero_iff (n : Number) (hn : n.isNormalized) :
     n.signum = 0 ↔ n.toRat = 0 :=
   signum_eq_zero_iff_proof n hn
 
+/-- A `Number` has a positive sign exactly when it is not negative and its
+mantissa is nonzero. -/
+lemma signum_pos_iff (n : Number) : 0 < n.signum ↔ n.negative_ = false ∧ n.mantissa_ ≠ 0 :=
+  signum_pos_iff_proof n
+
 end XRPL.Model.Protocol

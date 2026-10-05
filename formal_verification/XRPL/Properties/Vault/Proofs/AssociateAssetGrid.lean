@@ -9,7 +9,7 @@ import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
-import XRPL.Properties.Vault.Common.STAmountToNumber
+import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
 
 /-! # Grid arithmetic for the conditional `associateAsset` results
 
@@ -20,17 +20,6 @@ again on the grid, unless it underflows the IOU floor `10⁻⁸¹`. -/
 namespace XRPL.Model.SingleAssetVault.CatHI
 
 open XRPL.Model.Protocol
-
-/-- A normalized non-negative `Number` has a clear sign bit. -/
-lemma Number.negative_false_of_norm_nonneg (n : Number) (hn : n.isNormalized)
-    (h0 : 0 ≤ n.toRat) : n.negative_ = false := by
-  rcases hb : n.negative_ with _ | _
-  · rfl
-  · exfalso
-    have hle := Number.toRat_nonpos_of_negative n hb
-    have hm0 : n.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp (le_antisymm hle h0)
-    exact Number.mantissa_ne_zero_of_negative n hn hb hm0
-
 
 /-- `STAmount.checked` is the identity on a canonical 16-digit non-negative IOU record. -/
 lemma STAmount.checked_iou_id (mant : UInt64) (exp : Int) (mode : rounding_mode)
@@ -63,8 +52,6 @@ lemma STAmount.checked_iou_id (mant : UInt64) (exp : Int) (mode : rounding_mode)
   norm_num
   rfl
 
-
-
 /-- `Number.operator_eq` is structural equality. -/
 lemma Number.eq_of_operator_eq {x y : Number} (h : x.operator_eq y = true) : x = y := by
   unfold Number.operator_eq at h
@@ -72,14 +59,6 @@ lemma Number.eq_of_operator_eq {x y : Number} (h : x.operator_eq y = true) : x =
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨⟨h1, h2⟩, h3⟩ := h
   subst h1; subst h2; subst h3; rfl
-
-/-- `decide (n.signum < 0)` is the stored sign flag. -/
-lemma Number.signum_neg_decide' (n : Number) : decide (n.signum < 0) = n.negative_ := by
-  unfold Number.signum
-  cases hneg : n.negative_
-  · simp only [Bool.false_eq_true, if_false]
-    split <;> simp
-  · simp
 
 /-- **`ofNumber` is the identity on a 16-digit-representable normalized `Number`.**
 A non-negative normalized `Number` whose 19-digit mantissa has three trailing zeros,
@@ -101,7 +80,7 @@ lemma STAmount.ofNumber_frac_grid (x : Number) (mode : rounding_mode)
       (by unfold minExponent; omega) (by unfold maxExponent; omega), hneg]
     simp
   unfold STAmount.ofNumber
-  simp only [Number.signum_neg_decide', hneg, Bool.false_eq_true, if_false]
+  simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false]
   rw [if_neg (show ¬ (NumericType.fractional.isIntegral = true) from by decide)]
   rw [nr_aux x mode hnr]
   simp only []
@@ -113,8 +92,6 @@ where
         = .ok ((x.mantissa_ / 10 / 10 / 10).toInt64, x.exponent_ + 3)) :
       x.normalizeToRange kMinValue kMaxValue mode
         = .ok ((x.mantissa_ / 10 / 10 / 10).toInt64, x.exponent_ + 3) := h
-
-
 
 /-- `Number.zero` is exact for any asset. -/
 lemma STAmount.isRounded_zero (nt : NumericType) : STAmount.isRounded nt Number.zero = false := by
@@ -160,8 +137,6 @@ lemma STAmount.isRounded_frac_false_of_grid (x : Number)
   rw [hconv]
   rfl
 
-
-
 /-- **The grid criterion, converse direction.** If `associateAsset` would not move a
 normalized `Number`, then it is zero or its mantissa has three trailing zeros at an
 offset the IOU range admits. -/
@@ -178,8 +153,8 @@ lemma Number.grid_of_isRounded_frac_false (x : Number) (hx : x.isNormalized)
     have hb : b = true := by cases b <;> simp at h ⊢
     subst hb
     unfold STAmount.equalAfterNumberConvert at hconv
-    obtain ⟨st, hst, hconv⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hconv
-    obtain ⟨n, hn, hconv⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hconv
+    obtain ⟨st, hst, hconv⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hconv
+    obtain ⟨n, hn, hconv⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hconv
     have hneq : n.operator_eq x = true :=
       Except.ok.inj (show (Except.ok (n.operator_eq x) : Except Error Bool) = .ok true from hconv)
     have hnx : n = x := Number.eq_of_operator_eq hneq
@@ -198,8 +173,6 @@ lemma Number.grid_of_isRounded_frac_false (x : Number) (hx : x.isNormalized)
       have hnz : n = Number.zero := STAmount.toNumber_zero_eq st .to_nearest n hz hn
       rw [hnx] at hnz
       exact Or.inl (by rw [hnz]; rfl)
-
-
 
 /-- `x` sits on the decimal grid of step `10 ^ g`. -/
 def OnGridAt (x : ℚ) (g : ℤ) : Prop := ∃ k : ℤ, x = (k : ℚ) * 10 ^ g
@@ -239,7 +212,6 @@ lemma OnGridAt.nat_coeff {x : ℚ} {g : ℤ} (h : OnGridAt x g) (hnn : 0 ≤ x)
   congr 1
   exact_mod_cast (Int.toNat_of_nonneg hk0).symm
 
-
 /-! ## Bridges from the model records to `OnGridAt` -/
 
 lemma Number.onGridAt_toRat (x : Number) (hneg : x.negative_ = false)
@@ -276,8 +248,6 @@ lemma STAmount.toRat_lt_pow (s : STAmount) (hneg : s.mIsNegative = false)
   have hm : (s.mValue.toNat : ℚ) < 10 ^ 16 := by exact_mod_cast h_hi
   rw [STAmount.toRat_of_nonneg s hneg]
   nlinarith
-
-
 
 /-! ## The normalized witness for a grid value -/
 
@@ -345,7 +315,6 @@ lemma Number.exists_grid_witness (K : ℕ) (g E : ℤ)
     rw [hwval] at hband_hi
     nlinarith [hlo, hband_hi, h1, h2]
   exact ⟨w, hwnorm, hwneg, hwne, hwval, hwmod, hm_lo, hm_hi, he_lo, he_hi⟩
-
 
 /-! ## The stored subtraction -/
 
@@ -472,7 +441,6 @@ lemma Number.sub_grid_isRounded_false (X dn res : Number) (K : ℕ) (g E : ℤ)
   subst hres_eq
   exact STAmount.isRounded_frac_false_of_grid res hwneg hwm_lo hwm_hi hwmod hwe_lo hwe_hi
 
-
 /-! ## The `postSumExponent` bracket for a negative delta -/
 
 /-- The negated payout, as a canonical record. -/
@@ -508,12 +476,12 @@ lemma postSumExponent_neg_bracket (T : Number) (p : STAmount) (s : ℤ)
   -- peel `postSumExponent`
   unfold postSumExponent at hok
   simp only [] at hok
-  obtain ⟨pn, hpn, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
-  obtain ⟨R, hR, hok⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+  obtain ⟨pn, hpn, hok⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hok
+  obtain ⟨R, hR, hok⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hok
   have hnt : (p.operator_neg).numericType = .fractional := by rw [hnrec]; rfl
   rw [hnt] at hok
   unfold numberExponent at hok
-  obtain ⟨a, ha, hsa⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hok
+  obtain ⟨a, ha, hsa⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hok
   have hs : a.exponent = s :=
     Except.ok.inj (show (Except.ok a.exponent : Except Error Int) = .ok s from hsa)
   -- the lifted negated payout
@@ -615,7 +583,7 @@ lemma postSumExponent_neg_bracket (T : Number) (p : STAmount) (s : ℤ)
     have hRnn : 0 ≤ R.toRat :=
       le_trans (mul_nonneg hD0 (by norm_num)) hlow
     have hRneg : R.negative_ = false :=
-      Number.negative_false_of_norm_nonneg R hRnorm hRnn
+      Number.negative_false_of_nonneg R hRnorm hRnn
     by_cases haz : a.mValue = 0
     · -- the 16-digit pack flushed: the sum is under the IOU floor
       refine Or.inr ⟨hsent haz, ?_⟩
@@ -754,7 +722,6 @@ lemma postSumExponent_neg_bracket (T : Number) (p : STAmount) (s : ℤ)
         exact le_trans hkey (mul_le_mul_of_nonneg_right hfac (le_of_lt hps))
       exact le_of_mul_le_mul_right hstep hpos
 
-
 /-! ## The clamp's negative branch -/
 
 /-- **The clamp's negative branch reports a grid amount that keeps the total coarse.**
@@ -795,7 +762,7 @@ lemma clampToSumExponent_neg_grid (T : Number) (p d : STAmount)
   rw [hdelta_neg, if_pos rfl] at hclamp
   rw [hdelta_int] at hclamp
   simp only [Bool.false_eq_true, if_false, if_true, hnegneg, pure_bind] at hclamp
-  obtain ⟨s, hs, hclamp⟩ := XRPL.Model.SingleAssetVault.bind_ok_peel _ _ _ hclamp
+  obtain ⟨s, hs, hclamp⟩ := XRPL.Model.Protocol.bind_ok_peel _ _ _ hclamp
   -- the bracket
   have hbr := postSumExponent_neg_bracket T p s hTnorm hTneg hTne hTehi hThi hpc hpneg hple hs
   -- shape of `roundToExponent`
@@ -914,7 +881,6 @@ lemma clampToSumExponent_neg_grid (T : Number) (p d : STAmount)
       · rw [min_eq_right (le_of_lt hcase)]
         linarith [hbound, hpd, hps]
 
-
 /-! ## The headline arithmetic lemma -/
 
 /-- **A clamped payout keeps a vault asset field on the grid.** `X` is the stored field
@@ -1015,6 +981,5 @@ lemma clamped_field_on_grid (T X : Number) (p rep : STAmount) (repN res : Number
   exact Number.sub_grid_isRounded_false X repN res K g (X.exponent_ + 3)
     hXnorm hXneg hXne hrepN_norm hrepN_neg hrepN_ne hresnorm hK hg_lo hg_hi hXehi
     hKval hhi hnf hsub
-
 
 end XRPL.Model.SingleAssetVault.CatHI

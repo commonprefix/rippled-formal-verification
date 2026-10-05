@@ -1,8 +1,10 @@
 import XRPL.Properties.Protocol.STAmount.Sub.RoundsWithin
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
-import XRPL.Properties.Vault.Proofs.Support.FracCanon
+import XRPL.Properties.Vault.Proofs.Support.STAmountFacts
+import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
+import XRPL.Properties.Protocol.Common.Reduction
 
 /-! # Grid rounding and the sum clamp
 
@@ -10,7 +12,6 @@ Facts about `STAmount.roundToExponent` and `clampToSumExponent`. -/
 
 namespace XRPL.Model.Protocol
 
-open XRPL.Model.SingleAssetVault (bind_ok_peel)
 
 open private sumAndRoundToExponent from XRPL.Model.Protocol.Rounding in
 /-- **Sum-branch shape.** The non-negative (deposit) branch of the clamp ends in a
@@ -384,7 +385,7 @@ lemma clampToSumExponent_sum_zero_nonpos (amount : Number) (delta reported : STA
     (hcl : clampToSumExponent amount delta = .ok reported) :
     reported.toRat ≤ 0 := by
   have hnt : delta.numericType.isIntegral = false := hfrac
-  have hamt_neg : amount.negative_ = false := Number.negative_false_of_normalized_nonneg amount hamt hamt_nn
+  have hamt_neg : amount.negative_ = false := Number.negative_false_of_nonneg amount hamt hamt_nn
   unfold clampToSumExponent at hcl
   simp only [hbr, pure_bind] at hcl
   rw [if_neg (by simp [hfrac])] at hcl
@@ -526,7 +527,7 @@ open private sumAndRoundToExponent from XRPL.Model.Protocol.Rounding in
 /-- **The clamp's sum branch never reports more than it was handed.** Every step
 from the pre-sum total to the recovered post-sum total rounds DOWNWARD, so the
 difference the branch reports is at most the delta itself — the deposit-side
-counterpart of `clampToSumExponent_neg_bracket`. -/
+counterpart of `clampToSumExponent_neg_grid`. -/
 lemma clampToSumExponent_sum_le (amount : Number) (delta reported : STAmount)
     (hamt : amount.isNormalized) (hamt_nn : 0 ≤ amount.toRat)
     (hdc : delta.IOUCanonical ∨ delta.mValue = 0)
@@ -546,7 +547,7 @@ lemma clampToSumExponent_sum_le (amount : Number) (delta reported : STAmount)
     cases h : delta.numericType with
     | fractional => rfl
     | integral mv mo ms msh => rw [h] at hnt; simp [NumericType.isIntegral] at hnt
-  have hamt_neg : amount.negative_ = false := Number.negative_false_of_normalized_nonneg amount hamt hamt_nn
+  have hamt_neg : amount.negative_ = false := Number.negative_false_of_nonneg amount hamt hamt_nn
   unfold clampToSumExponent at hcl
   simp only [hbr, pure_bind] at hcl
   rw [if_neg (by simp [hfrac])] at hcl
@@ -585,7 +586,7 @@ lemma clampToSumExponent_sum_le (amount : Number) (delta reported : STAmount)
         STAmount.ofNumber_source_ne_zero delta.numericType s1 .downward s2 hs2 hs2z
       have hs1norm : s1.isNormalized :=
         operator_add_isNormalized amount dn s1 .downward hamt hdnnorm hs1 hs1m
-      have hs1neg : s1.negative_ = false := Number.negative_false_of_normalized_nonneg s1 hs1norm hs1_nn
+      have hs1neg : s1.negative_ = false := Number.negative_false_of_nonneg s1 hs1norm hs1_nn
       obtain ⟨hs2_le, -, hs2_nn⟩ :=
         STAmount.ofNumber_downward_floor_bounds delta.numericType s1 s2 hs1norm hs1neg hs2 hs2z
       have hs2c : s2.IOUCanonical := by

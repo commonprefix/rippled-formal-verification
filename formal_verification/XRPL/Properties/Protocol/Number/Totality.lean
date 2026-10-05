@@ -2,20 +2,11 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Properties.Protocol.Number.Common.Rounding.BitVec
 import XRPL.Properties.Protocol.Number.Common.Rounding.DivQuotient
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
-import XRPL.Properties.Protocol.Number.Mul.RoundsWithin
-import XRPL.Properties.Protocol.Number.Div.RoundsWithin
-import XRPL.Properties.Protocol.Number.Sub.RoundsWithin
-import XRPL.Properties.Protocol.Number.ToRep.ToRep
-import XRPL.Properties.Protocol.Number.Compare.Compare
-import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
-import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
-import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 
 /-! # Forward totality of the `Number` pipeline
 
 Success conditions for `doRoundUp`, `doNormalize`, `doNormalize128`, `operator_mul`, `operator_div`
-and `operator_sub` on normalized operands with exponent headroom. Split out of the vault withdraw
-totality file so that Number-level consumers (the lending invariants) need not import vault proofs. -/
+and `operator_sub` on normalized operands with exponent headroom. -/
 
 namespace XRPL.Model.Protocol
 
@@ -42,8 +33,8 @@ theorem Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mod
 
 /-! ## Escaping the zero guards of `operator_mul` / `operator_div`
 
-`operator_div` opens with a divide-by-zero guard keyed on `operator_eq Number.zero`;
-a nonzero divisor (here `0 < sharesTotal`, so `mantissa_ ≠ 0`) escapes it, reducing
+`operator_div` opens with a divide-by-zero guard keyed on `operator_eq Number.zero`.
+A nonzero divisor (here `0 < sharesTotal`, so `mantissa_ ≠ 0`) escapes it, reducing
 the divide totality to `doNormalize128`. -/
 
 /-- `operator_eq Number.zero` detects a zero mantissa, so a nonzero mantissa is not
@@ -132,36 +123,6 @@ theorem doNormalize_capAtMaxRep_ok_of_exp (m : UInt64) (e : Int) (g : Guard)
     exact ⟨(divu10 m).1, e + 1, g.push (divu10 m).2, rfl, le_refl _⟩
   · rw [if_neg h]
     exact ⟨m, e, g, rfl, by omega⟩
-
-/-- **Forward totality of `doNormalize` for an in-range operand.** A nonzero
-mantissa already in `[minM, maxM]` with exponent bounded by `maxExponent - 2`
-normalizes without error. -/
-theorem doNormalize_ok_of_inRange (neg : Bool) (M : UInt64) (e : Int)
-    (minM maxM : UInt64) (mode : rounding_mode)
-    (hM0 : M ≠ 0) (hlo : minM ≤ M) (hhi : M ≤ maxM)
-    (he_lo : minExponent ≤ e) (he_hi : e + 2 ≤ maxExponent) :
-    ∃ res, doNormalize neg M e minM maxM mode = .ok res := by
-  unfold doNormalize
-  rw [if_neg (show ¬ (M == 0) = true from by simp [hM0])]
-  simp only [doNormalize_scaleUp_id minM M e hlo]
-  rw [doNormalize_scaleDown_id maxM M e _ hhi]
-  simp only []
-  rw [if_neg (show ¬ (decide (e < minExponent) || decide (M < minM)) = true from by
-    have h1 : decide (e < minExponent) = false := decide_eq_false (by omega)
-    have h2 : decide (M < minM) = false :=
-      decide_eq_false (by
-        rw [UInt64.lt_iff_toNat_lt]
-        exact Nat.not_lt.mpr (UInt64.le_iff_toNat_le.mp hlo))
-    rw [h1, h2]; simp)]
-  obtain ⟨m', e', g', hcap, hle⟩ :=
-    doNormalize_capAtMaxRep_ok_of_exp M e
-      (if neg then Guard.new.set_negative else Guard.new) (by omega)
-  rw [hcap]
-  simp only []
-  obtain ⟨res, hres⟩ :=
-    Guard.doRoundUp_ok_of_exp_le g' neg m' e' minM maxM mode .normalize2 (by omega)
-  rw [hres]
-  exact ⟨res.toNumber, rfl⟩
 
 /-! ## Forward output bound for the `scaleDown128` front-half loop
 
@@ -391,7 +352,7 @@ errors only if the exponent reaches `maxExponent` before the mantissa drops to
 
 Totality of the back half needs only an *exponent* bound: the input mantissa is a
 `UInt128`, hence `< 2 ^ 128 < 10 ^ 39 = (maxMantissa + 1) · 10 ^ 20`, so at most
-twenty drops reach `maxMantissa`, keeping the output exponent within `e + 20`; the
+twenty drops reach `maxMantissa`, keeping the output exponent within `e + 20`. The
 tail then adds at most two. So `e + 22 ≤ maxExponent` suffices for `doNormalize128`,
 and with the `-17` divide offset the caller needs
 `x.exponent_ - y.exponent_ ≤ maxExponent - 5`. -/
@@ -530,29 +491,20 @@ theorem Number.operator_div_ok_of_normalized
   rw [Number.operator_div_of_divisor_ne x y mode hy0, hxeq, if_neg Bool.false_ne_true, hdq]
   exact doNormalize128_ok_of_exp (x.negative_ != y.negative_) zmq zeq mode drp hze
 
-/-! ## Forward totality of `operator_sub` on two normalized capped operands
+/-! ## Forward totality of the different-sign `operator_add`
 
-`operator_sub x y` is `operator_add x y.operator_neg`. The withdraw run performs
-two such subtractions, each decrementing a nonnegative stored total by a
-nonnegative normalized `Number` that fits `2 ^ 63 - 1`: the assets total minus the
-priced payout, and the share total minus the burned shares. Negating a nonnegative
-`y` flips its sign, so the internal addition always takes the different-sign
-branch, which routes through the `recover` loop and `doNormalize128`. Totality of
-that branch needs only an exponent bound. A normalized nonnegative `Number` capped
-by `2 ^ 63 - 1` has a nonpositive raw exponent (`Number.exponent_fn_le_zero_of_cap`
-lifted through `Number.exponent_ ≤ Number.exponent`). The aligned common exponent
-is the maximum of the two (`alignDown_e_eq`), and the `recover` loop only lowers it
-(`recover_exponent_le`). So the `doNormalize128` input exponent stays at or below
-zero, well inside the `maxExponent - 22` headroom of `doNormalize128_ok_of_exp`. No
-ordering of the operands is required, and the result magnitude is irrelevant to
-totality. -/
+The different-sign branch routes through the `recover` loop and `doNormalize128`,
+and its totality needs only an exponent bound. The aligned common exponent is the
+maximum of the two (`alignDown_e_eq`), and the `recover` loop only lowers it
+(`recover_exponent_le`). So a nonpositive input exponent stays well inside the
+`maxExponent - 22` headroom of `doNormalize128_ok_of_exp`. -/
 
 /-- **Forward totality of the different-sign `operator_add` tail.** The `recover`
 loop followed by `doNormalize128` is total whenever the pre-`recover` exponent is
 nonpositive. This is agnostic to the result sign, the pre-`recover` mantissa and
 the guard, because `recover` only decreases the exponent (`recover_exponent_le`)
 and the tail keeps 22 steps of headroom to `maxExponent`. -/
-private lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
+lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
     (g : Guard) (mode : rounding_mode) (hE : E + 22 ≤ maxExponent) :
     ∃ result, doNormalize128 zn
       (if (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty = true
@@ -589,26 +541,192 @@ private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_
       apply Number.diffSign_recover_tail_ok
       split_ifs <;> first | (rw [alignDown_e_eq]; omega) | omega
 
-/-- **Forward totality of `operator_sub` for two normalized nonnegative operands with exponent
-headroom.** The same shape as the capped version below, with the exponent bound `doNormalize128`
-needs given directly: 22 steps below `maxExponent`. A zero subtrahend is the identity, otherwise
-the negated subtrahend has the opposite sign to `x` and the different-sign add is total. -/
-theorem Number.operator_sub_ok_of_normalized_exp (x y : Number) (mode : rounding_mode)
-    (_hx : x.isNormalized) (_hy : y.isNormalized)
-    (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
+/-! ## Forward totality of the same-sign `operator_add`
+
+With both operands of one sign, `operator_add` aligns the smaller exponent up to the larger one,
+adds the two mantissas in `UInt128`, drops at most one digit, then rounds and normalizes. The
+larger-exponent operand keeps its `largeRange` mantissa, so the sum is at least `10^18` and below
+`2·10^19`. After the optional drop the mantissa sits in `[mantissaFloor, maxRepUp]` with the
+exponent raised by at most one. `doRoundUp` then succeeds with 3 steps of headroom to
+`maxExponent`, and its output normalizes unchanged. -/
+
+/-- **Forward totality of the same-sign `operator_add` tail.** Two aligned mantissas below
+`10^19` whose sum is at least `10^18`, at a common exponent 3 steps below `maxExponent`, add,
+round and normalize without error. -/
+lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g : Guard)
+    (mode : rounding_mode) (hxm : xm_a.toNat < 10 ^ 19) (hym : ym_a.toNat < 10 ^ 19)
+    (hsum : 10 ^ 18 ≤ xm_a.toNat + ym_a.toNat)
+    (he_lo : minExponent ≤ e) (he_hi : e + 3 ≤ maxExponent) :
+    ∃ result, (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a
+      let p : UInt64 × Int × Guard :=
+        if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
+          (toUInt64 (g.doDropDigit128 zm128 e).2.1, (g.doDropDigit128 zm128 e).2.2,
+           (g.doDropDigit128 zm128 e).1)
+        else (toUInt64 zm128, e, g)
+      match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode .overflow with
+      | .error err => Except.error err
+      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) = .ok result := by
+  have hxm_tu : (toUInt128 xm_a).toNat = xm_a.toNat := toNat_toUInt128 xm_a
+  have hym_tu : (toUInt128 ym_a).toNat = ym_a.toNat := toNat_toUInt128 ym_a
+  set zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a with hzm128_def
+  have hzm128 : zm128.toNat = xm_a.toNat + ym_a.toNat := by
+    rw [hzm128_def, BitVec.toNat_add, hxm_tu, hym_tu]
+    apply Nat.mod_eq_of_lt
+    have : 2 * 10 ^ 19 < 2 ^ 128 := by norm_num
+    omega
+  have hmru : (toUInt128 maxRepUp).toNat = 9223372036854775810 := by
+    rw [toNat_toUInt128]; rfl
+  have hlrm : (toUInt128 largeRange.max).toNat = 9999999999999999999 := by
+    rw [toNat_toUInt128]; exact largeRange_max_val
+  set p : UInt64 × Int × Guard :=
+    if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
+      (toUInt64 (g.doDropDigit128 zm128 e).2.1, (g.doDropDigit128 zm128 e).2.2,
+       (g.doDropDigit128 zm128 e).1)
+    else (toUInt64 zm128, e, g) with hp_def
+  -- the rounding input: mantissa in `[mantissaFloor, maxRepUp]`, exponent in `[e, e + 1]`
+  have hp : mantissaFloor ≤ p.1.toNat ∧ p.1.toNat ≤ maxRepUp.toNat ∧ e ≤ p.2.1 ∧
+      p.2.1 ≤ e + 1 := by
+    have hmru' : maxRepUp.toNat = 9223372036854775810 := rfl
+    by_cases hc : (zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp) = true
+    · rw [hp_def, if_pos hc]
+      have hgt : 9223372036854775810 < zm128.toNat := by
+        rw [Bool.or_eq_true, decide_eq_true_eq, decide_eq_true_eq] at hc
+        rcases hc with h | h
+        · have := BitVec.lt_def.mp h; rw [hlrm] at this; omega
+        · have := BitVec.lt_def.mp h; rw [hmru] at this; omega
+      have h10 : (10 : UInt128).toNat = 10 := by decide
+      have hdiv : (zm128 / 10).toNat = zm128.toNat / 10 := by rw [BitVec.toNat_udiv, h10]
+      have hfit : (zm128 / 10).toNat < 2 ^ 64 := by
+        rw [hdiv, hzm128]
+        have : 2 * 10 ^ 18 < 2 ^ 64 := by norm_num
+        omega
+      simp only [Guard.doDropDigit128]
+      rw [toNat_toUInt64 hfit, hdiv, hmru']
+      refine ⟨by omega, by omega, by omega, le_refl _⟩
+    · rw [hp_def, if_neg hc]
+      rw [Bool.or_eq_true, decide_eq_true_eq, decide_eq_true_eq, not_or] at hc
+      have hle : zm128.toNat ≤ 9223372036854775810 := by
+        have h' : ¬ (toUInt128 maxRepUp).toNat < zm128.toNat := fun h => hc.2 (BitVec.lt_def.mpr h)
+        rw [hmru] at h'
+        omega
+      have hfit : zm128.toNat < 2 ^ 64 := by omega
+      simp only []
+      rw [toNat_toUInt64 hfit, hmru']
+      refine ⟨by omega, by omega, le_refl _, by omega⟩
+  obtain ⟨hlo, hhi, hze_lo, hze_hi⟩ := hp
+  obtain ⟨res, hres⟩ := Guard.doRoundUp_ok_of_exp_le p.2.2 xn p.1 p.2.1
+    largeRange.min largeRange.max mode .overflow (by omega)
+  show ∃ result, (match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode
+      .overflow with
+    | .error err => Except.error err
+    | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) = .ok result
+  rw [hres]
+  simp only []
+  have hexp_out : res.exponent_ ≤ p.2.1 + 1 :=
+    Guard.doRoundUp_ok_output_exp_le p.2.2 xn p.1 p.2.1 largeRange.min largeRange.max mode
+      .overflow res (by omega) hres
+  by_cases hrm : res.mantissa_ = 0
+  · refine ⟨Number.zero, ?_⟩
+    show doNormalize res.toNumber.negative_ res.toNumber.mantissa_ res.toNumber.exponent_
+      largeRange.min largeRange.max mode = .ok Number.zero
+    unfold doNormalize
+    rw [if_pos (show (res.toNumber.mantissa_ == 0) = true from by
+      show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
+  · obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
+      doRoundUp_output_invariants_upTo_maxRepUp_anyMode p.2.2 xn p.1 p.2.1 mode hlo hhi
+        .overflow res hres hrm
+    exact ⟨res.toNumber, doNormalize_id mode res.negative_ res.mantissa_ res.exponent_
+      h_res_min h_res_max h_res_exp h_res_mod (by omega) (fun _ => by omega)⟩
+
+/-- The `Number` exponent of a nonzero normalized source sits at or above `minExponent`. -/
+lemma Number.exponent_ge_min (n : Number) (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0) :
+    minExponent ≤ n.exponent_ := by
+  rcases hn with hz | ⟨_, _, _, hemin, _⟩
+  · exfalso; apply hn0; rw [hz]; rfl
+  · exact hemin
+
+/-- **Forward totality of the same-sign `operator_add`.** Two nonzero normalized operands of the
+same sign, each exponent 3 steps below `maxExponent`, add without error in every mode. -/
+lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hsign : x.negative_ = y.negative_)
+    (hxe : x.exponent_ + 3 ≤ maxExponent) (hye : y.exponent_ + 3 ≤ maxExponent) :
+    ∃ result, x.operator_add y mode = .ok result := by
+  have hxe_min := Number.exponent_ge_min x hx hx0
+  have hye_min := Number.exponent_ge_min y hy hy0
+  have hx_b := mantissaBounds_nat_of (hx.mantissaBounds hx0)
+  have hy_b := mantissaBounds_nat_of (hy.mantissaBounds hy0)
+  unfold Number.operator_add
+  rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0,
+    Number.operator_eq_zero_false_of_mantissa_ne x hx0]
+  simp only [Bool.false_eq_true, if_false]
+  by_cases hc : x.operator_eq y.operator_neg = true
+  · rw [if_pos hc]; exact ⟨Number.zero, rfl⟩
+  rw [if_neg hc]
+  have hsn : (x.negative_ == y.negative_) = true := by rw [beq_iff_eq]; exact hsign
+  by_cases hlt : x.exponent_ < y.exponent_
+  · rw [if_pos hlt]
+    set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new
+    have he := alignDown_e_eq x.mantissa_ x.exponent_ g₀ y.exponent_
+    have hm := alignDown_mantissa_le x.mantissa_ x.exponent_ g₀ y.exponent_
+    rw [max_eq_right (le_of_lt hlt)] at he
+    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_
+      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).1 y.mantissa_
+      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1
+      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.2 mode
+      (by omega) hy_b.2 (by omega) (by rw [he]; exact hye_min) (by rw [he]; exact hye)
+    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+  by_cases hgt : x.exponent_ > y.exponent_
+  · rw [if_neg hlt, if_pos hgt]
+    set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new
+    have he := alignDown_e_eq y.mantissa_ y.exponent_ g₀ x.exponent_
+    have hm := alignDown_mantissa_le y.mantissa_ y.exponent_ g₀ x.exponent_
+    rw [max_eq_right (le_of_lt hgt)] at he
+    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_
+      (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).1 x.exponent_
+      (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).2.2 mode
+      hx_b.2 (by omega) (by omega) hxe_min hxe
+    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+  · rw [if_neg hlt, if_neg hgt]
+    obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_ y.mantissa_ x.exponent_
+      (if x.negative_ then Guard.new.set_negative else Guard.new) mode
+      hx_b.2 hy_b.2 (by omega) hxe_min hxe
+    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+
+/-- **Forward totality of `operator_add` for two normalized operands with exponent headroom.**
+Either operand may be zero, and the signs may differ. -/
+lemma Number.operator_add_ok_of_exp (x y : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
+    ∃ result, x.operator_add y mode = .ok result := by
+  by_cases hy0 : y.mantissa_ = 0
+  · rw [Number.eq_zero_of_mantissa_zero y hy hy0]
+    exact ⟨x, Number.operator_add_zero_right x mode⟩
+  by_cases hx0 : x.mantissa_ = 0
+  · rw [Number.eq_zero_of_mantissa_zero x hx hx0]
+    unfold Number.operator_add
+    rw [Number.operator_eq_zero_false_of_mantissa_ne y hy0, if_neg Bool.false_ne_true,
+      if_pos (by decide)]
+    exact ⟨y, rfl⟩
+  by_cases hs : x.negative_ = y.negative_
+  · exact Number.operator_add_sameSign_ok x y mode hx hy hx0 hy0 hs (by omega) (by omega)
+  · exact Number.operator_add_diffSign_ok x y mode hy0 (beq_eq_false_iff_ne.mpr hs) hxe hye
+
+/-- **Forward totality of `operator_sub` for two normalized operands with exponent headroom.**
+`x - y` is `x + (-y)`, and negating keeps a normalized operand normalized with the same exponent
+(or turns it into the zero sentinel). Either operand may be zero, and the signs may differ. -/
+lemma Number.operator_sub_ok_of_exp (x y : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
     (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
     ∃ result, x.operator_sub y mode = .ok result := by
-  by_cases hy0 : y.mantissa_ = 0
-  · exact ⟨x, Number.operator_sub_of_mantissa_zero x y mode hy0⟩
-  · have hkey : y.operator_neg = { y with negative_ := !y.negative_ } := by
-      unfold Number.operator_neg
-      rw [if_neg (ne_true_of_eq_false (beq_false_of_ne hy0))]
-    unfold Number.operator_sub
-    apply Number.operator_add_diffSign_ok x y.operator_neg mode
-    · rw [hkey]; exact hy0
-    · rw [hkey]; simp only [hxneg, hyneg]; rfl
-    · exact hxe
-    · rw [hkey]; exact hye
-
+  unfold Number.operator_sub
+  apply Number.operator_add_ok_of_exp x y.operator_neg mode hx
+    (Number.operator_neg_isNormalized y hy) hxe
+  unfold Number.operator_neg
+  split_ifs
+  · show (-2147483648 : Int) + 22 ≤ maxExponent
+    unfold maxExponent; norm_num
+  · exact hye
 
 end XRPL.Model.Protocol

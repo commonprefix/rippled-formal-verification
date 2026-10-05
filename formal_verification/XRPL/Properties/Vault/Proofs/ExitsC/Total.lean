@@ -76,66 +76,10 @@ lemma doNormalize_ok (neg : Bool) (M : UInt64) (e : Int) (minM maxM : UInt64)
   rw [hru]
   exact ⟨res.toNumber, rfl⟩
 
-lemma roundUp_normalize_ok (g : Guard) (neg : Bool) (zm : UInt64) (e : Int) (mode : rounding_mode)
-    (he_lo : minExponent ≤ e) (he : e + 25 ≤ maxExponent) :
-    ∃ r, (match g.doRoundUp neg zm e largeRange.min largeRange.max mode .overflow with
-      | .error err => (Except.error err : Except Error Number)
-      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) = .ok r := by
-  obtain ⟨res, hres⟩ := Guard.doRoundUp_ok_of_exp_le g neg zm e largeRange.min largeRange.max mode
-    .overflow (by omega)
-  have hle := Guard.doRoundUp_ok_output_exp_le g neg zm e largeRange.min largeRange.max mode
-    .overflow res he_lo hres
-  rw [hres]
-  exact doNormalize_ok _ _ _ _ _ _ (by show res.exponent_ + 22 ≤ _; omega)
-
-lemma diffSign_tail_ok (zn : Bool) (m : UInt128) (E : Int)
-    (g : Guard) (mode : rounding_mode) (hE : E + 22 ≤ maxExponent) :
-    ∃ result, doNormalize128 zn
-      (if (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty = true
-        then (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).1
-        else (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).1 - 1)
-      (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).2.1
-      largeRange.min largeRange.max mode
-      (!(Number.operator_add.recover (toUInt128 largeRange.min * 1000) m E g 40).2.2.empty)
-    = .ok result := by
-  have hle := recover_exponent_le (toUInt128 largeRange.min * 1000) m E g 40
-  exact doNormalize128_ok_of_exp zn _ _ mode _ (by omega)
-
 lemma add_ok (x y : Number) (mode : rounding_mode) (hx : x.isNormalized) (hy : y.isNormalized)
     (hxe : x.exponent_ + 30 ≤ maxExponent) (hye : y.exponent_ + 30 ≤ maxExponent) :
-    ∃ r, x.operator_add y mode = .ok r := by
-  unfold Number.operator_add
-  split_ifs with h1 h2 h3
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-  · exact ⟨_, rfl⟩
-  have hxm : x.mantissa_ ≠ 0 := fun h => h2 (by
-    rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
-  have hym : y.mantissa_ ≠ 0 := fun h => h1 (by
-    rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
-  have hxlo : minExponent ≤ x.exponent_ := by
-    rcases hx with h | ⟨_, _, _, h, _⟩
-    · exact absurd (by rw [h]; rfl) hxm
-    · exact h
-  have hylo : minExponent ≤ y.exponent_ := by
-    rcases hy with h | ⟨_, _, _, h, _⟩
-    · exact absurd (by rw [h]; rfl) hym
-    · exact h
-  by_cases hsign : (x.negative_ == y.negative_) = true
-  · simp only [hsign, if_true]
-    by_cases hlt : x.exponent_ < y.exponent_
-    · have hal : ∀ g, (Number.operator_add.alignDown x.mantissa_ x.exponent_ g y.exponent_).2.1
-          = y.exponent_ := fun g => by rw [alignDown_e_eq]; omega
-      simp only [hlt, if_true]
-      split_ifs <;> apply roundUp_normalize_ok <;> simp only [Guard.doDropDigit128, hal] <;> omega
-    · by_cases hgt : x.exponent_ > y.exponent_
-      · simp only [hlt, hgt, if_true, if_false]
-        split_ifs <;> apply roundUp_normalize_ok <;> simp only [Guard.doDropDigit128] <;> omega
-      · simp only [hlt, hgt, if_false]
-        split_ifs <;> apply roundUp_normalize_ok <;> simp only [Guard.doDropDigit128] <;> omega
-  · simp only [hsign, Bool.false_eq_true, if_false]
-    apply diffSign_tail_ok
-    split_ifs <;> first | (rw [alignDown_e_eq]; omega) | omega
+    ∃ r, x.operator_add y mode = .ok r :=
+  Number.operator_add_ok_of_exp x y mode hx hy (by omega) (by omega)
 
 lemma sub_ok (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (hxe : x.exponent_ ≤ 100) (hye : y.exponent_ ≤ 100) :
@@ -235,7 +179,7 @@ lemma iou_add_down_ok (v1 v2 : STAmount) (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCa
     rw [hval]
     have := Number.lower_tight _ m hlo Number.zero (Or.inl rfl) (by rw [Number.toRat_zero]; exact h0)
     rwa [Number.toRat_zero] at this
-  have hneg := Number.negative_false_of_normalized_nonneg n hnn hge
+  have hneg := Number.negative_false_of_nonneg n hnn hge
   have he : n.exponent_ ≤ 77 := by
     by_contra hc
     have hbig : (10 : ℚ) ^ (96 : ℤ) ≤ n.toRat := by

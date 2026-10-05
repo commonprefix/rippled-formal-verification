@@ -113,32 +113,6 @@ namespace XRPL.Model.SingleAssetVault.ClwTight
 
 open XRPL.Model.Protocol
 
-/-- `.to_nearest` `ofNumber` onto an integral type lands within half a unit. -/
-lemma ofNumber_integral_half (nt : NumericType) (n : Number) (result : STAmount)
-    (hnt : nt.isIntegral = true) (hn : n.isNormalized) (hneg : n.negative_ = false)
-    (hok : STAmount.ofNumber nt n .to_nearest = .ok result) :
-    |result.toRat - n.toRat| ≤ 1 / 2 := by
-  unfold STAmount.ofNumber at hok
-  simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false, if_pos hnt] at hok
-  cases hr : n.to_rep .to_nearest with
-  | error e => rw [hr] at hok; exact absurd hok (by simp)
-  | ok intValue =>
-    rw [hr] at hok
-    simp only [] at hok
-    obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range n .to_nearest intValue hneg hr
-    have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
-      toUInt64_toNat_le_maxRep intValue hnn hle
-    have hres : result.toRat = (intValue.toInt : ℚ) := by
-      have hexact := STAmount.canonicalize_integral_toRat
-        (STAmount.unchecked nt intValue.toUInt64 0 false) result .to_nearest
-        (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hnt) rfl
-        hval hok
-      rw [hexact, STAmount.toRat_of_offset_zero _ rfl]
-      show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
-      rw [toUInt64_toNat_of_nonneg intValue hnn]
-    rw [hres]
-    exact Number.to_rep_to_nearest_within_half n intValue hn hneg hr
-
 /-- The packed recovery lies within half a unit of its own last digit of the
 pipeline quotient. -/
 lemma ofNumber_half (nt : NumericType) (n : Number) (result : STAmount)
@@ -152,7 +126,7 @@ lemma ofNumber_half (nt : NumericType) (n : Number) (result : STAmount)
   · obtain ⟨-, hoff, -⟩ := STAmount.ofNumber_integral_facts nt n _ result hint hok
     refine ⟨?_, fun _ => hoff, fun h => absurd hint (by rw [h]; decide)⟩
     rw [show result.exponent = 0 from hoff, zpow_zero, mul_one]
-    exact ofNumber_integral_half nt n result hint hn hneg hok
+    exact STAmount.ofNumber_integral_within_half nt n result hint hn hneg hok
   · have hnt := fractional_of_not_integral nt hint
     subst hnt
     have hz := hfr rfl

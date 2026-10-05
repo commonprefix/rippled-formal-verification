@@ -178,10 +178,10 @@ lemma post_exp_facts (A : Number) (p : STAmount) (e : ℤ)
     rwa [hsnv] at this
   have hsum_norm : sum.isNormalized := by
     rcases hrsum with ⟨n, hn, hv⟩ | ⟨n, hn, hv⟩
-    · exact operator_add_isNormalized_to_nearest' A sn sum hA hsnn hsum
-    · exact operator_add_isNormalized_to_nearest' A sn sum hA hsnn hsum
+    · exact operator_add_isNormalized_to_nearest_sz A sn sum hA hsnn hsum
+    · exact operator_add_isNormalized_to_nearest_sz A sn sum hA hsnn hsum
   have hsum_neg : sum.negative_ = false :=
-    Number.negative_false_of_normalized_nonneg sum hsum_norm (by linarith)
+    Number.negative_false_of_nonneg sum hsum_norm (by linarith)
   have hsum_m : sum.mantissa_ ≠ 0 := by
     intro h; rw [Number.toRat_eq_zero_of_mantissa_zero sum h] at hsum_ge; linarith
   -- the pack is nonzero
@@ -338,7 +338,7 @@ lemma clamp_sum_ge (A : Number) (p c : STAmount) (e : ℤ)
   have hs1neg : s1.negative_ = false := by
     obtain ⟨-, h⟩ := Number.operator_add_downward_nonneg_le A dn s1 hA hdnnorm hA0
       (by rw [hdnval]; linarith) hs1
-    exact Number.negative_false_of_normalized_nonneg s1 hs1n h
+    exact Number.negative_false_of_nonneg s1 hs1n h
   -- the grid point `K·10^e` just below the exact post-sum total
   set t : ℚ := A.toRat + p.toRat with ht
   set K : ℤ := ⌊t / 10 ^ e⌋ with hK

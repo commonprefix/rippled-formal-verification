@@ -34,7 +34,7 @@ private lemma lt_of_rounds (sm : Number) (z b : ℚ) (hr : Number.RoundsToRepres
 /-- A normalized nonnegative `Number` is below `10^19` steps of its exponent. -/
 private lemma lt_pow19 (n : Number) (hn : n.isNormalized) (hn0 : 0 ≤ n.toRat) (hm : n.mantissa_ ≠ 0) :
     n.toRat < (10 : ℚ) ^ (n.exponent_ + 19) := by
-  rw [Number.toRat_of_nonneg n (Number.negative_false_of_normalized_nonneg n hn hn0),
+  rw [Number.toRat_of_nonneg n (Number.negative_false_of_nonneg n hn hn0),
     zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), mul_comm ((10 : ℚ) ^ n.exponent_)]
   exact mul_lt_mul_of_pos_right (by exact_mod_cast (hn.mantissaBounds_nat hm).2)
     (zpow_pos (by norm_num) _)
@@ -111,7 +111,7 @@ lemma clamp_grid_frac (T : Number) (p a : STAmount) (hT : T.isNormalized)
       (by rw [← hste]; exact hpe')
   have hsmn : sm.isNormalized := operator_add_isNormalized T dn' sm .to_nearest hT hdnn hsum hsmz
   obtain ⟨ex, hex, hcase⟩ := WdMono.ofNumber_frac_tn_exp sm st hsmn
-    (Number.negative_false_of_normalized_nonneg sm hsmn hsm0) hsmz hst
+    (Number.negative_false_of_nonneg sm hsmn hsm0) hsmz hst
   have hex3 : sm.exponent_ + 3 ≤ ex := by rcases hex with ⟨h, -⟩ | ⟨h, -⟩ <;> omega
   have hsm19 := lt_pow19 sm hsmn hsm0 hsmz
   rcases hcase with ⟨hexl, -, hst100⟩ | ⟨hexl, hstnz, hstex⟩

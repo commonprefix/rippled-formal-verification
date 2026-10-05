@@ -66,7 +66,6 @@ lemma m_div_thousand_toNat (m : UInt64) :
   rw [UInt64.toNat_div, UInt64.toNat_div, UInt64.toNat_div, uint64_ten_toNat,
       Nat.div_div_eq_div_mul, Nat.div_div_eq_div_mul]
 
-/-! ## Main error bound -/
 /-! ## Facts about `represents` -/
 
 /-- `represents g f` implies `0 ≤ f`. -/

@@ -3,7 +3,6 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.Number
 import XRPL.Properties.Protocol.Number.Common.Constants
 
-
 namespace XRPL.Model.Protocol
 
 /-! # Helper lemmas about `Number.toRat` and absolute-difference reasoning.
@@ -204,7 +203,14 @@ lemma Number.toRat_eq_zero_iff {n : Number} :
     unfold Number.toRat
     rw [if_pos h]
 
-/-- `n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0` — the contrapositive of `toRat_eq_zero_iff`.
+/-- A normalized `Number` is worth zero exactly when it is the canonical zero. -/
+lemma Number.toRat_eq_zero_iff_eq_zero {n : Number} (hn : n.isNormalized) :
+    n.toRat = 0 ↔ n = Number.zero := by
+  constructor
+  · intro h; exact Number.eq_zero_of_mantissa_zero n hn (Number.toRat_eq_zero_iff.mp h)
+  · intro h; rw [h, Number.toRat_zero]
+
+/-- `n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0`, the contrapositive of `toRat_eq_zero_iff`.
 Absorbs the recurring "mantissa is nonzero because the value is nonzero/pos/neg"
 inline blocks: feed it `h.ne'` (from `0 < toRat`), `h.ne` (from `toRat < 0`), or a
 `toRat ≠ 0` directly. -/
@@ -277,7 +283,7 @@ lemma Number.operator_neg_negative_of_ne (n : Number) (hne : n.mantissa_ ≠ 0) 
   rw [if_neg (by rw [hm_bool]; decide)]
 
 /-- `operator_neg` preserves `isNormalized` (for non-zero mantissa, it flips the
-sign bit but keeps the other fields; for zero mantissa, it returns `Number.zero`
+sign bit but keeps the other fields. For zero mantissa, it returns `Number.zero`
 which is normalized by the `n = Number.zero` disjunct). -/
 lemma Number.operator_neg_isNormalized (n : Number) (h : n.isNormalized) :
     n.operator_neg.isNormalized := by
@@ -293,7 +299,7 @@ lemma Number.operator_neg_isNormalized (n : Number) (h : n.isNormalized) :
       refine ⟨h1, h2, h3, h4, h5⟩
 
 /-- `Number.operator_neg` negates the rational value. For a non-zero mantissa, the
-sign bit is flipped; for zero mantissa it returns `Number.zero` which has `toRat = 0`. -/
+sign bit is flipped. For zero mantissa it returns `Number.zero` which has `toRat = 0`. -/
 lemma Number.toRat_neg (n : Number) : n.operator_neg.toRat = -n.toRat := by
   unfold Number.operator_neg
   by_cases hm : n.mantissa_ == 0
@@ -337,5 +343,14 @@ lemma neg_neg_of_mant_ne {y : Number} (hy_mant_ne : y.mantissa_ ≠ 0) :
 lemma sub_eq_add_neg_toRat (x y : Number) :
     x.toRat - y.toRat = x.toRat + y.operator_neg.toRat := by
   rw [Number.toRat_neg]; ring
+
+/-- A normalized nonnegative `Number` has a clear sign bit. -/
+lemma Number.negative_false_of_nonneg (n : Number) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat) :
+    n.negative_ = false := by
+  by_contra hb
+  have hb' : n.negative_ = true := by simpa using hb
+  have hle := Number.toRat_nonpos_of_negative n hb'
+  have hm0 : n.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp (le_antisymm hle h0)
+  rw [Number.eq_zero_of_mantissa_zero n hn hm0] at hb'; exact absurd hb' (by decide)
 
 end XRPL.Model.Protocol

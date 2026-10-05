@@ -257,4 +257,28 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
     | .error e => rfl
     | .ok sumI => rfl
 
+/-- `roundToExponent` returns an integral amount, a zero amount, or an amount
+whose exponent is already at or above `s` unchanged. -/
+lemma STAmount.roundToExponent_eq_self (value : STAmount) (s : Int) (mode : rounding_mode)
+    (h : value.integral = true ∨ value.isZero = true ∨ s ≤ value.exponent) :
+    value.roundToExponent s mode = .ok value := by
+  unfold STAmount.roundToExponent
+  by_cases hi : value.integral = true
+  · rw [if_pos hi]
+  · rw [if_neg hi]
+    by_cases hz : value.isZero = true
+    · rw [if_pos hz]
+    · rw [if_neg hz]
+      rcases h with h | h | h
+      · exact absurd h hi
+      · exact absurd h hz
+      · rw [if_pos h]
+
+/-- The same, read from a successful `roundToExponent`: the result is the amount. -/
+lemma STAmount.roundToExponent_ok_eq_self (value r : STAmount) (s : Int) (mode : rounding_mode)
+    (h : value.integral = true ∨ value.isZero = true ∨ s ≤ value.exponent)
+    (hok : value.roundToExponent s mode = .ok r) : r = value := by
+  rw [STAmount.roundToExponent_eq_self value s mode h, Except.ok.injEq] at hok
+  exact hok.symm
+
 end XRPL.Model.Protocol

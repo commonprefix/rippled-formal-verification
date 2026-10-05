@@ -89,43 +89,6 @@ lemma price_reduces (v : Vault) (s p : STAmount) (w : Bool)
     | exact ⟨_, ‹_›, Or.inl ⟨beq_iff_eq.mp ‹_›, rfl⟩⟩
     | exact ⟨_, ‹_›, Or.inr ⟨fun h => ‹¬ _› (beq_iff_eq.mpr h), _, _, _, ‹_›, ‹_›, ‹_›, ‹_›⟩⟩
 
-private lemma doNormalize_zero_shape (neg : Bool) (m : UInt64) (e : Int) (minM maxM : UInt64)
-    (mode : rounding_mode) (result : Number)
-    (hok : doNormalize neg m e minM maxM mode = .ok result) (h0 : result.mantissa_ = 0) :
-    result = Number.zero := by
-  unfold doNormalize at hok
-  by_cases hm : (m == 0) = true
-  · rw [if_pos hm] at hok; exact (Except.ok.inj hok).symm
-  rw [if_neg hm] at hok
-  simp only [] at hok
-  rcases hsu : doNormalize_scaleUp minM m e with ⟨m₁, e₁⟩
-  rw [hsu] at hok
-  simp only [] at hok
-  cases hsd : doNormalize_scaleDown maxM m₁ e₁
-      (if neg then Guard.new.set_negative else Guard.new) with
-  | error err => rw [hsd] at hok; simp at hok
-  | ok sd =>
-    obtain ⟨m₂, e₂, g₂⟩ := sd
-    rw [hsd] at hok
-    simp only [] at hok
-    by_cases hund : (e₂ < minExponent || m₂ < minM) = true
-    · rw [if_pos hund] at hok; exact (Except.ok.inj hok).symm
-    · rw [if_neg hund] at hok
-      cases hcap : doNormalize_capAtMaxRep m₂ e₂ g₂ with
-      | error err => rw [hcap] at hok; simp at hok
-      | ok cp =>
-        obtain ⟨m₃, e₃, g₃⟩ := cp
-        rw [hcap] at hok
-        simp only [] at hok
-        cases hru : g₃.doRoundUp neg m₃ e₃ minM maxM mode .normalize2 with
-        | error err => rw [hru] at hok; simp at hok
-        | ok res =>
-          rw [hru] at hok
-          simp only [] at hok
-          have hres : result = res.toNumber := (Except.ok.inj hok).symm
-          rw [hres] at h0 ⊢
-          exact Guard.doRoundUp_zero_shape g₃ neg m₃ e₃ minM maxM mode .normalize2 res hru h0
-
 /-- A zero-mantissa product of normalized operands is the literal zero. -/
 lemma mul_zero_shape (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -166,7 +129,7 @@ lemma div_zero_shape (x y result : Number) (mode : rounding_mode)
     rw [← hxz]; exact (Except.ok.inj hok).symm
   obtain ⟨M, ze', δ, zn, sticky, _, _, _, _, _, _, _, hok128, _, _, _⟩ :=
     operator_div_algorithmic_facts_represents x y result mode hx hy hxm hym hok
-  exact doNormalize128_zero_shape _ _ _ _ _ result hok128 h0
+  exact doNormalize128_zero_shape_sz _ _ _ _ _ result hok128 h0
 
 lemma mul_norm (x y result : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y .to_nearest = .ok result) : result.isNormalized := by
@@ -194,9 +157,9 @@ lemma nav_facts (v : Vault) (w : Bool) (nav : Number)
   subst hnv
   refine ⟨?_, ?_, hval⟩
   · cases w
-    · exact operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm
+    · exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
         v.wf.lossUnrealized_norm hsub
-    · exact operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub
+    · exact operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm (Or.inl rfl) hsub
   · rw [hval]
     cases w
     · exact v.exact.withdraw_nav_nonneg
@@ -207,7 +170,7 @@ private lemma zero_amount_toNumber (r : STAmount) (hz : r.mValue = 0)
     ∀ pn, r.toNumber .to_nearest = .ok pn → pn.isNormalized ∧ pn.toRat = r.toRat := by
   intro pn hpn
   by_cases hint : r.mNumericType.isIntegral = true
-  · obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_integral_exact' r .to_nearest hint
+  · obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_offset_zero_exact r .to_nearest hint
       (hoff hint) (by rw [hz]; exact Nat.zero_le _)
     rw [Except.ok.inj (hpn.symm.trans hsn)]; exact ⟨hnorm, hval⟩
   · rw [STAmount.toNumber_zero_fractional r .to_nearest (by simpa using hint : r.mNumericType.isIntegral = false) hz] at hpn
@@ -390,7 +353,7 @@ lemma price_mono (v : Vault) (w : Bool) (s₁ s₂ p₁ p₂ : STAmount)
     linarith [hσST, hlt]
   have hANn₂ := div_norm NV₂ v.sharesTotal aN₂ hNVn₂ v.wf.sharesTotal_norm hdiv₂
   have hneg : ∀ n : Number, n.isNormalized → 0 ≤ n.toRat → n.negative_ = false :=
-    fun n hn h0 => Number.negative_false_of_normalized_nonneg n hn h0
+    fun n hn h0 => Number.negative_false_of_nonneg n hn h0
   have haNle : aN₁.toRat ≤ aN₂.toRat :=
     Number.mul_div_num_mono nav v.sharesTotal sn₁ sn₂ NV₁ NV₂ aN₁ aN₂
       hnavn hnavm (hneg nav hnavn hnav0) v.wf.sharesTotal_norm hSTm

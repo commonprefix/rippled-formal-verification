@@ -152,7 +152,7 @@ lemma price_cases (v : Vault) (sh p : STAmount) (w : Bool)
   cases w <;>
     simp only [Vault.sharesToAssetsWithdraw, lossOp, bind, Except.bind, pure, Except.pure] at hok ⊢ <;>
     walk_ok
-  all_goals refine ⟨_, ‹_›, operator_sub_isNormalized_to_nearest' _ _ _ v.wf.assetsTotal_norm
+  all_goals refine ⟨_, ‹_›, operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsTotal_norm
       ?_ ‹_›, ?_⟩
   all_goals first
     | exact v.wf.lossUnrealized_norm

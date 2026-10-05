@@ -4,14 +4,16 @@ import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
 import XRPL.Properties.Vault.Common.CmpFaithfulCanonical
 import XRPL.Properties.Vault.Proofs.Support.NormalizeFacts
+import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberBoundary
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberFacts
+import XRPL.Properties.Protocol.Common.Reduction
 
 /-! # `STAmount` facts
 
 Facts about `STAmount`: the fractional (IOU) `ofNumber` and `canonicalize`, grids, zero records. -/
 
 namespace XRPL.Model.Protocol
-
-open XRPL.Model.SingleAssetVault (bind_ok_peel)
 
 /-- `operator_neg` only touches the sign bit. -/
 lemma STAmount.operator_neg_fields (s : STAmount) :
@@ -101,82 +103,6 @@ lemma STAmount.toNumber_zero_facts (s : STAmount) (mode : rounding_mode) (n : Nu
   have hsv : s.toRat = 0 := by rw [STAmount.toRat_signed, hz]; simp
   rw [STAmount.toNumber_zero_eq s mode n hz hok, Number.toRat_zero, hsv]
   exact ⟨rfl, Or.inl rfl⟩
-
-/-- **Core success shape of a nonzero fractional `ofNumber`.** The result is a
-canonical 16-digit IOU record and the source exponent obeys `r.exponent_ + 4 ≤
-maxExponent`. -/
-lemma STAmount.ofNumber_iou_ok_facts (r : Number) (mode : rounding_mode) (result : STAmount)
-    (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
-    (hre_lo : minExponent ≤ r.exponent_)
-    (hok : STAmount.ofNumber .fractional r mode = .ok result) (hresult : result.mValue ≠ 0) :
-    result.IOUCanonical ∧ r.exponent_ + 4 ≤ maxExponent := by
-  have hr_ne : r.mantissa_ ≠ 0 := by intro h; rw [h] at hr_lo; simp at hr_lo
-  have hmne : (r.mantissa_ != 0) = true := by simp [hr_ne]
-  have hneg_eq : decide (r.signum < 0) = r.negative_ := by
-    unfold Number.signum
-    rcases hrn : r.negative_ with _ | _ <;>
-      simp only [hmne, if_true, if_false, Bool.false_eq_true] <;> decide
-  set neg : Bool := decide (r.signum < 0) with hneg_def
-  set working : Number := if neg then r.operator_neg else r with hw_def
-  have hw_mant : working.mantissa_ = r.mantissa_ := by
-    rw [hw_def]; rcases neg with _ | _
-    · simp
-    · simp [Number.operator_neg_mantissa_of_ne r hr_ne]
-  have hw_exp : working.exponent_ = r.exponent_ := by
-    rw [hw_def]; rcases neg with _ | _
-    · simp
-    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hr_ne)]
-  have hw_neg : working.negative_ = false := by
-    rw [hw_def, hneg_eq]
-    by_cases hrn : r.negative_ = true
-    · rw [if_pos hrn, Number.operator_neg_negative_of_ne r hr_ne]; simp [hrn]
-    · rw [if_neg hrn]; simpa using hrn
-  have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hr_lo
-  have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hr_hi
-  have hwe_lo : minExponent ≤ working.exponent_ := by rw [hw_exp]; exact hre_lo
-  unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
-  cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
-  | error e => rw [hnorm] at hok; exact absurd hok (by simp)
-  | ok me =>
-    obtain ⟨mant, exp⟩ := me
-    rw [hnorm] at hok
-    simp only at hok
-    have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
-    have hexp_hi3 : working.exponent_ + 3 ≤ maxExponent :=
-      normalizeToRange_iou_exp_hi working mode mant exp hw_lo hw_hi hnorm'
-    obtain ⟨⟨hmlo, hmhi⟩, ⟨hexp_lo3, hexp_le⟩, hsgn⟩ :=
-      normalizeToRange_iou_ok_facts working mode mant exp hw_lo hw_hi (by omega) hexp_hi3 hnorm'
-    have hmant_pos : 0 ≤ mant.toInt := hsgn.1 hw_neg
-    have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
-      have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
-    have hmtu_lo : 10 ^ 15 ≤ mant.toUInt64.toNat := by
-      rw [← hmant_natAbs]; have := hmlo; rw [(by decide : cMinValue.toNat = 10 ^ 15)] at this
-      exact this
-    have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
-      rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
-      omega
-    obtain ⟨hexp_lo80, hexp_hi80, hres_eq⟩ :=
-      STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
-        hmtu_lo hmtu_hi (by omega) hexp_le result hok hresult
-    refine ⟨?_, ?_⟩
-    · rw [hres_eq]; exact ⟨rfl, hmtu_lo, hmtu_hi, hexp_lo80, hexp_hi80⟩
-    · rw [hw_exp] at hexp_lo3
-      have hme : maxExponent = 32768 := rfl
-      omega
-
-/-- **Lemma 2: fractional `ofNumber` output is `IOUCanonical`-or-zero.** Every
-`.ok` fractional `ofNumber` yields a canonical 16-digit record or a zero-mantissa
-record, so `toNumber` is value-faithful on it without a separate 16-digit
-hypothesis. -/
-lemma STAmount.ofNumber_iou_canonical_or_zero (r : Number) (mode : rounding_mode) (result : STAmount)
-    (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
-    (hre_lo : minExponent ≤ r.exponent_)
-    (hok : STAmount.ofNumber .fractional r mode = .ok result) :
-    result.IOUCanonical ∨ result.mValue = 0 := by
-  by_cases hz : result.mValue = 0
-  · exact Or.inr hz
-  · exact Or.inl (STAmount.ofNumber_iou_ok_facts r mode result hr_lo hr_hi hre_lo hok hz).1
 
 lemma STAmount.canonicalize_signtrue_nonpos (s result : STAmount) (mode : rounding_mode)
     (hfr : s.mNumericType = .fractional) (hneg : s.mIsNegative = true)
@@ -277,17 +203,6 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
         · exact absurd (hiff.mpr hm0) hne
         · rw [hexp]; exact h
 
-/-- **Lemma 1: success bounds the source exponent away from `maxExponent`.**
-Discharges the `hre_hi` (`r.exponent_ + 4 ≤ maxExponent`) side condition of the
-delivered IOU `ofNumber` rounding lemmas (`ofNumber_iou_within_ulp`,
-`_within_half_ulp`, `_rounds_within`, `_snap_pos`) from success of the run. -/
-lemma STAmount.ofNumber_iou_success_exp_range (r : Number) (mode : rounding_mode) (result : STAmount)
-    (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
-    (hre_lo : minExponent ≤ r.exponent_)
-    (hok : STAmount.ofNumber .fractional r mode = .ok result) (hresult : result.mValue ≠ 0) :
-    r.exponent_ + 4 ≤ maxExponent :=
-  (STAmount.ofNumber_iou_ok_facts r mode result hr_lo hr_hi hre_lo hok hresult).2
-
 /-- `toNumber` is value-exact and normalized on any deposit-ready amount. -/
 lemma STAmount.toNumber_canonical_exact (s : STAmount) (mode : rounding_mode)
     (hc : s.Canonical) :
@@ -341,48 +256,6 @@ lemma STAmount.Canonical.abs_toRat_ge (s : STAmount) (hc : s.Canonical)
       _ ≤ (s.mValue.toNat : ℚ) * 10 ^ s.mOffset := by
           exact mul_le_mul_of_nonneg_right (by exact_mod_cast hio.mant_lo) (le_of_lt h10)
 
-/-- `STAmount.canonicalize` on a fractional record: the output offset is the
-canonical zero offset (`-100`) or within the clamped IOU range `[-96, 80]`. -/
-lemma STAmount.canonicalize_fractional_offset (s result : STAmount) (mode : rounding_mode)
-    (hfr : s.mNumericType = .fractional)
-    (hok : s.canonicalize mode = .ok result) :
-    result.mOffset = -100 ∨ ((-96 : ℤ) ≤ result.mOffset ∧ result.mOffset ≤ 80) := by
-  have hint : ¬ s.integral = true := by
-    unfold STAmount.integral; rw [hfr]; decide
-  unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
-    unfold STAmount.iou; rw [if_neg hint]
-  rw [hiou] at hok
-  cases hone : IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode with
-  | error e => rw [hone] at hok; exact absurd hok (by simp)
-  | ok i =>
-    rw [hone] at hok
-    simp only [] at hok
-    have heq := Except.ok.inj hok
-    have hres : result.mOffset = i.exponent_ := by rw [← heq]
-    rw [hres]
-    exact IOUAmount.ofMantissaExp_exponent_cases _ _ mode i hone
-
-/-- `STAmount.ofNumber` on a fractional asset: the output offset is `-100` (zero)
-or within `[-96, 80]`. -/
-lemma STAmount.ofNumber_fractional_offset (nt : NumericType) (n : Number) (mode : rounding_mode)
-    (a : STAmount) (hnt : nt = .fractional)
-    (hok : STAmount.ofNumber nt n mode = .ok a) :
-    a.mOffset = -100 ∨ ((-96 : ℤ) ≤ a.mOffset ∧ a.mOffset ≤ 80) := by
-  subst hnt
-  unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ NumericType.fractional.isIntegral = true)] at hok
-  cases hnr : (if decide (n.signum < 0) = true then n.operator_neg else n).normalizeToRange
-      kMinValue kMaxValue mode with
-  | error e => rw [hnr] at hok; exact absurd hok (by simp)
-  | ok me =>
-    obtain ⟨m', e'⟩ := me
-    rw [hnr] at hok
-    simp only [] at hok
-    rw [STAmount.checked] at hok
-    exact STAmount.canonicalize_fractional_offset _ a mode rfl hok
-
 /-- The vault `exponent` helper on a fractional asset returns `-100` (zero) or a
 clamped IOU offset in `[-96, 80]`. -/
 lemma exponent_fractional_offset (n : Number) (e : Int)
@@ -395,67 +268,13 @@ lemma exponent_fractional_offset (n : Number) (e : Int)
   rw [← heq]
   exact STAmount.ofNumber_fractional_offset .fractional n .to_nearest a rfl ha
 
-/-- **A `.fractional` `checked` landing on a zero mantissa forces the exponent below
-`cMinOffset`.** On a canonical 16-digit mantissa the fractional `checked` reproduces
-the record when the exponent sits in `[cMinOffset, cMaxOffset]` and errors above it,
-so an `.ok` zero result can only come from `exp < cMinOffset`. -/
-lemma STAmount.checked_iou_zero_exp (mant : UInt64) (exp : Int) (neg : Bool) (mode : rounding_mode)
-    (h_lo : 10 ^ 15 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 16)
-    (he_lo : minExponent + 3 ≤ exp) (he_hi : exp ≤ maxExponent)
-    (result : STAmount)
-    (hok : STAmount.checked .fractional mant exp neg mode = .ok result)
-    (hz : result.mValue = 0) :
-    exp < cMinOffset := by
-  by_contra hnlt
-  push Not at hnlt
-  have h_fit : mant.toNat < 2 ^ 63 := by omega
-  have hint : ¬ (STAmount.unchecked .fractional mant exp neg).integral = true := by
-    simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
-  have h_sd : (STAmount.unchecked .fractional mant exp neg).signedDrops.toInt64
-      = if neg then -mant.toInt64 else mant.toInt64 := by
-    apply Int64.toInt_inj.mp
-    rw [STAmount.signedDrops_toInt64_toInt _
-          (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat < 10 ^ 16 from h_hi),
-        signed_mantissa_toInt neg mant h_fit]
-    show (STAmount.unchecked .fractional mant exp neg).signedDrops = _
-    unfold STAmount.signedDrops STAmount.unchecked
-    rcases neg <;> simp
-  have hiou : (STAmount.unchecked .fractional mant exp neg).iou mode
-      = (if exp > cMaxOffset then .error .overflow
-         else if exp < cMinOffset then .ok IOUAmount.zero
-         else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg hint]
-    unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
-    exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
-  by_cases hhi : exp > cMaxOffset
-  · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
-      rw [STAmount.checked]; unfold STAmount.canonicalize
-      rw [if_neg hint, hiou, if_pos hhi]
-    rw [hb] at hok; simp at hok
-  · have hexp_lo : (-96 : ℤ) ≤ exp := by unfold cMinOffset at hnlt; exact hnlt
-    have hexp_hi : exp ≤ 80 := by unfold cMaxOffset at hhi; omega
-    have hc : (⟨.fractional, mant, exp, neg⟩ : STAmount).IOUCanonical :=
-      ⟨rfl, h_lo, h_hi, hexp_lo, hexp_hi⟩
-    have hcid := STAmount.canonicalize_canonical_id ⟨.fractional, mant, exp, neg⟩ mode hc
-    rw [STAmount.checked,
-        show STAmount.unchecked .fractional mant exp neg = (⟨.fractional, mant, exp, neg⟩ : STAmount) from rfl,
-        hcid] at hok
-    have hres : result = ⟨.fractional, mant, exp, neg⟩ := (Except.ok.inj hok).symm
-    rw [hres] at hz
-    simp only [] at hz
-    rw [hz] at h_lo
-    simp at h_lo
-
 /-- **A fractional `ofNumber` (any mode) that lands on zero came from a source
 below the smallest positive IOU value `10⁻⁸¹`.** The exponent-underflow flush to
 zero happens in the `checked`/`iou`/`normalize` stage on the sub-`cMinOffset`
 exponent, independent of the rounding mode: the 16-digit `normalizeToRange` output
 sits below `cMinOffset`, so the 19-digit source exponent is `≤ -100` and its
-mantissa keeps the value under `10¹⁹·10⁻¹⁰⁰ = 10⁻⁸¹`. Mode-generic companion of
-`ofNumber_fractional_zero_below_min`; the deposit charge snaps upward, so it needs
-the `.upward` instance. -/
+mantissa keeps the value under `10¹⁹·10⁻¹⁰⁰ = 10⁻⁸¹`. Same statement as
+`ofNumber_fractional_zero_below_min`, used by the deposit charge, which snaps upward. -/
 lemma STAmount.ofNumber_iou_zero_below_min (nt : NumericType) (n : Number)
     (mode : rounding_mode) (result : STAmount) (hnt : nt.isIntegral = false)
     (hn : n.isNormalized) (hneg : n.negative_ = false) (hnz : n.mantissa_ ≠ 0)
@@ -499,7 +318,7 @@ lemma STAmount.ofNumber_iou_zero_below_min (nt : NumericType) (n : Number)
       rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
     have hexp_zero : exp < cMinOffset :=
-      STAmount.checked_iou_zero_exp mant.toUInt64 exp false mode
+      STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp false mode
         hmtu_lo hmtu_hi (by omega) hexp_le result hok hz
     have hexp_n : n.exponent_ ≤ -100 := by unfold cMinOffset at hexp_zero; omega
     rw [Number.toRat_of_nonneg n hneg]
@@ -521,54 +340,6 @@ lemma STAmount.operator_gt_false_le (lhs rhs : STAmount) (h : STAmount.CmpFaithf
     (hgt : lhs.operator_gt rhs = .ok false) : lhs.toRat ≤ rhs.toRat := by
   rw [STAmount.operator_gt_eq lhs rhs h, Except.ok.injEq, decide_eq_false_iff_not, not_lt] at hgt
   exact hgt
-
-/-- **A sign-cleared `Number` source rounds to a nonnegative `ofNumber` output**
-(any mode, any numeric type). Local re-derivation of the boundary fact: integral
-outputs floor a nonnegative `to_rep`; fractional outputs snap a nonnegative
-16-digit mantissa. -/
-lemma STAmount.ofNumber_signfalse_nonneg (nt : NumericType) (n : Number) (mode : rounding_mode)
-    (result : STAmount) (hn : n.isNormalized) (hneg : n.negative_ = false)
-    (hok : STAmount.ofNumber nt n mode = .ok result) : 0 ≤ result.toRat := by
-  by_cases hint : nt.isIntegral = true
-  · unfold STAmount.ofNumber at hok
-    simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false, if_pos hint] at hok
-    cases hr : n.to_rep mode with
-    | error e => rw [hr] at hok; exact absurd hok (by simp)
-    | ok intValue =>
-      rw [hr] at hok
-      simp only [] at hok
-      obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range n mode intValue hneg hr
-      have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
-        toUInt64_toNat_le_maxRep intValue hnn hle
-      have hres_val : result.toRat = (intValue.toInt : ℚ) := by
-        have hexact := STAmount.canonicalize_integral_toRat
-          (STAmount.unchecked nt intValue.toUInt64 0 false) result mode
-          (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hint) rfl
-          hval hok
-        rw [hexact, STAmount.toRat_of_offset_zero _ rfl]
-        show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
-        rw [toUInt64_toNat_of_nonneg intValue hnn]
-      rw [hres_val]; exact_mod_cast hnn
-  · have hnt_frac : nt = .fractional := by
-      cases nt with
-      | fractional => rfl
-      | integral mv mo ms msh => simp [NumericType.isIntegral] at hint
-    by_cases hz : result.mValue = 0
-    · rw [STAmount.toRat_signed, hz]; simp
-    · have hn_ne : n.mantissa_ ≠ 0 :=
-        STAmount.ofNumber_iou_mantissa_ne_zero nt n mode result hnt_frac hok hz
-      obtain ⟨hlo19, hhi19⟩ := hn.mantissaBounds_nat hn_ne
-      have hexp_lo : minExponent ≤ n.exponent_ := by
-        rcases hn with h0 | ⟨_, _, _, hlo, _⟩
-        · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hn_ne
-        · exact hlo
-      have hok' : STAmount.ofNumber .fractional n mode = .ok result := by rw [← hnt_frac]; exact hok
-      have hexp_hi : n.exponent_ + 4 ≤ maxExponent :=
-        STAmount.ofNumber_iou_success_exp_range n mode result hlo19 hhi19 hexp_lo hok' hz
-      obtain ⟨mant, exp, -, hval, -, hcast, -, -, -, -⟩ :=
-        STAmount.ofNumber_iou_snap_pos nt n mode result hnt_frac hneg
-          hlo19 hhi19 hexp_lo hexp_hi hok hz
-      rw [hval, hcast]; positivity
 
 /-- A nonzero canonical amount (fractional or integral) is at least `10 ^ (-81)`
 in magnitude. -/
@@ -604,8 +375,7 @@ the smallest positive IOU value `10⁻⁸¹`.** The `.downward` snap of a normal
 sign-cleared nonzero `Number` floors to zero exactly when its value is below the grid
 minimum `cMinValue · 10^cMinOffset = 10⁻⁸¹`: the 16-digit `normalizeToRange` exponent
 runs below `cMinOffset`, so the source exponent is `≤ -100` and its 19-digit mantissa
-keeps the value under `10¹⁹ · 10⁻¹⁰⁰ = 10⁻⁸¹`. Fractional companion of
-`ofNumber_integral_zero_floor`. -/
+keeps the value under `10¹⁹ · 10⁻¹⁰⁰ = 10⁻⁸¹`. -/
 lemma STAmount.ofNumber_fractional_zero_below_min (nt : NumericType) (n : Number)
     (result : STAmount) (mode : rounding_mode) (hnt : nt.isIntegral = false)
     (hn : n.isNormalized) (hneg : n.negative_ = false) (hnz : n.mantissa_ ≠ 0)
@@ -649,7 +419,7 @@ lemma STAmount.ofNumber_fractional_zero_below_min (nt : NumericType) (n : Number
       rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
     have hexp_zero : exp < cMinOffset :=
-      STAmount.checked_iou_zero_exp mant.toUInt64 exp false mode hmtu_lo hmtu_hi
+      STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp false mode hmtu_lo hmtu_hi
         (by omega) hexp_le result hok hz
     have hexp_n : n.exponent_ ≤ -100 := by unfold cMinOffset at hexp_zero; omega
     rw [Number.toRat_of_nonneg n hneg]
@@ -663,77 +433,6 @@ lemma STAmount.ofNumber_fractional_zero_below_min (nt : NumericType) (n : Number
       apply zpow_le_zpow_right₀ (by norm_num)
       omega
     linarith [hstep, hle2]
-
-/-- Signed-integer-times-grid-step form of `STAmount.toRat`. -/
-lemma STAmount.exists_int_grid (a : STAmount) :
-    ∃ z : ℤ, a.toRat = (z : ℚ) * 10 ^ a.exponent := by
-  refine ⟨if a.mIsNegative then -(a.mValue.toNat : ℤ) else (a.mValue.toNat : ℤ), ?_⟩
-  rw [STAmount.toRat_signed]
-  show _ = _ * (10 : ℚ) ^ a.mOffset
-  rcases h : a.mIsNegative with _ | _ <;> simp
-
-/-- Any `STAmount` sits on its own exponent grid: the trivial `.downward` floor
-equation at `s = a.exponent`. -/
-lemma STAmount.self_grid (a : STAmount) :
-    RoundsToRepresentableAt a a.toRat a.exponent .downward := by
-  show a.toRat = (⌊a.toRat / 10 ^ a.exponent⌋ : ℚ) * 10 ^ a.exponent
-  obtain ⟨z, hval⟩ := STAmount.exists_int_grid a
-  have h10 : ((10 : ℚ) ^ a.exponent) ≠ 0 := zpow_ne_zero _ (by norm_num)
-  have hdiv : a.toRat / 10 ^ a.exponent = (z : ℚ) := by
-    rw [hval]; field_simp
-  rw [hdiv, Int.floor_intCast, ← hval]
-
-/-- A nonzero `STAmount` is at least one step of its own grid. -/
-lemma STAmount.ulp_le_abs_toRat (a : STAmount) (h : a.mValue ≠ 0) :
-    (10 : ℚ) ^ a.exponent ≤ |a.toRat| := by
-  rw [STAmount.abs_toRat]
-  show (10 : ℚ) ^ a.mOffset ≤ _
-  have hnat : a.mValue.toNat ≠ 0 := by
-    intro h0
-    exact h (by rw [← UInt64.toNat_inj] at *; exact h0)
-  have h1 : (1 : ℚ) ≤ (a.mValue.toNat : ℚ) := by exact_mod_cast Nat.one_le_iff_ne_zero.mpr hnat
-  nlinarith [zpow_pos (show (0 : ℚ) < 10 by norm_num) a.mOffset]
-
-/-- A nonzero-mantissa `STAmount` has nonzero value. -/
-lemma STAmount.toRat_ne_zero (a : STAmount) (h : a.mValue ≠ 0) : a.toRat ≠ 0 := by
-  intro h0
-  have hle := STAmount.ulp_le_abs_toRat a h
-  rw [h0, abs_zero] at hle
-  exact absurd hle (not_le.mpr (zpow_pos (by norm_num) _))
-
-/-- **`canonicalize` of a sign-cleared fractional source is nonnegative.** The
-`iou`/`ofMantissaExp`/`normalize` snap preserves the cleared sign
-(`normalize_mantissa_nonneg`), so the packed record is nonnegative. Needs only
-that the stored magnitude fits `Int64` (`< 2^63`), not the canonical `10^16`
-window, so it covers small first-deposit mantissas. -/
-lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : rounding_mode)
-    (hfr : s.mNumericType = .fractional) (hneg : s.mIsNegative = false)
-    (hfit : s.mValue.toNat < 2 ^ 63)
-    (hok : s.canonicalize mode = .ok result) :
-    0 ≤ result.toRat := by
-  have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
-  unfold STAmount.canonicalize at hok
-  rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
-    unfold STAmount.iou; rw [if_neg hint]
-  rw [hiou] at hok
-  have hsd_nn : 0 ≤ s.signedDrops.toInt64.toInt := by
-    rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
-    unfold STAmount.signedDrops; rw [hneg]; simp
-  cases hone : IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode with
-  | error e => rw [hone] at hok; exact absurd hok (by simp)
-  | ok i =>
-    rw [hone] at hok
-    simp only [] at hok
-    have hi_nn : 0 ≤ i.mantissa_.toInt :=
-      IOUAmount.normalize_mantissa_nonneg s.signedDrops.toInt64 s.mOffset mode i hsd_nn hone
-    have hneg_false : decide (i.signum < 0) = false := by
-      rw [decide_eq_false_iff_not, IOUAmount.signum_neg_iff, Int64.lt_iff_toInt_lt]
-      have h0 : (0 : Int64).toInt = 0 := by decide
-      omega
-    have heq := Except.ok.inj hok
-    have hcneg : result.mIsNegative = false := by rw [← heq]; exact hneg_false
-    rw [STAmount.toRat_of_nonneg result hcneg]; positivity
 
 /-- `ofIOUAmount` of the zero `IOUAmount` is the canonical zero record. (The version
 in `RoundToScale.Common.Proofs` is `private`, so it is reproven here.) -/

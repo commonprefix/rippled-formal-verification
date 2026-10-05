@@ -1,4 +1,7 @@
 import XRPL.Properties.Vault.Proofs.Support.STAmountFacts
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberFacts
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberTotality
 
 /-! # Integral amounts
 
@@ -6,93 +9,6 @@ Facts about integral `STAmount`s: `canonicalize`, `ofNumber` and `toNumber` on i
 amounts. -/
 
 namespace XRPL.Model.Protocol
-
-/-- **Forward totality of the integral `STAmount.canonicalize`.** An offset-`0`,
-sign-cleared integral record whose magnitude fits both `maxRep` and the numeric
-type's carried bound canonicalizes without error: the nested `to_rep` succeeds by
-`Number.to_rep_ok_of_nonneg_exp_nonpos` (offset `0`, so its own adjusted exponent is
-nonpositive), and the resulting magnitude, still within `maxRep`, clears the
-type's `maxValue` check. -/
-lemma STAmount.canonicalize_integral_ok (s : STAmount) (mode : rounding_mode)
-    (hint : s.integral = true) (hoff : s.mOffset = 0) (hsneg : s.mIsNegative = false)
-    (hv : s.mValue.toNat ≤ maxRep.toNat) (hvmax : maxRep.toNat ≤ s.mNumericType.maxValue.toNat)
-    (hmaxoff : (0 : Int) ≤ s.mNumericType.maxOffset) :
-    ∃ result, s.canonicalize mode = .ok result := by
-  rw [STAmount.canonicalize, if_pos hint]
-  by_cases hz : (s.mValue == 0 || decide (s.mOffset ≤ -20)) = true
-  · exact ⟨_, by rw [if_pos hz]⟩
-  · rw [if_neg hz,
-        if_neg (show ¬ s.mOffset > s.mNumericType.maxOffset from by rw [hoff]; omega)]
-    simp only [IntAmount.ofNumber]
-    obtain ⟨r2, hr2⟩ := Number.to_rep_ok_of_nonneg_exp_nonpos
-      (Number.unchecked s.mIsNegative s.mValue s.mOffset) mode
-      (show (Number.unchecked s.mIsNegative s.mValue s.mOffset).negative_ = false from hsneg)
-      (show (Number.unchecked s.mIsNegative s.mValue s.mOffset).exponent ≤ 0 from by
-        unfold Number.exponent
-        rw [if_neg (show ¬ (Number.unchecked s.mIsNegative s.mValue s.mOffset).mantissa_ > maxRep
-          from by show ¬ s.mValue > maxRep; rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]; omega)]
-        exact le_of_eq hoff)
-    rw [hr2]
-    simp only []
-    have hr2rng := Number.to_rep_nonneg_range
-      (Number.unchecked s.mIsNegative s.mValue s.mOffset) mode r2 hsneg hr2
-    rw [if_neg (show ¬ r2.toInt.natAbs.toUInt64 > s.mNumericType.maxValue from by
-      rw [gt_iff_lt, UInt64.lt_iff_toNat_lt]
-      have habs : (r2.toInt.natAbs : ℤ) = r2.toInt := Int.natAbs_of_nonneg hr2rng.1
-      have habs_le : r2.toInt.natAbs ≤ maxRep.toNat := by
-        have : (r2.toInt.natAbs : ℤ) ≤ (maxRep.toNat : ℤ) := by rw [habs]; exact hr2rng.2
-        exact_mod_cast this
-      have hlt64 : r2.toInt.natAbs < 2 ^ 64 := by
-        have : maxRep.toNat < 2 ^ 64 := by rw [maxRep_val]; norm_num
-        omega
-      rw [UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hlt64)]
-      omega)]
-    exact ⟨_, rfl⟩
-
-/-- **Forward totality of the integral `STAmount.ofNumber`.** A normalized,
-nonnegative `Number` whose value fits `2 ^ 63 - 1` converts into any integral
-numeric type whose carried `maxValue` covers `maxRep` and whose `maxOffset` is
-nonnegative. The sign flag resolves to `false`, `to_rep` succeeds (its adjusted
-exponent is nonpositive by `Number.exponent_fn_le_zero_of_cap`), and the repack
-`checked` canonicalizes without error. -/
-lemma STAmount.ofNumber_integral_ok_of_cap (nt : NumericType) (n : Number)
-    (mode : rounding_mode) (hnt : nt.isIntegral = true)
-    (hmaxval : maxRep.toNat ≤ nt.maxValue.toNat) (hmaxoff : (0 : Int) ≤ nt.maxOffset)
-    (hnorm : n.isNormalized) (hneg : n.negative_ = false) (hcap : n.toRat ≤ 2 ^ 63 - 1) :
-    ∃ result, STAmount.ofNumber nt n mode = .ok result := by
-  unfold STAmount.ofNumber
-  rw [if_pos hnt]
-  set neg : Bool := decide (n.signum < 0) with hneg_def
-  set working : Number := if neg then n.operator_neg else n with hw_def
-  have hnegf : neg = false := by
-    rw [hneg_def]
-    apply decide_eq_false
-    unfold Number.signum
-    rw [hneg]; simp only [Bool.false_eq_true, if_false]
-    split <;> norm_num
-  have hwn : working = n := by rw [hw_def, hnegf]; simp only [Bool.false_eq_true, if_false]
-  rw [hwn]
-  have hexp0 : n.exponent ≤ 0 := Number.exponent_fn_le_zero_of_cap n hnorm hneg hcap
-  obtain ⟨r, hr⟩ := Number.to_rep_ok_of_nonneg_exp_nonpos n mode hneg hexp0
-  rw [hr]
-  simp only []
-  rw [hnegf]
-  have hrrng := Number.to_rep_nonneg_range n mode r hneg hr
-  have hru64 : r.toUInt64.toNat ≤ maxRep.toNat := toUInt64_toNat_le_maxRep r hrrng.1 hrrng.2
-  obtain ⟨result, hres⟩ := STAmount.canonicalize_integral_ok
-    (STAmount.unchecked nt r.toUInt64 0 false) mode hnt rfl rfl hru64 hmaxval hmaxoff
-  exact ⟨result, by rw [STAmount.checked]; exact hres⟩
-
-/-- **Share-total / payout `ofNumber .int64` totality (both caller modes).** The
-emptying run's two integral conversions -- the stored share total (`.to_nearest`)
-and the priced payout (`.downward`) -- succeed for any normalized nonnegative
-`Number` bounded by `2 ^ 63 - 1`. `NumericType.int64` carries `maxValue = maxRep`
-and `maxOffset = 18`, so the general cap totality applies directly. -/
-lemma STAmount.ofNumber_int64_ok (n : Number) (mode : rounding_mode)
-    (hnorm : n.isNormalized) (hneg : n.negative_ = false) (hcap : n.toRat ≤ 2 ^ 63 - 1) :
-    ∃ result, STAmount.ofNumber .int64 n mode = .ok result :=
-  STAmount.ofNumber_integral_ok_of_cap .int64 n mode (by decide) (by decide) (by decide)
-    hnorm hneg hcap
 
 /-- The value of a canonical integral amount is bounded by its type's carried
 maximum. -/
@@ -102,37 +18,6 @@ lemma STAmount.IntegralCanonical.abs_toRat_le (s : STAmount) (hc : s.IntegralCan
   have := hc.in_range
   simp only [zpow_zero, mul_one]
   exact_mod_cast this
-
-/-- **`ofNumber` on an integral type rounds within one unit** of a sign-cleared
-normalized `Number`. The integral packing routes the magnitude through `to_rep`,
-which lands within one of the value; a non-negative source keeps the sign bit
-clear so the stored value is exactly the `to_rep` integer. -/
-lemma STAmount.ofNumber_integral_within_one (nt : NumericType) (n : Number)
-    (mode : rounding_mode) (result : STAmount)
-    (hnt : nt.isIntegral = true) (hn : n.isNormalized) (hneg : n.negative_ = false)
-    (hok : STAmount.ofNumber nt n mode = .ok result) :
-    |result.toRat - n.toRat| < 1 := by
-  unfold STAmount.ofNumber at hok
-  simp only [Number.signum_neg_decide, hneg, Bool.false_eq_true, if_false, if_pos hnt] at hok
-  cases hr : n.to_rep mode with
-  | error e => rw [hr] at hok; exact absurd hok (by simp)
-  | ok intValue =>
-    rw [hr] at hok
-    simp only [] at hok
-    obtain ⟨hnn, hle⟩ :=
-      Number.to_rep_nonneg_range n mode intValue hneg hr
-    have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
-      toUInt64_toNat_le_maxRep intValue hnn hle
-    have hres : result.toRat = (intValue.toInt : ℚ) := by
-      have hexact := STAmount.canonicalize_integral_toRat
-        (STAmount.unchecked nt intValue.toUInt64 0 false) result mode
-        (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hnt) rfl
-        hval hok
-      rw [hexact, STAmount.toRat_of_offset_zero _ rfl]
-      show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
-      rw [toUInt64_toNat_of_nonneg intValue hnn]
-    rw [hres]
-    exact to_rep_within_one n mode intValue hn hr
 
 /-- The `int64` zero amount reduces to the canonical record `⟨.int64, 0, 0, false⟩`. -/
 lemma STAmount.zero_int64_eq : STAmount.zero .int64 = ⟨.int64, 0, 0, false⟩ := by decide
@@ -144,140 +29,6 @@ lemma STAmount.zero_int64_toRat : (STAmount.zero .int64).toRat = 0 := by
 /-- The `int64` zero amount carries the `int64` numeric type. -/
 lemma STAmount.zero_int64_mNumericType : (STAmount.zero .int64).mNumericType = .int64 := by
   rw [STAmount.zero_int64_eq]
-
-/-- A nonzero integral `ofNumber` result forces a nonzero source mantissa. -/
-lemma STAmount.ofNumber_integral_source_ne_zero (nt : NumericType) (n : Number)
-    (mode : rounding_mode) (a : STAmount)
-    (hnt : nt.isIntegral = true)
-    (hok : STAmount.ofNumber nt n mode = .ok a) (ha : a.mValue ≠ 0) :
-    n.mantissa_ ≠ 0 := by
-  intro h0
-  set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
-  have hwm : w.mantissa_ = 0 := by
-    rw [hw]
-    split
-    · unfold Number.operator_neg
-      rw [if_pos (by rw [h0]; rfl)]
-      rfl
-    · exact h0
-  have hrep : w.to_rep mode = .ok 0 := by
-    unfold Number.to_rep
-    rw [if_pos (show (w.mantissa == 0) = true from by
-      rw [Number.mantissa_acc_zero hwm]; decide)]
-  unfold STAmount.ofNumber at hok
-  rw [if_pos hnt, ← hw, hrep] at hok
-  simp only [] at hok
-  rw [show ((0 : rep).toUInt64) = (0 : UInt64) from by decide] at hok
-  rw [STAmount.checked, STAmount.canonicalize,
-    if_pos (show (STAmount.unchecked nt 0 0 (decide (n.signum < 0))).integral = true from hnt),
-    if_pos (show ((STAmount.unchecked nt 0 0 (decide (n.signum < 0))).mValue == 0
-      || decide ((STAmount.unchecked nt 0 0 (decide (n.signum < 0))).mOffset ≤ -20)) = true
-      from rfl)] at hok
-  apply ha
-  rw [← Except.ok.inj hok]
-
-/-- `STAmount.ofNumber` on an integral type is value-exact for a normalized
-integer-valued `Number` (`den = 1`). -/
-lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
-    (mode : rounding_mode) (a : STAmount)
-    (hnt : nt.isIntegral = true)
-    (hn : n.isNormalized) (hden : n.toRat.den = 1)
-    (hok : STAmount.ofNumber nt n mode = .ok a) :
-    a.toRat = n.toRat := by
-  by_cases hm : n.mantissa_ = 0
-  · -- zero source, zero result
-    have hn0 : n.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero n hm
-    have ha0 : a.mValue = 0 := by
-      by_contra hc
-      exact STAmount.ofNumber_integral_source_ne_zero nt n mode a hnt hok hc hm
-    rw [hn0, STAmount.toRat_signed, ha0]
-    simp
-  unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
-  set w : Number := if decide (n.signum < 0) = true then n.operator_neg else n with hw
-  have hwn : w = if n.negative_ = true then n.operator_neg else n := by
-    rw [hw, Number.signum_neg_decide]
-  have hw_norm : w.isNormalized := by
-    rw [hwn]
-    rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]; exact hn
-    · rw [if_pos rfl]; exact Number.operator_neg_isNormalized n hn
-  have hneg_rec : n.operator_neg = { n with negative_ := !n.negative_ } := by
-    unfold Number.operator_neg
-    rw [if_neg (by simpa using hm)]
-  have hw_exp : w.exponent_ = n.exponent_ := by
-    rw [hwn]
-    rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]
-    · rw [if_pos rfl, hneg_rec]
-  have hw_neg : w.negative_ = false := by
-    rw [hwn]
-    rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]; exact hb
-    · rw [if_pos rfl, hneg_rec]
-      simp [hb]
-  have hw_val : w.toRat = (if n.negative_ = true then (-1 : ℚ) else 1) * n.toRat := by
-    rw [hwn]
-    rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true, if_neg Bool.false_ne_true]
-      ring
-    · rw [if_pos rfl, if_pos rfl, Number.toRat_neg]; ring
-  cases hrep : w.to_rep mode with
-  | error e => rw [hrep] at hok; exact absurd hok (by simp)
-  | ok intValue =>
-    rw [hrep] at hok
-    simp only [] at hok
-    rw [STAmount.checked] at hok
-    have hwden : w.toRat.den = 1 := by
-      rw [hw_val]
-      rcases hb : n.negative_ with _ | _
-      · simpa using hden
-      · rw [if_pos rfl, neg_one_mul, Rat.neg_den]
-        exact hden
-    have hkey : (intValue.toInt : ℚ) = w.toRat := by
-      have hone := to_rep_within_one w mode intValue hw_norm hrep
-      have hwq : w.toRat = (w.toRat.num : ℚ) := by
-        conv_lhs => rw [← Rat.num_div_den w.toRat]
-        rw [hwden]; simp
-      rw [hwq] at hone ⊢
-      have habs : |intValue.toInt - w.toRat.num| < 1 := by
-        rw [← Int.cast_sub, ← Int.cast_abs] at hone
-        exact_mod_cast hone
-      have heq : intValue.toInt = w.toRat.num := by
-        have := abs_lt.mp habs
-        omega
-      rw [heq]
-    have hw_nonneg : 0 ≤ w.toRat := by
-      rw [Number.toRat_of_nonneg w hw_neg]; positivity
-    have hiv_nonneg : (0 : ℤ) ≤ intValue.toInt := by
-      have : (0 : ℚ) ≤ (intValue.toInt : ℚ) := by rw [hkey]; exact hw_nonneg
-      exact_mod_cast this
-    have hiv_le : intValue.toInt ≤ (2 : ℤ) ^ 63 - 1 := by
-      have := Int64.toInt_lt intValue
-      omega
-    have htu : (intValue.toUInt64.toNat : ℤ) = intValue.toInt :=
-      toUInt64_toNat_of_nonneg intValue hiv_nonneg
-    have hfit : intValue.toUInt64.toNat ≤ maxRep.toNat := by
-      rw [maxRep_val]
-      omega
-    have hexact := STAmount.canonicalize_integral_toRat _ a mode
-      (show (STAmount.unchecked nt intValue.toUInt64 0 (decide (n.signum < 0))).integral = true
-        from hnt) rfl hfit hok
-    rw [hexact, STAmount.toRat_of_offset_zero _ rfl]
-    show ((if decide (n.signum < 0) = true then -(intValue.toUInt64.toNat : ℤ)
-      else (intValue.toUInt64.toNat : ℤ) : ℤ) : ℚ) = n.toRat
-    rw [Number.signum_neg_decide]
-    rcases hb : n.negative_ with _ | _
-    · rw [if_neg Bool.false_ne_true]
-      have : ((intValue.toUInt64.toNat : ℤ) : ℚ) = n.toRat := by
-        rw [htu, hkey, hw_val, hb]; simp
-      exact_mod_cast this
-    · rw [if_pos rfl]
-      have h1 : ((intValue.toUInt64.toNat : ℤ) : ℚ) = -n.toRat := by
-        rw [htu, hkey, hw_val, hb]; simp
-      push_cast
-      push_cast at h1
-      linarith
 
 /-- `STAmount.ofNumber` on an integral type is monotone for integer-valued
 normalized inputs, in any rounding mode (the conversion is exact). -/
@@ -623,55 +374,6 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
     calc n.toRat - result.toRat ≤ (10 : ℚ) ^ (n.exponent_ + 3) := hgap
       _ ≤ (10 : ℚ) ^ result.exponent := zpow_le_zpow_right₀ (by norm_num) hexp_ge
 
-/-- `STAmount.canonicalize` on an integral offset-`0` record: the result is a
-canonical integral record of the same numeric type. -/
-lemma STAmount.canonicalize_integral_canonical (s result : STAmount) (mode : rounding_mode)
-    (hint : s.integral = true)
-    (hok : s.canonicalize mode = .ok result) :
-    result.IntegralCanonical ∧ result.mNumericType = s.mNumericType := by
-  rw [STAmount.canonicalize, if_pos hint] at hok
-  by_cases hz : (s.mValue == 0 || decide (s.mOffset ≤ -20)) = true
-  · rw [if_pos hz] at hok
-    rw [← Except.ok.inj hok]
-    exact ⟨⟨hint, rfl, by simp⟩, rfl⟩
-  · rw [if_neg hz] at hok
-    by_cases hmoff : s.mOffset > s.mNumericType.maxOffset
-    · rw [if_pos hmoff] at hok; exact absurd hok (by simp)
-    rw [if_neg hmoff] at hok
-    simp only [IntAmount.ofNumber] at hok
-    cases hr : (Number.unchecked s.mIsNegative s.mValue s.mOffset).to_rep mode with
-    | error e => rw [hr] at hok; exact absurd hok (by simp)
-    | ok r =>
-      rw [hr] at hok
-      simp only [] at hok
-      by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
-      · rw [if_pos hrng] at hok; exact absurd hok (by simp)
-      rw [if_neg hrng] at hok
-      rw [← Except.ok.inj hok]
-      refine ⟨⟨hint, rfl, ?_⟩, rfl⟩
-      show r.toInt.natAbs.toUInt64.toNat ≤ s.mNumericType.maxValue.toNat
-      by_contra hcon
-      exact hrng (UInt64.lt_iff_toNat_lt.mpr (by omega))
-
-/-- `STAmount.ofNumber` on an integral type: the result is a canonical integral
-record of that type. -/
-lemma STAmount.ofNumber_integral_canonical (nt : NumericType) (n : Number)
-    (mode : rounding_mode) (a : STAmount)
-    (hnt : nt.isIntegral = true)
-    (hok : STAmount.ofNumber nt n mode = .ok a) :
-    a.IntegralCanonical ∧ a.mNumericType = nt := by
-  unfold STAmount.ofNumber at hok
-  rw [if_pos hnt] at hok
-  cases hrep : (if decide (n.signum < 0) = true then n.operator_neg else n).to_rep mode with
-  | error e => rw [hrep] at hok; exact absurd hok (by simp)
-  | ok intValue =>
-    rw [hrep] at hok
-    simp only [] at hok
-    rw [STAmount.checked] at hok
-    exact STAmount.canonicalize_integral_canonical _ a mode
-      (show (STAmount.unchecked nt intValue.toUInt64 0 (decide (n.signum < 0))).integral = true
-        from hnt) hok
-
 /-- **Integral `STAmount.ofNumber` output shape.** A successful conversion into
 an integral numeric type yields an offset-`0` amount of that type whose stored
 magnitude fits `maxRep`. -/
@@ -719,46 +421,6 @@ lemma STAmount.ofNumber_integral_facts (nt : NumericType) (n : Number)
     obtain ⟨h1, h2, h3, _⟩ := STAmount.canonicalize_integral_facts
       (STAmount.unchecked nt intValue.toUInt64 0 neg) result mode hint' rfl hval hok
     exact ⟨h1, h2, h3⟩
-
-/-- **`toNumber` is value-exact, normalized, and integer-valued on an offset-`0`
-integral amount within `maxRep`.** Variant of `toNumber_integral_exact` keyed on
-the stored magnitude directly, so it also covers custom integral numeric types
-whose carried bound exceeds `maxRep`. -/
-lemma STAmount.toNumber_integral_exact' (s : STAmount) (mode : rounding_mode)
-    (hint : s.mNumericType.isIntegral = true) (hoff : s.mOffset = 0)
-    (hval : s.mValue.toNat ≤ maxRep.toNat) :
-    ∃ sn : Number, s.toNumber mode = .ok sn ∧ sn.toRat = s.toRat ∧ sn.isNormalized ∧
-      s.toRat.den = 1 := by
-  have hint' : s.integral = true := hint
-  have hbnd : s.mValue.toNat ≤ 9223372036854775807 := by rw [maxRep_val] at hval; exact hval
-  have hmin : Int64.minValue.toInt = (-9223372036854775808 : ℤ) := by decide
-  have hmax' : Int64.maxValue.toInt = (9223372036854775807 : ℤ) := by decide
-  have hsd_lo : Int64.minValue.toInt ≤ s.signedDrops := by
-    unfold STAmount.signedDrops; rw [hmin]; split <;> omega
-  have hsd_hi : s.signedDrops ≤ Int64.maxValue.toInt := by
-    unfold STAmount.signedDrops; rw [hmax']; split <;> omega
-  have hsd_toInt : s.signedDrops.toInt64.toInt = s.signedDrops :=
-    XRPL.Model.Protocol.AmountArith.toInt_toInt64_self hsd_lo hsd_hi
-  have h_ne_min : s.signedDrops.toInt64 ≠ Int64.minValue := by
-    intro h
-    have heq : s.signedDrops.toInt64.toInt = Int64.minValue.toInt := by rw [h]
-    rw [hsd_toInt, hmin] at heq
-    revert heq
-    unfold STAmount.signedDrops
-    split <;> omega
-  have hroute : s.toNumber mode = IntAmount.toNumber ⟨s.signedDrops.toInt64⟩ mode := by
-    unfold STAmount.toNumber STAmount.intAmount
-    rw [if_pos hint', if_pos hint']
-  obtain ⟨xn, hokn, hvaln, hnorm⟩ :=
-    IntAmount.toNumber_exact ⟨s.signedDrops.toInt64⟩ mode h_ne_min
-  have hsd_val : s.toRat = (s.signedDrops : ℚ) := by
-    rw [STAmount.toRat_of_offset_zero s hoff]
-  refine ⟨xn, by rw [hroute]; exact hokn, ?_, hnorm, ?_⟩
-  · rw [hvaln]
-    show (s.signedDrops.toInt64.toInt : ℚ) = s.toRat
-    rw [hsd_toInt, hsd_val]
-  · rw [hsd_val]
-    exact Rat.den_intCast _
 
 /-- The `int64` zero amount is `IntegralCanonical`. -/
 lemma zero_int64_IntegralCanonical : (STAmount.zero .int64).IntegralCanonical := by

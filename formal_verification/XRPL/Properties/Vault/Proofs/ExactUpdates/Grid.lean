@@ -80,8 +80,8 @@ lemma exponent_le_of_le (a b : Number) (ha : a.isNormalized) (hb : b.isNormalize
     rw [Number.toRat_eq_zero_of_mantissa_zero a h] at ha0; exact lt_irrefl _ ha0
   have hbm : b.mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero b h] at hb0; exact lt_irrefl _ hb0
-  have hav := Number.toRat_of_nonneg a (Number.negative_false_of_normalized_nonneg a ha ha0.le)
-  have hbv := Number.toRat_of_nonneg b (Number.negative_false_of_normalized_nonneg b hb hb0.le)
+  have hav := Number.toRat_of_nonneg a (Number.negative_false_of_nonneg a ha ha0.le)
+  have hbv := Number.toRat_of_nonneg b (Number.negative_false_of_nonneg b hb hb0.le)
   obtain ⟨halo, -⟩ := ha.mantissaBounds_nat ham
   obtain ⟨-, hbhi⟩ := hb.mantissaBounds_nat hbm
   by_contra hlt
@@ -118,7 +118,7 @@ lemma sub_exact_grid (x y res : Number) (s j : ℤ)
   have hxpos : 0 < x.toRat := lt_of_lt_of_le hypos hyx
   have hxm : x.mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero x h] at hxpos; exact lt_irrefl _ hxpos
-  have hxv := Number.toRat_of_nonneg x (Number.negative_false_of_normalized_nonneg x hx hxpos.le)
+  have hxv := Number.toRat_of_nonneg x (Number.negative_false_of_nonneg x hx hxpos.le)
   obtain ⟨hmlo, hmhi⟩ := hx.mantissaBounds_nat hxm
   obtain ⟨hsticky, hxe_lo, hxe_hi⟩ : (x.mantissa_ ≤ maxRep ∨ x.mantissa_.toNat % 10 = 0) ∧
       minExponent ≤ x.exponent_ ∧ x.exponent_ ≤ maxExponent := by

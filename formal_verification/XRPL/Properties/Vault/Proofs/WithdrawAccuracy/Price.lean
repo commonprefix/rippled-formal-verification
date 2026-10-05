@@ -55,7 +55,7 @@ lemma int_gap (x : Number) (hx : x.isNormalized) (hxnn : 0 ≤ x.toRat) (k : ℚ
   push Not at hsmall
   have hm : x.mantissa_ ≠ 0 := fun h => by
     rw [Number.toRat_eq_zero_of_mantissa_zero x h] at hsmall; norm_num at hsmall
-  have hneg := Number.negative_false_of_normalized_nonneg x hx hxnn
+  have hneg := Number.negative_false_of_nonneg x hx hxnn
   have hval := Number.toRat_of_nonneg x hneg
   obtain ⟨hMlo, hMhi⟩ := hx.mantissaBounds_nat hm
   set M := x.mantissa_.toNat with hM

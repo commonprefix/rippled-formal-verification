@@ -40,24 +40,6 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-private lemma zero_norm : (Number.zero).isNormalized := Or.inl rfl
-
-/-- For a normalized `Number`, `toRat = 0` is equivalent to being the canonical zero. -/
-private lemma toRat_eq_zero_iff_eq_zero {n : Number} (hn : n.isNormalized) :
-    n.toRat = 0 ↔ n = Number.zero := by
-  constructor
-  · intro h; exact Number.eq_zero_of_mantissa_zero n hn (Number.toRat_eq_zero_iff.mp h)
-  · intro h; rw [h, Number.toRat_zero]
-
-/-- A normalized nonnegative `Number` has a clear sign bit. -/
-private lemma neg_false_of_nonneg (n : Number) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat) :
-    n.negative_ = false := by
-  by_contra hb
-  have hb' : n.negative_ = true := by simpa using hb
-  have hle := Number.toRat_nonpos_of_negative n hb'
-  have hm0 : n.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp (le_antisymm hle h0)
-  rw [Number.eq_zero_of_mantissa_zero n hn hm0] at hb'; exact absurd hb' (by decide)
-
 /-! ## Clause 8 (`lossUnrealized_le`) grid helpers -/
 
 /-- **Flush corner of the downward difference.** When `x - y` (both normalized
@@ -144,45 +126,12 @@ private lemma sub_downward_grid_max_ne (x y d w : Number)
   rw [hval]
   exact Number.lower_tight (x.toRat - y.toRat) n hlo w hw hwle
 
-/-- **General-mode add normalization.** A nonzero-mantissa add of two normalized
-operands is normalized. Guard branches return an operand or the canonical zero;
-the generic branch is the existing any-mode fact. -/
-private lemma add_isNormalized_anyMode (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hok : Number.operator_add x y mode = .ok result)
-    (hresult : result.mantissa_ ≠ 0) : result.isNormalized := by
-  by_cases hy_guard : y.operator_eq Number.zero = true
-  · have h_result : result = x := by
-      unfold Number.operator_add at hok
-      rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
-    rw [h_result]; exact hx
-  by_cases hx_guard : x.operator_eq Number.zero = true
-  · have h_result : result = y := by
-      unfold Number.operator_add at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
-    rw [h_result]; exact hy
-  by_cases heq_guard : x.operator_eq y.operator_neg = true
-  · have h_result : result = Number.zero := by
-      unfold Number.operator_add at hok
-      rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
-      exact (Except.ok.inj
-        (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
-    exact absurd (show result.mantissa_ = 0 by rw [h_result]; rfl) hresult
-  have hx_mant_ne : x.mantissa_ ≠ 0 := fun h =>
-    hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
-  have hy_mant_ne : y.mantissa_ ≠ 0 := fun h =>
-    hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
-  exact operator_add_result_isNormalized_anyMode x y result mode hx hy hx_mant_ne hy_mant_ne
-    heq_guard hok hresult
-
 /-- The downward-subtraction result is normalized in the nonzero (on-grid) case. -/
 private lemma sub_downward_result_norm (x y d : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : x.operator_sub y .downward = .ok d) (hd : d.mantissa_ ≠ 0) : d.isNormalized := by
   unfold Number.operator_sub at hok
-  exact add_isNormalized_anyMode x y.operator_neg d .downward hx
+  exact operator_add_isNormalized x y.operator_neg d .downward hx
     (Number.operator_neg_isNormalized y hy) hok hd
 
 /-- If `loss.operator_le d = true` and `d` has zero mantissa (`d.toRat = 0`), then
@@ -247,10 +196,12 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         lossUnrealized_le := ?_
         withdraw_nav_nonneg := ?_ }
     · -- 0 ≤ assetsTotal
-      have := (operator_le_iff _ _ zero_norm hwf.assetsTotal_norm).mp hv.assetsTotal_nonneg
+      have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.assetsTotal_norm).mp hv.assetsTotal_nonneg
       rwa [Number.toRat_zero] at this
     · -- 0 ≤ assetsAvailable
-      have := (operator_le_iff _ _ zero_norm hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
+      have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
       rwa [Number.toRat_zero] at this
     · -- assetsAvailable ≤ assetsTotal
       exact (operator_le_iff _ _ hwf.assetsAvailable_norm hwf.assetsTotal_norm).mp hv.assetsAvailable_le
@@ -259,7 +210,8 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
       show 0 < m
       obtain ⟨m0, hm0, hval⟩ := Option.mem_map.mp hm
       have hm0norm := hwf.assetsMaximum_norm m0 hm0
-      have := (operator_lt_iff _ _ zero_norm hm0norm).mp (hv.assetsMaximum_pos m0 hm0)
+      have := (operator_lt_iff _ _ Number.zero_isNormalized
+          hm0norm).mp (hv.assetsMaximum_pos m0 hm0)
       rw [Number.toRat_zero] at this
       rwa [← hval]
     · -- empty_shares
@@ -268,7 +220,7 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         have h := RawVault.WF.toExact_sharesTotal rv hwf
         rw [hsh] at h; simpa using h.symm
       have hszero : rv.sharesTotal = Number.zero :=
-        (toRat_eq_zero_iff_eq_zero hwf.sharesTotal_norm).mp hsh0
+        (Number.toRat_eq_zero_iff_eq_zero hwf.sharesTotal_norm).mp hsh0
       obtain ⟨hT, hA⟩ := hv.empty_shares hszero
       exact ⟨by show rv.assetsTotal.toRat = 0; rw [hT, Number.toRat_zero],
              by show rv.assetsAvailable.toRat = 0; rw [hA, Number.toRat_zero]⟩
@@ -279,7 +231,8 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
       have := (operator_le_iff _ _ hwf.assetsTotal_norm hm0norm).mp (hv.cap m0 hm0)
       rwa [← hval]
     · -- 0 ≤ lossUnrealized
-      have := (operator_le_iff _ _ zero_norm hwf.lossUnrealized_norm).mp hv.lossUnrealized_nonneg
+      have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.lossUnrealized_norm).mp hv.lossUnrealized_nonneg
       rwa [Number.toRat_zero] at this
     · -- lossUnrealized ≤ assetsTotal - assetsAvailable
       show rv.lossUnrealized.toRat ≤ rv.assetsTotal.toRat - rv.assetsAvailable.toRat
@@ -313,15 +266,16 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         lossUnrealized_le := ?_
         withdraw_nav_nonneg := ?_ }
     · -- 0 ≤ assetsTotal
-      rw [operator_le_iff _ _ zero_norm hwf.assetsTotal_norm, Number.toRat_zero]
+      rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsTotal_norm, Number.toRat_zero]
       exact he.assetsTotal_nonneg
-    · rw [operator_le_iff _ _ zero_norm hwf.assetsAvailable_norm, Number.toRat_zero]
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsAvailable_norm, Number.toRat_zero]
       exact he.assetsAvailable_nonneg
     · rw [operator_le_iff _ _ hwf.assetsAvailable_norm hwf.assetsTotal_norm]
       exact he.assetsAvailable_le
     · -- assetsMaximum positive
       intro m hm
-      rw [operator_lt_iff _ _ zero_norm (hwf.assetsMaximum_norm m hm), Number.toRat_zero]
+      rw [operator_lt_iff _ _ Number.zero_isNormalized
+          (hwf.assetsMaximum_norm m hm), Number.toRat_zero]
       exact he.assetsMaximum_pos m.toRat (Option.mem_map_of_mem _ hm)
     · -- empty_shares
       intro hsz
@@ -329,13 +283,13 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         show rv.sharesTotal.toRat.num.toNat = 0
         rw [hsz, Number.toRat_zero]; rfl
       obtain ⟨hT, hA⟩ := he.empty_shares hsh
-      exact ⟨(toRat_eq_zero_iff_eq_zero hwf.assetsTotal_norm).mp hT,
-             (toRat_eq_zero_iff_eq_zero hwf.assetsAvailable_norm).mp hA⟩
+      exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.assetsTotal_norm).mp hT,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.assetsAvailable_norm).mp hA⟩
     · -- cap
       intro m hm
       rw [operator_le_iff _ _ hwf.assetsTotal_norm (hwf.assetsMaximum_norm m hm)]
       exact he.cap m.toRat (Option.mem_map_of_mem _ hm)
-    · rw [operator_le_iff _ _ zero_norm hwf.lossUnrealized_norm, Number.toRat_zero]
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.lossUnrealized_norm, Number.toRat_zero]
       exact he.lossUnrealized_nonneg
     · -- lossUnrealized_le (backward): ∀ d, sub = .ok d → loss.operator_le d
       intro d hsub
@@ -348,9 +302,9 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
       by_cases hd : d.mantissa_ = 0
       · -- flush corner: the exact difference is sub-grid, so `loss` and `d` are both zero
         have hTneg : rv.assetsTotal.negative_ = false :=
-          neg_false_of_nonneg _ hwf.assetsTotal_norm he.assetsTotal_nonneg
+          Number.negative_false_of_nonneg _ hwf.assetsTotal_norm he.assetsTotal_nonneg
         have hAneg : rv.assetsAvailable.negative_ = false :=
-          neg_false_of_nonneg _ hwf.assetsAvailable_norm he.assetsAvailable_nonneg
+          Number.negative_false_of_nonneg _ hwf.assetsAvailable_norm he.assetsAvailable_nonneg
         obtain ⟨hdz, hsmall⟩ := sub_downward_mantissa_zero rv.assetsTotal rv.assetsAvailable d
           hwf.assetsTotal_norm hwf.assetsAvailable_norm hTneg hAneg hsub hd
         have hlt_spr : rv.assetsTotal.toRat - rv.assetsAvailable.toRat
@@ -363,7 +317,7 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
             (fun h => hne (Number.toRat_eq_zero_of_mantissa_zero _ h))
           rw [abs_of_nonneg hLnn] at hge
           linarith
-        rw [(toRat_eq_zero_iff_eq_zero hwf.lossUnrealized_norm).mp hlossz, hdz]; decide
+        rw [(Number.toRat_eq_zero_iff_eq_zero hwf.lossUnrealized_norm).mp hlossz, hdz]; decide
       · have hdn := sub_downward_result_norm rv.assetsTotal rv.assetsAvailable d
           hwf.assetsTotal_norm hwf.assetsAvailable_norm hsub hd
         rw [operator_le_iff _ _ hwf.lossUnrealized_norm hdn]
@@ -376,7 +330,7 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
 
 /-- The exact-rational invariant of a lawful vault, derived from its operator
 proof and well-formedness. -/
-def Vault.exact (v : Vault) : v.toExact.Valid :=
+theorem Vault.exact (v : Vault) : v.toExact.Valid :=
   (RawVault.valid_iff_exact v.toRawVault v.wf).mp v.valid
 
 /-- Bridge: when the ops' in-op re-validation succeeds (`to_lawful = .ok v`), the
