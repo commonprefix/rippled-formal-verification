@@ -48,7 +48,7 @@ lemma Vault.withdraw_success_proof (v : Vault) (amount : WithdrawAmount) (waiveU
     ∃ v' : Vault,
       v.withdraw amount waiveUnrealizedLoss hpos = .ok ⟨none, v', reported, cw.sharesRedeemed⟩ ∧
       v'.toRawVault = { v.toRawVault with assetsTotal := assetsTotal', assetsAvailable := assetsAvailable', sharesTotal := sharesTotal' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.subtract_lawful v assetsNumber'
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.subtract_record_never_notLawful v assetsNumber'
     sharesBurnedNumber assetsTotal' assetsAvailable' sharesTotal' hL hAV hp_norm hp_nn hp_le
     hb_norm hb_nn hb_den hb_le hfit hat hav hshares hempty
   refine ⟨v', ?_, hlv'eq⟩

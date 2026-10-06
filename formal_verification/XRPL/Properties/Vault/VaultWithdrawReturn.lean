@@ -67,7 +67,7 @@ theorem Vault.withdraw_final_nonzero_loss (amount : WithdrawAmount)
 
 /-- The withdrawal redeems the whole share total on a vault with no unrealized
 loss: the vault is zeroed and the withdrawer is paid all of `assetsAvailable`.
-The `to_lawful` re-check is proven to succeed via `withdraw_final_poststate_lawful`,
+The `to_lawful` re-check is proven to succeed via `zero_record_never_notLawful`,
 so the `.notLawful` throw is unreachable. -/
 theorem Vault.withdraw_final (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
     (cw : ComputeWithdrawResult) (assetsNumber' : Number)

@@ -78,29 +78,31 @@ theorem Vault.deposit_shares_monotone (v : Vault)
     -- the starting vault is lawful
     (amountDeposit₁ amountDeposit₂ roundedAmount₁ roundedAmount₂ : STAmount)
     (r₁ r₂ : DepositResult)
-    -- both rounded amounts are stored canonically and are positive
-    (hcanon₁ : roundedAmount₁.Canonical) (hcanon₂ : roundedAmount₂.Canonical)
-    (hposR₁ : 0 < roundedAmount₁.toRat) (hposR₂ : 0 < roundedAmount₂.toRat)
+    -- both deposit amounts are stored canonically
+    (hcanon₁ : amountDeposit₁.Canonical) (hcanon₂ : amountDeposit₂.Canonical)
+    (hpos₁ : 0 < amountDeposit₁.toRat) (hpos₂ : 0 < amountDeposit₂.toRat)
     -- both amounts round to a nonzero roundedAmount
     (hrounded₁ : v.roundedDepositAmount amountDeposit₁ = .ok (.rounded roundedAmount₁))
     (hrounded₂ : v.roundedDepositAmount amountDeposit₂ = .ok (.rounded roundedAmount₂))
     -- both deposits succeed, each starting from the same vault v.toRawVault
-    (hpos₁ : 0 < amountDeposit₁.toRat)
     (hok₁ : v.deposit amountDeposit₁ false hpos₁ = .ok r₁) (herr₁ : r₁.error = none)
-    (hpos₂ : 0 < amountDeposit₂.toRat)
     (hok₂ : v.deposit amountDeposit₂ false hpos₂ = .ok r₂) (herr₂ : r₂.error = none)
     -- the first rounded amount is at most the second
     (hle : roundedAmount₁.toRat ≤ roundedAmount₂.toRat) :
     -- the first deposit is issued at most as many shares
     r₁.sharesIssued.toRat ≤ r₂.sharesIssued.toRat :=
+  have h₁ := DepRnd.Vault.roundedDepositAmount_canonical_pos v amountDeposit₁ roundedAmount₁
+    hcanon₁ hpos₁ hrounded₁
+  have h₂ := DepRnd.Vault.roundedDepositAmount_canonical_pos v amountDeposit₂ roundedAmount₂
+    hcanon₂ hpos₂ hrounded₂
   Vault.deposit_shares_monotone_proof v amountDeposit₁ amountDeposit₂
-    roundedAmount₁ roundedAmount₂ r₁ r₂ hcanon₁ hcanon₂ hposR₁ hposR₂
+    roundedAmount₁ roundedAmount₂ r₁ r₂ h₁.1 h₂.1 h₁.2 h₂.2
     hrounded₁ hrounded₂ hpos₁ hok₁ herr₁ hpos₂ hok₂ herr₂ hle
 
 /-- Issued shares are a nonnegative integer matching `idealSharesDeposit` of
 `roundedAmount` up to the two `Number` stages of the share pricing and the final
-truncation: at most `sharesε` relatively above, less than one whole share
-plus `sharesε` below. -/
+truncation: at most `sharesOverε` relatively above, less than one whole share plus
+`sharesShortε` below. -/
 theorem Vault.deposit_sharesIssued (v : Vault) (amountDeposit roundedAmount : STAmount) (r : DepositResult)
     -- the starting vault is lawful
     (hcanon : roundedAmount.Canonical) -- the rounded amount is stored canonically
@@ -109,35 +111,42 @@ theorem Vault.deposit_sharesIssued (v : Vault) (amountDeposit roundedAmount : ST
     (hnav : 0 < v.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hposA : 0 < amountDeposit.toRat)
-    (hok : v.deposit amountDeposit false hposA = .ok r) (herr : r.error = none) :
+    (hok : v.deposit amountDeposit false hposA = .ok r) (herr : r.error = none)
+    -- C++ mints the shares only if the share issuance stays within its maximum, 2⁶³ − 1
+    (hmint : v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat) :
     r.sharesIssued.toRat.den = 1 ∧ 0 ≤ r.sharesIssued.toRat ∧
-    v.idealSharesDeposit roundedAmount.toRat * (1 - sharesε) - 1 < r.sharesIssued.toRat ∧
-    r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + sharesε) :=
+    v.idealSharesDeposit roundedAmount.toRat * (1 - sharesShortε) - 1 < r.sharesIssued.toRat ∧
+    r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + sharesOverε) :=
   Vault.deposit_sharesIssued_proof v amountDeposit roundedAmount r hcanon hpos hnav
-    hrounded hposA hok herr
+    hrounded hposA hok herr hmint
 
-/-- Witness for the one-share truncation term of `deposit_sharesIssued`: a run falls
-short of the ideal by more than `1 - 10⁻¹⁴` shares beyond the relative term (by
-`1 - 2·10⁻¹⁵` in that run). -/
-theorem Vault.deposit_sharesIssued_truncation_attained :
+/-- Shortfall witness for `deposit_sharesIssued`: a deposit issues a whole share less
+than the ideal, plus `99.998%` of the relative term `ideal·sharesShortε`. -/
+theorem Vault.deposit_sharesIssued_shortfall_attained :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (hpos : 0 < amountDeposit.toRat)
       (r : DepositResult),
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+      roundedAmount.Canonical ∧
       v.deposit amountDeposit false hpos = .ok r ∧ r.error = none ∧
-      1 - 1 / 10 ^ 14 <
-        v.idealSharesDeposit roundedAmount.toRat * (1 - sharesε) - r.sharesIssued.toRat :=
-  Vault.deposit_sharesIssued_trunc_witness
+      v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat ∧
+      let ideal := v.idealSharesDeposit roundedAmount.toRat
+      let issued := r.sharesIssued.toRat
+      1 + ideal * sharesShortε * (99998150 / 10 ^ 8) < ideal - issued :=
+  Vault.deposit_sharesIssued_shortfall_witness
 
-/-- Witness for the relative `sharesε` term of `deposit_sharesIssued`: a run issues
-more than `1.084·10⁻¹⁸` relatively above the ideal, `98.5%` of `sharesε = 1.1·10⁻¹⁸`. -/
-theorem Vault.deposit_sharesIssued_relative_attained :
+/-- Overshoot witness for `deposit_sharesIssued`: a deposit issues more than the
+ideal by `99.999997%` of the relative term `ideal·sharesOverε`. -/
+theorem Vault.deposit_sharesIssued_overshoot_attained :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (hpos : 0 < amountDeposit.toRat)
       (r : DepositResult),
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+      roundedAmount.Canonical ∧
       v.deposit amountDeposit false hpos = .ok r ∧ r.error = none ∧
-      v.idealSharesDeposit roundedAmount.toRat * (1084 / 10 ^ 21) <
-        r.sharesIssued.toRat - v.idealSharesDeposit roundedAmount.toRat :=
-  Vault.deposit_sharesIssued_sharp_witness
+      v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat ∧
+      let ideal := v.idealSharesDeposit roundedAmount.toRat
+      let issued := r.sharesIssued.toRat
+      ideal * sharesOverε * (99999997 / 10 ^ 8) < issued - ideal :=
+  Vault.deposit_sharesIssued_overshoot_witness
 
 /-- The taken amount `amountDeposit'` never exceeds `amountDeposit`. It falls short
 of the issued shares' exact worth by at most `depositε` relatively plus `3/2` steps

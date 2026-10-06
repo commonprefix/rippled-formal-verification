@@ -8,13 +8,13 @@ import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 Each is closed by `native_decide` over the model; every result record is computed
 by `Vault.deposit`, not written out.
 
-* Truncation (shares): 1 asset, 2 shares, deposit `0.999999999999999`: the ideal is
-  `1.999999999999998`, the vault issues `1` share, short by `1 - 2·10⁻¹⁵` of the
-  one-share truncation budget.
-* Relative (shares): 1844674407370955163 shares over `99999999999889682.7` assets,
-  deposit `5·10^15`: the product `9223372036854775815·10^15` is a tie rounded up by
-  `5` in its last place, the quotient rounds up by almost `5` again, for an overshoot
-  of `1.0841995·10⁻¹⁸` relative.
+* Shortfall (shares): 3689348814741910330 shares over `10.00000008161533702` assets,
+  deposit `2.5`: the product `2^63 + 17` is a tie rounded down to even, the quotient
+  ends in `9` and is truncated, for a shortfall of one share plus `99.998%` of
+  `ideal·sharesShortε`.
+* Overshoot (shares): 1844674407372756839 shares over `9999999999998012.24` assets,
+  deposit `5·10^15`: both stages round up by almost a half-step at the top of the
+  mantissa range, for an overshoot of `99.999997%` of `ideal·sharesOverε`.
 * Charge, lower: assets `0.9999999999999995`, 1 share, deposit `10^15 + 1`: the
   ideal is `10^15 + 0.4999999999999995`, the charge `10^15 - 1`, short by
   `1.4999999999999995 = 3/2 - 5·10⁻¹⁶` steps of the post-deposit grid `10^0`.
@@ -38,19 +38,19 @@ def rawF (A ST : Number) : RawVault :=
 def run (v : Vault) (x : STAmount) (h : 0 < x.toRat) : DepositResult :=
   (v.deposit x false h).toOption.getD (DepositResult.rejected v .tecINTERNAL)
 
--- truncation: 1 asset, 2 shares
-def vT : Vault := ⟨rawF ⟨false, 1000000000000000000, -18⟩ ⟨false, 2000000000000000000, -18⟩,
+-- shortfall: the product is a tie rounded down, the quotient is truncated from a trailing 9
+def vS : Vault := ⟨rawF ⟨false, 1000000008161533702, -17⟩ ⟨false, 3689348814741910330, 0⟩,
   by native_decide, by native_decide⟩
-def xT : STAmount := STAmount.unchecked .fractional 9999999999999990 (-16) false
-lemma xT_pos : 0 < xT.toRat := by native_decide
-def rT : DepositResult := run vT xT xT_pos
+def xS : STAmount := STAmount.unchecked .fractional 2500000000000000 (-15) false
+lemma xS_pos : 0 < xS.toRat := by native_decide
+def rS : DepositResult := run vS xS xS_pos
 
--- two-stage relative overshoot of the share count
-def vR : Vault := ⟨rawF ⟨false, 9999999999988968270, -2⟩ ⟨false, 1844674407370955163, 0⟩,
+-- overshoot: both stages round up by almost a half-step
+def vO : Vault := ⟨rawF ⟨false, 9999999999998012240, -3⟩ ⟨false, 1844674407372756839, 0⟩,
   by native_decide, by native_decide⟩
-def xR : STAmount := STAmount.unchecked .fractional 5000000000000000 0 false
-lemma xR_pos : 0 < xR.toRat := by native_decide
-def rR : DepositResult := run vR xR xR_pos
+def xO : STAmount := STAmount.unchecked .fractional 5000000000000000 0 false
+lemma xO_pos : 0 < xO.toRat := by native_decide
+def rO : DepositResult := run vO xO xO_pos
 
 -- charge, lower: a tiny total just under one grid step
 def vL : Vault := ⟨rawF ⟨false, 9999999999999995000, -19⟩ ⟨false, 1000000000000000000, -18⟩,
@@ -66,6 +66,12 @@ def xU : STAmount := STAmount.unchecked .fractional 1500000000000000 0 false
 lemma xU_pos : 0 < xU.toRat := by native_decide
 def rU : DepositResult := run vU xU xU_pos
 
+lemma frac_canonical (m : UInt64) (e : Int) (h1 : 10 ^ 15 ≤ m.toNat) (h2 : m.toNat < 10 ^ 16)
+    (h3 : (-96 : ℤ) ≤ e) (h4 : e ≤ 80) :
+    (STAmount.unchecked .fractional m e false).Canonical :=
+  ⟨fun h => absurd h (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]),
+    fun _ => ⟨rfl, h1, h2, h3, h4⟩⟩
+
 end XRPL.Model.SingleAssetVault.DepTightWit
 
 namespace XRPL.Model.SingleAssetVault
@@ -74,26 +80,35 @@ open XRPL.Model.Protocol DepTightWit
 
 set_option maxRecDepth 10000
 
-/-- The one-share truncation term of `deposit_sharesIssued` is attained up to `10⁻¹⁴`. -/
-lemma Vault.deposit_sharesIssued_trunc_witness :
+/-- A deposit issues one share plus `99.998%` of `ideal·sharesShortε` fewer than the ideal. -/
+lemma Vault.deposit_sharesIssued_shortfall_witness :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (hpos : 0 < amountDeposit.toRat)
       (r : DepositResult),
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+      roundedAmount.Canonical ∧
       v.deposit amountDeposit false hpos = .ok r ∧ r.error = none ∧
-      1 - 1 / 10 ^ 14 <
-        v.idealSharesDeposit roundedAmount.toRat * (1 - sharesε) - r.sharesIssued.toRat :=
-  ⟨vT, xT, xT, xT_pos, rT, by native_decide, by native_decide, by native_decide, by native_decide⟩
+      v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat ∧
+      let ideal := v.idealSharesDeposit roundedAmount.toRat
+      let issued := r.sharesIssued.toRat
+      1 + ideal * sharesShortε * (99998150 / 10 ^ 8) < ideal - issued :=
+  ⟨vS, xS, xS, xS_pos, rS, by native_decide,
+    frac_canonical _ _ (by decide) (by decide) (by decide) (by decide), by native_decide, by native_decide,
+    by native_decide, by unfold sharesShortε; native_decide⟩
 
-/-- The share count overshoots the ideal by more than `1.084·10⁻¹⁸` relative, `98.5%`
-of the sharp `11·10⁻¹⁹` budget. -/
-lemma Vault.deposit_sharesIssued_sharp_witness :
+/-- A deposit issues `99.999997%` of `ideal·sharesOverε` more than the ideal. -/
+lemma Vault.deposit_sharesIssued_overshoot_witness :
     ∃ (v : Vault) (amountDeposit roundedAmount : STAmount) (hpos : 0 < amountDeposit.toRat)
       (r : DepositResult),
       v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount) ∧
+      roundedAmount.Canonical ∧
       v.deposit amountDeposit false hpos = .ok r ∧ r.error = none ∧
-      v.idealSharesDeposit roundedAmount.toRat * (1084 / 10 ^ 21) <
-        r.sharesIssued.toRat - v.idealSharesDeposit roundedAmount.toRat :=
-  ⟨vR, xR, xR, xR_pos, rR, by native_decide, by native_decide, by native_decide, by native_decide⟩
+      v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat ∧
+      let ideal := v.idealSharesDeposit roundedAmount.toRat
+      let issued := r.sharesIssued.toRat
+      ideal * sharesOverε * (99999997 / 10 ^ 8) < issued - ideal :=
+  ⟨vO, xO, xO, xO_pos, rO, by native_decide,
+    frac_canonical _ _ (by decide) (by decide) (by decide) (by decide), by native_decide, by native_decide,
+    by native_decide, by unfold sharesOverε; native_decide⟩
 
 /-- The `3/2`-grid-step shortfall of `deposit_charge` is attained up to `10⁻¹⁵` of a
 step. -/

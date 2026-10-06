@@ -264,7 +264,7 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
       rw [hpar]; exact Number.negative_false_of_normalized_nonneg _ hAnorm hAnn
     obtain ⟨allA, hallA⟩ := STAmount.ofNumber_int64_ok v.assetsAvailable .to_nearest hAAnorm
       hAAneg (by rw [hpar]; exact hcap)
-    obtain ⟨v', htl, hv'⟩ := Vault.zero_lawful v hL
+    obtain ⟨v', htl, hv'⟩ := Vault.zero_record_never_notLawful v hL
     rw [← hint] at hallA
     rw [hLz, if_neg (by decide), hallA]
     simp only []
@@ -344,7 +344,7 @@ lemma step (v : Vault) (hr : Vault.Reachable v)
       (rat_num_natAbs_lt_of_le _ hsdd (by rw [hsnv]; linarith) (by rw [hsnv]; linarith)) hst
     rw [if_neg (by rw [hguard]; decide), hav, hst]
     simp only []
-    obtain ⟨v', htl, hv'⟩ := Vault.subtract_lawful v aN sn at' at' st' hL hpar haNn haNnn
+    obtain ⟨v', htl, hv'⟩ := Vault.subtract_record_never_notLawful v aN sn at' at' st' hL hpar haNn haNnn
       (by rw [haNv]; exact hale) hsnn (by rw [hsnv]; norm_num) hsnd (by rw [hsnv]; linarith)
       hScap hat hav hst (fun h0 => by rw [hstv, hsnv] at h0; linarith)
     dsimp only at htl hv'

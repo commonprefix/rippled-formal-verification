@@ -8,8 +8,7 @@ One theorem per exit, each giving the exact result record. Conclusions are
 about the public API, `Vault.roundedDepositAmount` and `Vault.deposit`.
 Every rejection returns `DepositResult.rejected`: the vault unchanged and both
 amount fields zero. The success cases return the post-state as a `Vault`
-(`v'`), proving the `to_lawful` re-check succeeds via `deposit_poststate_lawful`,
-so the `.notLawful` throw is unreachable. -/
+(`v'`). -/
 
 namespace XRPL.Model.SingleAssetVault
 

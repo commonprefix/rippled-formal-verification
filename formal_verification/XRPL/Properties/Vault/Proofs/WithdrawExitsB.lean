@@ -31,7 +31,7 @@ lemma Vault.withdraw_final_proof (v : Vault) (amount : WithdrawAmount) (waiveUnr
       v'.toRawVault = { v.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero } := by
   have hL : v.toExact.lossUnrealized = 0 :=
     (Number.operator_ne_zero_eq_false_iff v.lossUnrealized v.wf.lossUnrealized_norm).mp hloss
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.zero_lawful v hL
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.zero_record_never_notLawful v hL
   refine ⟨v', ?_, hlv'eq⟩
   cases amount <;>
     simp_all [Vault.withdraw, bind, Except.bind, pure, Except.pure]

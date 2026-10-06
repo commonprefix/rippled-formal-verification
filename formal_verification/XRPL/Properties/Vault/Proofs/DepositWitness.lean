@@ -46,9 +46,15 @@ def waDVU : STAmount := STAmount.unchecked .int64 9000000000000000006 0 false
 
 lemma waDVU_pos : 0 < waDVU.toRat := by native_decide
 
-/-- The donation's result, computed by the model. -/
-def wrDVU : DepositResult :=
-  (wvDVUL.deposit waDVU true waDVU_pos).toOption.getD (DepositResult.rejected wvDVUL .tecINTERNAL)
+/-- The post-donation vault: both asset fields store `18000000000000000010`. -/
+def wvDVU' : RawVault :=
+  { wvDVU with
+    assetsTotal := ⟨false, 1800000000000000001, 1⟩
+  , assetsAvailable := ⟨false, 1800000000000000001, 1⟩ }
+
+def wvDVU'L : Vault := ⟨wvDVU', by native_decide, by native_decide⟩
+
+def wrDVU : DepositResult := ⟨none, wvDVU'L, waDVU, STAmount.zero .int64⟩
 
 end XRPL.Model.SingleAssetVault.DepWit
 

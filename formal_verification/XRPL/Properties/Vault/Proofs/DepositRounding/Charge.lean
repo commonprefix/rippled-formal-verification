@@ -25,6 +25,20 @@ lemma Vault.roundedDepositAmount_canonical (v : Vault) (amountDeposit roundedAmo
   · exact hc
   · rw [hz] at hnz; exact absurd hnz (by decide)
 
+/-- A canonical positive request that rounds (rather than being rejected) rounds to a
+canonical positive amount. -/
+lemma Vault.roundedDepositAmount_canonical_pos (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (hcanon : amountDeposit.Canonical) (hpos : 0 < amountDeposit.toRat)
+    (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount)) :
+    roundedAmount.Canonical ∧ 0 < roundedAmount.toRat := by
+  obtain ⟨hround, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  have hnn := RawVault.roundToVaultExponent_nonneg amountDeposit roundedAmount v.assetsTotal
+    hcanon hpos.le hround
+  have hmv : roundedAmount.mValue ≠ 0 := by
+    intro h0; unfold STAmount.isZero at hnz; rw [h0] at hnz; exact absurd hnz (by decide)
+  exact ⟨Vault.roundedDepositAmount_canonical v amountDeposit roundedAmount hcanon hrounded,
+    lt_of_le_of_ne hnn (Ne.symm (STAmount.toRat_ne_zero roundedAmount hmv))⟩
+
 /-- **The `assetsMaximum` guard never fires when the exact sum stays under the
 maximum.** The stored total rounds `assetsTotal + charge` to nearest, and a
 normalized maximum the exact sum is under is never crossed by the rounding, so the

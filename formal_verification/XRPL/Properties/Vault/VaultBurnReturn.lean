@@ -41,7 +41,7 @@ theorem Vault.canBurnShares_ok (sharesTotalAmount : STAmount)
 
 /-- `burnShares` stores the rounded difference `sharesTotal - sharesDestroyed`
 and changes no other field. The post-state is a `Vault` (`v'`): the in-op
-`to_lawful` re-check succeeds via `burnShares_poststate_lawful`. -/
+`to_lawful` re-check succeeds via `burnShares_record_never_notLawful`. -/
 theorem Vault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
     (sharesDestroyedNumber st' : Number)
     (hcan : v.canBurnShares = .ok (.assets sharesTotalAmount))
@@ -53,7 +53,7 @@ theorem Vault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
     (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
     ∃ v' : Vault, v.burnShares sharesDestroyed = .ok v' ∧
       v'.toRawVault = { v.toRawVault with sharesTotal := st' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_lawful v sharesDestroyed sharesTotalAmount
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_record_never_notLawful v sharesDestroyed sharesTotalAmount
     sharesDestroyedNumber st' hcan hcanon hnn hle hfit hnum hst
   refine ⟨v', ?_, hlv'eq⟩
   unfold Vault.burnShares
