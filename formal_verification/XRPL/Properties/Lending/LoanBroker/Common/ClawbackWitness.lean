@@ -23,38 +23,41 @@ def wbBelowMinimum : RawLoanBroker :=
 
 def wbBelowMinimumL : LoanBroker := ⟨wbBelowMinimum, by native_decide, by native_decide⟩
 
-/-- A full clawback passes its checks, succeeds, and leaves less than the
+/-- A full clawback passes its checks, subtracts without rounding, and leaves less than the
 minimum cover. -/
 def clawsBelowMinimum (lb : LoanBroker) (pool : Vault) : Bool :=
   match lb.canCoverClawback pool none, lb.coverClawback pool none,
       AssetPool.exponent pool lb.numericType with
   | .ok .tesSUCCESS, .ok (.ok res), .ok e =>
-    match res.loanBroker'.hasMinimumCover e with
-    | .ok false => true
+    match minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e with
+    | .ok m =>
+      decide (lb.coverAvailable.toRat - res.amount'.toRat = 0) &&
+        decide (0 < m.toRat - res.loanBroker'.coverAvailable.toRat)
     | _ => false
   | _, _, _ => false
 
 private lemma clawsBelowMinimum_witness : clawsBelowMinimum wbBelowMinimumL wvPoolL = true := by
   native_decide
 
-/-- A clawback that passes its checks can leave `coverAvailable` below the
+/-- A clawback whose checks passed, with an exact difference, can leave `coverAvailable` below the
 minimum cover. -/
 lemma LoanBroker.coverClawback_keeps_minimum_within_half_witness :
-    ∃ (lb : LoanBroker) (pool : Vault) (res : LoanBrokerCoverResult) (e : Int),
+    ∃ (lb : LoanBroker) (pool : Vault) (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number),
       lb.canCoverClawback pool none = .ok .tesSUCCESS ∧
       lb.coverClawback pool none = .ok (.ok res) ∧
       AssetPool.exponent pool lb.numericType = .ok e ∧
-      ¬ res.loanBroker'.HasMinimumCover e := by
+      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover ∧
+      (∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) ∧
+      0 < minimumCover.toRat - res.loanBroker'.toExact.coverAvailable := by
   have h := clawsBelowMinimum_witness
   unfold clawsBelowMinimum at h
   split at h
   · rename_i res e hcan hok hexp
     split at h
-    · rename_i hmin
-      refine ⟨_, _, res, e, hcan, hok, hexp, ?_⟩
-      unfold LoanBroker.HasMinimumCover
-      rw [hmin]
-      exact fun h' => absurd h' (by simp)
+    · rename_i m hm
+      rw [Bool.and_eq_true, decide_eq_true_eq, decide_eq_true_eq] at h
+      exact ⟨_, _, res, e, m, hcan, hok, hexp, hm,
+        ⟨Number.zero, Number.zero_isNormalized, by rw [Number.toRat_zero]; exact h.1.symm⟩, h.2⟩
     · exact absurd h (by decide)
   · exact absurd h (by decide)
 

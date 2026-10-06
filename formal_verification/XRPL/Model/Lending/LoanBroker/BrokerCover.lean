@@ -20,8 +20,8 @@ def roundToCoverScale (nt : NumericType) (coverAvailable : Number) (amount : STA
 -- minimum first-loss cover for the debt, rounded up
 def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (poolExponent : Int)
     : Except Error Number := do
-  let raw ← tenthBipsOfValue debtTotal coverRateMinimum .upward
-  STAmount.roundToNumericType nt raw .upward (some poolExponent)
+  let minimumCover ← tenthBipsOfValue debtTotal coverRateMinimum .upward
+  STAmount.roundToNumericType nt minimumCover .upward (some poolExponent)
 
 -- the first-loss cover is at least the minimum the debt requires
 def RawLoanBroker.hasMinimumCover (rb : RawLoanBroker) (poolExponent : Int) : Except Error Bool := do

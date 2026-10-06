@@ -21,15 +21,15 @@ theorem LoanBroker.roundedCoverAmount_precision_loss (amount r : STAmount)
     lb.roundedCoverAmount amount = .ok (.rejected .tecPRECISION_LOSS) :=
   LoanBroker.roundedCoverAmount_precision_loss_proof lb amount r hdown hz
 
-/-- Witness: the rejection in `roundedCoverAmount_precision_loss` depends on the current
-`coverAvailable`. On a cover of `10` a deposit of `10^-15` rounds to zero, and after
-withdrawing `0.5` the same deposit is taken whole. -/
+/-- Witness: whether `roundedCoverAmount_precision_loss` fires depends on `coverAvailable`. A deposit
+of `10^-15` rounds to zero on a cover of `10`, and is taken whole on a cover of `9.5`, which is what a
+withdrawal of `0.5` leaves. -/
 theorem LoanBroker.roundedCoverAmount_precision_loss_attained :
-    ∃ (lb : LoanBroker) (pool : Vault) (d w : STAmount) (r1 : LoanBrokerCoverResult),
-      lb.roundedCoverAmount d = .ok (.rejected .tecPRECISION_LOSS) ∧
-      lb.canCoverWithdraw pool w = .ok .tesSUCCESS ∧ lb.coverWithdraw w = .ok (.ok r1) ∧
-      r1.loanBroker'.roundedCoverAmount d = .ok (.rounded d) :=
-  LoanBroker.coverDeposit_after_withdraw_witness
+    ∃ (lb lb' : LoanBroker) (amount : STAmount), lb'.numericType = lb.numericType ∧
+      lb'.toExact.coverAvailable < lb.toExact.coverAvailable ∧
+      lb.roundedCoverAmount amount = .ok (.rejected .tecPRECISION_LOSS) ∧
+      lb'.roundedCoverAmount amount = .ok (.rounded amount) :=
+  LoanBroker.roundedCoverAmount_precision_loss_witness
 
 /-- Otherwise the amount passes, rounded down to the scale of `coverAvailable`. -/
 theorem LoanBroker.roundedCoverAmount_rounded (amount r : STAmount)

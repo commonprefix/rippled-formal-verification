@@ -1,6 +1,6 @@
 import XRPL.Properties.Lending.LoanBroker.Defs
 
-/-! # Witness for the cover floor at two vault scales
+/-! # Witness for the minimum cover at two vault scales
 
 A broker that meets the minimum cover at one vault scale but not at a coarser one, checked
 by `native_decide`. -/
@@ -11,34 +11,27 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-/-- An IOU broker with one loan, `debtTotal` `12.34567890123`, `coverRateMinimum`
-`10%` and `coverAvailable` `1.3`. -/
-def wbFloor : RawLoanBroker :=
-  { numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 10000
-  , coverRateLiquidation := 10000, debtTotal := ⟨false, 1234567890123000000, -17⟩
-  , debtMaximum := Number.zero, coverAvailable := ⟨false, 1300000000000000000, -18⟩
-  , loanCount := 1 }
-
-def wbFloorL : LoanBroker := ⟨wbFloor, by native_decide, by native_decide⟩
-
-/-- The cover floor holds at vault scale `e` and fails at vault scale `e'`. -/
-def floorFlips (lb : LoanBroker) (e e' : Int) : Bool :=
-  match lb.hasMinimumCover e, lb.hasMinimumCover e' with
-  | .ok true, .ok false => true
+/-- The minimum cover at vault scale `e` is strictly below the one at vault scale `e'`. -/
+def minCoverRises (nt : NumericType) (debtTotal : Number) (rate : TenthBips32) (e e' : Int) : Bool :=
+  match minimumBrokerCover nt debtTotal rate e, minimumBrokerCover nt debtTotal rate e' with
+  | .ok m, .ok m' => decide (m.toRat < m'.toRat)
   | _, _ => false
 
-private lemma floorFlips_witness : floorFlips wbFloorL (-13) 0 = true := by native_decide
+private lemma minCoverRises_witness :
+    minCoverRises .fractional ⟨false, 1234567890123000000, -17⟩ 10000 (-13) 0 = true := by
+  native_decide
 
-/-- A broker can hold the minimum cover at a finer vault scale and fall below it
-at a coarser one. -/
-lemma LoanBroker.hasMinimumCover_scale_witness :
-    ∃ (lb : LoanBroker) (e e' : Int), e < e' ∧ lb.HasMinimumCover e ∧
-      lb.hasMinimumCover e' = .ok false := by
-  have h := floorFlips_witness
-  unfold floorFlips at h
+/-- A debt of `12.34567890123` at `10%` needs `1.234567890123` of cover at vault scale `10^-13`,
+but `2` at vault scale `10^0`. -/
+lemma minimumBrokerCover_scale_witness :
+    ∃ (nt : NumericType) (debtTotal : Number) (rate : TenthBips32) (e e' : Int) (m m' : Number),
+      e < e' ∧ -96 ≤ e ∧ e' ≤ 80 ∧ minimumBrokerCover nt debtTotal rate e = .ok m ∧
+      minimumBrokerCover nt debtTotal rate e' = .ok m' ∧ m.toRat < m'.toRat := by
+  have h := minCoverRises_witness
+  unfold minCoverRises at h
   split at h
-  · rename_i h1 h2
-    exact ⟨_, -13, 0, by decide, h1, h2⟩
+  · rename_i m m' hm hm'
+    exact ⟨_, _, _, -13, 0, m, m', by decide, by decide, by decide, hm, hm', of_decide_eq_true h⟩
   · exact absurd h (by decide)
 
 end XRPL.Model.Lending

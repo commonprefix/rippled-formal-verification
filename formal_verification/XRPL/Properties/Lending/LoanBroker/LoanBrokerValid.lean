@@ -22,9 +22,8 @@ lemma debtMaximumCap_facts :
   rw [hcap, hval, show (9223372036854775807 : Int64).toInt = 9223372036854775807 from by decide]
   push_cast; norm_num
 
-/-- For a well-formed representation, the operator invariant (`RawLoanBroker.Valid`) and the
-exact-rational invariant coincide. `WF` is required because `operator_le` is faithful to `≤`
-only on normalized `Number`s. -/
+/-- For a well-formed broker, the `Number` checks of `Valid` and their exact versions agree. `WF` is
+needed because `operator_le` matches `≤` only on normalized `Number`s. -/
 theorem RawLoanBroker.valid_iff_exact (rb : RawLoanBroker) (hwf : rb.WF) :
     rb.Valid ↔ rb.toExact.Valid := by
   constructor

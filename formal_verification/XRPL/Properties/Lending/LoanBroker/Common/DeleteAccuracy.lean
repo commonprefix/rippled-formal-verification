@@ -18,8 +18,8 @@ private lemma roundedCoverAvailable_zero_iou (lb : LoanBroker) (s : STAmount)
     STAmount.ofNumber_fractional_zero, Except.ok.injEq] at hok
   rw [← hok]
 
-/-- **Proof body of `roundedCoverAvailable_within_half`.** -/
-lemma LoanBroker.roundedCoverAvailable_within_half_proof (lb : LoanBroker) (s : STAmount)
+/-- **Proof body of `roundedCoverAvailable_bounds`.** -/
+lemma LoanBroker.roundedCoverAvailable_bounds_proof (lb : LoanBroker) (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s) (hnz : s.mValue ≠ 0) :
     |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent := by
   unfold LoanBroker.roundedCoverAvailable at hok

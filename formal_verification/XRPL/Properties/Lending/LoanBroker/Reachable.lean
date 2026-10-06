@@ -11,8 +11,8 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- Every reachable broker is lawful: it is well formed and valid. Each operation
-re-checks the new broker and returns a `LoanBroker`, which carries both proofs. -/
+/-- Every reachable broker is lawful: it is well formed and valid. Each operation re-checks the new
+broker and returns a `LoanBroker`, which holds both proofs. -/
 theorem LoanBroker.Reachable.lawful (_hr : lb.Reachable) :
     lb.toRawLoanBroker.WF ∧ lb.toRawLoanBroker.Valid :=
   ⟨lb.wf, lb.valid⟩

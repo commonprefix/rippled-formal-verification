@@ -13,8 +13,8 @@ open XRPL.Model.Result
 
 variable (lb : LoanBroker)
 
-/-- The rounded amount never exceeds the requested amount, and stays within one
-step `10 ^ e` of the cover scale below it. -/
+/-- The rounded amount never exceeds the requested amount, and is less than one unit of the cover
+scale (`10 ^ e`) below it. -/
 theorem LoanBroker.roundedCoverAmount_bounds (amount r : STAmount) (e : Int)
     (hcanon : amount.integral = false → amount.IOUCanonical)
     (hexp : numberExponent lb.coverAvailable lb.numericType = .ok e)

@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.LoanBroker.Common.GuardProofs
 import XRPL.Properties.Lending.LoanBroker.Common.Create
+import XRPL.Properties.Lending.LoanBroker.Common.SetWitness
 
 /-! # `LoanBrokerSet` exits
 
@@ -31,6 +32,13 @@ theorem LoanBroker.canCreate_error_codes (debtMaximum : Option Number) (nt : Num
     ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS :=
   LoanBroker.canCreate_error_codes_proof debtMaximum nt ter hok
 
+/-- Witness: `canCreate_error_codes` covers only the checks that return a code. On an XRP vault a
+`debtMaximum` of `10^18` drops is in range, but the check throws instead of returning one. -/
+theorem LoanBroker.canCreate_error_codes_attained :
+    ∃ dm : Number, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
+      dm.operator_le debtMaximumCap = true ∧ LoanBroker.canCreate (some dm) .native = .error .outOfRange :=
+  LoanBroker.canCreate_error_codes_witness
+
 /-- A nonzero new `debtMaximum` that compares below the current `debtTotal`:
 `tecLIMIT_EXCEEDED`. -/
 theorem LoanBroker.canUpdate_limit_exceeded (dm : Number)
@@ -61,6 +69,14 @@ theorem LoanBroker.canUpdate_error_codes (debtMaximum : Option Number)
     (ter : TER) (hok : lb.canUpdate debtMaximum = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS :=
   LoanBroker.canUpdate_error_codes_proof lb debtMaximum ter hok
+
+/-- Witness: `canUpdate_error_codes` covers only the checks that return a code. On an XRP broker a
+`debtMaximum` of `10^18` drops is in range, but the check throws instead of returning one. -/
+theorem LoanBroker.canUpdate_error_codes_attained :
+    ∃ (lb : LoanBroker) (dm : Number), lb.numericType = .native ∧ dm.isNormalized ∧
+      Number.zero.operator_le dm = true ∧ dm.operator_le debtMaximumCap = true ∧
+      lb.canUpdate (some dm) = .error .outOfRange :=
+  LoanBroker.canUpdate_error_codes_witness
 
 /-- On a lawful broker, a normalized new `debtMaximum` passes exactly when it is
 zero or at least `debtTotal`, and the vault asset holds it exactly. -/

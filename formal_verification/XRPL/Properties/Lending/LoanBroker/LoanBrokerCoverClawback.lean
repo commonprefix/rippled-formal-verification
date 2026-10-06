@@ -16,9 +16,9 @@ variable {α : Type} [AssetPool α]
 
 variable (lb : LoanBroker)
 
-/-- With no amount or a zero amount, the clawback takes all cover above the minimum
-cover, rounded down to a `Number` and then to nearest in the vault asset. A nonzero claw
-amount is within half a unit of its exponent from that rounded-down difference. -/
+/-- With no amount or a zero amount, the clawback takes all cover above the minimum cover, rounded
+down to a `Number` and then to nearest in the vault asset. A nonzero clawed amount is off from
+that difference by at most half a unit in its last digit. -/
 theorem LoanBroker.roundedCoverClawback_all (pool : α)
     (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
@@ -33,9 +33,9 @@ theorem LoanBroker.roundedCoverClawback_all (pool : α)
   LoanBroker.roundedCoverClawback_all_proof lb pool amount e minimumCover maxClaw claw hexp hmin
     hsub hpos hall hclaw
 
-/-- Otherwise the clawback takes the requested amount, capped at the cover above the
-minimum and rounded to nearest in the vault asset. A nonzero claw amount is within half a
-unit of its exponent from the smaller of the two. -/
+/-- Otherwise the clawback takes the requested amount, capped at the cover above the minimum and
+rounded to nearest in the vault asset. A nonzero clawed amount is off from the smaller of the two
+by at most half a unit in its last digit. -/
 theorem LoanBroker.roundedCoverClawback_capped (pool : α) (a : STAmount)
     (e : Int) (minimumCover maxClaw magnitude : Number) (claw : STAmount)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
@@ -130,9 +130,8 @@ theorem LoanBroker.coverClawback_monotone (pool : α) (a b : STAmount)
   LoanBroker.coverClawback_monotone_proof lb pool a b ra rb hoka hokb hac hbc hat ha0 hza hzb hab
     hcanb
 
-/-- A clawback can leave `coverAvailable` below the minimum cover, but by at most half
-a unit of the claw amount's exponent. Only the final to-nearest rounding can take it
-below the minimum. -/
+/-- A clawback can leave `coverAvailable` below the minimum cover, but only by half a unit in the
+last digit of the clawed amount. Only the final rounding to nearest can take it below the minimum. -/
 theorem LoanBroker.coverClawback_keeps_minimum_within_half (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
     (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
@@ -147,15 +146,16 @@ theorem LoanBroker.coverClawback_keeps_minimum_within_half (pool : α)
   LoanBroker.coverClawback_keeps_minimum_within_half_proof lb pool amount res e minimumCover hcan
     hok hexp hmin hreq hexact
 
-/-- Witness: the half-unit term in `coverClawback_keeps_minimum_within_half`
-cannot be dropped, a run whose checks passed leaves `coverAvailable` below the
-minimum cover. XLS-66 says the minimum cover is always kept. -/
+/-- Witness: the half-unit term in `coverClawback_keeps_minimum_within_half` cannot be dropped. A full
+clawback that passes its checks, with an exact difference, leaves `coverAvailable` below the minimum cover. -/
 theorem LoanBroker.coverClawback_keeps_minimum_within_half_attained :
-    ∃ (lb : LoanBroker) (pool : Vault) (res : LoanBrokerCoverResult) (e : Int),
+    ∃ (lb : LoanBroker) (pool : Vault) (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number),
       lb.canCoverClawback pool none = .ok .tesSUCCESS ∧
       lb.coverClawback pool none = .ok (.ok res) ∧
       AssetPool.exponent pool lb.numericType = .ok e ∧
-      ¬ res.loanBroker'.HasMinimumCover e :=
+      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover ∧
+      (∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) ∧
+      0 < minimumCover.toRat - res.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverClawback_keeps_minimum_within_half_witness
 
 /-- With no amount or a zero amount, a clawback whose checks passed leaves exactly

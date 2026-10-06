@@ -52,41 +52,21 @@ def wbTen : RawLoanBroker :=
 
 def wbTenL : LoanBroker := ⟨wbTen, by native_decide, by native_decide⟩
 
-/-- The deposit, `10^-15`. It rounds to zero at scale `10^-14`. -/
+/-- An IOU broker holding `9.5` of cover, scale `10^-15`: `wbTen` after withdrawing `0.5`. -/
+def wbNineHalf : RawLoanBroker := { wbTen with coverAvailable := ⟨false, 9500000000000000000, -18⟩ }
+
+def wbNineHalfL : LoanBroker := ⟨wbNineHalf, by native_decide, by native_decide⟩
+
+/-- The deposit, `10^-15`. It rounds to zero at scale `10^-14` and not at scale `10^-15`. -/
 def waDepositSmall : STAmount := STAmount.unchecked .fractional 1000000000000000 (-30) false
 
-/-- The withdrawal, `0.5`. It lowers the cover to `9.5`, scale `10^-15`. -/
-def waWithdrawHalf : STAmount := STAmount.unchecked .fractional 5000000000000000 (-16) false
-
-/-- The deposit is rejected first, and taken whole after the withdrawal. -/
-def depositAfterWithdraw (lb : LoanBroker) (pool : Vault) (d w : STAmount) : Bool :=
-  match lb.roundedCoverAmount d, lb.canCoverWithdraw pool w, lb.coverWithdraw w with
-  | .ok (.rejected .tecPRECISION_LOSS), .ok .tesSUCCESS, .ok (.ok r1) =>
-    match r1.loanBroker'.roundedCoverAmount d with
-    | .ok (.rounded r) => r == d
-    | _ => false
-  | _, _, _ => false
-
-private lemma depositAfterWithdraw_witness :
-    depositAfterWithdraw wbTenL wvPoolL waDepositSmall waWithdrawHalf = true := by native_decide
-
-/-- A deposit can be rejected before a withdrawal and taken whole after it. -/
-lemma LoanBroker.coverDeposit_after_withdraw_witness :
-    ∃ (lb : LoanBroker) (pool : Vault) (d w : STAmount) (r1 : LoanBrokerCoverResult),
-      lb.roundedCoverAmount d = .ok (.rejected .tecPRECISION_LOSS) ∧
-      lb.canCoverWithdraw pool w = .ok .tesSUCCESS ∧ lb.coverWithdraw w = .ok (.ok r1) ∧
-      r1.loanBroker'.roundedCoverAmount d = .ok (.rounded d) := by
-  have h := depositAfterWithdraw_witness
-  unfold depositAfterWithdraw at h
-  split at h
-  · rename_i r1 h1 h2 h3
-    split at h
-    · rename_i r h4
-      rw [beq_iff_eq] at h
-      subst h
-      exact ⟨_, _, _, _, r1, h1, h2, h3, h4⟩
-    · exact absurd h (by decide)
-  · exact absurd h (by decide)
+/-- The same deposit is rejected on a cover of `10` and taken whole on a cover of `9.5`. -/
+lemma LoanBroker.roundedCoverAmount_precision_loss_witness :
+    ∃ (lb lb' : LoanBroker) (amount : STAmount), lb'.numericType = lb.numericType ∧
+      lb'.toExact.coverAvailable < lb.toExact.coverAvailable ∧
+      lb.roundedCoverAmount amount = .ok (.rejected .tecPRECISION_LOSS) ∧
+      lb'.roundedCoverAmount amount = .ok (.rounded amount) :=
+  ⟨wbTenL, wbNineHalfL, waDepositSmall, by native_decide⟩
 
 /-- The withdrawal passes its checks and leaves a 17-digit `coverAvailable`. -/
 def withdrawRounds (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Bool :=
