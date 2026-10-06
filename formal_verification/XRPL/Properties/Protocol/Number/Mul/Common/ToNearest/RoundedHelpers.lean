@@ -197,7 +197,7 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
     obtain ⟨n_lo, h_lo_eq, h_lo_toRat⟩ := h_branchA
     left
     exact ⟨n_lo, h_lo_eq, h_lo_toRat⟩
-  · push_neg at h_le
+  · push Not at h_le
     have h_ge : truth ≤ result.toRat := le_of_lt h_le
     have h_no_inbetween : ∀ m : Number, m.isNormalized →
                           m.toRat < result.toRat → ¬ (truth ≤ m.toRat) := by

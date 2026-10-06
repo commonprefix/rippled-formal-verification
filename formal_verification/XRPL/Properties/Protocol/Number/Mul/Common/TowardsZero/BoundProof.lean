@@ -90,7 +90,7 @@ theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
       exact absurd hfire Bool.noConfusion
   -- ===== IN RANGE: zm ≤ maxRep =====
   have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze' h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
-  simp only at h_tr_val
+  try simp only at h_tr_val
   have h_result_abs_eq : |result.toRat| = (zm.toNat : ℚ) * 10 ^ ze' := by
     rw [h_result_abs]; exact h_tr_val
   have h_direction : |result.toRat| ≤ |x.toRat * y.toRat| := by

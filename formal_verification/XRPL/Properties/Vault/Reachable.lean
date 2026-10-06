@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Common.ReachableDefs
-import XRPL.Properties.Vault.Common.ReachableProofs
+import XRPL.Properties.Vault.Proofs.Reachable
 
 /-! # Vault reachability (statement sketch)
 

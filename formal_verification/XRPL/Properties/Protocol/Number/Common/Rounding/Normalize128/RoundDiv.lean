@@ -111,7 +111,7 @@ theorem doNormalize_scaleDown128_valueInv
     have hm_ge : (10 : ℕ) ^ 19 ≤ m.toNat := by rw [hmaxM] at hgt_nat; omega
     have hp_le : p ≤ 3 := by
       by_contra hpc
-      push_neg at hpc
+      push Not at hpc
       have h1 : (10 : ℕ) ^ 19 * 10 ^ p < 10 ^ 23 := lt_of_le_of_lt (Nat.mul_le_mul_right _ hm_ge) hsize
       have h2 : (10 : ℕ) ^ 23 ≤ 10 ^ 19 * 10 ^ p := by
         rw [← pow_add]; exact Nat.pow_le_pow_right (by norm_num) (by omega)
@@ -241,7 +241,7 @@ theorem doNormalize_capAtMaxRep_valueInv
       have hm_ge : (10 : ℕ) ^ 18 ≤ m.toNat := by omega
       have hp_le : p ≤ 4 := by
         by_contra hpc
-        push_neg at hpc
+        push Not at hpc
         have h1 : (10 : ℕ) ^ 18 * 10 ^ p < 10 ^ 23 := lt_of_le_of_lt (Nat.mul_le_mul_right _ hm_ge) hsize
         have h2 : (10 : ℕ) ^ 23 ≤ 10 ^ 18 * 10 ^ p := by
           rw [← pow_add]; exact Nat.pow_le_pow_right (by norm_num) (by omega)
@@ -345,7 +345,7 @@ lemma valueInv_le_half_of_dec_lt (decVal : ℕ) (x f : ℚ) (p : ℕ)
       obtain ⟨a, ha⟩ := hdvd16p
       obtain ⟨b, hb⟩ := htie_dvd
       have hab : a < b := by
-        by_contra h; push_neg at h
+        by_contra h; push Not at h
         have : 5 * 10 ^ 15 ≤ decVal := by
           rw [ha, hb]; exact Nat.mul_le_mul (le_refl _) h
         omega
@@ -367,7 +367,7 @@ lemma valueInv_le_half_of_dec_lt (decVal : ℕ) (x f : ℚ) (p : ℕ)
     rw [div_add' _ _ _ (ne_of_gt h16), div_lt_div_iff₀ h16 (by norm_num)]
     nlinarith [hdle, hx16]
   · -- p ≥ 16: tail below 10^-16, integer gap of 1 suffices
-    push_neg at hp16
+    push Not at hp16
     have hxbound : x < 1 / 10 ^ 16 := by
       have hle : (1 : ℚ) / 10 ^ p ≤ 1 / 10 ^ 16 := by
         apply div_le_div_of_nonneg_left (by norm_num) (by positivity)

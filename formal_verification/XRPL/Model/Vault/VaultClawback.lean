@@ -33,8 +33,6 @@ def assetsToSharesClawback (v : Vault) (assets holderShares : STAmount) : Except
 
 def computeClawback (v : Vault) (assets holderShares : STAmount) : Except Error ComputeClawbackResult := do
   let result : ComputeClawbackResult := ⟨none, STAmount.zero v.numericType, STAmount.zero .int64⟩
-  if assets.negative then
-    return {result with error := some .tecINTERNAL}
   try
     let mut sharesDestroyed ← assetsToSharesClawback v assets holderShares
     let mut assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
@@ -60,7 +58,9 @@ def computeClawback (v : Vault) (assets holderShares : STAmount) : Except Error 
       throw e
 
 
-def Vault.clawback (v : Vault) (assets holderShares : STAmount) : Except Error ClawbackResult := do
+-- `hnn`: the preflight check `sfAmount >= 0` passed (zero means all); callers outside the model check it
+def Vault.clawback (v : Vault) (assets holderShares : STAmount)
+    (_hnn : 0 ≤ assets.toRat) : Except Error ClawbackResult := do
   let vault := v.toRawVault
   let result ← computeClawback v assets holderShares
   if result.error.isSome then

@@ -154,7 +154,7 @@ lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
       rw [hmin]
       have h_em_strict : m.exponent_ ≥ e_q + 1 := by
         by_contra h_not
-        push_neg at h_not
+        push Not at h_not
         have h_em_eq : m.exponent_ = e_q := by omega
         have h_m_real_le_mant : m_real ≤ (m.mantissa_.toNat : ℚ) := by
           have h_toRat : (m.mantissa_.toNat : ℚ) * (10 : ℚ) ^ m.exponent_ ≥ q := h_ge_mant
@@ -174,7 +174,7 @@ lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
           simp only at h_bump_eq
           by_cases hb3 : ((m_ceil_nat + 9) / 10) * 10 < 10^19
           · rw [if_pos hb3] at h_bump_eq; exact absurd h_bump_eq (by simp)
-          push_neg at hb3
+          push Not at hb3
           have h_div_eq : 10 * ((m_ceil_nat + 9) / 10) + (m_ceil_nat + 9) % 10 = m_ceil_nat + 9 :=
             Nat.div_add_mod (m_ceil_nat + 9) 10
           have h_mod_lt : (m_ceil_nat + 9) % 10 < 10 := Nat.mod_lt _ (by omega)
@@ -267,7 +267,7 @@ lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         · left; exact hv
         · by_cases h_le : m.mantissa_.toNat ≤ maxRep.toNat
           · left; exact h_le
-          · push_neg at h_le
+          · push Not at h_le
             right; exact ⟨h_le, hv, h_m_lt⟩
       have h_tight : m_out ≤ m.mantissa_.toNat :=
         bumpToValidMantissa_tight m_ceil_nat m_out h_bump_eq m.mantissa_.toNat h_k_valid h_ceil_le
@@ -301,7 +301,7 @@ lemma exponent_le_of_toRat_le_pos (q : ℚ) (_hq : 0 < q) (m : Number)
     exact mul_le_mul_of_nonneg_right h_mant_ge_cast' (le_of_lt h_pow_em_pos)
   have h_pow_le_q : (10 : ℚ) ^ (m.exponent_ + 18) ≤ q := le_trans h_lower h_le
   by_contra h_not
-  push_neg at h_not
+  push Not at h_not
   have h_exp_lower : m.exponent_ + 18 ≥ Int.log 10 q + 1 := by linarith
   have h_pow_mono : (10 : ℚ) ^ (Int.log 10 q + 1) ≤ (10 : ℚ) ^ (m.exponent_ + 18) :=
     zpow_le_zpow_right₀ (by norm_num) h_exp_lower
@@ -427,7 +427,7 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
               apply truncToValidMantissa_tight m_floor_nat m.mantissa_.toNat
               · by_cases h_le_mr : m.mantissa_.toNat ≤ maxRep.toNat
                 · left; exact h_le_mr
-                · push_neg at h_le_mr
+                · push Not at h_le_mr
                   right
                   refine ⟨h_le_mr, ?_, h_m_lt⟩
                   rcases h_m_valid with h_v | h_v
@@ -461,13 +461,13 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
           · have h_eq : truncToValidMantissa m_floor_nat = m_floor_nat := by
               unfold truncToValidMantissa; rw [if_pos h1]
             rw [h_eq]; exact h_floor_ge
-          · push_neg at h1
+          · push Not at h1
             by_cases h2 : m_floor_nat < cuspMin
             · have h_eq : truncToValidMantissa m_floor_nat = maxRep.toNat := by
                 unfold truncToValidMantissa
                 rw [if_neg (by omega), if_pos h2]
               rw [h_eq]; omega
-            · push_neg at h2
+            · push Not at h2
               have h_eq : truncToValidMantissa m_floor_nat = (m_floor_nat / 10) * 10 := by
                 unfold truncToValidMantissa
                 rw [if_neg (by omega), if_neg (by omega)]
@@ -487,7 +487,7 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         refine ⟨?_, ?_⟩
         · rw [h_min]; exact h_tr_ge_pow18
         · exact h_tr_lt_64
-  · push_neg at h_m_neg
+  · push Not at h_m_neg
     have h_m_neg' : m.negative_ = true := by
       cases hmm : m.negative_
       · exact absurd hmm h_m_neg

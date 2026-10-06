@@ -37,7 +37,7 @@ lemma doNormalize128_scaleUp_exit_exp (minMant : UInt64) (m : UInt128) (e : Int)
       simp only [if_neg hcond]]
     intro hlt
     by_contra hgt
-    push_neg at hgt
+    push Not at hgt
     exact hcond ⟨hlt, hgt⟩
 
 /-- A fired 128-bit scale-down exits at or above `(maxMantissa+1)/10`: with
@@ -106,7 +106,7 @@ lemma doNormalize_scaleDown128_output_le
     obtain rfl := (Except.ok.inj h).symm
     have hle : m.toNat ≤ (toUInt128 largeRange.max).toNat := by
       by_contra hc
-      push_neg at hc
+      push Not at hc
       exact hgt' (BitVec.lt_def.mpr hc)
     rw [toNat_toUInt128, largeRange_max_val] at hle
     exact hle
@@ -162,7 +162,7 @@ theorem doNormalize128_doRoundUp_stage
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
@@ -441,7 +441,7 @@ theorem doNormalize128_algorithmic_facts
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
@@ -714,7 +714,7 @@ theorem doNormalize128_underflow_value_small
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
         by_contra h
-        push_neg at h
+        push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp

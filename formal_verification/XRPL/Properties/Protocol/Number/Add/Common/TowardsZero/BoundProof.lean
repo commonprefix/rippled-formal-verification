@@ -28,7 +28,7 @@ theorem operator_add_rounding_bound_same_sign_towards_zero (x y : Number) (resul
   · -- In-range: plain truncate.
     have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze' h_zm_le_rep
       .overflow res_pos h_rup_pos hres_pos_mant_ne
-    simp only at h_tr_val
+    try simp only at h_tr_val
     have h_result_abs_eq : |result.toRat| = (zm.toNat : ℚ) * 10 ^ ze' := by
       rw [h_result_abs]; exact h_tr_val
     have h_direction : |result.toRat| ≤ |x.toRat + y.toRat| := by
@@ -44,7 +44,7 @@ theorem operator_add_rounding_bound_same_sign_towards_zero (x y : Number) (resul
       exact releps_lift h_inner h10ze'_pos
     exact ⟨h_direction, h_magnitude⟩
   · -- Cusp range: maxRep < zm ≤ maxRepUp.
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .towards_zero
       h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = v * 10 ^ ze' := by

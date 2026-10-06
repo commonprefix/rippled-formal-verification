@@ -89,7 +89,7 @@ lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (r
       rw [abs_mul, abs_of_pos (zpow_pos (by norm_num : (0:ℚ) < 10) _), Nat.cast_natAbs]; push_cast; ring
     have hvabs : |v.toRat| = (v.mantissa_.toNat : ℚ) * 10 ^ v.exponent_ := _root_.XRPL.Model.Protocol.abs_toRat_eq v
     have hvexp : v.exponent_ ≤ e := by
-      by_contra hc; push_neg at hc
+      by_contra hc; push Not at hc
       have h1 : (10 : ℚ) ^ (e + 1) ≤ 10 ^ v.exponent_ := zpow_le_zpow_right₀ (by norm_num) (by omega)
       have hvm18 : (10 : ℚ) ^ (18 : ℕ) ≤ (v.mantissa_.toNat : ℚ) := by exact_mod_cast hv_mant.1
       have hmlt : (m.toInt.natAbs : ℚ) < (10 : ℚ) ^ (18 : ℕ) := by exact_mod_cast hm_hi

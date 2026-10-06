@@ -321,7 +321,7 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
     have hup : maxRepUp.toNat = maxRepUpNat := rfl
     rw [hup] at hb2; omega
   have h_exp_le : n.exponent_ ≤ maxExponent := by
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     unfold Number.normalize doNormalize at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
     simp only [Bool.false_eq_true, if_false] at hok
@@ -355,7 +355,7 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
         exact absurd hok (by intro hc; cases hc)
   have h_mru_exp : n.mantissa_.toNat > maxRepUp.toNat → n.exponent_ < maxExponent := by
     intro h_mru_nat
-    by_contra h_ge; push_neg at h_ge
+    by_contra h_ge; push Not at h_ge
     unfold Number.normalize doNormalize at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
     simp only [Bool.false_eq_true, if_false] at hok
@@ -407,7 +407,7 @@ lemma Number.normalize_exp_bound {n result : Number} {mode : rounding_mode}
     rw [maxRep_val] at hb1
     have hup : maxRepUp.toNat = maxRepUpNat := rfl
     rw [hup] at hb2; omega
-  by_contra h; push_neg at h
+  by_contra h; push Not at h
   unfold Number.normalize doNormalize at hok
   rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
   simp only [Bool.false_eq_true, if_false] at hok
@@ -498,7 +498,7 @@ lemma Number.normalize_isNormalized_of_invariants {res : RoundResult} {result : 
     · left
       change res.mantissa_ ≤ maxRep
       rw [UInt64.le_iff_toNat_le]; exact h_cusp
-    · push_neg at h_cusp
+    · push Not at h_cusp
       right
       change res.mantissa_.toNat % 10 = 0
       exact h_mod h_cusp

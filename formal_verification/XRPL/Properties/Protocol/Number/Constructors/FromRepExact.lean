@@ -105,7 +105,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
   -- the keystone lower bound `M ≥ 10^18`, from exit-exponent + value + exponent room
   have hM_lo : 10 ^ 18 ≤ M.toNat := by
     by_contra hlt
-    push_neg at hlt
+    push Not at hlt
     have hMlt : M < largeRange.min := by rw [UInt64.lt_iff_toNat_lt, hminN]; omega
     have hexit := doNormalize_scaleUp_exit_exp largeRange.min m e
     simp only [hMe1] at hexit

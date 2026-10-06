@@ -259,7 +259,7 @@ theorem operator_add_rounded_to_nearest_proof (x y result : Number)
       h_truth_ne h_bound h_truth_top h_le
       (operator_add_no_inbetween_below_to_nearest x y result hx hy hx_mant_ne hy_mant_ne heq_guard
         hok hresult h_le)
-  · push_neg at h_le
+  · push Not at h_le
     have h_ge : x.toRat + y.toRat ≤ result.toRat := le_of_lt h_le
     right
     exact closest_upper_of_no_inbetween result (x.toRat + y.toRat) h_result_norm hresult

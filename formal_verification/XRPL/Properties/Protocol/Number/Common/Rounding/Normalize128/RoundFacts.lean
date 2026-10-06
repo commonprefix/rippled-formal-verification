@@ -153,7 +153,7 @@ theorem doNormalize128_algorithmic_facts_round
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund
       have hM₂_ge : 1000000000000000000 ≤ sd.1.toNat := by
-        by_contra h; push_neg at h
+        by_contra h; push Not at h
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp

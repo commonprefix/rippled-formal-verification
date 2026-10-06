@@ -54,7 +54,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
       · -- CUSP (zm = maxRep)
         have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_cusp_val
+        try simp only at h_cusp_val
         rw [h_cusp_val]
         have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
           rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
@@ -82,7 +82,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
         have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
         have h_nc_val := doRoundUp_value_downward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
           .overflow res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_nc_val
+        try simp only at h_nc_val
         rw [h_nc_val]
         have h_diff : ((zm.toNat : ℚ) + 1) * 10 ^ ze' - ((zm.toNat : ℚ) + f) * 10 ^ ze'
             = (1 - f) * 10 ^ ze' := by ring
@@ -96,7 +96,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
     · -- NO ROUND UP (truncate)
       have h_tr_val := doRoundUp_value_downward_truncate g false zm ze' h_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_tr_val
+      try simp only at h_tr_val
       rw [h_tr_val]
       have h_diff : (zm.toNat : ℚ) * 10 ^ ze' - ((zm.toNat : ℚ) + f) * 10 ^ ze'
           = -f * 10 ^ ze' := by ring
@@ -106,7 +106,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
       have h_inner : f < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) := f_lt_releps hzm_q_ge hf_lt1
       exact releps_lift h_inner h10ze'_pos
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
       h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
     rw [hv_val]

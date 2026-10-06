@@ -87,7 +87,7 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
           = (((zm.toNat : ℚ) + f) * (10 / (2 ^ 63 - 8 : ℚ))) * 10 ^ ze from by ring]
     exact mul_le_mul_of_nonneg_right hX h10ze_nn
   unfold Guard.doRoundUp at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   by_cases hb : ((gP.round mode == 1) || ((gP.round mode == 0) && (zm % 2 == 1))) = true
   · rw [if_pos hb] at hok_pos
@@ -411,7 +411,7 @@ lemma doRoundUp_value_cuspRange_cases
             ∧ ((g.round mode == 1) || ((g.round mode == 0) && (zm % 2 == 1))) = true)) := by
   have hmaxRepUp_toNat : maxRepUp.toNat = maxRepUpNat := rfl
   unfold Guard.doRoundUp at hok_pos
-  simp only [Guard.doDropDigit] at hok_pos
+  dsimp only [Guard.doDropDigit] at hok_pos
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   have hncusp1 : ¬ zm < maxRep := by
     rw [UInt64.lt_iff_toNat_lt]
@@ -641,7 +641,7 @@ theorem doRoundUp_value_downward_truncate
     roundUp_bool_downward_false g zm h_no_roundUp
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -664,17 +664,17 @@ theorem doRoundUp_value_downward_truncate
     by_cases h_under : ze' - 1 < minExponent ∨ zm * 10 = 0
     · exfalso; apply hne'
       rw [bringIntoRange_rescale_result hresc hzm_ne, if_pos h_under]
-    · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((zm * 10).toNat : ℚ) * 10 ^ (ze' - 1) = (zm.toNat : ℚ) * 10 ^ ze'
       rw [hzm_mul_10]; push_cast
       rw [show (ze' - 1 : ℤ) = ze' + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]
       field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : ze' < minExponent ∨ zm = 0
     · exfalso; apply hne'
-      rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+      rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
 
 /-- The round-up no-cusp case for `.downward`. -/
@@ -698,7 +698,7 @@ theorem doRoundUp_value_downward_roundUp_noCusp
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
   have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
@@ -725,15 +725,15 @@ theorem doRoundUp_value_downward_roundUp_noCusp
       exact Nat.mod_eq_of_lt this
     by_cases h_under : ze' - 1 < minExponent ∨ (zm + 1) * 10 = 0
     · exfalso; apply hne'; rw [bringIntoRange_rescale_result hresc h_m1_ne, if_pos h_under]
-    · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((((zm + 1) * 10)).toNat : ℚ) * 10 ^ (ze' - 1) = ((zm.toNat : ℚ) + 1) * 10 ^ ze'
       rw [h_m1_mul10_toNat, hm_add1_toNat]; push_cast
       rw [show (ze' - 1 : ℤ) = ze' + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]; field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : ze' < minExponent ∨ zm + 1 = 0
-    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
       change ((zm + 1).toNat : ℚ) * 10 ^ ze' = ((zm.toNat : ℚ) + 1) * 10 ^ ze'
       rw [hm_add1_toNat]; push_cast; ring
@@ -799,7 +799,7 @@ theorem doRoundUp_value_downward_roundUp_cusp
     intro h; have := UInt64.toNat_inj.mpr h; rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
   have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .downward == 1) || ((gP.round .downward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
     rw [h_gP_ru_true] at hok
@@ -820,8 +820,8 @@ theorem doRoundUp_value_downward_roundUp_cusp
   rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne]
   by_cases h_under : ze' + 1 - 1 < minExponent ∨ (zm / 10 + 1) * 10 = 0
   · exfalso; apply hne'; rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne, if_pos h_under]
-  · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-    rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+  · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+    rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
     change (((zm / 10 + 1) * 10).toNat : ℚ) * 10 ^ (ze' + 1 - 1) = maxRepCuspTarget * 10 ^ ze'
     rw [h_m1_mul10_toNat]; rw [show (ze' + 1 - 1 : ℤ) = ze' from by ring]; push_cast; ring
 
@@ -848,7 +848,7 @@ lemma doRoundUp_output_invariants_downward
     decide_eq_false h_m_not_ge_maxMant
   -- Unfold doRoundUp to extract res
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m .downward with hgP_def
   by_cases h_ru : (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true from h_ru] at hok
@@ -918,9 +918,9 @@ lemma doRoundUp_output_invariants_downward
       simp only [] at hok
       by_cases h_under : e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
         have h_not_under : ¬ (e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0) :=
-          by push_neg; exact ⟨hexp, hne10⟩
+          by push Not; exact ⟨hexp, hne10⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -960,7 +960,7 @@ lemma doRoundUp_output_invariants_downward
         by_cases h_under : e - 1 < minExponent ∨ (m + 1) * 10 = 0
         · underflow_absurd hne h_under hok
         · have h_nu := h_under
-          push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+          push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
           simp only [if_neg h_nu] at hok
           have h_no_ovf : ¬ (e - 1 > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -981,11 +981,11 @@ lemma doRoundUp_output_invariants_downward
           intro ⟨h, _⟩; exact h_resc h
         rw [if_neg h_no_resc_nc] at hok; simp only [] at hok
         have h_m1_ge_min : (m + 1).toNat ≥ largeRange.min.toNat := by
-          by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+          by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
         by_cases h_under : e < minExponent ∨ m + 1 = 0
         · underflow_absurd hne h_under hok
         · have h_nu := h_under
-          push_neg at h_under; obtain ⟨hexp, hm1ne⟩ := h_under
+          push Not at h_under; obtain ⟨hexp, hm1ne⟩ := h_under
           simp only [if_neg h_nu] at hok
           have h_no_ovf : ¬ (e > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1043,7 +1043,7 @@ lemma doRoundUp_output_invariants_downward
       by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
       · underflow_absurd hne h_under hok
       · have h_nu := h_under
-        push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+        push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
         simp only [if_neg h_nu] at hok
         have h_no_ovf : ¬ (e - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1064,11 +1064,11 @@ lemma doRoundUp_output_invariants_downward
         intro ⟨h, _⟩; exact h_resc h
       rw [if_neg h_no_resc_d] at hok; simp only [] at hok
       have h_m_ge_min : m.toNat ≥ largeRange.min.toNat := by
-        by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+        by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
       by_cases h_under : e < minExponent ∨ m = 0
       · underflow_absurd hne h_under hok
       · have h_nu := h_under
-        push_neg at h_under; obtain ⟨hexp, hmne⟩ := h_under
+        push Not at h_under; obtain ⟨hexp, hmne⟩ := h_under
         simp only [if_neg h_nu] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1107,7 +1107,7 @@ theorem doRoundUp_value_towards_zero_truncate
     roundUp_bool_towards_zero_false g zm
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
     unfold Guard.doRoundUp at hok
-    simp only [Guard.doDropDigit] at hok
+    dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -1128,15 +1128,15 @@ theorem doRoundUp_value_towards_zero_truncate
       m_mul_ten_no_overflow (UInt64.lt_iff_toNat_lt.mp hresc)
     by_cases h_under : ze' - 1 < minExponent ∨ zm * 10 = 0
     · exfalso; apply hne'; rw [bringIntoRange_rescale_result hresc hzm_ne, if_pos h_under]
-    · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((zm * 10).toNat : ℚ) * 10 ^ (ze' - 1) = (zm.toNat : ℚ) * 10 ^ ze'
       rw [hzm_mul_10]; push_cast
       rw [show (ze' - 1 : ℤ) = ze' + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]; field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : ze' < minExponent ∨ zm = 0
-    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
 
 /-- `.towards_zero` analogue of `doRoundUp_output_invariants_to_nearest`. -/
@@ -1164,7 +1164,7 @@ lemma doRoundUp_output_invariants_towards_zero
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_m_ne : m ≠ 0 := by intro h; rw [h] at h_lb; simp at h_lb
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   rw [h_pof] at hok
   rw [h_ru_false] at hok
   simp only [Bool.false_eq_true, ite_false] at hok
@@ -1179,7 +1179,7 @@ lemma doRoundUp_output_invariants_towards_zero
     by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
     · underflow_absurd hne h_under hok
     · have h_nu := h_under
-      push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
       simp only [if_neg h_nu] at hok
       have h_no_ovf : ¬ (e - 1 > maxExponent) := by
         intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1200,11 +1200,11 @@ lemma doRoundUp_output_invariants_towards_zero
       intro ⟨h, _⟩; exact h_resc h
     rw [if_neg h_no_resc_tz] at hok; simp only [] at hok
     have h_m_ge_min : m.toNat ≥ largeRange.min.toNat := by
-      by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+      by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
     by_cases h_under : e < minExponent ∨ m = 0
     · underflow_absurd hne h_under hok
     · have h_nu := h_under
-      push_neg at h_under; obtain ⟨hexp, hmne⟩ := h_under
+      push Not at h_under; obtain ⟨hexp, hmne⟩ := h_under
       simp only [if_neg h_nu] at hok
       have h_no_ovf : ¬ (e > maxExponent) := by
         intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1371,7 +1371,7 @@ theorem doRoundUp_value_upward_truncate
       ((g.round .upward == 1) || ((g.round .upward == 0) && (zm % 2 == 1))) = false :=
     roundUp_bool_upward_false g zm h_no_roundUp
   have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -1392,15 +1392,15 @@ theorem doRoundUp_value_upward_truncate
       m_mul_ten_no_overflow (UInt64.lt_iff_toNat_lt.mp hresc)
     by_cases h_under : ze' - 1 < minExponent ∨ zm * 10 = 0
     · exfalso; apply hne'; rw [bringIntoRange_rescale_result hresc hzm_ne, if_pos h_under]
-    · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((zm * 10).toNat : ℚ) * 10 ^ (ze' - 1) = (zm.toNat : ℚ) * 10 ^ ze'
       rw [hzm_mul_10]; push_cast
       rw [show (ze' - 1 : ℤ) = ze' + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]; field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : ze' < minExponent ∨ zm = 0
-    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
 
 /-- The round-up no-cusp case for `.upward`. -/
@@ -1423,7 +1423,7 @@ theorem doRoundUp_value_upward_roundUp_noCusp
     · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
   have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
@@ -1450,15 +1450,15 @@ theorem doRoundUp_value_upward_roundUp_noCusp
       exact Nat.mod_eq_of_lt this
     by_cases h_under : ze' - 1 < minExponent ∨ (zm + 1) * 10 = 0
     · exfalso; apply hne'; rw [bringIntoRange_rescale_result hresc h_m1_ne, if_pos h_under]
-    · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-      rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+    · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
       change ((((zm + 1) * 10)).toNat : ℚ) * 10 ^ (ze' - 1) = ((zm.toNat : ℚ) + 1) * 10 ^ ze'
       rw [h_m1_mul10_toNat, hm_add1_toNat]; push_cast
       rw [show (ze' - 1 : ℤ) = ze' + (-1) from by ring,
           zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]; field_simp
-  · rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc)]
+  · rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc)]
     by_cases h_under : ze' < minExponent ∨ zm + 1 = 0
-    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push_neg; intro h; exact absurd h hresc), if_pos h_under]
+    · exfalso; apply hne'; rw [bringIntoRange_noscale_result (by push Not; intro h; exact absurd h hresc), if_pos h_under]
     · rw [if_neg h_under]
       change ((zm + 1).toNat : ℚ) * 10 ^ ze' = ((zm.toNat : ℚ) + 1) * 10 ^ ze'
       rw [hm_add1_toNat]; push_cast; ring
@@ -1520,7 +1520,7 @@ theorem doRoundUp_value_upward_roundUp_cusp
     intro h; have := UInt64.toNat_inj.mpr h
     rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
   have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
-    unfold Guard.doRoundUp at hok; simp only [Guard.doDropDigit] at hok
+    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .upward == 1) || ((gP.round .upward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
     rw [h_gP_ru_true] at hok
@@ -1535,8 +1535,8 @@ theorem doRoundUp_value_upward_roundUp_cusp
   rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne]
   by_cases h_under : ze' + 1 - 1 < minExponent ∨ (zm / 10 + 1) * 10 = 0
   · exfalso; apply hne'; rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne, if_pos h_under]
-  · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
-    rw [if_neg (by push_neg; exact ⟨hexp, hne10⟩)]
+  · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
+    rw [if_neg (by push Not; exact ⟨hexp, hne10⟩)]
     change (((zm / 10 + 1) * 10).toNat : ℚ) * 10 ^ (ze' + 1 - 1) = maxRepCuspTarget * 10 ^ ze'
     rw [h_m1_mul10_toNat]; rw [show (ze' + 1 - 1 : ℤ) = ze' from by ring]; push_cast; ring
 
@@ -1560,7 +1560,7 @@ lemma doRoundUp_output_invariants_upward
     intro h; have := UInt64.le_iff_toNat_le.mp h
     rw [hmaxMant_v] at this; rw [hmaxRep_v] at h_ub; omega
   unfold Guard.doRoundUp Guard.bringIntoRange at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow m .upward with hgP_def
   by_cases h_ru : (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true from h_ru] at hok
@@ -1629,9 +1629,9 @@ lemma doRoundUp_output_invariants_upward
       simp only [] at hok
       by_cases h_under : e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0
       · underflow_absurd hne h_under hok
-      · push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+      · push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
         have h_not_under : ¬ (e + 1 - 1 < minExponent ∨ (m / 10 + 1) * 10 = 0) :=
-          by push_neg; exact ⟨hexp, hne10⟩
+          by push Not; exact ⟨hexp, hne10⟩
         simp only [if_neg h_not_under] at hok
         have h_no_ovf : ¬ (e + 1 - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1671,7 +1671,7 @@ lemma doRoundUp_output_invariants_upward
         by_cases h_under : e - 1 < minExponent ∨ (m + 1) * 10 = 0
         · underflow_absurd hne h_under hok
         · have h_nu := h_under
-          push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+          push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
           simp only [if_neg h_nu] at hok
           have h_no_ovf : ¬ (e - 1 > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1692,11 +1692,11 @@ lemma doRoundUp_output_invariants_upward
           intro ⟨h, _⟩; exact h_resc h
         rw [if_neg h_no_resc_nc] at hok; simp only [] at hok
         have h_m1_ge_min : (m + 1).toNat ≥ largeRange.min.toNat := by
-          by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+          by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
         by_cases h_under : e < minExponent ∨ m + 1 = 0
         · underflow_absurd hne h_under hok
         · have h_nu := h_under
-          push_neg at h_under; obtain ⟨hexp, hm1ne⟩ := h_under
+          push Not at h_under; obtain ⟨hexp, hm1ne⟩ := h_under
           simp only [if_neg h_nu] at hok
           have h_no_ovf : ¬ (e > maxExponent) := by
             intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1724,7 +1724,7 @@ lemma doRoundUp_output_invariants_upward
       by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
       · underflow_absurd hne h_under hok
       · have h_nu := h_under
-        push_neg at h_under; obtain ⟨hexp, hne10⟩ := h_under
+        push Not at h_under; obtain ⟨hexp, hne10⟩ := h_under
         simp only [if_neg h_nu] at hok
         have h_no_ovf : ¬ (e - 1 > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1745,11 +1745,11 @@ lemma doRoundUp_output_invariants_upward
         intro ⟨h, _⟩; exact h_resc h
       rw [if_neg h_no_resc_d] at hok; simp only [] at hok
       have h_m_ge_min : m.toNat ≥ largeRange.min.toNat := by
-        by_contra h; push_neg at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
+        by_contra h; push Not at h; exact h_resc (UInt64.lt_iff_toNat_lt.mpr h)
       by_cases h_under : e < minExponent ∨ m = 0
       · underflow_absurd hne h_under hok
       · have h_nu := h_under
-        push_neg at h_under; obtain ⟨hexp, hmne⟩ := h_under
+        push Not at h_under; obtain ⟨hexp, hmne⟩ := h_under
         simp only [if_neg h_nu] at hok
         have h_no_ovf : ¬ (e > maxExponent) := by
           intro h_ovf; simp only [if_pos h_ovf] at hok; simp at hok
@@ -1775,7 +1775,7 @@ lemma doRoundUp_output_invariants_downward_upTo_maxRepUp
     (res.mantissa_.toNat > maxRep.toNat → res.mantissa_.toNat % 10 = 0) := by
   by_cases h_le : m.toNat ≤ maxRep.toNat
   · exact doRoundUp_output_invariants_downward g neg m e h_lb h_le loc res hok hne
-  · push_neg at h_le
+  · push Not at h_le
     exact doRoundUp_output_invariants_cusp g neg m e .downward h_le h_ub loc res hok hne
 
 /-- `.towards_zero` invariants for `mantissaFloor ≤ m ≤ maxRepUp`. -/
@@ -1792,7 +1792,7 @@ lemma doRoundUp_output_invariants_towards_zero_upTo_maxRepUp
     (res.mantissa_.toNat > maxRep.toNat → res.mantissa_.toNat % 10 = 0) := by
   by_cases h_le : m.toNat ≤ maxRep.toNat
   · exact doRoundUp_output_invariants_towards_zero g neg m e h_lb h_le loc res hok hne
-  · push_neg at h_le
+  · push Not at h_le
     exact doRoundUp_output_invariants_cusp g neg m e .towards_zero h_le h_ub loc res hok hne
 
 /-- `.upward` invariants for `mantissaFloor ≤ m ≤ maxRepUp`. -/
@@ -1809,7 +1809,7 @@ lemma doRoundUp_output_invariants_upward_upTo_maxRepUp
     (res.mantissa_.toNat > maxRep.toNat → res.mantissa_.toNat % 10 = 0) := by
   by_cases h_le : m.toNat ≤ maxRep.toNat
   · exact doRoundUp_output_invariants_upward g neg m e h_lb h_le loc res hok hne
-  · push_neg at h_le
+  · push Not at h_le
     exact doRoundUp_output_invariants_cusp g neg m e .upward h_le h_ub loc res hok hne
 
 /-- Mode-generic combined invariants for `mantissaFloor ≤ m ≤ maxRepUp` — dispatches
@@ -1948,7 +1948,7 @@ lemma doRoundUp_flush_value_small
     · right
       have hm_ge : 10 ^ 18 ≤ m'.toNat := by
         by_contra hlt
-        push_neg at hlt
+        push Not at hlt
         apply hresc
         rw [UInt64.lt_iff_toNat_lt]
         omega
@@ -1963,7 +1963,7 @@ lemma doRoundUp_flush_value_small
         exact absurd h0' hm_ne
   -- Navigate the doRoundUp leaves.
   unfold Guard.doRoundUp at hok
-  simp only [Guard.doDropDigit] at hok
+  dsimp only [Guard.doDropDigit] at hok
   set gP : Guard := g.pushOverflow zm mode with hgP_def
   have h_zm_ne : zm ≠ 0 := by
     intro h

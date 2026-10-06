@@ -20,7 +20,7 @@ theorem upper_ge_cell_top (t : ℚ) (U : Number) (hU : Number.upper t = some U)
   have hUge : t ≤ U.toRat := Number.upper_ge t U hU
   have hUpos : 0 < U.toRat := lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
   by_contra h
-  push_neg at h
+  push Not at h
   exact no_normalized_in_open_ulp_gap_pos_zm e k hk_ge hk_lt U
     (Number.upper_isNormalized t U hU) hUpos (lt_of_lt_of_le ht_lo hUge) h
 
@@ -32,7 +32,7 @@ theorem lower_le_cell_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L)
     L.toRat ≤ (k : ℚ) * 10 ^ e := by
   have hLle : L.toRat ≤ t := Number.lower_le t L hL
   by_contra h
-  push_neg at h  -- k·10^e < L.toRat
+  push Not at h  -- k·10^e < L.toRat
   have hLpos : 0 < L.toRat := lt_of_le_of_lt (by positivity) h
   exact no_normalized_in_open_ulp_gap_pos_zm e k hk_ge hk_lt L
     (Number.lower_isNormalized t L hL) hLpos h (lt_of_le_of_lt hLle ht_hi)
@@ -47,7 +47,7 @@ theorem upper_ge_cusp_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) 
   have hUpos : 0 < U.toRat :=
     lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
   by_contra h
-  push_neg at h
+  push Not at h
   exact no_normalized_in_cusp_gap_pos e U (Number.upper_isNormalized t U hU) hUpos
     (by rw [hmaxR]; exact lt_of_lt_of_le ht_lo hUge)
     (by rw [show (maxRepCuspTarget : ℚ) = (maxRepUpNat : ℚ) from by norm_num]; exact h)
@@ -60,7 +60,7 @@ theorem lower_le_cusp_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L) 
   have hLle : L.toRat ≤ t := Number.lower_le t L hL
   have hmaxR : (maxRep.toNat : ℚ) = (maxRepNat : ℚ) := by rw [maxRep_val]; norm_num
   by_contra h
-  push_neg at h
+  push Not at h
   have hLpos : 0 < L.toRat := lt_of_le_of_lt (by positivity) h
   exact no_normalized_in_cusp_gap_pos e L (Number.lower_isNormalized t L hL) hLpos
     (by rw [hmaxR]; exact h)
@@ -75,7 +75,7 @@ theorem upper_ge_coarse_top (t : ℚ) (U : Number) (hU : Number.upper t = some U
   have hUge : t ≤ U.toRat := Number.upper_ge t U hU
   have hUpos : 0 < U.toRat := lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
   by_contra h
-  push_neg at h
+  push Not at h
   exact no_normalized_in_upper_cusp_gap_pos e U (Number.upper_isNormalized t U hU) hUpos
     (by rw [show (maxRepCuspTarget : ℚ) = (maxRepUpNat : ℚ) from by norm_num]
         exact lt_of_lt_of_le ht_lo hUge) h
@@ -140,7 +140,7 @@ theorem cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ) (hf : repr
     simp only [Bool.not_eq_true, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hnobump
     obtain ⟨hr1, hr0⟩ := hnobump
     have hflt : f < 1 / 2 := by
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       rcases lt_or_eq_of_le h with hgt | heq
       · exact hr1 (represents_f_gt_half hf hgt)
       · -- f = 1/2 → round = 0, contradiction
@@ -209,7 +209,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
   -- f ≤ 1/2 whenever the guard does not decide to round up (regular)
   have hf_le_of_noRU : ¬ g.shouldRoundUp_to_nearest zm → f ≤ 1 / 2 := by
     intro hru
-    by_contra h; push_neg at h
+    by_contra h; push Not at h
     exact hru (Or.inl (represents_f_gt_half hF.represents_f h))
   have hmaxRq : (maxRep.toNat : ℚ) = (maxRepNat : ℚ) := by exact_mod_cast maxRep_val
   have hpow : ∀ e : ℤ, (0 : ℚ) < 10 ^ e := fun e => zpow_pos (by norm_num) e
@@ -270,7 +270,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           .overflow res_pos hF.rounds hF.res_mant_ne
         have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
         have hzm_ge : mantissaFloorSucc ≤ zm.toNat := by
-          by_contra h; push_neg at h
+          by_contra h; push Not at h
           have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
           have := hF.floor_cusp hzf; linarith [hf_le]
         have hzm_lt : zm.toNat < 10 ^ 19 := by
@@ -287,7 +287,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           exact closeDown (zm.toNat : ℚ) ((zm.toNat : ℚ) + 1) ((zm.toNat : ℚ) + f) ze'
             ht_val hV hUb (by linarith [hf_le])
     · -- zm > maxRep (cusp interior / maxRepUp)
-      push_neg at hzm_le_rep
+      push Not at hzm_le_rep
       have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
       have hzmq_ge : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
         have : maxRepNat < zm.toNat := by rw [maxRep_val] at hzm_le_rep; exact hzm_le_rep
@@ -358,7 +358,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           nlinarith [hf_lt]
         linarith [hcancel, hrhs, hf_lt]
   · -- UP
-    push_neg at hdir
+    push Not at hdir
     right
     have hnoinb := operator_mul_no_inbetween_above x y r hx hy hxm hym hok hrm (le_of_lt hdir)
     obtain ⟨U, hU, hUeq⟩ :=
@@ -385,7 +385,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
       nlinarith [hkey]
     have hzc_pos : ∀ (zc : ℚ) (e : ℤ), t = zc * 10 ^ e → 0 < zc := by
       intro zc e htv
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       have : t ≤ 0 := by rw [htv]; exact mul_nonpos_of_nonpos_of_nonneg h (le_of_lt (hpow e))
       exact absurd hpos (by rw [htdef] at this ⊢; linarith)
     have closeUpMid : ∀ (V B zc : ℚ) (e : ℤ), t = zc * 10 ^ e → U.toRat = V * 10 ^ e →
@@ -427,7 +427,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           exact closeUpMid ((zm.toNat : ℚ) + 1) (zm.toNat : ℚ) ((zm.toNat : ℚ) + f) ze'
             ht_val hUv hLb (by linarith [hf_ge])
         · -- floor band: zm = mantissaFloor, cusp cell at ze'-1
-          push_neg at hzm_ge
+          push Not at hzm_ge
           have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
           have hff : (8 : ℚ) / 10 ≤ f := hF.floor_cusp hzf
           have hzfq : (zm.toNat : ℚ) = (922337203685477580 : ℚ) := by rw [hzf]; norm_num
@@ -484,7 +484,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         exact closeUp (maxRepUpNat : ℚ) (maxRepNat : ℚ) ((zm.toNat : ℚ) + f) ze'
           ht_val hUv hLb htiehcore
     · -- zm > maxRep: cusp interior UP (zm ∈ {maxRep+1, maxRep+2}); value maxRepUp
-      push_neg at hzm_le_rep
+      push Not at hzm_le_rep
       have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
       have hA : (0 : ℚ) < 10 ^ ze' := hpow ze'
       have hzmq_ge : (maxRepNat : ℚ) + 1 ≤ (zm.toNat : ℚ) := by

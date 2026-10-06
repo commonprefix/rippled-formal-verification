@@ -63,7 +63,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
       · -- ===== CUSP =====
         have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
           .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_cusp_val
+        try simp only at h_cusp_val
         have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
           rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
         have h_truth_signed : n.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
@@ -105,7 +105,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
         have h_no_cusp : zm.toNat + 1 ≤ maxRep.toNat := by omega
         have h_nc_val := doRoundUp_value_upward_roundUp_noCusp g false zm ze' h_sru h_no_cusp
           .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-        simp only at h_nc_val
+        try simp only at h_nc_val
         have h_truth_signed : n.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
           have h1 : |n.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_n_eq
           rw [h_abs_truth_eq] at h1; exact h1
@@ -131,7 +131,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
     · -- ===== NO ROUND UP (truncate) =====
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep
         .normalize2 res_pos h_rup_pos hres_pos_mant_ne
-      simp only at h_tr_val
+      try simp only at h_tr_val
       by_cases h_zn : n.negative_ = true
       · -- n < 0. Truncating magnitude toward zero ⇒ |result| ≤ |n|, both ≤ 0 ⇒ n ≤ result.
         have h_truth_nonpos : n.toRat ≤ 0 := Number.toRat_nonpos_of_negative n h_zn
@@ -217,7 +217,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
             apply div_pos (by norm_num) h_denom_pos
           exact mul_pos h_abs_pos h_eps_pos
   · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp — no digits were pushed, f = 0 =====
-    push_neg at h_zm_le_rep
+    push Not at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
       h_zm_le_rep hzm_le_maxRep .normalize2 res_pos h_rup_pos hres_pos_mant_ne

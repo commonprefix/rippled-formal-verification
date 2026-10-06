@@ -37,7 +37,7 @@ private lemma IOUAmount.toRat_neg_iff (a : IOUAmount) : a.toRat < 0 ↔ a.mantis
   have h10 : (0 : ℚ) < (10 : ℚ) ^ a.exponent_ := by positivity
   rw [IOUAmount.toRat_eq]
   constructor
-  · intro h; by_contra hh; push_neg at hh
+  · intro h; by_contra hh; push Not at hh
     exact absurd h (not_lt.mpr (mul_nonneg (by exact_mod_cast hh) (le_of_lt h10)))
   · intro h; exact mul_neg_of_neg_of_pos (by exact_mod_cast h) h10
 

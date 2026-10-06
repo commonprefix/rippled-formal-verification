@@ -47,7 +47,7 @@ theorem Number.no_gridV_between (t : ℚ) (L U : Number)
   rintro ⟨h1, h2⟩
   by_cases hgt : g.toRat ≤ t
   · exact absurd (Number.lower_tight t L hL g hg hgt) (not_le.mpr h1)
-  · push_neg at hgt
+  · push Not at hgt
     exact absurd (Number.upper_tight t U hU g hg (le_of_lt hgt)) (not_le.mpr h2)
 
 /-! ## The predicate -/
@@ -86,18 +86,18 @@ theorem roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
     · -- cross: r₁ = upper t₁, r₂ = lower t₂
       rw [hr₁, hr₂]
       by_contra hcon
-      push_neg at hcon  -- hcon : L₂.toRat < U₁.toRat
+      push Not at hcon  -- hcon : L₂.toRat < U₁.toRat
       have hL₂pos : 0 < L₂.toRat := hr₂ ▸ hr₂pos
       have hU₁pos : 0 < U₁.toRat := hr₁ ▸ hr₁pos
       have hL₂norm : L₂.isNormalized := Number.lower_isNormalized t₂ L₂ hL₂
       have hU₁norm : U₁.isNormalized := Number.upper_isNormalized t₁ U₁ hU₁
       -- L₂ < t₁ (else `upper t₁` minimality is violated by L₂)
       have hL₂_lt_t₁ : L₂.toRat < t₁ := by
-        by_contra h; push_neg at h
+        by_contra h; push Not at h
         exact absurd (Number.upper_tight t₁ U₁ hU₁ L₂ hL₂norm h) (not_le.mpr hcon)
       -- U₁ > t₂ (else `lower t₂` maximality is violated by U₁)
       have hU₁_gt_t₂ : t₂ < U₁.toRat := by
-        by_contra h; push_neg at h
+        by_contra h; push Not at h
         exact absurd (Number.lower_tight t₂ L₂ hL₂ U₁ hU₁norm h) (not_le.mpr hcon)
       -- recover the missing neighbours
       obtain ⟨L₁, hL₁⟩ := Number.lower_some_of_pos_witnesses t₁ ht₁pos
@@ -171,7 +171,7 @@ theorem operator_div_num_mono_of_cuspAware (a₁ a₂ b r₁ r₂ : Number)
     (by gcongr) ?_ ?_
   · intro hlt
     have ha_lt : a₁.toRat < a₂.toRat := by
-      by_contra h; push_neg at h
+      by_contra h; push Not at h
       have : a₂.toRat / b.toRat ≤ a₁.toRat / b.toRat := by gcongr
       exact absurd this (not_le.mpr hlt)
     have hgap := normalized_gap_bound a₁ a₂ ha₁ ha₂ ha₁pos ha_lt

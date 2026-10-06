@@ -1,4 +1,4 @@
-import XRPL.Properties.Vault.Common.CanEmptyProofs
+import XRPL.Properties.Vault.Proofs.CanEmpty
 
 /-! # Emptying a reachable `int64` vault -/
 

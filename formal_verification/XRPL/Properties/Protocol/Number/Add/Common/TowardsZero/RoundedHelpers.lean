@@ -257,7 +257,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
       (operator_add_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         heq_guard hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
-    push_neg at h_truth_nn
+    push Not at h_truth_nn
     have h_truth_np : x.toRat + y.toRat ≤ 0 := le_of_lt h_truth_nn
     -- Direction: truth = −|truth| ≤ −|result| ≤ result.
     have h_round_up : x.toRat + y.toRat ≤ result.toRat := by

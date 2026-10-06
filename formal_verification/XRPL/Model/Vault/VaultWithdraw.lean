@@ -23,8 +23,7 @@ def Vault.sharesToAssetsWithdraw (v : Vault) (shares : STAmount) (waiveUnrealize
   let sharesNumber ← shares.toNumber .to_nearest
   let NAVShares ← netAssetValue.operator_mul sharesNumber .to_nearest
   let assetsNumber ← NAVShares.operator_div v.sharesTotal .to_nearest
-  -- (waiting the C++ fix) round the payout down so a withdrawer never receives more than the shares are worth
-  let assets ← STAmount.ofNumber v.numericType assetsNumber .downward
+  let assets ← STAmount.ofNumber v.numericType assetsNumber .to_nearest
   return assets
 
 
@@ -97,9 +96,15 @@ inductive WithdrawAmount where
   | vaultAssets (amount : STAmount)
   | vaultShares (amount : STAmount)
 
+def WithdrawAmount.amount : WithdrawAmount → STAmount
+  | .vaultAssets a => a
+  | .vaultShares s => s
+
 -- withdraw assets from the vault
 -- returns an optional error, or the updated vault state, the amount withdrawn, and the shares redeemed
-def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : Except Error WithdrawResult := do
+-- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+    (_hpos : 0 < amount.amount.toRat) : Except Error WithdrawResult := do
   let vault := v.toRawVault
   let result ← match amount with
     | .vaultAssets assets => computeWithdrawByAssets v assets waiveUnrealizedLoss

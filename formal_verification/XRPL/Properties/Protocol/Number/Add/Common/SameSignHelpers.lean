@@ -78,7 +78,7 @@ lemma alignDown_sbit_preserved (m : UInt64) (e : Int) (g : Guard) (target : Int)
   rw [alignDown_eq_spec]
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
-    simp only [Guard.doDropDigit] at IH
+    dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
     rfl

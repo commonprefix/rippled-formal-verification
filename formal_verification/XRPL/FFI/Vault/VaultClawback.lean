@@ -7,8 +7,10 @@ open XRPL.Model.Protocol (Number NumericType STAmount Error)
 open XRPL.Model.SingleAssetVault
 
 @[export lean_vault_clawback]
+-- `.error .badInput`: the amount would have failed preflight (`sfAmount >= 0`).
 def lean_vault_clawback (v : Vault) (assets holderShares : STAmount) : Except Error ClawbackResult :=
-  v.clawback assets holderShares
+  if h : 0 ≤ assets.toRat then v.clawback assets holderShares h
+  else .error .badInput
 
 @[export lean_clawback_result_assets]
 def lean_clawback_result_assets (r : ClawbackResult) : STAmount := r.assetsRecovered

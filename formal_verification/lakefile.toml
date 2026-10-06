@@ -4,6 +4,10 @@ keywords = ["math"]
 defaultTargets = ["XRPL"]
 
 [leanOptions]
+# Keep the legacy `do` lowering: 4.32+ switched to `EarlyReturnT`/`EarlyReturn.runK`, which
+# changes the lowered body the Vault proofs walk. `weak.` = ignored on 4.28/4.29, where the
+# option does not exist (and legacy is the only behaviour anyway).
+weak.backward.do.legacy = true
 pp.unicode.fun = true # pretty-prints `fun a ↦ b`
 relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
@@ -15,7 +19,7 @@ maxSynthPendingDepth = 3
 [[require]]
 name = "mathlib"
 scope = "leanprover-community"
-rev = "v4.28.0"
+rev = "v4.30.0"
 
 [[lean_lib]]
 name = "XRPL"

@@ -424,6 +424,46 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
     }
 
+    // RECONSTRUCTION (temporary): FV_M2_12's scenario with the vault state staged directly rather
+    // than built by two deposits, so the second deposit (which trips the FV_M2_15_b invariant)
+    // is bypassed. Run against both the pre-merge total and the total the clamp would produce.
+    void
+    testClawbackPrecisionLossStaged(Number const& assetsTotal)
+    {
+        using namespace jtx;
+        testcase("STAGED clawback 1e-6 from total " + to_string(assetsTotal));
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(20'000'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(11'000'000'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        // Same first deposit as the original; only the 0.00001 top-up (which trips FV_M2_15_b)
+        // is staged instead of transacted.
+        env(jtx::Vault::deposit(
+                {.depositor = holder,
+                 .id = vaultKeylet.key,
+                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        BEAST_EXPECT(updateVaultState(
+            env, vaultKeylet, assetsTotal, assetsTotal, 10'000'000'000'000'009ULL));
+        compareClawbackAsset(
+            env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
+    }
+
     // Finding (FV_M2_12, regression): a clawback too small to change the stored assetsTotal
     // used to burn a share (c++ -> tecINVARIANT_FAILED). Both sides now return tecPRECISION_LOSS.
     void
@@ -465,7 +505,8 @@ class LeanVaultClawback_test : public LeanSuite
     testClawbackAllLeavesAssets(
         Number const& assetsTotal,
         Number const& lossUnrealized,
-        std::uint64_t sharesTotal)
+        std::uint64_t sharesTotal,
+        TER expected)
     {
         using namespace jtx;
         testcase("clawback all leaves assets (total " + to_string(assetsTotal) + ")");
@@ -494,15 +535,43 @@ class LeanVaultClawback_test : public LeanSuite
         BEAST_EXPECT(stageSoleHolderVault(
             env, vaultKeylet, holder, assetsTotal, lossUnrealized, sharesTotal));
 
-        // Amount 0 claws the whole balance, so every share burns.
+        // Amount 0 claws back everything the holder can be paid for.
         env(jtx::Vault::clawback(
                 {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = asset(0)}),
             jtx::Ter(std::ignore));
 
-        // The payout rounds below sfAssetsTotal, leaving a nonzero total while shares hit 0.
         BEAST_EXPECTS(
-            env.ter() == tecPRECISION_LOSS,
-            std::string("clawback returned ") + transToken(env.ter()));
+            env.ter() == expected, std::string("clawback returned ") + transToken(env.ter()));
+
+        if (env.ter() != tesSUCCESS)
+            return;
+
+        // Read before closing: stageSoleHolderVault edits the open ledger directly and those
+        // edits are discarded on close.
+        //
+        // A sole holder's shares are priced at full value, so the recovery clamps to
+        // sfAssetsAvailable and the share count is re-derived from it. What survives is exactly
+        // the impaired portion, still backed by shares: no zero-share vault holding assets.
+        auto const sleVault = env.le(vaultKeylet);
+        Number const afterTotal = sleVault->at(sfAssetsTotal);
+        Number const afterAvailable = sleVault->at(sfAssetsAvailable);
+        Number const afterLoss = sleVault->at(sfLossUnrealized);
+        Number const afterShares{static_cast<std::int64_t>(
+            env.le(keylet::mptokenIssuance(sleVault->at(sfShareMPTID)))->at(sfOutstandingAmount))};
+
+        // Everything available was recovered; only the unrealized loss remains.
+        BEAST_EXPECTS(afterAvailable == Number{0}, "assetsAvailable " + to_string(afterAvailable));
+        BEAST_EXPECTS(afterTotal == lossUnrealized, "assetsTotal " + to_string(afterTotal));
+        BEAST_EXPECTS(afterLoss == lossUnrealized, "lossUnrealized " + to_string(afterLoss));
+
+        // Shares survive in proportion to the assets that survive. The bug this covers burned
+        // every share while leaving assets behind, so the count must stay above zero.
+        Number const expectedShares =
+            Number{static_cast<std::int64_t>(sharesTotal)} * lossUnrealized / assetsTotal;
+        BEAST_EXPECTS(afterShares > Number{0}, "sharesTotal " + to_string(afterShares));
+        BEAST_EXPECTS(
+            afterShares == expectedShares,
+            "sharesTotal " + to_string(afterShares) + " expected " + to_string(expectedShares));
     }
 
     // Finding (FV_M2_10, regression vs develop): an issuer VaultClawback with amount 0 should claw
@@ -652,8 +721,8 @@ class LeanVaultClawback_test : public LeanSuite
             "model clawback lowered the share price");
     }
 
-    // The round-trip recovery is never re-rounded to the vault scale, so the total moves by
-    // slightly more than the issuer recovers (both C++ and the model).
+    // The round-trip recovery is now re-rounded to the vault scale by the clamp, so the total
+    // moves by exactly what the issuer recovers (both C++ and the model).
     void
     testClawbackAppliedDelta()
     {
@@ -678,7 +747,7 @@ class LeanVaultClawback_test : public LeanSuite
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean clawback failed");
         // Model and C++ agree on the recovery, so it stands in for the accountSend amount.
         Number const recovery{lean.assets};
-        BEAST_EXPECTS((recovery == Number{9'999'999'999'985'714LL, -20}), to_string(recovery));
+        BEAST_EXPECTS((recovery == Number{99'999'999'999LL, -15}), to_string(recovery));
 
         env(jtx::Vault::clawback(
                 {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = amount}),
@@ -752,18 +821,26 @@ class LeanVaultClawback_test : public LeanSuite
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
-        // testClawbackOvervaluedShares();  // FV_M2_3: model rounds down, C++ over-recovers
-        // testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
-        // testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
-        // testClawbackAppliedDelta();      // total moves by more than recovered (both)
-        // testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000);                     // FV_M2_17 (unrealized loss)
-        // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793'238LL, -18}, Number{0}, 7'000'025);  // FV_M2_18 (>16 digit dust)
+        testClawbackOvervaluedShares();  // FV_M2_3: model rounds down, C++ over-recovers
+        testClawbackDilution();          // FV_M2_8: clawback lowers the share price (both sides)
+        testClawbackOverRecover();       // FV_M2_11: recovers more than requested (both)
+        testClawbackAppliedDelta();      // total moves by more than recovered (both)
+        // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793'238LL, -18}, Number{0}, 7'000'025, tecPRECISION_LOSS);  // FV_M2_18 (>16 digit dust)
 
         // Fixed discrepancies, kept as regression tests.
+        // FV_M2_17: a sole holder's shares are now priced at full value, so the recovery clamps to
+        // sfAssetsAvailable instead of burning every share against a smaller payout.
+        testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000, tesSUCCESS);
         testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 claws the full balance
-        testClawbackPrecisionLoss();          // FV_M2_12: dust clawback now rejects upfront
+        // FV_M2_12 is fixed, but its setup deposit trips FV_M2_15_b. The staged reconstruction
+        // below covers the same property without that dependency.
+        // testClawbackPrecisionLoss();
         testClawbackDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
         testClawbackDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
+
+        // RECONSTRUCTION (temporary): FV_M2_12 with state staged, bypassing FV_M2_15_b.
+        testClawbackPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});  // pre-merge total
+        testClawbackPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});  // post-clamp total
         // clang-format on
     }
 };
