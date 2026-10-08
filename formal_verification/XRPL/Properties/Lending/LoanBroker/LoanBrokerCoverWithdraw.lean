@@ -16,19 +16,20 @@ variable {α : Type} [AssetPool α]
 
 variable (lb : LoanBroker)
 
-/-- A successful withdrawal pays out exactly the requested amount. -/
+/-- A withdraw pays out exactly the requested amount. -/
 theorem LoanBroker.coverWithdraw_amount (amount : STAmount) (res : LoanBrokerCoverResult)
     (hok : lb.coverWithdraw amount = .ok (.ok res)) :
     res.amount' = amount :=
   LoanBroker.coverWithdraw_amount_proof lb amount res hok
 
-/-- When the new `coverAvailable` fits a `Number`, the withdrawal subtracts
-exactly the requested amount. -/
+/-- When the new CoverAvailable fits a Number -> amount' = CoverAvailable − CoverAvailable', where
+`amount'` is the paid-out amount. -/
 theorem LoanBroker.coverWithdraw_debit (amount : STAmount) (res : LoanBrokerCoverResult)
     (hok : lb.coverWithdraw amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
-    (hexact : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - amount.toRat) :
-    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = amount.toRat :=
+    (hexact : ∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
+    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = res.amount'.toRat :=
   LoanBroker.coverWithdraw_debit_proof lb amount res hok hc hexact
 
 /-- Integral strengthening of `coverWithdraw_debit`: a whole `coverAvailable`
@@ -42,17 +43,42 @@ theorem LoanBroker.coverWithdraw_debit_integral (amount : STAmount) (res : LoanB
     lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = amount.toRat :=
   LoanBroker.coverWithdraw_debit_integral_proof lb amount res hok hint hsz hnn hcint hbound
 
-/-- Witness: the fit hypothesis of `coverWithdraw_debit` cannot be dropped, a run
-whose checks passed withdraws `1234.567890123456` from `10^18` and lowers
-`coverAvailable` by `1235`. -/
-theorem LoanBroker.coverWithdraw_debit_attained :
+/-- When the new CoverAvailable fits a Number -> amount ≥ CoverAvailable − CoverAvailable'. -/
+theorem LoanBroker.coverWithdraw_debit_le_amount (amount : STAmount) (res : LoanBrokerCoverResult)
+    (hok : lb.coverWithdraw amount = .ok (.ok res))
+    (hc : amount.ExactCanonical)
+    (hexact : ∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
+    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable ≤ amount.toRat :=
+  LoanBroker.coverWithdraw_debit_le_amount_proof lb amount res hok hc hexact
+
+/-- Witness: a run where CoverAvailable drops by more than the amount. Withdrawing
+`1234.567890123456` from `10^18` lowers `coverAvailable` by `1235`. -/
+theorem LoanBroker.coverWithdraw_debit_le_amount_attained :
     ∃ (lb : LoanBroker) (pool : Vault) (amount : STAmount) (res : LoanBrokerCoverResult),
       lb.canCoverWithdraw pool amount = .ok .tesSUCCESS ∧
-      lb.coverWithdraw amount = .ok (.ok res) ∧ amount.IOUCanonical ∧
-      lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable ≠ amount.toRat :=
-  LoanBroker.coverWithdraw_debit_witness
+      lb.coverWithdraw amount = .ok (.ok res) ∧ amount.IOUCanonical ∧ res.amount' = amount ∧
+      amount.toRat < lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable :=
+  LoanBroker.coverWithdraw_debit_le_amount_witness
 
-/-- A withdrawal only lowers `coverAvailable`. -/
+/-- Witness: the withdrawal amount is never rounded to the CoverAvailable scale, so
+STAmount(CoverAvailable − CoverAvailable') ≠ amount even when CoverAvailable fits an STAmount
+exactly. Withdrawing `1234.567890123456` from `10^18` moves `coverAvailable` by `1235`, while a
+deposit would round the amount down to `1000`.
+`amount''` - the withdrawn amount rounded down to the cover scale, as a deposit rounds it -/
+theorem LoanBroker.coverWithdraw_applied_delta_attained :
+    ∃ (lb : LoanBroker) (pool : Vault) (amount amount'' : STAmount) (res : LoanBrokerCoverResult)
+      (deltaCover : Number) (deltaAmount : STAmount),
+      lb.canCoverWithdraw pool amount = .ok .tesSUCCESS ∧
+      lb.coverWithdraw amount = .ok (.ok res) ∧ amount.IOUCanonical ∧
+      lb.roundedCoverAmount res.amount' = .ok (.rounded amount'') ∧
+      amount''.operator_eq res.amount' = false ∧
+      lb.coverAvailable.operator_sub res.loanBroker'.coverAvailable .to_nearest = .ok deltaCover ∧
+      STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount ∧
+      deltaAmount.operator_eq res.amount' = false :=
+  LoanBroker.coverWithdraw_applied_delta_witness
+
+/-- Cover withdraw only lowers CoverAvailable (monotone down). -/
 theorem LoanBroker.coverWithdraw_decreases_cover (amount : STAmount) (res : LoanBrokerCoverResult)
     (hok : lb.coverWithdraw amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
@@ -60,7 +86,7 @@ theorem LoanBroker.coverWithdraw_decreases_cover (amount : STAmount) (res : Loan
     res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_decreases_cover_proof lb amount res hok hc hnn
 
-/-- A withdrawal whose checks passed leaves at least the minimum cover. -/
+/-- When the checks pass -> CoverAvailable' ≥ minCover. -/
 theorem LoanBroker.coverWithdraw_keeps_minimum (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (e : Int)
     (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS)
@@ -69,16 +95,16 @@ theorem LoanBroker.coverWithdraw_keeps_minimum (pool : α) (amount : STAmount)
     res.loanBroker'.HasMinimumCover e :=
   LoanBroker.coverWithdraw_keeps_minimum_proof lb pool amount res e hcan hok hexp
 
-/-- A withdrawal whose checks passed never throws: it returns a lawful broker
-and the requested amount, never `.notLawful`. -/
+/-- When the checks pass -> the withdrawal succeeds with the amount and never throws, not even
+notLawful. -/
 theorem LoanBroker.coverWithdraw_total (pool : α) (amount : STAmount)
     (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS)
     (hc : amount.ExactCanonical) :
     ∃ res, lb.coverWithdraw amount = .ok (.ok res) ∧ res.amount' = amount :=
   LoanBroker.coverWithdraw_total_proof lb pool amount hcan hc
 
-/-- With no debt, withdrawing the whole cover passes the checks and leaves zero
-cover, when the asset holds `coverAvailable` exactly. -/
+/-- With no debt, the whole cover (≠ 0) can be withdrawn, when CoverAvailable fits an STAmount
+exactly. -/
 theorem LoanBroker.coverWithdraw_all (pool : α) (e : Int) (s : STAmount)
     (hdebt : lb.debtTotal = Number.zero)
     (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)

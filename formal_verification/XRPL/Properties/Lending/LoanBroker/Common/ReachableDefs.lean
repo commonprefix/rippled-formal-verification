@@ -63,7 +63,8 @@ inductive LoanBroker.WholeCoverFrom (start : LoanBroker) : LoanBroker → Prop w
 
 /-- Brokers reachable from `start` in `n` cover operations. `applied` is the net
 amount moved and `requested` the net amount requested. Every new
-`coverAvailable` fits a `Number`, and every step rounds by at most `unit`. -/
+`coverAvailable` fits a `Number`, and one unit of the cover scale at every deposit is at most
+`unit`. -/
 inductive LoanBroker.ReachableFromIn (start : LoanBroker) (unit : ℚ) :
     LoanBroker → ℕ → ℚ → ℚ → Prop where
   | refl : LoanBroker.ReachableFromIn start unit start 0 0 0
@@ -97,6 +98,7 @@ inductive LoanBroker.ReachableFromIn (start : LoanBroker) (unit : ℚ) :
       LoanBroker.ReachableFromIn start unit lb n applied requested →
       lb.coverClawback pool (some amount) = .ok (.ok res) →
       amount.ExactCanonical → 0 ≤ amount.toRat → -- a canonical nonnegative request
+      amount.mNumericType = lb.numericType → -- the request is in the vault asset
       amount.isZero = false → -- a zero request claws all cover above the minimum
       AssetPool.exponent pool lb.numericType = .ok e → -- the vault scale
       -- the minimum cover the debt requires
@@ -106,8 +108,6 @@ inductive LoanBroker.ReachableFromIn (start : LoanBroker) (unit : ℚ) :
       lb.canCoverClawback pool (some amount) = .ok .tesSUCCESS → -- the checks passed
       -- the true difference is a normalized `Number`
       (∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) →
-      -- half a unit of the clawed amount's exponent is at most `unit`
-      (1 / 2 : ℚ) * (10 : ℚ) ^ res.amount'.exponent ≤ unit →
       LoanBroker.ReachableFromIn start unit res.loanBroker' (n + 1)
         (applied - res.amount'.toRat) (requested - amount.toRat)
 

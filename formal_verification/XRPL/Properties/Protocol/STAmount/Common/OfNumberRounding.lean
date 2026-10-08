@@ -223,6 +223,41 @@ lemma STAmount.ofNumber_fractional_zero (mode : rounding_mode) :
     STAmount.ofNumber .fractional Number.zero mode = .ok ⟨.fractional, 0, -100, false⟩ := by
   cases mode <;> rfl
 
+/-- A positive normalized `Number` whose mantissa ends in three zeros converts to `STAmount`
+exactly, in every mode: the 16-digit amount drops those zeros and raises the exponent by `3`. -/
+lemma STAmount.ofNumber_fractional_of_trailing_zeros (n : Number) (mode : rounding_mode)
+    (hn : n.isNormalized) (hm0 : n.mantissa_ ≠ 0) (hneg : n.negative_ = false)
+    (hmod : n.mantissa_.toNat % 1000 = 0)
+    (he_lo : (-96 : Int) ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 3 ≤ 80) :
+    STAmount.ofNumber .fractional n mode =
+      .ok ⟨.fractional, n.mantissa_ / 10 / 10 / 10, n.exponent_ + 3, false⟩ := by
+  have hz : n ≠ Number.zero := fun h => hm0 (by rw [h]; rfl)
+  obtain ⟨hlo, hhi, _, _, _⟩ := hn.resolve_left hz
+  have hlo' : 10 ^ 18 ≤ n.mantissa_.toNat := by
+    have := UInt64.le_iff_toNat_le.mp hlo; simpa [largeRange] using this
+  have hhi' : n.mantissa_.toNat < 10 ^ 19 := by
+    have := UInt64.le_iff_toNat_le.mp hhi; simp [largeRange] at this; omega
+  have hm3 : (n.mantissa_ / 10 / 10 / 10).toNat = n.mantissa_.toNat / 1000 :=
+    m_div_thousand_toNat n.mantissa_
+  -- the dropped digits are zero, so the 16-digit rounding is exact in every mode
+  have hnorm := normalizeToRange_16_exact n mode hlo' hhi' hmod
+    (by unfold minExponent; omega) (by unfold maxExponent; omega)
+  rw [hneg, if_neg (by decide)] at hnorm
+  have hsig : decide (n.signum < 0) = false := by
+    unfold Number.signum; simp [hneg, hm0]
+  unfold STAmount.ofNumber
+  simp only [hsig, Bool.false_eq_true, if_false]
+  rw [if_neg (by decide)]
+  rw [show n.normalizeToRange kMinValue kMaxValue mode =
+    n.normalizeToRange cMinValue cMaxValue mode from rfl, hnorm]
+  simp only
+  rw [show (n.mantissa_ / 10 / 10 / 10).toInt64.toUInt64 = n.mantissa_ / 10 / 10 / 10 from
+    UInt64.toUInt64_toInt64 _]
+  -- the 16-digit record is already canonical, so `checked` keeps it
+  exact STAmount.canonicalize_canonical_id _ mode
+    ⟨rfl, by show 10 ^ 15 ≤ (n.mantissa_ / 10 / 10 / 10).toNat; omega,
+      by show (n.mantissa_ / 10 / 10 / 10).toNat < 10 ^ 16; omega, he_lo, he_hi⟩
+
 /-- **`to_nearest` `ofNumber` rounds within half a unit of the result exponent**, for every
 numeric type. An integral result has exponent `0`, so the bound is `1/2`. -/
 lemma STAmount.ofNumber_to_nearest_within_half (nt : NumericType) (n : Number) (result : STAmount)
@@ -580,6 +615,67 @@ lemma STAmount.ofNumber_to_nearest_ge_of_canonical (nt : NumericType) (n : Numbe
         linarith
       linarith
 
+/-- **A fractional `ofNumber` of a source whose exponent is at least `-99` is never zero.** The
+result exponent is at least three above the source exponent, so it never falls below the
+smallest offset `-96`, where the conversion would flush to zero. -/
+lemma STAmount.ofNumber_iou_ne_zero_of_exponent (n : Number) (mode : rounding_mode)
+    (result : STAmount) (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0)
+    (hexp : (-99 : ℤ) ≤ n.exponent_) (hok : STAmount.ofNumber .fractional n mode = .ok result) :
+    result.mValue ≠ 0 := by
+  intro hr0
+  have hb := mantissaBounds_nat_of (hn.mantissaBounds hn0)
+  have hemin := Number.exponent_ge_min n hn hn0
+  -- the sign-cleared source keeps the mantissa and exponent
+  have hmne : (n.mantissa_ != 0) = true := by simp [hn0]
+  have hneg_eq : decide (n.signum < 0) = n.negative_ := Number.signum_neg_decide n
+  set neg : Bool := decide (n.signum < 0) with hneg_def
+  set working : Number := if neg then n.operator_neg else n with hw_def
+  have hw_mant : working.mantissa_ = n.mantissa_ := by
+    rw [hw_def]; rcases neg with _ | _
+    · simp
+    · simp [Number.operator_neg_mantissa_of_ne n hn0]
+  have hw_exp : working.exponent_ = n.exponent_ := by
+    rw [hw_def]; rcases neg with _ | _
+    · simp
+    · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hn0)]
+  have hw_neg : working.negative_ = false := by
+    rw [hw_def, hneg_eq]
+    by_cases hrn : n.negative_ = true
+    · rw [if_pos hrn, Number.operator_neg_negative_of_ne n hn0]; simp [hrn]
+    · rw [if_neg hrn]; simpa using hrn
+  have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hb.1
+  have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hb.2
+  unfold STAmount.ofNumber at hok
+  rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
+  cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
+  | error e => rw [hnorm] at hok; exact absurd hok (by simp)
+  | ok me =>
+    obtain ⟨mant, exp⟩ := me
+    rw [hnorm] at hok
+    simp only at hok
+    have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
+    have hexp_hi3 : working.exponent_ + 3 ≤ maxExponent :=
+      normalizeToRange_iou_exp_hi working mode mant exp hw_lo hw_hi hnorm'
+    obtain ⟨⟨hmlo, hmhi⟩, ⟨hexp_lo3, hexp_le⟩, hsgn⟩ :=
+      normalizeToRange_iou_ok_facts working mode mant exp hw_lo hw_hi
+        (by rw [hw_exp]; omega) hexp_hi3 hnorm'
+    have hmant_pos : 0 ≤ mant.toInt := hsgn.1 hw_neg
+    have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
+      have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
+    have hmtu_lo : 10 ^ 15 ≤ mant.toUInt64.toNat := by
+      rw [← hmant_natAbs]; have := hmlo
+      rw [(by decide : cMinValue.toNat = 10 ^ 15)] at this
+      exact this
+    have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
+      rw [← hmant_natAbs]; have := hmhi
+      rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
+      omega
+    have hlt := STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
+      (by rw [hw_exp] at hexp_lo3; omega) hexp_le result hok hr0
+    rw [hw_exp] at hexp_lo3
+    unfold cMinOffset at hlt
+    omega
+
 /-- **A nonzero canonical amount's value converts to a nonzero amount.** The source
 is at or above the 16-digit floor of the type, so no rounding flushes it to zero. -/
 lemma STAmount.ofNumber_ne_zero_of_canonical (nt : NumericType) (n : Number)
@@ -638,57 +734,8 @@ lemma STAmount.ofNumber_ne_zero_of_canonical (nt : NumericType) (n : Number)
           (10 : ℚ) ^ 19 * (10 : ℚ) ^ n.exponent_ :=
         mul_lt_mul_of_pos_right hmh (hpos _)
       linarith
-    -- the sign-cleared source keeps the mantissa and exponent
-    have hmne : (n.mantissa_ != 0) = true := by simp [hn0]
-    have hneg_eq : decide (n.signum < 0) = n.negative_ := Number.signum_neg_decide n
-    set neg : Bool := decide (n.signum < 0) with hneg_def
-    set working : Number := if neg then n.operator_neg else n with hw_def
-    have hw_mant : working.mantissa_ = n.mantissa_ := by
-      rw [hw_def]; rcases neg with _ | _
-      · simp
-      · simp [Number.operator_neg_mantissa_of_ne n hn0]
-    have hw_exp : working.exponent_ = n.exponent_ := by
-      rw [hw_def]; rcases neg with _ | _
-      · simp
-      · simp only [if_true]; unfold Number.operator_neg; rw [if_neg (by simpa using hn0)]
-    have hw_neg : working.negative_ = false := by
-      rw [hw_def, hneg_eq]
-      by_cases hrn : n.negative_ = true
-      · rw [if_pos hrn, Number.operator_neg_negative_of_ne n hn0]; simp [hrn]
-      · rw [if_neg hrn]; simpa using hrn
-    have hw_lo : 10 ^ 18 ≤ working.mantissa_.toNat := by rw [hw_mant]; exact hb.1
-    have hw_hi : working.mantissa_.toNat < 10 ^ 19 := by rw [hw_mant]; exact hb.2
-    unfold STAmount.ofNumber at hok
-    rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
-    cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
-    | error e => rw [hnorm] at hok; exact absurd hok (by simp)
-    | ok me =>
-      obtain ⟨mant, exp⟩ := me
-      rw [hnorm] at hok
-      simp only at hok
-      have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
-      have hexp_hi3 : working.exponent_ + 3 ≤ maxExponent :=
-        normalizeToRange_iou_exp_hi working mode mant exp hw_lo hw_hi hnorm'
-      obtain ⟨⟨hmlo, hmhi⟩, ⟨hexp_lo3, hexp_le⟩, hsgn⟩ :=
-        normalizeToRange_iou_ok_facts working mode mant exp hw_lo hw_hi
-          (by rw [hw_exp]; omega) hexp_hi3 hnorm'
-      have hmant_pos : 0 ≤ mant.toInt := hsgn.1 hw_neg
-      have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
-        have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
-      have hmtu_lo : 10 ^ 15 ≤ mant.toUInt64.toNat := by
-        rw [← hmant_natAbs]; have := hmlo
-        rw [(by decide : cMinValue.toNat = 10 ^ 15)] at this
-        exact this
-      have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
-        rw [← hmant_natAbs]; have := hmhi
-        rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
-        omega
-      have hlt := STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
-        (by rw [hw_exp] at hexp_lo3; omega) hexp_le result hok hr0
-      have := hiou.exp_lo
-      rw [hw_exp] at hexp_lo3
-      unfold cMinOffset at hlt
-      omega
+    exact STAmount.ofNumber_iou_ne_zero_of_exponent n mode result hn hn0
+      (by have := hiou.exp_lo; omega) hok hr0
 
 /-- **A to-nearest `ofNumber` keeps a value a canonical amount holds**, for a nonnegative
 source: the result equals that amount. -/
@@ -717,6 +764,135 @@ lemma STAmount.ofNumber_to_nearest_eq_of_canonical (nt : NumericType) (n : Numbe
   exact le_antisymm
     (STAmount.ofNumber_to_nearest_le_of_canonical nt n result a hn h0 ha hat heq.le hok hresult)
     (STAmount.ofNumber_to_nearest_ge_of_canonical nt n result a hn h0 ha hat heq.ge hok hresult)
+
+/-- **A positive 16-digit IOU amount lies between `10^(e + 15)` and `10^(e + 16)`**, where `e` is its
+exponent. The upper bound keeps one unit of room: the amount is at most `10^(e + 16) - 10^e`. -/
+lemma STAmount.IOUCanonical.toRat_bounds (s : STAmount) (hs : s.IOUCanonical) (hpos : 0 < s.toRat) :
+    (10 : ℚ) ^ (s.exponent + 15) ≤ s.toRat ∧
+      s.toRat + (10 : ℚ) ^ s.exponent ≤ (10 : ℚ) ^ (s.exponent + 16) := by
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s.exponent := zpow_pos (by norm_num) _
+  have habs := STAmount.abs_toRat s
+  rw [abs_of_pos hpos] at habs
+  have hmlo : ((10 ^ 15 : ℕ) : ℚ) ≤ (s.mValue.toNat : ℚ) := by exact_mod_cast hs.mant_lo
+  have hmhi : (s.mValue.toNat : ℚ) + 1 ≤ ((10 ^ 16 : ℕ) : ℚ) := by
+    have := hs.mant_hi; exact_mod_cast this
+  push_cast at hmlo hmhi
+  have hexp : s.exponent = s.mOffset := rfl
+  rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), habs, ← hexp]
+  norm_num
+  constructor
+  · rw [mul_comm]; exact mul_le_mul_of_nonneg_right hmlo hp.le
+  · nlinarith
+
+/-- **A to-nearest `ofNumber` returns a canonical amount its source is very close to.** A
+nonnegative source within `½ · 10 ^ (a.exponent - 1)` of a positive canonical amount `a` of the
+same type converts to `a`. The rounding moves the source by at most half a unit, and the other
+canonical amounts are at least a tenth of a unit away from `a`. -/
+lemma STAmount.ofNumber_to_nearest_eq_of_near_canonical (nt : NumericType) (n : Number)
+    (result a : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
+    (ha : a.ExactCanonical) (hat : a.mNumericType = nt) (ha0 : 0 < a.toRat)
+    (hnear : |n.toRat - a.toRat| < (1 / 2 : ℚ) * (10 : ℚ) ^ (a.exponent - 1))
+    (hok : STAmount.ofNumber nt n .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
+    result.toRat = a.toRat := by
+  have hp : ∀ k : ℤ, (0 : ℚ) < (10 : ℚ) ^ k := fun k => zpow_pos (by norm_num) k
+  have hu : (1 / 2 : ℚ) * (10 : ℚ) ^ (a.exponent - 1) = (10 : ℚ) ^ a.exponent / 20 := by
+    rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring
+  rw [hu] at hnear
+  obtain ⟨hnear_lo, hnear_hi⟩ := abs_lt.mp hnear
+  cases hnt : nt with
+  | integral mv mo ms msh =>
+    rw [hnt] at hok hat
+    have hint : (NumericType.integral mv mo ms msh).isIntegral = true := rfl
+    rcases ha with hiou | ⟨hic, _⟩
+    · exact absurd (hat.symm.trans hiou.is_fractional) (by simp)
+    -- both values are whole numbers, less than one apart
+    have hoff : a.exponent = 0 := hic.offset_zero
+    rw [hoff, zpow_zero] at hnear_lo hnear_hi
+    have hneg := Number.negative_false_of_nonneg n hn h0
+    have hhalf := abs_le.mp (STAmount.ofNumber_integral_within_half _ n result hint hn hneg hok)
+    obtain ⟨iv, _, hres⟩ := STAmount.ofNumber_integral_toRat _ n .to_nearest result hint hneg hok
+    have hsd := STAmount.IntegralCanonical.toRat_eq_signedDrops a hic
+    have h1 : ((iv.toInt - a.signedDrops : ℤ) : ℚ) < 1 := by
+      push_cast; rw [← hres, ← hsd]; linarith [hhalf.2]
+    have h2 : (-1 : ℚ) < ((iv.toInt - a.signedDrops : ℤ) : ℚ) := by
+      push_cast; rw [← hres, ← hsd]; linarith [hhalf.1]
+    have h1' : iv.toInt - a.signedDrops < 1 := by exact_mod_cast h1
+    have h2' : -1 < iv.toInt - a.signedDrops := by exact_mod_cast h2
+    rw [hres, hsd, show iv.toInt = a.signedDrops by omega]
+  | fractional =>
+    rw [hnt] at hok hat
+    have hiou : a.IOUCanonical :=
+      ha.iouCanonical (by unfold STAmount.integral; rw [hat]; rfl)
+    -- `a` has 16 digits: `10^(e+15) ≤ a ≤ 10^(e+16) - 10^e`
+    obtain ⟨halo, hahi⟩ := STAmount.IOUCanonical.toRat_bounds a hiou ha0
+    have hpow15 : (10 : ℚ) ^ (a.exponent + 15) = 10 ^ 15 * (10 : ℚ) ^ a.exponent := by
+      rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num; ring
+    -- the source is positive, so it has a nonzero mantissa
+    have hn_pos : 0 < n.toRat := by
+      have : (10 : ℚ) ^ a.exponent / 20 < (10 : ℚ) ^ (a.exponent + 15) := by
+        rw [hpow15]; linarith [hp a.exponent]
+      linarith
+    have hn0 : n.mantissa_ ≠ 0 := fun h => by
+      rw [Number.toRat_eq_zero_of_mantissa_zero n h] at hn_pos; exact lt_irrefl _ hn_pos
+    have hb := mantissaBounds_nat_of (hn.mantissaBounds hn0)
+    have hemin := Number.exponent_ge_min n hn hn0
+    have hexp := STAmount.ofNumber_iou_success_exp_range n .to_nearest result hb.1 hb.2 hemin hok
+      hresult
+    obtain ⟨hbound, hle⟩ := STAmount.ofNumber_iou_within_half_ulp .fractional n result rfl hb.1
+      hb.2 hemin hexp hok hresult
+    -- the source lies between `10^(t + 15)` and `10^(t + 16)`, where `t` is its exponent plus 3
+    have hnabs := abs_toRat_eq n
+    rw [abs_of_pos hn_pos] at hnabs
+    have hnm_lo : ((10 ^ 18 : ℕ) : ℚ) ≤ (n.mantissa_.toNat : ℚ) := by exact_mod_cast hb.1
+    have hnm_hi : (n.mantissa_.toNat : ℚ) < ((10 ^ 19 : ℕ) : ℚ) := by exact_mod_cast hb.2
+    push_cast at hnm_lo hnm_hi
+    have hn_lo : (10 : ℚ) ^ (n.exponent_ + 18) ≤ n.toRat := by
+      rw [hnabs, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+      norm_num
+      rw [mul_comm]
+      exact mul_le_mul_of_nonneg_right hnm_lo (hp _).le
+    have hn_hi : n.toRat < (10 : ℚ) ^ (n.exponent_ + 19) := by
+      rw [hnabs, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+      norm_num
+      rw [mul_comm]
+      exact mul_lt_mul_of_pos_left hnm_hi (hp _)
+    -- so the source exponent plus 3 is `a.exponent - 1` or `a.exponent`
+    have ht_le : n.exponent_ + 3 ≤ a.exponent := by
+      by_contra h
+      push Not at h
+      have : (10 : ℚ) ^ (a.exponent + 16) ≤ (10 : ℚ) ^ (n.exponent_ + 18) :=
+        zpow_le_zpow_right₀ (by norm_num) (by omega)
+      have : (10 : ℚ) ^ a.exponent / 20 < (10 : ℚ) ^ a.exponent := by linarith [hp a.exponent]
+      linarith
+    have ht_ge : a.exponent - 1 ≤ n.exponent_ + 3 := by
+      by_contra h
+      push Not at h
+      have h14 : (10 : ℚ) ^ (n.exponent_ + 19) ≤ (10 : ℚ) ^ (a.exponent + 14) :=
+        zpow_le_zpow_right₀ (by norm_num) (by omega)
+      have hpow14 : (10 : ℚ) ^ (a.exponent + 14) = 10 ^ 14 * (10 : ℚ) ^ a.exponent := by
+        rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num; ring
+      rw [hpow14] at h14
+      rw [hpow15] at halo
+      linarith [hp a.exponent]
+    -- both amounts are whole multiples of `10^t`, less than one such unit apart
+    obtain ⟨za, hza⟩ := STAmount.toRat_eq_int_mul_of_exponent_ge a (n.exponent_ + 3) ht_le
+    obtain ⟨zr, hzr⟩ := STAmount.toRat_eq_int_mul_of_exponent_ge result (n.exponent_ + 3) hle
+    have hstep : (10 : ℚ) ^ a.exponent / 20 ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ (n.exponent_ + 3) := by
+      have : (10 : ℚ) ^ (a.exponent - 1) ≤ (10 : ℚ) ^ (n.exponent_ + 3) :=
+        zpow_le_zpow_right₀ (by norm_num) ht_ge
+      rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0)] at this
+      linarith
+    have hdiff : |result.toRat - a.toRat| < (10 : ℚ) ^ (n.exponent_ + 3) := by
+      have h := abs_sub_le result.toRat n.toRat a.toRat
+      linarith [abs_lt.mpr ⟨hnear_lo, hnear_hi⟩]
+    rw [hzr, hza, ← sub_mul, abs_mul, abs_of_pos (hp _)] at hdiff
+    have hlt : |((zr - za : ℤ) : ℚ)| < 1 := by
+      push_cast
+      exact (mul_lt_iff_lt_one_left (hp _)).mp hdiff
+    obtain ⟨hl1, hl2⟩ := abs_lt.mp hlt
+    have hl1' : -1 < zr - za := by exact_mod_cast hl1
+    have hl2' : zr - za < 1 := by exact_mod_cast hl2
+    rw [hzr, hza, show zr = za by omega]
 
 /-- Two 16-digit mantissas that give the same value cannot sit at exponents more
 than one digit apart: the finer one would need a 17th digit. -/

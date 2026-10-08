@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.LoanBroker.Common.CoverAccuracy
 import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
+import XRPL.Properties.Protocol.Number.Sub.RoundsWithin
 
 /-! # Proof bodies for the `LoanBroker.coverDeposit` theorems
 
@@ -139,5 +140,372 @@ lemma LoanBroker.coverDeposit_empty_proof (lb : LoanBroker) (amount : STAmount)
     ⟨aN, han, by rw [hamt, hav, h0]; ring⟩
   rw [hamt] at hup
   linarith
+
+/-- A deposit of an IOU amount takes a whole number of units of the cover scale. -/
+private lemma LoanBroker.coverDeposit_amount_grid (lb : LoanBroker) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (e : Int)
+    (hexp : numberExponent lb.coverAvailable lb.numericType = .ok e)
+    (hok : lb.coverDeposit amount = .ok (.ok res)) (hiou : amount.IOUCanonical) :
+    ∃ k : ℤ, res.amount'.toRat = (k : ℚ) * (10 : ℚ) ^ e := by
+  have hround := LoanBroker.coverDeposit_amount_of_exp lb amount res e hexp hok
+  by_cases hge : e ≤ amount.exponent
+  · -- an amount on a grid at least as fine as the cover scale passes unchanged
+    rw [STAmount.roundToExponent_ok_eq_self amount res.amount' e .downward
+      (Or.inr (Or.inr hge)) hround]
+    obtain ⟨z, hz⟩ := STAmount.exists_int_grid amount
+    obtain ⟨d, hd⟩ : ∃ d : ℕ, amount.exponent = e + d := ⟨(amount.exponent - e).toNat, by omega⟩
+    refine ⟨z * 10 ^ d, ?_⟩
+    rw [hz, hd, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
+    push_cast
+    ring
+  · -- otherwise it is truncated onto the `10 ^ e` grid
+    have hrange : (-96 : ℤ) ≤ e ∧ e ≤ 80 := by
+      rcases numberExponent_range _ _ e hexp with h100 | hr
+      · have := hiou.exp_lo
+        have hem : amount.exponent = amount.mOffset := rfl
+        omega
+      · exact hr
+    exact ⟨_, STAmount.roundToExponent_rounded amount res.amount' e .downward hiou hrange.1
+      hrange.2 (LoanBroker.coverDeposit_amount_nonzero lb amount res hok) hround⟩
+
+/-- The amount a deposit takes is already on the cover grid: rounding it to the cover scale again
+keeps its value. -/
+private lemma LoanBroker.coverDeposit_amount_on_grid (lb : LoanBroker) (amount amount'' : STAmount)
+    (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
+    (hc : amount.ExactCanonical)
+    (hround : lb.roundedCoverAmount res.amount' = .ok (.rounded amount'')) :
+    amount''.toRat = res.amount'.toRat := by
+  obtain ⟨hrc, hrt⟩ := LoanBroker.coverDeposit_amount_exactCanonical lb amount res hok hc
+  by_cases hint : res.amount'.integral = true
+  · rw [LoanBroker.roundedCoverAmount_integral_proof lb res.amount' amount'' hint hround]
+  have hriou := hrc.iouCanonical (by simpa using hint)
+  have hamtF : amount.integral = false := by
+    unfold STAmount.integral at hint ⊢
+    rw [← hrt]
+    simpa using hint
+  obtain ⟨e, hexp⟩ := LoanBroker.roundedCoverAmount_exponent lb _ _ hround
+  obtain ⟨k, hk⟩ := LoanBroker.coverDeposit_amount_grid lb amount res e hexp hok
+    (hc.iouCanonical hamtF)
+  obtain ⟨hr2, hnz2⟩ := LoanBroker.roundedCoverAmount_rounded_inv lb _ _ hround
+  rw [roundToCoverScale_eq _ _ _ _ e hexp] at hr2
+  by_cases hge : e ≤ res.amount'.exponent
+  · rw [STAmount.roundToExponent_ok_eq_self _ _ e .downward (Or.inr (Or.inr hge)) hr2]
+  have hrange : (-96 : ℤ) ≤ e ∧ e ≤ 80 := by
+    rcases numberExponent_range _ _ e hexp with h100 | hr
+    · have := hriou.exp_lo
+      have hem : res.amount'.exponent = res.amount'.mOffset := rfl
+      omega
+    · exact hr
+  have hmv : amount''.mValue ≠ 0 := fun h0 => hnz2 (by simp [STAmount.signum, h0])
+  have h := STAmount.roundToExponent_rounded _ _ e .downward hriou hrange.1 hrange.2 hmv hr2
+  change amount''.toRat = (⌊res.amount'.toRat / 10 ^ e⌋ : ℚ) * 10 ^ e at h
+  rw [h, hk, mul_div_assoc, div_self (zpow_ne_zero _ (by norm_num)), mul_one, Int.floor_intCast]
+
+/-- A deposit's applied delta: the new `coverAvailable` minus the old, taken with `Number`
+arithmetic and converted to an amount of the vault asset, is the amount the deposit took. -/
+private lemma LoanBroker.coverDeposit_delta_value (lb : LoanBroker) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (deltaCover : Number) (deltaAmount : STAmount)
+    (hok : lb.coverDeposit amount = .ok (.ok res))
+    (hc : amount.ExactCanonical) (hat : amount.mNumericType = lb.numericType)
+    (hnn : 0 ≤ amount.toRat)
+    (hrep : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
+      a.toRat = lb.toExact.coverAvailable)
+    (hbound : lb.numericType.isIntegral = true →
+      lb.toExact.coverAvailable + amount.toRat < 2 ^ 63)
+    (hsub : res.loanBroker'.coverAvailable.operator_sub lb.coverAvailable .to_nearest =
+      .ok deltaCover)
+    (hda : STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount) :
+    deltaCover.isNormalized ∧ 0 ≤ deltaCover.toRat ∧ deltaAmount.toRat = res.amount'.toRat := by
+  have hCn := lb.wf.coverAvailable_norm
+  have hC0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
+  obtain ⟨a, hac, hat', hav⟩ := hrep
+  change a.toRat = lb.coverAvailable.toRat at hav
+  -- the deposit takes `r` and adds it to the cover as the `Number` `m`
+  obtain ⟨hrc, hrt⟩ := LoanBroker.coverDeposit_amount_exactCanonical lb amount res hok hc
+  have hrnz := LoanBroker.coverDeposit_amount_nonzero lb amount res hok
+  have hrnn := (LoanBroker.coverDeposit_amount_bounds lb amount res hok hc hnn).1
+  have hrpos : 0 < res.amount'.toRat :=
+    lt_of_le_of_ne hrnn (Ne.symm (STAmount.toRat_ne_zero _ hrnz))
+  have hrnt : res.amount'.mNumericType = lb.numericType := hrt.trans hat
+  obtain ⟨r0, hrr, happ⟩ := LoanBroker.coverDeposit_ok_inv lb amount res hok
+  obtain ⟨m, c', hm, hadd, hamt, hraw⟩ :=
+    LoanBroker.applyCoverTransaction_credit_inv lb r0 res happ
+  rw [← hamt] at hm
+  have hnew : res.loanBroker'.coverAvailable = c' := by
+    show res.loanBroker'.toRawLoanBroker.coverAvailable = c'
+    rw [hraw]
+  rw [hnew] at hsub
+  obtain ⟨hmv, hmn⟩ := STAmount.toNumber_exact_of _ m hrc hm
+  have hcn : c'.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ hCn hmn hadd
+  have hdn : deltaCover.isNormalized :=
+    operator_sub_isNormalized_to_nearest_sz _ _ _ hcn hCn hsub
+  refine ⟨hdn, ?_⟩
+  -- when the exact sum is a `Number`, nothing rounds
+  have hexact : (∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.coverAvailable.toRat + res.amount'.toRat) →
+      0 ≤ deltaCover.toRat ∧ deltaAmount.toRat = res.amount'.toRat := by
+    rintro ⟨w, hw, hwv⟩
+    have hc'v : c'.toRat = lb.coverAvailable.toRat + m.toRat :=
+      Number.RoundsToRepresentable.eq_of_representable c' _
+        (operator_add_rounded_to_nearest _ _ _ hCn hmn hadd) w hw (by rw [hwv, hmv])
+    have hdv : deltaCover.toRat = res.amount'.toRat := by
+      have h := Number.RoundsToRepresentable.eq_of_representable deltaCover _
+        (operator_sub_rounded_to_nearest _ _ _ hcn hCn hsub) m hmn (by rw [hc'v]; ring)
+      rw [h, hc'v, hmv]
+      ring
+    refine ⟨by rw [hdv]; exact hrnn, ?_⟩
+    exact STAmount.ofNumber_to_nearest_eq_of_canonical _ deltaCover deltaAmount res.amount' hdn
+      (by rw [hdv]; exact hrnn) hrc hrnt hdv hda
+  by_cases hnt : lb.numericType.isIntegral = true
+  · -- XRP and MPT: whole values whose sum is below `2^63`
+    apply hexact
+    have hamtI : amount.integral = true := by unfold STAmount.integral; rw [hat]; exact hnt
+    have hra : res.amount' = amount :=
+      LoanBroker.coverDeposit_amount_integral lb amount res hok hamtI
+    have hic : a.IntegralCanonical := by
+      rcases hac with hiou | ⟨hic, _⟩
+      · have := hiou.is_fractional
+        rw [hat'] at this
+        rw [this] at hnt
+        exact absurd hnt (by decide)
+      · exact hic
+    have hric : res.amount'.IntegralCanonical := by
+      rcases hrc with hiou | ⟨hic, _⟩
+      · have := hiou.is_fractional
+        rw [hrnt] at this
+        rw [this] at hnt
+        exact absurd hnt (by decide)
+      · exact hic
+    have hCd : lb.coverAvailable.toRat.den = 1 := by
+      rw [← hav]; exact STAmount.IntegralCanonical.den_eq_one a hic
+    have hrd : res.amount'.toRat.den = 1 := STAmount.IntegralCanonical.den_eq_one _ hric
+    have hCz := Rat.coe_int_num_of_den_eq_one hCd
+    have hrz := Rat.coe_int_num_of_den_eq_one hrd
+    have hlt : lb.coverAvailable.toRat + res.amount'.toRat < 2 ^ 63 := by
+      rw [hra]; exact hbound hnt
+    have h1 : ((lb.coverAvailable.toRat.num + res.amount'.toRat.num : ℤ) : ℚ) < 2 ^ 63 := by
+      push_cast; rw [hCz, hrz]; exact hlt
+    have h2 : (0 : ℚ) ≤ ((lb.coverAvailable.toRat.num + res.amount'.toRat.num : ℤ) : ℚ) := by
+      push_cast; rw [hCz, hrz]; linarith
+    have h1' : lb.coverAvailable.toRat.num + res.amount'.toRat.num < 2 ^ 63 := by exact_mod_cast h1
+    have h2' : 0 ≤ lb.coverAvailable.toRat.num + res.amount'.toRat.num := by exact_mod_cast h2
+    obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_of_int
+      (lb.coverAvailable.toRat.num + res.amount'.toRat.num)
+      (by have := Int.natAbs_of_nonneg h2'; omega)
+    exact ⟨w, hw, by rw [hwv]; push_cast; rw [hCz, hrz]⟩
+  -- IOU
+  have hfr : lb.numericType = .fractional := by
+    cases h : lb.numericType with
+    | integral _ _ _ _ => rw [h] at hnt; exact absurd rfl hnt
+    | fractional => rfl
+  have hriou : res.amount'.IOUCanonical :=
+    hrc.iouCanonical (by unfold STAmount.integral; rw [hrnt, hfr]; rfl)
+  have hamtF : amount.integral = false := by unfold STAmount.integral; rw [hat, hfr]; rfl
+  by_cases hCz : lb.coverAvailable.toRat = 0
+  · -- an empty cover: the sum is the amount itself
+    exact hexact ⟨m, hmn, by rw [hmv, hCz, zero_add]⟩
+  have haiou : a.IOUCanonical := hac.iouCanonical (by unfold STAmount.integral; rw [hat', hfr]; rfl)
+  have hCpos : 0 < lb.coverAvailable.toRat := lt_of_le_of_ne hC0 (Ne.symm hCz)
+  obtain ⟨halo, _⟩ := STAmount.IOUCanonical.toRat_bounds a haiou (hav ▸ hCpos)
+  have hCmin : (10 : ℚ) ^ (-81 : ℤ) ≤ lb.coverAvailable.toRat := by
+    have : (10 : ℚ) ^ (-81 : ℤ) ≤ (10 : ℚ) ^ (a.exponent + 15) :=
+      zpow_le_zpow_right₀ (by norm_num) (by have := haiou.exp_lo; show (-81 : ℤ) ≤ a.mOffset + 15; omega)
+    rw [← hav]; linarith
+  by_cases hsmall : res.amount'.toRat ≤ 9 * lb.coverAvailable.toRat
+  · -- at most nine times the cover: the sum has at most 17 digits on the cover grid
+    apply hexact
+    obtain ⟨e, hexp⟩ := LoanBroker.roundedCoverAmount_exponent lb amount r0 hrr
+    obtain ⟨k, hk⟩ := LoanBroker.coverDeposit_amount_grid lb amount res e hexp hok
+      (hc.iouCanonical hamtF)
+    -- the cover scale is the exponent of the cover's canonical amount `a`
+    have hae : a.exponent = e := by
+      unfold numberExponent at hexp
+      obtain ⟨s, hs, hse⟩ := bind_ok_peel _ _ _ hexp
+      simp only [pure_eq, Except.ok.injEq] at hse
+      have hsv := STAmount.ofNumber_to_nearest_eq_of_canonical _ _ s a hCn hC0 hac hat'
+        hav.symm hs
+      have hsnz : s.mValue ≠ 0 := fun h0 => hCz (by
+        rw [← hav, ← hsv]; unfold STAmount.toRat; simp [h0])
+      have hsc := STAmount.ofNumber_exactCanonical _ _ .to_nearest s hCn hC0 hs hsnz
+      have hsa := STAmount.eq_of_exactCanonical s a hsc hac
+        ((STAmount.ofNumber_mNumericType _ _ _ _ hs).trans hat'.symm) hsnz hsv
+      rw [← hsa, hse]
+    obtain ⟨za, hza⟩ := STAmount.exists_int_grid a
+    rw [hae] at hza halo
+    have hp : (0 : ℚ) < (10 : ℚ) ^ e := zpow_pos (by norm_num) _
+    obtain ⟨_, hahi⟩ := STAmount.IOUCanonical.toRat_bounds a haiou (hav ▸ hCpos)
+    rw [hae] at hahi
+    -- `0 < za < 10^16` and `0 < k ≤ 9 za`
+    have hpow16 : (10 : ℚ) ^ (e + 16) = 10 ^ 16 * (10 : ℚ) ^ e := by
+      rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num; ring
+    rw [hpow16, hza] at hahi
+    have hza_hi : (za : ℚ) < 10 ^ 16 := by
+      by_contra h
+      push Not at h
+      nlinarith
+    have hza_pos : (0 : ℚ) < za := by
+      by_contra h
+      push Not at h
+      have : (za : ℚ) * (10 : ℚ) ^ e ≤ 0 := mul_nonpos_of_nonpos_of_nonneg h hp.le
+      rw [← hza, hav] at this
+      linarith
+    have hk_pos : (0 : ℚ) < k := by
+      by_contra h
+      push Not at h
+      have : (k : ℚ) * (10 : ℚ) ^ e ≤ 0 := mul_nonpos_of_nonpos_of_nonneg h hp.le
+      rw [← hk] at this
+      linarith
+    have hk_le : (k : ℚ) ≤ 9 * za := by
+      have h9 : (k : ℚ) * (10 : ℚ) ^ e ≤ 9 * za * (10 : ℚ) ^ e := by
+        rw [← hk, mul_assoc, ← hza, hav]; exact hsmall
+      exact le_of_mul_le_mul_right h9 hp
+    have hza_hi' : za < 10 ^ 16 := by exact_mod_cast hza_hi
+    have hza_pos' : 0 < za := by exact_mod_cast hza_pos
+    have hk_pos' : 0 < k := by exact_mod_cast hk_pos
+    have hk_le' : k ≤ 9 * za := by exact_mod_cast hk_le
+    obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (za + k) e
+      ⟨by norm_num; omega, by norm_num; omega⟩
+      ⟨by have := haiou.exp_lo; rw [← hae]; unfold minExponent; show _ ≤ a.mOffset; omega,
+        by have := haiou.exp_hi; rw [← hae]; unfold maxExponent; show a.mOffset ≤ _; omega⟩
+    exact ⟨w, hw, by rw [hwv, ← hav, hza, hk]; push_cast; ring⟩
+  -- more than nine times the cover: the two roundings stay far below the last digit of `r`
+  push Not at hsmall
+  obtain ⟨ε, hε⟩ : ∃ ε : ℚ, ε = 6 / (2 ^ 63 - 3 : ℚ) := ⟨_, rfl⟩
+  have hε0 : 0 < ε := by rw [hε]; norm_num
+  have hε16 : ε * 10 ^ 16 ≤ 1 / 100 := by rw [hε]; norm_num
+  have hεr : ε * res.amount'.toRat ≤ res.amount'.toRat / 1000 := by
+    have : ε ≤ 1 / 1000 := by rw [hε]; norm_num
+    nlinarith
+  have hCne : lb.coverAvailable.mantissa_ ≠ 0 := fun h =>
+    hCz (Number.toRat_eq_zero_of_mantissa_zero _ h)
+  have hmne : m.mantissa_ ≠ 0 := fun h => by
+    rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hmv; linarith
+  -- the sum `c'` is within `ε` of `lb.coverAvailable.toRat + res.amount'.toRat`
+  have hc'ge : m.toRat ≤ c'.toRat :=
+    operator_add_ge_of_ge_normalized _ _ _ _ hCn hmn hadd hmn (by linarith)
+  have hc'ne : c'.mantissa_ ≠ 0 := fun h => by
+    rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hc'ge; linarith
+  have hnotneg : ¬ lb.coverAvailable.operator_eq m.operator_neg := by
+    intro h
+    have := (operator_eq_iff _ _ hCn (Number.operator_neg_isNormalized m hmn)).mp h
+    rw [Number.toRat_neg] at this
+    linarith
+  have hadd' := operator_add_rounds_to_nearest _ _ _ hCn hmn hCne hmne hnotneg hadd hc'ne
+  simp only [RoundsWithin, RatValued.toRat] at hadd'
+  rw [hmv, abs_of_pos (show (0 : ℚ) < lb.coverAvailable.toRat + res.amount'.toRat by linarith)] at hadd'
+  obtain ⟨hs1, hs2⟩ := abs_le.mp hadd'
+  rw [← hε] at hs1 hs2
+  have hQ : (lb.coverAvailable.toRat + res.amount'.toRat) * ε ≤ 2 * (ε * res.amount'.toRat) := by nlinarith
+  have hcC_lo : res.amount'.toRat - 2 * (ε * res.amount'.toRat) ≤ c'.toRat - lb.coverAvailable.toRat := by linarith
+  have hcC_hi : c'.toRat - lb.coverAvailable.toRat ≤ res.amount'.toRat + 2 * (ε * res.amount'.toRat) := by linarith
+  have hcC_pos : 0 < c'.toRat - lb.coverAvailable.toRat := by linarith
+  -- the difference is within `ε` of `c' - lb.coverAvailable.toRat`
+  have hneq : ¬ c'.operator_eq lb.coverAvailable := by
+    intro h
+    have := (operator_eq_iff _ _ hcn hCn).mp h
+    linarith
+  obtain ⟨hrlo, hrhi⟩ := STAmount.IOUCanonical.toRat_bounds _ hriou hrpos
+  have hpr : (0 : ℚ) < (10 : ℚ) ^ res.amount'.exponent := zpow_pos (by norm_num) _
+  obtain ⟨f, hf, hfv⟩ := Number.exists_normalized_int_mul_pow 1 (res.amount'.exponent + 14)
+    ⟨by norm_num, by norm_num⟩
+    ⟨by have := hriou.exp_lo; unfold minExponent; show _ ≤ res.amount'.mOffset + 14; omega,
+      by have := hriou.exp_hi; unfold maxExponent; show res.amount'.mOffset + 14 ≤ _; omega⟩
+  have hpow : (10 : ℚ) ^ (res.amount'.exponent + 15) =
+      10 * (10 : ℚ) ^ (res.amount'.exponent + 14) := by
+    rw [show res.amount'.exponent + 15 = (res.amount'.exponent + 14) + 1 by ring,
+      zpow_add_one₀ (by norm_num : (10 : ℚ) ≠ 0)]
+    ring
+  have hfle : f.toRat ≤ c'.toRat - lb.coverAvailable.toRat := by
+    rw [hfv]; push_cast; rw [one_mul]
+    have : (10 : ℚ) ^ (res.amount'.exponent + 14) ≤ res.amount'.toRat / 10 := by
+      rw [hpow] at hrlo; linarith
+    linarith
+  have hdge : f.toRat ≤ deltaCover.toRat :=
+    operator_sub_ge_of_ge_normalized _ _ _ _ hcn hCn hsub hf hfle
+  have hfpos : 0 < f.toRat := by rw [hfv]; push_cast; rw [one_mul]; exact zpow_pos (by norm_num) _
+  have hdne : deltaCover.mantissa_ ≠ 0 := fun h => by
+    rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hdge; linarith
+  have hsub' := operator_sub_rounds_to_nearest _ _ _ hcn hCn hc'ne hCne hneq hsub hdne
+  simp only [RoundsWithin, RatValued.toRat] at hsub'
+  rw [← hε, abs_of_pos hcC_pos] at hsub'
+  obtain ⟨hd1, hd2⟩ := abs_le.mp hsub'
+  have hR : (c'.toRat - lb.coverAvailable.toRat) * ε ≤ 2 * (ε * res.amount'.toRat) := by
+    have h1 := mul_le_mul_of_nonneg_right hcC_hi hε0.le
+    have hεs : ε ≤ 1 / 1000 := by rw [hε]; norm_num
+    have h2 : ε * (ε * res.amount'.toRat) ≤ 1 / 1000 * (ε * res.amount'.toRat) :=
+      mul_le_mul_of_nonneg_right hεs (mul_nonneg hε0.le hrnn)
+    linarith only [h1, h2, mul_nonneg hε0.le hrnn]
+  -- so `|d - res.amount'.toRat| ≤ 4 ε res.amount'.toRat`, below a twentieth of a unit of `res.amount'.toRat`
+  have hd_lo : res.amount'.toRat - 4 * (ε * res.amount'.toRat) ≤ deltaCover.toRat := by linarith
+  have hd_hi : deltaCover.toRat ≤ res.amount'.toRat + 4 * (ε * res.amount'.toRat) := by linarith
+  have hunit : 4 * (ε * res.amount'.toRat) < (1 / 2 : ℚ) * (10 : ℚ) ^ (res.amount'.exponent - 1) := by
+    rw [zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_one]
+    have hr16 : res.amount'.toRat < 10 ^ 16 * (10 : ℚ) ^ res.amount'.exponent := by
+      have : (10 : ℚ) ^ (res.amount'.exponent + 16) = 10 ^ 16 * (10 : ℚ) ^ res.amount'.exponent := by
+        rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num; ring
+      linarith
+    have : ε * res.amount'.toRat < ε * (10 ^ 16 * (10 : ℚ) ^ res.amount'.exponent) :=
+      mul_lt_mul_of_pos_left hr16 hε0
+    nlinarith
+  have hnear : |deltaCover.toRat - res.amount'.toRat| < (1 / 2 : ℚ) * (10 : ℚ) ^ (res.amount'.exponent - 1) :=
+    abs_lt.mpr ⟨by linarith only [hd_lo, hunit], by linarith only [hd_hi, hunit]⟩
+  have hd0 : 0 ≤ deltaCover.toRat := by linarith
+  refine ⟨hd0, ?_⟩
+  -- the result is nonzero: the difference is above `10^-81`
+  have hdexp : (-99 : ℤ) ≤ deltaCover.exponent_ := by
+    by_contra h
+    push Not at h
+    have hdabs := abs_toRat_eq deltaCover
+    rw [abs_of_nonneg hd0] at hdabs
+    have hb := mantissaBounds_nat_of (hdn.mantissaBounds hdne)
+    have hmh : (deltaCover.mantissa_.toNat : ℚ) < ((10 ^ 19 : ℕ) : ℚ) := by exact_mod_cast hb.2
+    push_cast at hmh
+    have h19 : deltaCover.toRat < (10 : ℚ) ^ (deltaCover.exponent_ + 19) := by
+      rw [hdabs, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+      norm_num
+      rw [mul_comm]
+      exact mul_lt_mul_of_pos_left hmh (zpow_pos (by norm_num) _)
+    have h81 : (10 : ℚ) ^ (deltaCover.exponent_ + 19) ≤ (10 : ℚ) ^ (-81 : ℤ) :=
+      zpow_le_zpow_right₀ (by norm_num) (by omega)
+    have hp81 : (0 : ℚ) < (10 : ℚ) ^ (-81 : ℤ) := zpow_pos (by norm_num) _
+    linarith only [h19, h81, hCmin, hsmall, hd_lo, hεr, hp81]
+  have hda' : STAmount.ofNumber .fractional deltaCover .to_nearest = .ok deltaAmount := by
+    rw [← hfr]; exact hda
+  have hdanz := STAmount.ofNumber_iou_ne_zero_of_exponent _ _ _ hdn hdne hdexp hda'
+  exact STAmount.ofNumber_to_nearest_eq_of_near_canonical _ _ _ _ hdn hd0 hrc hrnt hrpos hnear
+    hda hdanz
+
+/-- **Proof body of `coverDeposit_applied_delta`.** -/
+lemma LoanBroker.coverDeposit_applied_delta_proof (lb : LoanBroker) (amount amount'' : STAmount)
+    (res : LoanBrokerCoverResult) (deltaCover : Number) (deltaAmount : STAmount)
+    (hok : lb.coverDeposit amount = .ok (.ok res))
+    (hc : amount.ExactCanonical) (hat : amount.mNumericType = lb.numericType)
+    (hnn : 0 ≤ amount.toRat)
+    (hrep : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
+      a.toRat = lb.toExact.coverAvailable)
+    (hbound : lb.numericType.isIntegral = true →
+      lb.toExact.coverAvailable + amount.toRat < 2 ^ 63)
+    (hround : lb.roundedCoverAmount res.amount' = .ok (.rounded amount''))
+    (hsub : res.loanBroker'.coverAvailable.operator_sub lb.coverAvailable .to_nearest =
+      .ok deltaCover)
+    (hda : STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount) :
+    amount''.operator_eq res.amount' = true ∧ deltaAmount.operator_eq res.amount' = true := by
+  obtain ⟨hrc, hrt⟩ := LoanBroker.coverDeposit_amount_exactCanonical lb amount res hok hc
+  have hrnz := LoanBroker.coverDeposit_amount_nonzero lb amount res hok
+  -- a canonical amount of the same type and value is the amount itself
+  have heq : ∀ x : STAmount, x.ExactCanonical → x.mNumericType = res.amount'.mNumericType →
+      x.toRat = res.amount'.toRat → x.operator_eq res.amount' = true := by
+    intro x hx hxt hxv
+    rw [← STAmount.eq_of_exactCanonical res.amount' x hrc hx hxt.symm hrnz hxv.symm]
+    simp [STAmount.operator_eq, STAmount.areComparable]
+  obtain ⟨hgc, hgt⟩ := LoanBroker.roundedCoverAmount_exactCanonical lb _ _ hrc hround
+  obtain ⟨hdn, hd0, hdv⟩ := LoanBroker.coverDeposit_delta_value lb amount res deltaCover
+    deltaAmount hok hc hat hnn hrep hbound hsub hda
+  have hdanz : deltaAmount.mValue ≠ 0 := fun h0 => STAmount.toRat_ne_zero _ hrnz (by
+    rw [← hdv]; unfold STAmount.toRat; simp [h0])
+  refine ⟨heq _ hgc hgt
+    (LoanBroker.coverDeposit_amount_on_grid lb amount amount'' res hok hc hround), heq _ ?_ ?_ hdv⟩
+  · exact STAmount.ofNumber_exactCanonical _ _ .to_nearest _ hdn hd0 hda hdanz
+  · rw [STAmount.ofNumber_mNumericType _ _ _ _ hda, hrt, hat]
 
 end XRPL.Model.Lending

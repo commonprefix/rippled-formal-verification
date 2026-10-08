@@ -13,7 +13,7 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- A `coverAvailable` the asset holds exactly is returned without rounding. -/
+/-- When CoverAvailable fits an STAmount exactly -> the returned amount `s` = CoverAvailable. -/
 theorem LoanBroker.roundedCoverAvailable_exact (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s)
     -- `coverAvailable` is on the STAmount grid of the vault asset, so it converts without rounding
@@ -22,24 +22,23 @@ theorem LoanBroker.roundedCoverAvailable_exact (s : STAmount)
     s.toRat = lb.toExact.coverAvailable :=
   LoanBroker.roundedCoverAvailable_exact_proof lb s hok hrep
 
-/-- The returned amount is off from `coverAvailable` by at most half a unit in its last digit. For
-XRP and MPT that unit is `1`, so the bound is `1/2`. -/
+/-- When the returned amount `s` ≠ 0 -> |s - CoverAvailable| ≤ ½ ULP of `s`. For XRP and MPT the ULP
+is `1`. -/
 theorem LoanBroker.roundedCoverAvailable_bounds (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s)
     (hnz : s.mValue ≠ 0) :
     |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent :=
   LoanBroker.roundedCoverAvailable_bounds_proof lb s hok hnz
 
-/-- Witness: the bound of `roundedCoverAvailable_bounds` is reached. A cover of
-`1000000000000000.5` needs 17 digits, so the IOU amount returned is half a unit away. -/
+/-- Witness: a run where the error reaches the bound. A cover of `1000000000000000.5` needs 17
+digits, so the IOU amount returned is half a unit away. -/
 theorem LoanBroker.roundedCoverAvailable_bounds_attained :
     ∃ (lb : LoanBroker) (s : STAmount), lb.roundedCoverAvailable = .ok s ∧ s.mValue ≠ 0 ∧
       |s.toRat - lb.toExact.coverAvailable| = (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent :=
   LoanBroker.roundedCoverAvailable_bounds_witness
 
-/-- Integral strengthening of `roundedCoverAvailable_exact`: an XRP or MPT
-broker whose cover history keeps `coverAvailable` whole returns it exactly, with
-no representability condition. -/
+/-- For XRP and MPT, when every cover operation moves a whole amount and keeps CoverAvailable below
+2^63 -> the returned amount `s` = CoverAvailable. -/
 theorem LoanBroker.WholeCoverFrom.roundedCoverAvailable_exact (start lb : LoanBroker)
     (s : STAmount)
     (hint : start.numericType.isIntegral = true)

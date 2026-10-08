@@ -371,6 +371,35 @@ lemma LoanBroker.coverClawback_debit_integral_proof (lb : LoanBroker) (pool : α
     LoanBroker.applyCoverTransaction_debit_integral lb claw res happ hint hsz hnn hcint hbound
   rw [hv]; ring
 
+/-- **Proof body of `coverClawback_debit_le_amount`.** -/
+lemma LoanBroker.coverClawback_debit_le_amount_proof (lb : LoanBroker) (pool : α) (a : STAmount)
+    (res : LoanBrokerCoverResult)
+    (hcan : lb.canCoverClawback pool (some a) = .ok .tesSUCCESS)
+    (hok : lb.coverClawback pool (some a) = .ok (.ok res))
+    (hac : a.ExactCanonical) (hat : a.mNumericType = lb.numericType) (ha0 : 0 ≤ a.toRat)
+    (hza : a.isZero = false)
+    (hexact : ∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
+    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable ≤ a.toRat := by
+  have hreq : ∀ a' ∈ some a, a'.isZero = false → a'.ExactCanonical ∧ 0 ≤ a'.toRat := by
+    intro a' ha' _
+    rw [Option.mem_def, Option.some_inj] at ha'
+    subst ha'
+    exact ⟨hac, ha0⟩
+  rw [LoanBroker.coverClawback_debit_proof lb pool (some a) res hcan hok hreq hexact]
+  -- the clawed amount is the smaller of the request and the cap, rounded to nearest, and the
+  -- request is itself an amount of the vault asset, so the rounding never goes past it
+  obtain ⟨claw, hrr, hnz⟩ := LoanBroker.canCoverClawback_success_inv lb pool (some a) hcan
+  obtain ⟨e, m, he, hm⟩ := LoanBroker.roundedCoverClawback_minimum lb pool _ claw hrr
+  obtain ⟨c, hcn, hc0, _, hcl, hca⟩ :=
+    LoanBroker.roundedCoverClawback_rounded_inv lb pool (some a) claw e m hreq he hm hrr
+  obtain ⟨claw', hrr', happ⟩ := LoanBroker.coverClawback_ok_inv lb pool (some a) res hok
+  rw [hrr, Except.ok.injEq, RoundingResult.rounded.injEq] at hrr'
+  subst hrr'
+  rw [LoanBroker.applyCoverTransaction_amount' lb _ _ res happ]
+  exact STAmount.ofNumber_to_nearest_le_of_canonical _ c claw a hcn hc0 hac hat (hca a rfl hza) hcl
+    hnz
+
 /-- **Proof body of `coverClawback_decreases_cover`.** -/
 lemma LoanBroker.coverClawback_decreases_cover_proof (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult)
@@ -468,32 +497,40 @@ lemma LoanBroker.coverClawback_lawful_total_proof (lb : LoanBroker) (pool : α)
   exact ⟨{ amount' := claw, loanBroker' := lb' },
     by simp [LoanBroker.coverClawback, LoanBroker.applyCoverTransaction, hrr, hN, hsub, htl]⟩
 
-/-- **Proof body of `coverClawback_keeps_minimum_within_half`.** -/
-lemma LoanBroker.coverClawback_keeps_minimum_within_half_proof (lb : LoanBroker) (pool : α)
+/-- **Proof body of `coverClawback_keeps_minimum`.** -/
+lemma LoanBroker.coverClawback_keeps_minimum_proof (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
     (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     (hok : lb.coverClawback pool amount = .ok (.ok res))
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
     (hreq : ∀ a ∈ amount, a.isZero = false → a.ExactCanonical ∧ 0 ≤ a.toRat)
-    (hexact : ∃ w : Number, w.isNormalized ∧
-      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
-    minimumCover.toRat - res.loanBroker'.toExact.coverAvailable ≤
-      (1 / 2 : ℚ) * (10 : ℚ) ^ res.amount'.exponent := by
+    (hfit : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
+      a.toRat = lb.toExact.coverAvailable - minimumCover.toRat) :
+    minimumCover.toRat ≤ res.loanBroker'.toExact.coverAvailable := by
+  have hmn := minimumBrokerCover_isNormalized _ _ _ _ _ hmin
   have hnz := LoanBroker.coverClawback_amount_nonzero lb pool amount res hcan hok
   obtain ⟨claw, hrr, happ⟩ := LoanBroker.coverClawback_ok_inv lb pool amount res hok
-  have hamt : res.amount' = claw :=
-    LoanBroker.applyCoverTransaction_amount' lb _ claw res happ
-  rw [hamt] at hnz hexact ⊢
+  obtain ⟨m, c', hm, hsub, hamt, hraw⟩ :=
+    LoanBroker.applyCoverTransaction_debit_inv lb claw res happ
+  rw [hamt] at hnz
+  -- the clawed amount is a capped amount, at most the cover above the minimum, rounded to nearest
   obtain ⟨c, hcn, hc0, hcle, hcl, _⟩ :=
     LoanBroker.roundedCoverClawback_rounded_inv lb pool amount claw e minimumCover hreq hexp hmin
       hrr
+  -- the asset holds the cover above the minimum, so the rounding cannot take the claw past it
+  obtain ⟨a, hac, hat, hav⟩ := hfit
+  have hle : claw.toRat ≤ a.toRat :=
+    STAmount.ofNumber_to_nearest_le_of_canonical _ c claw a hcn hc0 hac hat (by rw [hav]; exact hcle)
+      hcl hnz
+  -- the debit rounds to nearest, and the minimum cover is a `Number` it cannot round past
   have hcc := STAmount.ofNumber_exactCanonical _ c .to_nearest claw hcn hc0 hcl hnz
-  have hdeb := LoanBroker.coverClawback_debit_of_canonical lb pool amount res hok (hamt ▸ hcc)
-    (hamt ▸ hexact)
-  rw [hamt] at hdeb
-  have hhalf := (abs_le.mp (STAmount.ofNumber_to_nearest_within_half _ c claw hcn hc0 hcl hnz)).2
-  linarith
+  obtain ⟨hmv, hmn'⟩ := STAmount.toNumber_exact_of claw m hcc hm
+  have hcov : lb.toExact.coverAvailable = lb.coverAvailable.toRat := rfl
+  show minimumCover.toRat ≤ res.loanBroker'.toRawLoanBroker.coverAvailable.toRat
+  rw [hraw]
+  exact operator_sub_ge_of_ge_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn' hsub hmn
+    (by rw [hmv]; linarith)
 
 /-- **Proof body of `coverClawback_all_leaves_minimum`.** -/
 lemma LoanBroker.coverClawback_all_leaves_minimum_proof (lb : LoanBroker) (pool : α)

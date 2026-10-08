@@ -90,44 +90,95 @@ private lemma maxClaw_facts (lb : LoanBroker) (e : Int) (minimumCover maxClaw : 
       (minimumBrokerCover_isNormalized _ _ _ _ _ hmin) hsub hm0,
     Number.toRat_nonneg_of_nonnegative _ hneg⟩
 
-/-- **Proof body of `roundedCoverClawback_all`.** -/
-lemma LoanBroker.roundedCoverClawback_all_proof (lb : LoanBroker) (pool : α)
+/-- A clawback that returns an amount had cover above the minimum. -/
+private lemma roundedCoverClawback_signum_pos (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
     (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
-    (hpos : 0 < maxClaw.signum)
-    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
-    (hclaw : STAmount.ofNumber lb.numericType maxClaw .to_nearest = .ok claw) :
-    lb.roundedCoverClawback pool amount = .ok (.rounded claw) ∧
-      (claw.mValue ≠ 0 →
-        |claw.toRat - maxClaw.toRat| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent) := by
-  have hnle : ¬ maxClaw.signum ≤ 0 := not_le.mpr hpos
-  refine ⟨?_, fun hnz => ?_⟩
-  · rcases hall with rfl | ⟨a, rfl, hz⟩
-    · simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hclaw]
-    · simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hz, hclaw]
-  · obtain ⟨hxn, hx0⟩ := maxClaw_facts lb e minimumCover maxClaw hmin hsub hpos
-    exact STAmount.ofNumber_to_nearest_within_half _ _ _ hxn hx0 hclaw hnz
+    (hok : lb.roundedCoverClawback pool amount = .ok (.rounded claw)) : 0 < maxClaw.signum := by
+  by_contra hle
+  rw [LoanBroker.roundedCoverClawback_no_excess_proof lb pool amount e minimumCover maxClaw hexp hmin
+    hsub (not_lt.mp hle)] at hok
+  simp at hok
 
-/-- **Proof body of `roundedCoverClawback_capped`.** -/
-lemma LoanBroker.roundedCoverClawback_capped_proof (lb : LoanBroker) (pool : α)
-    (a : STAmount) (e : Int) (minimumCover maxClaw magnitude : Number) (claw : STAmount)
+/-- A full clawback that returns a nonzero amount is within half a unit in its last digit of the
+cover above the minimum, because it rounds that cover to nearest. -/
+private lemma roundedCoverClawback_all_within_half (lb : LoanBroker) (pool : α)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
     (hexp : AssetPool.exponent pool lb.numericType = .ok e)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
     (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
-    (hpos : 0 < maxClaw.signum) (hnz : a.isZero = false)
-    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat)
-    (hmag : a.toNumber .to_nearest = .ok magnitude)
-    (hclaw : STAmount.ofNumber lb.numericType
-      (if magnitude.operator_gt maxClaw = true then maxClaw else magnitude) .to_nearest =
-        .ok claw) :
-    lb.roundedCoverClawback pool (some a) = .ok (.rounded claw) ∧
-      (claw.mValue ≠ 0 →
-        |claw.toRat - min a.toRat maxClaw.toRat| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent) := by
+    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
+    (hok : lb.roundedCoverClawback pool amount = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    |claw.toRat - maxClaw.toRat| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent := by
+  have hpos := roundedCoverClawback_signum_pos lb pool amount e minimumCover maxClaw claw hexp hmin
+    hsub hok
   have hnle : ¬ maxClaw.signum ≤ 0 := not_le.mpr hpos
-  refine ⟨by simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hnz, hmag, hclaw],
-    fun hcz => ?_⟩
+  have hclaw : STAmount.ofNumber lb.numericType maxClaw .to_nearest = .ok claw := by
+    revert hok
+    rcases hall with rfl | ⟨a, rfl, hz⟩
+    · cases hc : STAmount.ofNumber lb.numericType maxClaw .to_nearest <;>
+        simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hc]
+    · cases hc : STAmount.ofNumber lb.numericType maxClaw .to_nearest <;>
+        simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hz, hc]
+  obtain ⟨hxn, hx0⟩ := maxClaw_facts lb e minimumCover maxClaw hmin hsub hpos
+  exact STAmount.ofNumber_to_nearest_within_half _ _ _ hxn hx0 hclaw hnz
+
+/-- **Proof body of `roundedCoverClawback_all_upper_bound`.** -/
+lemma LoanBroker.roundedCoverClawback_all_upper_bound_proof (lb : LoanBroker) (pool : α)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
+    (hok : lb.roundedCoverClawback pool amount = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    claw.toRat - maxClaw.toRat ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent :=
+  (abs_sub_le_iff.mp (roundedCoverClawback_all_within_half lb pool amount e minimumCover maxClaw
+    claw hexp hmin hsub hall hok hnz)).1
+
+/-- **Proof body of `roundedCoverClawback_all_lower_bound`.** -/
+lemma LoanBroker.roundedCoverClawback_all_lower_bound_proof (lb : LoanBroker) (pool : α)
+    (amount : Option STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hall : amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true)
+    (hok : lb.roundedCoverClawback pool amount = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    maxClaw.toRat - claw.toRat ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent :=
+  (abs_sub_le_iff.mp (roundedCoverClawback_all_within_half lb pool amount e minimumCover maxClaw
+    claw hexp hmin hsub hall hok hnz)).2
+
+/-- A clawback of a nonzero request that returns a nonzero amount is within half a unit in its last
+digit of the smaller of the request and the cover above the minimum, because it rounds that
+smaller value to nearest. -/
+private lemma roundedCoverClawback_capped_within_half (lb : LoanBroker) (pool : α) (a : STAmount)
+    (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hza : a.isZero = false)
+    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat)
+    (hok : lb.roundedCoverClawback pool (some a) = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    |claw.toRat - min a.toRat maxClaw.toRat| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent := by
+  have hpos := roundedCoverClawback_signum_pos lb pool (some a) e minimumCover maxClaw claw hexp
+    hmin hsub hok
+  have hnle : ¬ maxClaw.signum ≤ 0 := not_le.mpr hpos
+  obtain ⟨magnitude, hmag⟩ : ∃ magnitude, a.toNumber .to_nearest = .ok magnitude := by
+    cases hm : a.toNumber .to_nearest with
+    | error err => simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hza, hm] at hok
+    | ok magnitude => exact ⟨magnitude, rfl⟩
+  have hclaw : STAmount.ofNumber lb.numericType
+      (if magnitude.operator_gt maxClaw = true then maxClaw else magnitude) .to_nearest =
+        .ok claw := by
+    revert hok
+    cases hc : STAmount.ofNumber lb.numericType
+        (if magnitude.operator_gt maxClaw = true then maxClaw else magnitude) .to_nearest <;>
+      simp [LoanBroker.roundedCoverClawback, hexp, hmin, hsub, hnle, hza, hmag, hc]
   obtain ⟨hxn, hx0⟩ := maxClaw_facts lb e minimumCover maxClaw hmin hsub hpos
   obtain ⟨hmv, hmn⟩ := STAmount.toNumber_exact_of a magnitude hac hmag
   -- the converted value is the smaller of the request and the cover above the minimum
@@ -143,8 +194,36 @@ lemma LoanBroker.roundedCoverClawback_capped_proof (lb : LoanBroker) (pool : α)
       (if magnitude.operator_gt maxClaw = true then maxClaw else magnitude).isNormalized := by
     split_ifs <;> assumption
   have h := STAmount.ofNumber_to_nearest_within_half _ _ _ hcn (by rw [hc]; exact le_min ha0 hx0)
-    hclaw hcz
+    hclaw hnz
   rwa [hc] at h
+
+/-- **Proof body of `roundedCoverClawback_capped_upper_bound`.** -/
+lemma LoanBroker.roundedCoverClawback_capped_upper_bound_proof (lb : LoanBroker) (pool : α)
+    (a : STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hza : a.isZero = false)
+    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat)
+    (hok : lb.roundedCoverClawback pool (some a) = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    claw.toRat - min a.toRat maxClaw.toRat ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent :=
+  (abs_sub_le_iff.mp (roundedCoverClawback_capped_within_half lb pool a e minimumCover maxClaw claw
+    hexp hmin hsub hza hac ha0 hok hnz)).1
+
+/-- **Proof body of `roundedCoverClawback_capped_lower_bound`.** -/
+lemma LoanBroker.roundedCoverClawback_capped_lower_bound_proof (lb : LoanBroker) (pool : α)
+    (a : STAmount) (e : Int) (minimumCover maxClaw : Number) (claw : STAmount)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hsub : lb.coverAvailable.operator_sub minimumCover .downward = .ok maxClaw)
+    (hza : a.isZero = false)
+    (hac : a.ExactCanonical) (ha0 : 0 ≤ a.toRat)
+    (hok : lb.roundedCoverClawback pool (some a) = .ok (.rounded claw))
+    (hnz : claw.mValue ≠ 0) :
+    min a.toRat maxClaw.toRat - claw.toRat ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ claw.exponent :=
+  (abs_sub_le_iff.mp (roundedCoverClawback_capped_within_half lb pool a e minimumCover maxClaw claw
+    hexp hmin hsub hza hac ha0 hok hnz)).2
 
 /-- **Proof body of `canCoverClawback_no_excess`.** -/
 lemma LoanBroker.canCoverClawback_no_excess_proof (lb : LoanBroker) (pool : α)

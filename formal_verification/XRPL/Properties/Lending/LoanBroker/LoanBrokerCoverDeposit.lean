@@ -13,8 +13,7 @@ open XRPL.Model.Result
 
 variable (lb : LoanBroker)
 
-/-- The rounded amount never exceeds the requested amount, and is less than one unit of the cover
-scale (`10 ^ e`) below it. -/
+/-- 0 ≤ amount - roundedAmount < 1 ULP at CoverAvailable's scale (`10 ^ e`). -/
 theorem LoanBroker.roundedCoverAmount_bounds (amount r : STAmount) (e : Int)
     (hcanon : amount.integral = false → amount.IOUCanonical)
     (hexp : numberExponent lb.coverAvailable lb.numericType = .ok e)
@@ -22,14 +21,23 @@ theorem LoanBroker.roundedCoverAmount_bounds (amount r : STAmount) (e : Int)
     r.toRat ≤ amount.toRat ∧ amount.toRat - r.toRat < 10 ^ e :=
   LoanBroker.roundedCoverAmount_bounds_proof lb amount r e hcanon hexp hok
 
-/-- An integral amount passes through `roundedCoverAmount` unchanged. -/
+/-- Witness: a run where the error reaches 1 − 10⁻¹⁵ ULP, just under the bound. On a cover of
+`10^15` one unit is `1`, and a deposit of `1.999999999999999` is rounded down to `1`. -/
+theorem LoanBroker.roundedCoverAmount_bounds_attained :
+    ∃ (lb : LoanBroker) (amount r : STAmount) (e : Int),
+      (amount.integral = false → amount.IOUCanonical) ∧
+      numberExponent lb.coverAvailable lb.numericType = .ok e ∧
+      lb.roundedCoverAmount amount = .ok (.rounded r) ∧
+      (1 - 1 / 10 ^ 15) * 10 ^ e ≤ amount.toRat - r.toRat :=
+  LoanBroker.roundedCoverAmount_bounds_witness
+
+/-- When integral type, roundedAmount = amount (no rounding). -/
 theorem LoanBroker.roundedCoverAmount_integral (amount r : STAmount)
     (hint : amount.integral = true)
     (hok : lb.roundedCoverAmount amount = .ok (.rounded r)) : r = amount :=
   LoanBroker.roundedCoverAmount_integral_proof lb amount r hint hok
 
-/-- When the new `coverAvailable` fits a `Number`, the deposit adds exactly the
-rounded amount. -/
+/-- When the new CoverAvailable fits a Number -> roundedAmount = CoverAvailable' - CoverAvailable. -/
 theorem LoanBroker.coverDeposit_credit (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
@@ -48,8 +56,7 @@ theorem LoanBroker.coverDeposit_credit_integral (amount : STAmount)
     res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable = amount.toRat :=
   LoanBroker.coverDeposit_credit_integral_proof lb amount res hok hint hsz hcint hbound
 
-/-- When the new `coverAvailable` fits a `Number`, it rises by no more than the
-requested amount. -/
+/-- When the new CoverAvailable fits a Number -> amount ≥ CoverAvailable' - CoverAvailable. -/
 theorem LoanBroker.coverDeposit_credit_le_amount (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
@@ -58,15 +65,37 @@ theorem LoanBroker.coverDeposit_credit_le_amount (amount : STAmount)
     res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable ≤ amount.toRat :=
   LoanBroker.coverDeposit_credit_le_amount_proof lb amount res hok hc hexact
 
-/-- Witness: the fit hypothesis of `coverDeposit_credit_le_amount` cannot be
-dropped, a run exists whose `coverAvailable` rises by more than the deposit. -/
+/-- Witness: a run that credits more than was deposited. On a cover of `6.6 * 10^12`, a deposit of
+`9999999999999999 * 10^15` raises `coverAvailable` by `3.4 * 10^12` more than the deposit. -/
 theorem LoanBroker.coverDeposit_credit_le_amount_attained :
     ∃ (lb : LoanBroker) (amount : STAmount) (res : LoanBrokerCoverResult),
       amount.IOUCanonical ∧ lb.coverDeposit amount = .ok (.ok res) ∧ res.amount' = amount ∧
       amount.toRat < res.loanBroker'.toExact.coverAvailable - lb.toExact.coverAvailable :=
   LoanBroker.coverDeposit_credit_le_amount_witness
 
-/-- A deposit only raises `coverAvailable`. -/
+/-- When CoverAvailable fits an STAmount exactly -> STAmount(CoverAvailable' − CoverAvailable) =
+roundedAmount, and roundedAmount is already at the cover scale.
+`amount''` - the deposited amount rounded to the cover scale again -/
+theorem LoanBroker.coverDeposit_applied_delta (amount amount'' : STAmount)
+    (res : LoanBrokerCoverResult) (deltaCover : Number) (deltaAmount : STAmount)
+    (hok : lb.coverDeposit amount = .ok (.ok res))
+    (hc : amount.ExactCanonical) (hat : amount.mNumericType = lb.numericType)
+    (hnn : 0 ≤ amount.toRat)
+    -- `coverAvailable` is on the STAmount grid of the vault asset
+    (hrep : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
+      a.toRat = lb.toExact.coverAvailable)
+    -- an XRP or MPT cover plus the deposit stays within the largest MPT amount, `2^63 - 1`
+    (hbound : lb.numericType.isIntegral = true →
+      lb.toExact.coverAvailable + amount.toRat < 2 ^ 63)
+    (hround : lb.roundedCoverAmount res.amount' = .ok (.rounded amount''))
+    (hsub : res.loanBroker'.coverAvailable.operator_sub lb.coverAvailable .to_nearest =
+      .ok deltaCover)
+    (hda : STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount) :
+    amount''.operator_eq res.amount' = true ∧ deltaAmount.operator_eq res.amount' = true :=
+  LoanBroker.coverDeposit_applied_delta_proof lb amount amount'' res deltaCover deltaAmount hok hc
+    hat hnn hrep hbound hround hsub hda
+
+/-- Cover deposit only raises CoverAvailable (monotone up). -/
 theorem LoanBroker.coverDeposit_increases_cover (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
@@ -74,8 +103,8 @@ theorem LoanBroker.coverDeposit_increases_cover (amount : STAmount)
     lb.toExact.coverAvailable ≤ res.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_increases_cover_proof lb amount res hok hc hnn
 
-/-- An amount that passed `roundedCoverAmount` deposits without a throw: the
-result is a lawful broker holding the rounded amount, never `.notLawful`. -/
+/-- When CoverAvailable + roundedAmount < 10^96 -> the deposit succeeds with roundedAmount and never
+throws, not even notLawful. -/
 theorem LoanBroker.coverDeposit_total (amount r : STAmount)
     (hrounded : lb.roundedCoverAmount amount = .ok (.rounded r))
     (hc : amount.ExactCanonical)
@@ -85,8 +114,7 @@ theorem LoanBroker.coverDeposit_total (amount r : STAmount)
     ∃ res, lb.coverDeposit amount = .ok (.ok res) ∧ res.amount' = r :=
   LoanBroker.coverDeposit_total_proof lb amount r hrounded hc hnn hcap
 
-/-- A deposit onto an empty cover is taken whole, never rounded, and becomes the
-new `coverAvailable`. An empty cover has no scale to round to. -/
+/-- A deposit into an empty cover is credited whole: CoverAvailable' = amount. -/
 theorem LoanBroker.coverDeposit_empty (amount : STAmount) (res : LoanBrokerCoverResult)
     (hzero : lb.coverAvailable = Number.zero)
     (hok : lb.coverDeposit amount = .ok (.ok res))
@@ -95,8 +123,7 @@ theorem LoanBroker.coverDeposit_empty (amount : STAmount) (res : LoanBrokerCover
     res.amount' = amount ∧ res.loanBroker'.toExact.coverAvailable = amount.toRat :=
   LoanBroker.coverDeposit_empty_proof lb amount res hzero hok hc hat
 
-/-- A deposit never breaks the minimum cover: if `coverAvailable` was at least the
-minimum cover, it still is, because the debt is unchanged and `coverAvailable` only rises. -/
+/-- If CoverAvailable ≥ minCover before a deposit, it stays also after. -/
 theorem LoanBroker.coverDeposit_keeps_minimum (amount : STAmount) (res : LoanBrokerCoverResult)
     (e : Int)
     (hok : lb.coverDeposit amount = .ok (.ok res))

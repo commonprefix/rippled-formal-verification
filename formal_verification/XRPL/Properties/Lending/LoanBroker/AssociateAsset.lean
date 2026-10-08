@@ -16,8 +16,9 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
 
-/-- NOT PROVABLE: **`associateAsset` is a no-op on every reachable broker.** Create and update
-are proven. Deposit, withdraw and clawback can leave `coverAvailable` off the grid. -/
+/-- NOT PROVABLE: all Numbers that are passed to `associateAsset` are exactly representable and
+calling `associateAsset` on them is a no-op in terms of rounding. Create and update are proven.
+Deposit, withdraw and clawback can leave `coverAvailable` off the grid. -/
 theorem LoanBroker.Reachable.associateAsset_noop (lb : LoanBroker) (hr : lb.Reachable) :
     ¬ lb.assetsRounded := by
   have hzero (nt : NumericType) : STAmount.isRounded nt Number.zero = false := by cases nt <;> rfl
@@ -62,16 +63,16 @@ theorem LoanBroker.Reachable.associateAsset_noop (lb : LoanBroker) (hr : lb.Reac
     -- the new cover can be off the grid (`coverClawback_associateAsset_rounds`)
     sorry
 
-/-- **`associateAsset` is not a no-op after a deposit.** Depositing
-`9999999999999999` onto `9999999999999999` of IOU cover leaves `coverAvailable`
-at `19999999999999998`, 17 significant digits. -/
+/-- Witness: `associateAsset` can round CoverAvailable after a deposit (it is not a no-op).
+Depositing `9999999999999999` onto `9999999999999999` of IOU cover leaves `coverAvailable` at
+`19999999999999998`, 17 significant digits. -/
 theorem LoanBroker.coverDeposit_associateAsset_rounds :
     ∃ (lb : LoanBroker) (amount : STAmount) (res : LoanBrokerCoverResult),
       lb.coverDeposit amount = .ok (.ok res) ∧ res.loanBroker'.assetsRounded :=
   LoanBroker.coverDeposit_associateAsset_witness
 
-/-- **`associateAsset` is not a no-op after a withdrawal.** Withdrawing
-`7.6 * 10^-10` from `10^6` of IOU cover passes the checks and leaves a 17-digit
+/-- Witness: `associateAsset` can round CoverAvailable after a withdraw (it is not a no-op).
+Withdrawing `7.6 * 10^-10` from `10^6` of IOU cover passes the checks and leaves a 17-digit
 `coverAvailable`. -/
 theorem LoanBroker.coverWithdraw_associateAsset_rounds :
     ∃ (lb : LoanBroker) (pool : Vault) (amount : STAmount) (res : LoanBrokerCoverResult),
@@ -79,9 +80,9 @@ theorem LoanBroker.coverWithdraw_associateAsset_rounds :
       lb.coverWithdraw amount = .ok (.ok res) ∧ res.loanBroker'.assetsRounded :=
   LoanBroker.coverWithdraw_associateAsset_witness
 
-/-- **`associateAsset` is not a no-op after a clawback.** Clawing `7.5` from
-`10^16` of IOU cover leaves `coverAvailable` at `9999999999999992.5`, 17
-significant digits. -/
+/-- Witness: `associateAsset` can round CoverAvailable after a clawback (it is not a no-op). Clawing
+`7.5` from `10^16` of IOU cover leaves `coverAvailable` at `9999999999999992.5`, 17 significant
+digits. -/
 theorem LoanBroker.coverClawback_associateAsset_rounds :
     ∃ (lb : LoanBroker) (pool : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult),
       lb.coverClawback pool amount = .ok (.ok res) ∧ res.loanBroker'.assetsRounded :=
@@ -89,9 +90,8 @@ theorem LoanBroker.coverClawback_associateAsset_rounds :
 
 variable {α : Type} [AssetPool α]
 
-/-- **`associateAsset` is a no-op after an XRP or MPT deposit.** A whole cover
-plus a whole deposit is whole, so the asset stores it exactly while it fits the
-type's bounds. -/
+/-- For XRP and MPT, `associateAsset` is a no-op after a deposit of a whole amount, while the new
+CoverAvailable stays within the type's max. -/
 theorem LoanBroker.coverDeposit_associateAsset_integral (lb : LoanBroker) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverDeposit amount = .ok (.ok res))
     (hnt : lb.numericType.isIntegral = true)
@@ -104,8 +104,8 @@ theorem LoanBroker.coverDeposit_associateAsset_integral (lb : LoanBroker) (amoun
   LoanBroker.coverDeposit_associateAsset_integral_proof lb amount res hok hnt hmaxoff hint hsz
     hcint hbound hmax
 
-/-- **`associateAsset` is a no-op after an XRP or MPT withdrawal.** A whole cover
-less a whole withdrawal is whole and no larger, so the asset stores it exactly. -/
+/-- For XRP and MPT, `associateAsset` is a no-op after a withdraw of a whole amount from a whole
+CoverAvailable within the type's max. -/
 theorem LoanBroker.coverWithdraw_associateAsset_integral (lb : LoanBroker) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverWithdraw amount = .ok (.ok res))
     (hnt : lb.numericType.isIntegral = true)
@@ -119,9 +119,8 @@ theorem LoanBroker.coverWithdraw_associateAsset_integral (lb : LoanBroker) (amou
   LoanBroker.coverWithdraw_associateAsset_integral_proof lb amount res hok hnt hmaxoff hint hsz
     hnn hcint hbound hmax
 
-/-- **`associateAsset` is a no-op after an XRP or MPT clawback.** A whole cover
-less a whole clawed amount is whole and no larger, so the asset stores it
-exactly. -/
+/-- For XRP and MPT, `associateAsset` is a no-op after a clawback whose checks pass, from a whole
+CoverAvailable within the type's max. -/
 theorem LoanBroker.coverClawback_associateAsset_integral (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (res : LoanBrokerCoverResult)
     (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)

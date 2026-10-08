@@ -10,8 +10,7 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-/-- A coarser vault scale never lowers the minimum cover, because the minimum cover is
-rounded up, and rounding up to fewer decimals never gives a smaller value. -/
+/-- A coarser vault scale never lowers the minCover when it is ≠ 0. -/
 theorem minimumBrokerCover_scale_monotone (nt : NumericType) (debtTotal : Number)
     (coverRateMinimum : TenthBips32) (e e' : Int) (m m' : Number)
     (hle : e ≤ e') -- `e'` is the coarser vault scale
@@ -23,16 +22,16 @@ theorem minimumBrokerCover_scale_monotone (nt : NumericType) (debtTotal : Number
   minimumBrokerCover_scale_monotone_proof nt debtTotal coverRateMinimum e e' m m' hle he he' hm hm'
     hnz hnz'
 
-/-- Witness: a coarser vault scale can raise the minimum cover. A debt of `12.34567890123` at `10%`
-needs `1.234567890123` at scale `10^-13` but `2` at `10^0`, so a cover of `1.3` meets only the first. -/
+/-- Witness: a coarser vault scale can cause CoverAvailable < minCover. A debt of `12.34567890123`
+at `10%` needs `1.234567890123` at scale `10^-13` but `2` at `10^0`, so a cover of `1.3` meets
+only the first. -/
 theorem minimumBrokerCover_scale_monotone_attained :
     ∃ (nt : NumericType) (debtTotal : Number) (rate : TenthBips32) (e e' : Int) (m m' : Number),
       e < e' ∧ -96 ≤ e ∧ e' ≤ 80 ∧ minimumBrokerCover nt debtTotal rate e = .ok m ∧
       minimumBrokerCover nt debtTotal rate e' = .ok m' ∧ m.toRat < m'.toRat :=
   minimumBrokerCover_scale_witness
 
-/-- More debt never lowers the minimum cover, because the (debt x rate) is rounded up, and
-rounding a larger value up never gives a smaller result. -/
+/-- A higher DebtTotal never lowers the minCover when it is ≠ 0. -/
 theorem minimumBrokerCover_debt_monotone (nt : NumericType) (debtTotal debtTotal' : Number)
     (coverRateMinimum : TenthBips32) (e : Int) (m m' : Number)
     (hd : debtTotal.isNormalized) (hd' : debtTotal'.isNormalized) (h0 : 0 ≤ debtTotal.toRat)
@@ -45,8 +44,7 @@ theorem minimumBrokerCover_debt_monotone (nt : NumericType) (debtTotal debtTotal
   minimumBrokerCover_debt_monotone_proof nt debtTotal debtTotal' coverRateMinimum e m m' hd hd' h0
     hle he he' hm hm' hnz'
 
-/-- A higher `coverRateMinimum` never lowers the minimum cover, because the (debt x rate) is
-rounded up, and rounding a larger value up never gives a smaller result. -/
+/-- A higher CoverRateMinimum never lowers the minCover when it is ≠ 0. -/
 theorem minimumBrokerCover_rate_monotone (nt : NumericType) (debtTotal : Number)
     (rate rate' : TenthBips32) (e : Int) (m m' : Number)
     (hd : debtTotal.isNormalized) (h0 : 0 ≤ debtTotal.toRat)

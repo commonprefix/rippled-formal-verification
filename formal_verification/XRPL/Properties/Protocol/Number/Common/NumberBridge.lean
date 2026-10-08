@@ -195,6 +195,15 @@ lemma operator_sub_le_of_le_normalized (x y result m : Number)
   Number.RoundsToRepresentable.le_of_le_normalized result (x.toRat - y.toRat)
     (operator_sub_rounded_to_nearest x y result hx hy hok) m hm hle
 
+/-- A `to_nearest` subtraction that stays above a normalized floor. -/
+lemma operator_sub_ge_of_ge_normalized (x y result m : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hok : Number.operator_sub x y .to_nearest = .ok result)
+    (hm : m.isNormalized) (hge : m.toRat ≤ x.toRat - y.toRat) :
+    m.toRat ≤ result.toRat :=
+  Number.RoundsToRepresentable.ge_of_ge_normalized result (x.toRat - y.toRat)
+    (operator_sub_rounded_to_nearest x y result hx hy hok) m hm hge
+
 /-- A `to_nearest` subtraction of a non-negative exact difference is
 non-negative. -/
 lemma operator_sub_nonneg (x y result : Number)

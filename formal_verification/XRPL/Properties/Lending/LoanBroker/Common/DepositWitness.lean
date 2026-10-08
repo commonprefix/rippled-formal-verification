@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
+import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
 
 /-! # Witnesses for the `LoanBroker.coverDeposit` theorems
 
@@ -13,6 +14,41 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.Lending1_1
 open XRPL.Model.SingleAssetVault (Vault)
+
+/-- An IOU broker holding `10^15` of cover, so one unit of the cover scale is `1`. -/
+def wbUnitScale : RawLoanBroker :=
+  { numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 0
+  , coverRateLiquidation := 0, debtTotal := Number.zero, debtMaximum := Number.zero
+  , coverAvailable := ⟨false, 1000000000000000000, -3⟩, loanCount := 0 }
+
+def wbUnitScaleL : LoanBroker := ⟨wbUnitScale, by native_decide, by native_decide⟩
+
+/-- The deposit, `1.999999999999999`, all 16 digits after the leading one below the cover scale. -/
+def waUnitScale : STAmount := STAmount.unchecked .fractional 1999999999999999 (-15) false
+
+/-- The amount is rounded, and loses at least `1 - 10^-15` of a unit of the cover scale. -/
+def roundsByAlmostUnit (lb : LoanBroker) (amount : STAmount) : Bool :=
+  match numberExponent lb.coverAvailable lb.numericType, lb.roundedCoverAmount amount with
+  | .ok e, .ok (.rounded r) => decide ((1 - 1 / 10 ^ 15 : ℚ) * 10 ^ e ≤ amount.toRat - r.toRat)
+  | _, _ => false
+
+private lemma roundsByAlmostUnit_witness : roundsByAlmostUnit wbUnitScaleL waUnitScale = true := by
+  native_decide
+
+/-- Rounding a deposit to the cover scale can drop all but `10^-15` of a unit. -/
+lemma LoanBroker.roundedCoverAmount_bounds_witness :
+    ∃ (lb : LoanBroker) (amount r : STAmount) (e : Int),
+      (amount.integral = false → amount.IOUCanonical) ∧
+      numberExponent lb.coverAvailable lb.numericType = .ok e ∧
+      lb.roundedCoverAmount amount = .ok (.rounded r) ∧
+      (1 - 1 / 10 ^ 15 : ℚ) * 10 ^ e ≤ amount.toRat - r.toRat := by
+  have h := roundsByAlmostUnit_witness
+  unfold roundsByAlmostUnit at h
+  split at h
+  · rename_i e r he hr
+    exact ⟨_, _, r, e, fun _ => ⟨rfl, by decide, by decide, by decide, by decide⟩, he, hr,
+      of_decide_eq_true h⟩
+  · exact absurd h (by decide)
 
 /-- An IOU broker holding `6.6 * 10^12` of cover. -/
 def wbOvercredit : RawLoanBroker :=
@@ -46,6 +82,79 @@ lemma LoanBroker.coverDeposit_credit_le_amount_witness :
   · rename_i res hres
     rw [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
     exact ⟨_, _, res, ⟨rfl, by decide, by decide, by decide, by decide⟩, hres, h.1, h.2⟩
+  · exact absurd h (by decide)
+
+/-- The deposit succeeds, withdrawing the credited amount passes its checks, and the cover ends
+above where it started. -/
+def depositWithdrawGains (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Bool :=
+  match lb.coverDeposit amount with
+  | .ok (.ok r1) =>
+    match r1.loanBroker'.canCoverWithdraw pool r1.amount',
+        r1.loanBroker'.coverWithdraw r1.amount' with
+    | .ok .tesSUCCESS, .ok (.ok r2) =>
+      decide (lb.coverAvailable.toRat < r2.loanBroker'.coverAvailable.toRat)
+    | _, _ => false
+  | _ => false
+
+private lemma depositWithdrawGains_witness :
+    depositWithdrawGains wbOvercreditL wvPoolL waOvercredit = true := by
+  native_decide
+
+/-- Withdrawing the amount a deposit credited can leave `coverAvailable` above where it
+started. -/
+lemma LoanBroker.coverDeposit_coverWithdraw_restores_witness :
+    ∃ (lb : LoanBroker) (pool : Vault) (amount : STAmount) (res res' : LoanBrokerCoverResult),
+      lb.coverDeposit amount = .ok (.ok res) ∧
+      res.loanBroker'.canCoverWithdraw pool res.amount' = .ok .tesSUCCESS ∧
+      res.loanBroker'.coverWithdraw res.amount' = .ok (.ok res') ∧ amount.ExactCanonical ∧
+      lb.toExact.coverAvailable < res'.loanBroker'.toExact.coverAvailable := by
+  have h := depositWithdrawGains_witness
+  unfold depositWithdrawGains at h
+  split at h
+  · rename_i r1 h1
+    split at h
+    · rename_i r2 h2 h3
+      exact ⟨_, _, _, r1, r2, h1, h2, h3, Or.inl ⟨rfl, by decide, by decide, by decide, by decide⟩,
+        of_decide_eq_true h⟩
+    · exact absurd h (by decide)
+  · exact absurd h (by decide)
+
+/-- The deposit succeeds, clawing back the credited amount passes its checks, and the cover ends
+above where it started. -/
+def depositClawbackGains (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Bool :=
+  match lb.coverDeposit amount with
+  | .ok (.ok r1) =>
+    match r1.loanBroker'.canCoverClawback pool (some r1.amount'),
+        r1.loanBroker'.coverClawback pool (some r1.amount') with
+    | .ok .tesSUCCESS, .ok (.ok r2) =>
+      decide (0 ≤ amount.toRat) &&
+        decide (lb.coverAvailable.toRat < r2.loanBroker'.coverAvailable.toRat)
+    | _, _ => false
+  | _ => false
+
+private lemma depositClawbackGains_witness :
+    depositClawbackGains wbOvercreditL wvPoolL waOvercredit = true := by
+  native_decide
+
+/-- With no debt, clawing back the amount a deposit credited can leave `coverAvailable` above
+where it started. -/
+lemma LoanBroker.coverDeposit_coverClawback_restores_witness :
+    ∃ (lb : LoanBroker) (pool : Vault) (amount : STAmount) (res res' : LoanBrokerCoverResult),
+      lb.debtTotal = Number.zero ∧ lb.coverDeposit amount = .ok (.ok res) ∧
+      res.loanBroker'.canCoverClawback pool (some res.amount') = .ok .tesSUCCESS ∧
+      res.loanBroker'.coverClawback pool (some res.amount') = .ok (.ok res') ∧
+      amount.ExactCanonical ∧ 0 ≤ amount.toRat ∧ amount.mNumericType = lb.numericType ∧
+      lb.toExact.coverAvailable < res'.loanBroker'.toExact.coverAvailable := by
+  have h := depositClawbackGains_witness
+  unfold depositClawbackGains at h
+  split at h
+  · rename_i r1 h1
+    split at h
+    · rename_i r2 h2 h3
+      rw [Bool.and_eq_true, decide_eq_true_eq, decide_eq_true_eq] at h
+      exact ⟨_, _, _, r1, r2, rfl, h1, h2, h3,
+        Or.inl ⟨rfl, by decide, by decide, by decide, by decide⟩, h.1, rfl, h.2⟩
+    · exact absurd h (by decide)
   · exact absurd h (by decide)
 
 /-- An IOU broker holding `9.999999999999999` of cover. -/
@@ -180,6 +289,74 @@ def depositOrderDependent (lb : LoanBroker) (a b : STAmount) : Bool :=
 
 private lemma depositOrderDependent_witness : depositOrderDependent wbOrderL waOrderA waOrderB = true := by
   native_decide
+
+/-- An IOU broker holding `5 * 10^15` of cover, so one unit of the cover scale is `1`. -/
+def wbSplit : RawLoanBroker :=
+  { numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 0
+  , coverRateLiquidation := 0, debtTotal := Number.zero, debtMaximum := Number.zero
+  , coverAvailable := ⟨false, 5000000000000000000, -3⟩, loanCount := 0 }
+
+def wbSplitL : LoanBroker := ⟨wbSplit, by native_decide, by native_decide⟩
+
+/-- The first part, `6 * 10^15`. It lifts the cover to `1.1 * 10^16`, where one unit is `10`. -/
+def waSplitDepositA : STAmount := STAmount.unchecked .fractional 6000000000000000 0 false
+
+/-- The second part, `1000000000000001`. At the coarser scale it rounds down to `10^15`. -/
+def waSplitDepositB : STAmount := STAmount.unchecked .fractional 1000000000000001 0 false
+
+/-- Both parts at once, `7000000000000001`. -/
+def waSplitDepositC : STAmount := STAmount.unchecked .fractional 7000000000000001 0 false
+
+/-- All three deposits succeed, the sum of the parts is the whole, the first part and the whole are
+added exactly, and the two parts end at a different cover and take a different total than the
+whole at once. -/
+def depositSplitDiffers (lb : LoanBroker) (a b c : STAmount) : Bool :=
+  match lb.coverDeposit a, lb.coverDeposit c with
+  | .ok (.ok r1), .ok (.ok s) =>
+    match r1.loanBroker'.coverDeposit b with
+    | .ok (.ok r2) =>
+      decide (c.toRat = a.toRat + b.toRat) &&
+        decide (r1.loanBroker'.coverAvailable.toRat = lb.coverAvailable.toRat + a.toRat) &&
+        decide (s.loanBroker'.coverAvailable.toRat = lb.coverAvailable.toRat + c.toRat) &&
+        decide (r2.loanBroker'.coverAvailable.toRat ≠ s.loanBroker'.coverAvailable.toRat) &&
+        decide (r1.amount'.toRat + r2.amount'.toRat ≠ s.amount'.toRat)
+    | _ => false
+  | _, _ => false
+
+private lemma depositSplitDiffers_witness :
+    depositSplitDiffers wbSplitL waSplitDepositA waSplitDepositB waSplitDepositC = true := by
+  native_decide
+
+/-- Two deposits can end at a different `coverAvailable`, and take a different total, than one
+deposit of their sum. -/
+lemma LoanBroker.coverDeposit_split_witness :
+    ∃ (lb : LoanBroker) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult) (e : Int),
+      lb.coverDeposit a = .ok (.ok r1) ∧ r1.loanBroker'.coverDeposit b = .ok (.ok r2) ∧
+      lb.coverDeposit c = .ok (.ok s) ∧
+      a.ExactCanonical ∧ b.ExactCanonical ∧ c.ExactCanonical ∧ c.toRat = a.toRat + b.toRat ∧
+      numberExponent lb.coverAvailable lb.numericType = .ok e ∧
+      e ≤ a.exponent ∧ e ≤ b.exponent ∧ e ≤ c.exponent ∧
+      (∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + a.toRat) ∧
+      (∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + c.toRat) ∧
+      r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable ∧
+      r1.amount'.toRat + r2.amount'.toRat ≠ s.amount'.toRat := by
+  have h := depositSplitDiffers_witness
+  unfold depositSplitDiffers at h
+  split at h
+  · rename_i r1 s h1 h3
+    split at h
+    · rename_i r2 h2
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨⟨⟨⟨hsum, hx1⟩, hx2⟩, hne⟩, htot⟩ := h
+      exact ⟨_, _, _, _, r1, r2, s, 0, h1, h2, h3,
+        Or.inl ⟨rfl, by decide, by decide, by decide, by decide⟩,
+        Or.inl ⟨rfl, by decide, by decide, by decide, by decide⟩,
+        Or.inl ⟨rfl, by decide, by decide, by decide, by decide⟩, hsum, by native_decide,
+        by decide, by decide, by decide,
+        ⟨r1.loanBroker'.coverAvailable, r1.loanBroker'.wf.coverAvailable_norm, hx1⟩,
+        ⟨s.loanBroker'.coverAvailable, s.loanBroker'.wf.coverAvailable_norm, hx2⟩, hne, htot⟩
+    · exact absurd h (by decide)
+  · exact absurd h (by decide)
 
 /-- Two deposits in the two orders can take different totals from the depositor. -/
 lemma LoanBroker.coverDeposit_comm_witness :

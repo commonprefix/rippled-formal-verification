@@ -33,12 +33,6 @@ def wbMillion : RawLoanBroker :=
 
 def wbMillionL : LoanBroker := ⟨wbMillion, by native_decide, by native_decide⟩
 
-/-- `5.1 * 10^-10`, just above half a unit at scale `10^-9`. It rounds to `10^-9`. -/
-def waAboveHalfUnit : STAmount := STAmount.unchecked .fractional 5100000000000000 (-25) false
-
-/-- `4.9 * 10^-10`, just below half a unit at scale `10^-9`. It rounds to zero. -/
-def waBelowHalfUnit : STAmount := STAmount.unchecked .fractional 4900000000000000 (-25) false
-
 /-- `7.6 * 10^-10`, below one unit at scale `10^-9`. It rounds to `10^-9`, so it
 passes the scale check. -/
 def waBelowUnit : STAmount := STAmount.unchecked .fractional 7600000000000000 (-25) false
@@ -53,5 +47,14 @@ def wbLargeCoverL : LoanBroker := ⟨wbLargeCover, by native_decide, by native_d
 
 /-- The amount, `1234.567890123456`. -/
 def waSmallAmount : STAmount := STAmount.unchecked .fractional 1234567890123456 (-12) false
+
+/-- One part of a split, `1000.5`. -/
+def waSplitPart : STAmount := STAmount.unchecked .fractional 1000500000000000 (-12) false
+
+/-- The other amount of an either-order pair with `waSplitPart`, `1001.25`. -/
+def waOrderPart : STAmount := STAmount.unchecked .fractional 1001250000000000 (-12) false
+
+/-- Both parts at once, `2001`. -/
+def waSplitWhole : STAmount := STAmount.unchecked .fractional 2001000000000000 (-12) false
 
 end XRPL.Model.Lending

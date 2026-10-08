@@ -11,7 +11,7 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- In-range parameters create a lawful broker holding exactly the requested
+/-- When all create fields are valid -> a lawful loan broker is created with exactly the requested
 values. -/
 theorem LoanBroker.create_success (tx : LoanBrokerSetCreate) (nt : NumericType)
     (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
@@ -24,22 +24,21 @@ theorem LoanBroker.create_success (tx : LoanBrokerSetCreate) (nt : NumericType)
     ∃ lb, LoanBroker.create tx nt = .ok lb ∧ lb.toRawLoanBroker = LoanBroker.createRaw tx nt :=
   LoanBroker.create_success_proof tx nt hdm hfee hmin hliq hcoupled
 
-/-- A new broker has no exposure: `debtTotal`, `coverAvailable` and `loanCount`
-are all zero. -/
+/-- A new loan broker has no exposure: DebtTotal, CoverAvailable and LoanCount are all zero. -/
 theorem LoanBroker.create_no_exposure (tx : LoanBrokerSetCreate) (nt : NumericType)
     (lb : LoanBroker) (hok : LoanBroker.create tx nt = .ok lb) :
     lb.debtTotal = Number.zero ∧ lb.coverAvailable = Number.zero ∧ lb.loanCount = 0 :=
   LoanBroker.create_no_exposure_proof tx nt lb hok
 
-/-- A `debtMaximum` that passed the create checks is on the STAmount grid of the vault
-asset, so C++ `associateAsset` stores it without rounding. -/
+/-- When a loan broker is successfully created, DebtMaximum fits an STAmount exactly, so it is
+stored without rounding. -/
 theorem LoanBroker.canCreate_debtMaximum_not_rounded (dm : Number) (nt : NumericType)
     (hcan : LoanBroker.canCreate (some dm) nt = .ok .tesSUCCESS) :
     STAmount.isRounded nt dm = false :=
   LoanBroker.canCreate_debtMaximum_not_rounded_proof dm nt hcan
 
-/-- An in-range new `debtMaximum` that is zero or not below the debt gives a
-lawful broker that differs from the old one only in `debtMaximum`. -/
+/-- When DebtMaximum ∈ [0, 2^63 - 1] and is 0 or ≥ DebtTotal -> lawful where only DebtMaximum is
+changed, other fields remain the same. -/
 theorem LoanBroker.update_success (dm : Number)
     (hnorm : dm.isNormalized) (hnn : Number.zero.operator_le dm = true)
     (hcap : dm.operator_le debtMaximumCap = true)
@@ -48,14 +47,14 @@ theorem LoanBroker.update_success (dm : Number)
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm } :=
   LoanBroker.update_success_proof lb dm hnorm hnn hcap hdebt
 
-/-- A `debtMaximum` that passed the update checks is on the STAmount grid of the vault
-asset, so C++ `associateAsset` stores it without rounding. -/
+/-- When a loan broker is successfully updated, DebtMaximum fits an STAmount exactly, so it is
+stored without rounding. -/
 theorem LoanBroker.canUpdate_debtMaximum_not_rounded (dm : Number)
     (hcan : lb.canUpdate (some dm) = .ok .tesSUCCESS) :
     STAmount.isRounded lb.numericType dm = false :=
   LoanBroker.canUpdate_debtMaximum_not_rounded_proof lb dm hcan
 
-/-- An update with no `debtMaximum` returns the broker unchanged. -/
+/-- A loan broker update with no DebtMaximum changes nothing. -/
 theorem LoanBroker.update_none : lb.update none = .ok lb :=
   LoanBroker.update_none_proof lb
 

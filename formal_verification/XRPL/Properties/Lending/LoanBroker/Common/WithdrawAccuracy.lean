@@ -19,8 +19,9 @@ lemma LoanBroker.coverWithdraw_amount_proof (lb : LoanBroker) (amount : STAmount
   LoanBroker.applyCoverTransaction_amount' lb _ amount res
     (LoanBroker.coverWithdraw_ok_inv lb amount res hok)
 
-/-- **Proof body of `coverWithdraw_debit`.** -/
-lemma LoanBroker.coverWithdraw_debit_proof (lb : LoanBroker) (amount : STAmount)
+/-- A withdrawal lowers `coverAvailable` by exactly the requested amount when the difference fits
+a `Number`. -/
+lemma LoanBroker.coverWithdraw_debit_request (lb : LoanBroker) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : lb.coverWithdraw amount = .ok (.ok res))
     (hc : amount.ExactCanonical)
     (hexact : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - amount.toRat) :
@@ -28,6 +29,26 @@ lemma LoanBroker.coverWithdraw_debit_proof (lb : LoanBroker) (amount : STAmount)
   have happ := LoanBroker.coverWithdraw_ok_inv lb amount res hok
   rw [(LoanBroker.applyCoverTransaction_debit_value lb amount res happ hc hexact).1]
   ring
+
+/-- **Proof body of `coverWithdraw_debit`.** -/
+lemma LoanBroker.coverWithdraw_debit_proof (lb : LoanBroker) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (hok : lb.coverWithdraw amount = .ok (.ok res))
+    (hc : amount.ExactCanonical)
+    (hexact : ∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
+    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = res.amount'.toRat := by
+  rw [LoanBroker.coverWithdraw_amount_proof lb amount res hok] at hexact ⊢
+  exact LoanBroker.coverWithdraw_debit_request lb amount res hok hc hexact
+
+/-- **Proof body of `coverWithdraw_debit_le_amount`.** -/
+lemma LoanBroker.coverWithdraw_debit_le_amount_proof (lb : LoanBroker) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (hok : lb.coverWithdraw amount = .ok (.ok res))
+    (hc : amount.ExactCanonical)
+    (hexact : ∃ w : Number, w.isNormalized ∧
+      w.toRat = lb.toExact.coverAvailable - res.amount'.toRat) :
+    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable ≤ amount.toRat := by
+  rw [LoanBroker.coverWithdraw_debit_proof lb amount res hok hc hexact,
+    LoanBroker.coverWithdraw_amount_proof lb amount res hok]
 
 /-- **Proof body of `coverWithdraw_debit_integral`.** -/
 lemma LoanBroker.coverWithdraw_debit_integral_proof (lb : LoanBroker) (amount : STAmount)
@@ -129,7 +150,7 @@ lemma LoanBroker.coverWithdraw_all_proof (lb : LoanBroker) (pool : α) (e : Int)
     hsub hmin
   refine ⟨hcan, ?_⟩
   obtain ⟨res, hok, _⟩ := LoanBroker.coverWithdraw_total_proof lb pool s hcan hc
-  have hdeb := LoanBroker.coverWithdraw_debit_proof lb s res hok hc
+  have hdeb := LoanBroker.coverWithdraw_debit_request lb s res hok hc
     ⟨Number.zero, Number.zero_isNormalized, by
       rw [Number.toRat_zero]; show (0 : ℚ) = lb.coverAvailable.toRat - s.toRat; rw [hrep']; ring⟩
   refine ⟨res, hok, ?_⟩

@@ -158,9 +158,9 @@ lemma LoanBroker.ReachableFromIn.cover_eq_proof (start : LoanBroker) (unit : ℚ
     have h := LoanBroker.coverDeposit_credit_proof lb amount res hok hc hexact
     linarith
   | coverWithdraw lb n a q amount res _ hok hc hexact ih =>
-    have h := LoanBroker.coverWithdraw_debit_proof lb amount res hok hc hexact
+    have h := LoanBroker.coverWithdraw_debit_request lb amount res hok hc hexact
     linarith
-  | coverClawback lb n a q α pool amount res e m _ hok hac ha0 hnz he hm hfit hcan hexact _ ih =>
+  | coverClawback lb n a q α pool amount res e m _ hok hac ha0 _ hnz he hm hfit hcan hexact ih =>
     have hcnz := LoanBroker.coverClawback_amount_nonzero lb pool _ res hcan hok
     obtain ⟨mag, hmn, hmv, hcl⟩ :=
       LoanBroker.coverClawback_request lb pool amount res e m hok hac hnz he hm hfit
@@ -169,12 +169,12 @@ lemma LoanBroker.ReachableFromIn.cover_eq_proof (start : LoanBroker) (unit : ℚ
     have h := LoanBroker.coverClawback_debit_of_canonical lb pool (some amount) res hok hc hexact
     linarith
 
-/-- The net amount the operations moved is within `n` rounding units of the net
-amount they were asked to move. -/
+/-- The operations moved at most the net amount they were asked to move, and less by at most `n`
+rounding units. Only a deposit rounds, and it rounds its amount down. -/
 private lemma LoanBroker.ReachableFromIn.applied_near (start : LoanBroker) (unit : ℚ)
     (lb : LoanBroker) (n : ℕ) (applied requested : ℚ) (hu0 : 0 ≤ unit)
     (hr : LoanBroker.ReachableFromIn start unit lb n applied requested) :
-    |applied - requested| ≤ n * unit := by
+    0 ≤ requested - applied ∧ requested - applied ≤ n * unit := by
   induction hr with
   | refl => simp
   | update lb lb' n a q dm _ _ ih => exact ih
@@ -185,36 +185,32 @@ private lemma LoanBroker.ReachableFromIn.applied_near (start : LoanBroker) (unit
     obtain ⟨hle, hlt⟩ :=
       LoanBroker.roundedCoverAmount_bounds_proof lb amount r e hc.iouCanonical he hrr
     have hu := hunit e he
-    have hp : (0 : ℚ) < 10 ^ e := zpow_pos (by norm_num) _
-    have hstep : |r.toRat - amount.toRat| ≤ unit := by rw [abs_le]; constructor <;> linarith
-    have hsplit : a + r.toRat - (q + amount.toRat) = (a - q) + (r.toRat - amount.toRat) := by
-      ring
-    rw [hamt, hsplit]; push_cast; rw [add_mul, one_mul]
-    linarith [abs_add_le (a - q) (r.toRat - amount.toRat)]
+    rw [hamt]; push_cast; rw [add_mul, one_mul]
+    exact ⟨by linarith [ih.1], by linarith [ih.2]⟩
   | coverWithdraw lb n a q amount res _ _ _ _ ih =>
-    rw [show a - amount.toRat - (q - amount.toRat) = a - q by ring]
+    rw [show q - amount.toRat - (a - amount.toRat) = q - a by ring]
     push_cast; rw [add_mul, one_mul]
-    linarith
-  | coverClawback lb n a q α pool amount res e m _ hok hac ha0 hnz he hm hfit hcan _ hunit ih =>
-    have hcnz := LoanBroker.coverClawback_amount_nonzero lb pool _ res hcan hok
+    exact ⟨ih.1, by linarith [ih.2]⟩
+  | coverClawback lb n a q α pool amount res e m _ hok hac ha0 hat hnz he hm hfit _ _ ih =>
     obtain ⟨mag, hmn, hmv, hcl⟩ :=
       LoanBroker.coverClawback_request lb pool amount res e m hok hac hnz he hm hfit
-    have hhalf := STAmount.ofNumber_to_nearest_within_half _ mag res.amount' hmn
-      (by rw [hmv]; exact ha0) hcl hcnz
-    rw [hmv, abs_sub_comm] at hhalf
-    have hsplit : a - res.amount'.toRat - (q - amount.toRat) =
-        (a - q) + (amount.toRat - res.amount'.toRat) := by ring
-    rw [hsplit]; push_cast; rw [add_mul, one_mul]
-    linarith [abs_add_le (a - q) (amount.toRat - res.amount'.toRat)]
+    -- a request in the vault asset that fits under the cap is clawed whole
+    have hclaw : res.amount'.toRat = amount.toRat :=
+      STAmount.ofNumber_to_nearest_eq_of_canonical _ mag _ amount hmn (by rw [hmv]; exact ha0) hac
+        hat hmv hcl
+    rw [hclaw, show q - amount.toRat - (a - amount.toRat) = q - a by ring]
+    push_cast; rw [add_mul, one_mul]
+    exact ⟨ih.1, by linarith [ih.2]⟩
 
-/-- **Proof body of `ReachableFromIn.cover_within`.** -/
-lemma LoanBroker.ReachableFromIn.cover_within_proof (start : LoanBroker) (unit : ℚ)
+/-- **Proof body of `ReachableFromIn.cover_within_bounds`.** -/
+lemma LoanBroker.ReachableFromIn.cover_within_bounds_proof (start : LoanBroker) (unit : ℚ)
     (lb : LoanBroker) (n : ℕ) (applied requested : ℚ) (hu0 : 0 ≤ unit)
     (hr : LoanBroker.ReachableFromIn start unit lb n applied requested) :
-    |lb.toExact.coverAvailable - (start.toExact.coverAvailable + requested)| ≤ n * unit := by
+    0 ≤ start.toExact.coverAvailable + requested - lb.toExact.coverAvailable ∧
+      start.toExact.coverAvailable + requested - lb.toExact.coverAvailable ≤ n * unit := by
   rw [LoanBroker.ReachableFromIn.cover_eq_proof start unit lb n applied requested hr,
-    show start.toExact.coverAvailable + applied - (start.toExact.coverAvailable + requested) =
-      applied - requested by ring]
+    show start.toExact.coverAvailable + requested - (start.toExact.coverAvailable + applied) =
+      requested - applied by ring]
   exact LoanBroker.ReachableFromIn.applied_near start unit lb n applied requested hu0 hr
 
 end XRPL.Model.Lending

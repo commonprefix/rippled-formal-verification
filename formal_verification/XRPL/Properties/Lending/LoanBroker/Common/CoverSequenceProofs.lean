@@ -24,7 +24,7 @@ lemma LoanBroker.coverDeposit_coverWithdraw_restores_proof (lb : LoanBroker)
     res'.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable := by
   have hup := LoanBroker.coverDeposit_credit_proof lb amount res hdep hc hexact
   have hcr := (LoanBroker.coverDeposit_amount_exactCanonical lb amount res hdep hc).1
-  have hdown := LoanBroker.coverWithdraw_debit_proof res.loanBroker' res.amount' res' hwd hcr
+  have hdown := LoanBroker.coverWithdraw_debit_request res.loanBroker' res.amount' res' hwd hcr
     ⟨lb.coverAvailable, lb.wf.coverAvailable_norm, by
       show lb.toExact.coverAvailable = _; linarith⟩
   linarith
@@ -233,11 +233,44 @@ lemma LoanBroker.coverWithdraw_split_proof (lb : LoanBroker) (a b c : STAmount)
     (hx1 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - a.toRat)
     (hx2 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable - c.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s.loanBroker'.toExact.coverAvailable := by
-  have d1 := LoanBroker.coverWithdraw_debit_proof lb a r1 h1 hca hx1
+  have d1 := LoanBroker.coverWithdraw_debit_request lb a r1 h1 hca hx1
   obtain ⟨w, hwn, hwv⟩ := hx2
-  have d2 := LoanBroker.coverWithdraw_debit_proof r1.loanBroker' b r2 h2 hcb
+  have d2 := LoanBroker.coverWithdraw_debit_request r1.loanBroker' b r2 h2 hcb
     ⟨w, hwn, by rw [hwv]; linarith⟩
-  have d3 := LoanBroker.coverWithdraw_debit_proof lb c s h3 hcc ⟨w, hwn, hwv⟩
+  have d3 := LoanBroker.coverWithdraw_debit_request lb c s h3 hcc ⟨w, hwn, hwv⟩
+  linarith
+
+/-- **Proof body of `coverDeposit_split`.** -/
+lemma LoanBroker.coverDeposit_split_proof (lb : LoanBroker) (a b c : STAmount)
+    (r1 r2 s : LoanBrokerCoverResult) (e : Int)
+    (h1 : lb.coverDeposit a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverDeposit b = .ok (.ok r2))
+    (h3 : lb.coverDeposit c = .ok (.ok s))
+    (hca : a.ExactCanonical) (hcb : b.ExactCanonical) (hcc : c.ExactCanonical)
+    (hsum : c.toRat = a.toRat + b.toRat)
+    (he : numberExponent lb.coverAvailable lb.numericType = .ok e)
+    (hr : numberExponent r1.loanBroker'.coverAvailable lb.numericType = .ok e)
+    (hga : e ≤ a.exponent) (hgb : e ≤ b.exponent) (hgc : e ≤ c.exponent)
+    (hx1 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + a.toRat)
+    (hx2 : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + c.toRat) :
+    r2.loanBroker'.toExact.coverAvailable = s.loanBroker'.toExact.coverAvailable := by
+  have hr' : numberExponent r1.loanBroker'.coverAvailable r1.loanBroker'.numericType = .ok e := by
+    rw [(LoanBroker.coverDeposit_fixed_fields lb a r1 h1).numericType]; exact hr
+  -- every amount sits on the cover scale, so each deposit takes it whole
+  have ha : r1.amount' = a := STAmount.roundToExponent_ok_eq_self a _ e .downward
+    (Or.inr (Or.inr hga)) (LoanBroker.coverDeposit_amount_of_exp lb a r1 e he h1)
+  have hb : r2.amount' = b := STAmount.roundToExponent_ok_eq_self b _ e .downward
+    (Or.inr (Or.inr hgb)) (LoanBroker.coverDeposit_amount_of_exp r1.loanBroker' b r2 e hr' h2)
+  have hc : s.amount' = c := STAmount.roundToExponent_ok_eq_self c _ e .downward
+    (Or.inr (Or.inr hgc)) (LoanBroker.coverDeposit_amount_of_exp lb c s e he h3)
+  obtain ⟨w1, hw1n, hw1v⟩ := hx1
+  obtain ⟨w2, hw2n, hw2v⟩ := hx2
+  have d1 := LoanBroker.coverDeposit_credit_proof lb a r1 h1 hca ⟨w1, hw1n, by rw [hw1v, ha]⟩
+  rw [ha] at d1
+  have d2 := LoanBroker.coverDeposit_credit_proof r1.loanBroker' b r2 h2 hcb
+    ⟨w2, hw2n, by rw [hw2v, hb, hsum]; linarith⟩
+  have d3 := LoanBroker.coverDeposit_credit_proof lb c s h3 hcc ⟨w2, hw2n, by rw [hw2v, hc]⟩
+  rw [hb] at d2
+  rw [hc] at d3
   linarith
 
 /-- **Proof body of `coverDeposit_comm`.** -/
@@ -302,7 +335,7 @@ lemma LoanBroker.coverWithdraw_coverDeposit_restores_proof (lb : LoanBroker) (am
   have hamt := LoanBroker.coverDeposit_amount_of_exp res.loanBroker' amount res' e hexp hdep
   have hsame : res'.amount' = amount :=
     STAmount.roundToExponent_ok_eq_self amount _ e .downward (Or.inr (Or.inr hgrid)) hamt
-  have hdown := LoanBroker.coverWithdraw_debit_proof lb amount res hwd hc hexact
+  have hdown := LoanBroker.coverWithdraw_debit_request lb amount res hwd hc hexact
   have hup := LoanBroker.coverDeposit_credit_proof res.loanBroker' amount res' hdep hc
     ⟨lb.coverAvailable, lb.wf.coverAvailable_norm, by
       rw [hsame]
@@ -348,12 +381,12 @@ lemma LoanBroker.coverWithdraw_comm_proof (lb : LoanBroker) (a b : STAmount)
     (hxab : ∃ w : Number, w.isNormalized ∧
       w.toRat = lb.toExact.coverAvailable - a.toRat - b.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s2.loanBroker'.toExact.coverAvailable := by
-  have d1 := LoanBroker.coverWithdraw_debit_proof lb a r1 h1 hca hxa
-  have d3 := LoanBroker.coverWithdraw_debit_proof lb b s1 h3 hcb hxb
+  have d1 := LoanBroker.coverWithdraw_debit_request lb a r1 h1 hca hxa
+  have d3 := LoanBroker.coverWithdraw_debit_request lb b s1 h3 hcb hxb
   obtain ⟨w, hwn, hwv⟩ := hxab
-  have d2 := LoanBroker.coverWithdraw_debit_proof r1.loanBroker' b r2 h2 hcb
+  have d2 := LoanBroker.coverWithdraw_debit_request r1.loanBroker' b r2 h2 hcb
     ⟨w, hwn, by rw [hwv]; linarith⟩
-  have d4 := LoanBroker.coverWithdraw_debit_proof s1.loanBroker' a s2 h4 hca
+  have d4 := LoanBroker.coverWithdraw_debit_request s1.loanBroker' a s2 h4 hca
     ⟨w, hwn, by rw [hwv]; linarith⟩
   linarith
 

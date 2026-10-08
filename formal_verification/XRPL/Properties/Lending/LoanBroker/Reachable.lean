@@ -11,24 +11,23 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- Every reachable broker is lawful: it is well formed and valid. Each operation re-checks the new
-broker and returns a `LoanBroker`, which holds both proofs. -/
+/-- Every loan broker reachable from creation by a sequence of operations is lawful. -/
 theorem LoanBroker.Reachable.lawful (_hr : lb.Reachable) :
     lb.toRawLoanBroker.WF ∧ lb.toRawLoanBroker.Valid :=
   ⟨lb.wf, lb.valid⟩
 
-/-- No operation changes `debtTotal`, so every reachable broker has none. -/
+/-- Every reachable loan broker has zero DebtTotal, since loans are not modeled yet. -/
 theorem LoanBroker.Reachable.debtTotal_zero (hr : lb.Reachable) :
     lb.debtTotal = Number.zero :=
   LoanBroker.Reachable.debtTotal_zero_proof lb hr
 
-/-- No operation changes `loanCount`, so every reachable broker has no loans. -/
+/-- Every reachable loan broker has zero LoanCount, since loans are not modeled yet. -/
 theorem LoanBroker.Reachable.loanCount_zero (hr : lb.Reachable) :
     lb.loanCount = 0 :=
   LoanBroker.Reachable.loanCount_zero_proof lb hr
 
-/-- A broker keeps the rates it was created with: `managementFeeRate`,
-`coverRateMinimum` and `coverRateLiquidation` never change after `create`. -/
+/-- A reachable broker's rates (ManagementFeeRate, CoverRateMinimum, CoverRateLiquidation) never
+change after create. -/
 theorem LoanBroker.ReachableFrom.creation_rates (tx : LoanBrokerSetCreate) (nt : NumericType)
     (start lb : LoanBroker)
     (hc : LoanBroker.create tx nt = .ok start)
