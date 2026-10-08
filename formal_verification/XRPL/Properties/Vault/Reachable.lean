@@ -25,6 +25,11 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
+/-- Every vault reachable from creation by a sequence of operations is lawful. -/
+theorem Vault.Reachable.lawful (v : Vault) (_hr : Vault.Reachable v) :
+    v.toRawVault.WF ∧ v.toRawVault.Valid :=
+  ⟨v.wf, v.valid⟩
+
 /-- No operation changes `lossUnrealized`. -/
 theorem Vault.Reachable.lossUnrealized_zero (v : Vault) (hr : Vault.Reachable v) :
     v.toExact.lossUnrealized = 0 :=
