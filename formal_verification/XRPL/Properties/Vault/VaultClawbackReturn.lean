@@ -77,7 +77,7 @@ theorem Vault.clawback_success (assets holderShares : STAmount) (result : Comput
       v.clawback assets holderShares hnn =
         .ok ⟨none, v', result.assetsRecovered, result.sharesDestroyed⟩ ∧
       v'.toRawVault = { v.toRawVault with sharesTotal := st', assetsAvailable := av', assetsTotal := at' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.subtract_lawful v assetsRecoveredNumber
+  obtain ⟨v', htl, hlv'eq⟩ := Vault.subtract_record_never_notLawful v assetsRecoveredNumber
     sharesDestroyedNumber at' av' st' hL hAV hr_norm hr_nn hr_le hd_norm hd_nn hd_den hd_le hfit
     hat hav hst hempty
   refine ⟨v', ?_, hlv'eq⟩

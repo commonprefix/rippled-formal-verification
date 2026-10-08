@@ -1,6 +1,8 @@
 import XRPL.Properties.Vault.Proofs.DepositTight.Charge
 import XRPL.Properties.Vault.Proofs.DepositTight.Shares
 import XRPL.Properties.Vault.Common.Reduction
+import XRPL.Properties.Vault.Proofs.DepositTight.Upper
+import XRPL.Properties.Vault.Proofs.DepositTight.LowerMint
 
 /-! # Tight accuracy bounds of `Vault.deposit` -/
 
@@ -270,39 +272,23 @@ lemma Vault.deposit_charge_proof (v : Vault) (amountDeposit : STAmount) (r : Dep
         linarith
 
 
-/-- **Sharp share count bound.** The issued shares are a nonnegative integer within
-`11·10⁻¹⁹` relatively of the ideal, less one whole share below (the truncation). -/
+/-- **Sharp share count bound.** The issued shares are a nonnegative integer at most
+`sharesOverε` relatively above the ideal and, under the mint cap, less than one share
+plus `sharesShortε` relatively below it. -/
 lemma Vault.deposit_sharesIssued_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
     (r : DepositResult)
     (hcanon : roundedAmount.Canonical) (hpos : 0 < roundedAmount.toRat)
     (hnav : 0 < v.toExact.assetsTotal → (10 : ℚ) ^ (-32700 : ℤ) ≤ v.depositNav)
     (hrounded : v.roundedDepositAmount amountDeposit = .ok (.rounded roundedAmount))
     (hposA : 0 < amountDeposit.toRat)
-    (hok : v.deposit amountDeposit false hposA = .ok r) (herr : r.error = none) :
+    (hok : v.deposit amountDeposit false hposA = .ok r) (herr : r.error = none)
+    (hmint : v.sharesTotal.toRat + r.sharesIssued.toRat ≤ maxRep.toNat) :
     r.sharesIssued.toRat.den = 1 ∧ 0 ≤ r.sharesIssued.toRat ∧
-    v.idealSharesDeposit roundedAmount.toRat * (1 - sharesε) - 1 < r.sharesIssued.toRat ∧
-    r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + sharesε) := by
-  obtain ⟨hround0, -⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
-  obtain ⟨amount, c, sh, cN, sN, at', av', st', hround, _, _, _, _, hcd, _, _, _, _, _, _, _, hshr, _⟩ :=
-    DepAcc.Vault.deposit_success_reduces v amountDeposit false r hposA hok herr
-  have hameq : amount = roundedAmount := by
-    rw [hround0] at hround
-    exact (Except.ok.inj hround).symm
-  obtain ⟨p, hcdp, -, -⟩ := hcd rfl
-  obtain ⟨shares, hats, hsz, _, _, hsheq⟩ := computeDeposit_success_reduces v amount p sh hcdp
-  rw [hameq] at hats
-  obtain ⟨q, hqval, hqbound, hqpos⟩ := shares_spec v roundedAmount shares hcanon hpos hnav hats hsz
-  have hshare_eq : r.sharesIssued = shares := by rw [hshr, hsheq]
-  rw [hshare_eq, hqval]
-  have hfl := Int.floor_le q
-  have hfl2 := Int.sub_one_lt_floor q
-  obtain ⟨hlo, hhi⟩ := abs_le.mp hqbound
-  refine ⟨Rat.den_intCast _, ?_, ?_, ?_⟩
-  · have hε1 : sharesε < 1 := by unfold sharesε; norm_num
-    have hqpos' : 0 < q := by nlinarith
-    have h0 : (0 : ℤ) ≤ ⌊q⌋ := Int.floor_nonneg.mpr (le_of_lt hqpos')
-    exact_mod_cast h0
-  · linarith
-  · linarith
+    v.idealSharesDeposit roundedAmount.toRat * (1 - sharesShortε) - 1 < r.sharesIssued.toRat ∧
+    r.sharesIssued.toRat ≤ v.idealSharesDeposit roundedAmount.toRat * (1 + sharesOverε) := by
+  obtain ⟨hden, hnn, -, hup⟩ := Vault.deposit_sharesIssued_upper_sharp_proof v amountDeposit
+    roundedAmount r hcanon hpos hnav hrounded hposA hok herr
+  exact ⟨hden, hnn, Vault.deposit_sharesIssued_lower_mint_proof v amountDeposit roundedAmount r
+    hcanon hpos hnav hrounded hposA hok herr hmint, hup⟩
 
 end XRPL.Model.SingleAssetVault

@@ -35,6 +35,15 @@ price a share count (deposit, withdrawal by assets, clawback). The worst stage e
 normalized grid, `5 / (2 ^ 63 + 7)`, so two stages stay below `11 / 10 ^ 19`. -/
 def sharesε : ℚ := 11 / 10 ^ 19
 
+/-- Relative error of a deposit's share count above the ideal: two exact `.to_nearest`
+half-steps, `(1 + 5/(2^63+7))² - 1`, rounded up. -/
+def sharesOverε : ℚ := 10842022 / 10 ^ 25
+
+/-- Relative error of a deposit's share count below the ideal, beyond the one share lost
+to truncation, when the share issuance stays within its `maxRep` cap: the multiply
+stage's half-step less the quotient grid's leftover half-step, rounded up. -/
+def sharesShortε : ℚ := 4879 / 10 ^ 22
+
 /-- Net asset value used to price a deposit: `assetsTotal`.
 Unrealized loss is not subtracted when depositing. -/
 def RawVault.depositNav (rv : RawVault) : ℚ :=

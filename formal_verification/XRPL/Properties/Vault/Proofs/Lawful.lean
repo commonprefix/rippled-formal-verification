@@ -11,9 +11,9 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- The record with only `sharesTotal` reduced re-validates: its in-op
-`to_lawful` re-check returns `.ok v'`. -/
-lemma Vault.burnShares_lawful (v : Vault)
+/-- The record with only `sharesTotal` reduced passes the `to_lawful` re-check
+(no `notLawful`). -/
+lemma Vault.burnShares_record_never_notLawful (v : Vault)
     (sharesDestroyed sharesTotalAmount : STAmount) (sdn st' : Number)
     (hcan : v.canBurnShares = .ok (.assets sharesTotalAmount))
     (hcanon : sharesDestroyed.IntegralCanonical)
@@ -98,9 +98,9 @@ lemma Vault.burnShares_lawful (v : Vault)
   · show 0 ≤ v.assetsTotal.toRat - v.lossUnrealized.toRat
     rw [hLU0, hAT0]; linarith
 
-/-- Subtracting one payout from both asset totals and one burn from `sharesTotal`
-re-validates. `hempty`: dropping to zero shares must also zero the assets. -/
-lemma Vault.subtract_lawful (v : Vault)
+/-- The record subtracting one payout from both asset totals and one burn from
+`sharesTotal` passes the `to_lawful` re-check (no `notLawful`). `hempty`: dropping to zero shares must also zero the assets. -/
+lemma Vault.subtract_record_never_notLawful (v : Vault)
     (payout burned at' av' st' : Number)
     (hL : v.toExact.lossUnrealized = 0)
     (hAV : v.assetsAvailable = v.assetsTotal)
@@ -169,9 +169,9 @@ lemma Vault.subtract_lawful (v : Vault)
   · show 0 ≤ at'.toRat - v.lossUnrealized.toRat
     rw [show v.lossUnrealized.toRat = 0 from hL]; linarith
 
-/-- The all-zero record (both
-asset totals and `sharesTotal` zeroed) re-validates like a freshly created vault. -/
-lemma Vault.zero_lawful (v : Vault)
+/-- The all-zero record (both asset totals and `sharesTotal` zeroed) passes the
+`to_lawful` re-check (no `notLawful`), like a freshly created vault. -/
+lemma Vault.zero_record_never_notLawful (v : Vault)
     (hL : v.toExact.lossUnrealized = 0) :
     ∃ v' : Vault,
       ({ v.toRawVault with assetsTotal := Number.zero, assetsAvailable := Number.zero, sharesTotal := Number.zero } : RawVault).to_lawful = .ok v' ∧
