@@ -54,11 +54,12 @@ class Lean4Deps(ConanFile):
     def build(self):
         # capture lake output and log only on failure.
         # lake :static archive throws ARG_MAX error on mathlib (harmless), so verify by count
+        # --no-cache: skip lake's prebuilt Linux x86-64 builds, which the macOS linker rejects
         log = StringIO()
         try:
-            self.run("lake exe cache get", cwd=self.build_folder, stdout=log, stderr=log)
+            self.run("lake --no-cache exe cache get", cwd=self.build_folder, stdout=log, stderr=log)
             self.run(
-                "lake build " + " ".join(DEP_TARGETS),
+                "lake --no-cache build " + " ".join(DEP_TARGETS),
                 cwd=self.build_folder,
                 stdout=log,
                 stderr=log,
