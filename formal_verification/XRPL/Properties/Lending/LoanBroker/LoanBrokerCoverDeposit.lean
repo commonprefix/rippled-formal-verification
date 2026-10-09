@@ -103,6 +103,18 @@ theorem LoanBroker.coverDeposit_increases_cover (amount : STAmount)
     lb.toExact.coverAvailable ≤ res.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_increases_cover_proof lb amount res hok hc hnn
 
+/-- There is an amount that raises CoverAvailable, when CoverAvailable + amount doesn't overflow. The
+amount is CoverAvailable itself in the vault asset, which sits at the cover scale. With an empty cover
+it is one whole unit of the asset, one drop for XRP. -/
+theorem LoanBroker.coverDeposit_increase_possible (s : STAmount)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    -- an integral vault asset accepts the amount 1, as XRP and MPT do
+    (hone : lb.numericType.isIntegral = true → 1 ≤ lb.numericType.maxValue.toNat)
+    (hexact : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + s.toRat) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult), lb.coverDeposit amount = .ok (.ok res) ∧
+      lb.toExact.coverAvailable < res.loanBroker'.toExact.coverAvailable :=
+  LoanBroker.coverDeposit_increase_possible_proof lb s hs hone hexact
+
 /-- When CoverAvailable + roundedAmount < 10^96 -> the deposit succeeds with roundedAmount and never
 throws, not even notLawful. -/
 theorem LoanBroker.coverDeposit_total (amount r : STAmount)

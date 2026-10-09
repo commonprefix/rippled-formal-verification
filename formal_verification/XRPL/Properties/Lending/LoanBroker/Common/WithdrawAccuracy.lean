@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.LoanBroker.Common.WithdrawExits
 import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
+import XRPL.Properties.Lending.LoanBroker.Common.CoverUnit
 
 /-! # Proof bodies for the `LoanBroker.coverWithdraw` theorems
 
@@ -74,6 +75,55 @@ lemma LoanBroker.coverWithdraw_decreases_cover_proof (lb : LoanBroker) (amount :
   rw [hraw]
   exact operator_sub_le_of_le_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn hsub
     lb.wf.coverAvailable_norm (by rw [hmv]; linarith)
+
+/-- **Proof body of `coverWithdraw_decrease_possible`.** The amount is one unit at the cover scale. -/
+lemma LoanBroker.coverWithdraw_decrease_possible_proof (lb : LoanBroker) (pool : α) (s : STAmount)
+    (e : Int) (minimumCover : Number)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s) (hnz : s.mValue ≠ 0)
+    (hunit : (-81 : Int) ≤ s.exponent)
+    (hroom : minimumCover.toRat + (10 : ℚ) ^ s.exponent ≤ lb.toExact.coverAvailable) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
+      lb.canCoverWithdraw pool amount = .ok .tesSUCCESS ∧ lb.coverWithdraw amount = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable := by
+  have hcn := lb.wf.coverAvailable_norm
+  have hcov0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
+  have hcov : lb.toExact.coverAvailable = lb.coverAvailable.toRat := rfl
+  have hmn := minimumBrokerCover_isNormalized _ _ _ _ _ hmin
+  have hm0 := LoanBroker.minimumCover_nonneg lb pool e minimumCover hexp hmin
+  have hcap := LoanBroker.cover_lt_cap_of_ofNumber lb s hs hnz
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s.exponent := zpow_pos (by norm_num) _
+  obtain ⟨u, huc, _, _, huv, hcheck⟩ := LoanBroker.coverUnit_exists lb s hs hnz hunit
+  obtain ⟨w, hwn, hwv⟩ := LoanBroker.coverUnit_sub_exact lb s hs hnz hunit (by linarith)
+  -- the unit converts exactly, and CoverAvailable covers it
+  obtain ⟨uN, hnum, huNv, huNn⟩ := STAmount.toNumber_exact_canonical u .to_nearest huc
+  have hge : lb.coverAvailable.operator_lt uN = false :=
+    (operator_lt_eq_false_iff _ _ hcn huNn).mpr (by rw [huNv, huv]; linarith)
+  obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_lt lb.coverAvailable uN .to_nearest hcn huNn hcov0 hcap
+    (by rw [huNv, huv]; exact hp.le)
+    (by rw [huNv]; exact lt_of_le_of_lt (le_abs_self _) (STAmount.ExactCanonical.abs_lt u huc))
+  -- taking the unit is exact, and leaves at least the minimum cover
+  have hc'v : c'.toRat = lb.coverAvailable.toRat - (10 : ℚ) ^ s.exponent := by
+    rw [Number.roundsToRepresentable_eq c' _ (operator_sub_rounded_to_nearest _ _ _ hcn huNn hsub) w hwn
+      (by rw [hwv, huNv, huv, hcov]), huNv, huv]
+  have hcn' : c'.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hcn huNn hsub
+  have hmin' : ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).hasMinimumCover e =
+      .ok true := by
+    show (do
+        let minimumCover ← minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e
+        return minimumCover.operator_le c') = Except.ok true
+    rw [hmin]
+    simp only [ok_bind, pure_eq, Except.ok.injEq]
+    exact (operator_le_iff _ _ hmn hcn').mpr (by rw [hc'v]; linarith)
+  have hcan := LoanBroker.canCoverWithdraw_success_proof lb pool u e uN c' hcheck hexp hnum hge hsub hmin'
+  obtain ⟨lb', hok, hraw⟩ := LoanBroker.coverWithdraw_success_proof lb u uN c' huc hnum hge hsub
+  refine ⟨u, ⟨u, lb'⟩, hcan, hok, ?_⟩
+  show lb'.toRawLoanBroker.coverAvailable.toRat < lb.coverAvailable.toRat
+  rw [hraw]
+  show c'.toRat < lb.coverAvailable.toRat
+  rw [hc'v]
+  linarith
 
 /-- **Proof body of `coverWithdraw_total`.** -/
 lemma LoanBroker.coverWithdraw_total_proof (lb : LoanBroker) (pool : α) (amount : STAmount)

@@ -1,4 +1,5 @@
 import XRPL.Properties.Lending.LoanBroker.Common.CoverAccuracy
+import XRPL.Properties.Lending.LoanBroker.Common.CoverUnit
 import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 import XRPL.Properties.Protocol.Number.Sub.RoundsWithin
 
@@ -72,6 +73,180 @@ lemma LoanBroker.coverDeposit_increases_cover_proof (lb : LoanBroker) (amount : 
   rw [hraw]
   exact operator_add_ge_of_ge_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn hadd
     lb.wf.coverAvailable_norm (by rw [hmv]; linarith)
+
+/-- CoverAvailable itself, converted to the vault asset, sits at the cover scale, so the deposit
+rounding keeps it whole. -/
+private lemma LoanBroker.roundedCoverAmount_whole (lb : LoanBroker) (s : STAmount)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hnz : s.mValue ≠ 0) : lb.roundedCoverAmount s = .ok (.rounded s) := by
+  have hscale : numberExponent lb.coverAvailable lb.numericType = .ok s.exponent := by
+    simp [numberExponent, hs]
+  have hsg : s.signum ≠ 0 := by
+    have hb : (s.mValue == 0) = false := by simpa using hnz
+    unfold STAmount.signum
+    rw [hb, if_neg Bool.false_ne_true]
+    split <;> decide
+  have hdown : roundToCoverScale lb.numericType lb.coverAvailable s .downward = .ok s := by
+    rw [roundToCoverScale_eq _ _ _ _ _ hscale]
+    exact STAmount.roundToExponent_eq_self _ _ _ (Or.inr (Or.inr le_rfl))
+  simp [LoanBroker.roundedCoverAmount, hdown, hsg]
+
+/-- `coverDeposit_increase_possible` with a nonzero cover: the amount is CoverAvailable itself in the
+vault asset. -/
+private lemma LoanBroker.coverDeposit_increase_possible_nonzero (lb : LoanBroker) (s : STAmount)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hnz : s.mValue ≠ 0)
+    (hexact : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + s.toRat) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult), lb.coverDeposit amount = .ok (.ok res) ∧
+      lb.toExact.coverAvailable < res.loanBroker'.toExact.coverAvailable := by
+  have hcn := lb.wf.coverAvailable_norm
+  have hcov0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
+  have hc : s.ExactCanonical := STAmount.ofNumber_exactCanonical _ _ .to_nearest s hcn hcov0 hs hnz
+  have hnn : 0 ≤ s.toRat :=
+    STAmount.ofNumber_nonneg _ _ _ s hcn (Number.negative_false_of_nonneg _ hcn hcov0) hs
+  have hpos : 0 < s.toRat := lt_of_le_of_ne hnn (Ne.symm (STAmount.toRat_ne_zero s hnz))
+  have hcap := LoanBroker.cover_lt_cap_of_ofNumber lb s hs hnz
+  have hscap : s.toRat < 10 ^ 96 :=
+    lt_of_le_of_lt (le_abs_self _) (STAmount.ExactCanonical.abs_lt s hc)
+  -- two amounts below `10^96` add without error, so the deposit succeeds
+  obtain ⟨m, hm, hmv, hmn⟩ := STAmount.toNumber_exact_canonical s .to_nearest hc
+  obtain ⟨c', hadd⟩ := Number.operator_add_ok_of_lt lb.coverAvailable m .to_nearest hcn hmn hcov0
+    hcap (by rw [hmv]; exact hnn) (by rw [hmv]; exact hscap)
+  obtain ⟨lb', htl, _⟩ := LoanBroker.credit_lawful lb m c' hmn (by rw [hmv]; exact hnn) hadd
+  have hok : lb.coverDeposit s = .ok (.ok { amount' := s, loanBroker' := lb' }) := by
+    simp [LoanBroker.coverDeposit, LoanBroker.applyCoverTransaction,
+      LoanBroker.roundedCoverAmount_whole lb s hs hnz, hm, hadd, htl]
+  refine ⟨s, _, hok, ?_⟩
+  have hup := LoanBroker.coverDeposit_credit_proof lb s _ hok hc hexact
+  dsimp only at hup ⊢
+  linarith
+
+/-- `coverDeposit_increase_possible` with an empty cover, one that rounds to zero in the vault asset:
+the amount is one whole unit of the asset, one drop for XRP. The unit is lifted to the cover scale if
+that is coarser. The cover is below one unit, and the nearest-rounded sum is at least the unit. -/
+private lemma LoanBroker.coverDeposit_increase_possible_empty (lb : LoanBroker) (s : STAmount)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hz : s.mValue = 0)
+    (hone : lb.numericType.isIntegral = true → 1 ≤ lb.numericType.maxValue.toNat) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult), lb.coverDeposit amount = .ok (.ok res) ∧
+      lb.toExact.coverAvailable < res.loanBroker'.toExact.coverAvailable := by
+  have hcn := lb.wf.coverAvailable_norm
+  have hcov0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
+  have hneg : lb.coverAvailable.negative_ = false := Number.negative_false_of_nonneg _ hcn hcov0
+  have hscale : numberExponent lb.coverAvailable lb.numericType = .ok s.exponent := by
+    simp [numberExponent, hs]
+  have hs0 : s.toRat = 0 := by unfold STAmount.toRat; simp [hz]
+  -- a unit of the asset: canonical, nonzero, at or above the cover scale, worth more than the cover
+  suffices h : ∃ u : STAmount, u.ExactCanonical ∧ u.mIsNegative = false ∧ u.mValue ≠ 0 ∧
+      s.exponent ≤ u.exponent ∧ lb.coverAvailable.toRat < u.toRat ∧ u.toRat < 10 ^ 96 by
+    obtain ⟨u, huc, hun, hu0, hle, hlt, hucap⟩ := h
+    have hcap : lb.coverAvailable.toRat < 10 ^ 96 := lt_trans hlt hucap
+    have hunn : 0 ≤ u.toRat := by rw [STAmount.toRat_of_nonneg u hun]; positivity
+    have hsg : u.signum ≠ 0 := by
+      have hb : (u.mValue == 0) = false := by simpa using hu0
+      unfold STAmount.signum
+      rw [hb, if_neg Bool.false_ne_true]
+      split <;> decide
+    have hdown : roundToCoverScale lb.numericType lb.coverAvailable u .downward = .ok u := by
+      rw [roundToCoverScale_eq _ _ _ _ _ hscale]
+      exact STAmount.roundToExponent_eq_self _ _ _ (Or.inr (Or.inr hle))
+    have hrounded : lb.roundedCoverAmount u = .ok (.rounded u) := by
+      simp [LoanBroker.roundedCoverAmount, hdown, hsg]
+    obtain ⟨m, hm, hmv, hmn⟩ := STAmount.toNumber_exact_canonical u .to_nearest huc
+    obtain ⟨c', hadd⟩ := Number.operator_add_ok_of_lt lb.coverAvailable m .to_nearest hcn hmn hcov0
+      hcap (by rw [hmv]; exact hunn) (by rw [hmv]; exact hucap)
+    obtain ⟨lb', htl, hraw⟩ := LoanBroker.credit_lawful lb m c' hmn (by rw [hmv]; exact hunn) hadd
+    have hok : lb.coverDeposit u = .ok (.ok { amount' := u, loanBroker' := lb' }) := by
+      simp [LoanBroker.coverDeposit, LoanBroker.applyCoverTransaction, hrounded, hm, hadd, htl]
+    refine ⟨u, _, hok, ?_⟩
+    show lb.coverAvailable.toRat < lb'.toRawLoanBroker.coverAvailable.toRat
+    rw [hraw]
+    -- rounding to nearest never lands below the unit, a Number below the exact sum
+    have hge := operator_add_ge_of_ge_normalized _ _ _ m hcn hmn hadd hmn (by linarith)
+    rw [hmv] at hge
+    exact lt_of_lt_of_le hlt hge
+  by_cases hint : lb.numericType.isIntegral = true
+  · -- XRP or MPT: the cover rounds to zero, so it is at most half a drop, and one drop passes
+    have hic := (STAmount.ofNumber_integral_canonical _ _ _ s hint hs).1
+    have hhalf := STAmount.ofNumber_integral_within_half _ _ s hint hcn hneg hs
+    rw [hs0] at hhalf
+    set u : STAmount := ⟨lb.numericType, 1, 0, false⟩ with hu_def
+    have huc : u.IntegralCanonical := ⟨hint, rfl, by show (1 : UInt64).toNat ≤ _; exact hone hint⟩
+    have huv : u.toRat = 1 := by
+      rw [STAmount.toRat_of_nonneg u rfl]
+      show (((1 : UInt64).toNat : ℕ) : ℚ) * 10 ^ (0 : ℤ) = 1
+      simp
+    refine ⟨u, Or.inr ⟨huc, by show (1 : UInt64).toNat ≤ 2 ^ 63 - 1; decide⟩, rfl,
+      by show (1 : UInt64) ≠ 0; decide, ?_, ?_, ?_⟩
+    · have := hic.offset_zero
+      show s.mOffset ≤ 0
+      omega
+    · rw [huv]; linarith [(abs_le.mp hhalf).1]
+    · rw [huv]; norm_num
+  · -- an IOU: the cover rounds to zero, so it is below `10^-81`, and one whole token passes
+    have hfr : lb.numericType = .fractional := by
+      cases h : lb.numericType with
+      | integral mv mo ms msh => exact absurd (show lb.numericType.isIntegral = true by rw [h]; rfl) hint
+      | fractional => rfl
+    have hs80 : s.mOffset ≤ 80 := by
+      rcases STAmount.ofNumber_fractional_offset _ _ _ s hfr hs with h | ⟨_, h⟩ <;> omega
+    have hs' : STAmount.ofNumber .fractional lb.coverAvailable .to_nearest = .ok s := by
+      rw [← hfr]; exact hs
+    have hlt1 : lb.coverAvailable.toRat < 1 := by
+      by_cases hm0 : lb.coverAvailable.mantissa_ = 0
+      · rw [Number.toRat_eq_zero_of_mantissa_zero _ hm0]; norm_num
+      · have hexp : lb.coverAvailable.exponent_ ≤ -100 := by
+          by_contra hcon
+          exact STAmount.ofNumber_iou_ne_zero_of_exponent _ .to_nearest s hcn hm0 (by omega) hs' hz
+        have hb := mantissaBounds_nat_of (hcn.mantissaBounds hm0)
+        have habs := abs_toRat_eq lb.coverAvailable
+        rw [abs_of_nonneg hcov0] at habs
+        rw [habs]
+        have hm : (lb.coverAvailable.mantissa_.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hb.2
+        have hp : (10 : ℚ) ^ lb.coverAvailable.exponent_ ≤ (10 : ℚ) ^ (-100 : ℤ) :=
+          zpow_le_zpow_right₀ (by norm_num) hexp
+        have h2 : (10 : ℚ) ^ 19 * (10 : ℚ) ^ (-100 : ℤ) < 1 := by norm_num
+        calc (lb.coverAvailable.mantissa_.toNat : ℚ) * 10 ^ lb.coverAvailable.exponent_
+            ≤ (lb.coverAvailable.mantissa_.toNat : ℚ) * (10 : ℚ) ^ (-100 : ℤ) :=
+              mul_le_mul_of_nonneg_left hp (by positivity)
+          _ < 10 ^ 19 * (10 : ℚ) ^ (-100 : ℤ) := mul_lt_mul_of_pos_right hm (by positivity)
+          _ < 1 := h2
+    have hkMin : kMinValue.toNat = 10 ^ 15 := by decide
+    set u : STAmount := ⟨.fractional, kMinValue, max s.exponent (-15), false⟩ with hu_def
+    have huc : u.IOUCanonical :=
+      ⟨rfl, by show 10 ^ 15 ≤ kMinValue.toNat; omega, by show kMinValue.toNat < 10 ^ 16; omega,
+        by show (-96 : ℤ) ≤ max s.exponent (-15); exact le_trans (by norm_num) (le_max_right _ _),
+        by show max s.exponent (-15) ≤ 80; exact max_le hs80 (by norm_num)⟩
+    have hu1 : (1 : ℚ) ≤ u.toRat := by
+      rw [STAmount.toRat_of_nonneg u rfl]
+      show (1 : ℚ) ≤ (kMinValue.toNat : ℚ) * 10 ^ max s.exponent (-15)
+      rw [hkMin]; push_cast
+      have h1 : (10 : ℚ) ^ (-15 : ℤ) ≤ (10 : ℚ) ^ max s.exponent (-15) :=
+        zpow_le_zpow_right₀ (by norm_num) (le_max_right _ _)
+      calc (1 : ℚ) = 10 ^ 15 * (10 : ℚ) ^ (-15 : ℤ) := by norm_num
+        _ ≤ 10 ^ 15 * (10 : ℚ) ^ max s.exponent (-15) := mul_le_mul_of_nonneg_left h1 (by positivity)
+    have hucap : u.toRat < 10 ^ 96 := by
+      rw [STAmount.toRat_of_nonneg u rfl]
+      show (kMinValue.toNat : ℚ) * 10 ^ max s.exponent (-15) < 10 ^ 96
+      rw [hkMin]; push_cast
+      have h1 : (10 : ℚ) ^ max s.exponent (-15) ≤ (10 : ℚ) ^ (80 : ℤ) :=
+        zpow_le_zpow_right₀ (by norm_num) (max_le hs80 (by norm_num))
+      have h2 : (10 : ℚ) ^ 15 * (10 : ℚ) ^ (80 : ℤ) < 10 ^ 96 := by norm_num
+      exact lt_of_le_of_lt (mul_le_mul_of_nonneg_left h1 (by positivity)) h2
+    exact ⟨u, Or.inl huc, rfl, by show kMinValue ≠ 0; decide,
+      by show s.exponent ≤ max s.exponent (-15); exact le_max_left _ _, lt_of_lt_of_le hlt1 hu1, hucap⟩
+
+/-- **Proof body of `coverDeposit_increase_possible`.** The amount is CoverAvailable itself in the
+vault asset, or one whole unit of the asset when the cover is empty. -/
+lemma LoanBroker.coverDeposit_increase_possible_proof (lb : LoanBroker) (s : STAmount)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hone : lb.numericType.isIntegral = true → 1 ≤ lb.numericType.maxValue.toNat)
+    (hexact : ∃ w : Number, w.isNormalized ∧ w.toRat = lb.toExact.coverAvailable + s.toRat) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult), lb.coverDeposit amount = .ok (.ok res) ∧
+      lb.toExact.coverAvailable < res.loanBroker'.toExact.coverAvailable := by
+  by_cases hz : s.mValue = 0
+  · exact LoanBroker.coverDeposit_increase_possible_empty lb s hs hz hone
+  · exact LoanBroker.coverDeposit_increase_possible_nonzero lb s hs hz hexact
 
 /-- **Proof body of `coverDeposit_total`.** -/
 lemma LoanBroker.coverDeposit_total_proof (lb : LoanBroker) (amount r : STAmount)

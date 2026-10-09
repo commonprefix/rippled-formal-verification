@@ -86,6 +86,23 @@ theorem LoanBroker.coverWithdraw_decreases_cover (amount : STAmount) (res : Loan
     res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_decreases_cover_proof lb amount res hok hc hnn
 
+/-- There is an amount that lowers CoverAvailable, when CoverAvailable is at least one unit above minCover.
+The amount is one unit at the cover scale, the smallest amount the scale check accepts. -/
+theorem LoanBroker.coverWithdraw_decrease_possible (pool : α) (s : STAmount) (e : Int)
+    (minimumCover : Number)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    -- `s` is CoverAvailable in the vault asset, so `10 ^ s.exponent` is one unit at the cover scale
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hnz : s.mValue ≠ 0)
+    -- the unit is an amount of the asset: the smallest IOU amount is `10^-81`
+    (hunit : (-81 : Int) ≤ s.exponent)
+    (hroom : minimumCover.toRat + (10 : ℚ) ^ s.exponent ≤ lb.toExact.coverAvailable) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
+      lb.canCoverWithdraw pool amount = .ok .tesSUCCESS ∧ lb.coverWithdraw amount = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable :=
+  LoanBroker.coverWithdraw_decrease_possible_proof lb pool s e minimumCover hexp hmin hs hnz hunit hroom
+
 /-- When the checks pass -> CoverAvailable' ≥ minCover. -/
 theorem LoanBroker.coverWithdraw_keeps_minimum (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (e : Int)
@@ -107,6 +124,7 @@ theorem LoanBroker.coverWithdraw_total (pool : α) (amount : STAmount)
 exactly. -/
 theorem LoanBroker.coverWithdraw_all (pool : α) (e : Int) (s : STAmount)
     (hdebt : lb.debtTotal = Number.zero)
+    -- `hs` and `hrep` go once the C++ fix keeps CoverAvailable on the asset grid
     (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
     (hnz : s.mValue ≠ 0)
     (hrep : s.toRat = lb.toExact.coverAvailable)

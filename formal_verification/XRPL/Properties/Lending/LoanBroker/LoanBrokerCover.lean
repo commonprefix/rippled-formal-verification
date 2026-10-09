@@ -26,7 +26,9 @@ theorem LoanBroker.ReachableFromIn.cover_eq (start lb : LoanBroker) (unit : ℚ)
   LoanBroker.ReachableFromIn.cover_eq_proof start unit lb n applied requested hr
 
 /-- Over n cover operations -> 0 ≤ start + Σdeposits - Σwithdrawals - Σclawbacks - CoverAvailable ≤
-n × unit, where `unit` is at least one ULP of the cover scale at every deposit. -/
+n × unit, where `unit` is at least one ULP of the cover scale at every deposit. Today only deposits
+round, so the error is n deposits × 1 ULP. Once C++ rounds withdrawals and clawbacks too, the bound
+stays as stated. -/
 theorem LoanBroker.ReachableFromIn.cover_within_bounds (start lb : LoanBroker) (unit : ℚ) (n : ℕ)
     (applied requested : ℚ)
     (hu0 : 0 ≤ unit)
@@ -155,8 +157,8 @@ theorem LoanBroker.coverDeposit_coverClawback_restores_attained :
       lb.toExact.coverAvailable < res'.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_coverClawback_restores_witness
 
-/-- Splitting a clawback in two gives the same CoverAvailable (if neither part is capped and nothing
-rounds). -/
+/-- Two clawbacks give the same CoverAvailable as one clawback of their exact sum (if neither part is
+capped and nothing rounds). -/
 theorem LoanBroker.coverClawback_split (lb : LoanBroker) (pool : α) (a b c : STAmount)
     (r1 r2 s : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
     -- `a` then `b`
@@ -205,7 +207,8 @@ theorem LoanBroker.coverClawback_split_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverClawback_split_witness
 
-/-- Splitting a withdraw in two gives the same CoverAvailable (if nothing rounds). -/
+/-- Two withdrawals give the same CoverAvailable as one withdrawal of their exact sum (if nothing
+rounds). -/
 theorem LoanBroker.coverWithdraw_split (lb : LoanBroker) (a b c : STAmount)
     (r1 r2 s : LoanBrokerCoverResult)
     -- `a` then `b`
@@ -231,8 +234,8 @@ theorem LoanBroker.coverWithdraw_split_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_split_witness
 
-/-- Splitting a deposit in two gives the same CoverAvailable (if cover scale doesn't change and
-nothing rounds). -/
+/-- Two deposits give the same CoverAvailable as one deposit of their exact sum (if the cover scale
+doesn't change and nothing rounds). -/
 theorem LoanBroker.coverDeposit_split (lb : LoanBroker) (a b c : STAmount)
     (r1 r2 s : LoanBrokerCoverResult) (e : Int)
     -- `a` then `b`
@@ -321,7 +324,8 @@ theorem LoanBroker.coverClawback_coverDeposit_restores_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ lb.toExact.coverAvailable :=
   LoanBroker.coverClawback_coverDeposit_witness
 
-/-- Two withdraws give the same CoverAvailable in either order (if nothing rounds). -/
+/-- Withdrawals are commutative when nothing rounds: two withdrawals give the same CoverAvailable in
+either order. -/
 theorem LoanBroker.coverWithdraw_comm (lb : LoanBroker) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult)
     -- `a` then `b`
@@ -351,8 +355,8 @@ theorem LoanBroker.coverWithdraw_comm_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_comm_witness
 
-/-- Two clawbacks give the same CoverAvailable in either order (if neither is capped and nothing
-rounds). -/
+/-- Clawbacks are commutative when neither is capped and nothing rounds: two clawbacks give the same
+CoverAvailable in either order. -/
 theorem LoanBroker.coverClawback_comm (lb : LoanBroker) (pool : α) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int) (minimumCover : Number)
     -- `a` then `b`
@@ -403,7 +407,8 @@ theorem LoanBroker.coverClawback_comm_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverClawback_comm_witness
 
-/-- Two deposits take the same amounts in either order (if neither order changes the cover scale). -/
+/-- Deposits are commutative when neither order changes the cover scale: two deposits take the same
+amounts in either order. -/
 theorem LoanBroker.coverDeposit_comm (lb : LoanBroker) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int)
     -- `a` then `b`
@@ -442,13 +447,14 @@ theorem LoanBroker.coverDeposit_comm_cover (lb : LoanBroker) (a b : STAmount)
   LoanBroker.coverDeposit_comm_cover_proof lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs hca hcb hx1
     hx2 hx3 hx4
 
-/-- Witness: a pair crossing a power of 10 where the order changes the total deposit amount.
-Depositing `10^-14` and `1.3 * 10^-14` onto `9.99999999999999` takes `2 * 10^-14` in one order
-and `2.3 * 10^-14` in the other. -/
+/-- Witness: a run where all checks pass in both orders and CoverAvailable is different. Depositing
+`10^-14` and `1.3 * 10^-14` onto `9.99999999999999` ends at `10.00000000000001` in one order and at
+`10.000000000000013` in the other, taking `2 * 10^-14` and `2.3 * 10^-14`. -/
 theorem LoanBroker.coverDeposit_comm_attained :
     ∃ (lb : LoanBroker) (a b : STAmount) (r1 r2 s1 s2 : LoanBrokerCoverResult),
       lb.coverDeposit a = .ok (.ok r1) ∧ r1.loanBroker'.coverDeposit b = .ok (.ok r2) ∧
       lb.coverDeposit b = .ok (.ok s1) ∧ s1.loanBroker'.coverDeposit a = .ok (.ok s2) ∧
+      r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable ∧
       r1.amount'.toRat + r2.amount'.toRat ≠ s1.amount'.toRat + s2.amount'.toRat :=
   LoanBroker.coverDeposit_comm_witness
 

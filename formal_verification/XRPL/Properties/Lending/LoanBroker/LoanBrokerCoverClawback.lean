@@ -217,6 +217,27 @@ theorem LoanBroker.coverClawback_decreases_cover (pool : α) (amount : Option ST
     res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable :=
   LoanBroker.coverClawback_decreases_cover_proof lb pool amount res hcan hok hreq
 
+/-- There is an amount that lowers CoverAvailable, when CoverAvailable is at least one unit above minCover.
+The amount is one unit at the cover scale, the smallest amount the scale check accepts. -/
+theorem LoanBroker.coverClawback_decrease_possible (pool : α) (s : STAmount) (e : Int)
+    (minimumCover : Number)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    -- `s` is CoverAvailable in the vault asset, so `10 ^ s.exponent` is one unit at the cover scale
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
+    (hnz : s.mValue ≠ 0)
+    -- the unit is an amount of the asset: the smallest IOU amount is `10^-81`
+    (hunit : (-81 : Int) ≤ s.exponent)
+    (hroom : minimumCover.toRat + (10 : ℚ) ^ s.exponent ≤ lb.toExact.coverAvailable)
+    -- the vault asset accepts whole amounts (offset 0), as XRP, MPT and IOU do
+    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
+      lb.canCoverClawback pool (some amount) = .ok .tesSUCCESS ∧
+        lb.coverClawback pool (some amount) = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable :=
+  LoanBroker.coverClawback_decrease_possible_proof lb pool s e minimumCover hexp hmin hs hnz hunit hroom
+    hmaxoff
+
 /-- A bigger clawback amount never takes less. -/
 theorem LoanBroker.coverClawback_monotone (pool : α) (a b : STAmount)
     (ra rb : LoanBrokerCoverResult)
@@ -309,6 +330,7 @@ theorem LoanBroker.coverClawback_lawful_total_attained :
 exactly. -/
 theorem LoanBroker.coverClawback_all (pool : α) (e : Int) (s : STAmount)
     (hdebt : lb.debtTotal = Number.zero)
+    -- `hs` and `hrep` go once the C++ fix keeps CoverAvailable on the asset grid
     (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
     (hnz : s.mValue ≠ 0)
     (hrep : s.toRat = lb.toExact.coverAvailable)

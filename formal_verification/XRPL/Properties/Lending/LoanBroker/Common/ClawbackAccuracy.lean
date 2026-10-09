@@ -1,5 +1,11 @@
 import XRPL.Properties.Lending.LoanBroker.Common.ClawbackExits
 import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
+import XRPL.Properties.Lending.LoanBroker.Common.CoverUnit
+import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128Facts
+import XRPL.Properties.Protocol.Number.Add.Common.Rounded
+import XRPL.Properties.Protocol.Number.Common.Closest.OpExact
+import XRPL.Properties.Protocol.STAmount.Common.OfNumberTotality
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
 
 /-! # Proof bodies for the `LoanBroker.coverClawback` theorems
 
@@ -418,6 +424,189 @@ lemma LoanBroker.coverClawback_decreases_cover_proof (lb : LoanBroker) (pool : �
   rw [hraw]
   exact operator_sub_le_of_le_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn hsub
     lb.wf.coverAvailable_norm (by rw [hmv]; linarith)
+
+/-- A `Number` holding the value of a positive canonical amount of the vault asset converts back to
+that asset. -/
+private lemma STAmount.ofNumber_ok_of_canonical (nt : NumericType) (n : Number) (a : STAmount)
+    (hn : n.isNormalized) (hac : a.ExactCanonical) (hat : a.mNumericType = nt) (hpos : 0 < a.toRat)
+    (heq : n.toRat = a.toRat) (hmaxoff : (0 : Int) ≤ nt.maxOffset) :
+    ∃ r, STAmount.ofNumber nt n .to_nearest = .ok r := by
+  have hnneg : n.negative_ = false :=
+    Number.negative_false_of_nonneg n hn (by rw [heq]; exact hpos.le)
+  rcases hac with hiou | ⟨hint, hsz⟩
+  · -- an IOU value: `n` is the 19-digit lift of the 16-digit amount
+    have hfr : nt = .fractional := by rw [← hat]; exact hiou.is_fractional
+    subst hfr
+    have hL : n = ⟨a.mIsNegative, a.mValue * 10 * 10 * 10, a.mOffset - 3⟩ := by
+      apply hn.toRat_inj (lift_isNormalized _ _ _ hiou.mant_lo hiou.mant_hi
+        (by have := hiou.exp_lo; unfold minExponent; omega)
+        (by have := hiou.exp_hi; unfold maxExponent; omega))
+      rw [heq, lift_toRat a hiou.mant_hi]
+    have hM : (a.mValue * 10 * 10 * 10).toNat = a.mValue.toNat * 1000 :=
+      m_mul_thousand_no_overflow hiou.mant_hi
+    subst hL
+    refine ⟨_, STAmount.ofNumber_fractional_of_trailing_zeros _ .to_nearest hn ?_ hnneg ?_ ?_ ?_⟩
+    · show a.mValue * 10 * 10 * 10 ≠ 0
+      intro h0
+      have h1 : (a.mValue * 10 * 10 * 10).toNat = 0 := by rw [h0]; rfl
+      rw [hM] at h1
+      have := hiou.mant_lo
+      omega
+    · show (a.mValue * 10 * 10 * 10).toNat % 1000 = 0
+      rw [hM]; omega
+    · show (-96 : Int) ≤ a.mOffset - 3 + 3
+      have := hiou.exp_lo; omega
+    · show a.mOffset - 3 + 3 ≤ 80
+      have := hiou.exp_hi; omega
+  · -- an XRP or MPT value: a whole number within the type's bound
+    have hint' : nt.isIntegral = true := by rw [← hat]; exact hint.is_integral
+    have hneg : a.mIsNegative = false := by
+      by_contra h
+      have h' : a.mIsNegative = true := by simpa using h
+      have hsd := STAmount.IntegralCanonical.toRat_eq_signedDrops a hint
+      unfold STAmount.signedDrops at hsd
+      rw [h', if_pos rfl] at hsd
+      have hm : (0 : ℚ) ≤ (a.mValue.toNat : ℚ) := by positivity
+      push_cast at hsd
+      linarith
+    have hden : n.toRat.den = 1 := by rw [heq]; exact STAmount.IntegralCanonical.den_eq_one a hint
+    have hcap : n.toRat ≤ 2 ^ 63 - 1 := by
+      rw [heq]
+      exact le_trans (le_abs_self _) (STAmount.IntegralCanonical.abs_toRat_le_of_mValue_le a hint hsz)
+    have hmax : n.toRat ≤ nt.maxValue.toNat := by
+      rw [heq, STAmount.IntegralCanonical.toRat_eq_signedDrops a hint]
+      unfold STAmount.signedDrops
+      rw [hneg]
+      simp only [Bool.false_eq_true, if_false]
+      have := hint.in_range
+      rw [hat] at this
+      exact_mod_cast this
+    exact STAmount.ofNumber_integral_ok_of_le nt n .to_nearest hint' hmaxoff hn hnneg hden hcap hmax
+
+/-- **Proof body of `coverClawback_decrease_possible`.** The amount is one unit at the cover scale. -/
+lemma LoanBroker.coverClawback_decrease_possible_proof (lb : LoanBroker) (pool : α) (s : STAmount)
+    (e : Int) (minimumCover : Number)
+    (hexp : AssetPool.exponent pool lb.numericType = .ok e)
+    (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok minimumCover)
+    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s) (hnz : s.mValue ≠ 0)
+    (hunit : (-81 : Int) ≤ s.exponent)
+    (hroom : minimumCover.toRat + (10 : ℚ) ^ s.exponent ≤ lb.toExact.coverAvailable)
+    (hmaxoff : (0 : Int) ≤ lb.numericType.maxOffset) :
+    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
+      lb.canCoverClawback pool (some amount) = .ok .tesSUCCESS ∧
+        lb.coverClawback pool (some amount) = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable := by
+  have hcn := lb.wf.coverAvailable_norm
+  have hcov0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
+  have hcov : lb.toExact.coverAvailable = lb.coverAvailable.toRat := rfl
+  have hmn := minimumBrokerCover_isNormalized _ _ _ _ _ hmin
+  have hm0 := LoanBroker.minimumCover_nonneg lb pool e minimumCover hexp hmin
+  have hmcap := LoanBroker.minimumCover_lt_cap lb e minimumCover hmin
+  have hcap := LoanBroker.cover_lt_cap_of_ofNumber lb s hs hnz
+  have hp : (0 : ℚ) < (10 : ℚ) ^ s.exponent := zpow_pos (by norm_num) _
+  obtain ⟨u, huc, hut, hu0, huv, hcheck⟩ := LoanBroker.coverUnit_exists lb s hs hnz hunit
+  obtain ⟨w, hwn, hwv⟩ := LoanBroker.coverUnit_sub_exact lb s hs hnz hunit (by linarith)
+  obtain ⟨uN, hnum, huNv, huNn⟩ := STAmount.toNumber_exact_canonical u .to_nearest huc
+  have hupos : 0 < u.toRat := by rw [huv]; exact hp
+  -- the cap is CoverAvailable above the minimum, rounded down: still at least the unit
+  have hdiff : (10 : ℚ) ^ s.exponent ≤ lb.coverAvailable.toRat - minimumCover.toRat := by linarith
+  obtain ⟨mx, hmx⟩ := Number.operator_sub_ok_of_exp lb.coverAvailable minimumCover .downward hcn hmn
+    (Number.exponent_headroom_of_lt _ hcn hcov0 hcap)
+    (Number.exponent_headroom_of_lt minimumCover hmn hm0 hmcap)
+  have hmx0 : mx.mantissa_ ≠ 0 := by
+    intro h0
+    by_cases hmz : minimumCover.mantissa_ = 0
+    · -- no minimum cover: the cap is CoverAvailable itself, which is not zero
+      have hmx' := hmx
+      rw [Number.eq_zero_of_mantissa_zero minimumCover hmn hmz, Number.operator_sub_zero,
+        Except.ok.injEq] at hmx'
+      have hz : lb.coverAvailable.toRat = 0 := by
+        rw [hmx']; exact Number.toRat_eq_zero_of_mantissa_zero _ h0
+      linarith
+    · -- a subtraction of nonzero values that flushes to zero only far below `10^-81`
+      have hmx' := hmx
+      unfold Number.operator_sub at hmx'
+      have hyn : minimumCover.operator_neg.isNormalized := Number.operator_neg_isNormalized _ hmn
+      have hy_ne : minimumCover.operator_neg.mantissa_ ≠ 0 := by
+        rw [Number.operator_neg_mantissa_of_ne _ hmz]; exact hmz
+      have hx_ne : lb.coverAvailable.mantissa_ ≠ 0 :=
+        Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt (by linarith))
+      have hyneg : minimumCover.operator_neg.toRat = -minimumCover.toRat := Number.toRat_neg _
+      have h_diff : lb.coverAvailable.negative_ ≠ minimumCover.operator_neg.negative_ := by
+        rw [Number.negative_false_of_nonneg _ hcn hcov0, Number.operator_neg_negative_of_ne _ hmz,
+          Number.negative_false_of_nonneg _ hmn hm0]
+        decide
+      have h_not_zero : ¬ lb.coverAvailable.operator_eq minimumCover.operator_neg.operator_neg := by
+        intro h
+        have := add_truth_zero_of_eq_neg _ _ h
+        rw [hyneg] at this
+        linarith
+      obtain ⟨M, ze', δ, zn, sticky, hδ0, _, hst0, hM1, hMlt, hstM, hval, hok128, _, hδlt, _⟩ :=
+        operator_add_algorithmic_facts_diff_sign_represents _ _ mx .downward hcn hyn hx_ne hy_ne h_diff
+          h_not_zero hmx'
+      have hsmall := doNormalize128_underflow_value_small zn M ze' δ sticky .downward hδ0 hδlt hst0 hM1
+        (by omega)
+        (fun hs => by
+          have h2 : (10 : ℚ) ^ 20 ≤ (M.toNat : ℚ) := by exact_mod_cast hstM hs
+          nlinarith)
+        mx hok128 h0
+      rw [← hval, hyneg] at hsmall
+      -- the smallest positive `Number` is far below one unit at the cover scale
+      have htiny : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ (10 : ℚ) ^ s.exponent := by
+        rw [← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+        exact zpow_le_zpow_right₀ (by norm_num) (by unfold minExponent; omega)
+      have := le_abs_self (lb.coverAvailable.toRat + -minimumCover.toRat)
+      linarith
+  have hmx_ge : uN.toRat ≤ mx.toRat := by
+    obtain ⟨n, hlo, hval⟩ := operator_sub_rounded_downward _ _ _ hcn hmn hmx hmx0
+    rw [hval]
+    exact Number.lower_tight _ n hlo uN huNn (by rw [huNv, huv]; linarith)
+  have hmx_pos : 0 < mx.toRat := by rw [huNv, huv] at hmx_ge; linarith
+  have hmxn : mx.isNormalized := operator_sub_isNormalized _ _ _ .downward hcn hmn hmx hmx0
+  have hsg : ¬ mx.signum ≤ 0 := by
+    rw [not_le, signum_pos_iff]
+    exact ⟨Number.negative_false_of_nonneg mx hmxn hmx_pos.le, hmx0⟩
+  have hgt : uN.operator_gt mx = false := by
+    unfold Number.operator_gt
+    exact (operator_lt_eq_false_iff _ _ hmxn huNn).mpr hmx_ge
+  -- the unit converts to the vault asset as itself
+  obtain ⟨claw, hcl⟩ :=
+    STAmount.ofNumber_ok_of_canonical lb.numericType uN u huNn huc hut hupos huNv hmaxoff
+  have hclnz : claw.mValue ≠ 0 :=
+    STAmount.ofNumber_ne_zero_of_canonical _ uN .to_nearest claw u huNn huc hut hu0 huNv hcl
+  have hclaw : claw = u :=
+    STAmount.eq_of_exactCanonical claw u
+      (STAmount.ofNumber_exactCanonical _ uN .to_nearest claw huNn (by rw [huNv]; exact hupos.le) hcl
+        hclnz)
+      huc (by rw [STAmount.ofNumber_mNumericType _ _ _ _ hcl, hut]) hclnz
+      (STAmount.ofNumber_to_nearest_eq_of_canonical _ uN claw u huNn (by rw [huNv]; exact hupos.le) huc
+        hut huNv hcl)
+  rw [hclaw] at hcl
+  have hz : u.isZero = false := by simp [STAmount.isZero, hu0]
+  have hrr : lb.roundedCoverClawback pool (some u) = .ok (.rounded u) := by
+    unfold LoanBroker.roundedCoverClawback
+    simp only [hexp, ok_bind, hmin, hmx, hsg, if_false, hz, Bool.false_eq_true, hnum, hgt, pure_eq,
+      except_pure_eq, hcl]
+  have hcan : lb.canCoverClawback pool (some u) = .ok .tesSUCCESS := by
+    unfold LoanBroker.canCoverClawback
+    rw [hrr, ok_bind]
+    exact hcheck
+  -- the clawback takes the unit, exactly
+  obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_lt lb.coverAvailable uN .to_nearest hcn huNn hcov0 hcap
+    (by rw [huNv, huv]; exact hp.le)
+    (by rw [huNv]; exact lt_of_le_of_lt (le_abs_self _) (STAmount.ExactCanonical.abs_lt u huc))
+  have hc'v : c'.toRat = lb.coverAvailable.toRat - (10 : ℚ) ^ s.exponent := by
+    rw [Number.roundsToRepresentable_eq c' _ (operator_sub_rounded_to_nearest _ _ _ hcn huNn hsub) w hwn
+      (by rw [hwv, huNv, huv, hcov]), huNv, huv]
+  have hcn' : c'.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hcn huNn hsub
+  obtain ⟨lb', htl, hraw⟩ := LoanBroker.withCover_lawful lb c' hcn' (by rw [hc'v]; linarith)
+  refine ⟨u, ⟨u, lb'⟩, hcan, ?_, ?_⟩
+  · simp [LoanBroker.coverClawback, LoanBroker.applyCoverTransaction, hrr, hnum, hsub, htl]
+  · show lb'.toRawLoanBroker.coverAvailable.toRat < lb.coverAvailable.toRat
+    rw [hraw]
+    show c'.toRat < lb.coverAvailable.toRat
+    rw [hc'v]
+    linarith
 
 /-- A clawed amount converts exactly to a nonnegative `Number`, and taking it
 from a cover below `10^96` never throws. -/

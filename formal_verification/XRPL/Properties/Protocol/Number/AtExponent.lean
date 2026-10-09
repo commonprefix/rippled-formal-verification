@@ -319,4 +319,85 @@ lemma Number.exponent_le_of_le (x y : Number) (hx : x.isNormalized) (hy : y.isNo
         mul_le_mul hxl hten (by norm_num) (by positivity)
   linarith
 
+/-- Taking one unit at exponent `e` from a nonnegative normalized `Number` of at least one and below
+`2^63` units at `e` is exact: the difference is again a normalized `Number`. -/
+lemma Number.exists_normalized_sub_pow (n : Number) (e : Int) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
+    (hlo : (10 : ℚ) ^ e ≤ n.toRat) (hhi : n.toRat < 2 ^ 63 * (10 : ℚ) ^ e)
+    (he_lo : minExponent + 36 ≤ e) (he_hi : e ≤ maxExponent - 1) :
+    ∃ w : Number, w.isNormalized ∧ w.toRat = n.toRat - (10 : ℚ) ^ e := by
+  have hpe : (0 : ℚ) < (10 : ℚ) ^ e := zpow_pos (by norm_num) _
+  have hneg : n.negative_ = false := Number.negative_false_of_nonneg n hn h0
+  have hm0 : n.mantissa_ ≠ 0 := fun h => by
+    rw [Number.toRat_eq_zero_of_mantissa_zero n h] at hlo; linarith
+  obtain ⟨hmlo, hmhi⟩ := hn.mantissaBounds_nat hm0
+  obtain ⟨_, _, hrep, hemin, hemax⟩ := hn.resolve_left (fun h => hm0 (by rw [h]; rfl))
+  have hval := Number.toRat_of_nonneg n hneg
+  set E := n.exponent_ with hE_def
+  set m := n.mantissa_.toNat with hm_def
+  have hpE : (0 : ℚ) < (10 : ℚ) ^ E := zpow_pos (by norm_num) _
+  -- the unit sits at or above the mantissa exponent, and within 18 places of it
+  have hEle : E ≤ e := Number.exponent_le_of_toRat_lt_of_ne n e hn hneg hm0
+    (lt_of_lt_of_le hhi (by gcongr; norm_num))
+  have hEge : e - 18 ≤ E := by
+    have hm' : (m : ℚ) < 10 ^ 19 := by exact_mod_cast hmhi
+    have h1 : (10 : ℚ) ^ e < (10 : ℚ) ^ (E + 19) := by
+      rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+      calc (10 : ℚ) ^ e ≤ n.toRat := hlo
+        _ = (m : ℚ) * 10 ^ E := hval
+        _ < 10 ^ 19 * 10 ^ E := mul_lt_mul_of_pos_right hm' hpE
+        _ = 10 ^ E * 10 ^ (19 : ℤ) := by norm_num; ring
+    have := (zpow_lt_zpow_iff_right₀ (by norm_num : (1 : ℚ) < 10)).mp h1
+    omega
+  -- the unit is `10^d` mantissa units
+  obtain ⟨d, hd⟩ : ∃ d : ℕ, (d : ℤ) = e - E := ⟨(e - E).toNat, Int.toNat_of_nonneg (by omega)⟩
+  obtain ⟨P, hP_def⟩ : ∃ P : ℕ, P = 10 ^ d := ⟨_, rfl⟩
+  have hpow : (10 : ℚ) ^ e = (P : ℚ) * 10 ^ E := by
+    rw [hP_def, Nat.cast_pow, Nat.cast_ofNat, ← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), hd]
+    congr 1; ring
+  have hdm : P ≤ m := by
+    have h : (P : ℚ) * 10 ^ E ≤ (m : ℚ) * 10 ^ E := by rw [← hpow, ← hval]; exact hlo
+    exact_mod_cast le_of_mul_le_mul_right h hpE
+  obtain ⟨k, hk_def⟩ : ∃ k : ℕ, k = m - P := ⟨_, rfl⟩
+  have hk_eq : k + P = m := by rw [hk_def]; exact Nat.sub_add_cancel hdm
+  have hk_val : n.toRat - (10 : ℚ) ^ e = (k : ℚ) * 10 ^ E := by
+    rw [hval, hpow, hk_def, Nat.cast_sub hdm]; ring
+  rcases Nat.eq_zero_or_pos k with hk0 | hkpos
+  · exact ⟨Number.zero, Or.inl rfl, by rw [Number.toRat_zero, hk_val, hk0]; simp⟩
+  by_cases hk18 : k < 10 ^ 18
+  · -- fewer than 19 digits: scale the mantissa up
+    obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (k : ℤ) E
+      ⟨by omega, by omega⟩ ⟨by omega, by omega⟩
+    exact ⟨w, hw, by rw [hwv, hk_val]; push_cast; ring⟩
+  · -- 19 digits at the exponent of `n`: the record itself
+    push Not at hk18
+    have hk64 : k < UInt64.size := by rw [uint64_size_val]; omega
+    have hkN : (k.toUInt64).toNat = k := UInt64.toNat_ofNat_of_lt' hk64
+    refine ⟨⟨false, k.toUInt64, E⟩, Or.inr ⟨?_, ?_, ?_, hemin, hemax⟩, ?_⟩
+    · rw [UInt64.le_iff_toNat_le, largeRange_min_val, hkN]; omega
+    · rw [UInt64.le_iff_toNat_le, largeRange_max_val, hkN]; omega
+    · -- the mantissa fits `Int64` or ends in a zero, as the mantissa of `n` does
+      have hmaxRep : maxRep.toNat = 9223372036854775807 := by decide
+      rcases hrep with hfit | hten
+      · left
+        rw [UInt64.le_iff_toNat_le, hkN]
+        have := UInt64.le_iff_toNat_le.mp hfit
+        omega
+      · rcases Nat.eq_zero_or_pos d with hd0 | hdpos
+        · -- the unit is one mantissa unit, and `n` is below `2^63` of them
+          left
+          rw [UInt64.le_iff_toNat_le, hkN, hmaxRep]
+          have hP1 : P = 1 := by rw [hP_def, hd0, pow_zero]
+          have hEe : E = e := by omega
+          have h2 : (m : ℚ) * 10 ^ E < 2 ^ 63 * 10 ^ E := by rw [← hval, hEe]; exact hhi
+          have h3 : m < 2 ^ 63 := by exact_mod_cast lt_of_mul_lt_mul_right h2 hpE.le
+          omega
+        · right
+          rw [hkN]
+          obtain ⟨d', rfl⟩ : ∃ d', d = d' + 1 := ⟨d - 1, by omega⟩
+          have hP10 : P = 10 ^ d' * 10 := by rw [hP_def, pow_succ]
+          omega
+    · rw [Number.toRat_of_nonneg _ rfl]
+      show ((k.toUInt64).toNat : ℚ) * 10 ^ E = _
+      rw [hkN, hk_val]
+
 end XRPL.Model.Protocol

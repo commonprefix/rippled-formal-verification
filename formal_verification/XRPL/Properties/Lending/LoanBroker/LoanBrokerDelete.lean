@@ -23,7 +23,8 @@ theorem LoanBroker.roundedCoverAvailable_exact (s : STAmount)
   LoanBroker.roundedCoverAvailable_exact_proof lb s hok hrep
 
 /-- When the returned amount `s` ≠ 0 -> |s - CoverAvailable| ≤ ½ ULP of `s`. For XRP and MPT the ULP
-is `1`. -/
+is `1`. C++ `associateAsset` keeps CoverAvailable on the asset grid, so today nothing rounds here.
+Without it the broker could be paid more than CoverAvailable. -/
 theorem LoanBroker.roundedCoverAvailable_bounds (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s)
     (hnz : s.mValue ≠ 0) :

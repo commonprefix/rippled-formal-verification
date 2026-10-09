@@ -381,6 +381,62 @@ private lemma minimumBrokerCover_nonneg (nt : NumericType) (debtTotal : Number) 
   · exact key (-96) m le_rfl (by norm_num)
       (by rw [← minimumBrokerCover_below_min nt debtTotal rate e (by omega)]; exact hm)
 
+/-- The minimum cover is the value of a canonical amount, so it is below `10^96`. -/
+private lemma minimumBrokerCover_lt_cap (nt : NumericType) (debtTotal : Number) (rate : TenthBips32)
+    (e : Int) (m : Number) (hd : debtTotal.isNormalized) (h0 : 0 ≤ debtTotal.toRat)
+    (hm : minimumBrokerCover nt debtTotal rate e = .ok m) : m.toRat < 10 ^ 96 := by
+  unfold minimumBrokerCover at hm
+  obtain ⟨raw, hraw, hm⟩ := bind_ok_peel _ _ _ hm
+  obtain ⟨hrn, hr0⟩ := tenthBipsOfValue_upward_facts debtTotal rate raw hd h0 hraw
+  -- a canonical amount converts exactly to a value below `10^96`
+  have hcap (q : STAmount) (hq : q.ExactCanonical) (hn : q.toNumber .upward = .ok m) :
+      m.toRat < 10 ^ 96 := by
+    obtain ⟨n, hn', hv, _⟩ := STAmount.toNumber_exact_canonical q .upward hq
+    rw [hn, Except.ok.injEq] at hn'
+    rw [hn', hv]
+    exact lt_of_le_of_lt (le_abs_self _) (STAmount.ExactCanonical.abs_lt q hq)
+  unfold STAmount.roundToNumericType at hm
+  cases hret : STAmount.ofNumber nt raw .upward with
+  | error err => rw [hret] at hm; exact absurd hm (by simp)
+  | ok ret =>
+    rw [hret] at hm
+    dsimp only at hm
+    by_cases hint : ret.integral = true
+    · -- an XRP or MPT amount is canonical, zero included
+      rw [if_pos hint] at hm
+      refine hcap ret ?_ hm
+      by_cases hz : ret.mValue = 0
+      · have hnt : nt.isIntegral = true := by
+          rw [← STAmount.ofNumber_mNumericType nt raw .upward ret hret]; exact hint
+        exact Or.inr ⟨(STAmount.ofNumber_integral_canonical _ _ _ ret hnt hret).1,
+          by rw [hz]; decide⟩
+      · exact STAmount.ofNumber_exactCanonical nt raw .upward ret hrn hr0 hret hz
+    -- an IOU amount rounds up to a canonical amount or to zero
+    rw [if_neg hint] at hm
+    cases hr : ret.roundToExponent e .upward with
+    | error err => rw [hr] at hm; exact absurd hm (by simp)
+    | ok r =>
+      rw [hr] at hm
+      dsimp only at hm
+      have hfc : ret.FracCanonZero := by
+        cases nt with
+        | integral mv mo ms msh =>
+          exact absurd (STAmount.ofNumber_integral_canonical _ _ _ ret rfl hret).1.is_integral hint
+        | fractional => exact STAmount.ofNumber_fractional_fczr raw .upward ret hret
+      obtain ⟨hrfr, hrc⟩ := STAmount.roundToExponent_fczr ret r e .upward hfc hr
+      rcases hrc with hrc | h0r
+      · exact hcap r (Or.inl hrc) hm
+      · have hri : r.integral = false := by unfold STAmount.integral; rw [hrfr]; rfl
+        rw [STAmount.toNumber_zero_fractional r .upward hri h0r, Except.ok.injEq] at hm
+        rw [← hm, Number.toRat_zero]
+        norm_num
+
+/-- A broker's minimum cover is below `10^96`. -/
+lemma LoanBroker.minimumCover_lt_cap (lb : LoanBroker) (e : Int) (m : Number)
+    (hm : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum e = .ok m) :
+    m.toRat < 10 ^ 96 :=
+  minimumBrokerCover_lt_cap _ _ _ e m lb.wf.debtTotal_norm lb.exact.debtTotal_nonneg hm
+
 /-- A broker's minimum cover at the vault scale is not negative. -/
 lemma LoanBroker.minimumCover_nonneg {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
     (e : Int) (m : Number) (hexp : AssetPool.exponent pool lb.numericType = .ok e)
