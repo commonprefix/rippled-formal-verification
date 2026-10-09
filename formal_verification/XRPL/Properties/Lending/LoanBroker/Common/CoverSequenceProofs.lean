@@ -273,8 +273,9 @@ lemma LoanBroker.coverDeposit_split_proof (lb : LoanBroker) (a b c : STAmount)
   rw [hc] at d3
   linarith
 
-/-- **Proof body of `coverDeposit_comm`.** -/
-lemma LoanBroker.coverDeposit_comm_proof (lb : LoanBroker) (a b : STAmount)
+/-- Both orders credit the same two amounts when neither deposit changes the cover scale. A step of
+`coverDeposit_comm`. -/
+lemma LoanBroker.coverDeposit_comm_amounts (lb : LoanBroker) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int)
     (h1 : lb.coverDeposit a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverDeposit b = .ok (.ok r2))
     (h3 : lb.coverDeposit b = .ok (.ok s1)) (h4 : s1.loanBroker'.coverDeposit a = .ok (.ok s2))
@@ -294,8 +295,8 @@ lemma LoanBroker.coverDeposit_comm_proof (lb : LoanBroker) (a b : STAmount)
   rw [hb1, Except.ok.injEq] at hb2
   exact ⟨ha2, hb2.symm⟩
 
-/-- **Proof body of `coverDeposit_comm_cover`.** -/
-lemma LoanBroker.coverDeposit_comm_cover_proof (lb : LoanBroker) (a b : STAmount)
+/-- **Proof body of `coverDeposit_comm`.** -/
+lemma LoanBroker.coverDeposit_comm_proof (lb : LoanBroker) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int)
     (h1 : lb.coverDeposit a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverDeposit b = .ok (.ok r2))
     (h3 : lb.coverDeposit b = .ok (.ok s1)) (h4 : s1.loanBroker'.coverDeposit a = .ok (.ok s2))
@@ -312,7 +313,7 @@ lemma LoanBroker.coverDeposit_comm_cover_proof (lb : LoanBroker) (a b : STAmount
     (hx4 : ∃ w : Number, w.isNormalized ∧
       w.toRat = s1.loanBroker'.toExact.coverAvailable + s2.amount'.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s2.loanBroker'.toExact.coverAvailable := by
-  obtain ⟨hab, hba⟩ := LoanBroker.coverDeposit_comm_proof lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs
+  obtain ⟨hab, hba⟩ := LoanBroker.coverDeposit_comm_amounts lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs
   have d1 := LoanBroker.coverDeposit_credit_proof lb a r1 h1 hca hx1
   have d2 := LoanBroker.coverDeposit_credit_proof r1.loanBroker' b r2 h2 hcb hx2
   have d3 := LoanBroker.coverDeposit_credit_proof lb b s1 h3 hcb hx3

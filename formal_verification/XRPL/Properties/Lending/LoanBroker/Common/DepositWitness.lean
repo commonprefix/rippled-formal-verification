@@ -277,15 +277,13 @@ def waOrderA : STAmount := STAmount.unchecked .fractional 1000000000000000 (-29)
 /-- The second deposit, `1.3 * 10^-14`. At scale `10^-14` it rounds down to `10^-14`. -/
 def waOrderB : STAmount := STAmount.unchecked .fractional 1300000000000000 (-29) false
 
-/-- Both orders of the two deposits succeed, and they end at a different cover and take different
-totals. -/
+/-- Both orders of the two deposits succeed, and they end at a different cover. -/
 def depositOrderDependent (lb : LoanBroker) (a b : STAmount) : Bool :=
   match lb.coverDeposit a, lb.coverDeposit b with
   | .ok (.ok r1), .ok (.ok s1) =>
     match r1.loanBroker'.coverDeposit b, s1.loanBroker'.coverDeposit a with
     | .ok (.ok r2), .ok (.ok s2) =>
-      decide (r2.loanBroker'.coverAvailable.toRat ≠ s2.loanBroker'.coverAvailable.toRat) &&
-        decide (r1.amount'.toRat + r2.amount'.toRat ≠ s1.amount'.toRat + s2.amount'.toRat)
+      decide (r2.loanBroker'.coverAvailable.toRat ≠ s2.loanBroker'.coverAvailable.toRat)
     | _, _ => false
   | _, _ => false
 
@@ -360,22 +358,20 @@ lemma LoanBroker.coverDeposit_split_witness :
     · exact absurd h (by decide)
   · exact absurd h (by decide)
 
-/-- Two deposits in the two orders can end at a different cover and take different totals from the
-depositor. -/
+/-- Two deposits in the two orders can end at a different cover. -/
 lemma LoanBroker.coverDeposit_comm_witness :
     ∃ (lb : LoanBroker) (a b : STAmount) (r1 r2 s1 s2 : LoanBrokerCoverResult),
       lb.coverDeposit a = .ok (.ok r1) ∧ r1.loanBroker'.coverDeposit b = .ok (.ok r2) ∧
       lb.coverDeposit b = .ok (.ok s1) ∧ s1.loanBroker'.coverDeposit a = .ok (.ok s2) ∧
-      r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable ∧
-      r1.amount'.toRat + r2.amount'.toRat ≠ s1.amount'.toRat + s2.amount'.toRat := by
+      r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable := by
   have h := depositOrderDependent_witness
   unfold depositOrderDependent at h
   split at h
   · rename_i r1 s1 h1 h3
     split at h
     · rename_i r2 s2 h2 h4
-      simp only [Bool.and_eq_true, decide_eq_true_eq] at h
-      exact ⟨_, _, _, r1, r2, s1, s2, h1, h2, h3, h4, h.1, h.2⟩
+      simp only [decide_eq_true_eq] at h
+      exact ⟨_, _, _, r1, r2, s1, s2, h1, h2, h3, h4, h⟩
     · exact absurd h (by decide)
   · exact absurd h (by decide)
 

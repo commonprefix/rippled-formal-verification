@@ -407,24 +407,9 @@ theorem LoanBroker.coverClawback_comm_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverClawback_comm_witness
 
-/-- Deposits are commutative when neither order changes the cover scale: two deposits take the same
-amounts in either order. -/
+/-- Deposits are commutative when neither changes the cover scale and nothing rounds: two deposits
+give the same CoverAvailable in either order. -/
 theorem LoanBroker.coverDeposit_comm (lb : LoanBroker) (a b : STAmount)
-    (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int)
-    -- `a` then `b`
-    (h1 : lb.coverDeposit a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverDeposit b = .ok (.ok r2))
-    -- `b` then `a`
-    (h3 : lb.coverDeposit b = .ok (.ok s1)) (h4 : s1.loanBroker'.coverDeposit a = .ok (.ok s2))
-    -- the cover scale is the same before and after each first deposit
-    (he : numberExponent lb.coverAvailable lb.numericType = .ok e)
-    (hr : numberExponent r1.loanBroker'.coverAvailable lb.numericType = .ok e)
-    (hs : numberExponent s1.loanBroker'.coverAvailable lb.numericType = .ok e) :
-    r1.amount' = s2.amount' ∧ r2.amount' = s1.amount' :=
-  LoanBroker.coverDeposit_comm_proof lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs
-
-/-- Two deposits end at the same `coverAvailable` in either order when neither
-order moves the cover to a new scale and every sum fits a `Number`. -/
-theorem LoanBroker.coverDeposit_comm_cover (lb : LoanBroker) (a b : STAmount)
     (r1 r2 s1 s2 : LoanBrokerCoverResult) (e : Int)
     -- `a` then `b`
     (h1 : lb.coverDeposit a = .ok (.ok r1)) (h2 : r1.loanBroker'.coverDeposit b = .ok (.ok r2))
@@ -444,18 +429,16 @@ theorem LoanBroker.coverDeposit_comm_cover (lb : LoanBroker) (a b : STAmount)
     (hx4 : ∃ w : Number, w.isNormalized ∧
       w.toRat = s1.loanBroker'.toExact.coverAvailable + s2.amount'.toRat) :
     r2.loanBroker'.toExact.coverAvailable = s2.loanBroker'.toExact.coverAvailable :=
-  LoanBroker.coverDeposit_comm_cover_proof lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs hca hcb hx1
-    hx2 hx3 hx4
+  LoanBroker.coverDeposit_comm_proof lb a b r1 r2 s1 s2 e h1 h2 h3 h4 he hr hs hca hcb hx1 hx2 hx3 hx4
 
 /-- Witness: a run where all checks pass in both orders and CoverAvailable is different. Depositing
 `10^-14` and `1.3 * 10^-14` onto `9.99999999999999` ends at `10.00000000000001` in one order and at
-`10.000000000000013` in the other, taking `2 * 10^-14` and `2.3 * 10^-14`. -/
+`10.000000000000013` in the other. -/
 theorem LoanBroker.coverDeposit_comm_attained :
     ∃ (lb : LoanBroker) (a b : STAmount) (r1 r2 s1 s2 : LoanBrokerCoverResult),
       lb.coverDeposit a = .ok (.ok r1) ∧ r1.loanBroker'.coverDeposit b = .ok (.ok r2) ∧
       lb.coverDeposit b = .ok (.ok s1) ∧ s1.loanBroker'.coverDeposit a = .ok (.ok s2) ∧
-      r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable ∧
-      r1.amount'.toRat + r2.amount'.toRat ≠ s1.amount'.toRat + s2.amount'.toRat :=
+      r2.loanBroker'.toExact.coverAvailable ≠ s2.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_comm_witness
 
 end XRPL.Model.Lending
