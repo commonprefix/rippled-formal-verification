@@ -1,0 +1,71 @@
+import XRPL.Model.Protocol.Exponent
+import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.NumericType
+import XRPL.Model.Protocol.Result
+import XRPL.Model.Protocol.STAmount
+import XRPL.Model.Protocol.TER
+import XRPL.Model.Protocol.TenthBips
+import XRPL.Model.Lending.LoanBroker.LoanBroker
+
+namespace XRPL.Model.Lending
+
+open XRPL.Model.Protocol
+open XRPL.Model.Result
+
+def roundToCoverScale (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
+    (mode : rounding_mode) : Except Error STAmount := do
+  let exponent ← numberExponent coverAvailable nt
+  STAmount.roundToExponent amount exponent mode
+
+-- minimum first-loss cover for the debt, rounded up
+def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (poolExponent : Int)
+    : Except Error Number := do
+  let minimumCover ← tenthBipsOfValue debtTotal coverRateMinimum .upward
+  STAmount.roundToNumericType nt minimumCover .upward (some poolExponent)
+
+-- the first-loss cover is at least the minimum the debt requires
+def RawLoanBroker.hasMinimumCover (rb : RawLoanBroker) (poolExponent : Int) : Except Error Bool := do
+  let minimumCover ← minimumBrokerCover rb.numericType rb.debtTotal rb.coverRateMinimum poolExponent
+  return minimumCover.operator_le rb.coverAvailable
+
+-- reject a cover withdraw/clawback that rounds to zero at the cover's own scale
+def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
+    : Except Error TER := do
+  if amount.isZero then
+    return .tecPRECISION_LOSS
+  let rounded ← roundToCoverScale nt coverAvailable amount .to_nearest
+  if rounded.signum == 0 then
+    return .tecPRECISION_LOSS
+  return .tesSUCCESS
+
+-- the cover movement actually applied: sub-scale dust is rejected rather than truncated
+def LoanBroker.roundedCoverAmount (lb : LoanBroker) (amount : STAmount)
+    : Except Error RoundingResult := do
+  let rounded ← roundToCoverScale lb.numericType lb.coverAvailable amount .downward
+  if rounded.signum == 0 then
+    return .rejected .tecPRECISION_LOSS
+  return .rounded rounded
+
+structure LoanBrokerCoverResult where
+  amount' : STAmount
+  loanBroker' : LoanBroker
+
+abbrev LoanBrokerCoverTerResult := Except TER LoanBrokerCoverResult
+
+inductive CoverDirection where
+  | credit
+  | debit
+
+-- settle a rounded cover movement against coverAvailable
+def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirection) (amount : STAmount)
+   : Except Error LoanBrokerCoverResult := do
+  let magnitude ← amount.toNumber .to_nearest
+  let coverAvailable' ← match direction with
+    | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
+    | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
+  let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
+  let loanBroker' ← rawBroker'.to_lawful
+
+  return { amount' := amount, loanBroker' := loanBroker' }
+
+end XRPL.Model.Lending
