@@ -155,16 +155,16 @@ stAmountUnchecked(uint8_t nt, uint64_t mValue, int64_t mOffset, uint8_t mIsNegat
         [&](Issue const& iss) {
             return STAmount{
                 iss,
-                static_cast<STAmount::mantissa_type>(mValue),
-                static_cast<STAmount::exponent_type>(mOffset),
+                static_cast<STAmount::MantissaType>(mValue),
+                static_cast<STAmount::ExponentType>(mOffset),
                 mIsNegative != 0,
                 STAmount::Unchecked{}};
         },
         [&](MPTIssue const& mpt) {
             return STAmount{
                 mpt,
-                static_cast<STAmount::mantissa_type>(mValue),
-                static_cast<STAmount::exponent_type>(mOffset),
+                static_cast<STAmount::MantissaType>(mValue),
+                static_cast<STAmount::ExponentType>(mOffset),
                 mIsNegative != 0,
                 STAmount::Unchecked{}};
         });
