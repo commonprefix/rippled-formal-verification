@@ -459,6 +459,7 @@ def Loan.fullPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amoun
     (now : UInt32) : TerExcept (LoanWithAmounts α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
     throw .tecKILLED
+
   if loan.nextPaymentDueDate == 0 then throw .tecINTERNAL
   if loan.isPaymentLate now then throw .tecEXPIRED
   -- the last instalment must be a regular payment

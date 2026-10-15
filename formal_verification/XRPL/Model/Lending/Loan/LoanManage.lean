@@ -84,7 +84,7 @@ def Loan.manageDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α) : Te
   let scheduledInterest ← loan.interestDue
   let defaultCovered ← defaultCoveredAmount broker pool totalDefaultAmount
 
-  -- the cover arrives as cash, an impaired loan also releases its paper loss
+  -- the cover joins the available assets, an impaired loan also releases its paper loss
   let change : PoolBalanceChange := {
     cash := defaultCovered
     deployed := totalDefaultAmount.operator_neg

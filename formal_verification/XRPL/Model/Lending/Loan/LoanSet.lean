@@ -192,12 +192,12 @@ def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (pr
   if !limitTer.isTesSuccess then throw limitTer
 
   -- the principal is deployed, a pending loan also reserves it, an active loan adds its interest to the yield
-  let cash ← STAmount.roundToNumericType nt principal .to_nearest
+  let principal' ← STAmount.roundToNumericType nt principal .to_nearest
   let change : PoolBalanceChange := {
-    cash := cash.operator_neg
+    cash := principal'.operator_neg
     deployed := principal
     yield := if pending then Number.zero else loanState.interestDue
-    reserved := if pending then cash else Number.zero }
+    reserved := if pending then principal' else Number.zero }
   let pool' ← AssetPool.adjustBalances pool change
 
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
