@@ -9,6 +9,12 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
+structure LoanBrokerSetCreate where
+  debtMaximum : Option Number
+  managementFeeRate : Option TenthBips16
+  coverRateMinimum : Option TenthBips32
+  coverRateLiquidation : Option TenthBips32
+
 def LoanBroker.canCreate {α : Type} [AssetPool α] (pool : α) (debtMaximum : Option Number)
     (numericType : NumericType) : Except Error TER := do
   -- only a closed-ended pool can create a loan broker
@@ -34,12 +40,6 @@ def LoanBroker.canUpdate {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α
     return .tecPRECISION_LOSS
 
   return .tesSUCCESS
-
-structure LoanBrokerSetCreate where
-  debtMaximum : Option Number
-  managementFeeRate : Option TenthBips16
-  coverRateMinimum : Option TenthBips32
-  coverRateLiquidation : Option TenthBips32
 
 -- LoanBrokerSet -> doApply
 def LoanBroker.createRaw (tx : LoanBrokerSetCreate) (numericType : NumericType) : RawLoanBroker :=

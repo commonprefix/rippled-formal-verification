@@ -12,6 +12,14 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
+structure LoanBrokerCoverResult where
+  amount' : STAmount
+  loanBroker' : LoanBroker
+
+inductive CoverDirection where
+  | credit
+  | debit
+
 -- minimum first-loss cover for the debt, rounded up
 def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (poolExponent : Int)
     : Except Error Number := do
@@ -50,14 +58,6 @@ def LoanBroker.roundedCoverAmount {α : Type} [AssetPool α] (lb : LoanBroker) (
     throw .tecPRECISION_LOSS
 
   return rounded
-
-structure LoanBrokerCoverResult where
-  amount' : STAmount
-  loanBroker' : LoanBroker
-
-inductive CoverDirection where
-  | credit
-  | debit
 
 -- settle a rounded cover movement against coverAvailable
 def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirection) (amount : STAmount)

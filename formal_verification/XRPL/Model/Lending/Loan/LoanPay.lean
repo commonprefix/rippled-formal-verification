@@ -5,12 +5,12 @@ import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TenthBips
 import XRPL.Model.Lending.Amortization
 import XRPL.Model.Lending.AssetPool
-import XRPL.Model.Lending.CashBasis
 import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan.Loan
 import XRPL.Model.Lending.Loan.LoanManage
 import XRPL.Model.Lending.Loan.LoanSet
 import XRPL.Model.Lending.Loan.LoanState
+import XRPL.Model.Lending.LoanBroker.BrokerCover
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
@@ -35,6 +35,7 @@ structure UnsettledPayment (α : Type) where
   amounts : PaymentAmounts
   totalPaid : Number
   count : Nat
+  scheduledInterest : Number
 
 -- Round the interest, then split it into the net interest and the management fee on it.
 private def roundAndSplitInterest (interest : Number) (mgmtRate : TenthBips16) (mode : rounding_mode)
@@ -238,20 +239,21 @@ private def Loan.tryOverpayment (loan : Loan) (opc : PaymentComponents)
     periodicPayment := reamortizedProps.periodicPayment
   }
 
--- Re-check the pool after a payment, matching the doApply checks once amounts are rounded
+-- Re-check the pool after a payment. A final payment whose credit rounds to zero still succeeds.
 private def validatePostPayment {α : Type} [AssetPool α] (pool : α) (result : LoanWithAmounts α)
-    (assetsTotalDelta : Number) : LoanWithAmountsTerResult α :=
+    : TerExcept (LoanWithAmounts α) := do
   let poolAmounts := AssetPool.amounts pool
   let poolAmounts' := AssetPool.amounts result.pool'
+  let assetsTotal' ← AssetPool.assetsTotal result.pool'
   let assetsAvailableChanged := poolAmounts'.assetsAvailable.operator_ne poolAmounts.assetsAvailable
-  let assetsTotalChanged := poolAmounts'.assetsTotal.operator_ne poolAmounts.assetsTotal
-  let expectedChange := assetsTotalDelta.operator_ne Number.zero
 
-  if !assetsAvailableChanged then .error .tecPRECISION_LOSS
-  else if expectedChange && !assetsTotalChanged then .error .tecPRECISION_LOSS
-  else if !expectedChange && assetsTotalChanged then .error .tecINTERNAL
-  else if poolAmounts'.assetsAvailable.operator_gt poolAmounts'.assetsTotal then .error .tecINTERNAL
-  else .ok result
+  if !assetsAvailableChanged && result.loan'.paymentRemaining != 0 then
+    throw .tecPRECISION_LOSS
+
+  if poolAmounts'.assetsAvailable.operator_gt assetsTotal' then
+    throw .tecINTERNAL
+
+  return result
 
 -- Advance the loan by one instalment.
 private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error Loan := do
@@ -277,26 +279,57 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
 
 -- Settle the summed amounts against the broker and its pool, then re-check the pool
 private def Loan.settlePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amounts : PaymentAmounts)
-    : Except Error (LoanWithAmountsTerResult α) := do
-  let (⟨broker', pool'⟩, amountToPool) ← CashBasis.applyPayment loan.broker pool amounts
+    (scheduledInterest : Number) : TerExcept (LoanWithAmounts α) := do
+  let broker := loan.broker
+  let nt := broker.numericType
+  let poolAmounts := AssetPool.amounts pool
+  let baseExponent := AssetPool.baseExponent pool
+  -- if cover already meets its minimum, pay the owner, else add the fee to cover
+  let sendFeeToOwner ← broker.hasMinimumCover baseExponent
+
+  let scheduledInterest' ← loan.interestDue
+  let scheduledInterestDelta ← scheduledInterest'.operator_sub scheduledInterest .to_nearest
+
+  let totalPaid ← amounts.principalPaid.operator_add amounts.interestPaid .to_nearest
+  let totalPaidAmount ← sumRoundAndSubtract poolAmounts.assetsAvailable totalPaid baseExponent nt .downward
+  let totalPaid' ← totalPaidAmount.toNumber .to_nearest
+
+  let mut feeToBroker := amounts.feePaid
+  let mut coverAvailable' := broker.coverAvailable
+  if !sendFeeToOwner then
+    let feeToCover ← sumRoundAndSubtract broker.coverAvailable amounts.feePaid baseExponent nt .downward
+    feeToBroker ← feeToCover.toNumber .to_nearest
+    coverAvailable' ← broker.coverAvailable.operator_add feeToBroker .to_nearest
+
+  let debtTotal' ← broker.debtTotal.operator_sub amounts.principalPaid .to_nearest
+  let change : PoolBalanceChange := {
+    cash := totalPaid'
+    deployed := amounts.principalPaid.operator_neg
+    yield := scheduledInterestDelta }
+  let pool' ← AssetPool.adjustBalances pool change
+
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
+    debtTotal := debtTotal', coverAvailable := coverAvailable' }
+  let broker' ← rawBroker'.to_lawful
 
   let rawLoan' : RawLoan := { loan.toRawLoan with broker := broker' }
   let loan' ← rawLoan'.to_lawful
   let result : LoanWithAmounts α := {
     loan' := loan', pool' := pool',
-    amountToPool := amountToPool, amountToBroker := amounts.feePaid }
+    amountToPool := totalPaid', amountToBroker := feeToBroker }
 
-  return validatePostPayment pool result amounts.interestPaid
+  validatePostPayment pool result
 
 -- Settle one instalment if the amount covers it, then re-check the pool
 private def Loan.paySingleInstalment {α : Type} [AssetPool α] (loan : Loan) (pool : α)
-    (pc : PaymentComponents) (amount : Number) : Except Error (LoanWithAmountsTerResult α) := do
+    (pc : PaymentComponents) (amount : Number) : TerExcept (LoanWithAmounts α) := do
   if amount.operator_lt (← pc.totalDue) then
-    return .error .tecINSUFFICIENT_PAYMENT
+    throw .tecINSUFFICIENT_PAYMENT
 
+  let scheduledInterest ← loan.interestDue
   let amounts ← pc.paidAmounts
   let loan ← loan.doPayment pc
-  loan.settlePayment pool amounts
+  loan.settlePayment pool amounts scheduledInterest
 
 -- Pay scheduled instalments one at a time while the amount covers the next due and the loan is unpaid, up to 100.
 private def UnsettledPayment.payInstalments {α : Type} (payment : UnsettledPayment α) (instalmentsLeft : Nat)
@@ -327,28 +360,27 @@ private def UnsettledPayment.payInstalments {α : Type} (payment : UnsettledPaym
     else payment'.payInstalments remaining amount
 
 -- Reverse any impairment before paying
-private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α)
-    : Except Error (LoanWithPoolTerResult α) :=
-  if loan.isImpaired then loan.manageUnimpair pool else pure (.ok { loan' := loan, pool' := pool })
+private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) :=
+  if loan.isImpaired then loan.manageUnimpair pool else pure { loan' := loan, pool' := pool }
 
 private def Loan.payScheduledInstalments {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
-    (now : UInt32) : Except Error (Except TER (UnsettledPayment α)) := do
+    (now : UInt32) : TerExcept (UnsettledPayment α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
-    return .error .tecKILLED
-  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
-  if loan.isPaymentLate now then return .error .tecEXPIRED
+    throw .tecKILLED
+  if loan.nextPaymentDueDate == 0 then throw .tecINTERNAL
+  if loan.isPaymentLate now then throw .tecEXPIRED
 
-  match ← loan.unimpairIfImpaired pool with
-  | .error ter => return .error ter
-  | .ok ⟨loan, pool⟩ =>
-    let emptyPayment : UnsettledPayment α := {
-      loan := loan, pool := pool,
-      amounts := PaymentAmounts.zero, totalPaid := Number.zero, count := 0 }
-    let payment ← emptyPayment.payInstalments maxPaymentsPerTransaction amount
-    if payment.count == 0 then
-      return .error .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
+  let ⟨loan, pool⟩ ← loan.unimpairIfImpaired pool
+  let scheduledInterest ← loan.interestDue
+  let emptyPayment : UnsettledPayment α := {
+    loan := loan, pool := pool,
+    amounts := PaymentAmounts.zero, totalPaid := Number.zero, count := 0,
+    scheduledInterest := scheduledInterest }
+  let payment ← emptyPayment.payInstalments maxPaymentsPerTransaction amount
+  if payment.count == 0 then
+    throw .tecINSUFFICIENT_PAYMENT   -- amount covered no instalments
 
-    return .ok payment
+  return payment
 
 -- Add the overpayment tail to an unsettled payment.
 private def UnsettledPayment.applyOverpayment {α : Type} (payment : UnsettledPayment α) (amount : Number)
@@ -399,48 +431,41 @@ def Loan.canPay (loan : Loan) (paymentType : LoanPaymentType) : TER :=
 
 -- Pay one or more scheduled instalments.
 def Loan.regularPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
-    (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
-  match ← loan.payScheduledInstalments pool amount now with
-  | .error ter => return .error ter
-  | .ok payment => payment.loan.settlePayment payment.pool payment.amounts
+    (now : UInt32) : TerExcept (LoanWithAmounts α) := do
+  let payment ← loan.payScheduledInstalments pool amount now
+  payment.loan.settlePayment payment.pool payment.amounts payment.scheduledInterest
 
 -- Pay scheduled instalments, then an overpayment tail that pays down extra principal.
 def Loan.overpayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
-    (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
-  match ← loan.payScheduledInstalments pool amount now with
-  | .error ter => return .error ter
-  | .ok payment =>
-    let payment ← payment.applyOverpayment amount
-    payment.loan.settlePayment payment.pool payment.amounts
+    (now : UInt32) : TerExcept (LoanWithAmounts α) := do
+  let payment ← loan.payScheduledInstalments pool amount now
+  let payment ← payment.applyOverpayment amount
+  payment.loan.settlePayment payment.pool payment.amounts payment.scheduledInterest
 
 -- Pay a late instalment: the scheduled amount plus penalty interest for the overdue seconds and the fixed late fee.
 def Loan.latePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
-    (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
+    (now : UInt32) : TerExcept (LoanWithAmounts α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
-    return .error .tecKILLED
-  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
-  if !(loan.isPaymentLate now) then return .error .tecTOO_SOON
+    throw .tecKILLED
+  if loan.nextPaymentDueDate == 0 then throw .tecINTERNAL
+  if !(loan.isPaymentLate now) then throw .tecTOO_SOON
 
-  match ← loan.unimpairIfImpaired pool with
-  | .error ter => return .error ter
-  | .ok ⟨loan, pool⟩ =>
-    let pc ← loan.lateComponents now
-    loan.paySingleInstalment pool pc amount
+  let ⟨loan, pool⟩ ← loan.unimpairIfImpaired pool
+  let pc ← loan.lateComponents now
+  loan.paySingleInstalment pool pc amount
 
 -- Pay off the loan early: clear the whole outstanding value plus early-payoff interest and the close fee
 def Loan.fullPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
-    (now : UInt32) : Except Error (LoanWithAmountsTerResult α) := do
+    (now : UInt32) : TerExcept (LoanWithAmounts α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then
-    return .error .tecKILLED
-  if loan.nextPaymentDueDate == 0 then return .error .tecINTERNAL
-  if loan.isPaymentLate now then return .error .tecEXPIRED
+    throw .tecKILLED
+  if loan.nextPaymentDueDate == 0 then throw .tecINTERNAL
+  if loan.isPaymentLate now then throw .tecEXPIRED
   -- the last instalment must be a regular payment
-  if loan.paymentRemaining ≤ 1 then return .error .tecKILLED
+  if loan.paymentRemaining ≤ 1 then throw .tecKILLED
 
-  match ← loan.unimpairIfImpaired pool with
-  | .error ter => return .error ter
-  | .ok ⟨loan, pool⟩ =>
-    let pc ← loan.fullComponents now
-    loan.paySingleInstalment pool pc amount
+  let ⟨loan, pool⟩ ← loan.unimpairIfImpaired pool
+  let pc ← loan.fullComponents now
+  loan.paySingleInstalment pool pc amount
 
 end XRPL.Model.Lending

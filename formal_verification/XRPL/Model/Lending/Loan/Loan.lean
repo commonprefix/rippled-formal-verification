@@ -24,8 +24,8 @@ def maxPaymentsPerTransaction : Nat := 100
 -- UInt32 max (2³² − 1)
 def maxTime : UInt32 := 4_294_967_295
 
-def hasExpired (ledgerCloseTime expTime : UInt32) (exclusive : Bool := false) : Bool :=
-  if exclusive then ledgerCloseTime > expTime else ledgerCloseTime ≥ expTime
+-- The last payment is due at least this long before the RedemptionDate
+def loanRedemptionBuffer : Nat := 60  -- seconds
 
 -- 1/10 bips: 0.1 bp = 0.001% = 0.00001
 structure LoanRates where
@@ -42,34 +42,11 @@ structure LoanFees where
   latePaymentFee : Number
   closePaymentFee : Number
 
--- fee amounts (C++ getValueFields, with principalRequested prepended)
-def LoanFees.amountFields (fees : LoanFees) : List Number :=
-  [fees.originationFee, fees.serviceFee, fees.latePaymentFee, fees.closePaymentFee]
-
 structure LoanSchedule where
   paymentInterval : UInt32
   paymentTotal : UInt32
   gracePeriod : UInt32
   startDate : UInt32
-
--- build the schedule, filling defaults
-def LoanSchedule.build (paymentInterval paymentTotal gracePeriod : Option UInt32)
-    (startDate ledgerCloseTime : UInt32) (twoStep : Bool) : LoanSchedule :=
-  { paymentInterval := paymentInterval.getD defaultPaymentInterval
-    paymentTotal := paymentTotal.getD defaultPaymentTotal
-    gracePeriod := gracePeriod.getD defaultGracePeriod
-    -- C++ getStartDate: two-step keeps the provided StartDate, one-step uses ledgerCloseTime
-    startDate := if twoStep then startDate else ledgerCloseTime }
-
-def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
-  let timeAvailable := maxTime - schedule.startDate
-  if schedule.gracePeriod > timeAvailable
-      || schedule.paymentInterval > timeAvailable
-      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds?
-      || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
-    .tecKILLED
-  else
-    .tesSUCCESS
 
 structure RawLoan where
   broker : LoanBroker
@@ -91,6 +68,29 @@ structure RawLoan where
   isImpaired : Bool
   isDefault : Bool
   allowsOverpayment : Bool
+
+-- fee amounts (C++ getValueFields, with principalRequested prepended)
+def LoanFees.amountFields (fees : LoanFees) : List Number :=
+  [fees.originationFee, fees.serviceFee, fees.latePaymentFee, fees.closePaymentFee]
+
+-- build the schedule, filling defaults
+def LoanSchedule.build (paymentInterval paymentTotal gracePeriod : Option UInt32)
+    (startDate ledgerCloseTime : UInt32) (twoStep : Bool) : LoanSchedule :=
+  { paymentInterval := paymentInterval.getD defaultPaymentInterval
+    paymentTotal := paymentTotal.getD defaultPaymentTotal
+    gracePeriod := gracePeriod.getD defaultGracePeriod
+    -- C++ getStartDate: two-step keeps the provided StartDate, one-step uses ledgerCloseTime
+    startDate := if twoStep then startDate else ledgerCloseTime }
+
+def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
+  let timeAvailable := maxTime - schedule.startDate
+  if schedule.gracePeriod > timeAvailable
+      || schedule.paymentInterval > timeAvailable
+      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds?
+      || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
+    .tecKILLED
+  else
+    .tesSUCCESS
 
 def RawLoan.interestDue (rl : RawLoan) : Except Error Number := do
   let totalValueOutstanding' ← rl.totalValueOutstanding.operator_sub rl.principalOutstanding .to_nearest
@@ -218,9 +218,6 @@ structure LoanWithPool (α : Type) where
 structure LoanWithAmounts (α : Type) extends LoanWithPool α where
   amountToPool : Number
   amountToBroker : Number
-
-abbrev LoanWithPoolTerResult (α : Type) := Except TER (LoanWithPool α)
-abbrev LoanWithAmountsTerResult (α : Type) := Except TER (LoanWithAmounts α)
 
 def Loan.periodicRate (loan : Loan) : Except Error Number :=
   loanPeriodicRate loan.rates.interestRate loan.schedule.paymentInterval

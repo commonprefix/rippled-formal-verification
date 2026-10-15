@@ -10,6 +10,15 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
+-- withdrawal amount, either as vault assets or as vault shares
+inductive WithdrawAmount where
+  | vaultAssets (amount : STAmount)
+  | vaultShares (amount : STAmount)
+
+def WithdrawAmount.amount : WithdrawAmount → STAmount
+  | .vaultAssets a => a
+  | .vaultShares s => s
+
 def Vault.assetsTotalForWithdrawal (v : Vault) (waiveUnrealizedLoss : Bool) : Except Error Number := do
   let assetsTotal ← v.assetsTotal
 
@@ -48,15 +57,6 @@ def assetsToSharesWithdraw (v : Vault) (assets : STAmount) (truncateShares waive
   | false => pure sharesNumber
 
   STAmount.ofNumber .int64 sharesNumber .to_nearest
-
--- withdrawal amount, either as vault assets or as vault shares
-inductive WithdrawAmount where
-  | vaultAssets (amount : STAmount)
-  | vaultShares (amount : STAmount)
-
-def WithdrawAmount.amount : WithdrawAmount → STAmount
-  | .vaultAssets a => a
-  | .vaultShares s => s
 
 def computeWithdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) : TerExcept VaultAmounts := do
   try

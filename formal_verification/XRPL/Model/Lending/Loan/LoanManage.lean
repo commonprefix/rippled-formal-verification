@@ -1,4 +1,3 @@
-import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.NumericType
 import XRPL.Model.Protocol.Rounding
@@ -18,28 +17,25 @@ inductive LoanManageAction where
   deriving DecidableEq, Repr
 
 -- Amount of the default the broker's first-loss cover absorbs
-private def defaultCoveredAmount (broker : LoanBroker) (totalDefaultAmount : Number) (scale : Int)
-    : Except Error Number := do
+private def defaultCoveredAmount {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α)
+    (totalDefaultAmount : Number) : Except Error Number := do
   let minimumCover ← tenthBipsOfValue broker.debtTotal broker.coverRateMinimum .upward
   let liquidationAmount ← tenthBipsOfValue minimumCover broker.coverRateLiquidation .upward
-
   let coveredAmount := Number.min liquidationAmount totalDefaultAmount
-  let coveredAmount' ← STAmount.roundToNumericType broker.numericType coveredAmount .upward (some scale)
+  let cappedAmount := Number.min coveredAmount broker.coverAvailable
 
-  return Number.min coveredAmount' broker.coverAvailable
+  let nt := broker.numericType
+  let coveredAmount' ← STAmount.roundToNumericType nt cappedAmount .towards_zero
 
--- If AA exceeds AT by only a dust amount (more than 13 exponents smaller), raise AT to AA.
-private def dustAdjustedAssetsTotal (assetsAvailable assetsTotal : Number) (nt : NumericType)
-    : Except Error Number := do
-  if nt.isIntegral || assetsAvailable.operator_le assetsTotal then
-    return assetsTotal
-  let assetsDiff ← assetsAvailable.operator_sub assetsTotal .to_nearest
-  let isDust := assetsAvailable.exponent_ - assetsDiff.exponent_ > 13
-  return (if isDust then assetsAvailable else assetsTotal)
+  let poolAmounts := AssetPool.amounts pool
+  let baseExponent := AssetPool.baseExponent pool
+  let defaultCovered ← sumRoundAndSubtract poolAmounts.assetsAvailable coveredAmount' baseExponent nt .downward
+  defaultCovered.toNumber .to_nearest
 
 -- LoanManage -> preclaim
 def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : TER :=
   let gracePeriodEnd := loan.nextPaymentDueDate + loan.schedule.gracePeriod
+  let hasExpired : Bool := now > gracePeriodEnd
 
   if loan.isPending then
     .tecNO_PERMISSION
@@ -51,94 +47,53 @@ def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : TE
     .tecNO_PERMISSION
   else if loan.paymentRemaining == 0 then
     .tecNO_PERMISSION
-  else if action == .default && !hasExpired now gracePeriodEnd (exclusive := true) then
+  else if action == .default && !hasExpired then
     .tecTOO_SOON
   else
     .tesSUCCESS
 
+-- Record the loan's principal as a paper loss when impairing, reverse it when not.
+private def Loan.changeImpairment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (impaired : Bool)
+    : TerExcept (LoanWithPool α) := do
+  let principal := loan.principalOutstanding
+  let loss := if impaired then principal else principal.operator_neg
+  let pool' ← AssetPool.adjustBalances pool { loss := loss }
+
+  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := impaired }
+  let loan' ← rawLoan'.to_lawful
+
+  return { loan' := loan', pool' := pool' }
+
 -- Record the loan's exposure as a paper loss.
 def Loan.manageImpair {α : Type} [AssetPool α] (loan : Loan) (pool : α) (now : UInt32)
-    : Except Error (LoanWithPoolTerResult α) := do
+    : TerExcept (LoanWithPool α) := do
   -- a loan that is not late yet can not be impaired
   if !(loan.isPaymentLate now) then
-    return .error .tecTOO_SOON
+    throw .tecTOO_SOON
 
-  let nt := loan.broker.numericType
-  let poolAmounts := AssetPool.amounts pool
-  let vaultScale ← AssetPool.exponent pool nt
-  let lossUnrealized' ← sumRoundAndClamp poolAmounts.lossUnrealized loan.principalOutstanding vaultScale nt
-
-  let assetsDiff ← poolAmounts.assetsTotal.operator_sub poolAmounts.assetsAvailable .to_nearest
-  if lossUnrealized'.operator_gt assetsDiff then
-    return .error .tecLIMIT_EXCEEDED
-
-  let pool' ← AssetPool.updateAmounts pool { poolAmounts with lossUnrealized := lossUnrealized' }
-
-  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := true }
-  let loan' ← rawLoan'.to_lawful
-  return .ok { loan' := loan', pool' := pool' }
+  loan.changeImpairment pool (impaired := true)
 
 -- Reverse the paper loss an impairment recorded
-def Loan.manageUnimpair {α : Type} [AssetPool α] (loan : Loan) (pool : α)
-    : Except Error (LoanWithPoolTerResult α) := do
-  let nt := loan.broker.numericType
-  let poolAmounts := AssetPool.amounts pool
-  let vaultScale ← AssetPool.exponent pool nt
-  if poolAmounts.lossUnrealized.operator_lt loan.principalOutstanding then
-    return .error .tefBAD_LEDGER
-
-  let loanPrincipalNeg := loan.principalOutstanding.operator_neg
-  let lossUnrealized' ← sumRoundAndClamp poolAmounts.lossUnrealized loanPrincipalNeg vaultScale nt
-
-  let pool' ← AssetPool.updateAmounts pool { poolAmounts with lossUnrealized := lossUnrealized' }
-
-  let rawLoan' : RawLoan := { loan.toRawLoan with isImpaired := false }
-  let loan' ← rawLoan'.to_lawful
-
-  return .ok { loan' := loan', pool' := pool' }
+def Loan.manageUnimpair {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) :=
+  loan.changeImpairment pool (impaired := false)
 
 -- Default a loan: first-loss cover absorbs part of the loss, the rest reduces the vault's AssetsTotal.
-def Loan.manageDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α)
-    : Except Error (LoanWithAmountsTerResult α) := do
+def Loan.manageDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithAmounts α) := do
   let broker := loan.broker
-  let nt := broker.numericType
-  let poolAmounts := AssetPool.amounts pool
   let totalDefaultAmount := loan.principalOutstanding
-  let defaultCovered ← defaultCoveredAmount broker totalDefaultAmount loan.loanScale
+  let scheduledInterest ← loan.interestDue
+  let defaultCovered ← defaultCoveredAmount broker pool totalDefaultAmount
 
-  -- the vault absorbs the remaining default amount by reducing AssetsTotal
-  let vaultDefaultAmount ← totalDefaultAmount.operator_sub defaultCovered .to_nearest
-  let vaultScale ← AssetPool.exponent pool nt
-  if poolAmounts.assetsTotal.operator_lt vaultDefaultAmount then
-    return .error .tefBAD_LEDGER
+  -- the cover arrives as cash, an impaired loan also releases its paper loss
+  let change : PoolBalanceChange := {
+    cash := defaultCovered
+    deployed := totalDefaultAmount.operator_neg
+    yield := scheduledInterest.operator_neg
+    loss := if loan.isImpaired then totalDefaultAmount.operator_neg else Number.zero }
+  let pool' ← AssetPool.adjustBalances pool change
 
-  let vaultDefaultAmount' ← STAmount.roundToNumericType nt vaultDefaultAmount .downward (some vaultScale)
-  let assetsTotal ← poolAmounts.assetsTotal.operator_sub vaultDefaultAmount' .to_nearest
-  let assetsAvailable' ← poolAmounts.assetsAvailable.operator_add defaultCovered .to_nearest
-
-  let assetsTotal' ← dustAdjustedAssetsTotal assetsAvailable' assetsTotal nt
-  if assetsAvailable'.operator_gt assetsTotal' then
-    return .error .tecINTERNAL
-
-  -- realize the loss only when the loan was already impaired
-  if loan.isImpaired && poolAmounts.lossUnrealized.operator_lt totalDefaultAmount then
-    return .error .tefBAD_LEDGER
-  let lossUnrealized' ←
-    if loan.isImpaired then
-      sumRoundAndClamp poolAmounts.lossUnrealized totalDefaultAmount.operator_neg vaultScale nt
-    else
-      pure poolAmounts.lossUnrealized
-
-  let debtTotal' ← sumRoundAndClamp broker.debtTotal totalDefaultAmount.operator_neg vaultScale nt
-  if broker.coverAvailable.operator_lt defaultCovered then
-    return .error .tefBAD_LEDGER
+  let debtTotal' ← broker.debtTotal.operator_sub totalDefaultAmount .to_nearest
   let coverAvailable' ← broker.coverAvailable.operator_sub defaultCovered .to_nearest
-
-  let pool' ← AssetPool.updateAmounts pool { poolAmounts with
-    assetsTotal := assetsTotal'
-    assetsAvailable := assetsAvailable'
-    lossUnrealized := lossUnrealized' }
-
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
     debtTotal := debtTotal', coverAvailable := coverAvailable' }
   let broker' ← rawBroker'.to_lawful
@@ -153,6 +108,6 @@ def Loan.manageDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α)
     nextPaymentDueDate := 0 }
   let loan' ← rawLoan'.to_lawful
 
-  return .ok { loan' := loan', pool' := pool', amountToPool := defaultCovered, amountToBroker := Number.zero }
+  return { loan' := loan', pool' := pool', amountToPool := defaultCovered, amountToBroker := Number.zero }
 
 end XRPL.Model.Lending
