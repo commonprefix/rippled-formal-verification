@@ -3,90 +3,68 @@ import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Vault.Vault
+import XRPL.Model.Vault.VaultBalances
 import XRPL.Model.Vault.VaultWithdraw
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-structure ComputeClawbackResult where
-  error : Option TER
-  assetsRecovered : STAmount
-  sharesDestroyed : STAmount
-
-structure ClawbackResult where
-  error : Option TER
-  vault' : Vault
-  assetsRecovered : STAmount
-  sharesDestroyed : STAmount
-
--- A rejection changes nothing and reports nothing: the vault is returned
--- unchanged and both amount fields are zero.
-def ClawbackResult.rejected (v : Vault) (ter : TER) : ClawbackResult :=
-  ⟨some ter, v, STAmount.zero v.numericType, STAmount.zero .int64⟩
-
-def assetsToSharesClawback (v : Vault) (assets holderShares : STAmount) : Except Error STAmount := do
+def assetsToSharesClawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
+    : Except Error STAmount := do
   if assets.isZero then
-    -- zero means destroy "all" holder shares
+    if waiveUnrealizedLoss then
+      return ← STAmount.ofNumber .int64 v.sharesTotal .to_nearest
     return holderShares
-  assetsToSharesWithdraw v assets true false
+  assetsToSharesWithdraw v assets true waiveUnrealizedLoss
 
-def computeClawback (v : Vault) (assets holderShares : STAmount) : Except Error ComputeClawbackResult := do
-  let result : ComputeClawbackResult := ⟨none, STAmount.zero v.numericType, STAmount.zero .int64⟩
+def computeClawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
+    : TerExcept VaultAmounts := do
   try
-    let mut sharesDestroyed ← assetsToSharesClawback v assets holderShares
-    let mut assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
+    let mut sharesDestroyed ← assetsToSharesClawback v assets holderShares waiveUnrealizedLoss
+    let mut assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss
 
     let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
     if assetsRecoveredNumber.operator_gt v.assetsAvailable then
       assetsRecovered ← STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest
-      sharesDestroyed ← assetsToSharesWithdraw v assetsRecovered true false
-      assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed false
+      sharesDestroyed ← assetsToSharesWithdraw v assetsRecovered true waiveUnrealizedLoss
+      assetsRecovered ← v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss
 
       let assetsRecoveredNumber ← assetsRecovered.toNumber .to_nearest
       if assetsRecoveredNumber.operator_gt v.assetsAvailable then
-        return {result with error := some .tecINTERNAL}
+        throw .tecINTERNAL
 
-    assetsRecovered ← clampToSumExponent v.assetsTotal assetsRecovered.operator_neg
-    if ← assetsRecovered.isFractionalNonPositive then
-      return {result with error := some .tecPRECISION_LOSS}
-    return {result with assetsRecovered := assetsRecovered, sharesDestroyed := sharesDestroyed}
-  catch e =>
+    let sharesTotal ← STAmount.ofNumber .int64 v.sharesTotal .to_nearest
+    if sharesDestroyed.operator_eq sharesTotal && v.assetsDeployed.operator_ne Number.zero then
+      throw .tecHAS_OBLIGATIONS
+
+    if !assetsRecovered.isZero then
+      assetsRecovered ← clampToSumExponent v.assetsAvailable assetsRecovered.operator_neg v.baseExponent
+      if ← assetsRecovered.isFractionalNonPositive then
+        throw .tecPRECISION_LOSS
+    return { assets := assetsRecovered, shares := sharesDestroyed }
+  catch e : Error =>
     if isOverflow e then
-      return ⟨.some .tecPATH_DRY, STAmount.zero v.numericType, STAmount.zero .int64⟩
+      throw .tecPATH_DRY
     else
-      throw e
+      throwThe Error e
 
 
 -- `hnn`: the preflight check `sfAmount >= 0` passed (zero means all); callers outside the model check it
-def Vault.clawback (v : Vault) (assets holderShares : STAmount)
-    (_hnn : 0 ≤ assets.toRat) : Except Error ClawbackResult := do
-  let vault := v.toRawVault
-  let result ← computeClawback v assets holderShares
-  if result.error.isSome then
-    return ⟨result.error, v, STAmount.zero v.numericType, STAmount.zero .int64⟩
+def Vault.clawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
+    (_hnn : 0 ≤ assets.toRat) : TerExcept VaultWithAmounts := do
+  let amounts ← computeClawback v assets holderShares waiveUnrealizedLoss
 
-  if result.sharesDestroyed.isZero then
-    return .rejected v .tecPRECISION_LOSS
+  if amounts.shares.isZero then
+    throw .tecPRECISION_LOSS
 
-  let sharesDestroyedNumber ← result.sharesDestroyed.toNumber .to_nearest
-  let assetsRecoveredNumber ← result.assetsRecovered.toNumber .to_nearest
-  let assetsTotal' ← vault.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest
+  let assetsNumber ← amounts.assets.toNumber .to_nearest
+  let dustCheck ← v.checkDebitNotDust assetsNumber
+  if dustCheck != .tesSUCCESS then
+    throw dustCheck
 
-  let assetsTotalRounded ← STAmount.ofNumber vault.numericType vault.assetsTotal .to_nearest
-  let assetsTotalRounded' ← STAmount.ofNumber vault.numericType assetsTotal' .to_nearest
-  if assetsRecoveredNumber.mantissa_ != 0 && assetsTotalRounded.operator_eq assetsTotalRounded' then
-    return .rejected v .tecPRECISION_LOSS
-
-  let vault' := {
-    vault with
-      sharesTotal := ← vault.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest
-      assetsAvailable := ← vault.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest
-      assetsTotal := assetsTotal'
-  }
-  -- re-validate the new state into a Vault. Clawback-all on a fractional vault can leave dust
-  -- (sharesTotal=0, assetsTotal>0), which fails empty_shares, so this can error.
-  let v' ← vault'.to_lawful
-  return ⟨none, v', result.assetsRecovered, result.sharesDestroyed⟩
+  let rawVault' ← v.adjustAssetsAndShares amounts.assets.operator_neg amounts.shares.operator_neg
+  let v' ← rawVault'.to_lawful
+  return { amounts with vault' := v' }
 
 end XRPL.Model.SingleAssetVault
