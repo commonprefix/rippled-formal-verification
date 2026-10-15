@@ -42,7 +42,6 @@ def Vault.sharesToAssetsWithdraw (v : Vault) (shares : STAmount) (waiveUnrealize
   let assets ← STAmount.ofNumber v.numericType assetsNumber .to_nearest
   return assets
 
-
 def assetsToSharesWithdraw (v : Vault) (assets : STAmount) (truncateShares waiveUnrealizedLoss : Bool) : Except Error STAmount := do
   let netAssetValue ← v.assetsTotalForWithdrawal waiveUnrealizedLoss
 
@@ -136,6 +135,5 @@ def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : 
   let v' ← rawVault'.to_lawful
 
   return { vault' := v', assets := assets', shares := amounts.shares }
-
 
 end XRPL.Model.SingleAssetVault
