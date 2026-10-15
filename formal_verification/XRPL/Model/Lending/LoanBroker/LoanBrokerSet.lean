@@ -1,24 +1,38 @@
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-def LoanBroker.canCreate (debtMaximum : Option Number) (numericType : NumericType) : Except Error TER := do
+def LoanBroker.canCreate {α : Type} [AssetPool α] (pool : α) (debtMaximum : Option Number)
+    (numericType : NumericType) : Except Error TER := do
+  -- only a closed-ended pool can create a loan broker
+  let redemptionDate := AssetPool.redemptionDate pool
+  if redemptionDate.isNone then
+    return .tecNO_PERMISSION
+
   let some dm := debtMaximum | return .tesSUCCESS
-  if !(← STAmount.equalAfterNumberConvert numericType dm) then
+  let baseExponent := AssetPool.baseExponent pool
+  if !(← dm.isOnExponentGrid baseExponent numericType) then
     return .tecPRECISION_LOSS
+
   return .tesSUCCESS
 
-def LoanBroker.canUpdate (lb : LoanBroker) (debtMaximum : Option Number) : Except Error TER := do
+def LoanBroker.canUpdate {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α) (debtMaximum : Option Number)
+    : Except Error TER := do
   let some dm := debtMaximum | return .tesSUCCESS
   if dm.signum != 0 && dm.operator_lt lb.debtTotal then
     return .tecLIMIT_EXCEEDED
-  if !(← STAmount.equalAfterNumberConvert lb.numericType dm) then
+
+  let baseExponent := AssetPool.baseExponent pool
+  if !(← dm.isOnExponentGrid baseExponent lb.numericType) then
     return .tecPRECISION_LOSS
+
   return .tesSUCCESS
 
 structure LoanBrokerSetCreate where

@@ -46,28 +46,9 @@ def VaultSchedule.hasValidGap (s : VaultSchedule) : Bool :=
   s.subscriptionDate.toNat + minInvestmentPeriod ≤ s.redemptionDate.toNat &&
     s.redemptionDate.toNat < s.subscriptionDate.toNat + maxInvestmentPeriod
 
-def RawVault.baseExponent (rv : RawVault) : Int :=
-  rv.numericType.baseExponent rv.scale
-
 -- C++ `getAssetsTotal`
 def RawVault.assetsTotal (rv : RawVault) : Except Error Number :=
   rv.assetsAvailable.operator_add rv.assetsDeployed .downward
-
-def RawVault.phase (rv : RawVault) (parentCloseTime : UInt32) : PoolPhase :=
-  match rv.schedule with
-  | none => .noPhase
-  | some s =>
-    let hasSubscriptionExpired : Bool := parentCloseTime > s.subscriptionDate
-    let hasRedemptionExpired : Bool := parentCloseTime ≥ s.redemptionDate
-
-    if !hasSubscriptionExpired then .subscription
-    else if !hasRedemptionExpired then .investment
-    else .redemption
-
-def RawVault.earlyExitFeeRateAt (rv : RawVault) (parentCloseTime : UInt32) : TenthBips32 :=
-  match rv.earlyExitFeeRate with
-  | some rate => if rv.phase parentCloseTime == .investment then rate else 0
-  | none => 0
 
 /-- Representation well-formed of the raw record. -/
 structure RawVault.WF (rv : RawVault) : Prop where
@@ -147,6 +128,25 @@ structure VaultWithAmounts extends VaultAmounts where
 /-- Build a lawful vault from a raw vault, or reject. -/
 def RawVault.to_lawful (rv : RawVault) : Except Error Vault :=
   if h : rv.WF ∧ rv.Valid then .ok { toRawVault := rv, wf := h.1, valid := h.2 } else .error .notLawful
+
+def Vault.baseExponent (v : Vault) : Int :=
+  v.numericType.baseExponent v.scale
+
+def Vault.phase (v : Vault) (parentCloseTime : UInt32) : PoolPhase :=
+  match v.schedule with
+  | none => .noPhase
+  | some s =>
+    let hasSubscriptionExpired : Bool := parentCloseTime > s.subscriptionDate
+    let hasRedemptionExpired : Bool := parentCloseTime ≥ s.redemptionDate
+
+    if !hasSubscriptionExpired then .subscription
+    else if !hasRedemptionExpired then .investment
+    else .redemption
+
+def Vault.earlyExitFeeRateAt (v : Vault) (parentCloseTime : UInt32) : TenthBips32 :=
+  match v.earlyExitFeeRate with
+  | some rate => if v.phase parentCloseTime == .investment then rate else 0
+  | none => 0
 
 def Vault.isInsolvent (v : Vault) : Bool :=
   v.assetsAvailable.mantissa_ = 0 && v.assetsDeployed.mantissa_ = 0 && v.sharesTotal.signum = 1

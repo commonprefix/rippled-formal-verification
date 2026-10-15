@@ -1,5 +1,4 @@
 import XRPL.Model.Protocol.Number
-import XRPL.Model.Protocol.Result
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
@@ -9,18 +8,16 @@ import XRPL.Model.Vault.VaultBalances
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
-open XRPL.Model.Result
 
 -- Round the deposit down to the new total's exponent, rejecting it if nothing is left.
-def Vault.roundedDepositAmount (v : Vault) (amountDeposit : STAmount)
-    : Except Error RoundingResult := do
+def Vault.roundedDepositAmount (v : Vault) (amountDeposit : STAmount) : TerExcept STAmount := do
   let assetsTotal ← v.assetsTotal
 
   let roundedAmount ← clampToSumExponent assetsTotal amountDeposit v.baseExponent
   if roundedAmount.isZero then
-    return .rejected .tecPRECISION_LOSS
+    throw .tecPRECISION_LOSS
 
-  return .rounded roundedAmount
+  return roundedAmount
 
 def assetsToSharesDeposit (v : Vault) (amountDeposit : STAmount) : Except Error STAmount := do
   let assetsTotal ← v.assetsTotal
@@ -99,13 +96,11 @@ def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (pa
   if v.depositBlocked then
     throw .tecLOCKED
 
-  let amount ← match ← v.roundedDepositAmount amountDeposit with
-    | .rejected ter => throw ter
-    | .rounded amount => pure amount
+  let amount ← v.roundedDepositAmount amountDeposit
 
   let amounts ← computeDeposit v amount isDonation
 
-  let inflowCheck ← v.checkOptionalInflow amounts.assets
+  let inflowCheck ← v.checkOpenLimit amounts.assets
   if inflowCheck != .tesSUCCESS then
     throw inflowCheck
 
