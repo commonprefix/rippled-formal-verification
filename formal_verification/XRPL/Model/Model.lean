@@ -1,6 +1,5 @@
 import XRPL.Model.Lending.Amortization
 import XRPL.Model.Lending.AssetPool
-import XRPL.Model.Lending.CashBasis
 import XRPL.Model.Lending.Interest
 import XRPL.Model.Lending.Loan.Loan
 import XRPL.Model.Lending.Loan.LoanAccept
@@ -18,8 +17,10 @@ import XRPL.Model.Lending.LoanBroker.LoanBrokerDelete
 import XRPL.Model.Lending.LoanBroker.LoanBrokerSet
 import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Model.Vault.Vault
+import XRPL.Model.Vault.VaultBalances
 import XRPL.Model.Vault.VaultBurn
 import XRPL.Model.Vault.VaultClawback
+import XRPL.Model.Vault.VaultCreate
 import XRPL.Model.Vault.VaultDelete
 import XRPL.Model.Vault.VaultDeposit
 import XRPL.Model.Vault.VaultSet

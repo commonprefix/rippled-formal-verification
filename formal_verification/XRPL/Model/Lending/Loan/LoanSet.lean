@@ -1,4 +1,3 @@
-import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
@@ -14,26 +13,6 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
--- C++ getValueFields: principalRequested and each fee must pass the check
-private def checkPrecisionFields (principal : Number) (fees : LoanFees) (checkFnc : Number → Except Error Bool)
-    : Except Error TER := do
-  for value in principal :: fees.amountFields do
-    if !(← checkFnc value) then return .tecPRECISION_LOSS
-  return .tesSUCCESS
-
--- LoanSet -> preclaim
-def Loan.canCreate (broker : LoanBroker) (principalRequested : Number) (fees : LoanFees) (schedule : LoanSchedule)
-    (ledgerCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
-  let scheduleTer := schedule.checkTimeAvailability
-  if !scheduleTer.isTesSuccess then return scheduleTer
-
-  let precisionTer ← checkPrecisionFields principalRequested fees
-    (STAmount.equalAfterNumberConvert broker.numericType)
-  if !precisionTer.isTesSuccess then return precisionTer
-
-  if twoStep && hasExpired ledgerCloseTime schedule.startDate then return .tecEXPIRED
-  return .tesSUCCESS
-
 -- The derived values of a loan, rounded at the loan scale
 structure LoanProperties where
   periodicPayment : Number
@@ -43,6 +22,50 @@ structure LoanProperties where
   principalOutstanding : Number
   -- the unrounded principal part of the first payment, positive when the loan can amortize
   firstPaymentPrincipal : Number
+
+-- C++ getValueFields: principalRequested and each fee must pass the check
+private def checkPrecisionFields (principal : Number) (fees : LoanFees) (checkFnc : Number → Except Error Bool)
+    : Except Error TER := do
+  for value in principal :: fees.amountFields do
+    if !(← checkFnc value) then return .tecPRECISION_LOSS
+  return .tesSUCCESS
+
+-- C++ `checkVaultAcceptsLoan`
+private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanSchedule) (ledgerCloseTime : UInt32)
+    (nt : NumericType) : Except Error TER := do
+  let phase := AssetPool.phase pool ledgerCloseTime
+  match phase with
+  | .subscription => return .tecTOO_SOON
+  | .redemption => return .tecEXPIRED
+  | .investment =>
+    let finalPayment := schedule.startDate.toNat + schedule.paymentInterval.toNat * schedule.paymentTotal.toNat
+    let redemptionDate := (AssetPool.redemptionDate pool).getD 0
+    if finalPayment + loanRedemptionBuffer > redemptionDate.toNat then return .tecNO_PERMISSION
+  | .noPhase => pure ()
+
+  let exponent ← AssetPool.exponent pool nt
+  let baseExponent := AssetPool.baseExponent pool
+  if exponent != baseExponent then return .tecLIMIT_EXCEEDED
+
+  return .tesSUCCESS
+
+-- LoanSet -> preclaim
+def Loan.canCreate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principalRequested : Number)
+    (fees : LoanFees) (schedule : LoanSchedule) (ledgerCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
+  let scheduleTer := schedule.checkTimeAvailability
+  if !scheduleTer.isTesSuccess then return scheduleTer
+
+  let hasExpired : Bool := ledgerCloseTime ≥ schedule.startDate
+  if twoStep && hasExpired then return .tecEXPIRED
+
+  let vaultTer ← canFundLoan pool schedule ledgerCloseTime broker.numericType
+  if !vaultTer.isTesSuccess then return vaultTer
+
+  let precisionTer ← checkPrecisionFields principalRequested fees
+    (fun value => pure !(STAmount.isRounded broker.numericType value))
+  if !precisionTer.isTesSuccess then return precisionTer
+
+  return .tesSUCCESS
 
 def computeLoanPropertiesFromPeriodicRate (principal periodicRate : Number) (paymentsRemaining : UInt32)
     (managementFeeRate : TenthBips16) (nt : NumericType) (minimumScale : Int)
@@ -110,11 +133,11 @@ def LoanProperties.checkGuards (properties : LoanProperties) (principal : Number
   return .tesSUCCESS
 
 -- broker stays under its debt cap and keeps enough cover
-def LoanBroker.checkLimits (broker : LoanBroker) (newDebtTotal : Number) (vaultExponent : Int)
+def LoanBroker.checkLimits (broker : LoanBroker) (debtTotal' : Number) (vaultExponent : Int)
     : Except Error TER := do
-  if broker.debtMaximum.operator_ne Number.zero && broker.debtMaximum.operator_lt newDebtTotal then
+  if broker.debtMaximum.operator_ne Number.zero && broker.debtMaximum.operator_lt debtTotal' then
     return .tecLIMIT_EXCEEDED
-  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with debtTotal := newDebtTotal }
+  let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with debtTotal := debtTotal' }
   let hasMinimumCover ← rawBroker'.hasMinimumCover vaultExponent
   if !hasMinimumCover then return .tecINSUFFICIENT_FUNDS
   return .tesSUCCESS
@@ -143,33 +166,40 @@ def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : Loan
 -- LoanSet -> doApply
 def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    : Except Error (LoanWithPoolTerResult α) := do
+    : TerExcept (LoanWithPool α) := do
   let nt := broker.numericType
   let poolAmounts := AssetPool.amounts pool
-  if poolAmounts.assetsAvailable.operator_lt principal then return .error .tecINSUFFICIENT_FUNDS
-  let vaultExponent ← AssetPool.exponent pool nt
+  if poolAmounts.assetsAvailable.operator_lt principal then throw .tecINSUFFICIENT_FUNDS
+  let vaultExponent := AssetPool.baseExponent pool
 
   let properties ← computeLoanProperties principal rates.interestRate
     schedule.paymentInterval schedule.paymentTotal broker.managementFeeRate nt vaultExponent
   let precisionTer ← checkPrecisionFields principal fees
     (fun value => isRounded value properties.loanScale nt)
-  if !precisionTer.isTesSuccess then return .error precisionTer
+  if !precisionTer.isTesSuccess then throw precisionTer
 
   let guardTer ← properties.checkGuards principal rates.interestRate schedule.paymentTotal nt
-  if !guardTer.isTesSuccess then return .error guardTer
+  if !guardTer.isTesSuccess then throw guardTer
 
-  let newDebtTotal ← broker.debtTotal.operator_add principal .to_nearest
-  let limitTer ← broker.checkLimits newDebtTotal vaultExponent
-  if !limitTer.isTesSuccess then return .error limitTer
+  -- the interest of the new loan must fit in the vault's Open zone
+  let loanState ← LoanState.build properties.totalValueOutstanding principal properties.managementFeeOutstanding
+  let exceedsOpenLimit ← AssetPool.exceedsOpenLimit pool loanState.interestDue
+  if exceedsOpenLimit then
+    throw .tecLIMIT_EXCEEDED
 
-  -- the principal leaves the available assets, a pending loan adds it in the reserved assets
-  let assetsAvailable' ← poolAmounts.assetsAvailable.operator_sub principal .to_nearest
-  let assetsReserved' ← if pending then poolAmounts.assetsReserved.operator_add principal .to_nearest
-                        else pure poolAmounts.assetsReserved
-  let pool' ← AssetPool.updateAmounts pool { poolAmounts with
-    assetsAvailable := assetsAvailable', assetsReserved := assetsReserved' }
+  let debtTotal' ← broker.debtTotal.operator_add principal .to_nearest
+  let limitTer ← broker.checkLimits debtTotal' vaultExponent
+  if !limitTer.isTesSuccess then throw limitTer
 
-  let debtTotal' ← sumRoundAndClamp broker.debtTotal principal vaultExponent nt
+  -- the principal is deployed, a pending loan also reserves it, an active loan adds its interest to the yield
+  let principal' ← STAmount.roundToNumericType nt principal .to_nearest
+  let change : PoolBalanceChange := {
+    cash := principal'.operator_neg
+    deployed := principal
+    yield := if pending then Number.zero else loanState.interestDue
+    reserved := if pending then principal' else Number.zero }
+  let pool' ← AssetPool.adjustBalances pool change
+
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
     debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
   let broker' ← rawBroker'.to_lawful
@@ -177,16 +207,17 @@ def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (pr
   let rawLoan := RawLoan.build properties rates fees schedule broker'
     allowsOverpayment pending
   let loan ← rawLoan.to_lawful
-  return .ok { loan' := loan, pool' := pool' }
+
+  return { loan' := loan, pool' := pool' }
 
 def Loan.createPending {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
-    : Except Error (LoanWithPoolTerResult α) :=
+    : TerExcept (LoanWithPool α) :=
   Loan.create broker pool principal rates fees schedule allowsOverpayment true
 
 def Loan.createImmediate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
-    : Except Error (LoanWithPoolTerResult α) :=
+    : TerExcept (LoanWithPool α) :=
   Loan.create broker pool principal rates fees schedule allowsOverpayment false
 
 end XRPL.Model.Lending

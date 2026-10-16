@@ -12,6 +12,9 @@ def NumericType.isIntegral : NumericType → Bool
   | .integral _ _ _ _ => true
   | .fractional => false
 
+def NumericType.baseExponent (nt : NumericType) (exponent : UInt8) : Int :=
+  if nt.isIntegral then 0 else -(exponent.toNat : Int)
+
 -- Bound accessors (meaningful only for `integral`, so `fractional` returns 0).
 def NumericType.maxValue : NumericType → UInt64
   | .integral mv _ _ _ => mv | .fractional => 0

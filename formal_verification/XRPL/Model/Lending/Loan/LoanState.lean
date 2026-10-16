@@ -83,7 +83,7 @@ def LoanState.buildTheoretical (periodicPayment periodicRate : Number) (paymentR
 
 -- Interest still owed by the borrower, the net interest plus the management fee on it
 def LoanState.grossInterestOutstanding (state : LoanState) : Except Error Number :=
-  state.valueOutstanding.operator_sub state.principalOutstanding .to_nearest
+  state.interestDue.operator_add state.managementFeeDue .to_nearest
 
 def LoanState.calculateDeltas (x y : LoanState) : Except Error LoanStateDeltas := do
   return { principal := ← x.principalOutstanding.operator_sub y.principalOutstanding .to_nearest,

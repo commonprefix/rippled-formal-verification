@@ -1,21 +1,24 @@
 import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.NumericType
-import XRPL.Model.Protocol.Result
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Protocol.TenthBips
+import XRPL.Model.Lending.AssetPool
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.Result
 
-def roundToCoverScale (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
-    (mode : rounding_mode) : Except Error STAmount := do
-  let exponent ← numberExponent coverAvailable nt
-  STAmount.roundToExponent amount exponent mode
+structure LoanBrokerCoverResult where
+  amount' : STAmount
+  loanBroker' : LoanBroker
+
+inductive CoverDirection where
+  | credit
+  | debit
 
 -- minimum first-loss cover for the debt, rounded up
 def minimumBrokerCover (nt : NumericType) (debtTotal : Number) (coverRateMinimum : TenthBips32) (poolExponent : Int)
@@ -28,41 +31,41 @@ def RawLoanBroker.hasMinimumCover (rb : RawLoanBroker) (poolExponent : Int) : Ex
   let minimumCover ← minimumBrokerCover rb.numericType rb.debtTotal rb.coverRateMinimum poolExponent
   return minimumCover.operator_le rb.coverAvailable
 
--- reject a cover withdraw/clawback that rounds to zero at the cover's own scale
-def canApplyToBrokerCover (nt : NumericType) (coverAvailable : Number) (amount : STAmount)
-    : Except Error TER := do
-  if amount.isZero then
-    return .tecPRECISION_LOSS
-  let rounded ← roundToCoverScale nt coverAvailable amount .to_nearest
-  if rounded.signum == 0 then
-    return .tecPRECISION_LOSS
+-- C++ `checkOptionalBrokerCoverInflow`: a deposit must keep the cover at the base exponent and inside the Open zone.
+def LoanBroker.checkCoverOpenLimit {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
+    (amount : STAmount) : Except Error TER := do
+  let baseExponent := AssetPool.baseExponent pool
+  let amountNum ← amount.toNumber .to_nearest
+  let exponent ← postSumExponent lb.coverAvailable amountNum baseExponent lb.numericType
+  if exponent != baseExponent then
+    return .tecLIMIT_EXCEEDED
+
+  let coverAvailable' ← lb.coverAvailable.operator_add amountNum .towards_zero
+  let openLimit ← AssetPool.openLimit pool
+  if coverAvailable'.operator_gt openLimit then
+    return .tecLIMIT_EXCEEDED
+
   return .tesSUCCESS
 
 -- the cover movement actually applied: sub-scale dust is rejected rather than truncated
-def LoanBroker.roundedCoverAmount (lb : LoanBroker) (amount : STAmount)
-    : Except Error RoundingResult := do
-  let rounded ← roundToCoverScale lb.numericType lb.coverAvailable amount .downward
+def LoanBroker.roundedCoverAmount {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α) (amount : STAmount)
+    : TerExcept STAmount := do
+  let baseExponent := AssetPool.baseExponent pool
+  let amountNum ← amount.toNumber .to_nearest
+
+  let rounded ← sumRoundAndSubtract lb.coverAvailable amountNum baseExponent lb.numericType .downward
   if rounded.signum == 0 then
-    return .rejected .tecPRECISION_LOSS
-  return .rounded rounded
+    throw .tecPRECISION_LOSS
 
-structure LoanBrokerCoverResult where
-  amount' : STAmount
-  loanBroker' : LoanBroker
-
-abbrev LoanBrokerCoverTerResult := Except TER LoanBrokerCoverResult
-
-inductive CoverDirection where
-  | credit
-  | debit
+  return rounded
 
 -- settle a rounded cover movement against coverAvailable
 def LoanBroker.applyCoverTransaction (lb : LoanBroker) (direction : CoverDirection) (amount : STAmount)
    : Except Error LoanBrokerCoverResult := do
-  let magnitude ← amount.toNumber .to_nearest
+  let amountNum ← amount.toNumber .to_nearest
   let coverAvailable' ← match direction with
-    | .credit => lb.coverAvailable.operator_add magnitude .to_nearest
-    | .debit => lb.coverAvailable.operator_sub magnitude .to_nearest
+    | .credit => lb.coverAvailable.operator_add amountNum .to_nearest
+    | .debit => lb.coverAvailable.operator_sub amountNum .to_nearest
   let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with coverAvailable := coverAvailable' }
   let loanBroker' ← rawBroker'.to_lawful
 

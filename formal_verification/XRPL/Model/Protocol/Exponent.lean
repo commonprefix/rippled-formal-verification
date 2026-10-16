@@ -3,16 +3,17 @@ import XRPL.Model.Protocol.STAmount
 
 namespace XRPL.Model.Protocol
 
--- exponent of a Number represented as an STAmount. Models the function `scale` from xrpld
-def numberExponent (amount : Number) (nt : NumericType) : Except Error Int := do
-  let a ← STAmount.ofNumber nt amount .to_nearest
-  return a.exponent
+-- exponent of a Number represented as an STAmount, never finer than `exponent`.
+def numberExponent (amount : Number) (exponent : Int) (nt : NumericType) : Except Error Int := do
+  if amount.operator_eq Number.zero then
+    return exponent
 
-def postSumExponent (amount : Number) (amountDelta : STAmount)
+  let amount' ← STAmount.ofNumber nt amount .downward
+  return max exponent amount'.exponent
+
+def postSumExponent (amount amountDelta : Number) (exponent : Int) (nt : NumericType)
     : Except Error Int := do
-  let numericType := amountDelta.numericType
-  let amountDelta ← amountDelta.toNumber .to_nearest
   let sum ← amount.operator_add amountDelta .to_nearest
-  numberExponent sum numericType
+  numberExponent sum exponent nt
 
 end XRPL.Model.Protocol

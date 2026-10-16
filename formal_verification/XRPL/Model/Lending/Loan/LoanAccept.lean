@@ -8,16 +8,33 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 
 -- LoanAccept -> preclaim
-def Loan.canAccept (loan : Loan) (ledgerCloseTime : UInt32) : TER :=
-  if !loan.isPending then .tecNO_PERMISSION
-  else if hasExpired ledgerCloseTime loan.schedule.startDate then .tecEXPIRED
-  else .tesSUCCESS
+def Loan.canAccept {α : Type} [AssetPool α] (loan : Loan) (pool : α) (ledgerCloseTime : UInt32)
+    : Except Error TER := do
+  if !loan.isPending then return .tecNO_PERMISSION
+  let hasExpired : Bool := ledgerCloseTime ≥ loan.schedule.startDate
+  if hasExpired then return .tecEXPIRED
 
--- LoanAccept -> doApply. The principal leaves the reserved assets and the loan becomes active.
-def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : Except Error (LoanWithPool α) := do
-  let poolAmounts := AssetPool.amounts pool
-  let assetsReserved' ← poolAmounts.assetsReserved.operator_sub loan.principalOutstanding .to_nearest
-  let pool' ← AssetPool.updateAmounts pool { poolAmounts with assetsReserved := assetsReserved' }
+  let phase := AssetPool.phase pool ledgerCloseTime
+  match phase with
+  | .subscription => return .tecTOO_SOON
+  | .redemption => return .tecEXPIRED
+  | .noPhase | .investment => pure ()
+
+  -- the interest of the loan must fit in the vault's Open zone
+  let interestDue ← loan.interestDue
+  let exceedsOpenLimit ← AssetPool.exceedsOpenLimit pool interestDue
+  if exceedsOpenLimit then
+    return .tecLIMIT_EXCEEDED
+
+  return .tesSUCCESS
+
+-- LoanAccept -> doApply. The principal leaves the reserved assets, the interest joins the unrealized yield.
+def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) := do
+  let interestDue ← loan.interestDue
+  let change : PoolBalanceChange := {
+    yield := interestDue
+    reserved := loan.principalOutstanding.operator_neg }
+  let pool' ← AssetPool.adjustBalances pool change
 
   let rawLoan' : RawLoan := { loan.toRawLoan with isPending := false }
   let loan' ← rawLoan'.to_lawful

@@ -228,13 +228,13 @@ def STAmount.operator_sub (v1 v2 : STAmount) (mode : rounding_mode)
     : Except Error STAmount :=
   STAmount.operator_add v1 v2.operator_neg mode
 
-def STAmount.roundToExponent (value : STAmount) (scale : Int) (rounding : rounding_mode)
+def STAmount.roundToExponent (value : STAmount) (exponent : Int) (rounding : rounding_mode)
     : Except Error STAmount :=
   if value.integral then .ok value
   else if value.isZero then .ok value
-  else if value.exponent ≥ scale then .ok value
+  else if value.exponent ≥ exponent then .ok value
   else
-    match STAmount.checked value.mNumericType kMinValue scale value.negative rounding with
+    match STAmount.checked value.mNumericType kMinValue exponent value.negative rounding with
     | .error e => .error e
     | .ok referenceValue =>
       match STAmount.operator_add value referenceValue rounding with
@@ -404,6 +404,23 @@ def STAmount.multiply (v1 v2 : STAmount) (nt : NumericType) (mode : rounding_mod
         | .error e => .error e
         | .ok r => STAmount.ofNumber nt r mode
 
+-- C++ `mulRoundImpl` and `divRoundImpl` MPT branch (MPTokensV2)
+def STAmount.roundNumberResult (v1 v2 : STAmount) (nt : NumericType) (roundUp : Bool)
+    (operation : Number → Number → rounding_mode → Except Error Number) : Except Error STAmount := do
+  let resultNegative := v1.negative != v2.negative
+  let mode : rounding_mode := if roundUp != resultNegative then .upward else .downward
+
+  let v1' ← v1.toNumber mode
+  let v2' ← v2.toNumber mode
+  let result ← operation v1' v2' mode
+  let result' ← STAmount.ofNumber nt result mode
+
+  if roundUp && !resultNegative && result'.isZero then
+    if nt.isIntegral then STAmount.checked nt 1 0 false mode
+    else STAmount.checked nt kMinValue kMinOffset false mode
+  else
+    return result'
+
 -- `canonFn` selects legacy vs strict canonicalization.
 def STAmount.mulRoundImpl
     (v1 v2 : STAmount) (nt : NumericType) (roundUp : Bool) (mode : rounding_mode)
@@ -424,6 +441,8 @@ def STAmount.mulRoundImpl
     else
       let prod : UInt64 := minV * maxV
       STAmount.checked nt prod 0 false mode
+  -- An MPT target takes the Number path. XRP and IOU targets keep the path below.
+  else if nt == NumericType.int64 then STAmount.roundNumberResult v1 v2 nt roundUp Number.operator_mul
   else
     let (value1, offset1) :=
       if v1.integral then STAmount.normalizeIntegralMantissa v1.mantissa v1.exponent
@@ -466,6 +485,8 @@ def STAmount.divRoundImpl
     : Except Error STAmount :=
   if den.isZero then .error .divByZero
   else if num.isZero then STAmount.checked nt 0 0 false mode
+  -- An MPT target takes the Number path. XRP and IOU targets keep the path below.
+  else if nt == NumericType.int64 then STAmount.roundNumberResult num den nt roundUp Number.operator_div
   else
     let (numVal, numOffset) :=
       if num.integral then STAmount.normalizeIntegralMantissa num.mantissa num.exponent

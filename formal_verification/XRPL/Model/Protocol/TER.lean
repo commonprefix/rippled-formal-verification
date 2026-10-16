@@ -1,3 +1,5 @@
+import XRPL.Model.Protocol.Errors
+
 namespace XRPL.Model.Protocol
 
 inductive TER where
@@ -109,5 +111,7 @@ def TER.code : TER → Int32
   | .tecTOO_SOON => 152
   | .tecINSUFFICIENT_PAYMENT => 161
 
+-- A transaction step that either rejects the transaction with a `TER` or fails the model with an `Error`
+abbrev TerExcept := ExceptT TER (Except Error)
 
 end XRPL.Model.Protocol

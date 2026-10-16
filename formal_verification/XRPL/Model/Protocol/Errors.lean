@@ -15,4 +15,7 @@ inductive Error where
   | badInput
 deriving DecidableEq, Repr, Inhabited
 
+-- Detect an overflow error triggered by arithmetic operation.
+def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
+
 end XRPL.Model.Protocol
