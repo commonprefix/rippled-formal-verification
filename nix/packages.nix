@@ -117,14 +117,11 @@ let
   # cache get, the lean4-deps Conan package) as stale. LEAN_GITHASH overrides
   # the githash lake uses. Values are `lean --githash` of the official releases.
   leanReleaseGithashes = {
-    "4.30.0" = "d024af099ca4bf2c86f649261ebf59565dc8c622";
     "4.34.1" = "5045d0056413266e57c625dcd7c365b10e377c52";
   };
   leanGithash =
-    leanReleaseGithashes.${pkgs.lean4.version} or (pkgs.lib.warn
-      "nix/packages.nix: no official githash for lean4 ${pkgs.lean4.version}; add it to leanReleaseGithashes"
-      null
-    );
+    leanReleaseGithashes.${pkgs.lean4.version}
+      or (pkgs.lib.warn "nix/packages.nix: no official githash for lean4 ${pkgs.lean4.version}; add it to leanReleaseGithashes" null);
 in
 {
   inherit
