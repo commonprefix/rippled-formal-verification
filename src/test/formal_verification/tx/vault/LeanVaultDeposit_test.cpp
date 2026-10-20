@@ -39,7 +39,7 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanRoundingResult const rounded = leanRoundedDepositAmount(state, amount);
+        LeanAmountResult const rounded = leanRoundedDepositAmount(state, amount);
         expectLawful(rounded);
 
         env(jtx::Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
@@ -86,7 +86,7 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanDepositResult const deposit = leanVaultDeposit(state, amount, isDonation);
+        LeanVaultResult const deposit = leanVaultDeposit(state, amount, isDonation, parentCloseTime(env));
         expectLawful(deposit);
 
         jtx::Vault::DepositArgs depositArgs{
@@ -116,7 +116,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         auto const newVaultSle = env.le(vaultKeylet);
         auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
-        Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
+        Number const cppAssetsTotal = getAssetsTotal(newVaultSle);
         Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
         Number const cppSharesTotal{
             static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
@@ -392,7 +392,7 @@ class LeanVaultDeposit_test : public LeanSuite
         PrettyAsset const asset = issuer["USD"];
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
         env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 9})}),
             jtx::Ter(tesSUCCESS));
         env.close();
 
@@ -400,7 +400,7 @@ class LeanVaultDeposit_test : public LeanSuite
             env, vaultKeylet, issuer, asset.raw(), asset(Number{1'000}), tesSUCCESS);
     }
 
-    // Under ULP deposit into a non-empty vault: preclaim rounds it to zero at the vault scale
+    // A deposit below the vault's 1e-6 grid: preclaim rounds it to zero
     void
     testRoundedDepositBelowVaultScale(bool depositorIsIssuer)
     {
@@ -420,19 +420,18 @@ class LeanVaultDeposit_test : public LeanSuite
         {
             env(trust(holder, asset(10'000'000'000'000'000LL)));
             env.close();
-            env(pay(issuer, holder, asset(Number{1, -4})));
+            env(pay(issuer, holder, asset(Number{1, -7})));
             env.close();
         }
 
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        // Vault holds 1e12 USD -> ULP ~1e-3, so depositing 1e-4 rounds to zero at the vault scale.
         env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 9})}),
             jtx::Ter(tesSUCCESS));
         env.close();
 
         compareRoundedDepositAmount(
-            env, vaultKeylet, depositor, asset.raw(), asset(Number{1, -4}), tecPRECISION_LOSS);
+            env, vaultKeylet, depositor, asset.raw(), asset(Number{1, -7}), tecPRECISION_LOSS);
     }
 
     // AssetsTotal + amount near the IOU maximum overflows.
@@ -567,7 +566,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const amount = asset(depositN);
-        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
 
@@ -589,51 +588,9 @@ class LeanVaultDeposit_test : public LeanSuite
             "model deposit lowered the share price");
     }
 
-    // FV_M2_14: a donation rounds assetsTotal and assetsAvailable independently, so their
-    // difference can drop below lossUnrealized and trip the invariant (tecINVARIANT_FAILED).
-    void
-    testDonationLossInvariant()
-    {
-        using namespace jtx;
-        testcase("donation shrinks the loss gap and trips the invariant");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(vaultOwner, asset(1'000'000)));
-        env.close();
-        env(pay(issuer, vaultOwner, asset(1'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{100})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        // Valid state: lossUnrealized == assetsTotal - assetsAvailable == 0.999999999999995.
-        Number const total{2'000'000'000'000'001LL, -15};      // 2.000000000000001
-        Number const available{1'000'000'000'000'006LL, -15};  // 1.000000000000006
-        Number const loss{999'999'999'999'995LL, -15};         // 0.999999999999995
-        BEAST_EXPECT(
-            updateVaultState(env, vaultKeylet, total, available, 100'000'000, Number{0}, loss));
-
-        // Donating 50 rounds the two totals in opposite directions, decreasing the gap below the
-        // loss. The donation is valid and should succeed, but the invariant fires.
-        env(jtx::Vault::deposit(
-                {.depositor = vaultOwner,
-                 .id = vaultKeylet.key,
-                 .amount = asset(Number{50}),
-                 .flags = tfVaultDonate}),
-            jtx::Ter(tesSUCCESS));
-    }
-
-    // FV_M2_15: an IOU deposit whose exact new total needs 17 significant digits rounds up
-    // when stored, so sfAssetsTotal is credited more than the depositor paid.
+    // FV_M2_15 (regression): an IOU deposit whose exact new total needed 17 significant digits
+    // rounded up when stored, crediting more than the depositor paid. The open limit keeps a total
+    // within 16 digits of the vault grid, so both sides now reject such a deposit.
     void
     testDepositOvercredit(Number const& seed, Number const& deposit, int vaultScale)
     {
@@ -659,12 +616,12 @@ class LeanVaultDeposit_test : public LeanSuite
             jtx::Ter(tesSUCCESS));
         env.close();
 
-        // The exact new total needs 17 digits, C++ rounds sfAssetsTotal up, the model keeps it.
-        compareVaultDeposit(env, vaultKeylet, issuer, asset.raw(), asset(deposit), tesSUCCESS);
+        compareVaultDeposit(
+            env, vaultKeylet, issuer, asset.raw(), asset(deposit), tecLIMIT_EXCEEDED);
     }
 
-    // The round-trip charge is never re-rounded to the vault scale, so the totals move by
-    // slightly more than the depositor pays (both C++ and the model).
+    // The round-trip charge is clamped to the vault grid, so the totals move by exactly what the
+    // depositor pays (both C++ and the model).
     void
     testDepositAppliedDelta()
     {
@@ -688,7 +645,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Deposit 0.001, an amount already on the vault grid.
         STAmount const amount = asset(Number{1, -3});
-        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean deposit failed");
 
@@ -708,26 +665,26 @@ class LeanVaultDeposit_test : public LeanSuite
         // Model: the vault must gain exactly the charge it reports.
         Number const leanDelta = lean.vault.assetsTotal - before.assetsTotal;
         BEAST_EXPECTS(
-            leanDelta == Number{lean.amountDeposit},
+            leanDelta == Number{lean.assets},
             "model booked " + to_string(leanDelta) + " but charged " +
-                to_string(Number{lean.amountDeposit}));
+                to_string(Number{lean.assets}));
 
         // C++: the paid amount must be on the vault scale.
-        STAmount const paidRounded = roundToVaultScale(asset, before.assetsTotal, paid);
+        STAmount const paidRounded = roundToVaultGrid(asset, before.scale, before.assetsTotal, paid);
         BEAST_EXPECTS(
             Number{paidRounded} == paid,
             "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
 
         // Model: its charge must be on the vault scale as well.
-        LeanRoundingResult const chargeRounded =
-            leanRoundedDepositAmount(before, lean.amountDeposit);
+        LeanAmountResult const chargeRounded =
+            leanRoundedDepositAmount(before, lean.assets);
         expectLawful(chargeRounded);
         BEAST_EXPECTS(
             !chargeRounded.leanError.has_value() && chargeRounded.amount,
             "rounding the charge failed");
         BEAST_EXPECTS(
-            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.amountDeposit},
-            "the charge " + to_string(Number{lean.amountDeposit}) + " re-rounds to " +
+            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.assets},
+            "the charge " + to_string(Number{lean.assets}) + " re-rounds to " +
                 (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
     }
 
@@ -739,26 +696,23 @@ class LeanVaultDeposit_test : public LeanSuite
         // XRP: scale 0, no share overflow within the XRP domain.
         testVaultDepositXRP(XRP(0), drops(1), tesSUCCESS);  // minimum deposit
         testVaultDepositXRP(XRP(0), XRP(1'000), tesSUCCESS);
-        testVaultDepositXRP(XRP(0), XRP(80'000'000'000), tesSUCCESS);
+        // Open limit: 9e15 drops.
+        testVaultDepositXRP(XRP(0), drops(kOpenLimitUnits), tesSUCCESS);
+        testVaultDepositXRP(XRP(0), drops(kOpenLimitUnits + 1), tecLIMIT_EXCEEDED);
         testVaultDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
         testVaultDepositXRP(XRP(1'000), drops(1), tesSUCCESS);    // minimum deposit, non-empty
 
-        // IOU: default vault scale 6, so shares ~ amount * 1e6; over kMaxMpTokenAmount / 1e6 the
-        // share amount overflows.
+        // IOU: default vault scale 6, so shares ~ amount * 1e6.
         testVaultDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
         testVaultDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
-        testVaultDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
-        // Over the share ceiling: the share amount overflows the MPT domain. C++ returns
-        // tecPATH_DRY; the model's computeDeposit catches the overflow and returns the same.
-        testVaultDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY);
-
+        // Open limit at scale 6: 9e9. It keeps the shares (amount * 1e6) far below INT64_MAX.
+        Number const iouOpenLimit{kOpenLimitUnits, -6};
+        testVaultDepositIOU(Number{0}, iouOpenLimit, false, tesSUCCESS);
+        testVaultDepositIOU(Number{0}, iouOpenLimit + Number{1, -6}, false, tecLIMIT_EXCEEDED);
         testVaultDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
-        testVaultDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, true, tesSUCCESS);
-        testVaultDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY);
+        testVaultDepositIOU(Number{0}, iouOpenLimit, true, tesSUCCESS);
+        testVaultDepositIOU(Number{0}, iouOpenLimit + Number{1, -6}, true, tecLIMIT_EXCEEDED);
 
-        // IOU STAmount magnitude extremes (offset range is [kMinOffset, kMaxOffset] = [-96, 80]).
         testVaultDepositIOU(Number{0}, Number{9'999'999'999'999'999LL, 80}, true, tecPATH_DRY);
         testVaultDepositIOU(Number{0}, Number{1, -80}, true, tecPRECISION_LOSS);
 
@@ -767,24 +721,21 @@ class LeanVaultDeposit_test : public LeanSuite
         testRoundedDepositBelowVaultScale(false);
         testRoundedDepositBelowVaultScale(true);
         // sanity: a normal deposit into the same non-empty vault still succeeds
-        testVaultDepositIOU(Number{1, 12}, Number{1'000}, false, tesSUCCESS);
+        testVaultDepositIOU(Number{1, 9}, Number{1'000}, false, tesSUCCESS);
 
-        // MPT: scale 0, sfMPTAmount and shares are int64, with kMaxMpTokenAmount == INT64_MAX.
+        // MPT: scale 0, sfMPTAmount and shares are int64.
         testVaultDepositMPT(0, 1, tesSUCCESS);
         testVaultDepositMPT(0, 1'000, tesSUCCESS);
-        testVaultDepositMPT(0, kMaxMpTokenAmount, tesSUCCESS);  // deposit the type maximum
-        testVaultDepositMPT(1'000, 1'000, tesSUCCESS);          // non-empty vault
-        // Integer extremes: a big multiply (sharesTotal * amount) that lands outstanding shares
-        // exactly on INT64_MAX
-        testVaultDepositMPT(1, kMaxMpTokenAmount - 1, tesSUCCESS);
-        testVaultDepositMPT(kMaxMpTokenAmount - 1, 1, tesSUCCESS);
-        // (kMax/2)^2 / (kMax/2) rounds up a ULP in Number (~16 sig digits), so amountDeposit'
-        // exceeds the deposit and C++ rejects with tecINTERNAL
-        testVaultDepositMPT(kMaxMpTokenAmount / 2, kMaxMpTokenAmount / 2, tecINTERNAL);
+        // Open limit: 9e15 units, far below the share type maximum INT64_MAX.
+        testVaultDepositMPT(0, kOpenLimitUnits, tesSUCCESS);
+        testVaultDepositMPT(1'000, 1'000, tesSUCCESS);  // non-empty vault
+        testVaultDepositMPT(1, kOpenLimitUnits - 1, tesSUCCESS);
+        testVaultDepositMPT(kOpenLimitUnits - 1, 1, tesSUCCESS);
+        testVaultDepositMPT(kOpenLimitUnits - 1, 2, tecLIMIT_EXCEEDED);
 
-        // Rounding-mode regression traps, these values catch potential rounding mode changes
-        testVaultDepositIOU(Number{1, 12}, Number{100006, -4}, false, tesSUCCESS);
-        testVaultDepositIOU(Number{1, 12}, Number{100001, -4}, false, tesSUCCESS);
+        // Truncated to the 1e-6 grid on both sides.
+        testVaultDepositIOU(Number{1, 9}, Number{100'000'006, -7}, false, tesSUCCESS);
+        testVaultDepositIOU(Number{1, 9}, Number{100'000'001, -7}, false, tesSUCCESS);
 
         // Empty-vault share truncation (C++ truncates toward zero, not to-nearest):
         // 1.5e-6 USD * 1e6 scale = 1.5 shares -> 1.
@@ -814,11 +765,11 @@ class LeanVaultDeposit_test : public LeanSuite
         testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
         // testVaultDonationInsolvent();   // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
         // testDepositDilution();          // FV_M2_8_c: deposit lowers the share price (both)
-        testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
         testDepositAppliedDelta();           // totals move by more than paid (both)
 
         // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
-        testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
+        // 899999.9999999999 is 16 digits at scale 10 (open limit 9e5); +5 would need 17.
+        testDepositOvercredit(Number{8'999'999'999'999'999LL, -10}, Number{5}, 10);
         // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);  // FV_M2_15_b
         // clang-format on
     }

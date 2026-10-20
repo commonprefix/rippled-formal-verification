@@ -41,7 +41,7 @@ class LeanVaultSet_test : public LeanSuite
 
         Vault const state = readVaultState(env, vaultKeylet, asset.raw());
         Number const cap{assetsMaximum};
-        auto const lean = leanCanVaultSet(state, cap);
+        auto const lean = leanCanVaultUpdate(state, cap);
         expectLawful(lean);
         TER const leanTer = lean.ter;
 

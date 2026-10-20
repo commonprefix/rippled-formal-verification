@@ -16,7 +16,7 @@ extern "C" void
 lean_initialize_runtime_module(void);
 
 extern "C" lean_object*
-initialize_XRPL_XRPL_FFI_FFI(uint8_t builtin, lean_object* w);
+initialize_XRPL_XRPL_FFI_FFI(uint8_t builtin);
 
 namespace xrpl::test::formal_verification {
 
@@ -46,9 +46,10 @@ class LeanSuite : public beast::unit_test::Suite
         static bool ok = false;
         std::call_once(flag, [] {
             lean_initialize_runtime_module();
-            lean_object* res = initialize_XRPL_XRPL_FFI_FFI(1, lean_io_mk_world());
+            lean_object* res = initialize_XRPL_XRPL_FFI_FFI(1);
             if (!lean_io_result_is_ok(res))
             {
+                lean_io_result_show_error(res);
                 lean_dec(res);
                 return;
             }
