@@ -306,7 +306,7 @@ See [Sanitizers docs](./docs/build/sanitizers.md) for more details.
 
 Build with the `formal_verification` option (needs `xrpld` and `tests`), then
 run the Lean 4 cross-validation suite. The `lean4` toolchain and prebuilt
-mathlib (`lean4-deps`) come from the `xrplf` remote. `--lockfile-partial` lets
+mathlib (`mathlib4`) come from the `xrplf` remote. `--lockfile-partial` lets
 Conan add them, as they are opt-in and not pinned in `conan.lock`:
 
 ```bash

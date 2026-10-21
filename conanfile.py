@@ -149,7 +149,7 @@ class Xrpl(ConanFile):
             return f.read().strip().split(":v")[1]
 
     def _assert_lake_closure(self, package_manifest):
-        # lean4-deps' prebuilt oleans are only usable if lake resolves the same
+        # mathlib4's prebuilt oleans are only usable if lake resolves the same
         # dependency closure they were built from. Otherwise lake re-resolves and
         # re-elaborates all of mathlib -- hours, with no error. A lean-toolchain
         # bump is caught by the version pin; this covers a `lake update` within
@@ -164,15 +164,15 @@ class Xrpl(ConanFile):
         theirs = pins(package_manifest)
         if ours != theirs:
             drifted = [
-                f"{name}: ours {ours.get(name)}, lean4-deps {theirs.get(name)}"
+                f"{name}: ours {ours.get(name)}, mathlib4 {theirs.get(name)}"
                 for name in sorted(ours.keys() | theirs.keys())
                 if ours.get(name) != theirs.get(name)
             ]
             raise ConanException(
                 "formal_verification/lake-manifest.json pins a different Lean "
-                "dependency closure than lean4-deps was built against:\n  "
+                "dependency closure than mathlib4 was built against:\n  "
                 + "\n  ".join(drifted)
-                + "\nRepublish lean4-deps from this manifest, or restore the pins."
+                + "\nRepublish mathlib4 from this manifest, or restore the pins."
             )
 
     def requirements(self):
@@ -182,7 +182,7 @@ class Xrpl(ConanFile):
         self.requires("date/3.0.4", transitive_headers=True)
         if self.options.formal_verification:
             self.requires(f"lean4/{self._lean_version()}", transitive_headers=True)
-            self.requires(f"lean4-deps/{self._lean_version()}")
+            self.requires(f"mathlib4/{self._lean_version()}")
         if self.options.jemalloc:
             self.requires("jemalloc/5.3.1")
         self.requires("lz4/1.10.0", force=True)
@@ -232,10 +232,12 @@ class Xrpl(ConanFile):
         tc.variables["formal_verification"] = self.options.formal_verification
         if self.options.formal_verification:
             lean4 = self.dependencies["lean4"].cpp_info
-            lean4_deps = self.dependencies["lean4-deps"].cpp_info
-            self._assert_lake_closure(lean4_deps.get_property("lean4_lake_manifest"))
+            mathlib4 = self.dependencies["mathlib4"].cpp_info
+            self._assert_lake_closure(mathlib4.get_property("lean4_lake_manifest"))
             tc.variables["LEAN4_BINDIR"] = lean4.bindirs[0]
-            tc.variables["LEAN4_DEPS_PACKAGES"] = lean4_deps.get_property("lean4_packages_dir")
+            tc.variables["LEAN4_DEPS_PACKAGES"] = mathlib4.get_property(
+                "lean4_packages_dir"
+            )
         tc.variables["jemalloc"] = self.options.jemalloc
         tc.variables["rocksdb"] = self.options.rocksdb
         tc.variables["BUILD_SHARED_LIBS"] = self.options.shared

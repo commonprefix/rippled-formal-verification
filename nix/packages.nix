@@ -114,7 +114,7 @@ let
 
   # nixpkgs builds lean4 with USE_GITHASH=OFF, and lake keys its traces on the
   # githash, so it would treat the official-release mathlib oleans (lake exe
-  # cache get, the lean4-deps Conan package) as stale. LEAN_GITHASH overrides
+  # cache get, the mathlib4 Conan package) as stale. LEAN_GITHASH overrides
   # the githash lake uses. Values are `lean --githash` of the official releases.
   leanReleaseGithashes = {
     "4.34.1" = "5045d0056413266e57c625dcd7c365b10e377c52";

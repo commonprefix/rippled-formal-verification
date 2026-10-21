@@ -249,15 +249,15 @@ model's raw fields to the C++ oracle.
 The Lean4 side is heavy: it depends on `mathlib`, which contains thousands of files that are slow to compile. The strategy is to compile it **once** and keep it warm.
 
 Our model is built **in-tree** by CMake when `formal_verification=ON`, while
-mathlib comes prebuilt from the `lean4-deps` Conan package. Both `lean4` (the
-toolchain) and `lean4-deps` are published to the `xrplf` remote, so
+mathlib comes prebuilt from the `mathlib4` Conan package. Both `lean4` (the
+toolchain) and `mathlib4` are published to the `xrplf` remote, so
 `conan install` downloads them like any other dependency. After that, editing a
 `.lean` file and running `cmake --build` rebuilds only what changed.
 
 ### Prebuilt mathlib, incremental edits
 
-`lean4-deps` bundles mathlib's elaboration artifacts (`.olean`) and its native
-objects (`libLeanDeps.a`), built once per platform. Its version is the Lean
+`mathlib4` bundles mathlib's elaboration artifacts (`.olean`) and its native
+objects (`libmathlib4.a`), built once per platform. Its version is the Lean
 version: `formal_verification/lean-toolchain` selects both packages, and
 `conan install` checks that `formal_verification/lake-manifest.json` pins the
 same dependency closure the package was built from.
@@ -269,7 +269,7 @@ same dependency closure the package was built from.
 
 CMake builds the model in its own lake workspace, `<build dir>/formal_verification`:
 a copy of `formal_verification/` without `.lake`, whose `.lake/packages` is a
-symlink into the `lean4-deps` package. It never touches
+symlink into the `mathlib4` package. It never touches
 `formal_verification/.lake`, which stays yours for proof work with the
 `formal-verification` dev shell's `lake`.
 
@@ -277,12 +277,12 @@ The `formal-verification` dev shell's `lean` comes from nixpkgs, which builds
 it without the upstream githash. lake keys its build traces on the githash, so
 that shell exports `LEAN_GITHASH` with the official release's value (see
 `nix/packages.nix`); `lake exe cache get` and mathlib's prebuilt oleans then
-stay valid. The CMake build unsets it, as it uses the Conan toolchain.
+stay valid. The CMake build removes it, as it uses the Conan toolchain.
 
-The `lean4-deps` package keeps each dependency's `.git` directory: lake reads
+The `mathlib4` package keeps each dependency's `.git` directory: lake reads
 the revision from it, and without it re-clones and rebuilds mathlib.
 
-If `lean4-deps` ever has to be built locally (no binary for your platform),
+If `mathlib4` ever has to be built locally (no binary for your platform),
 it needs `git` and `curl` on `PATH` and network access, and limit its
 parallelism: each job is a clang process, and the default is one per hardware
 thread. Add `-c tools.build:jobs=N` to `conan install`.
@@ -322,7 +322,7 @@ From a fresh checkout:
 ```bash
 mkdir .build && cd .build
 
-# Resolve dependencies. Downloads the lean4 toolchain and the prebuilt lean4-deps.
+# Resolve dependencies. Downloads the lean4 toolchain and the prebuilt mathlib4.
 conan install .. --output-folder . --build missing --settings build_type=Release \
     -o formal_verification=True --lockfile-partial
 
@@ -336,11 +336,11 @@ cmake --build . --parallel N
 ./xrpld --unittest=formal_verification
 ```
 
-`-o formal_verification=True` pulls the `lean4` toolchain and `lean4-deps`
+`-o formal_verification=True` pulls the `lean4` toolchain and `mathlib4`
 into the graph, and the matching `-Dformal_verification=ON` tells CMake to build
 and link the Lean4 side.
 
-`--lockfile-partial` lets Conan add `lean4` and `lean4-deps`, which are opt-in and not pinned in `conan.lock`.
+`--lockfile-partial` lets Conan add `lean4` and `mathlib4`, which are opt-in and not pinned in `conan.lock`.
 
 ## Testing Principles
 

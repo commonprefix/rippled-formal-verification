@@ -10,7 +10,7 @@
 # file(COPY) keeps timestamps, so unchanged modules stay up to date.
 #
 # LEAN_CC: leanc invokes it when set, so a system compiler would build the
-# model's objects with a different toolchain than lean4-deps' were built with.
+# model's objects with a different toolchain than mathlib4's were built with.
 # It has to be *removed* rather than emptied: lake fails outright on an empty
 # value ("external command '' exited with code 255"), which rules out
 # `cmake -E env LEAN_CC=`. `cmake -E env --unset` needs CMake 3.24, above the

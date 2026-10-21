@@ -18,7 +18,7 @@ foreach(_var IN ITEMS LEAN4_BINDIR LEAN4_DEPS_PACKAGES)
 endforeach()
 
 find_package(lean4 REQUIRED)
-find_package(lean4-deps REQUIRED)
+find_package(mathlib4 REQUIRED)
 
 set(lean4_src ${CMAKE_SOURCE_DIR}/formal_verification)
 # CMake's own lake workspace, separate from formal_verification/.lake (see
@@ -35,16 +35,23 @@ set(lean4_lake ${LEAN4_BINDIR}/lake)
 execute_process(
     COMMAND ${lean4_lake} --version
     RESULT_VARIABLE lean4_lake_result
-    OUTPUT_QUIET
-    ERROR_QUIET
+    OUTPUT_VARIABLE lean4_lake_output
+    ERROR_VARIABLE lean4_lake_output
 )
 if(NOT lean4_lake_result EQUAL 0)
+    set(lean4_lake_hint "")
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+        string(
+            CONCAT lean4_lake_hint
+            " The lean4 package ships upstream binaries that need the FHS "
+            "loader /lib64/ld-linux-x86-64.so.2. On NixOS, provide it by "
+            "enabling nix-ld (programs.nix-ld.enable = true)."
+        )
+    endif()
     message(
         FATAL_ERROR
-        "formal_verification: '${lean4_lake}' cannot be executed. The lean4 "
-        "package ships upstream binaries that need the FHS loader "
-        "/lib64/ld-linux-x86-64.so.2. On NixOS, provide it by enabling nix-ld "
-        "(programs.nix-ld.enable = true)."
+        "formal_verification: '${lean4_lake}' cannot be executed "
+        "(${lean4_lake_result}).${lean4_lake_hint}\n${lean4_lake_output}"
     )
 endif()
 
@@ -83,7 +90,7 @@ add_dependencies(xrpld lean4_model)
 target_link_libraries(
     xrpld
     ${lean4_model_archive}
-    lean4-deps::lean4-deps
+    mathlib4::mathlib4
     lean4::lean4
 )
 message(STATUS "formal_verification: Lean4 linked into xrpld")
