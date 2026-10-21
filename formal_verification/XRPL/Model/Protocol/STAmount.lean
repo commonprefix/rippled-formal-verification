@@ -441,7 +441,8 @@ def STAmount.mulRoundImpl
     else
       let prod : UInt64 := minV * maxV
       STAmount.checked nt prod 0 false mode
-  -- An MPT target takes the Number path. XRP and IOU targets keep the path below.
+  -- An MPT target takes the Number path, which C++ takes only under MPTokensV2. XRP and IOU targets keep
+  -- the path below.
   else if nt == NumericType.int64 then STAmount.roundNumberResult v1 v2 nt roundUp Number.operator_mul
   else
     let (value1, offset1) :=

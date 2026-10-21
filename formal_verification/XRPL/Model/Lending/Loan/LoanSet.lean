@@ -31,9 +31,9 @@ private def checkPrecisionFields (principal : Number) (fees : LoanFees) (checkFn
   return .tesSUCCESS
 
 -- C++ `checkVaultAcceptsLoan`
-private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanSchedule) (ledgerCloseTime : UInt32)
+private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanSchedule) (parentCloseTime : UInt32)
     (nt : NumericType) : Except Error TER := do
-  let phase := AssetPool.phase pool ledgerCloseTime
+  let phase := AssetPool.phase pool parentCloseTime
   match phase with
   | .subscription => return .tecTOO_SOON
   | .redemption => return .tecEXPIRED
@@ -49,16 +49,17 @@ private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanS
 
   return .tesSUCCESS
 
--- LoanSet -> preclaim
+-- LoanSet -> preclaim. The expiry and the pool phase are judged at the parent close time; the one-step
+-- start date in `schedule` is the ledger close time (`LoanSchedule.build`).
 def Loan.canCreate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principalRequested : Number)
-    (fees : LoanFees) (schedule : LoanSchedule) (ledgerCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
+    (fees : LoanFees) (schedule : LoanSchedule) (parentCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
   let scheduleTer := schedule.checkTimeAvailability
   if !scheduleTer.isTesSuccess then return scheduleTer
 
-  let hasExpired : Bool := ledgerCloseTime ≥ schedule.startDate
+  let hasExpired : Bool := parentCloseTime ≥ schedule.startDate
   if twoStep && hasExpired then return .tecEXPIRED
 
-  let vaultTer ← canFundLoan pool schedule ledgerCloseTime broker.numericType
+  let vaultTer ← canFundLoan pool schedule parentCloseTime broker.numericType
   if !vaultTer.isTesSuccess then return vaultTer
 
   let precisionTer ← checkPrecisionFields principalRequested fees

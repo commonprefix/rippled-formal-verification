@@ -13,6 +13,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 
 namespace xrpl::test::formal_verification {
 
@@ -149,8 +150,10 @@ public:
     read() const
     {
         auto total = readExcept<NumberFFI>(leanGet(lean_vault_assets_total));
+        if (!total.value)
+            throw std::runtime_error("VaultFFI::read: assetsAvailable + assetsDeployed overflows");
         return Vault{
-            .assetsTotal = total.value ? total.value->read() : Number{},
+            .assetsTotal = total.value->read(),
             .assetsAvailable = leanGetObj<NumberFFI>(lean_vault_assets_available),
             .assetsDeployed = leanGetObj<NumberFFI>(lean_vault_assets_deployed),
             .assetsReserved = leanGetObj<NumberFFI>(lean_vault_assets_reserved),
@@ -168,7 +171,8 @@ public:
     }
 };
 
-// The inner `Except TER α` of a model `TerExcept α` result: the TER code on rejection, else the value.
+// The inner `Except TER α` of a model `TerExcept α` result: the TER code on rejection, else the
+// value.
 class TerExceptFFI : public LeanObjectFFI
 {
 public:

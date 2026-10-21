@@ -86,7 +86,8 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanVaultResult const deposit = leanVaultDeposit(state, amount, isDonation, parentCloseTime(env));
+        LeanVaultResult const deposit =
+            leanVaultDeposit(state, amount, isDonation, parentCloseTime(env));
         expectLawful(deposit);
 
         jtx::Vault::DepositArgs depositArgs{
@@ -95,6 +96,8 @@ class LeanVaultDeposit_test : public LeanSuite
             depositArgs.flags = tfVaultDonate;
         env(jtx::Vault::deposit(depositArgs), jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
+        // Read before closing: a close discards state staged on the open ledger.
+        Vault const cpp = readVaultState(env, vaultKeylet, asset);
         env.close();
 
         BEAST_EXPECTS(
@@ -114,12 +117,9 @@ class LeanVaultDeposit_test : public LeanSuite
         if (cppTer != tesSUCCESS)
             return;
 
-        auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
-        Number const cppAssetsTotal = getAssetsTotal(newVaultSle);
-        Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
-        Number const cppSharesTotal{
-            static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
+        Number const& cppAssetsTotal = cpp.assetsTotal;
+        Number const& cppAssetsAvailable = cpp.assetsAvailable;
+        Number const& cppSharesTotal = cpp.sharesTotal;
         BEAST_EXPECTS(
             deposit.vault.assetsTotal == cppAssetsTotal,
             "assetsTotal lean=" + to_string(deposit.vault.assetsTotal) +
@@ -132,7 +132,7 @@ class LeanVaultDeposit_test : public LeanSuite
             deposit.vault.sharesTotal == cppSharesTotal,
             "sharesTotal lean=" + to_string(deposit.vault.sharesTotal) +
                 " cpp=" + to_string(cppSharesTotal));
-        Number const cppLossUnrealized = newVaultSle->at(sfLossUnrealized);
+        Number const& cppLossUnrealized = cpp.lossUnrealized;
         BEAST_EXPECTS(
             deposit.vault.lossUnrealized == cppLossUnrealized,
             "lossUnrealized lean=" + to_string(deposit.vault.lossUnrealized) +
@@ -325,12 +325,14 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const& assetsTotal,
         std::uint64_t sharesTotal,
         std::int64_t amount,
-        TER expected)
+        TER expected,
+        Number const& yieldUnrealized = Number{0})
     {
         using namespace jtx;
         testcase(
             "updated-state MPT deposit " + std::to_string(amount) + " (assetsTotal=" +
-            to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) + ")");
+            to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) +
+            ", yield=" + to_string(yieldUnrealized) + ")");
 
         Env env(*this);
         Account const vaultOwner{"vaultOwner"};
@@ -348,8 +350,71 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        BEAST_EXPECT(updateVaultState(
+            env,
+            vaultKeylet,
+            assetsTotal,
+            assetsTotal,
+            sharesTotal,
+            Number{0},
+            Number{0},
+            yieldUnrealized));
         compareVaultDeposit(env, vaultKeylet, holder, asset.raw(), asset(amount), expected);
+    }
+
+    // The owner blocked deposits (VaultSet), so a deposit is tecLOCKED on both sides.
+    void
+    testVaultDepositBlocked()
+    {
+        using namespace jtx;
+        testcase("deposit into a vault with deposits blocked");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), vaultOwner, holder);
+        env.close();
+
+        jtx::Vault vault{env};
+        auto const [createTx, vaultKeylet] = vault.create(
+            {.owner = vaultOwner, .asset = xrpIssue(), .flags = tfVaultOwnerCanBlockDeposit});
+        env(createTx);
+        env.close();
+        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = XRP(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        env(jtx::Vault::set(
+                {.owner = vaultOwner, .id = vaultKeylet.key, .flags = tfVaultDepositBlock}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        compareVaultDeposit(env, vaultKeylet, holder, xrpIssue(), XRP(100), tecLOCKED);
+    }
+
+    // Stage an IOU vault with a share price below the grid: the shares a deposit buys are worth
+    // less than one grid unit, so the clamped deposit is zero.
+    void
+    testVaultDepositUpdatedStateIOU(
+        Number const& assetsTotal,
+        std::uint64_t sharesTotal,
+        Number const& amount,
+        TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            "updated-state IOU deposit " + to_string(amount) + " (assetsTotal=" +
+            to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) + ")");
+
+        Env env(*this);
+        Account const vaultOwner{"vaultOwner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), vaultOwner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        compareVaultDeposit(env, vaultKeylet, issuer, asset.raw(), asset(amount), expected);
     }
 
     // Update an IOU vault to an extreme AssetsTotal so a small issuer deposit rounds to zero (or
@@ -589,15 +654,15 @@ class LeanVaultDeposit_test : public LeanSuite
     }
 
     // FV_M2_15 (regression): an IOU deposit whose exact new total needed 17 significant digits
-    // rounded up when stored, crediting more than the depositor paid. The open limit keeps a total
-    // within 16 digits of the vault grid, so both sides now reject such a deposit.
+    // rounded up when stored, crediting more than the depositor paid. Such a total is now past the
+    // open limit (9e15 grid units), which is what rejects the deposit on both sides.
     void
-    testDepositOvercredit(Number const& seed, Number const& deposit, int vaultScale)
+    testDepositPastOpenLimit(Number const& seed, Number const& deposit, int vaultScale)
     {
         using namespace jtx;
         testcase(
-            "deposit overcredit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
-            std::to_string(vaultScale));
+            "deposit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
+            std::to_string(vaultScale) + " passes the open limit");
 
         Env env(*this);
         Account const owner{"owner"};
@@ -626,7 +691,7 @@ class LeanVaultDeposit_test : public LeanSuite
     testDepositAppliedDelta()
     {
         using namespace jtx;
-        testcase("deposit moves the vault totals by a different amount than paid");
+        testcase("deposit moves the vault totals by exactly the amount paid");
 
         Env env(*this);
         Account const owner{"owner"};
@@ -670,14 +735,14 @@ class LeanVaultDeposit_test : public LeanSuite
                 to_string(Number{lean.assets}));
 
         // C++: the paid amount must be on the vault scale.
-        STAmount const paidRounded = roundToVaultGrid(asset, before.scale, before.assetsTotal, paid);
+        STAmount const paidRounded =
+            roundToVaultGrid(asset, before.scale, before.assetsTotal, paid);
         BEAST_EXPECTS(
             Number{paidRounded} == paid,
             "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
 
         // Model: its charge must be on the vault scale as well.
-        LeanAmountResult const chargeRounded =
-            leanRoundedDepositAmount(before, lean.assets);
+        LeanAmountResult const chargeRounded = leanRoundedDepositAmount(before, lean.assets);
         expectLawful(chargeRounded);
         BEAST_EXPECTS(
             !chargeRounded.leanError.has_value() && chargeRounded.amount,
@@ -709,6 +774,8 @@ class LeanVaultDeposit_test : public LeanSuite
         Number const iouOpenLimit{kOpenLimitUnits, -6};
         testVaultDepositIOU(Number{0}, iouOpenLimit, false, tesSUCCESS);
         testVaultDepositIOU(Number{0}, iouOpenLimit + Number{1, -6}, false, tecLIMIT_EXCEEDED);
+        // 1e10 at scale 6 needs 17 digits: the total would leave the base exponent.
+        testVaultDepositIOU(Number{0}, Number{1, 10}, false, tecLIMIT_EXCEEDED);
         testVaultDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
         testVaultDepositIOU(Number{0}, iouOpenLimit, true, tesSUCCESS);
         testVaultDepositIOU(Number{0}, iouOpenLimit + Number{1, -6}, true, tecLIMIT_EXCEEDED);
@@ -747,6 +814,9 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Extreme NAV ratio AssetsTotal >> SharesTotal: a unit deposit buys zero shares.
         testVaultDepositUpdatedStateMPT(Number{1, 18}, 1, 1, tecPRECISION_LOSS);
+        // Share price 3e-7: one grid unit buys 3 shares worth 9e-7, which clamps to nothing.
+        testVaultDepositUpdatedStateIOU(
+            Number{1'000}, 3'333'333'333ULL, Number{1, -6}, tecPRECISION_LOSS);
         // AssetsTotal near the STAmount exponent ceiling: a small IOU deposit rounds to zero.
         testRoundedDepositUpdatedStateIOU(
             Number{9'999'999'999'999'999LL, 80}, Number{1}, tecPRECISION_LOSS);
@@ -755,22 +825,38 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Insolvent vault (assetsTotal=0, sharesTotal>0): deposits are blocked with tecLOCKED.
         testVaultDepositUpdatedStateMPT(Number{0}, 1'000'000, 1'000, tecLOCKED);
+        // Deposits blocked by the owner.
+        testVaultDepositBlocked();
+        // Unrealized yield counts toward the open-limit capacity: 10 under the limit (one share
+        // per unit) with 10 of yield rejects one unit, with 9 of yield it fits exactly.
+        testVaultDepositUpdatedStateMPT(
+            Number{kOpenLimitUnits - 10},
+            static_cast<std::uint64_t>(kOpenLimitUnits - 10),
+            1,
+            tecLIMIT_EXCEEDED,
+            Number{10});
+        testVaultDepositUpdatedStateMPT(
+            Number{kOpenLimitUnits - 10},
+            static_cast<std::uint64_t>(kOpenLimitUnits - 10),
+            1,
+            tesSUCCESS,
+            Number{9});
         // Donation to an empty vault is blocked with tecNO_PERMISSION
         testVaultDonationEmptyVault();
         // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
         testVaultDepositLimitExceeded();
 
-        // Known discrepancies, each fails until the C++ code is fixed.
+        // Open discrepancies, disabled until the C++ code is fixed.
         // clang-format off
-        testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
         // testVaultDonationInsolvent();   // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
         // testDepositDilution();          // FV_M2_8_c: deposit lowers the share price (both)
-        testDepositAppliedDelta();           // totals move by more than paid (both)
+        // testDepositPastOpenLimit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);  // FV_M2_15_b
 
-        // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
-        // 899999.9999999999 is 16 digits at scale 10 (open limit 9e5); +5 would need 17.
-        testDepositOvercredit(Number{8'999'999'999'999'999LL, -10}, Number{5}, 10);
-        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);  // FV_M2_15_b
+        // Properties both sides now satisfy, kept as regression tests.
+        testVaultDepositOvervaluedShares();  // FV_M2_3: the share charge rounds up
+        testDepositAppliedDelta();           // totals move by exactly the amount paid
+        // FV_M2_15: 899999.9999999999 is at the scale-10 open limit (9e5); +5 passes it.
+        testDepositPastOpenLimit(Number{8'999'999'999'999'999LL, -10}, Number{5}, 10);
         // clang-format on
     }
 };

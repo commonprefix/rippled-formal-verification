@@ -67,6 +67,11 @@ class LeanVault_test : public LeanSuite
             s.assetsMaximum = Number{3};
             runLawful(s, true, "assetsTotal above assetsMaximum");
         }
+        {
+            auto s = baseline();
+            s.sharesTotal = Number{9'223'372'036'854'775LL, 3};  // 16 digits, below INT64_MAX
+            runLawful(s, true, "sharesTotal just below INT64_MAX");
+        }
     }
 
     // RawVault.WF clauses (the *_norm clauses are omitted)
@@ -156,6 +161,12 @@ class LeanVault_test : public LeanSuite
             s.assetsDeployed = Number{2};
             s.assetsReserved = Number{3};
             runLawful(s, false, "assetsReserved above assetsDeployed");
+        }
+        // The share supply is an int64.
+        {
+            auto s = baseline();
+            s.sharesTotal = Number{1, 19};
+            runLawful(s, false, "sharesTotal above INT64_MAX");
         }
         // 17 significant digits do not fit an IOU STAmount.
         {

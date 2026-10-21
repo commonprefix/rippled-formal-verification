@@ -10,6 +10,7 @@
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
+#include <xrpl/basics/chrono.h>
 #include <xrpl/ledger/OpenView.h>
 #include <xrpl/ledger/Sandbox.h>
 #include <xrpl/ledger/helpers/VaultHelpers.h>
@@ -23,13 +24,14 @@
 #include <xrpl/protocol/STNumber.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 
 namespace xrpl::test::formal_verification {
 
-// A FixedPrecision vault rejects inflows past 9e15 units of its base grid (10^-scale): 9e15 drops or
-// MPT units, 9e9 for an IOU at the default scale 6.
+// A FixedPrecision vault rejects inflows past 9e15 units of its base grid (10^-scale): 9e15 drops
+// or MPT units, 9e9 for an IOU at the default scale 6.
 constexpr std::int64_t kOpenLimitUnits = 9'000'000'000'000'000LL;
 
 inline Keylet
@@ -71,11 +73,67 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
         .depositBlocked = vaultSle->isFlag(lsfVaultDepositBlocked)};
 }
 
+// The holder's balance of the vault's share MPT (zero without an MPToken).
+[[nodiscard]] inline STAmount
+fetchHolderShares(jtx::Env& env, Keylet const& vaultKeylet, jtx::Account const& holder)
+{
+    auto const vaultSle = env.le(vaultKeylet);
+    if (!vaultSle)
+        throw std::runtime_error("fetchHolderShares: no vault on the ledger");
+    MPTIssue const share{vaultSle->at(sfShareMPTID)};
+    auto const sleToken = env.le(keylet::mptoken(share.getMptID(), holder.id()));
+    return STAmount{share, sleToken ? sleToken->at(sfMPTAmount) : 0};
+}
+
+// True iff `holder` owns every outstanding share: C++ then waives the unrealized loss on a
+// withdrawal or clawback, and the model must be told so.
+[[nodiscard]] inline bool
+holderOwnsAllShares(jtx::Env& env, Keylet const& vaultKeylet, jtx::Account const& holder)
+{
+    auto const vaultSle = env.le(vaultKeylet);
+    if (!vaultSle)
+        throw std::runtime_error("holderOwnsAllShares: no vault on the ledger");
+    auto const shareMptId = vaultSle->at(sfShareMPTID);
+    std::uint64_t const outstanding =
+        env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount);
+    if (outstanding == 0)
+        return false;
+    auto const token = env.le(keylet::mptoken(shareMptId, holder.id()));
+    return token && token->at(sfMPTAmount) == outstanding;
+}
+
 // The close time of the parent ledger, the "now" of the transaction phase checks.
 [[nodiscard]] inline std::uint32_t
 parentCloseTime(jtx::Env& env)
 {
     return env.current()->parentCloseTime().time_since_epoch().count();
+}
+
+[[nodiscard]] inline std::uint32_t
+timeCount(NetClock::time_point t)
+{
+    return static_cast<std::uint32_t>(t.time_since_epoch().count());
+}
+
+// `t` rounded up to a multiple of the ledger's close-time resolution.
+[[nodiscard]] inline NetClock::time_point
+alignedTime(jtx::Env& env, NetClock::time_point t)
+{
+    using namespace std::chrono_literals;
+    auto const resolution = env.closed()->header().closeTimeResolution;
+    auto const rem = t.time_since_epoch() % resolution;
+    return rem == 0s ? t : t + (resolution - rem);
+}
+
+// Close the ledger so that the next transaction's parent close time is exactly `at`, which must
+// be aligned (`alignedTime`). Returns whether it landed.
+[[nodiscard]] inline bool
+closeExactlyAt(jtx::Env& env, NetClock::time_point at)
+{
+    using namespace std::chrono_literals;
+    auto const resolution = env.closed()->header().closeTimeResolution;
+    env.close(at - resolution + 1s);
+    return parentCloseTime(env) == timeCount(at);
 }
 
 // Overwrite the vault totals and share issuance outstanding on the open ledger to reach states a
@@ -89,7 +147,8 @@ updateVaultState(
     Number const& assetsAvailable,
     std::uint64_t sharesTotal,
     Number const& assetsMaximum = Number{0},
-    Number const& lossUnrealized = Number{0})
+    Number const& lossUnrealized = Number{0},
+    Number const& yieldUnrealized = Number{0})
 {
     return env.app().getOpenLedger().modify(  //
         [&](OpenView& view, beast::Journal) -> bool {
@@ -105,6 +164,7 @@ updateVaultState(
             v->at(sfAssetsDeployed) = assetsTotal - assetsAvailable;
             v->at(sfAssetsMaximum) = assetsMaximum;
             v->at(sfLossUnrealized) = lossUnrealized;
+            v->at(sfYieldUnrealized) = yieldUnrealized;
             iss->setFieldU64(sfOutstandingAmount, sharesTotal);
             sb.update(v);
             sb.update(iss);
@@ -221,7 +281,11 @@ iouBalance(jtx::Env& env, jtx::Account const& account, jtx::PrettyAsset const& a
 // Overwrite the IOU balance the vault's pseudo-account holds on its trust line, so a staged total
 // is backed by real funds. Returns false if the vault or trust line is missing.
 [[nodiscard]] inline bool
-stageVaultHolding(jtx::Env& env, Keylet const& vaultKeylet, Issue const& issue, Number const& amount)
+stageVaultHolding(
+    jtx::Env& env,
+    Keylet const& vaultKeylet,
+    Issue const& issue,
+    Number const& amount)
 {
     return env.app().getOpenLedger().modify(  //
         [&](OpenView& view, beast::Journal) -> bool {

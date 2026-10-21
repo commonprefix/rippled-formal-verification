@@ -36,14 +36,16 @@ class LeanVaultCreate_test : public LeanSuite
     };
 
     // Model of VaultCreate: canCreate is preclaim, create is the vault doApply writes. A preflight
-    // rejection (tem) is matched by create rejecting the fields as not lawful.
+    // rejection (tem) is matched by create rejecting the fields as not lawful, unless the check is
+    // `outsideModel`: the model then normalizes the field instead of rejecting it.
     void
     runVaultCreate(
         std::string const& label,
         AssetKind kind,
         VaultCreateArgs args,
         std::optional<ScheduleOffsets> schedule,
-        TER expected)
+        TER expected,
+        bool outsideModel = false)
     {
         using namespace jtx;
         testcase(label);
@@ -103,9 +105,13 @@ class LeanVaultCreate_test : public LeanSuite
 
         if (isTemMalformed(cppTer))
         {
-            BEAST_EXPECTS(
-                created.leanError == LeanError::notLawful,
-                "preflight rejects the fields but the model creates the vault");
+            if (outsideModel)
+                BEAST_EXPECTS(
+                    !created.leanError.has_value(), "the model does not normalize the field");
+            else
+                BEAST_EXPECTS(
+                    created.leanError == LeanError::notLawful,
+                    "preflight rejects the fields but the model creates the vault");
             return;
         }
         BEAST_EXPECTS(
@@ -175,6 +181,34 @@ class LeanVaultCreate_test : public LeanSuite
             tecPRECISION_LOSS);
         runVaultCreate(
             "IOU scale above 10", AssetKind::iou, {.scale = 11}, std::nullopt, temMALFORMED);
+        // A scale on an integral asset is a preflight error; the model forces the scale to 0.
+        runVaultCreate(
+            "XRP vault with a scale",
+            AssetKind::xrp,
+            {.scale = 3},
+            std::nullopt,
+            temMALFORMED,
+            true);
+        runVaultCreate(
+            "MPT vault with a scale",
+            AssetKind::mpt,
+            {.scale = 3},
+            std::nullopt,
+            temMALFORMED,
+            true);
+        // A zero maximum means no cap; a negative one is rejected.
+        runVaultCreate(
+            "IOU vault with a zero maximum",
+            AssetKind::iou,
+            {.assetsMaximum = Number{0}},
+            std::nullopt,
+            tesSUCCESS);
+        runVaultCreate(
+            "IOU vault with a negative maximum",
+            AssetKind::iou,
+            {.assetsMaximum = Number{-1}},
+            std::nullopt,
+            temMALFORMED);
 
         // Closed-ended vaults.
         runVaultCreate(

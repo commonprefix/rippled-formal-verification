@@ -5,11 +5,13 @@
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
 #include <test/jtx/ter.h>
+#include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
+#include <xrpl/protocol/TxFlags.h>
 
 #include <cstdint>
 #include <string>
@@ -44,11 +46,14 @@ class LeanVaultSet_test : public LeanSuite
         auto const lean = leanCanVaultUpdate(state, cap);
         expectLawful(lean);
         TER const leanTer = lean.ter;
+        LeanUpdateResult const updated = leanVaultUpdate(state, cap);
 
         auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
         tx[sfAssetsMaximum] = cap;
         env(tx, jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
+        // Read before closing: a close discards state staged on the open ledger.
+        Vault const cpp = readVaultState(env, vaultKeylet, asset.raw());
         env.close();
 
         BEAST_EXPECTS(
@@ -57,6 +62,105 @@ class LeanVaultSet_test : public LeanSuite
         BEAST_EXPECTS(
             leanTer == cppTer,
             std::string("lean=") + transToken(leanTer) + " cpp=" + transToken(cppTer));
+        if (cppTer != tesSUCCESS)
+            return;
+
+        // A zero cap is stored as no cap on both sides.
+        BEAST_EXPECTS(!updated.leanError.has_value(), "lean update error");
+        BEAST_EXPECTS(
+            updated.vault.assetsMaximum == cpp.assetsMaximum,
+            "assetsMaximum lean=" +
+                (updated.vault.assetsMaximum ? to_string(*updated.vault.assetsMaximum) : "none") +
+                " cpp=" + (cpp.assetsMaximum ? to_string(*cpp.assetsMaximum) : "none"));
+    }
+
+    // Deposit blocking: only a vault created with tfVaultOwnerCanBlockDeposit accepts the flags.
+    void
+    runBlockDeposit(bool ownerCanBlock, bool block, TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            std::string(block ? "block" : "unblock") + " deposits, owner " +
+            (ownerCanBlock ? "can" : "cannot") + " block");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        env.fund(XRP(1'000'000), owner);
+        env.close();
+
+        jtx::Vault vault{env};
+        auto const [createTx, vaultKeylet] = vault.create(
+            {.owner = owner,
+             .asset = xrpIssue(),
+             .flags = ownerCanBlock ? std::optional<std::uint32_t>{tfVaultOwnerCanBlockDeposit}
+                                    : std::nullopt});
+        env(createTx);
+        env.close();
+        if (!block)
+        {
+            // Block first, so the unblock changes the vault.
+            env(jtx::Vault::set(
+                    {.owner = owner, .id = vaultKeylet.key, .flags = tfVaultDepositBlock}),
+                jtx::Ter(tesSUCCESS));
+            env.close();
+        }
+
+        Vault const state = readVaultState(env, vaultKeylet, xrpIssue());
+        auto const lean = leanCanVaultUpdate(state, std::nullopt, block, !block);
+        expectLawful(lean);
+        LeanUpdateResult const updated = leanVaultUpdate(state, std::nullopt, block, !block);
+
+        env(jtx::Vault::set(
+                {.owner = owner,
+                 .id = vaultKeylet.key,
+                 .flags = block ? tfVaultDepositBlock : tfVaultDepositUnblock}),
+            jtx::Ter(std::ignore));
+        TER const cppTer = env.ter();
+        Vault const cpp = readVaultState(env, vaultKeylet, xrpIssue());
+        env.close();
+
+        BEAST_EXPECTS(
+            cppTer == expected,
+            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
+        BEAST_EXPECTS(
+            lean.ter == cppTer,
+            std::string("lean=") + transToken(lean.ter) + " cpp=" + transToken(cppTer));
+        if (cppTer != tesSUCCESS)
+            return;
+        BEAST_EXPECTS(!updated.leanError.has_value(), "lean update error");
+        BEAST_EXPECTS(
+            updated.vault.depositBlocked == cpp.depositBlocked && cpp.depositBlocked == block,
+            std::string("depositBlocked lean=") + (updated.vault.depositBlocked ? "1" : "0") +
+                " cpp=" + (cpp.depositBlocked ? "1" : "0"));
+    }
+
+    // An IOU cap below the vault grid is rejected on both sides.
+    void
+    testCapOffGrid()
+    {
+        using namespace jtx;
+        testcase("set an IOU cap off the vault grid");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+
+        Vault const state = readVaultState(env, vaultKeylet, asset.raw());
+        Number const cap{1, -7};
+        auto const lean = leanCanVaultUpdate(state, cap);
+        expectLawful(lean);
+
+        auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
+        tx[sfAssetsMaximum] = cap;
+        env(tx, jtx::Ter(std::ignore));
+        TER const cppTer = env.ter();
+        env.close();
+        BEAST_EXPECTS(cppTer == tecPRECISION_LOSS, std::string("cpp=") + transToken(cppTer));
+        BEAST_EXPECTS(lean.ter == cppTer, std::string("lean=") + transToken(lean.ter));
     }
 
     void
@@ -136,6 +240,11 @@ class LeanVaultSet_test : public LeanSuite
         testCapBelowTotal();
         testCapEqualsTotal();
         testCapAboveTotal();
+        testCapOffGrid();
+
+        runBlockDeposit(true, true, tesSUCCESS);
+        runBlockDeposit(true, false, tesSUCCESS);
+        runBlockDeposit(false, true, tecNO_PERMISSION);
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off

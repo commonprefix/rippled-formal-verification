@@ -11,10 +11,12 @@
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
 #include <xrpl/protocol/Asset.h>
+#include <xrpl/protocol/Feature.h>
 #include <xrpl/protocol/IOUAmount.h>
 #include <xrpl/protocol/Issue.h>
 #include <xrpl/protocol/MPTAmount.h>
 #include <xrpl/protocol/MPTIssue.h>
+#include <xrpl/protocol/Rules.h>
 #include <xrpl/protocol/STAmount.h>
 
 #include <cstdint>
@@ -24,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_set>
 
 extern "C" {
 lean_object*
@@ -1946,6 +1949,18 @@ private:
     void
     runTests() override
     {
+        // The model's MPT multiply and divide mirror the Number paths C++ takes under
+        // MPTokensV2, so the suite runs under every supported amendment (the rules a test Env
+        // applies) plus MPTokensV2, which is not supported yet.
+        std::unordered_set<UInt256, beast::Uhash<>> presets;
+        for (auto const& [name, vote] : detail::supportedAmendments())
+        {
+            if (auto const feature = getRegisteredFeature(name))
+                presets.insert(*feature);
+        }
+        presets.insert(featureMPTokensV2);
+        CurrentTransactionRulesGuard const rules{Rules{presets}};
+
         test_fuzz_mul_round();
         test_fuzz_round_to_exponent();
         test_fuzz_get_rate();
