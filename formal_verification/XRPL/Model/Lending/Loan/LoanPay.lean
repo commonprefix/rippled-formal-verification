@@ -280,6 +280,9 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
 -- Settle the summed amounts against the broker and its pool, then re-check the pool
 private def Loan.settlePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amounts : PaymentAmounts)
     (scheduledInterest : Number) : TerExcept (LoanWithAmounts α) := do
+  if amounts.principalPaid.signum < 0 || amounts.interestPaid.signum < 0 || amounts.feePaid.signum < 0 then
+    throw .tecLIMIT_EXCEEDED
+
   let broker := loan.broker
   let nt := broker.numericType
   let poolAmounts := AssetPool.amounts pool
