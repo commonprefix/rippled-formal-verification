@@ -54,7 +54,7 @@ def LoanBroker.roundedCoverAmount {α : Type} [AssetPool α] (lb : LoanBroker) (
   let amountNum ← amount.toNumber .to_nearest
 
   let rounded ← sumRoundAndSubtract lb.coverAvailable amountNum baseExponent lb.numericType .downward
-  if rounded.signum == 0 then
+  if rounded.signum ≤ 0 then
     throw .tecPRECISION_LOSS
 
   return rounded

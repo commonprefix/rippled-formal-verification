@@ -77,7 +77,7 @@ def computeWithdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss :
 -- returns the updated vault, the assets withdrawn and the shares redeemed, or the TER that rejects it
 -- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
 def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (parentCloseTime : UInt32)
-    (_hpos : 0 < amount.amount.toRat) : TerExcept VaultWithAmounts := do
+    (_hpos : 0 < amount.amount.toRat) (holderShares : Option Number := none) : TerExcept VaultWithAmounts := do
   -- a vault with an early-exit fee rate, even a zero one, allows withdrawals in the investment phase
   if v.earlyExitFeeRate.isNone && v.phase parentCloseTime == .investment then
     throw .tecTOO_SOON
@@ -100,6 +100,11 @@ def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : 
     let dustCheck ← v.checkDebitNotDust assetsNumber'
     if dustCheck != .tesSUCCESS then
       throw dustCheck
+
+  if let some sharesHeld := holderShares then
+    let sharesRedeemed ← amounts.shares.toNumber .to_nearest
+    if sharesHeld.operator_lt sharesRedeemed then
+      throw .tecINSUFFICIENT_FUNDS
 
   if !isFinalWithdrawal && !assets'.isZero then
     -- the shares are burned for the whole amount, the early-exit fee stays in the vault

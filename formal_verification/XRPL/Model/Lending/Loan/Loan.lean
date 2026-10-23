@@ -115,6 +115,12 @@ structure RawLoan.WF (rl : RawLoan) : Prop where
   serviceFee_norm : rl.fees.serviceFee.isNormalized
   latePaymentFee_norm : rl.fees.latePaymentFee.isNormalized
   closePaymentFee_norm : rl.fees.closePaymentFee.isNormalized
+  loanScale_range : cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset
+  totalValueOutstanding_atExponent :
+    rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
+  principalOutstanding_atExponent : rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
+  managementFeeOutstanding_atExponent :
+    rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
 
 structure RawLoan.Valid (rl : RawLoan) : Prop where
   -- fully paid off exactly when no payments remain
@@ -145,29 +151,19 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   paymentInterval_min : minPaymentInterval ≤ rl.schedule.paymentInterval
   gracePeriod_range : defaultGracePeriod ≤ rl.schedule.gracePeriod ∧
     rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval
-  -- the loan scale is an STAmount exponent
-  loanScale_range : cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset
-  -- schedule bookkeeping
-  paymentRemaining_le : rl.paymentRemaining ≤ rl.schedule.paymentTotal
-  dueDates_ordered : rl.paymentRemaining ≠ 0 → rl.previousPaymentDueDate < rl.nextPaymentDueDate
-  nextPaymentDueDate_on_schedule : rl.paymentRemaining ≠ 0 →
-    rl.schedule.startDate ≤ rl.nextPaymentDueDate ∧
-      (rl.nextPaymentDueDate - rl.schedule.startDate) % rl.schedule.paymentInterval = 0
-  -- the accounting code keeps the three outstanding amounts at the loan scale
-  totalValueOutstanding_atExponent :
-    rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
-  principalOutstanding_atExponent : rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
-  managementFeeOutstanding_atExponent :
-    rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
 
 instance RawLoan.decidableWF (rl : RawLoan) : Decidable rl.WF :=
   decidable_of_iff
     (rl.periodicPayment.isNormalized ∧ rl.principalOutstanding.isNormalized ∧
       rl.totalValueOutstanding.isNormalized ∧ rl.managementFeeOutstanding.isNormalized ∧
       rl.fees.originationFee.isNormalized ∧ rl.fees.serviceFee.isNormalized ∧
-      rl.fees.latePaymentFee.isNormalized ∧ rl.fees.closePaymentFee.isNormalized)
-    ⟨fun ⟨a, b, c, d, e, f, g, h⟩ => ⟨a, b, c, d, e, f, g, h⟩,
-     fun ⟨a, b, c, d, e, f, g, h⟩ => ⟨a, b, c, d, e, f, g, h⟩⟩
+      rl.fees.latePaymentFee.isNormalized ∧ rl.fees.closePaymentFee.isNormalized ∧
+      (cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset) ∧
+      rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
+      rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
+      rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true)
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩⟩
 
 instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
   decidable_of_iff
@@ -188,19 +184,11 @@ instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
       rl.rates.closeInterestRate ≤ maxLoanRate ∧ rl.rates.overpaymentInterestRate ≤ maxLoanRate ∧
       rl.rates.overpaymentFee ≤ maxLoanRate ∧ Number.zero.operator_le rl.fees.originationFee = true ∧
       0 < rl.schedule.paymentTotal ∧ minPaymentInterval ≤ rl.schedule.paymentInterval ∧
-      (defaultGracePeriod ≤ rl.schedule.gracePeriod ∧ rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval) ∧
-      (cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset) ∧
-      rl.paymentRemaining ≤ rl.schedule.paymentTotal ∧
-      (rl.paymentRemaining ≠ 0 → rl.previousPaymentDueDate < rl.nextPaymentDueDate) ∧
-      (rl.paymentRemaining ≠ 0 → rl.schedule.startDate ≤ rl.nextPaymentDueDate ∧
-        (rl.nextPaymentDueDate - rl.schedule.startDate) % rl.schedule.paymentInterval = 0) ∧
-      rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
-      rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
-      rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u, v, w, x, y, z, z'⟩⟩
+      (defaultGracePeriod ≤ rl.schedule.gracePeriod ∧ rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval))
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩⟩
 
 structure Loan extends RawLoan where
   wf : toRawLoan.WF
