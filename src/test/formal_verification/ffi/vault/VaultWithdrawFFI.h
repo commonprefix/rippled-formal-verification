@@ -1,9 +1,11 @@
 #pragma once
 
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
+#include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 
+#include <xrpl/basics/Number.h>
 #include <xrpl/protocol/STAmount.h>
 
 #include <lean/lean.h>
@@ -24,7 +26,8 @@ lean_vault_withdraw(
     lean_object* v,
     lean_object* amount,
     uint8_t waiveUnrealizedLoss,
-    uint32_t parentCloseTime);
+    uint32_t parentCloseTime,
+    lean_object* holderShares);
 }
 
 namespace xrpl::test::formal_verification {
@@ -73,7 +76,8 @@ leanVaultWithdraw(
     STAmount const& amount,
     bool byShares,
     std::uint32_t parentCloseTime,
-    bool waiveUnrealizedLoss = false)
+    bool waiveUnrealizedLoss = false,
+    std::optional<Number> const& holderShares = std::nullopt)
 {
     auto lawful = VaultFFI::build(state);
     if (!lawful)
@@ -83,6 +87,7 @@ leanVaultWithdraw(
         *lawful,
         WithdrawAmountFFI::build(amount, byShares),
         static_cast<std::uint8_t>(waiveUnrealizedLoss ? 1 : 0),
-        parentCloseTime));
+        parentCloseTime,
+        holderShares ? leanSome(NumberFFI::build(*holderShares)) : leanNone()));
 }
 }  // namespace xrpl::test::formal_verification

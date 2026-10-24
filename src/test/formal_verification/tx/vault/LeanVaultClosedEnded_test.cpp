@@ -256,8 +256,13 @@ class LeanVaultClosedEnded_test : public LeanSuite
         Vault const before = readVaultState(env, f.vaultKeylet, f.asset.raw());
         bool const byShares = amount.asset() != f.asset.raw();
         bool const waiveUnrealizedLoss = holderOwnsAllShares(env, f.vaultKeylet, f.holder);
-        LeanVaultResult const lean =
-            leanVaultWithdraw(before, amount, byShares, parentCloseTime(env), waiveUnrealizedLoss);
+        LeanVaultResult const lean = leanVaultWithdraw(
+            before,
+            amount,
+            byShares,
+            parentCloseTime(env),
+            waiveUnrealizedLoss,
+            Number{fetchHolderShares(env, f.vaultKeylet, f.holder)});
         expectLawful(lean);
 
         env(jtx::Vault::withdraw(

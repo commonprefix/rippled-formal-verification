@@ -58,8 +58,13 @@ class LeanVaultWithdraw_test : public LeanSuite
         Vault const state = readVaultState(env, vaultKeylet, asset);
         bool const byShares = amount.asset() != asset;
         bool const waiveUnrealizedLoss = holderOwnsAllShares(env, vaultKeylet, withdrawer);
-        LeanVaultResult const withdraw =
-            leanVaultWithdraw(state, amount, byShares, parentCloseTime(env), waiveUnrealizedLoss);
+        LeanVaultResult const withdraw = leanVaultWithdraw(
+            state,
+            amount,
+            byShares,
+            parentCloseTime(env),
+            waiveUnrealizedLoss,
+            Number{fetchHolderShares(env, vaultKeylet, withdrawer)});
         expectLawful(withdraw);
 
         env(jtx::Vault::withdraw(
@@ -245,7 +250,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             shares,
             true,
             parentCloseTime(env),
-            holderOwnsAllShares(env, vaultKeylet, issuer));
+            holderOwnsAllShares(env, vaultKeylet, issuer),
+            Number{fetchHolderShares(env, vaultKeylet, issuer)});
 
         Number const availableBefore = env.le(vaultKeylet)->at(sfAssetsAvailable);
         env(jtx::Vault::withdraw({.depositor = issuer, .id = vaultKeylet.key, .amount = shares}),
@@ -326,6 +332,44 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
         compareWithdraw(env, vaultKeylet, issuer, asset.raw(), asset(amount), expected);
+    }
+
+    // Two holders: the holder redeems one share more than they own. The vault could pay it, the
+    // holder's balance cannot.
+    void
+    testWithdrawMoreSharesThanHeld()
+    {
+        using namespace jtx;
+        testcase("withdraw more shares than the holder owns");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        Account const other{"other"};
+        env.fund(XRP(1'000'000), owner, issuer, holder, other);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(1'000'000)));
+        env(trust(other, asset(1'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env(pay(issuer, other, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env(jtx::Vault::deposit(
+                {.depositor = other, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        STAmount const held = fetchHolderShares(env, vaultKeylet, holder);
+        STAmount const tooMany{held.asset(), held.mantissa() + 1};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), tooMany, tecINSUFFICIENT_FUNDS);
     }
 
     // Stage an MPT vault with a share price below one unit and withdraw a few shares.
@@ -734,7 +778,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             shares,
             true,
             parentCloseTime(env),
-            holderOwnsAllShares(env, vaultKeylet, holder));
+            holderOwnsAllShares(env, vaultKeylet, holder),
+            Number{fetchHolderShares(env, vaultKeylet, holder)});
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean withdraw error");
 
@@ -820,7 +865,8 @@ class LeanVaultWithdraw_test : public LeanSuite
             shares,
             true,
             parentCloseTime(env),
-            holderOwnsAllShares(env, vaultKeylet, holder));
+            holderOwnsAllShares(env, vaultKeylet, holder),
+            Number{fetchHolderShares(env, vaultKeylet, holder)});
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean withdraw failed");
 
@@ -932,6 +978,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         // One share worth 0.3 units of an MPT pays nothing: rejected rather than burned.
         testWithdrawUpdatedStateMPT(Number{1'000}, 3'333, 1, tecPRECISION_LOSS);
         testWithdrawFromFullyImpairedVault();
+        testWithdrawMoreSharesThanHeld();
         // FV_M2_4: a 1e-6 withdrawal below the 1e-5 ULP of a staged ~1e10 total.
         testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});
         testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});

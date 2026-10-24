@@ -97,17 +97,17 @@ class LeanLoan_test : public LeanSuite
         {
             auto s = baseline;
             s.paymentRemaining = s.paymentTotal + 1;
-            runLawful(s, false, "more payments left than scheduled");
+            runLawful(s, true, "more payments left than scheduled (not an invariant)");
         }
         {
             auto s = baseline;
             s.previousPaymentDueDate = s.nextPaymentDueDate;
-            runLawful(s, false, "due dates out of order");
+            runLawful(s, true, "due dates out of order (not an invariant)");
         }
         {
             auto s = baseline;
             s.nextPaymentDueDate += 7;
-            runLawful(s, false, "next due date off the schedule");
+            runLawful(s, true, "next due date off the schedule (not an invariant)");
         }
         {
             auto s = baseline;
