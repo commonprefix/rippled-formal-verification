@@ -278,7 +278,7 @@ readLoanState(
         .allowsOverpayment = sle->isFlag(lsfLoanOverpayment)};
 }
 
-// The LoanSet fields of a test loan: a 1000 principal in two instalments 600 s apart, no interest
+// The LoanSet fields of a test loan: a 1000 principal in two installments 600 s apart, no interest
 // and no fees unless set. A start date makes it a two-step proposal submitted by the owner.
 struct LoanParams
 {

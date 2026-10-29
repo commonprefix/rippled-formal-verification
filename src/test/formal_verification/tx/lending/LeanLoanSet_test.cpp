@@ -277,7 +277,7 @@ class LeanLoanSet_test : public LeanSuite
         auto const loanKeylet = submitLoanSet(env, f, big);
         std::uint32_t const dueDate = env.le(loanKeylet)->at(sfNextPaymentDueDate);
         closeAt(env, dueDate + 4'000'000);
-        // The late instalment: 4e9 of principal plus about 1.1e9 of late interest.
+        // The late installment: 4e9 of principal plus about 1.1e9 of late interest.
         env(loan::pay(f.borrower, loanKeylet.key, f.asset(Number{6, 9}), tfLoanLatePayment),
             jtx::Ter(tesSUCCESS));
         env.close();
@@ -405,10 +405,10 @@ class LeanLoanSet_test : public LeanSuite
             "fee off the vault grid",
             LoanParams{.originationFee = Number{1, -7}},
             tecPRECISION_LOSS);
-        // One grid unit in three instalments: the rounded-up instalment covers the whole loan in
+        // One grid unit in three installments: the rounded-up installment covers the whole loan in
         // one payment, so the schedule cannot be honoured.
         runLoanSet(
-            "principal too small for its instalments",
+            "principal too small for its installments",
             LoanParams{.principal = Number{1, -6}, .paymentTotal = 3},
             tecPRECISION_LOSS);
         runLoanSet(
@@ -424,10 +424,10 @@ class LeanLoanSet_test : public LeanSuite
             "tiny interest rate",
             LoanParams{.principal = Number{5'000}, .interestRate = 10, .paymentInterval = 60},
             tesSUCCESS);
-        // A tiny rate over many instalments (rate times count still below 1e-9): the binomial
+        // A tiny rate over many installments (rate times count still below 1e-9): the binomial
         // series converges before its last term.
         runLoanSet(
-            "tiny interest rate over 50 instalments",
+            "tiny interest rate over 50 installments",
             LoanParams{
                 .principal = Number{5'000},
                 .interestRate = 1,

@@ -168,12 +168,12 @@ class LeanLoanPay_test : public LeanSuite
         comparePay(env, f, loanKeylet, p, type, amount, expected);
     }
 
-    // Two regular instalments paid in two transactions: the second one closes the loan.
+    // Two regular installments paid in two transactions: the second one closes the loan.
     void
-    testTwoInstalments()
+    testTwoInstallments()
     {
         using namespace jtx;
-        testcase("regular payment: second instalment closes the loan");
+        testcase("regular payment: second installment closes the loan");
 
         Env env(*this);
         auto const f = setUpBrokerVault(env, BrokerConfig{});
@@ -206,14 +206,14 @@ class LeanLoanPay_test : public LeanSuite
         BEAST_EXPECT(!env.le(loanKeylet)->isFlag(lsfLoanImpaired));
     }
 
-    // A full payment after the first instalment: right after an early instalment the loan is
+    // A full payment after the first installment: right after an early installment the loan is
     // "paid ahead" (no interest accrues), after the due date interest accrues from it.
     void
-    testFullAfterInstalment(bool pastDueDate)
+    testFullAfterInstallment(bool pastDueDate)
     {
         using namespace jtx;
         testcase(
-            std::string("full payment: after an instalment, ") +
+            std::string("full payment: after an installment, ") +
             (pastDueDate ? "past its due date" : "paid ahead"));
 
         Env env(*this);
@@ -230,12 +230,12 @@ class LeanLoanPay_test : public LeanSuite
         comparePay(env, f, loanKeylet, p, PaymentType::full, Number{800}, tesSUCCESS);
     }
 
-    // Every instalment of an interest-bearing loan paid one at a time.
+    // Every installment of an interest-bearing loan paid one at a time.
     void
-    testSequentialInstalments()
+    testSequentialInstallments()
     {
         using namespace jtx;
-        testcase("regular payment: three interest-bearing instalments in turn");
+        testcase("regular payment: three interest-bearing installments in turn");
 
         Env env(*this);
         auto const f = setUpBrokerVault(env, BrokerConfig{});
@@ -272,31 +272,31 @@ class LeanLoanPay_test : public LeanSuite
     void
     runTests() override
     {
-        // Regular payments on a 1000 loan in two instalments of 500 (no interest).
-        runPay("one instalment", LoanParams{}, 0, PaymentType::regular, Number{500}, tesSUCCESS);
+        // Regular payments on a 1000 loan in two installments of 500 (no interest).
+        runPay("one installment", LoanParams{}, 0, PaymentType::regular, Number{500}, tesSUCCESS);
         runPay(
-            "both instalments in one transaction",
+            "both installments in one transaction",
             LoanParams{},
             0,
             PaymentType::regular,
             Number{1'000},
             tesSUCCESS);
         runPay(
-            "amount below one instalment",
+            "amount below one installment",
             LoanParams{},
             0,
             PaymentType::regular,
             Number{499},
             tecINSUFFICIENT_PAYMENT);
         runPay(
-            "one instalment with interest",
+            "one installment with interest",
             LoanParams{.interestRate = 10'000, .paymentTotal = 3},
             0,
             PaymentType::regular,
             Number{400},
             tesSUCCESS);
         runPay(
-            "one instalment with a service fee",
+            "one installment with a service fee",
             LoanParams{.serviceFee = Number{1}},
             0,
             PaymentType::regular,
@@ -319,11 +319,11 @@ class LeanLoanPay_test : public LeanSuite
             Number{500},
             tecKILLED,
             LoanKind::paidOff);
-        testTwoInstalments();
+        testTwoInstallments();
 
         // Late payments
         runPay(
-            "one instalment",
+            "one installment",
             LoanParams{.lateInterestRate = 10'000, .latePaymentFee = Number{2}},
             601,
             PaymentType::late,
@@ -338,7 +338,7 @@ class LeanLoanPay_test : public LeanSuite
             Number{500},
             tesSUCCESS);
         runPay(
-            "amount below the instalment",
+            "amount below the installment",
             LoanParams{},
             601,
             PaymentType::late,
@@ -348,7 +348,7 @@ class LeanLoanPay_test : public LeanSuite
 
         // Full payments
         runPay(
-            "pay off a three-instalment loan",
+            "pay off a three-installment loan",
             LoanParams{.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3},
             100,
             PaymentType::full,
@@ -375,22 +375,22 @@ class LeanLoanPay_test : public LeanSuite
             PaymentType::full,
             Number{1'000},
             tesSUCCESS);
-        testFullAfterInstalment(false);
-        testFullAfterInstalment(true);
+        testFullAfterInstallment(false);
+        testFullAfterInstallment(true);
         runPay(
-            "with one instalment left",
+            "with one installment left",
             LoanParams{.paymentTotal = 1},
             0,
             PaymentType::full,
             Number{1'100},
             tecKILLED);
 
-        testSequentialInstalments();
+        testSequentialInstallments();
         testFeeIntoCover();
 
         // MPT vault
         runPay(
-            "one instalment with interest",
+            "one installment with interest",
             LoanParams{.interestRate = 10'000, .paymentTotal = 3},
             0,
             PaymentType::regular,
@@ -399,7 +399,7 @@ class LeanLoanPay_test : public LeanSuite
             LoanKind::active,
             LendingAsset::mpt);
         runPay(
-            "one instalment",
+            "one installment",
             LoanParams{.lateInterestRate = 10'000, .latePaymentFee = Number{2}},
             601,
             PaymentType::late,
@@ -408,7 +408,7 @@ class LeanLoanPay_test : public LeanSuite
             LoanKind::active,
             LendingAsset::mpt);
         runPay(
-            "pay off a three-instalment loan",
+            "pay off a three-installment loan",
             LoanParams{.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3},
             100,
             PaymentType::full,
@@ -441,7 +441,7 @@ class LeanLoanPay_test : public LeanSuite
             Number{600},
             tesSUCCESS);
         runPay(
-            "one instalment plus extra principal",
+            "one installment plus extra principal",
             LoanParams{
                 .interestRate = 10'000,
                 .overpaymentInterestRate = 1'000,

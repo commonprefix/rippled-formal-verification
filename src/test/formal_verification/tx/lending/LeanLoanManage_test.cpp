@@ -111,7 +111,7 @@ class LeanLoanManage_test : public LeanSuite
             cppPool.assetsAvailable - pool.assetsAvailable);
     }
 
-    // A 1000 loan (two instalments 600 s apart, 60 s grace) on a broker with 500 of cover. The
+    // A 1000 loan (two installments 600 s apart, 60 s grace) on a broker with 500 of cover. The
     // ledger is advanced `delay` seconds past the loan's start, and the loan is impaired first if
     // `impairFirst` (which needs the loan to be late).
     enum class LoanKind : std::uint8_t { active, pending, defaulted, paidOff };
@@ -160,7 +160,7 @@ class LeanLoanManage_test : public LeanSuite
     void
     runTests() override
     {
-        // The first instalment is due 600 s after the start, with a 60 s grace period.
+        // The first installment is due 600 s after the start, with a 60 s grace period.
         runManage("a late loan", 601, false, ManageAction::impair, tesSUCCESS);
         runManage("a loan that is not late", 0, false, ManageAction::impair, tecTOO_SOON);
         runManage("an impaired loan", 601, true, ManageAction::impair, tecNO_PERMISSION);

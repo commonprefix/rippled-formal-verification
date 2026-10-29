@@ -60,7 +60,8 @@ leanCanVaultCreate(VaultCreateArgs const& args, std::uint32_t parentCloseTime)
         NumericTypeFFI::build(args.numericType)));
 }
 
-// The empty vault VaultCreate writes, or the model error (notLawful: the fields break an invariant).
+// The empty vault VaultCreate writes, or the model error (notLawful: the fields break an
+// invariant).
 struct LeanCreateResult
 {
     std::optional<LeanError> leanError;
