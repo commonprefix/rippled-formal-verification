@@ -21,9 +21,10 @@ open XRPL.Model.SingleAssetVault (Vault)
 def lean_loan_broker_build (numericType : NumericType) (managementFeeRate : UInt16)
     (coverRateMinimum coverRateLiquidation : UInt32) (debtTotal debtMaximum coverAvailable : Number)
     (loanCount : UInt32) : Except Error LoanBroker :=
-  RawLoanBroker.to_lawful
+  let raw : RawLoanBroker :=
     { numericType, managementFeeRate, coverRateMinimum, coverRateLiquidation, debtTotal, debtMaximum,
       coverAvailable, loanCount }
+  raw.to_lawful
 
 @[export lean_loan_broker_management_fee_rate]
 def lean_loan_broker_management_fee_rate (lb : LoanBroker) : UInt16 := lb.managementFeeRate
@@ -43,18 +44,21 @@ def lean_loan_broker_loan_count (lb : LoanBroker) : UInt32 := lb.loanCount
 -- LoanBrokerSet
 @[export lean_can_loan_broker_create]
 def lean_can_loan_broker_create (pool : Vault) (debtMaximum : Option Number) (nt : NumericType)
-    : Except Error Int32 :=
-  (·.code) <$> LoanBroker.canCreate pool debtMaximum nt
+    : Except Error Int32 := do
+  let ter ← LoanBroker.canCreate pool debtMaximum nt
+  return ter.code
 
 @[export lean_loan_broker_create]
 def lean_loan_broker_create (debtMaximum : Option Number) (managementFeeRate : Option UInt16)
     (coverRateMinimum coverRateLiquidation : Option UInt32) (nt : NumericType) : Except Error LoanBroker :=
-  LoanBroker.create { debtMaximum, managementFeeRate, coverRateMinimum, coverRateLiquidation } nt
+  let tx : LoanBrokerSetCreate := { debtMaximum, managementFeeRate, coverRateMinimum, coverRateLiquidation }
+  LoanBroker.create tx nt
 
 @[export lean_can_loan_broker_update]
 def lean_can_loan_broker_update (lb : LoanBroker) (pool : Vault) (debtMaximum : Option Number)
-    : Except Error Int32 :=
-  (·.code) <$> lb.canUpdate pool debtMaximum
+    : Except Error Int32 := do
+  let ter ← lb.canUpdate pool debtMaximum
+  return ter.code
 
 @[export lean_loan_broker_update]
 def lean_loan_broker_update (lb : LoanBroker) (debtMaximum : Option Number) : Except Error LoanBroker :=
@@ -62,8 +66,9 @@ def lean_loan_broker_update (lb : LoanBroker) (debtMaximum : Option Number) : Ex
 
 -- Cover transactions. Each `TerExcept` reaches C++ as its `.run`.
 @[export lean_can_cover_deposit]
-def lean_can_cover_deposit (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Except Error Int32 :=
-  (·.code) <$> lb.canCoverDeposit pool amount
+def lean_can_cover_deposit (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Except Error Int32 := do
+  let ter ← lb.canCoverDeposit pool amount
+  return ter.code
 
 @[export lean_cover_deposit]
 def lean_cover_deposit (lb : LoanBroker) (pool : Vault) (amount : STAmount)
@@ -71,8 +76,9 @@ def lean_cover_deposit (lb : LoanBroker) (pool : Vault) (amount : STAmount)
   (lb.coverDeposit pool amount).run
 
 @[export lean_can_cover_withdraw]
-def lean_can_cover_withdraw (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Except Error Int32 :=
-  (·.code) <$> lb.canCoverWithdraw pool amount
+def lean_can_cover_withdraw (lb : LoanBroker) (pool : Vault) (amount : STAmount) : Except Error Int32 := do
+  let ter ← lb.canCoverWithdraw pool amount
+  return ter.code
 
 @[export lean_cover_withdraw]
 def lean_cover_withdraw (lb : LoanBroker) (pool : Vault) (amount : STAmount)
@@ -81,8 +87,9 @@ def lean_cover_withdraw (lb : LoanBroker) (pool : Vault) (amount : STAmount)
 
 @[export lean_can_cover_clawback]
 def lean_can_cover_clawback (lb : LoanBroker) (pool : Vault) (amount : Option STAmount)
-    : Except Error Int32 :=
-  (·.code) <$> lb.canCoverClawback pool amount
+    : Except Error Int32 := do
+  let ter ← lb.canCoverClawback pool amount
+  return ter.code
 
 @[export lean_cover_clawback]
 def lean_cover_clawback (lb : LoanBroker) (pool : Vault) (amount : Option STAmount)
@@ -91,8 +98,9 @@ def lean_cover_clawback (lb : LoanBroker) (pool : Vault) (amount : Option STAmou
 
 -- LoanBrokerDelete
 @[export lean_can_loan_broker_delete]
-def lean_can_loan_broker_delete (lb : LoanBroker) (pool : Vault) : Except Error Int32 :=
-  (·.code) <$> lb.canDelete pool
+def lean_can_loan_broker_delete (lb : LoanBroker) (pool : Vault) : Except Error Int32 := do
+  let ter ← lb.canDelete pool
+  return ter.code
 
 @[export lean_loan_broker_rounded_cover]
 def lean_loan_broker_rounded_cover (lb : LoanBroker) : Except Error STAmount :=

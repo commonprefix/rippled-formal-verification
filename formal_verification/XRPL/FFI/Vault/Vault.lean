@@ -23,11 +23,12 @@ def lean_vault_build (assetsAvailable assetsDeployed assetsReserved : Number)
     (subscriptionDate redemptionDate : Option UInt32) (earlyExitFeeRate : Option UInt32)
     (ownerCanBlockDeposit depositBlocked : UInt8) : Except Error Vault := do
   let schedule ← scheduleOf subscriptionDate redemptionDate
-  RawVault.to_lawful
+  let raw : RawVault :=
     { assetsAvailable, assetsDeployed, assetsReserved, assetsMaximum, numericType, scale,
       sharesTotal, lossUnrealized, yieldUnrealized, schedule, earlyExitFeeRate,
       ownerCanBlockDeposit := ownerCanBlockDeposit != 0,
       depositBlocked := depositBlocked != 0 }
+  raw.to_lawful
 
 @[export lean_vault_assets_total]
 def lean_vault_assets_total (v : Vault) : Except Error Number := v.assetsTotal

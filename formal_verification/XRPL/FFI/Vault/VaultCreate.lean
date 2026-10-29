@@ -12,7 +12,8 @@ def lean_can_vault_create (scale : Option UInt8) (assetsMaximum : Option Number)
     (subscriptionDate redemptionDate : Option UInt32) (parentCloseTime : UInt32) (nt : NumericType)
     : Except Error Int32 := do
   let schedule ← scheduleOf subscriptionDate redemptionDate
-  return (← Vault.canCreate scale assetsMaximum schedule parentCloseTime nt).code
+  let ter ← Vault.canCreate scale assetsMaximum schedule parentCloseTime nt
+  return ter.code
 
 @[export lean_vault_create]
 def lean_vault_create (scale : Option UInt8) (assetsMaximum : Option Number)

@@ -13,7 +13,7 @@ import XRPL.Model.Lending1_1.AssetPool
 import XRPL.FFI.Vault.Vault
 import XRPL.FFI.Lending.LoanBroker
 
-open XRPL.Model.Protocol (Number NumericType STAmount TER Error)
+open XRPL.Model.Protocol (Number NumericType STAmount TER TerExcept Error)
 open XRPL.Model.Lending
 open XRPL.Model.SingleAssetVault (Vault)
 
@@ -27,11 +27,12 @@ def lean_loan_build (broker : LoanBroker)
     (periodicPayment principalOutstanding totalValueOutstanding managementFeeOutstanding : Number)
     (loanScale : Int32) (previousPaymentDueDate nextPaymentDueDate : UInt32)
     (isPending isImpaired isDefault allowsOverpayment : UInt8) : Except Error Loan :=
-  RawLoan.to_lawful {
-    broker
-    rates := { interestRate, lateInterestRate, closeInterestRate, overpaymentInterestRate, overpaymentFee }
-    fees := { originationFee, serviceFee, latePaymentFee, closePaymentFee }
-    schedule := { paymentInterval, paymentTotal, gracePeriod, startDate }
+  let rates : LoanRates :=
+    { interestRate, lateInterestRate, closeInterestRate, overpaymentInterestRate, overpaymentFee }
+  let fees : LoanFees := { originationFee, serviceFee, latePaymentFee, closePaymentFee }
+  let schedule : LoanSchedule := { paymentInterval, paymentTotal, gracePeriod, startDate }
+  let raw : RawLoan := {
+    broker, rates, fees, schedule
     paymentRemaining, periodicPayment, principalOutstanding, totalValueOutstanding, managementFeeOutstanding
     loanScale := loanScale.toInt
     previousPaymentDueDate, nextPaymentDueDate
@@ -39,6 +40,7 @@ def lean_loan_build (broker : LoanBroker)
     isImpaired := isImpaired != 0
     isDefault := isDefault != 0
     allowsOverpayment := allowsOverpayment != 0 }
+  raw.to_lawful
 
 @[export lean_loan_broker]
 def lean_loan_broker (loan : Loan) : LoanBroker := loan.broker
@@ -77,10 +79,12 @@ def withZeroAmounts (r : LoanWithPool Vault) : LoanWithAmounts Vault :=
 def lean_can_loan_create (broker : LoanBroker) (pool : Vault) (principal : Number)
     (originationFee serviceFee latePaymentFee closePaymentFee : Number)
     (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate ledgerCloseTime parentCloseTime : UInt32)
-    (twoStep : UInt8) : Except Error Int32 :=
-  let schedule := LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate ledgerCloseTime (twoStep != 0)
-  (·.code) <$> Loan.canCreate broker pool principal
-    { originationFee, serviceFee, latePaymentFee, closePaymentFee } schedule parentCloseTime (twoStep != 0)
+    (twoStep : UInt8) : Except Error Int32 := do
+  let isTwoStep := twoStep != 0
+  let fees : LoanFees := { originationFee, serviceFee, latePaymentFee, closePaymentFee }
+  let schedule := LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate ledgerCloseTime isTwoStep
+  let ter ← Loan.canCreate broker pool principal fees schedule parentCloseTime isTwoStep
+  return ter.code
 
 @[export lean_loan_create]
 def lean_loan_create (broker : LoanBroker) (pool : Vault) (principal : Number)
@@ -88,20 +92,28 @@ def lean_loan_create (broker : LoanBroker) (pool : Vault) (principal : Number)
     (originationFee serviceFee latePaymentFee closePaymentFee : Number)
     (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate ledgerCloseTime : UInt32)
     (twoStep allowsOverpayment : UInt8) : Except Error (Except TER (LoanWithAmounts Vault)) :=
-  let schedule := LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate ledgerCloseTime (twoStep != 0)
-  (withZeroAmounts <$> Loan.create broker pool principal
+  let isTwoStep := twoStep != 0
+  let rates : LoanRates :=
     { interestRate, lateInterestRate, closeInterestRate, overpaymentInterestRate, overpaymentFee }
-    { originationFee, serviceFee, latePaymentFee, closePaymentFee }
-    schedule (allowsOverpayment != 0) (twoStep != 0)).run
+  let fees : LoanFees := { originationFee, serviceFee, latePaymentFee, closePaymentFee }
+  let schedule := LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate ledgerCloseTime isTwoStep
+  let create : TerExcept (LoanWithAmounts Vault) := do
+    let created ← Loan.create broker pool principal rates fees schedule (allowsOverpayment != 0) isTwoStep
+    return withZeroAmounts created
+  create.run
 
 -- LoanAccept
 @[export lean_can_loan_accept]
-def lean_can_loan_accept (loan : Loan) (pool : Vault) (parentCloseTime : UInt32) : Except Error Int32 :=
-  (·.code) <$> loan.canAccept pool parentCloseTime
+def lean_can_loan_accept (loan : Loan) (pool : Vault) (parentCloseTime : UInt32) : Except Error Int32 := do
+  let ter ← loan.canAccept pool parentCloseTime
+  return ter.code
 
 @[export lean_loan_accept]
 def lean_loan_accept (loan : Loan) (pool : Vault) : Except Error (Except TER (LoanWithAmounts Vault)) :=
-  (withZeroAmounts <$> loan.accept pool).run
+  let accept : TerExcept (LoanWithAmounts Vault) := do
+    let accepted ← loan.accept pool
+    return withZeroAmounts accepted
+  accept.run
 
 -- LoanPay. Payment type tags: 0 = regular, 1 = late, 2 = full, 3 = overpayment.
 def paymentTypeOf : UInt8 → LoanPaymentType
@@ -117,11 +129,13 @@ def lean_can_loan_pay (loan : Loan) (paymentType : UInt8) : Except Error Int32 :
 @[export lean_loan_pay]
 def lean_loan_pay (loan : Loan) (pool : Vault) (paymentType : UInt8) (amount : Number) (now : UInt32)
     : Except Error (Except TER (LoanWithAmounts Vault)) :=
-  (match paymentTypeOf paymentType with
+  let pay : TerExcept (LoanWithAmounts Vault) :=
+    match paymentTypeOf paymentType with
     | .regular => loan.regularPayment pool amount now
     | .late => loan.latePayment pool amount now
     | .full => loan.fullPayment pool amount now
-    | .overpayment => loan.overpayment pool amount now).run
+    | .overpayment => loan.overpayment pool amount now
+  pay.run
 
 -- LoanManage. Action tags: 0 = impair, 1 = unimpair, 2 = default.
 def manageActionOf : UInt8 → LoanManageAction
@@ -136,10 +150,16 @@ def lean_can_loan_manage (loan : Loan) (action : UInt8) (now : UInt32) : Except 
 @[export lean_loan_manage]
 def lean_loan_manage (loan : Loan) (pool : Vault) (action : UInt8) (now : UInt32)
     : Except Error (Except TER (LoanWithAmounts Vault)) :=
-  (match manageActionOf action with
-    | .impair => withZeroAmounts <$> loan.manageImpair pool now
-    | .unimpair => withZeroAmounts <$> loan.manageUnimpair pool
-    | .default => loan.manageDefault pool).run
+  let manage : TerExcept (LoanWithAmounts Vault) :=
+    match manageActionOf action with
+    | .impair => do
+      let impaired ← loan.manageImpair pool now
+      return withZeroAmounts impaired
+    | .unimpair => do
+      let unimpaired ← loan.manageUnimpair pool
+      return withZeroAmounts unimpaired
+    | .default => loan.manageDefault pool
+  manage.run
 
 -- LoanDelete
 @[export lean_can_loan_delete]
