@@ -10,19 +10,29 @@
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
+#include <xrpl/basics/chrono.h>
 #include <xrpl/ledger/OpenView.h>
 #include <xrpl/ledger/Sandbox.h>
+#include <xrpl/ledger/helpers/VaultHelpers.h>
 #include <xrpl/protocol/Asset.h>
 #include <xrpl/protocol/Indexes.h>
+#include <xrpl/protocol/LedgerFormats.h>
 #include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/STLedgerEntry.h>
 #include <xrpl/protocol/STNumber.h>
 
+#include <algorithm>
+#include <chrono>
 #include <cstdint>
+#include <stdexcept>
 
 namespace xrpl::test::formal_verification {
+
+// A FixedPrecision vault rejects inflows past 9e15 units of its base grid (10^-scale): 9e15 drops
+// or MPT units, 9e9 for an IOU at the default scale 6.
+constexpr std::int64_t kOpenLimitUnits = 9'000'000'000'000'000LL;
 
 inline Keylet
 createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
@@ -39,10 +49,14 @@ inline Vault
 readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
 {
     auto const vaultSle = env.le(vaultKeylet);
+    if (!vaultSle)
+        throw std::runtime_error("readVaultState: no vault on the ledger");
     auto const shareMptId = vaultSle->at(sfShareMPTID);
     return Vault{
-        .assetsTotal = vaultSle->at(sfAssetsTotal),
+        .assetsTotal = getAssetsTotal(vaultSle),
         .assetsAvailable = vaultSle->at(sfAssetsAvailable),
+        .assetsDeployed = vaultSle->at(sfAssetsDeployed),
+        .assetsReserved = vaultSle->at(sfAssetsReserved),
         .assetsMaximum = vaultSle->isFieldPresent(sfAssetsMaximum)
             ? std::optional<Number>(vaultSle->at(sfAssetsMaximum))
             : std::nullopt,
@@ -50,11 +64,81 @@ readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
         .scale = vaultSle->at(sfScale),
         .sharesTotal = Number{static_cast<std::int64_t>(
             env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount))},
-        .lossUnrealized = vaultSle->at(sfLossUnrealized)};
+        .lossUnrealized = vaultSle->at(sfLossUnrealized),
+        .yieldUnrealized = vaultSle->at(sfYieldUnrealized),
+        .subscriptionDate = vaultSle->at(~sfSubscriptionDate),
+        .redemptionDate = vaultSle->at(~sfRedemptionDate),
+        .earlyExitFeeRate = vaultSle->at(~sfEarlyExitFeeRate),
+        .ownerCanBlockDeposit = vaultSle->isFlag(lsfVaultOwnerCanBlockDeposit),
+        .depositBlocked = vaultSle->isFlag(lsfVaultDepositBlocked)};
+}
+
+// The holder's balance of the vault's share MPT (zero without an MPToken).
+[[nodiscard]] inline STAmount
+fetchHolderShares(jtx::Env& env, Keylet const& vaultKeylet, jtx::Account const& holder)
+{
+    auto const vaultSle = env.le(vaultKeylet);
+    if (!vaultSle)
+        throw std::runtime_error("fetchHolderShares: no vault on the ledger");
+    MPTIssue const share{vaultSle->at(sfShareMPTID)};
+    auto const sleToken = env.le(keylet::mptoken(share.getMptID(), holder.id()));
+    return STAmount{share, sleToken ? sleToken->at(sfMPTAmount) : 0};
+}
+
+// True iff `holder` owns every outstanding share: C++ then waives the unrealized loss on a
+// withdrawal or clawback, and the model must be told so.
+[[nodiscard]] inline bool
+holderOwnsAllShares(jtx::Env& env, Keylet const& vaultKeylet, jtx::Account const& holder)
+{
+    auto const vaultSle = env.le(vaultKeylet);
+    if (!vaultSle)
+        throw std::runtime_error("holderOwnsAllShares: no vault on the ledger");
+    auto const shareMptId = vaultSle->at(sfShareMPTID);
+    std::uint64_t const outstanding =
+        env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount);
+    if (outstanding == 0)
+        return false;
+    auto const token = env.le(keylet::mptoken(shareMptId, holder.id()));
+    return token && token->at(sfMPTAmount) == outstanding;
+}
+
+// The close time of the parent ledger, the "now" of the transaction phase checks.
+[[nodiscard]] inline std::uint32_t
+parentCloseTime(jtx::Env& env)
+{
+    return env.current()->parentCloseTime().time_since_epoch().count();
+}
+
+[[nodiscard]] inline std::uint32_t
+timeCount(NetClock::time_point t)
+{
+    return static_cast<std::uint32_t>(t.time_since_epoch().count());
+}
+
+// `t` rounded up to a multiple of the ledger's close-time resolution.
+[[nodiscard]] inline NetClock::time_point
+alignedTime(jtx::Env& env, NetClock::time_point t)
+{
+    using namespace std::chrono_literals;
+    auto const resolution = env.closed()->header().closeTimeResolution;
+    auto const rem = t.time_since_epoch() % resolution;
+    return rem == 0s ? t : t + (resolution - rem);
+}
+
+// Close the ledger so that the next transaction's parent close time is exactly `at`, which must
+// be aligned (`alignedTime`). Returns whether it landed.
+[[nodiscard]] inline bool
+closeExactlyAt(jtx::Env& env, NetClock::time_point at)
+{
+    using namespace std::chrono_literals;
+    auto const resolution = env.closed()->header().closeTimeResolution;
+    env.close(at - resolution + 1s);
+    return parentCloseTime(env) == timeCount(at);
 }
 
 // Overwrite the vault totals and share issuance outstanding on the open ledger to reach states a
-// real transaction cannot. Returns false if the vault or issuance is missing.
+// real transaction cannot. The total is split into assetsAvailable and the deployed remainder.
+// Returns false if the vault or issuance is missing.
 [[nodiscard]] inline bool
 updateVaultState(
     jtx::Env& env,
@@ -63,7 +147,8 @@ updateVaultState(
     Number const& assetsAvailable,
     std::uint64_t sharesTotal,
     Number const& assetsMaximum = Number{0},
-    Number const& lossUnrealized = Number{0})
+    Number const& lossUnrealized = Number{0},
+    Number const& yieldUnrealized = Number{0})
 {
     return env.app().getOpenLedger().modify(  //
         [&](OpenView& view, beast::Journal) -> bool {
@@ -76,8 +161,10 @@ updateVaultState(
                 return false;
             v->at(sfAssetsTotal) = assetsTotal;
             v->at(sfAssetsAvailable) = assetsAvailable;
+            v->at(sfAssetsDeployed) = assetsTotal - assetsAvailable;
             v->at(sfAssetsMaximum) = assetsMaximum;
             v->at(sfLossUnrealized) = lossUnrealized;
+            v->at(sfYieldUnrealized) = yieldUnrealized;
             iss->setFieldU64(sfOutstandingAmount, sharesTotal);
             sb.update(v);
             sb.update(iss);
@@ -143,8 +230,8 @@ createDilutionVault(
     return keylet;
 }
 
-// A scale-18 vault mints 7e15 shares for a 0.007 deposit, then a 2.993 owner donation lifts
-// the total to 3. The share price 3/7e15 puts every round-trip amount off the vault grid.
+// A scale-10 vault mints 7e7 shares for a 0.007 deposit, then a 2.993 owner donation lifts
+// the total to 3. The share price 3/7e7 puts every round-trip amount off the vault grid.
 [[nodiscard]] inline Keylet
 createAppliedDeltaVault(
     jtx::Env& env,
@@ -168,7 +255,7 @@ createAppliedDeltaVault(
 
     jtx::Vault vault{env};
     auto [tx, keylet] = vault.create({.owner = owner, .asset = asset.raw()});
-    tx[sfScale] = 18;
+    tx[sfScale] = 10;
     env(tx);
     env.close();
 
@@ -191,16 +278,88 @@ iouBalance(jtx::Env& env, jtx::Account const& account, jtx::PrettyAsset const& a
     return env.balance(account, asset.raw().get<Issue>()).value();
 }
 
-// Replicates the file-static roundToVaultScale from VaultDeposit.cpp: round the amount down
-// to the scale the vault total has after adding it.
+// Overwrite the IOU balance the vault's pseudo-account holds on its trust line, so a staged total
+// is backed by real funds. Returns false if the vault or trust line is missing.
+[[nodiscard]] inline bool
+stageVaultHolding(
+    jtx::Env& env,
+    Keylet const& vaultKeylet,
+    Issue const& issue,
+    Number const& amount)
+{
+    return env.app().getOpenLedger().modify(  //
+        [&](OpenView& view, beast::Journal) -> bool {
+            Sandbox sb(&view, TapNone);
+            auto const vaultSle = sb.read(vaultKeylet);
+            if (!vaultSle)
+                return false;
+            AccountID const pseudo = vaultSle->at(sfAccount);
+            auto line = sb.peek(keylet::trustLine(pseudo, issue));
+            if (!line)
+                return false;
+            // The balance is held by the low account when positive.
+            STAmount balance{Issue{issue.currency, noAccount()}, amount};
+            if (pseudo > issue.account)
+                balance.negate();
+            line->setFieldAmount(sfBalance, balance);
+            sb.update(line);
+            sb.apply(view);
+            return true;
+        });
+}
+
+// Round the magnitude of `delta` toward zero to the grid `reference` has after adding it: the vault
+// base grid 10^-scale, or the coarser grid of a sum past 16 digits.
 [[nodiscard]] inline STAmount
-roundToVaultScale(jtx::PrettyAsset const& asset, Number const& assetsTotal, Number const& amount)
+roundToVaultGrid(
+    jtx::PrettyAsset const& asset,
+    std::uint8_t vaultScale,
+    Number const& reference,
+    Number const& delta)
 {
     int const postScale = [&] {
         NumberRoundModeGuard const rg(Number::RoundingMode::ToNearest);
-        return scale(assetsTotal + amount, asset.raw());
+        return std::max(-static_cast<int>(vaultScale), scale(reference + delta, asset.raw()));
     }();
-    return roundToScale(STAmount{asset.raw(), amount}, postScale, Number::RoundingMode::Downward);
+    Number const magnitude = delta < Number{0} ? -delta : delta;
+    return roundToScale(
+        STAmount{asset.raw(), magnitude}, postScale, Number::RoundingMode::TowardsZero);
+}
+
+// Stage a vault whose whole share supply is held by `holder`. The loss is backed by an equal
+// deployed amount, the rest is available.
+[[nodiscard]] inline bool
+stageSoleHolderVault(
+    jtx::Env& env,
+    Keylet const& vaultKeylet,
+    jtx::Account const& holder,
+    Number const& assetsTotal,
+    Number const& lossUnrealized,
+    std::uint64_t sharesTotal)
+{
+    return env.app().getOpenLedger().modify(  //
+        [&](OpenView& view, beast::Journal) -> bool {
+            Sandbox sb(&view, TapNone);
+            auto vaultSle = sb.peek(vaultKeylet);
+            if (!vaultSle)
+                return false;
+            auto const shareId = vaultSle->at(sfShareMPTID);
+            auto issuance = sb.peek(keylet::mptokenIssuance(shareId));
+            auto holderShares = sb.peek(keylet::mptoken(shareId, holder.id()));
+            if (!issuance || !holderShares)
+                return false;
+            vaultSle->at(sfAssetsTotal) = assetsTotal;
+            vaultSle->at(sfAssetsAvailable) = assetsTotal - lossUnrealized;
+            vaultSle->at(sfAssetsDeployed) = lossUnrealized;
+            vaultSle->at(sfLossUnrealized) = lossUnrealized;
+            issuance->setFieldU64(sfOutstandingAmount, sharesTotal);
+            holderShares->setFieldU64(sfMPTAmount, sharesTotal);
+            sb.update(vaultSle);
+            sb.update(issuance);
+            sb.update(holderShares);
+            sb.apply(view);
+            return true;
+        });
 }
 
 }  // namespace xrpl::test::formal_verification

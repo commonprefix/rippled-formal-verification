@@ -52,20 +52,27 @@ class LeanVaultWithdraw_test : public LeanSuite
         jtx::Account const& withdrawer,
         Asset const& asset,
         STAmount const& amount,
-        TER expected,
-        bool waiveUnrealizedLoss = false)
+        TER expected)
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
         bool const byShares = amount.asset() != asset;
-        LeanWithdrawResult const withdraw =
-            leanVaultWithdraw(state, amount, byShares, waiveUnrealizedLoss);
+        bool const waiveUnrealizedLoss = holderOwnsAllShares(env, vaultKeylet, withdrawer);
+        LeanVaultResult const withdraw = leanVaultWithdraw(
+            state,
+            amount,
+            byShares,
+            parentCloseTime(env),
+            waiveUnrealizedLoss,
+            Number{fetchHolderShares(env, vaultKeylet, withdrawer)});
         expectLawful(withdraw);
 
         env(jtx::Vault::withdraw(
                 {.depositor = withdrawer, .id = vaultKeylet.key, .amount = amount}),
             jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
+        // Read before closing: a close discards state staged on the open ledger.
+        Vault const cpp = readVaultState(env, vaultKeylet, asset);
         env.close();
 
         BEAST_EXPECTS(
@@ -81,12 +88,9 @@ class LeanVaultWithdraw_test : public LeanSuite
         if (cppTer != tesSUCCESS)
             return;
 
-        auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
-        Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
-        Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
-        Number const cppSharesTotal{
-            static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
+        Number const& cppAssetsTotal = cpp.assetsTotal;
+        Number const& cppAssetsAvailable = cpp.assetsAvailable;
+        Number const& cppSharesTotal = cpp.sharesTotal;
         BEAST_EXPECTS(
             withdraw.vault.assetsTotal == cppAssetsTotal,
             "assetsTotal lean=" + to_string(withdraw.vault.assetsTotal) +
@@ -99,7 +103,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             withdraw.vault.sharesTotal == cppSharesTotal,
             "sharesTotal lean=" + to_string(withdraw.vault.sharesTotal) +
                 " cpp=" + to_string(cppSharesTotal));
-        Number const cppLossUnrealized = newVaultSle->at(sfLossUnrealized);
+        Number const& cppLossUnrealized = cpp.lossUnrealized;
         BEAST_EXPECTS(
             withdraw.vault.lossUnrealized == cppLossUnrealized,
             "lossUnrealized lean=" + to_string(withdraw.vault.lossUnrealized) +
@@ -241,15 +245,32 @@ class LeanVaultWithdraw_test : public LeanSuite
         Vault const state = readVaultState(env, vaultKeylet, asset.raw());
         LeanSharesToAssetsResult const lean = leanSharesToAssetsWithdraw(state, shares, false);
         expectLawful(lean);
+        LeanVaultResult const withdraw = leanVaultWithdraw(
+            state,
+            shares,
+            true,
+            parentCloseTime(env),
+            holderOwnsAllShares(env, vaultKeylet, issuer),
+            Number{fetchHolderShares(env, vaultKeylet, issuer)});
 
         Number const availableBefore = env.le(vaultKeylet)->at(sfAssetsAvailable);
         env(jtx::Vault::withdraw({.depositor = issuer, .id = vaultKeylet.key, .amount = shares}),
             jtx::Ter(tesSUCCESS));
         env.close();
         Number const availableAfter = env.le(vaultKeylet)->at(sfAssetsAvailable);
+        Number const paid = availableBefore - availableAfter;
 
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean sharesToAssetsWithdraw error");
-        BEAST_EXPECT(static_cast<Number>(lean.assets) == availableBefore - availableAfter);
+        BEAST_EXPECTS(!withdraw.leanError.has_value() && !withdraw.error, "lean withdraw failed");
+        // The payout is the conversion clamped toward zero to the vault grid.
+        BEAST_EXPECTS(
+            static_cast<Number>(withdraw.assets) == paid,
+            "payout lean=" + to_string(Number{withdraw.assets}) + " cpp=" + to_string(paid));
+        Number const conversion{lean.assets};
+        BEAST_EXPECTS(
+            (conversion >= paid && conversion - paid < Number{1, -static_cast<int>(state.scale)}),
+            "conversion " + to_string(conversion) + " is not the payout " + to_string(paid) +
+                " before the clamp");
     }
 
     // Force an extreme vault state a real deposit cannot reach, then withdraw and compare.
@@ -283,6 +304,168 @@ class LeanVaultWithdraw_test : public LeanSuite
         BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsAvailable, sharesTotal));
         STAmount const shares{shareIssue(env, vaultKeylet), shareAmount};
         compareWithdraw(env, vaultKeylet, issuer, asset.raw(), shares, expected);
+    }
+
+    // Stage an IOU vault past the open limit (a deposit cannot reach it), then withdraw by assets.
+    void
+    testWithdrawAssetsStaged(
+        Number const& assetsTotal,
+        std::uint64_t sharesTotal,
+        Number const& amount,
+        TER expected)
+    {
+        using namespace jtx;
+        testcase("STAGED withdraw IOU " + to_string(amount) + " from " + to_string(assetsTotal));
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        env.fund(XRP(1'000'000), owner, issuer);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        compareWithdraw(env, vaultKeylet, issuer, asset.raw(), asset(amount), expected);
+    }
+
+    // Two holders: the holder redeems one share more than they own. The vault could pay it, the
+    // holder's balance cannot.
+    void
+    testWithdrawMoreSharesThanHeld()
+    {
+        using namespace jtx;
+        testcase("withdraw more shares than the holder owns");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        Account const other{"other"};
+        env.fund(XRP(1'000'000), owner, issuer, holder, other);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(1'000'000)));
+        env(trust(other, asset(1'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env(pay(issuer, other, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env(jtx::Vault::deposit(
+                {.depositor = other, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        STAmount const held = fetchHolderShares(env, vaultKeylet, holder);
+        STAmount const tooMany{held.asset(), held.mantissa() + 1};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), tooMany, tecINSUFFICIENT_FUNDS);
+    }
+
+    // Stage an MPT vault with a share price below one unit and withdraw a few shares.
+    void
+    testWithdrawUpdatedStateMPT(
+        Number const& assetsTotal,
+        std::uint64_t sharesTotal,
+        std::int64_t shareAmount,
+        TER expected)
+    {
+        using namespace jtx;
+        testcase(
+            "withdraw updated-state MPT shares=" + std::to_string(shareAmount) + " (assetsTotal=" +
+            to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) + ")");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.close();
+
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        PrettyAsset const asset = mptt.issuanceID();
+        mptt.authorize({.account = holder});
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
+        STAmount const shares{shareIssue(env, vaultKeylet), shareAmount};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), shares, expected);
+    }
+
+    // A fully impaired vault (the whole deployed total is an unrealized loss) with two holders:
+    // without the sole-holder waiver the net asset value is zero, and a withdrawal by shares
+    // burns the shares for nothing on both sides.
+    void
+    testWithdrawFromFullyImpairedVault()
+    {
+        using namespace jtx;
+        testcase("withdraw shares from a fully impaired vault with two holders");
+
+        Env env(*this);
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        Account const other{"other"};
+        env.fund(XRP(1'000'000), owner, issuer, holder, other);
+        env.close();
+
+        PrettyAsset const asset = issuer["USD"];
+        env(trust(holder, asset(1'000'000)));
+        env(trust(other, asset(1'000'000)));
+        env.close();
+        env(pay(issuer, holder, asset(1'000)));
+        env(pay(issuer, other, asset(10)));
+        env.close();
+
+        auto const vaultKeylet = createVault(env, owner, asset.raw());
+        env(jtx::Vault::deposit(
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
+            jtx::Ter(tesSUCCESS));
+        env(jtx::Vault::deposit({.depositor = other, .id = vaultKeylet.key, .amount = asset(10)}),
+            jtx::Ter(tesSUCCESS));
+        env.close();
+
+        Number const total{1'010};
+        std::int64_t const shares = outstandingShares(env, vaultKeylet);
+        BEAST_EXPECT(updateVaultState(
+            env,
+            vaultKeylet,
+            total,
+            Number{0},
+            static_cast<std::uint64_t>(shares),
+            Number{0},
+            total));
+        STAmount const some{shareIssue(env, vaultKeylet), 100'000'000};
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), some, tesSUCCESS);
+        // The close discarded the staged state; stage it again. By assets, the zero net asset
+        // value converts to zero shares: rejected.
+        BEAST_EXPECT(updateVaultState(
+            env,
+            vaultKeylet,
+            total,
+            Number{0},
+            static_cast<std::uint64_t>(outstandingShares(env, vaultKeylet)),
+            Number{0},
+            total));
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), asset(1), tecPRECISION_LOSS);
     }
 
     // Withdraw by assets from a vault whose sharesTotal is INT64_MAX, so the share computation
@@ -343,43 +526,10 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, bob, xrpIssue(), oneShare, tesSUCCESS);
     }
 
-    // Finding (FV_M2_4, regression): a withdrawal too small to debit assetsTotal (the debit rounds
-    // back to the old value) used to pay the withdrawer and trip the global invariant. C++ now
-    // rejects it upfront with tecPRECISION_LOSS, like the model.
-    void
-    testWithdrawPrecisionLoss()
-    {
-        using namespace jtx;
-        testcase("withdraw below assetsTotal precision");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), owner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        // Move assetsTotal to ~1e10 (ULP 1e-5): deposit 9,999,999,999.999999, then 0.00001.
-        env(jtx::Vault::deposit(
-                {.depositor = issuer,
-                 .id = vaultKeylet.key,
-                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, -5})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        // Withdraw 1e-6, below the vault's 1e-5 ULP: the payout cannot debit assetsTotal.
-        compareWithdraw(
-            env, vaultKeylet, issuer, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
-    }
-
-    // RECONSTRUCTION (temporary): FV_M2_4's scenario with the vault state staged directly rather
-    // than built by two deposits, so the second deposit (which trips the FV_M2_15_b invariant)
-    // is bypassed. Run against both the pre-merge total and the total the clamp would produce.
+    // FV_M2_4 (regression): a withdrawal too small to debit assetsTotal (the debit rounds back to
+    // the old value) used to pay the withdrawer and trip the global invariant; both sides now
+    // reject it with tecPRECISION_LOSS. A ~1e10 total is past the open limit (9e9 at scale 6),
+    // so it is staged.
     void
     testWithdrawPrecisionLossStaged(Number const& assetsTotal)
     {
@@ -394,12 +544,9 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         PrettyAsset const asset = issuer["USD"];
         auto const vaultKeylet = createVault(env, owner, asset.raw());
-        // Same first deposit as the original; only the 0.00001 top-up (which trips FV_M2_15_b)
-        // is staged instead of transacted.
+        // A deposit stops at the 9e9 open limit, so seed small and stage the ~1e10 total.
         env(jtx::Vault::deposit(
-                {.depositor = issuer,
-                 .id = vaultKeylet.key,
-                 .amount = asset(Number{9'999'999'999'999'999LL, -6})}),
+                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1'000})}),
             jtx::Ter(tesSUCCESS));
         env.close();
 
@@ -481,7 +628,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         env.close(subscriptionDate + investmentWindow + std::chrono::seconds{1});
 
         STAmount const shares{shareIssue(env, vaultKeylet), 100'000'000};
-        compareWithdraw(env, vaultKeylet, lender, asset.raw(), shares, tesSUCCESS, true);
+        compareWithdraw(env, vaultKeylet, lender, asset.raw(), shares, tesSUCCESS);
     }
 
     // Finding (FV_M2_9, both sides): a sole shareholder witdrawing all outstanding shares is
@@ -523,9 +670,8 @@ class LeanVaultWithdraw_test : public LeanSuite
     }
 
     // Finding (FV_M2_13, regression): a sole shareholder's full withdrawal while the vault carries
-    // an unrealized loss is priced without the waiver, so the payout equals assetsAvailable and the
-    // final-withdrawal branch fires -> tefINTERNAL, where the funds guard should return
-    // tecINSUFFICIENT_FUNDS.
+    // an unrealized loss used to reach the final-withdrawal branch -> tefINTERNAL. A loss is backed
+    // by deployed assets, and a full exit with deployed assets is now tecHAS_OBLIGATIONS.
     void
     testWithdrawFinalWithLoss(Number const& assetsTotal, Number const& loss)
     {
@@ -561,13 +707,13 @@ class LeanVaultWithdraw_test : public LeanSuite
             loss));
 
         STAmount const allShares{shareIssue(env, vaultKeylet), shares};
-        compareWithdraw(
-            env, vaultKeylet, holder, asset.raw(), allShares, tecINSUFFICIENT_FUNDS, true);
+        compareWithdraw(env, vaultKeylet, holder, asset.raw(), allShares, tecHAS_OBLIGATIONS);
     }
 
-    // Finding (FV_M2_16): on a scale-0 IOU vault where one share is worth less than the assetsTotal
-    // ULP, withdrawing all but one share rounds the payout up to the whole balance, draining
-    // assetsTotal to 0 while a share stays outstanding (the vault then locks).
+    // FV_M2_16 (no longer reachable): on a scale-0 IOU vault where one share is worth less than
+    // the assetsTotal ULP, withdrawing all but one share pays out the whole balance, draining
+    // assetsTotal to 0 while a share stays outstanding. Such a total is now past the open limit,
+    // so only a staged state reaches it; kept to show both sides agree on the staged arithmetic.
     void
     testWithdrawDrainsVault()
     {
@@ -584,23 +730,26 @@ class LeanVaultWithdraw_test : public LeanSuite
         PrettyAsset const asset = issuer["USD"];
         env(trust(holder, asset(Number{1, 18})));
         env.close();
-        env(pay(issuer, holder, asset(Number{1, 17})));
+        env(pay(issuer, holder, asset(Number{1'000})));
         env.close();
 
-        // Scale 0: 1 share == 1 asset unit, so sharesTotal == assetsTotal == 10^17 (16-digit
-        // storage, ULP 100).
         jtx::Vault vault{env};
         auto [createTx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
         createTx[sfScale] = 0;
         env(createTx);
         env.close();
         env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 17})}),
+                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1'000})}),
             jtx::Ter(tesSUCCESS));
         env.close();
 
-        // Withdraw all but one share: C++ overpays to the whole balance (assetsTotal -> 0), the
-        // model rounds the payout down (assetsTotal stays positive), so the stored total diverges.
+        // Scale 0: 1 share == 1 asset unit. A deposit stops at the 9e15 open limit, so stage
+        // sharesTotal == assetsTotal == 10^17 (16-digit storage, ULP 100) directly.
+        BEAST_EXPECT(stageSoleHolderVault(
+            env, vaultKeylet, holder, Number{1, 17}, Number{0}, 100'000'000'000'000'000ULL));
+        BEAST_EXPECT(stageVaultHolding(env, vaultKeylet, asset.raw().get<Issue>(), Number{1, 17}));
+
+        // Withdraw all but one share: both sides pay the whole balance (assetsTotal -> 0).
         STAmount const allButOne{
             shareIssue(env, vaultKeylet), std::uint64_t{100'000'000'000'000'000ULL - 1}};
         compareWithdraw(env, vaultKeylet, holder, asset.raw(), allButOne, tesSUCCESS);
@@ -624,7 +773,13 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const shares{shareIssue(env, vaultKeylet), 1'003'103'695};
-        LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true, false);
+        LeanVaultResult const lean = leanVaultWithdraw(
+            before,
+            shares,
+            true,
+            parentCloseTime(env),
+            holderOwnsAllShares(env, vaultKeylet, holder),
+            Number{fetchHolderShares(env, vaultKeylet, holder)});
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean withdraw error");
 
@@ -680,13 +835,13 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, holder, asset.raw(), oneShare, tecPRECISION_LOSS);
     }
 
-    // The round-trip payout is never re-rounded to the vault scale, so the totals move by
-    // slightly more than the holder receives (both C++ and the model).
+    // The round-trip payout is clamped to the vault grid, so the totals move by exactly what the
+    // holder receives (both C++ and the model).
     void
     testWithdrawAppliedDelta()
     {
         using namespace jtx;
-        testcase("withdraw moves the vault totals by a different amount than paid out");
+        testcase("withdraw moves the vault totals by exactly the payout");
 
         Env env(*this);
         Account const owner{"owner"};
@@ -703,9 +858,15 @@ class LeanVaultWithdraw_test : public LeanSuite
         Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         BEAST_EXPECT(before.assetsTotal == Number{3});
 
-        // Redeem 2333333333333 of the holder's shares.
-        STAmount const shares{shareIssue(env, vaultKeylet), std::int64_t{2'333'333'333'333}};
-        LeanWithdrawResult const lean = leanVaultWithdraw(before, shares, true);
+        // Redeem a third of the holder's 7e7 shares.
+        STAmount const shares{shareIssue(env, vaultKeylet), std::int64_t{23'333'333}};
+        LeanVaultResult const lean = leanVaultWithdraw(
+            before,
+            shares,
+            true,
+            parentCloseTime(env),
+            holderOwnsAllShares(env, vaultKeylet, holder),
+            Number{fetchHolderShares(env, vaultKeylet, holder)});
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean withdraw failed");
 
@@ -732,7 +893,8 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         // The paid-out amount must be on the vault scale, on both sides: the model payout
         // is the same value here.
-        STAmount const receivedRounded = roundToVaultScale(asset, before.assetsTotal, received);
+        STAmount const receivedRounded =
+            roundToVaultGrid(asset, before.scale, before.assetsAvailable, -received);
         BEAST_EXPECTS(
             Number{receivedRounded} == received,
             "the paid out " + to_string(received) + " re-rounds to " +
@@ -755,9 +917,9 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Insufficient vault assets (the check is asset-agnostic, so one case suffices).
         testWithdrawIOU(Number{1'000}, Number{1'001}, tecINSUFFICIENT_FUNDS);
         // Sub-share withdrawal: the amount converts to zero shares.
-        testWithdrawIOU(Number{1, 12}, Number{1, -7}, tecPRECISION_LOSS);
-        // MPT at INT64_MAX, deposited and withdrawn end to end.
-        testWithdrawMPT(kMaxMpTokenAmount, kMaxMpTokenAmount, tesSUCCESS);
+        testWithdrawIOU(Number{1, 9}, Number{1, -7}, tecPRECISION_LOSS);
+        // MPT at the open limit, deposited and withdrawn end to end.
+        testWithdrawMPT(kOpenLimitUnits, kOpenLimitUnits, tesSUCCESS);
 
         testWithdrawAllShares();
 
@@ -776,8 +938,12 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Extreme AssetsTotal, tiny available, full shareholder
         testWithdrawUpdatedState(
             iouMax, Number{1}, 1'000'000'000, 500'000'000, tecINSUFFICIENT_FUNDS);
-        // Extreme AssetsTotal, mid available, minimal sharesTotal/shareAmount
-        testWithdrawUpdatedState(iouMax, Number{1, 50}, 1, 1, tecINSUFFICIENT_FUNDS);
+        // Extreme AssetsTotal, mid available, minimal sharesTotal/shareAmount: a full exit while
+        // assets are deployed
+        testWithdrawUpdatedState(iouMax, Number{1, 50}, 1, 1, tecHAS_OBLIGATIONS);
+        // Most assets lent out: half the shares are worth more than is available
+        testWithdrawUpdatedState(
+            Number{1'000}, Number{100}, 1'000'000'000, 500'000'000, tecINSUFFICIENT_FUNDS);
         // Extreme AssetsTotal, tiny available, extreme sharesTotal, minimal shareAmount
         testWithdrawUpdatedState(iouMax, Number{1}, 1'000'000'000, 1, tecINSUFFICIENT_FUNDS);
         // Overflow: NAV * shares / sharesTotal exceeds the IOU domain
@@ -787,30 +953,35 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Overflow: sharesTotal * assets / NAV exceeds the MPT domain (by assets).
         testWithdrawAssetsShareOverflow(tecPATH_DRY);
 
-        // Known discrepancies, each fails until the C++ code is fixed.
+        // Open discrepancy, disabled until the C++ code is fixed.
         // clang-format off
-        testWithdrawOvervaluedShares();  // FV_M2_3: model rounds payout down, C++ overpays
-        testWithdrawDilution();          // FV_M2_8: withdraw lowers the share price (both sides)
-        testWithdrawDrainsVault();       // FV_M2_16: all-but-one-share withdrawal drains to 0
-        testWithdrawAppliedDelta();      // totals move by more than paid out (both)
-
         // testWithdrawOvershoot();      // FV_M2_9: full withdrawal overshoots (both sides)
 
+        // Properties both sides now satisfy, kept as regression tests.
+        testWithdrawOvervaluedShares();  // FV_M2_3: a single-share payout rounds down
+        testWithdrawDilution();          // FV_M2_8: the share price does not fall
+        testWithdrawDrainsVault();       // FV_M2_16: staged past the open limit, both sides agree
+        testWithdrawAppliedDelta();      // totals move by exactly the payout
+
         // Fixed discrepancies, kept as regression tests.
-        // FV_M2_15: a 6e-6 payout is below the 1e-5 ULP of assetsTotal; the clamp floors it to
-        // zero rather than moving the vault's books by a full ULP. Both sides reject.
-        testWithdrawIOU(Number{1'234'567'890'123'456LL, -5}, Number{6, -6}, tecPRECISION_LOSS);
+        // FV_M2_15: a 6e-6 payout is below the 1e-5 ULP of a staged 1.2e10 total; the clamp floors
+        // it to zero rather than moving the vault's books by a full ULP. Both sides reject.
+        testWithdrawAssetsStaged(
+            Number{1'234'567'890'123'456LL, -5},
+            12'345'678'901'234'560ULL,
+            Number{6, -6},
+            tecPRECISION_LOSS);
         testWithdrawFinalWithLoss(Number{100}, Number{10});  // FV_M2_13: full exit with a loss
         testWithdrawWaiveLoss();              // FV_M2_6: doApply now honors the waiver
-        // FV_M2_4 is fixed, but its setup deposit trips FV_M2_15_b. The staged reconstruction
-        // below covers the same property without that dependency.
-        // testWithdrawPrecisionLoss();
         testWithdrawDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);  // FV_M2_12 (2e12)
         testWithdrawDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL); // FV_M2_12 (1.5e13)
-
-        // RECONSTRUCTION (temporary): FV_M2_4 with state staged, bypassing FV_M2_15_b.
-        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});  // pre-merge total
-        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});  // post-clamp total
+        // One share worth 0.3 units of an MPT pays nothing: rejected rather than burned.
+        testWithdrawUpdatedStateMPT(Number{1'000}, 3'333, 1, tecPRECISION_LOSS);
+        testWithdrawFromFullyImpairedVault();
+        testWithdrawMoreSharesThanHeld();
+        // FV_M2_4: a 1e-6 withdrawal below the 1e-5 ULP of a staged ~1e10 total.
+        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});
+        testWithdrawPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});
         // clang-format on
     }
 };

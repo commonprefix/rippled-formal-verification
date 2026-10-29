@@ -12,18 +12,27 @@ namespace xrpl::test::formal_verification {
 // (RawVault.WF / RawVault.Valid) and build must reject it.
 class LeanVault_test : public LeanSuite
 {
-    // A valid vault: solvent, fractional (IOU) asset at scale 6, no cap, no unrealized loss.
+    // A valid vault: solvent, open-ended, fractional (IOU) asset at scale 6, no cap, no loans.
     static Vault
     baseline()
     {
         return {
-            .assetsTotal = Number{5},
             .assetsAvailable = Number{5},
             .assetsMaximum = std::nullopt,
             .numericType = 2,
             .scale = 6,
-            .sharesTotal = Number{1'000'000},
-            .lossUnrealized = Number{0}};
+            .sharesTotal = Number{1'000'000}};
+    }
+
+    // A closed-ended vault with the minimum 180 s investment period and an early-exit fee.
+    static Vault
+    closedEnded()
+    {
+        auto s = baseline();
+        s.subscriptionDate = 1'000;
+        s.redemptionDate = 1'180;
+        s.earlyExitFeeRate = 5'000;
+        return s;
     }
 
     void
@@ -34,12 +43,38 @@ class LeanVault_test : public LeanSuite
     }
 
     void
-    testBaseline()
+    testLawful()
     {
         runLawful(baseline(), true, "valid baseline");
+        {
+            auto s = baseline();
+            s.assetsDeployed = Number{3};
+            s.assetsReserved = Number{2};
+            s.lossUnrealized = Number{3};
+            s.yieldUnrealized = Number{1};
+            runLawful(s, true, "lent-out vault with loss, reserve and yield");
+        }
+        runLawful(closedEnded(), true, "closed-ended vault with an early-exit fee");
+        {
+            auto s = baseline();
+            s.ownerCanBlockDeposit = true;
+            s.depositBlocked = true;
+            runLawful(s, true, "deposits blocked by an owner allowed to");
+        }
+        // The cap is a transaction check now, not a vault invariant.
+        {
+            auto s = baseline();
+            s.assetsMaximum = Number{3};
+            runLawful(s, true, "assetsTotal above assetsMaximum");
+        }
+        {
+            auto s = baseline();
+            s.sharesTotal = Number{9'223'372'036'854'775LL, 3};  // 16 digits, below INT64_MAX
+            runLawful(s, true, "sharesTotal just below INT64_MAX");
+        }
     }
 
-    // RawVault.WF clauses (the five *_norm clauses are omitted)
+    // RawVault.WF clauses (the *_norm clauses are omitted)
     void
     testWellFormed()
     {
@@ -61,8 +96,8 @@ class LeanVault_test : public LeanSuite
         }
         {
             auto s = baseline();
-            s.scale = 19;
-            runLawful(s, false, "scale above 18");
+            s.scale = 11;
+            runLawful(s, false, "scale above 10");
         }
     }
 
@@ -70,69 +105,111 @@ class LeanVault_test : public LeanSuite
     void
     testValid()
     {
-        // A negative total also breaks the ordering and loss clauses. assetsAvailable is set to 0
-        // so only the sign of the total is exercised beyond those.
-        {
-            auto s = baseline();
-            s.assetsTotal = Number{-1};
-            s.assetsAvailable = Number{0};
-            runLawful(s, false, "negative assetsTotal");
-        }
         {
             auto s = baseline();
             s.assetsAvailable = Number{-1};
             runLawful(s, false, "negative assetsAvailable");
         }
-        // available > total forces the loss gap negative, so this also breaks lossUnrealized_le.
         {
             auto s = baseline();
-            s.assetsAvailable = Number{10};
-            runLawful(s, false, "assetsAvailable exceeds assetsTotal");
-        }
-        // Zero cap. Total and available are 0 so only assetsMaximum_pos fails.
-        {
-            auto s = baseline();
-            s.assetsTotal = Number{0};
-            s.assetsAvailable = Number{0};
-            s.assetsMaximum = Number{0};
-            runLawful(s, false, "assetsMaximum is zero");
+            s.assetsDeployed = Number{-1};
+            runLawful(s, false, "negative assetsDeployed");
         }
         {
             auto s = baseline();
-            s.sharesTotal = Number{0};
-            runLawful(s, false, "zero shares with nonzero assets");
-        }
-        {
-            auto s = baseline();
-            s.assetsMaximum = Number{3};  // below the total of 5
-            runLawful(s, false, "assetsTotal above assetsMaximum");
+            s.assetsReserved = Number{-1};
+            runLawful(s, false, "negative assetsReserved");
         }
         {
             auto s = baseline();
             s.lossUnrealized = Number{-1};
             runLawful(s, false, "negative lossUnrealized");
         }
-        // Loss above the total-minus-available gap (gap 2, loss 4), staying below the total.
         {
             auto s = baseline();
-            s.assetsAvailable = Number{3};
-            s.lossUnrealized = Number{4};
-            runLawful(s, false, "lossUnrealized above the loss gap");
+            s.yieldUnrealized = Number{-1};
+            runLawful(s, false, "negative yieldUnrealized");
         }
-        // Loss above the total. With available 0 the gap equals the total, so this also breaks
-        // lossUnrealized_le
+        // Total and available are 0 so only assetsMaximum_pos fails.
         {
             auto s = baseline();
             s.assetsAvailable = Number{0};
-            s.lossUnrealized = Number{6};
-            runLawful(s, false, "lossUnrealized above assetsTotal");
+            s.sharesTotal = Number{0};
+            s.assetsMaximum = Number{0};
+            runLawful(s, false, "assetsMaximum is zero");
+        }
+        {
+            auto s = baseline();
+            s.sharesTotal = Number{0};
+            runLawful(s, false, "zero shares with available assets");
+        }
+        {
+            auto s = baseline();
+            s.assetsAvailable = Number{0};
+            s.assetsDeployed = Number{5};
+            s.sharesTotal = Number{0};
+            runLawful(s, false, "zero shares with deployed assets");
+        }
+        {
+            auto s = baseline();
+            s.assetsDeployed = Number{2};
+            s.lossUnrealized = Number{3};
+            runLawful(s, false, "lossUnrealized above assetsDeployed");
+        }
+        {
+            auto s = baseline();
+            s.assetsDeployed = Number{2};
+            s.assetsReserved = Number{3};
+            runLawful(s, false, "assetsReserved above assetsDeployed");
+        }
+        // The share supply is an int64.
+        {
+            auto s = baseline();
+            s.sharesTotal = Number{1, 19};
+            runLawful(s, false, "sharesTotal above INT64_MAX");
+        }
+        // 17 significant digits do not fit an IOU STAmount.
+        {
+            auto s = baseline();
+            s.assetsDeployed = Number{12'345'678'901'234'567LL};
+            runLawful(s, false, "assetsDeployed not representable");
+        }
+        {
+            auto s = baseline();
+            s.depositBlocked = true;
+            runLawful(s, false, "deposits blocked by an owner not allowed to");
+        }
+        {
+            auto s = closedEnded();
+            s.redemptionDate = 1'179;
+            runLawful(s, false, "investment period below 180 s");
+        }
+        {
+            auto s = closedEnded();
+            s.redemptionDate = 1'000 + 30u * 31'556'952u;
+            runLawful(s, false, "investment period of 30 years");
+        }
+        {
+            auto s = closedEnded();
+            s.redemptionDate = std::nullopt;
+            runLawful(s, false, "subscription date without a redemption date");
+        }
+        {
+            auto s = baseline();
+            s.earlyExitFeeRate = 0;
+            runLawful(s, false, "early-exit fee on an open-ended vault");
+        }
+        {
+            auto s = closedEnded();
+            s.earlyExitFeeRate = 100'001;
+            runLawful(s, false, "early-exit fee above 100%");
         }
     }
 
     void
     runTests() override
     {
-        testBaseline();
+        testLawful();
         testWellFormed();
         testValid();
     }
