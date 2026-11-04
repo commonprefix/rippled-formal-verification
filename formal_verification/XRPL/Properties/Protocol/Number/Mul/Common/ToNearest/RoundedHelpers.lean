@@ -8,8 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `result.toRat` and `truth` when
-`result.toRat ≤ truth`. -/
+/-- No normalized Number lies above `result.toRat` and at or below `truth` when `result.toRat ≤ truth`. -/
 theorem operator_mul_no_inbetween_below_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -32,8 +31,7 @@ theorem operator_mul_no_inbetween_below_to_nearest (x y result : Number)
     (fun h_pos => mul_result_nonneg_of_truth_pos x y result h_sign h_pos)
     h_le
 
-/-- No normalized Number sits strictly between `truth` and `result.toRat` when
-`truth ≤ result.toRat`. -/
+/-- No normalized Number lies at or above `truth` and below `result.toRat` when `truth ≤ result.toRat`. -/
 theorem operator_mul_no_inbetween_above (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -57,10 +55,8 @@ theorem operator_mul_no_inbetween_above (x y result : Number)
     (fun h_pos => mul_result_nonneg_of_truth_pos x y result h_sign h_pos)
     h_ge
 
-/-! ## Branch A: round-down (no round-up fires) — result = lower(truth) -/
-
-/-- When round-up does not fire (`result.toRat ≤ truth`) and no representable lies
-strictly between `result` and `truth`, the result equals `Number.lower(truth)`. -/
+/-- If `result.toRat ≤ truth` and no normalized Number lies above `result.toRat` and at or below `truth`, the result
+has the value of `Number.lower truth`. -/
 theorem operator_mul_rounded_branchA (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -89,10 +85,8 @@ theorem operator_mul_rounded_branchA (x y result : Number)
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h)
     h_round_down h_no_inbetween
 
-/-! ## Branch B: round-up (no cusp overflow) — result = upper(truth) -/
-
-/-- When round-up fires (`truth ≤ result.toRat`) and no representable lies strictly
-between `truth` and `result`, the result equals `Number.upper(truth)`. -/
+/-- If `truth ≤ result.toRat` and no normalized Number lies at or above `truth` and below `result.toRat`, the result
+has the value of `Number.upper truth`. -/
 theorem operator_mul_rounded_branchB (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

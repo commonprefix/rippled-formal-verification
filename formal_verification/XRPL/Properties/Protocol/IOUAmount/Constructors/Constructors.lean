@@ -4,7 +4,7 @@ import XRPL.Properties.Protocol.IOUAmount.Constructors.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- **`normalize` rounds a 17-to-18-digit mantissa to canonical 16-digit form.** -/
+/-- `normalize` rounds a 17- or 18-digit mantissa to 16 digits with relative error about `10⁻¹⁵`. -/
 theorem IOUAmount.normalize_rounds (m : Int64) (e : Int) (mode : rounding_mode) (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
     (he_hi : e + 4 ≤ maxExponent)
@@ -13,7 +13,7 @@ theorem IOUAmount.normalize_rounds (m : Int64) (e : Int) (mode : rounding_mode) 
       (10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ) + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) :=
   IOUAmount.normalize_rounds_proof m e mode result hm_lo hm_hi he_hi hok hne
 
-/-- **`normalize`'s output is canonical 16-digit (`InRange16`).** -/
+/-- `normalize`'s output is canonical 16-digit (`InRange16`). -/
 theorem IOUAmount.normalize_canonical (m : Int64) (e : Int) (mode : rounding_mode) (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
     (he_hi : e + 4 ≤ maxExponent)
@@ -21,7 +21,8 @@ theorem IOUAmount.normalize_canonical (m : Int64) (e : Int) (mode : rounding_mod
     result.InRange16 :=
   IOUAmount.normalize_InRange16_proof m e mode result hm_lo hm_hi he_hi hok hne
 
-/-- **`ofMantissaExp` rounds a 17-to-18-digit mantissa to canonical 16-digit form.** -/
+/-- `ofMantissaExp m e`, which is `normalize ⟨m, e⟩`, rounds a 17- or 18-digit mantissa to 16 digits with relative
+error about `10⁻¹⁵`. -/
 theorem IOUAmount.ofMantissaExp_rounds (m : Int64) (e : Int) (mode : rounding_mode)
     (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
@@ -31,7 +32,7 @@ theorem IOUAmount.ofMantissaExp_rounds (m : Int64) (e : Int) (mode : rounding_mo
       (10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ) + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) :=
   IOUAmount.ofMantissaExp_rounds_proof m e mode result hm_lo hm_hi he_hi hok hne
 
-/-- **`ofNumber` re-rounds a 19-digit-normalized `Number` to within a 16-digit ULP.** -/
+/-- `ofNumber` re-rounds a 19-digit-normalized `Number` to within a 16-digit ULP. -/
 theorem IOUAmount.ofNumber_rounds (sum : Number) (mode : rounding_mode)
     (result : IOUAmount)
     (h_lo : 10 ^ 18 ≤ sum.mantissa_.toNat) (h_hi : sum.mantissa_.toNat < 10 ^ 19)

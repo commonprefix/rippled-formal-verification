@@ -3,17 +3,10 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! ## The master rounding bound for `doNormalize128` (to_nearest) -/
-
 set_option maxHeartbeats 3200000 in
 -- Four-stage pipeline composition over large UInt128 terms needs a raised budget.
-/-- Rounding bound for `doNormalize128` against the true value `(M + δ) * 10^e`,
-where `δ ∈ [0,1]` is the sticky tail (`δ = 0` iff the sticky flag is off). When
-the flag is set, the tail-vs-mantissa ratio `δ·10^20 ≤ M` (the diff-sign add
-caller has `M ≥ 10^20`; div's correction-free residual has `δ < 10⁻⁵` against
-`M ≥ 10^16`) keeps the shadow slip relatively negligible — the ratio is
-preserved by the scale-up stage. The constant `6/(2^63 - 3)` leaves room above
-the supTight `5/(2^63 + 7)` for the slip. -/
+/-- For a nonzero result, `doNormalize128` rounds `(M + δ) · 10^e` to nearest within relative error
+`6/(2^63 - 3)` and keeps the sign `zn`. The sticky tail `δ ∈ [0, 1]` must satisfy `δ · 10^20 ≤ M`. -/
 theorem doNormalize128_rounds_to_nearest
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool)
     (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
@@ -28,7 +21,6 @@ theorem doNormalize128_rounds_to_nearest
     ∧ result.negative_ = zn := by
   have hminM_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxM_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
-  -- M ≠ 0.
   have hM_ne : ¬ (M == 0) = true := by
     intro h
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
@@ -41,9 +33,8 @@ theorem doNormalize128_rounds_to_nearest
   rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
-  -- Unified post-scaleUp facts: the value is exact and the tail rescales to δ₁
-  -- (δ₁ = δ·10^(e−e₁) ≤ 1 since either scaleUp is the identity or M₁ < 10^19
-  -- with the tail-vs-mantissa ratio δ·10^20 ≤ M preserved by the rescale).
+  -- After scaleUp the value is unchanged and the tail becomes δ₁ = δ·10^(e−e₁) ≤ 1, since scaleUp either does
+  -- nothing or stops with M₁ < 10^19, and the rescale keeps δ·10^20 ≤ M.
   obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
       ((M₁.toNat : ℚ) * 10 ^ e₁ = (M.toNat : ℚ) * 10 ^ e)
       ∧ 1 ≤ M₁.toNat ∧ M₁.toNat < 10 ^ 23 ∧ e₁ ≤ e
@@ -85,7 +76,7 @@ theorem doNormalize128_rounds_to_nearest
       exact hδ_le
     · have hM₁q : (M₁.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hlt19
       linarith [hδ₁M, hM₁q]
-  -- Initial guard: represents with the appropriate shadow.
+  -- Initial guard: it holds the fraction `1/10^17` when sticky, else `0`.
   set g₀ : Guard := (if sticky = true
       then (if zn then Guard.new.set_negative else Guard.new).set_sticky
       else (if zn then Guard.new.set_negative else Guard.new)) with hg₀_def
@@ -96,8 +87,7 @@ theorem doNormalize128_rounds_to_nearest
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
-  -- (`set g₀` has already abstracted the model's seeded guard inside `hok`.)
+      exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -129,7 +119,6 @@ theorem doNormalize128_rounds_to_nearest
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
-      -- Convert to UInt64.
       have hM₂_fit : sd.1.toNat < 2 ^ 64 := by
         rw [hmaxM_v] at h2le
         omega
@@ -174,7 +163,6 @@ theorem doNormalize128_rounds_to_nearest
           have h_sup := doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp
             cp.2.2 cp.1 cp.2.1 ftilde₃ h3rep h_floor_le h3le h_floor_vac
             .normalize2 res_pos h_rup_pos hres_pos_mant
-          -- |result.toRat| in terms of res.
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
             rfl
@@ -183,7 +171,7 @@ theorem doNormalize128_rounds_to_nearest
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
               .normalize2 res hru hres_mant
           refine ⟨?_, h_neg⟩
-          -- Assemble the triangle.
+          -- Compare the result with `A` (guard fraction), then `A` with `W = V` (exact fraction).
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
           set A : ℚ := ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1 with hA_def
           set W : ℚ := ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 with hW_def
@@ -192,14 +180,11 @@ theorem doNormalize128_rounds_to_nearest
           have h_sup' : |(|result.toRat|) - A| ≤ A * (5 / ((2 ^ 63 + 7 : ℕ) : ℚ)) := by
             rw [h_abs, hA_def]
             exact h_sup
-          -- Slip at the final scale, bounded uniformly via the tail-vs-mantissa
-          -- ratio: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁, and M₁ + δ₁ ≥ 10¹⁸
-          -- (the post-scaleDown mantissa is ≥ 10¹⁸ at a no-smaller exponent),
-          -- so the slip is at most V/10¹⁹.
+          -- The guard fraction is off by at most V/10¹⁹: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁ and M₁ + δ₁ ≥ 10¹⁸,
+          -- since scaleDown leaves a mantissa of at least 10¹⁸ and never lowers the exponent.
           have h_slip_chain : |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := by
             calc |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |φ₂ - ftilde₂| * (10 : ℚ) ^ sd.2.1 := h3slip
               _ ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := h2slip
-          -- |A - V| ≤ slip at scale.
           have hAV : |A - V| ≤ |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 := by
             rw [← hVW, hA_def, hW_def]
             rw [show ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1
@@ -244,7 +229,6 @@ theorem doNormalize128_rounds_to_nearest
                   linarith [h_core]
               _ = (((M₁.toNat : ℚ) + δ₁) * (10 : ℚ) ^ e₁) * (1 / 10 ^ 19) := by ring
               _ = V * (1 / 10 ^ 19) := by rw [hval₁]
-          -- A ≤ V + slip.
           have hA_le : A ≤ V + V * (1 / 10 ^ 19) := by
             have h1 : A - V ≤ |A - V| := le_abs_self _
             have h2 := le_trans hAV h_slip_small
@@ -269,16 +253,10 @@ theorem doNormalize128_rounds_to_nearest
                 rw [show ((2 : ℚ) ^ 63 - 3) = 9223372036854775805 from by norm_num]
                 nlinarith [hV_pos]
 
-/-! ## The mode-generic rounding bound for `doNormalize128` -/
-
 set_option maxHeartbeats 3200000 in
 -- Four-stage pipeline composition over large UInt128 terms needs a raised budget.
-/-- Mode-generic rounding bound for `doNormalize128` against the true value
-`(M + δ) * 10^e`. Identical pipeline to `doNormalize128_rounds_to_nearest`, but
-the final `doRoundUp` stage uses the any-round bound `10/(2^63 − 8)` (the round
-decision cannot be related to the fraction in directed modes), so the composed
-constant is `11/(2^63 − 8)`. The directed (`downward`/`upward`/`towards_zero`)
-diff-sign addition bounds consume this. -/
+/-- In any rounding mode, a nonzero `doNormalize128` result is within relative error `11/(2^63 - 8)` of
+`(M + δ) · 10^e` and has the sign `zn`. The constant is looser because directed modes do not round to nearest. -/
 theorem doNormalize128_rounds_any
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool) (mode : rounding_mode)
     (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
@@ -293,7 +271,6 @@ theorem doNormalize128_rounds_any
     ∧ result.negative_ = zn := by
   have hminM_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxM_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
-  -- M ≠ 0.
   have hM_ne : ¬ (M == 0) = true := by
     intro h
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
@@ -306,9 +283,8 @@ theorem doNormalize128_rounds_any
   rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
-  -- Unified post-scaleUp facts: the value is exact and the tail rescales to δ₁
-  -- (δ₁ = δ·10^(e−e₁) ≤ 1 since either scaleUp is the identity or M₁ < 10^19
-  -- with the tail-vs-mantissa ratio δ·10^20 ≤ M preserved by the rescale).
+  -- After scaleUp the value is unchanged and the tail becomes δ₁ = δ·10^(e−e₁) ≤ 1, since scaleUp either does
+  -- nothing or stops with M₁ < 10^19, and the rescale keeps δ·10^20 ≤ M.
   obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
       ((M₁.toNat : ℚ) * 10 ^ e₁ = (M.toNat : ℚ) * 10 ^ e)
       ∧ 1 ≤ M₁.toNat ∧ M₁.toNat < 10 ^ 23 ∧ e₁ ≤ e
@@ -350,7 +326,7 @@ theorem doNormalize128_rounds_any
       exact hδ_le
     · have hM₁q : (M₁.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hlt19
       linarith [hδ₁M, hM₁q]
-  -- Initial guard: represents with the appropriate shadow.
+  -- Initial guard: it holds the fraction `1/10^17` when sticky, else `0`.
   set g₀ : Guard := (if sticky = true
       then (if zn then Guard.new.set_negative else Guard.new).set_sticky
       else (if zn then Guard.new.set_negative else Guard.new)) with hg₀_def
@@ -361,8 +337,7 @@ theorem doNormalize128_rounds_any
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
-  -- (`set g₀` has already abstracted the model's seeded guard inside `hok`.)
+      exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -394,7 +369,6 @@ theorem doNormalize128_rounds_any
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
-      -- Convert to UInt64.
       have hM₂_fit : sd.1.toNat < 2 ^ 64 := by
         rw [hmaxM_v] at h2le
         omega
@@ -435,7 +409,6 @@ theorem doNormalize128_rounds_any
           have h_sup := doRoundUp_rounds_any_supTight_upTo_maxRepUp
             cp.2.2 cp.1 cp.2.1 ftilde₃ mode h3rep h_floor_le h3le
             .normalize2 res_pos h_rup_pos hres_pos_mant
-          -- |result.toRat| in terms of res.
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
             rfl
@@ -444,7 +417,7 @@ theorem doNormalize128_rounds_any
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
               .normalize2 res hru hres_mant
           refine ⟨?_, h_neg⟩
-          -- Assemble the triangle.
+          -- Compare the result with `A` (guard fraction), then `A` with `W = V` (exact fraction).
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
           set A : ℚ := ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1 with hA_def
           set W : ℚ := ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 with hW_def
@@ -453,14 +426,11 @@ theorem doNormalize128_rounds_any
           have h_sup' : |(|result.toRat|) - A| ≤ A * (10 / (2 ^ 63 - 8 : ℚ)) := by
             rw [h_abs, hA_def]
             exact h_sup
-          -- Slip at the final scale, bounded uniformly via the tail-vs-mantissa
-          -- ratio: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁, and M₁ + δ₁ ≥ 10¹⁸
-          -- (the post-scaleDown mantissa is ≥ 10¹⁸ at a no-smaller exponent),
-          -- so the slip is at most V/10¹⁹.
+          -- The guard fraction is off by at most V/10¹⁹: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁ and M₁ + δ₁ ≥ 10¹⁸,
+          -- since scaleDown leaves a mantissa of at least 10¹⁸ and never lowers the exponent.
           have h_slip_chain : |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := by
             calc |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |φ₂ - ftilde₂| * (10 : ℚ) ^ sd.2.1 := h3slip
               _ ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := h2slip
-          -- |A - V| ≤ slip at scale.
           have hAV : |A - V| ≤ |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 := by
             rw [← hVW, hA_def, hW_def]
             rw [show ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1
@@ -505,7 +475,6 @@ theorem doNormalize128_rounds_any
                   linarith [h_core]
               _ = (((M₁.toNat : ℚ) + δ₁) * (10 : ℚ) ^ e₁) * (1 / 10 ^ 19) := by ring
               _ = V * (1 / 10 ^ 19) := by rw [hval₁]
-          -- A ≤ V + slip.
           have hA_le : A ≤ V + V * (1 / 10 ^ 19) := by
             have h1 : A - V ≤ |A - V| := le_abs_self _
             have h2 := le_trans hAV h_slip_small
@@ -527,24 +496,10 @@ theorem doNormalize128_rounds_any
                 rw [show ((2 : ℚ) ^ 63 - 8) = 9223372036854775800 from by norm_num]
                 nlinarith [hV_pos]
 
-/-! ## The direction keystone for `doNormalize128` -/
-
 set_option maxHeartbeats 3200000 in
 -- Four-stage pipeline + per-mode directional leaf analysis over 2^63-scale literals.
-/-- Directional behaviour of `doNormalize128` against the true value
-`(M + δ) * 10^e`, `δ ∈ [0, 1]` (the diff-sign tail is nonnegative by the
-recover-loop digit-exactness fact). The result lands on the correct side of
-the signed truth `(if zn then -1 else 1) · (M + δ) · 10^e`:
-
-* `.downward`     — `result ≤ truth`;
-* `.upward`       — `truth ≤ result`;
-* `.towards_zero` — `|result| ≤ |truth|`.
-
-The `doRoundUp` decisions are driven by the guard shadow `f̃₃` while the truth
-carries the honest tail `φ₃ ∈ [0,1]`; the two are reconciled by:
-`sticky = true` keeps the guard's `xbit` set to the end (content nonzero, so
-the away-side decision fires), and `sticky = false` makes the slip zero
-(`φ₃ = f̃₃` exactly), so a dead decision forces an exact result. -/
+/-- A nonzero `doNormalize128` result is on the mode's side of the signed truth `±(M + δ) · 10^e`: `.downward`
+gives `result ≤ truth`, `.upward` gives `truth ≤ result` and `.towards_zero` gives `|result| ≤ |truth|`. -/
 theorem doNormalize128_rounds_direction
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool) (mode : rounding_mode)
     (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
@@ -564,7 +519,6 @@ theorem doNormalize128_rounds_direction
       |result.toRat| ≤ ((M.toNat : ℚ) + δ) * 10 ^ e) := by
   have hminM_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxM_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
-  -- M ≠ 0.
   have hM_ne : ¬ (M == 0) = true := by
     intro h
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
@@ -619,7 +573,7 @@ theorem doNormalize128_rounds_direction
       exact hδ_le
     · have hM₁q : (M₁.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hlt19
       linarith [hδ₁M, hM₁q]
-  -- Initial guard: represents with the appropriate shadow.
+  -- Initial guard: it holds the fraction `1/10^17` when sticky, else `0`.
   set g₀ : Guard := (if sticky = true
       then (if zn then Guard.new.set_negative else Guard.new).set_sticky
       else (if zn then Guard.new.set_negative else Guard.new)) with hg₀_def
@@ -630,7 +584,7 @@ theorem doNormalize128_rounds_direction
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
+      exact g0_represents_zero zn
   -- scaleDown stage.
   cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
   | error err =>
@@ -771,7 +725,7 @@ theorem doNormalize128_rounds_direction
           · -- ===== .downward: result ≤ truth =====
             intro hmode
             subst hmode
-            -- Dead-decision helper for the truncating sign.
+            -- With the sign bit clear, `.downward` never rounds up.
             have h_bool_false : ∀ g' : Guard, g'.sbit_ = false →
                 (((g'.round .downward == 1)
                   || ((g'.round .downward == 0) && (cp.1 % 2 == 1))) = false) := by
@@ -790,7 +744,7 @@ theorem doNormalize128_rounds_direction
                   Bool.false_and]
               rfl
             cases hzn : zn
-            · -- zn = false: the magnitude truncates; result = RV ≤ W = V.
+            · -- zn = false: the magnitude truncates, so result = RV ≤ W = V.
               have h_sbit_f : cp.2.2.sbit_ = false := hsbit₃.trans hzn
               have h_no_sru : ¬ cp.2.2.shouldRoundUp_downward := by
                 intro h
@@ -834,7 +788,7 @@ theorem doNormalize128_rounds_direction
                   = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := rfl
                 _ ≤ ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := hRV_le
                 _ = V := hVW
-            · -- zn = true: the magnitude rounds up (or is exact); -RV ≤ -W = -V.
+            · -- zn = true: the magnitude rounds up (or is exact), so -RV ≤ -W = -V.
               have h_sbit_t : cp.2.2.sbit_ = true := hsbit₃.trans hzn
               have hRV_ge : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1
                   ≤ (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
@@ -883,7 +837,7 @@ theorem doNormalize128_rounds_direction
                     exact Bool.noConfusion hbool
                   · subst hv
                     rcases hcoup with ⟨hzm_eq, hdead⟩ | ⟨hzm_lt_up, _⟩
-                    · -- dead decision at maxRepUp: φ₃ = 0, exact.
+                    · -- No round-up at maxRepUp: the guard is empty, so φ₃ = 0 and the value is exact.
                       have hφ0 : φ₃ = 0 := by
                         rcases hdead with hb1 | hb2
                         · obtain ⟨h_dig0, h_xbit0⟩ :=
@@ -941,7 +895,7 @@ theorem doNormalize128_rounds_direction
                   Bool.false_and]
               rfl
             cases hzn : zn
-            · -- zn = false: the magnitude rounds up (or is exact); V = W ≤ RV.
+            · -- zn = false: the magnitude rounds up (or is exact), so V = W ≤ RV.
               have h_sbit_f : cp.2.2.sbit_ = false := hsbit₃.trans hzn
               have hRV_ge : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1
                   ≤ (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
@@ -1024,7 +978,7 @@ theorem doNormalize128_rounds_direction
               calc V = ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 := hVW.symm
                 _ ≤ (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := hRV_ge
                 _ = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := rfl
-            · -- zn = true: the magnitude truncates; -V = -W ≤ -RV.
+            · -- zn = true: the magnitude truncates, so -V = -W ≤ -RV.
               have h_sbit_t : cp.2.2.sbit_ = true := hsbit₃.trans hzn
               have h_no_sru : ¬ cp.2.2.shouldRoundUp_upward := by
                 intro h

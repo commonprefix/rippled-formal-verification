@@ -8,8 +8,7 @@ ULP below/above a value `Mr·10^ec` are themselves normalized `Number`s. That ma
 them admissible witnesses for the `Number.lower`/`upper` tightness lemmas, which
 quantify over normalized `Number`s only: if a double-rounded result were more than
 one ULP from the target, its far-side neighbor would be a representable value
-between the correctly-rounded `Number` and the target — contradicting tightness.
-Shared by the `Mul` and `Add` `DirectedTight` proofs. -/
+between the correctly-rounded `Number` and the target, contradicting tightness. -/
 
 namespace XRPL.Model.Protocol
 
@@ -119,8 +118,8 @@ lemma exists_normalized_grid_above (Mr : ℕ) (ec : ℤ)
       have hcast : (((Mr + 1) * 1000 : ℕ) : ℚ) = ((Mr : ℚ) + 1) * 1000 := by push_cast; ring
       rw [hcast]; ring
 
-/-- Flip the sign bit of a positive normalized `Number`: it stays normalized and its
-rational value negates. Shared tail of the two `_neg` grid-neighbor lemmas. -/
+/-- Flip the sign bit of a positive normalized `Number`: it stays normalized and its value
+negates. -/
 private lemma exists_grid_neg_of {m0 : Number} {t : ℚ} (hnorm : m0.isNormalized)
     (hneg0 : m0.negative_ = false) (hval : m0.toRat = t) (ht : 0 < t) :
     ∃ m : Number, m.isNormalized ∧ m.negative_ = true ∧ m.toRat = -t := by

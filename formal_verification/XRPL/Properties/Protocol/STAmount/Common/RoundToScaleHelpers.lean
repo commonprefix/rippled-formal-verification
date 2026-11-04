@@ -2,13 +2,12 @@ import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
-
-namespace XRPL.Model.Protocol
-
-/-! # Operator-level helpers for the `roundToExponent` discrete theorem
+/-! # Operator facts for the `roundToExponent` grid theorem
 
 `ofIOUAmount` on in-range 16-digit IOUAmounts, `operator_neg`, and the value
 forms of the canonical records. -/
+
+namespace XRPL.Model.Protocol
 
 /-- An in-range 16-digit IOUAmount. -/
 structure IOUAmount.InRange16 (a : IOUAmount) : Prop where
@@ -116,7 +115,7 @@ lemma STAmount.operator_neg_of_ne (s : STAmount) (h : s.mValue ≠ 0) :
     intro hb
     exact h (by exact_mod_cast beq_iff_eq.mp hb))]
 
-/-- The canonical-record value, in signed form. -/
+/-- The value of any STAmount in signed form: `±mValue · 10^mOffset`. -/
 lemma STAmount.toRat_signed (s : STAmount) :
     s.toRat = (if s.mIsNegative then (-1 : ℚ) else 1) * (s.mValue.toNat : ℚ)
       * 10 ^ s.mOffset := by
@@ -216,7 +215,6 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
   rw [if_neg h_int1]
   rw [STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2]
   simp only []
-  -- IOUAmount.operator_add unfold.
   have h_sd1_ne : ¬ ((⟨v1.signedDrops.toInt64, v1.mOffset⟩ : IOUAmount).mantissa_ == 0)
       = true := by
     intro h
@@ -246,7 +244,6 @@ theorem STAmount.operator_add_iou_unfold (v1 v2 : STAmount) (mode : rounding_mod
   rw [STAmount.iou_toNumber_canonical v1 mode hc1,
       STAmount.iou_toNumber_canonical v2 mode hc2]
   simp only []
-  -- Fold the trailing ofNumber/ofIOUAmount composition.
   match h_add : Number.operator_add
       ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩
       ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ mode with

@@ -211,9 +211,8 @@ theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding
     doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge hzm_le_maxRep .overflow res h_rup hres_mant_ne
   exact Number.normalize_mantissa_le_maxRepUp_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok' h_exp_ge
 
-/-- `operator_mul` short-circuits on a zero operand (returning that operand), so a
-nonzero result forces both operands' mantissas to be nonzero. Lets the public
-`operator_mul_rounds_<mode>` theorems drop their `hx_mant_ne`/`hy_mant_ne` hypotheses. -/
+/-- `operator_mul` returns a zero operand unchanged, so a nonzero result forces both operands' mantissas to be
+nonzero. -/
 theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mode}
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :

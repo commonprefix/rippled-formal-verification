@@ -3,7 +3,7 @@ import XRPL.Properties.Vault.VaultValid
 
 /-! # Identities of the ideal exchange formulas
 
-Pure `ℚ` facts about the ideal (exact) conversions; no `Number`, rounding or
+Pure `ℚ` facts about the ideal (exact) conversions. No `Number`, rounding or
 clamp is involved. -/
 
 namespace XRPL.Model.SingleAssetVault
@@ -21,17 +21,19 @@ lemma Vault.idealSharesDeposit_initial_rate_proof (v : Vault) (amount : ℚ)
   · rw [if_pos h]
   · rw [if_neg h]
     have hpos : 0 < v.toExact.assetsTotal :=
-      lt_of_le_of_ne v.exact.assetsTotal_nonneg (Ne.symm h)
+      lt_of_le_of_ne (add_nonneg v.exact.assetsAvailable_nonneg v.exact.assetsDeployed_nonneg) (Ne.symm h)
     have hnav : (0 : ℚ) < v.depositNav := by
       unfold RawVault.depositNav; exact hpos
     have hne : v.depositNav ≠ 0 := hnav.ne'
     rw [hrate]; field_simp
 
-/-- **Proof body of `idealAssetsClawback_idealSharesClawback`.** -/
-lemma RawVault.idealAssetsClawback_idealSharesClawback_proof (rv : RawVault) (assets : ℚ)
-    (hnav : rv.withdrawNav ≠ 0) (hsh : rv.toExact.sharesTotal ≠ 0) :
-    rv.idealAssetsClawback (rv.idealSharesClawback assets) = assets := by
-  unfold RawVault.idealAssetsClawback RawVault.idealSharesClawback
+/-- The two ideal formulas are a ratio and its inverse, so they cancel when both are nonzero. -/
+lemma RawVault.idealAssetsClawback_idealSharesClawback_proof (rv : RawVault) (waiveUnrealizedLoss : Bool)
+    (assets : ℚ) (hnav : (if waiveUnrealizedLoss then rv.depositNav else rv.withdrawNav) ≠ 0)
+    (hsh : rv.toExact.sharesTotal ≠ 0) :
+    rv.idealAssetsClawback waiveUnrealizedLoss (rv.idealSharesClawback waiveUnrealizedLoss assets) = assets := by
+  unfold RawVault.idealAssetsClawback RawVault.idealSharesClawback RawVault.idealAssetsWithdraw
+    RawVault.idealSharesWithdraw
   have hsh' : ((rv.toExact.sharesTotal : ℕ) : ℚ) ≠ 0 := Nat.cast_ne_zero.mpr hsh
   field_simp
 

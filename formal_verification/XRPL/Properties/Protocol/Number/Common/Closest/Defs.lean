@@ -7,17 +7,8 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Helpers
 
 namespace XRPL.Model.Protocol
 
-/-! ## Number.upper and Number.lower (positive case helpers) -/
-
-/-- For positive `q`, the candidate mantissa is `q · 10^(-(Int.log 10 q - mantissaLog))`.
-This lands in `[10^18, 10^19)` by construction. The integer ceiling is then
-bumped to a valid mantissa.
-
-Corner cases:
-- `e_q < minExponent`: q is below the smallest positive representable. Return
-  the smallest positive representable (`largeRange.min` at `minExponent`).
-- `e_q > maxExponent`: q is above the largest positive representable. Return
-  `none` (genuinely no representable ≥ q). -/
+/-- For positive `q`, rounds `q` up to a representable Number by bumping the scaled mantissa to a valid one. Below
+the range it returns the smallest positive Number, above the range it returns `none`. -/
 def upperPosAux (q : ℚ) : Option Number :=
   let e_q : ℤ := Int.log 10 q - mantissaLog
   let m_real : ℚ := q * (10 : ℚ)^(-e_q)
@@ -36,13 +27,8 @@ def upperPosAux (q : ℚ) : Option Number :=
       some ⟨false, largeRange.min, minExponent⟩
     else none
 
-/-- For positive `q`, the largest representable Number ≤ q.
-
-Corner cases:
-- `e_q < minExponent`: no positive normalized representable ≤ q exists, but
-  `Number.zero.toRat = 0 ≤ q` (since `q > 0`), so return `Number.zero`.
-- `e_q > maxExponent`: q is above the largest positive representable. Return
-  `none` (handled separately by the maxExponent corner). -/
+/-- For positive `q`, the largest representable Number ≤ `q`. Below the range it returns `Number.zero`, above the
+range it returns `none`. -/
 def lowerPosAux (q : ℚ) : Option Number :=
   let e_q : ℤ := Int.log 10 q - mantissaLog
   let m_real : ℚ := q * (10 : ℚ)^(-e_q)
@@ -61,9 +47,7 @@ def lowerPosAux (q : ℚ) : Option Number :=
       some Number.zero
     else none
 
-/-! ## Top-level Number.upper / Number.lower -/
-
-/-- Smallest representable Number `n` with `n.toRat ≥ q`, if it exists.
+/-- Smallest representable Number `n` with `n.toRat ≥ q`, or `none` when `|q|` is too large for a Number.
 For `q < 0`, uses `upper(q) = -lower(-q)` with a `Number.zero` short-circuit. -/
 def Number.upper (q : ℚ) : Option Number :=
   if q = 0 then some Number.zero
@@ -74,7 +58,7 @@ def Number.upper (q : ℚ) : Option Number :=
   else
     upperPosAux q
 
-/-- Largest representable Number `n` with `n.toRat ≤ q`, if it exists.
+/-- Largest representable Number `n` with `n.toRat ≤ q`, or `none` when `|q|` is too large for a Number.
 For `q < 0`, uses `lower(q) = -upper(-q)`. -/
 def Number.lower (q : ℚ) : Option Number :=
   if q = 0 then some Number.zero
@@ -82,8 +66,6 @@ def Number.lower (q : ℚ) : Option Number :=
     (upperPosAux (-q)).map (fun n => { n with negative_ := true })
   else
     lowerPosAux q
-
-/-! ## Zero corners: values below the smallest representable magnitude -/
 
 /-- For `0 < q` below the smallest positive representable, the largest
 representable `≤ q` is `Number.zero`. -/

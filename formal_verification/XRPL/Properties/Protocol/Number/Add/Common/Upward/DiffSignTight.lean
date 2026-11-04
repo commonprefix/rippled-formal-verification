@@ -41,9 +41,7 @@ theorem operator_add_rounding_bound_diff_sign_upward_tight (x y result : Number)
         rw [htruth]
         exact mul_lt_mul_of_pos_left (by norm_num) h_truth_pos
 
-/-- Diff-sign direction for `.upward`: the result never undershoots the truth.
-Composes the diff-sign keystone facts (`0 ≤ δ` by the recover digit-exactness)
-with the `doNormalize128` direction keystone. -/
+/-- Diff-sign addition under `.upward` rounding never lands below the true sum. -/
 theorem operator_add_rounding_bound_diff_sign_upward_dir (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

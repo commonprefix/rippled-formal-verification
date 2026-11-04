@@ -4,14 +4,12 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128.RoundFacts
 
 namespace XRPL.Model.Protocol
 
-/-! # `operator_div` cusp-aware algorithmic facts (`.to_nearest`)
+/-! # The last rounding step of `operator_div` under `.to_nearest`
 
-Div analog of `MulFactsToNearest` / `operator_mul_algorithmic_facts_to_nearest`, but
-carrying the *tight* round-decision facts (`round ⋛ 1 ↔ f ⋛ 1/2`) instead of
-`represents g f` (which is false for the div path, whose guard tracks only the top
-dropped digits with a residual tail). -/
+For the last rounding step of `operator_div`, the guard rounds up exactly when the exact fraction `f` is above `1/2`,
+and sees a tie exactly when `f = 1/2`. -/
 
-/-- The div-side facts bundle consumed by `operator_div_roundsCuspAware`. -/
+/-- Facts about the last rounding step of `operator_div` under `.to_nearest`. -/
 structure DivFactsToNearest (x y result : Number) (mode : rounding_mode)
     (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) : Prop where
   zm_ge_floor : mantissaFloor ≤ zm.toNat
@@ -54,9 +52,8 @@ theorem operator_div_algorithmic_facts_to_nearest (x y result : Number)
     ⟨hzm_ge, hzm_le, hf_nn, hf_lt, hfloor, value_eq, h_rup, h_abs, hres_mant,
      result_nonneg, hround1, hround0, hfgt, hfeq⟩⟩
 
-/-! ## Branch identification (div analogs of `operator_mul_rounded_branchA/B`) -/
-
-/-- Round-down cell: `result = lower(x/y)`. -/
+/-- If `result.toRat ≤ x/y` and no normalized Number lies above `result.toRat` and at or below `x/y`, the
+result has the value of `Number.lower (x/y)`. -/
 theorem operator_div_rounded_branchA (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -81,7 +78,8 @@ theorem operator_div_rounded_branchA (x y result : Number)
   exact closest_lower_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
     h_truth_ne h_bound h_truth_top h_round_down h_no_inbetween
 
-/-- Round-up cell: `result = upper(x/y)`. -/
+/-- If `x/y ≤ result.toRat` and no normalized Number lies at or above `x/y` and below `result.toRat`, the
+result has the value of `Number.upper (x/y)`. -/
 theorem operator_div_rounded_branchB (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

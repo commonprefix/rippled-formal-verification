@@ -2,21 +2,20 @@ import XRPL.Properties.Vault.VaultValid
 
 /-! # Walking an operation's do-block
 
-`walk_ok` splits every hypothesis `h : e = .ok r` whose left side is a `match` or
-an `if` (what an unfolded `Except` do-block reduces to) until none is left. Each
-resulting goal is one path through the code: a `.error _ = .ok _` hypothesis closes
-its goal, and `.ok a = .ok b` is injected and substituted when one side is a
-variable. The path conditions stay in context as hypotheses (`heq✝`, `h✝`).
-
-The walk follows the model's control flow rather than naming its steps, so proofs
-built on it survive a step being added or reordered. Calls to other functions are
-not unfolded: their results stay as `f … = .ok x` hypotheses. -/
+`walk_ok` splits every hypothesis `h : e = .ok r` (or `e = .error x`) whose left side is a `match` or
+an `if` until none is left, so each goal is one path through the code. It follows the control flow
+rather than naming steps, so proofs survive a step being added or reordered. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open Lean Meta Elab Tactic
 
-/-- One step of `walk_ok` on the main goal; fails when no hypothesis can be split. -/
+/-- An `if` equal to a value took one of its branches. -/
+lemma ite_eq_cases {α : Sort _} {c : Prop} [Decidable c] {a b x : α}
+    (h : (if c then a else b) = x) : (c ∧ a = x) ∨ (¬c ∧ b = x) :=
+  ite_eq_iff.mp h
+
+/-- One step of `walk_ok` on the main goal. It fails when no hypothesis can be split. -/
 elab "walk_step" : tactic => do
   let g ← getMainGoal
   g.withContext do
@@ -24,8 +23,10 @@ elab "walk_step" : tactic => do
       if ldecl.isImplementationDetail then continue
       let ty ← instantiateMVars ldecl.type
       let some (_, lhs, rhs) := ty.eq? | continue
-      unless rhs.isAppOfArity ``Except.ok 3 do continue
-      if lhs.isAppOfArity ``Except.error 3 then
+      let rhsOk := rhs.isAppOfArity ``Except.ok 3
+      unless rhsOk || rhs.isAppOfArity ``Except.error 3 do continue
+      -- two constructors: a mismatch closes the path, `.error a = .error b` identifies them
+      if lhs.isAppOfArity ``Except.error 3 || (lhs.isAppOfArity ``Except.ok 3 && !rhsOk) then
         let gs ← g.cases ldecl.fvarId
         replaceMainGoal (gs.toList.map (·.mvarId))
         return
@@ -38,8 +39,16 @@ elab "walk_step" : tactic => do
         if lhs.isAppOfArity ``Except.ok 3 then
           let h2 := mkIdent (← mkFreshUserName `hw)
           evalTactic (← `(tactic| (injection $hId:ident with $h2:ident; try cases $h2:ident)))
+        else if lhs.isAppOfArity ``ite 5 then
+          -- take the branch with a lemma: `split` simps the whole term, too slow on a large block
+          -- a branch whose condition is a false literal (`false = true`) is closed on the spot
+          let h2 := mkIdent (← mkFreshUserName `hw)
+          let hc := mkIdent (← mkFreshUserName `hc)
+          evalTactic (← `(tactic|
+            ((obtain ⟨$hc:ident, $h2:ident⟩ | ⟨$hc:ident, $h2:ident⟩ := ite_eq_cases $hId:ident) <;>
+              clear $hId:ident <;> try exact absurd $hc:ident (by decide))))
         else if lhs.isAppOf ``MonadExcept.throw || lhs.isAppOf ``throwThe then
-          -- newer Lean leaves a handler's `throw e` unreduced; expose the `Except.error`
+          -- Lean leaves a handler's `throw e` unreduced, so expose the `Except.error`
           evalTactic (← `(tactic| simp only [throw, throwThe, MonadExceptOf.throw] at $hId:ident))
         else
           evalTactic (← `(tactic| split at $hId:ident))
@@ -50,6 +59,18 @@ elab "walk_step" : tactic => do
 
 /-- Split every `… = .ok _` hypothesis into the paths of the code. -/
 macro "walk_ok" : tactic => `(tactic| repeat' walk_step)
+
+open Lean.Parser.Tactic in
+/-- Turn the `TerExcept` and `Except` monad plumbing of a hypothesis (or the goal) into plain
+`match` and `if`, ready for `walk_ok`. -/
+macro "unfold_ter" loc:(location)? : tactic =>
+  `(tactic| simp (config := { maxSteps := 2000000 }) only [ExceptT.run, ExceptT.bind, ExceptT.mk,
+      ExceptT.lift, ExceptT.pure, ExceptT.bindCont, ExceptT.tryCatch, bind, pure, Except.bind,
+      Except.pure, Except.map, Except.tryCatch, Functor.map, throw, throwThe, MonadExceptOf.throw,
+      tryCatch, tryCatchThe, MonadExceptOf.tryCatch, liftM, monadLift, MonadLift.monadLift,
+      MonadLiftT.monadLift, Bool.not_false, Bool.not_true, Bool.true_and, Bool.false_and,
+      Bool.and_true, Bool.and_false, Bool.true_or, Bool.false_or, Bool.or_true, Bool.or_false,
+      ↓reduceIte] $[$loc]?)
 
 /-- Rewrite the goal with the record behind the exit's `to_lawful` re-check. -/
 macro "rw_lawful" : tactic =>

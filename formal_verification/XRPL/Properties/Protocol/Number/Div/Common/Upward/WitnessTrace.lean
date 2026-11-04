@@ -4,14 +4,6 @@ import XRPL.Properties.Protocol.Number.Div.Common.Upward.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_div` under `.upward`
-
-`x = 1000735865998747695`, `y = 1085000000000004899`: staged quotient
-`9223372036854775820000` + sticky. The dropped digits are all zero, so only
-the sticky `xbit` survives in the guard — `.upward` rounds up by a full unit
-at scale `mantissaFloorSucc + 1` (the `capAtMaxRep` corner), giving relative
-error ≈ 1.084·10⁻¹⁸ > 9/(2⁶³−18). -/
-
 /-- The staged quotient on the witness inputs. -/
 lemma divQuotient128_upward_witness :
     divQuotient128 (1000735865998747695 : UInt64) (1085000000000004899 : UInt64) 0 0
@@ -86,11 +78,8 @@ lemma operator_div_upward_witness :
   exact doNormalize128_upward_witness
 
 
-/-- The directed bound is sharp up to its integer numerator: the sticky-driven
-round-up at the `capAtMaxRep` corner overshoots by a full unit, exceeding
-`9/(2^63 − 18)`. (`10/(2^63 − 18)` is unattainable — the true supremum is
-`10/(2^63 + 12)` — so the provable numerator over this denominator is at most
-`9` while the bound holds with `11`.) -/
+/-- Division rounding upward can overshoot by more than `9/(2^63 − 18)` of the value. The error stays under
+`10/(2^63 + 2)` and gets close to it, so 9 is the largest numerator reachable over this denominator. -/
 theorem operator_div_upward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧

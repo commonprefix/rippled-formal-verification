@@ -12,7 +12,7 @@ theorem STAmount.operator_sub_rounds_integral (v1 v2 result : STAmount) (mode : 
   RoundsWithin_of_eq result (v1.toRat - v2.toRat) mode
     (STAmount.operator_sub_integral_exact v1 v2 result mode hc1 hc2 hbound_val hsum hok)
 
-/-- **IOU subtraction rounds within `IOUAmount.εToNearest`.** -/
+/-- IOU subtraction rounds within `IOUAmount.εToNearest`. -/
 theorem STAmount.operator_sub_rounds_iou (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
@@ -21,7 +21,7 @@ theorem STAmount.operator_sub_rounds_iou (v1 v2 result : STAmount)
     RoundsWithin result (v1.toRat - v2.toRat) .to_nearest IOUAmount.εToNearest :=
   STAmount.operator_sub_rounds_iou_proof v1 v2 result hc1 hc2 h_truth_ne hok hresult
 
-/-- **Tightness witness for the IOU subtraction bound.** -/
+/-- IOU subtraction can err by more than `4/10¹⁶` of the exact difference, close to the `εToNearest` bound. -/
 theorem STAmount.operator_sub_rounds_iou_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
@@ -29,7 +29,7 @@ theorem STAmount.operator_sub_rounds_iou_witness :
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   STAmount.operator_sub_rounds_iou_witness_proof
 
-/-- **IOU subtraction, `downward` within `IOUAmount.εDirected`.** -/
+/-- IOU subtraction, `downward` within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_sub_rounds_iou_downward (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
@@ -39,7 +39,7 @@ theorem STAmount.operator_sub_rounds_iou_downward (v1 v2 result : STAmount)
   STAmount.operator_sub_iou_rounds_directed v1 v2 result .downward hc1 hc2
     h_truth_ne hok hresult
 
-/-- **IOU subtraction, `upward` within `IOUAmount.εDirected`.** -/
+/-- IOU subtraction, `upward` within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_sub_rounds_iou_upward (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
@@ -49,7 +49,7 @@ theorem STAmount.operator_sub_rounds_iou_upward (v1 v2 result : STAmount)
   STAmount.operator_sub_iou_rounds_directed v1 v2 result .upward hc1 hc2
     h_truth_ne hok hresult
 
-/-- **IOU subtraction, `towards_zero` within `IOUAmount.εDirected`.** -/
+/-- IOU subtraction, `towards_zero` within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_sub_rounds_iou_towards_zero (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
@@ -59,7 +59,7 @@ theorem STAmount.operator_sub_rounds_iou_towards_zero (v1 v2 result : STAmount)
   STAmount.operator_sub_iou_rounds_directed v1 v2 result .towards_zero hc1 hc2
     h_truth_ne hok hresult
 
-/-- **Tightness witness, IOU subtraction `downward`.** -/
+/-- IOU subtraction rounding `downward` can err by more than `4/10¹⁶` of the exact difference. -/
 theorem STAmount.operator_sub_rounds_iou_downward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
@@ -67,7 +67,7 @@ theorem STAmount.operator_sub_rounds_iou_downward_witness :
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   sub_dir_wit_core .downward 1000000000000000 (by decide) (Or.inl rfl)
 
-/-- **Tightness witness, IOU subtraction `upward`.** -/
+/-- IOU subtraction rounding `upward` can err by more than `4/10¹⁶` of the exact difference. -/
 theorem STAmount.operator_sub_rounds_iou_upward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
@@ -75,7 +75,7 @@ theorem STAmount.operator_sub_rounds_iou_upward_witness :
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   sub_dir_wit_core .upward 1000000000000001 (by decide) (Or.inr (Or.inl rfl))
 
-/-- **Tightness witness, IOU subtraction `towards_zero`.** -/
+/-- IOU subtraction rounding `towards_zero` can err by more than `4/10¹⁶` of the exact difference. -/
 theorem STAmount.operator_sub_rounds_iou_towards_zero_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧

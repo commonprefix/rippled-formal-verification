@@ -2,15 +2,15 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IntAmount
 import XRPL.Properties.Protocol.IntAmount.Common.ToRatLemmas
 
-/-! # Proof bodies for the `IntAmount` accessor correctness headlines. -/
+/-! # Proofs of the `IntAmount` accessor theorems -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`value` is faithful**: the integer cast of `value` is `toRat`. -/
+/-- The integer cast of `value` is `toRat`. -/
 theorem IntAmount.value_toRat_proof (x : IntAmount) :
     ((IntAmount.value x).toInt : ℚ) = x.toRat := rfl
 
-/-- **`toBool` decides non-zeroness.** -/
+/-- `toBool` decides non-zeroness. -/
 theorem IntAmount.toBool_iff_proof (x : IntAmount) :
     IntAmount.toBool x = true ↔ x.toRat ≠ 0 := by
   have hz : x.toRat = 0 ↔ x.value = 0 := by

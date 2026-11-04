@@ -4,24 +4,16 @@ import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.Number.Common.GridNeighbors
 
-/-! # IOU multiplication is within **1 ULP** for directed modes (non-negative operands).
+/-! # IOU multiplication is within 1 ULP for the directed modes
 
-The double rounding of the IOU `multiply` pipeline (19-digit `Number` product, then the
-16-digit `ofNumber` snap) does **not** compound for the directed modes: because the
-16-digit grid is a subgrid of the 19-digit grid, the composed rounding equals a single
-directed rounding of the exact product, hence lands within one ULP.
-
-The engine is a minimality argument: the `Number` product `r` is the *least* representable
-`Number ≥ truth` (`upward`) / *greatest* `≤ truth` (`downward`), and the 16-digit snap is
-an exact fixed-scale ceiling/floor. The adjacent 16-digit grid point on the far side of
-`result` is itself a representable `Number`, so minimality pins `result` to within one ULP
-of `truth`. -/
+The directed double rounding of the IOU `multiply` pipeline does not compound: the 16-digit grid is a subgrid of
+the 19-digit grid, so `result` stays within one ULP of the exact product. The file covers non-negative operands
+in every directed mode, and operands of any sign for `towards_zero` and for the magnitude bound. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **Raw `ofNumber` snap facts for a non-negative 19-digit `Number` `r`.** Exposes the
-`normalizeToRange` output `(mant, exp)`, the grid form of `result`, and the exponent
-range. The engine for the exact ceiling/floor characterization of the 16-digit snap. -/
+/-- Raw `ofNumber` snap facts for a non-negative 19-digit `Number` `r`. Exposes the `normalizeToRange` output
+`(mant, exp)`, the grid form of `result`, and the exponent range. -/
 lemma STAmount.ofNumber_iou_snap_pos (nt : NumericType) (r : Number) (mode : rounding_mode)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -108,11 +100,8 @@ lemma STAmount.ofNumber_iou_snap_pos (nt : NumericType) (r : Number) (mode : rou
       by symm; exact_mod_cast toUInt64_toNat_of_nonneg mant hmant_pos, hmtu_lo, hmtu_hi, hexp_lo, hexp_hi⟩
     rw [hres_eq]; rfl
 
-/-- **Magnitude version of the `ofNumber` snap facts, any sign.** `ofNumber` rounds the
-*magnitude* `|r|` (`working = if r.negative_ then -r else r`) onto the 16-digit grid and
-reattaches the sign, so this exposes the `normalizeToRange` output on `working = |r|`, the
-grid form of `|result|`, and the exponent range — the engine for the sign-agnostic
-magnitude 1-ULP bound. -/
+/-- Magnitude version of the `ofNumber` snap facts, any sign. `ofNumber` rounds `|r|` onto the 16-digit grid
+and reattaches the sign, so this exposes the snap of `|r|`, the grid form of `|result|`, and the exponent range. -/
 lemma STAmount.ofNumber_iou_snap_mag (nt : NumericType) (r : Number) (mode : rounding_mode)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -215,10 +204,8 @@ lemma STAmount.ofNumber_iou_snap_mag (nt : NumericType) (r : Number) (mode : rou
       hres_abs, ?_, by rw [hres_eq]; exact hneg_eq, hcast, hmtu_lo, hmtu_hi, hexp_lo, hexp_hi⟩
     rw [hres_eq]; rfl
 
-/-- **Stage-1 exact rounding of the IOU multiply pipeline (directed modes, non-negative
-operands).** Like `operator_mul_iou_decompose_anyMode` but additionally exposes that the
-19-digit `Number` product `r` is the *exact* directed rounding of the true product onto
-the `Number` grid (`Number.RoundsToRepresentable`), the key minimality fact. -/
+/-- Stage-1 exact rounding of the IOU multiply pipeline (directed modes, non-negative operands). The 19-digit
+`Number` product `r` is the *exact* directed rounding of the true product (`Number.RoundsToRepresentable`). -/
 lemma STAmount.operator_mul_iou_decompose_tight (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -278,10 +265,8 @@ lemma STAmount.operator_mul_iou_decompose_tight (v1 v2 result : STAmount) (nt : 
     rw [hn1_val, hn2_val] at hrepr
     exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hr_neg, hrepr⟩
 
-/-- **Sign-agnostic stage-1 exact rounding decomposition.** Like
-`operator_mul_iou_decompose_tight` but with no non-negativity hypothesis: exposes the
-19-digit `Number` product `r`, its range, its sign (XOR of the operand signs), and that it
-is the exact directed rounding of the true product (`Number.RoundsToRepresentable`). -/
+/-- Sign-agnostic stage-1 exact rounding decomposition. The 19-digit `Number` product `r` has the XOR of the
+operand signs and is the exact directed rounding of the true product (`Number.RoundsToRepresentable`). -/
 lemma STAmount.operator_mul_iou_decompose_mag_tight (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -340,11 +325,9 @@ lemma STAmount.operator_mul_iou_decompose_mag_tight (v1 v2 result : STAmount) (n
     exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hr_neg, hrepr⟩
 
 set_option maxHeartbeats 1200000 in
--- three directed-mode branches, each composing the exact ceiling/floor snap with the
--- `Number.upper`/`lower` minimality argument and zpow/nlinarith algebra; exceeds default
-/-- **IOU multiplication is within 1 ULP for the directed modes (non-negative operands).**
-The double rounding collapses: `result` is the single directed rounding of the exact
-product onto the 16-digit grid, so it lands within one ULP. -/
+-- the three directed-mode minimality branches exceed the default heartbeat budget
+/-- IOU multiplication is within 1 ULP for the directed modes (non-negative operands). The double rounding
+collapses: `result` is the single directed rounding of the exact product onto the 16-digit grid. -/
 lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hmode : mode = .upward ∨ mode = .downward ∨ mode = .towards_zero)
@@ -378,7 +361,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
   have hid : ((Mr:ℚ) - 1) * (10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp - (10:ℚ)^exp := by ring
   have hida : ((Mr:ℚ) + 1) * (10:ℚ)^exp = (Mr:ℚ)*(10:ℚ)^exp + (10:ℚ)^exp := by ring
   rcases hmode with hm | hm | hm
-  · -- upward: exact ceiling; `r` is the least representable `Number ≥ truth`.
+  · -- upward: exact ceiling, `r` is the least representable `Number ≥ truth`.
     subst hm
     obtain ⟨hval, hEle⟩ := normalizeToRange_16_ceil_pos r mant exp hr_neg hr_lo hr_hi (by omega)
       hr_exp_hi hnorm_r
@@ -417,7 +400,7 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
     refine ⟨htruth_le_res, ?_⟩
     rw [hres_exp, Nat.cast_one, one_mul, abs_of_nonneg (by linarith [htruth_le_res])]
     rw [hres_grid]; linarith [hbelow, hid]
-  · -- downward: exact floor; `r` is the greatest representable `Number ≤ truth`.
+  · -- downward: exact floor, `r` is the greatest representable `Number ≤ truth`.
     subst hm
     obtain ⟨hval, hEeq⟩ := normalizeToRange_16_floor_pos r mant exp .downward (Or.inl rfl) hr_neg
       hr_lo hr_hi (by omega) hr_exp_hi hnorm_r
@@ -480,11 +463,9 @@ lemma STAmount.operator_mul_repr_iou_directed_core (v1 v2 result : STAmount) (nt
     rw [hres_grid]; linarith [habove, hida]
 
 set_option maxHeartbeats 1200000 in
--- sign-factoring reduces the any-sign product to a magnitude floor∘floor collapse;
--- `lower`/`upper` maximality plus zpow/nlinarith algebra exceeds the default budget
-/-- **IOU multiplication is within 1 ULP under `towards_zero`, for operands of *any* sign.**
-`towards_zero` truncates the *magnitude* at both stages regardless of sign, so `|result|`
-is the single 16-digit floor of `|v1·v2|`, hence within one ULP. -/
+-- the sign factoring and the `lower`/`upper` maximality algebra exceed the default heartbeat budget
+/-- IOU multiplication is within 1 ULP under `towards_zero`, for operands of *any* sign. Both stages truncate
+the magnitude, so `|result|` is the single 16-digit floor of `|v1·v2|`. -/
 lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -497,7 +478,6 @@ lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt :
     STAmount.ofNumber_iou_snap_mag nt r .towards_zero result hnt hr_lo hr_hi
       hr_exp_lo hr_exp_hi hofn hresult
   have hr_ne : r.mantissa_ ≠ 0 := by intro h; rw [h] at hr_lo; simp at hr_lo
-  -- magnitude/sign factoring helpers.
   have vabs : ∀ v : STAmount, |v.toRat| = (v.mValue.toNat : ℚ) * 10 ^ v.mOffset := by
     intro v
     rw [STAmount.toRat_signed, abs_mul, abs_mul,
@@ -537,7 +517,7 @@ lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt :
   have hres_form : result.toRat
       = (if (v1.mIsNegative != v2.mIsNegative) then (-1:ℚ) else 1) * |result.toRat| := by
     nth_rewrite 1 [hsv result]; rw [hres_sign, hr_neg]
-  -- working = |r|; |result| = floor₁₆(|r|); |r| = M·10^E.
+  -- working = |r|, |result| = floor₁₆(|r|), |r| = M·10^E.
   set w : Number := if r.negative_ then r.operator_neg else r with hw_def
   have hw_mant : w.mantissa_ = r.mantissa_ := by
     rw [hw_def]; rcases r.negative_
@@ -649,7 +629,6 @@ lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt :
     have heq : ((Mr : ℚ) + 1) * (10:ℚ) ^ exp = |result.toRat| + (10:ℚ) ^ exp := by
       rw [show |result.toRat| = (Mr : ℚ) * (10:ℚ)^exp by rw [hres_mag, hexpE, hMr_eq]]; ring
     linarith [habove, heq]
-  -- combine via the shared sign factor.
   have hsub : result.toRat - truth
       = (if (v1.mIsNegative != v2.mIsNegative) then (-1:ℚ) else 1) * (|result.toRat| - |truth|) := by
     rw [mul_sub, ← hres_form, ← htruth_form]
@@ -662,12 +641,9 @@ lemma STAmount.operator_mul_iou_towards_zero_one (v1 v2 result : STAmount) (nt :
 
 
 set_option maxHeartbeats 1600000 in
--- `upward`/`downward`, any sign: the mixed-direction double rounding (fine one way, coarse
--- the other, for negative products) still lands within one ULP, via the fine `upper`/`lower`
--- minimality against a coarse neighbour, cased over sign × mode. Exceeds the default budget.
-/-- **IOU multiplication is within 1 ULP under `upward`/`downward`, for operands of *any*
-sign** (magnitude/accuracy form, no directional claim). Even the mixed `ceil∘floor` /
-`floor∘ceil` double rounding for negative products lands within one ULP. -/
+-- the sign × mode case split with `upper`/`lower` minimality exceeds the default heartbeat budget
+/-- IOU multiplication is within 1 ULP under `upward`/`downward`, for operands of *any* sign (magnitude only).
+Even the mixed `ceil∘floor` / `floor∘ceil` double rounding for negative products lands within one ULP. -/
 lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode) (hmode : mode = .upward ∨ mode = .downward)
     (hnt : nt = .fractional)
@@ -746,7 +722,6 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
     rw [zpow_add₀ (by norm_num : (10:ℚ)≠0)]; norm_num
   have hgb_lo : minExponent + 4 ≤ exp := by unfold minExponent; omega
   have hgb_hi : exp + 3 ≤ maxExponent := by unfold maxExponent; omega
-  -- Reduce to the two-sided coarse bracket.
   suffices hP : ((Mr : ℚ) - 1) * (10:ℚ) ^ exp ≤ |truth| ∧
       |truth| ≤ ((Mr : ℚ) + 1) * (10:ℚ) ^ exp by
     have hsub : result.toRat - truth
@@ -804,7 +779,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
         have htneg : truth < 0 := by rw [htf]; simpa using hA_pos
         have hle_up := Number.le_upper truth n hn_eq
         rw [← hr_eq] at hle_up
-        -- |r| ≤ |truth| here (fine floor), and |truth| < (Mr-1)·10^exp, so |r| < (Mr-1)·10^exp; contra hup_gt.
+        -- |r| ≤ |truth| here (fine floor), and |truth| < (Mr-1)·10^exp, so |r| < (Mr-1)·10^exp, contra hup_gt.
         linarith [hle_up, htf, hrf, hcon, hup_gt]
     · by_contra hcon; push Not at hcon
       have hlt : |r.toRat| < ((Mr : ℚ) + 1) * (10:ℚ) ^ exp := by
@@ -873,7 +848,7 @@ lemma STAmount.operator_mul_iou_directed_mag_one (v1 v2 result : STAmount) (nt :
         have hrf := hr_form; rw [hif, one_mul] at hrf
         have hle_lo := Number.lower_le truth n hn_eq
         rw [← hr_eq] at hle_lo
-        -- Mr·10^exp ≤ |r| = r.toRat ≤ truth = |truth| < (Mr-1)·10^exp; contra.
+        -- Mr·10^exp ≤ |r| = r.toRat ≤ truth = |truth| < (Mr-1)·10^exp, a contradiction.
         linarith [hdn_ge, hle_lo, htf, hrf, hcon]
       · have hif : (if (v1.mIsNegative != v2.mIsNegative) then (-1:ℚ) else 1) = -1 := by rw [hxor]; simp
         have htf := htruth_form; rw [hif, neg_one_mul] at htf

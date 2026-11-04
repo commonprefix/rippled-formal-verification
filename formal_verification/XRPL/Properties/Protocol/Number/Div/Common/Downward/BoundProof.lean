@@ -6,11 +6,7 @@ import XRPL.Properties.Protocol.Number.Common.Helpers
 
 namespace XRPL.Model.Protocol
 
-/-- Rounding bound for `operator_div` under `.downward`: the algorithmic facts
-package the staged-quotient state as `doNormalize128` keystone inputs, and
-`doNormalize128_rounds_any` delivers the any-round bound `11/(2^63 − 8)` on
-`|result.toRat|`; the strict constant `11/(2^63 − 18)` follows from the
-positive truth. -/
+/-- A nonzero `operator_div` result under `.downward` has relative error strictly below `11/(2^63 − 18)`. -/
 theorem operator_div_rounding_bound_downward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -40,10 +36,8 @@ theorem operator_div_rounding_bound_downward (x y result : Number)
         rw [htruth]
         exact mul_lt_mul_of_pos_left (by norm_num) h_truth_pos
 
-/-- Direction for `.downward`: the result never exceeds the truth. The staged
-sticky flag is exact (`dropped ↔ r ≠ 0`), so the `doNormalize128` direction
-keystone applies — unlike the pre-330 pipeline, where the invisible residual
-could break directionality. -/
+/-- Direction for `.downward`: the result never exceeds the truth. This holds because the staged sticky flag is
+exact (`dropped ↔ r ≠ 0`). -/
 theorem operator_div_rounding_bound_downward_dir (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

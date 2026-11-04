@@ -4,15 +4,6 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `normalize_rounding_bound_to_nearest`
-
-The bound `5/(2^63 + 7)` is attained at the value `2^63 + 7 = twoPow63Add7`
-(mantissa, exponent 0). `scaleUp`/`scaleDown` are no-ops; `capAtMaxRep` divides by
-ten (the value exceeds `maxRep`), pushing guard digit `5` and producing the odd
-mantissa `mantissaFloorSucc` at exponent 1. The to-nearest tie (guard digit `5`,
-odd mantissa) rounds up to `twoPow63Add12`, then `bringIntoRange` scales it
-back up to `twoPow63Add12` at exponent 0. Error = 5. -/
-
 /-- `Number.normalize` trace for the to_nearest witness input `2^63 + 7`. -/
 lemma normalize_to_nearest_witness :
     Number.normalize ⟨false, twoPow63Add7, 0⟩
@@ -45,9 +36,8 @@ lemma normalize_to_nearest_witness :
   simp only [RoundResult.toNumber]
 
 
-/-- The `5/(2^63+7)` to-nearest normalize bound is attained: normalizing the
-    value `2^63+7` rounds up by exactly 5 ULP-at-scale (tie on an odd mantissa),
-    giving relative error exactly `5/(2^63+7)`. So 5 is the optimal numerator. -/
+/-- The `5/(2^63+7)` to-nearest normalize bound is attained: normalizing `2^63+7` ties on an odd mantissa and
+rounds up by exactly 5, so 5 is the optimal numerator. -/
 theorem normalize_to_nearest_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .to_nearest = .ok result ∧

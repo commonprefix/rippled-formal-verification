@@ -8,14 +8,12 @@ import XRPL.Properties.Protocol.Number.Normalize.NormalizedResult
 
 /-! # Rounding bounds of `STAmount.ofNumber`
 
-How far converting a `Number` into an `STAmount` can move its value, and when it does not move
-it. An integral type rounds to a whole unit. A fractional type rounds to a 16-digit mantissa.
-`to_nearest` stays within half a unit of the result exponent, and a value already on that grid
-converts exactly. -/
+How far converting a `Number` into an `STAmount` can move its value. `to_nearest` stays within half a unit of
+the result exponent, and a value already on that grid converts exactly. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **An integral `ofNumber` stores the `to_rep` integer.** A sign-cleared source goes through
+/-- An integral `ofNumber` stores the `to_rep` integer. A sign-cleared source goes through
 `to_rep`, and the offset-`0` result holds exactly that integer. -/
 lemma STAmount.ofNumber_integral_toRat (nt : NumericType) (n : Number)
     (mode : rounding_mode) (result : STAmount)
@@ -41,7 +39,7 @@ lemma STAmount.ofNumber_integral_toRat (nt : NumericType) (n : Number)
     show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
     rw [toUInt64_toNat_of_nonneg intValue hnn]
 
-/-- **`ofNumber` on an integral type rounds within one unit** of a sign-cleared
+/-- `ofNumber` on an integral type rounds within one unit of a sign-cleared
 normalized `Number`, because the magnitude goes through `to_rep`. -/
 lemma STAmount.ofNumber_integral_within_one (nt : NumericType) (n : Number)
     (mode : rounding_mode) (result : STAmount)
@@ -52,7 +50,7 @@ lemma STAmount.ofNumber_integral_within_one (nt : NumericType) (n : Number)
   rw [hres]
   exact to_rep_within_one n mode intValue hn hr
 
-/-- **`to_nearest` `ofNumber` on an integral type rounds within half a unit.** -/
+/-- `to_nearest` `ofNumber` on an integral type rounds within half a unit. -/
 lemma STAmount.ofNumber_integral_within_half (nt : NumericType) (n : Number) (result : STAmount)
     (hnt : nt.isIntegral = true) (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : STAmount.ofNumber nt n .to_nearest = .ok result) :
@@ -99,7 +97,7 @@ lemma STAmount.ofNumber_integral_source_ne_zero (nt : NumericType) (n : Number)
   apply ha
   rw [← Except.ok.inj hok]
 
-/-- **`ofNumber` on an integral type keeps a whole number exactly**, in every mode. -/
+/-- `ofNumber` on an integral type keeps a whole number exactly, in every mode. -/
 lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
     (mode : rounding_mode) (a : STAmount)
     (hnt : nt.isIntegral = true)
@@ -201,9 +199,8 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
       push_cast at h1
       linarith
 
-/-- **`to_nearest` `ofNumber` on the fractional type rounds within half a unit of the result
-exponent.** A nonzero normalized source and a nonzero result, with no exponent hypothesis: the
-success of the conversion already bounds the source exponent. -/
+/-- `to_nearest` `ofNumber` on the fractional type rounds within half a unit of the result exponent. No
+exponent hypothesis is needed: the success of the conversion bounds the source exponent. -/
 lemma STAmount.ofNumber_iou_to_nearest_within_half (n : Number) (result : STAmount)
     (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0)
     (hok : STAmount.ofNumber .fractional n .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
@@ -258,7 +255,7 @@ lemma STAmount.ofNumber_fractional_of_trailing_zeros (n : Number) (mode : roundi
     ⟨rfl, by show 10 ^ 15 ≤ (n.mantissa_ / 10 / 10 / 10).toNat; omega,
       by show (n.mantissa_ / 10 / 10 / 10).toNat < 10 ^ 16; omega, he_lo, he_hi⟩
 
-/-- **`to_nearest` `ofNumber` rounds within half a unit of the result exponent**, for every
+/-- `to_nearest` `ofNumber` rounds within half a unit of the result exponent, for every
 numeric type. An integral result has exponent `0`, so the bound is `1/2`. -/
 lemma STAmount.ofNumber_to_nearest_within_half (nt : NumericType) (n : Number) (result : STAmount)
     (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
@@ -282,7 +279,7 @@ lemma STAmount.ofNumber_to_nearest_within_half (nt : NumericType) (n : Number) (
       exact absurd (by rw [← hok]) hresult
     · exact STAmount.ofNumber_iou_to_nearest_within_half n result hn hm hok hresult
 
-/-- **A nonzero `ofNumber` result is stored canonically.** A fractional result has a 16-digit
+/-- A nonzero `ofNumber` result is stored canonically. A fractional result has a 16-digit
 mantissa and an in-range exponent. An integral result has offset `0` and fits `2^63 - 1`. -/
 lemma STAmount.ofNumber_exactCanonical (nt : NumericType) (n : Number) (mode : rounding_mode)
     (result : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
@@ -324,9 +321,8 @@ private lemma STAmount.toRat_eq_int_mul_of_exponent_ge (a : STAmount) (e : ℤ)
   rw [hw, hk, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
   push_cast; ring
 
-/-- **`to_nearest` `ofNumber` never rounds above an amount the numeric type holds.** A source at
-most a canonical amount `a` of the same type converts to at most `a`: `a` sits on the result's
-grid, so any result above `a` is a full unit above it, more than the half-unit rounding. -/
+/-- `to_nearest` `ofNumber` never rounds above an amount the numeric type holds. A source at most a canonical
+`a` converts to at most `a`: a result above `a` is a full unit above it, more than the half-unit rounding. -/
 lemma STAmount.ofNumber_to_nearest_le_of_canonical (nt : NumericType) (n : Number)
     (result a : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
     (ha : a.ExactCanonical) (hat : a.mNumericType = nt) (hle : n.toRat ≤ a.toRat)
@@ -413,7 +409,7 @@ lemma STAmount.ofNumber_to_nearest_le_of_canonical (nt : NumericType) (n : Numbe
     rw [hz'] at hle
     linarith
 
-/-- **A nonnegative source converts to a nonnegative amount**, for every numeric type. -/
+/-- A nonnegative source converts to a nonnegative amount, for every numeric type. -/
 lemma STAmount.ofNumber_nonneg (nt : NumericType) (n : Number) (mode : rounding_mode)
     (result : STAmount) (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : STAmount.ofNumber nt n mode = .ok result) : 0 ≤ result.toRat := by
@@ -442,7 +438,7 @@ lemma STAmount.ofNumber_nonneg (nt : NumericType) (n : Number) (mode : rounding_
     rw [hval, hcast]
     positivity
 
-/-- **A canonically stored amount is below `10 ^ 96` in magnitude.** A fractional amount has a
+/-- A canonically stored amount is below `10 ^ 96` in magnitude. A fractional amount has a
 16-digit mantissa and offset at most `80`, an integral one fits `2^63 - 1`. -/
 lemma STAmount.ExactCanonical.abs_lt (s : STAmount) (hc : s.ExactCanonical) :
     |s.toRat| < 10 ^ 96 := by
@@ -462,27 +458,36 @@ lemma STAmount.ExactCanonical.abs_lt (s : STAmount) (hc : s.ExactCanonical) :
     have h2 : ((2 ^ 63 - 1 : ℕ) : ℚ) < 10 ^ 96 := by norm_num
     linarith
 
-/-- The exponent of a Number written as an `STAmount` is `-100` (zero) or in
-`[-96, 80]`. -/
-lemma numberExponent_range (n : Number) (nt : NumericType) (e : Int)
-    (hok : numberExponent n nt = .ok e) : e = -100 ∨ ((-96 : ℤ) ≤ e ∧ e ≤ 80) := by
+/-- The exponent of a Number written as an `STAmount`, never finer than `exponent`, is
+`exponent`, `-100` (zero) or in `[-96, 80]`. -/
+lemma numberExponent_range (n : Number) (exponent : Int) (nt : NumericType) (e : Int)
+    (hok : numberExponent n exponent nt = .ok e) :
+    e = exponent ∨ e = -100 ∨ ((-96 : ℤ) ≤ e ∧ e ≤ 80) := by
   unfold numberExponent at hok
-  cases ha : STAmount.ofNumber nt n .to_nearest with
-  | error err => rw [ha] at hok; exact absurd hok (by simp [bind, Except.bind])
-  | ok a =>
-    rw [ha] at hok
-    simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hok
-    subst hok
-    cases hnt : nt.isIntegral
-    · have hfr : nt = .fractional := by
-        cases nt with
-        | integral _ _ _ _ => simp [NumericType.isIntegral] at hnt
-        | fractional => rfl
-      exact STAmount.ofNumber_fractional_offset nt n .to_nearest a hfr ha
-    · have hoff := (STAmount.ofNumber_integral_canonical nt n .to_nearest a hnt ha).1.offset_zero
-      right
-      show (-96 : ℤ) ≤ a.mOffset ∧ a.mOffset ≤ 80
-      rw [hoff]; norm_num
+  by_cases hz : n.operator_eq Number.zero = true
+  · simp only [hz, if_true, pure, Except.pure, Except.ok.injEq] at hok
+    exact Or.inl hok.symm
+  · simp only [hz, Bool.false_eq_true, if_false] at hok
+    cases ha : STAmount.ofNumber nt n .downward with
+    | error err => rw [ha] at hok; simp [bind, Except.bind, pure, Except.pure] at hok
+    | ok a =>
+      rw [ha] at hok
+      simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq] at hok
+      subst hok
+      have hrange : a.mOffset = -100 ∨ ((-96 : ℤ) ≤ a.mOffset ∧ a.mOffset ≤ 80) := by
+        cases hnt : nt.isIntegral
+        · have hfr : nt = .fractional := by
+            cases nt with
+            | integral _ _ _ _ => simp [NumericType.isIntegral] at hnt
+            | fractional => rfl
+          exact STAmount.ofNumber_fractional_offset nt n .downward a hfr ha
+        · have hoff := (STAmount.ofNumber_integral_canonical nt n .downward a hnt ha).1.offset_zero
+          right; rw [hoff]; norm_num
+      show max exponent a.mOffset = exponent ∨ max exponent a.mOffset = -100 ∨
+        ((-96 : ℤ) ≤ max exponent a.mOffset ∧ max exponent a.mOffset ≤ 80)
+      rcases le_total a.mOffset exponent with h | h
+      · exact Or.inl (max_eq_left h)
+      · rw [max_eq_right h]; exact Or.inr hrange
 
 /-- Every successful `STAmount.toNumber` gives a normalized `Number`. -/
 lemma STAmount.toNumber_isNormalized (s : STAmount) (mode : rounding_mode) (n : Number)
@@ -506,8 +511,8 @@ lemma STAmount.roundToNumericType_isNormalized (nt : NumericType) (v : Number)
     | exact absurd hok (by simp)
     | exact STAmount.toNumber_isNormalized _ _ n hok
 
-/-- **A to-nearest `ofNumber` result is at least a canonical amount below its source**, for a
-nonnegative source. The mirror of `ofNumber_to_nearest_le_of_canonical`. -/
+/-- A to-nearest `ofNumber` result is at least a canonical amount below its source, for a
+nonnegative source. The lower-bound version of `ofNumber_to_nearest_le_of_canonical`. -/
 lemma STAmount.ofNumber_to_nearest_ge_of_canonical (nt : NumericType) (n : Number)
     (result a : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
     (ha : a.ExactCanonical) (hat : a.mNumericType = nt) (hle : a.toRat ≤ n.toRat)
@@ -615,9 +620,8 @@ lemma STAmount.ofNumber_to_nearest_ge_of_canonical (nt : NumericType) (n : Numbe
         linarith
       linarith
 
-/-- **A fractional `ofNumber` of a source whose exponent is at least `-99` is never zero.** The
-result exponent is at least three above the source exponent, so it never falls below the
-smallest offset `-96`, where the conversion would flush to zero. -/
+/-- A fractional `ofNumber` of a source whose exponent is at least `-99` is never zero. The result exponent
+is at least three higher, so it never falls below the smallest offset `-96`, where it would flush to zero. -/
 lemma STAmount.ofNumber_iou_ne_zero_of_exponent (n : Number) (mode : rounding_mode)
     (result : STAmount) (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0)
     (hexp : (-99 : ℤ) ≤ n.exponent_) (hok : STAmount.ofNumber .fractional n mode = .ok result) :
@@ -676,7 +680,7 @@ lemma STAmount.ofNumber_iou_ne_zero_of_exponent (n : Number) (mode : rounding_mo
     unfold cMinOffset at hlt
     omega
 
-/-- **A nonzero canonical amount's value converts to a nonzero amount.** The source
+/-- A nonzero canonical amount's value converts to a nonzero amount. The source
 is at or above the 16-digit floor of the type, so no rounding flushes it to zero. -/
 lemma STAmount.ofNumber_ne_zero_of_canonical (nt : NumericType) (n : Number)
     (mode : rounding_mode) (result a : STAmount) (hn : n.isNormalized)
@@ -737,7 +741,7 @@ lemma STAmount.ofNumber_ne_zero_of_canonical (nt : NumericType) (n : Number)
     exact STAmount.ofNumber_iou_ne_zero_of_exponent n mode result hn hn0
       (by have := hiou.exp_lo; omega) hok hr0
 
-/-- **A to-nearest `ofNumber` keeps a value a canonical amount holds**, for a nonnegative
+/-- A to-nearest `ofNumber` keeps a value a canonical amount holds, for a nonnegative
 source: the result equals that amount. -/
 lemma STAmount.ofNumber_to_nearest_eq_of_canonical (nt : NumericType) (n : Number)
     (result a : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
@@ -765,7 +769,7 @@ lemma STAmount.ofNumber_to_nearest_eq_of_canonical (nt : NumericType) (n : Numbe
     (STAmount.ofNumber_to_nearest_le_of_canonical nt n result a hn h0 ha hat heq.le hok hresult)
     (STAmount.ofNumber_to_nearest_ge_of_canonical nt n result a hn h0 ha hat heq.ge hok hresult)
 
-/-- **A positive 16-digit IOU amount lies between `10^(e + 15)` and `10^(e + 16)`**, where `e` is its
+/-- A positive 16-digit IOU amount lies between `10^(e + 15)` and `10^(e + 16)`, where `e` is its
 exponent. The upper bound keeps one unit of room: the amount is at most `10^(e + 16) - 10^e`. -/
 lemma STAmount.IOUCanonical.toRat_bounds (s : STAmount) (hs : s.IOUCanonical) (hpos : 0 < s.toRat) :
     (10 : ℚ) ^ (s.exponent + 15) ≤ s.toRat ∧
@@ -784,10 +788,8 @@ lemma STAmount.IOUCanonical.toRat_bounds (s : STAmount) (hs : s.IOUCanonical) (h
   · rw [mul_comm]; exact mul_le_mul_of_nonneg_right hmlo hp.le
   · nlinarith
 
-/-- **A to-nearest `ofNumber` returns a canonical amount its source is very close to.** A
-nonnegative source within `½ · 10 ^ (a.exponent - 1)` of a positive canonical amount `a` of the
-same type converts to `a`. The rounding moves the source by at most half a unit, and the other
-canonical amounts are at least a tenth of a unit away from `a`. -/
+/-- A to-nearest `ofNumber` returns a canonical amount its source is very close to. A nonnegative source
+within `½ · 10 ^ (a.exponent - 1)` of a positive canonical amount `a` of the same type converts to `a`. -/
 lemma STAmount.ofNumber_to_nearest_eq_of_near_canonical (nt : NumericType) (n : Number)
     (result a : STAmount) (hn : n.isNormalized) (h0 : 0 ≤ n.toRat)
     (ha : a.ExactCanonical) (hat : a.mNumericType = nt) (ha0 : 0 < a.toRat)
@@ -894,8 +896,8 @@ lemma STAmount.ofNumber_to_nearest_eq_of_near_canonical (nt : NumericType) (n : 
     have hl2' : zr - za < 1 := by exact_mod_cast hl2
     rw [hzr, hza, show zr = za by omega]
 
-/-- Two 16-digit mantissas that give the same value cannot sit at exponents more
-than one digit apart: the finer one would need a 17th digit. -/
+/-- If a mantissa below `10^16` and one of at least `10^15` give the same value, the second exponent is not
+above the first. Otherwise the first mantissa would need a 17th digit. -/
 private lemma mant16_exp_le (ma mb : ℕ) (ea eb : ℤ) (ha_hi : ma < 10 ^ 16)
     (hb_lo : 10 ^ 15 ≤ mb) (h : (ma : ℚ) * 10 ^ ea = (mb : ℚ) * 10 ^ eb) : eb ≤ ea := by
   by_contra hlt
@@ -914,7 +916,7 @@ private lemma mant16_exp_le (ma mb : ℕ) (ea eb : ℤ) (ha_hi : ma < 10 ^ 16)
   have hbl : (10 : ℚ) ^ 15 ≤ mb := by exact_mod_cast hb_lo
   nlinarith
 
-/-- **Two canonical amounts of one numeric type with the same value are equal.** A
+/-- Two canonical amounts of one numeric type with the same value are equal. A
 canonical amount stores one mantissa, exponent and sign for each nonzero value. -/
 lemma STAmount.eq_of_exactCanonical (a b : STAmount) (ha : a.ExactCanonical)
     (hb : b.ExactCanonical) (hnt : a.mNumericType = b.mNumericType) (ha0 : a.mValue ≠ 0)
@@ -969,7 +971,7 @@ lemma STAmount.eq_of_exactCanonical (a b : STAmount) (ha : a.ExactCanonical)
   simp only [STAmount.mk.injEq]
   exact ⟨hnt, hparts.1, hparts.2, hsign⟩
 
-/-- Rounding zero to a numeric type gives zero, at every scale. -/
+/-- Rounding zero upward to a numeric type gives zero, at every scale. -/
 lemma STAmount.roundToNumericType_zero (nt : NumericType) (e : Int) :
     STAmount.roundToNumericType nt Number.zero .upward (some e) = .ok Number.zero := by
   cases nt with
@@ -988,6 +990,11 @@ lemma STAmount.roundToNumericType_zero (nt : NumericType) (e : Int) :
         .ok Number.zero := by
       rfl
     simp [STAmount.roundToNumericType, h1, STAmount.integral, NumericType.isIntegral, h2]
+
+/-- Rounding zero to nearest at a numeric type's precision gives zero. -/
+lemma STAmount.roundToNumericType_zero_to_nearest (nt : NumericType) :
+    STAmount.roundToNumericType nt Number.zero .to_nearest = .ok Number.zero := by
+  cases nt <;> rfl
 
 /-- `⌈M / 1000⌉` as a quotient plus a carry when the remainder is nonzero. -/
 private lemma ceil_div_thousand (M : ℕ) :
@@ -1010,9 +1017,8 @@ private lemma ceil_div_thousand (M : ℕ) :
     rw [hz, hr, Nat.cast_zero, zero_div, add_zero]
     constructor <;> linarith
 
-/-- **An upward fractional `ofNumber` rounds up onto the 16-digit grid of its source.** A
-nonzero result is the ceiling of a nonnegative source at scale `10 ^ (exponent + 3)`, three
-digits above the source's 19-digit mantissa. -/
+/-- An upward fractional `ofNumber` rounds up onto the 16-digit grid of its source. A nonzero result is the
+ceiling of a nonnegative source at scale `10 ^ (exponent + 3)`. -/
 lemma STAmount.ofNumber_iou_upward_ceil (n : Number) (result : STAmount) (hn : n.isNormalized)
     (hn0 : n.mantissa_ ≠ 0) (h0 : 0 ≤ n.toRat)
     (hok : STAmount.ofNumber .fractional n .upward = .ok result) (hresult : result.mValue ≠ 0) :

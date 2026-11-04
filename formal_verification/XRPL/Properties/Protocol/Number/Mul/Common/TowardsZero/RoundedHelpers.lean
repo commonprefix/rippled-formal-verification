@@ -8,8 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `result.toRat` and `truth` when
-`result.toRat ≤ truth`. -/
+/-- No normalized Number lies above `result.toRat` and at or below `truth` when `result.toRat ≤ truth`. -/
 theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -27,8 +26,7 @@ theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
     (fun h_pos => mul_result_nonneg_of_truth_pos x y result h_sign h_pos)
     h_le
 
-/-- No normalized Number sits strictly between `truth` and `result.toRat` when
-`truth ≤ result.toRat`. -/
+/-- No normalized Number lies at or above `truth` and below `result.toRat` when `truth ≤ result.toRat`. -/
 theorem operator_mul_no_inbetween_above_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -46,9 +44,8 @@ theorem operator_mul_no_inbetween_above_towards_zero (x y result : Number)
     (fun h_neg => mul_result_nonpos_of_truth_neg x y result h_sign h_neg)
     h_ge
 
-/-- Zero-operand and underflow dispatch shared by the discrete theorems: a zero
-result mantissa always lands on the correct grid point for `.towards_zero`
-(flush-to-zero *is* rounding toward zero). -/
+/-- A zero `operator_mul` result is correctly rounded for `.towards_zero`, since the underflow flush to zero
+is rounding toward zero. -/
 lemma rounded_towards_zero_of_result_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

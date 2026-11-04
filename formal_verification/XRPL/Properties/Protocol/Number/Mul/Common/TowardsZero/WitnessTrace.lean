@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_mul_rounding_bound_towards_zero`
+/-! # Witness for `operator_mul_rounding_bound_towards_zero`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = 9223372036854775810`, `y = 1000000000000000001` exceeds `9/(2^63+2)`.

@@ -2,13 +2,12 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeBound
 
 /-! # Exact 16-digit re-round of a negative `Number`
 
-Mirror of `SmallRangePos`: on the negative side the magnitude roles swap.
-`.downward` is the exact magnitude ceiling, `.upward`/`.towards_zero` the exact
-magnitude floor. -/
+`SmallRangePos` for a negative input, where the magnitude roles swap: `.downward` is the exact magnitude ceiling,
+`.upward` and `.towards_zero` the exact magnitude floor. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`.downward` on a negative `Number`: exact magnitude ceiling**
+/-- `.downward` on a negative `Number`: exact magnitude ceiling
 `-(⌈M/1000⌉·10^(e+3))`, with `exp = e+3` except a `+1` cusp carry. -/
 theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
     (hnf : n.negative_ = true)
@@ -95,7 +94,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
           if_pos hrem_ne, hnf, if_pos rfl]
       simp only [neg_mul, one_mul, Int.cast_neg, Int.cast_natCast]
 
-/-- **`.upward`/`.towards_zero` on a negative `Number`: exact magnitude floor**
+/-- `.upward`/`.towards_zero` on a negative `Number`: exact magnitude floor
 `-(⌊M/1000⌋·10^(e+3))` at `exp = e+3`. -/
 theorem normalizeToRange_16_floor_neg (n : Number) (mant : Int64) (exp : Int) (mode : rounding_mode)
     (hmode : mode = .upward ∨ mode = .towards_zero)

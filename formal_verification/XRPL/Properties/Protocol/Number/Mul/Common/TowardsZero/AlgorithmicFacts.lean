@@ -8,8 +8,8 @@ set_option linter.style.emptyLine false
 
 namespace XRPL.Model.Protocol
 
-/-! ## Algorithmic decomposition for `.towards_zero`-mode `operator_mul`. -/
-
+/-- A nonzero `towards_zero` product of nonzero operands meets `MulFactsTowardsZero`: the exact product has
+magnitude `(zm + f)·10^ze'`, and `doRoundUp` on `zm` gives `|result|`. -/
 theorem operator_mul_algorithmic_facts_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

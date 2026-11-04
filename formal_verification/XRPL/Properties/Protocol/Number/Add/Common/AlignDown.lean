@@ -10,8 +10,6 @@ import XRPL.Properties.Protocol.Number.Common.DropDigitEquivalence
 namespace XRPL.Model.Protocol
 
 
-/-! ## Equation lemmas -/
-
 /-- No-op case: when `e ≥ target`, `alignDown` returns its inputs. -/
 lemma alignDownSpec_noop {m : UInt64} {e : Int} {g : Guard} {target : Int}
     (h : ¬ e < target) :
@@ -28,8 +26,6 @@ lemma alignDownSpec_step {m : UInt64} {e : Int} {g : Guard} {target : Int}
   rw [if_pos h]
   rfl
 
-/-! ## Exponent invariant -/
-
 /-- The output exponent of `alignDown` is always `max e target`. -/
 theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (alignDownSpec m e g target).2.1 = max e target := by
@@ -38,7 +34,6 @@ theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
-    -- After one step e becomes e + 1; show max (e+1) target = max e target when e < target.
     have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
     by_cases h2 : e + 1 ≤ target
     · rw [max_eq_right h2, hmax_r]
@@ -48,8 +43,6 @@ theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     rw [alignDownSpec_noop hnlt]
     push Not at hnlt
     exact (max_eq_left hnlt).symm
-
-/-! ## Mantissa monotonicity / no-overflow -/
 
 /-- The output mantissa of `alignDown` is at most the input mantissa.
 Each step divides by 10, so the value can only shrink. -/
@@ -66,8 +59,6 @@ theorem alignDownSpec_mantissa_le (m : UInt64) (e : Int) (g : Guard) (target : I
   | case2 m e g hnlt =>
     rw [alignDownSpec_noop hnlt]
 
-/-! ## Value preservation -/
-
 /-- Number of steps performed by `alignDown m e g target`. -/
 def alignDownSpec_steps (e target : Int) : ℕ := (target - e).toNat
 
@@ -80,7 +71,6 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
     dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
-    -- IH: result.1.toNat = (m / 10).toNat / 10 ^ (max (e+1) target - (e+1)).toNat
     have hm10 : ((m / 10 : UInt64)).toNat = m.toNat / 10 := by
       rw [UInt64.toNat_div]; rfl
     rw [hm10]
@@ -95,7 +85,6 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
       · push Not at h2
         rw [max_eq_left (le_of_lt h2)]; omega
     rw [hmax_e1]
-    -- Now need: m.toNat / 10 / 10 ^ k = m.toNat / 10 ^ (k+1) where k+1 = (max e target - e).toNat.
     have hpos : 0 < (max e target - e).toNat := by
       have : 0 < max e target - e := by
         have : e < max e target := lt_of_lt_of_le hlt htarget_le_max
@@ -121,18 +110,8 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
     rw [hmax]
     simp
 
-/-! ## Guard representation invariant
-
-The guard captures all digits removed during alignment. If the initial guard
-represents `f0`, then after `alignDown m e g target`, the output guard
-represents `(f0 + (m.toNat % 10 ^ k : ℚ)) / 10 ^ k`, where `k` is the number
-of steps. This mirrors the corresponding `scaleDown128_correct` invariant. -/
-
-/-- Guard captures the truncated tail.
-
-If `g0` represents fraction `f0 ∈ [0, 1)`, then after `alignDown m e g0 target`,
-the output guard represents `(f0 + (m.toNat % 10 ^ k)) / 10 ^ k`, where
-`k = (max e target - e).toNat`. -/
+/-- If `g0` represents `f0`, the guard after `alignDown m e g0 target` represents the truncated tail
+`(f0 + m % 10^k) / 10^k`, where `k = (max e target - e).toNat`. -/
 theorem alignDownSpec_represents
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (f0 : ℚ) (hrep0 : represents g0 f0) :
@@ -143,7 +122,6 @@ theorem alignDownSpec_represents
     generalizing f0 with
   | case1 m e g0 hlt IH =>
     dsimp only [Guard.doDropDigit] at IH
-    -- One step then IH.
     have h10_uval : (10 : UInt64).toNat = 10 := uint64_ten_toNat
     have hd_lt : (m % 10).toNat < 10 := by
       rw [UInt64.toNat_mod, h10_uval]
@@ -153,10 +131,8 @@ theorem alignDownSpec_represents
       rw [UInt64.toNat_mod, h10_uval]
     have hstep := alignDownSpec_step (m := m) (e := e) (g := g0) (target := target) hlt
     rw [hstep]
-    -- IH gives the represents claim on the recursive output with the pushed guard.
     set f1 : ℚ := (f0 + ((m % 10 : UInt64).toNat : ℚ)) / 10 with hf1_def
     have hIH := IH (f0 := f1) hpush
-    -- Reindex via the relations between K and K-1.
     have hmax_e1 : max (e + 1) target = max e target := by
       have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
       rw [hmax_r]
@@ -198,15 +174,10 @@ theorem alignDownSpec_represents
       have hK1_ne : (10 : ℚ) ^ (K - 1) ≠ 0 := by positivity
       field_simp
       ring
-    -- Goal at this point is in terms of K = (max e target - e).toNat.
-    -- Rewrite goal using target_eq, then close with IH (after reindexing).
     change represents
       (alignDownSpec (m / 10) (e + 1) (g0.push (m % 10)) target).2.2
       ((f0 + ((m.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K)
     rw [target_eq]
-    -- hIH gives: represents ((alignDown (m/10) (e+1) (push g0 d) target).2.2)
-    --             ((f1 + ((m/10).toNat % 10 ^ (max (e+1) target - (e+1)).toNat))
-    --              / 10 ^ (max (e+1) target - (e+1)).toNat)
     rw [hKstep] at hIH
     exact hIH
   | case2 m e g0 hnlt =>
@@ -218,34 +189,23 @@ theorem alignDownSpec_represents
     simp only [pow_zero, Nat.mod_one, Nat.cast_zero, add_zero, div_one]
     exact hrep0
 
-/-! ## Drops-vs-xbit and aligned-mantissa bounds -/
-
-/-- If the aligned guard's `xbit_` is set (the truncated tail is nonzero in the
-deep digits), at least 17 digits were dropped: `17 ≤ k = (max e target - e).toNat`.
-
-Integrality argument: the represented tail `r = (m % 10^k)/10^k` satisfies
-`r * 10^16 = decimalValue(guard) + x * 10^16` with `0 < x*10^16 < 1`. If `k ≤ 16`
-then `r * 10^16` is a natural number, but it also lies strictly between two
-consecutive naturals — contradiction. -/
+/-- If alignment starts from a guard holding 0 and ends with `xbit_` set, at least 17 digits were dropped:
+`17 ≤ (max e target - e).toNat`. -/
 theorem alignDownSpec_steps_ge_17_of_xbit
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (hg0 : represents g0 0)
     (hxbit : (alignDownSpec m e g0 target).2.2.xbit_ = true) :
     17 ≤ (max e target - e).toNat := by
   set k := (max e target - e).toNat with hk_def
-  -- The output guard represents r.
   have hrep := alignDownSpec_represents m e g0 target 0 hg0
   rw [← hk_def] at hrep
-  -- Simplify the represented value to r = (m.toNat % 10^k : ℚ) / 10^k.
   have hr_eq :
       ((0 : ℚ) + ((m.toNat % 10 ^ k : ℕ) : ℚ)) / 10 ^ k
         = ((m.toNat % 10 ^ k : ℕ) : ℚ) / 10 ^ k := by
     rw [zero_add]
   rw [hr_eq] at hrep
   obtain ⟨x, hx_nn, hx_lt, hf, hxbit_iff, _hall⟩ := hrep
-  -- From hxbit, x > 0.
   have hxpos : x > 0 := hxbit_iff.mp hxbit
-  -- Suppose for contradiction k ≤ 16.
   by_contra hk_le
   push Not at hk_le
   have hk16 : k ≤ 16 := by omega
@@ -254,7 +214,6 @@ theorem alignDownSpec_steps_ge_17_of_xbit
       ∃ N : ℕ, N = decimalValue (alignDownSpec m e g0 target).2.2.digits_ :=
     ⟨_, rfl⟩
   rw [← hN_def] at hf
-  -- Name the residue mod as a fresh Nat r0 too.
   obtain ⟨r0, hr0_def⟩ : ∃ r0 : ℕ, r0 = m.toNat % 10 ^ k := ⟨_, rfl⟩
   rw [← hr0_def] at hf
   -- r * 10^16 = N + x * 10^16.
@@ -262,7 +221,6 @@ theorem alignDownSpec_steps_ge_17_of_xbit
   have hkne : (10 : ℚ) ^ k ≠ 0 := by positivity
   -- M := r0 * 10^(16-k), a Nat, equals r * 10^16.
   obtain ⟨M, hM_def⟩ : ∃ M : ℕ, M = r0 * 10 ^ (16 - k) := ⟨_, rfl⟩
-  -- 10^16 = 10^(16-k) * 10^k in ℚ.
   have hsplit : (10 : ℚ) ^ 16 = 10 ^ (16 - k) * 10 ^ k := by
     rw [← pow_add]; congr 1; omega
   have hMr : (M : ℚ) = (r0 : ℚ) / 10 ^ k * 10 ^ 16 := by
@@ -270,7 +228,6 @@ theorem alignDownSpec_steps_ge_17_of_xbit
     push_cast
     rw [hsplit]
     field_simp
-  -- From hf : r = N/10^16 + x, multiply by 10^16.
   have hf16 : (r0 : ℚ) / 10 ^ k * 10 ^ 16 = (N : ℚ) + x * 10 ^ 16 := by
     rw [hf]
     field_simp
@@ -290,11 +247,8 @@ theorem alignDownSpec_steps_ge_17_of_xbit
   have hMN_gt' : N < M := by exact_mod_cast hMN_gt
   omega
 
-/-- When the aligned guard's `xbit_` is set and the mantissa fits in 19 digits,
-the aligned mantissa is at most 99.
-
-By `alignDownSpec_steps_ge_17_of_xbit`, at least 17 digits are dropped, so the
-aligned mantissa `m / 10^k ≤ m / 10^17 ≤ (10^19 - 1) / 10^17 ≤ 99`. -/
+/-- If alignment starts from a guard holding 0, ends with `xbit_` set and `m < 10^19`, the aligned mantissa
+is at most 99, since at least 17 digits were dropped. -/
 theorem alignDownSpec_mantissa_le_99_of_xbit
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (hg0 : represents g0 0)
@@ -318,8 +272,6 @@ theorem alignDownSpec_mantissa_le_99_of_xbit
   exact le_trans hstep1 hstep2
 
 
-
-/-! ## The same results stated for `alignDown` -/
 
 /-- No-op case: when `e ≥ target`, `alignDown` returns its inputs. -/
 lemma alignDown_noop {m : UInt64} {e : Int} {g : Guard} {target : Int}

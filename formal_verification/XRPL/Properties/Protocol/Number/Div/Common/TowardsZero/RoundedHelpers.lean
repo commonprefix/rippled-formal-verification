@@ -7,8 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `result.toRat` and the quotient
-when `result.toRat ≤ x/y`. -/
+/-- No normalized Number lies above `result.toRat` and at or below the quotient when `result.toRat ≤ x/y`. -/
 theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -36,8 +35,7 @@ theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
       exact Number.toRat_nonneg_of_nonnegative result (h_neg.trans hzn_false))
     h_le
 
-/-- No normalized Number sits strictly between the quotient and `result.toRat`
-when `x/y ≤ result.toRat`. -/
+/-- No normalized Number lies at or above the quotient and below `result.toRat` when `x/y ≤ result.toRat`. -/
 theorem operator_div_no_inbetween_above_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -65,8 +63,7 @@ theorem operator_div_no_inbetween_above_towards_zero (x y result : Number)
       exact Number.toRat_nonpos_of_negative result (h_neg.trans hzn_true))
     h_ge
 
-/-- Underflow dispatch: a zero result mantissa always lands on the correct
-grid point for `.towards_zero`. -/
+/-- A zero result is correctly rounded toward zero, since flushing to zero is rounding toward zero. -/
 lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -95,9 +92,8 @@ lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
     · rw [h_res0, Number.toRat_zero]
 
 
-/-- `operator_div` under `.towards_zero` is **correctly rounded**: the result
-is `Number.lower` of the quotient for nonnegative quotients and `Number.upper`
-for negative ones. -/
+/-- `operator_div` under `.towards_zero` is correctly rounded: the result is `Number.lower` of the quotient for
+nonnegative quotients and `Number.upper` for negative ones. -/
 theorem operator_div_rounded_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .towards_zero = .ok result) :

@@ -2,15 +2,13 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IOUAmount
 import XRPL.Properties.Protocol.IOUAmount.Common.ToRatLemmas
 
-/-! # Proof bodies for the `IOUAmount` accessor correctness headlines.
+/-! # Proofs of the `IOUAmount` accessor theorems
 
-The `mantissa` / `exponent` accessors are faithful (`mantissa · 10^exponent = toRat`) and
-`toBool` decides non-zeroness. Mirrors `Number/Accessors/`. The thin headlines live in
-`IOUAmount.Accessors.Accessors`. -/
+`mantissa · 10^exponent = toRat`, and `toBool` is true exactly when the value is not zero. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **The public `mantissa` / `exponent` accessors are faithful.** -/
+/-- The public `mantissa` and `exponent` accessors give back the value: `mantissa · 10^exponent = toRat`. -/
 theorem IOUAmount.mantissa_exponent_eq_toRat_proof (a : IOUAmount) :
     ((IOUAmount.mantissa a).toInt : ℚ) * (10 : ℚ) ^ (IOUAmount.exponent a) = a.toRat :=
   (IOUAmount.toRat_eq a).symm
@@ -25,7 +23,7 @@ private lemma IOUAmount.toRat_eq_zero_iff (a : IOUAmount) : a.toRat = 0 ↔ a.ma
     · exact absurd h (by positivity)
   · intro h; left; rw [h]; norm_num [show ((0 : Int64)).toInt = 0 from by decide]
 
-/-- **`toBool` decides non-zeroness.** -/
+/-- `toBool` decides non-zeroness. -/
 theorem IOUAmount.toBool_iff_proof (a : IOUAmount) :
     IOUAmount.toBool a = true ↔ a.toRat ≠ 0 := by
   unfold IOUAmount.toBool

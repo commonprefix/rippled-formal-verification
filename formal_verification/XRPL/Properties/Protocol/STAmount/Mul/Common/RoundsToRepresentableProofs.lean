@@ -1,8 +1,7 @@
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedTight
 
-/-! # Proof bodies for the IOU multiplication discrete/ULP (`RoundsToRepresentableWithin`)
-headlines. The thin headlines live in `Mul.RoundsToRepresentable`. -/
+/-! # Proofs that IOU multiplication lands within one ULP of the exact product -/
 
 namespace XRPL.Model.Protocol
 
@@ -37,12 +36,8 @@ theorem STAmount.operator_mul_repr_iou_proof (v1 v2 result : STAmount) (nt : Num
     (5 / (2 ^ 63 + 7 : ℚ)) hsnap hr_ulp hop (by positivity) (by norm_num) (by norm_num)
   simpa using h
 
-/-- Proof of `operator_mul_repr_iou_directed` (IOU multiply within **1** ULP, directed
-modes, non-negative operands). The directed double rounding does not compound: because the
-16-digit grid embeds in the 19-digit `Number` grid, the composed rounding equals a single
-directed rounding of the exact product, hence lands within one ULP. The `to_nearest` case
-reuses the dedicated half-ULP snap (`operator_mul_repr_iou_proof`); the three directed modes
-use the `Number.upper`/`lower` minimality collapse (`operator_mul_repr_iou_directed_core`). -/
+/-- Proof of `operator_mul_repr_iou_directed` (IOU multiply within 1 ULP, non-negative operands). Directed
+double rounding does not compound, because the 16-digit grid sits inside the 19-digit `Number` grid. -/
 theorem STAmount.operator_mul_repr_iou_directed_proof (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -74,9 +69,7 @@ theorem STAmount.operator_mul_repr_iou_directed_proof (v1 v2 result : STAmount) 
   · intro hm; subst hm; exact hdir
   · intro hm; subst hm; exact hdir
 
-/-- Proof of `operator_mul_iou_within_1ulp` (IOU multiply accuracy **1** ULP, any sign/mode).
-Dispatches to the half-ULP `to_nearest` snap, the magnitude `towards_zero` collapse, and the
-`upward`/`downward` mixed-direction magnitude bound; each lands within one ULP. -/
+/-- Proof of `operator_mul_iou_within_1ulp` (IOU multiply accuracy 1 ULP, any sign/mode). -/
 theorem STAmount.operator_mul_iou_within_1ulp_proof (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)

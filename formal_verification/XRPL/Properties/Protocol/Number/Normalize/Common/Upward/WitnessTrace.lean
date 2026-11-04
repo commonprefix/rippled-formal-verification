@@ -4,14 +4,6 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.Upward.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `normalize_rounding_bound_upward`
-
-Witness value `10^19 + 1` (positive mantissa, exponent 0). `scaleUp` is a no-op;
-`scaleDown` fires once (the value exceeds `largeRange.max`), peeling guard digit
-`1` and producing mantissa `10^18` at exponent 1; `capAtMaxRep` is the identity.
-With `sbit_ = false` and nonzero guard content `.upward` rounds up to
-`10^18 + 1`. Error = 9, relative error `9/(10^19 + 1) > 8/(2^63 + 2)`. -/
-
 /-- `Number.normalize` trace for the upward witness input `10^19 + 1`. -/
 lemma normalize_upward_witness :
     Number.normalize ⟨false, 10000000000000000001, 0⟩
@@ -47,9 +39,8 @@ lemma normalize_upward_witness :
   simp only [RoundResult.toNumber]
 
 
-/-- Sharpness witness: the relative error exceeds `8/(2^63 + 2)`. (The round-up
-supremum after the f765ab1 cusp threshold is `9·10⁻¹⁹` — witnessed by 19-digit
-inputs with guard digit 1 — slightly below the stated `10/(2^63 + 2)` scale.) -/
+/-- Rounding upward can be off by more than `8/(2^63 + 2)` of the value, here on the input `10^19 + 1`. The largest
+error is `9/(2^63 + 3)`, on the input `2^63 + 3`. -/
 theorem normalize_upward_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .upward = .ok result ∧

@@ -3,16 +3,13 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128.RoundDiv
 
 namespace XRPL.Model.Protocol
 
-/-! # `doNormalize128` round-decision facts (tight, for the div cusp-monotone route)
+/-! # `doNormalize128` round decision
 
-Augments `doNormalize128_algorithmic_facts` with the *tight* round-decision facts
-(`g.round ⋛ 1 ↔ f ⋛ 1/2` for the true value fraction `f`, not the coarse shadow),
-by threading the `RoundDiv` value invariant through the same `scaleUp / scaleDown /
-capAtMaxRep` walk and discharging the `p = 0` corner via `valueInv_p0_le_half`. -/
+The final guard's `to_nearest` decision matches the exact dropped fraction `f`: it rounds up exactly when `f > 1/2`
+and reports a tie exactly when `f = 1/2`. -/
 
 set_option maxHeartbeats 25600000 in
--- Full `doNormalize128` walk (scaleUp/scaleDown/capAtMaxRep/doRoundUp) threading two
--- invariants (shadow repr + value repr); mirrors `doNormalize128_algorithmic_facts`.
+-- The UInt128 terms in this proof need a raised budget.
 theorem doNormalize128_algorithmic_facts_round
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool) (mode : rounding_mode)
     (hδ_low : 0 ≤ δ) (hδ_lt : δ < 1)
@@ -97,7 +94,7 @@ theorem doNormalize128_algorithmic_facts_round
     rw [hg₀_def, hft₀_def]
     by_cases hst : sticky = true
     · rw [if_pos hst, if_pos hst]; exact represents_sticky_initial128 zn
-    · rw [if_neg hst, if_neg hst]; exact represents_initial128 zn
+    · rw [if_neg hst, if_neg hst]; exact g0_represents_zero zn
   have h_g0_sbit : g₀.sbit_ = zn := by
     rw [hg₀_def]
     by_cases hst : sticky = true
@@ -220,7 +217,7 @@ theorem doNormalize128_algorithmic_facts_round
             rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hzm_le_ru
             have : (maxRepUpNat : ℕ) < 10 ^ 19 := by norm_num
             omega
-          -- p₃ = 0 corner discharge
+          -- The case p₃ = 0, where the guard holds no captured digit.
           have hp0 : p₃ = 0 → φ₃ < 1 / 2 := by
             intro hp0eq
             subst hp0eq

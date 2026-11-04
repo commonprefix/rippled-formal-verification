@@ -2,9 +2,7 @@ import XRPL.Model.Lending.LoanBroker.LoanBrokerDelete
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
 
-/-! # Proof bodies for the `LoanBroker.roundedCoverAvailable` theorems
-
-Proofs for the theorems in `LoanBrokerDelete.lean`. -/
+/-! # Proof body for the `LoanBroker.roundedCoverAvailable` bound -/
 
 namespace XRPL.Model.Lending
 
@@ -18,7 +16,7 @@ private lemma roundedCoverAvailable_zero_iou (lb : LoanBroker) (s : STAmount)
     STAmount.ofNumber_fractional_zero, Except.ok.injEq] at hok
   rw [← hok]
 
-/-- **Proof body of `roundedCoverAvailable_bounds`.** -/
+/-- Proof body of `roundedCoverAvailable_bounds`. -/
 lemma LoanBroker.roundedCoverAvailable_bounds_proof (lb : LoanBroker) (s : STAmount)
     (hok : lb.roundedCoverAvailable = .ok s) (hnz : s.mValue ≠ 0) :
     |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent := by
@@ -38,17 +36,5 @@ lemma LoanBroker.roundedCoverAvailable_bounds_proof (lb : LoanBroker) (s : STAmo
     by_cases hm : lb.coverAvailable.mantissa_ = 0
     · exact absurd (roundedCoverAvailable_zero_iou lb s hm hok) hnz
     · exact STAmount.ofNumber_iou_to_nearest_within_half _ s lb.wf.coverAvailable_norm hm hok hnz
-
-/-- **Proof body of `roundedCoverAvailable_exact`.** -/
-lemma LoanBroker.roundedCoverAvailable_exact_proof (lb : LoanBroker) (s : STAmount)
-    (hok : lb.roundedCoverAvailable = .ok s)
-    (hrep : ∃ a : STAmount, a.ExactCanonical ∧ a.mNumericType = lb.numericType ∧
-      a.toRat = lb.toExact.coverAvailable) :
-    s.toRat = lb.toExact.coverAvailable := by
-  unfold LoanBroker.roundedCoverAvailable at hok
-  obtain ⟨a, hac, hat, hav⟩ := hrep
-  rw [← hav]
-  exact STAmount.ofNumber_to_nearest_eq_of_canonical _ _ s a lb.wf.coverAvailable_norm
-    lb.exact.coverAvailable_nonneg hac hat hav.symm hok
 
 end XRPL.Model.Lending

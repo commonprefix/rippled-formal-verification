@@ -11,51 +11,34 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- When all create fields are valid -> a lawful loan broker is created with exactly the requested
-values. -/
-theorem LoanBroker.create_success (tx : LoanBrokerSetCreate) (nt : NumericType)
-    (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
-      dm.operator_le debtMaximumCap = true)
-    (hfee : tx.managementFeeRate.getD 0 ≤ maxManagementFeeRate) -- at most 10%
-    (hmin : tx.coverRateMinimum.getD 0 ≤ maxCoverRate) -- at most 100%
-    (hliq : tx.coverRateLiquidation.getD 0 ≤ maxCoverRate) -- at most 100%
-    -- both cover rates are set or neither is
-    (hcoupled : tx.coverRateMinimum.getD 0 = 0 ↔ tx.coverRateLiquidation.getD 0 = 0) :
-    ∃ lb, LoanBroker.create tx nt = .ok lb ∧ lb.toRawLoanBroker = LoanBroker.createRaw tx nt :=
-  LoanBroker.create_success_proof tx nt hdm hfee hmin hliq hcoupled
+/-- LoanBrokerSet create -> with valid fields a lawful broker with no exposure is created, and a DebtMaximum that
+passes the checks is stored without rounding. -/
+theorem LoanBroker.create_success (nt : NumericType) :
+    -- ManagementFeeRate at most 10%, each cover rate at most 100%, and both cover rates set or neither
+    (∀ tx : LoanBrokerSetCreate, (∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
+        dm.operator_le debtMaximumCap = true) →
+      tx.managementFeeRate.getD 0 ≤ maxManagementFeeRate → tx.coverRateMinimum.getD 0 ≤ maxCoverRate →
+      tx.coverRateLiquidation.getD 0 ≤ maxCoverRate →
+      (tx.coverRateMinimum.getD 0 = 0 ↔ tx.coverRateLiquidation.getD 0 = 0) →
+      ∃ lb, LoanBroker.create tx nt = .ok lb ∧ lb.toRawLoanBroker = LoanBroker.createRaw tx nt) ∧
+    (∀ (tx : LoanBrokerSetCreate) (lb : LoanBroker), LoanBroker.create tx nt = .ok lb →
+      lb.debtTotal = Number.zero ∧ lb.coverAvailable = Number.zero ∧ lb.loanCount = 0) ∧
+    ∀ {α : Type} [AssetPool α] (pool : α) (dm : Number),
+      LoanBroker.canCreate pool (some dm) nt = .ok .tesSUCCESS → STAmount.isRounded nt dm = false :=
+  ⟨fun tx => LoanBroker.create_success_proof tx nt, fun tx => LoanBroker.create_no_exposure_proof tx nt,
+    fun pool dm hcan => LoanBroker.canCreate_debtMaximum_not_rounded_proof pool dm nt hcan⟩
 
-/-- A new loan broker has no exposure: DebtTotal, CoverAvailable and LoanCount are all zero. -/
-theorem LoanBroker.create_no_exposure (tx : LoanBrokerSetCreate) (nt : NumericType)
-    (lb : LoanBroker) (hok : LoanBroker.create tx nt = .ok lb) :
-    lb.debtTotal = Number.zero ∧ lb.coverAvailable = Number.zero ∧ lb.loanCount = 0 :=
-  LoanBroker.create_no_exposure_proof tx nt lb hok
-
-/-- When a loan broker is successfully created, DebtMaximum fits an STAmount exactly, so it is
-stored without rounding. -/
-theorem LoanBroker.canCreate_debtMaximum_not_rounded (dm : Number) (nt : NumericType)
-    (hcan : LoanBroker.canCreate (some dm) nt = .ok .tesSUCCESS) :
-    STAmount.isRounded nt dm = false :=
-  LoanBroker.canCreate_debtMaximum_not_rounded_proof dm nt hcan
-
-/-- When DebtMaximum ∈ [0, 2^63 - 1] and is 0 or ≥ DebtTotal -> lawful where only DebtMaximum is
-changed, other fields remain the same. -/
-theorem LoanBroker.update_success (dm : Number)
-    (hnorm : dm.isNormalized) (hnn : Number.zero.operator_le dm = true)
-    (hcap : dm.operator_le debtMaximumCap = true)
-    (hdebt : dm ≠ Number.zero → lb.debtTotal.operator_le dm = true) :
-    ∃ lb', lb.update (some dm) = .ok lb' ∧
-      lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm } :=
-  LoanBroker.update_success_proof lb dm hnorm hnn hcap hdebt
-
-/-- When a loan broker is successfully updated, DebtMaximum fits an STAmount exactly, so it is
-stored without rounding. -/
-theorem LoanBroker.canUpdate_debtMaximum_not_rounded (dm : Number)
-    (hcan : lb.canUpdate (some dm) = .ok .tesSUCCESS) :
-    STAmount.isRounded lb.numericType dm = false :=
-  LoanBroker.canUpdate_debtMaximum_not_rounded_proof lb dm hcan
-
-/-- A loan broker update with no DebtMaximum changes nothing. -/
-theorem LoanBroker.update_none : lb.update none = .ok lb :=
-  LoanBroker.update_none_proof lb
+/-- LoanBrokerSet update -> a valid DebtMaximum gives a lawful broker where only DebtMaximum changes, a DebtMaximum
+that passes the checks is stored without rounding, and no DebtMaximum changes nothing. -/
+theorem LoanBroker.update_success :
+    (∀ dm : Number, dm.isNormalized → Number.zero.operator_le dm = true → dm.operator_le debtMaximumCap = true →
+      (dm ≠ Number.zero → lb.debtTotal.operator_le dm = true) →
+      ∃ lb', lb.update (some dm) = .ok lb' ∧ lb'.toRawLoanBroker = { lb.toRawLoanBroker with debtMaximum := dm }) ∧
+    (∀ {α : Type} [AssetPool α] (pool : α) (dm : Number), lb.canUpdate pool (some dm) = .ok .tesSUCCESS →
+      STAmount.isRounded lb.numericType dm = false) ∧
+    lb.update none = .ok lb :=
+  ⟨LoanBroker.update_success_proof lb,
+    fun pool dm hcan => LoanBroker.canUpdate_debtMaximum_not_rounded_proof lb pool dm hcan,
+    LoanBroker.update_none_proof lb⟩
 
 end XRPL.Model.Lending

@@ -2,13 +2,10 @@ import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.SameSign
 import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.DiffSignRepresents
 
-/-! # Zero-record shape chain for `operator_sub`
+/-! # A zero `to_nearest` sum or difference is `Number.zero`
 
-Every mantissa-`0` output of the `to_nearest` add/sub pipeline (on normalized
-operands) is the literal `Number.zero`. This upgrades the `NumberBridge`
-normalization lemmas to unconditional form: a `to_nearest` subtraction result is
-always normalized, so its `operator_eq Number.zero` test coincides with
-`mantissa_ = 0`. -/
+On normalized operands, a `to_nearest` add or sub result with mantissa 0 is the literal `Number.zero`. So the result
+is always normalized, and its `operator_eq Number.zero` test matches `mantissa_ = 0`. -/
 
 namespace XRPL.Model.Protocol
 
@@ -144,7 +141,7 @@ lemma Number.operator_sub_zero_shape_sz (x y result : Number)
   exact Number.operator_add_zero_shape_sz x y.operator_neg result hx
     (Number.operator_neg_isNormalized y hy) hok h0
 
-/-- **Unconditional `to_nearest` addition normalization.** -/
+/-- A successful `to_nearest` addition of normalized `Number`s gives a normalized `Number`. -/
 lemma operator_add_isNormalized_to_nearest_sz (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .to_nearest = .ok result) :
@@ -154,7 +151,7 @@ lemma operator_add_isNormalized_to_nearest_sz (x y result : Number)
     exact Or.inl rfl
   · exact operator_add_isNormalized_to_nearest x y result hx hy hok h0
 
-/-- **Unconditional `to_nearest` subtraction normalization.** -/
+/-- A successful `to_nearest` subtraction of normalized `Number`s gives a normalized `Number`. -/
 lemma operator_sub_isNormalized_to_nearest_sz (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_sub x y .to_nearest = .ok result) :
@@ -177,19 +174,16 @@ lemma divQuotient128_zero_sz (ym : UInt64) (xe ye : Int) :
   rw [hnum, hmod, hdiv]
   norm_num
 
-/-- `doNormalize128` on a zero mantissa is the literal `Number.zero`. The WF loop is
-short-circuited by the leading `if mantissa == 0` guard, so the kernel never reduces
-it. -/
+/-- `doNormalize128` on a zero mantissa is the literal `Number.zero`, returned by the leading
+`if mantissa == 0` check before the loop. -/
 lemma doNormalize128_zero_num_sz (zn : Bool) (e : Int) (minM maxM : UInt64)
     (mode : rounding_mode) (s : Bool) :
     doNormalize128 zn 0 e minM maxM mode s = .ok Number.zero := by
   unfold doNormalize128
   rw [if_pos (by decide : ((0 : UInt128) == 0) = true)]
 
-/-- **A nonzero `operator_div` result forces a nonzero numerator.** A zero numerator
-returns `x` (if it tests as zero) or drives `divQuotient128` to a zero quotient,
-which `doNormalize128` normalizes to `Number.zero`. Either way the result has zero
-mantissa. -/
+/-- A nonzero `operator_div` result forces a nonzero numerator, since a zero numerator is either returned as
+it is or gives a zero quotient that `doNormalize128` turns into `Number.zero`. -/
 lemma operator_div_numerator_ne_zero_sz (x y result : Number) (mode : rounding_mode)
     (hyne : ¬ y.operator_eq Number.zero = true)
     (hok : Number.operator_div x y mode = .ok result) (hres : result.mantissa_ ≠ 0) :

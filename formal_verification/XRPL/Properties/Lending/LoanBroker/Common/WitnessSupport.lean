@@ -1,60 +1,107 @@
-import XRPL.Model.Lending.LoanBroker.LoanBrokerCoverDeposit
-import XRPL.Model.Lending.LoanBroker.LoanBrokerCoverWithdraw
-import XRPL.Model.Lending.LoanBroker.LoanBrokerCoverClawback
-import XRPL.Model.Lending1_1.AssetPool
-import XRPL.Properties.Lending.LoanBroker.Defs
+import XRPL.Properties.Lending.LoanBroker.Common.ReachableDefs
+import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
 /-! # Shared fixtures for the cover witnesses
 
-The vault, brokers and amounts the cover witnesses share. -/
+A reachable history on a closed-ended IOU vault with base exponent `-6`, and two lawful brokers off the base grid of
+a vault with base exponent `0`, which no ledger reaches. -/
 
 set_option linter.style.nativeDecide false
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.Lending1_1
-open XRPL.Model.SingleAssetVault (Vault RawVault)
+open XRPL.Model.SingleAssetVault (Vault)
 
-/-- An IOU vault holding `10^6`, so the vault scale is `10^-9`. -/
-def wvPool : RawVault :=
-  { assetsTotal := ⟨false, 1000000000000000000, -12⟩
-  , assetsAvailable := ⟨false, 1000000000000000000, -12⟩
-  , assetsReserved := Number.zero, assetsMaximum := none, numericType := .fractional, scale := 0
-  , sharesTotal := ⟨false, 1000000000000000000, -12⟩, lossUnrealized := Number.zero }
+deriving instance DecidableEq for RawLoanBroker
 
-def wvPoolL : Vault := ⟨wvPool, by native_decide, by native_decide⟩
+instance : DecidableEq LoanBroker := fun a b =>
+  decidable_of_iff (a.toRawLoanBroker = b.toRawLoanBroker)
+    ⟨fun h => by obtain ⟨av, _, _⟩ := a; obtain ⟨bv, _, _⟩ := b; cases h; rfl, fun h => by rw [h]⟩
 
-/-- An IOU broker holding `10^6` of cover, scale `10^-9`, with no debt. -/
-def wbMillion : RawLoanBroker :=
-  { numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 0
-  , coverRateLiquidation := 0, debtTotal := Number.zero, debtMaximum := Number.zero
-  , coverAvailable := ⟨false, 1000000000000000000, -12⟩, loanCount := 0 }
+deriving instance DecidableEq for LoanBrokerCoverResult
 
-def wbMillionL : LoanBroker := ⟨wbMillion, by native_decide, by native_decide⟩
+/-- A closed-ended IOU vault with base exponent `-6`. -/
+def wvBase6 : Vault :=
+  match Vault.create (some 6) none (some ⟨100, 900000000⟩) none false .fractional with
+  | .ok v => v
+  | .error _ => Vault.placeholder
 
-/-- `7.6 * 10^-10`, below one unit at scale `10^-9`. It rounds to `10^-9`, so it
-passes the scale check. -/
-def waBelowUnit : STAmount := STAmount.unchecked .fractional 7600000000000000 (-25) false
+/-- A closed-ended IOU vault with base exponent `0`. -/
+def wvBase0 : Vault :=
+  match Vault.create (some 0) none (some ⟨100, 900000000⟩) none false .fractional with
+  | .ok v => v
+  | .error _ => Vault.placeholder
 
-/-- An IOU broker holding `10^18` of cover, with no debt. -/
-def wbLargeCover : RawLoanBroker :=
-  { numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 0
-  , coverRateLiquidation := 0, debtTotal := Number.zero, debtMaximum := Number.zero
-  , coverAvailable := ⟨false, 1000000000000000000, 0⟩, loanCount := 0 }
+/-- A new broker with a DebtMaximum of `1000` and 1% minimum cover. -/
+private def wtxCreate : LoanBrokerSetCreate :=
+  { debtMaximum := some ⟨false, 1000000000000000000, -15⟩, managementFeeRate := some 100
+  , coverRateMinimum := some 1000, coverRateLiquidation := some 1000 }
 
-def wbLargeCoverL : LoanBroker := ⟨wbLargeCover, by native_decide, by native_decide⟩
+/-- An empty IOU broker, the result when a run below fails. -/
+private def wbFallback : LoanBroker :=
+  ⟨{ numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 0, coverRateLiquidation := 0
+   , debtTotal := Number.zero, debtMaximum := Number.zero, coverAvailable := Number.zero, loanCount := 0 },
+   by native_decide, by native_decide⟩
 
-/-- The amount, `1234.567890123456`. -/
-def waSmallAmount : STAmount := STAmount.unchecked .fractional 1234567890123456 (-12) false
+/-- The result of a successful cover run, or an empty one when the run fails. -/
+def wResultOf (x : TerExcept LoanBrokerCoverResult) : LoanBrokerCoverResult :=
+  match x.run with
+  | .ok (.ok r) => r
+  | _ => ⟨STAmount.unchecked .fractional 0 0 false, wbFallback⟩
 
-/-- One part of a split, `1000.5`. -/
-def waSplitPart : STAmount := STAmount.unchecked .fractional 1000500000000000 (-12) false
+/-- An IOU amount with mantissa `m` and exponent `e`. -/
+def wAmount (m : UInt64) (e : Int) : STAmount := STAmount.unchecked .fractional m e false
 
-/-- The other amount of an either-order pair with `waSplitPart`, `1001.25`. -/
-def waOrderPart : STAmount := STAmount.unchecked .fractional 1001250000000000 (-12) false
+/-- The broker `wtxCreate` creates, with no cover. -/
+def wbEmpty : LoanBroker :=
+  match LoanBroker.create wtxCreate .fractional with
+  | .ok lb => lb
+  | .error _ => wbFallback
 
-/-- Both parts at once, `2001`. -/
-def waSplitWhole : STAmount := STAmount.unchecked .fractional 2001000000000000 (-12) false
+/-- `12.34567890123456` deposited into `wbEmpty` is credited `12.345678`. -/
+private def wrHeld : LoanBrokerCoverResult := wResultOf (wbEmpty.coverDeposit wvBase6 (wAmount 1234567890123456 (-14)))
+
+/-- The broker holding `12.345678` of cover. -/
+def wbHeld : LoanBroker := wrHeld.loanBroker'
+
+/-- `1.999999999999999` base units, just under two. -/
+def waNines : STAmount := wAmount 1999999999999999 (-21)
+
+/-- `1.5` base units. -/
+def waHalves : STAmount := wAmount 1500000000000000 (-21)
+
+/-- `3` base units, the sum of two `waHalves`. -/
+def waThree : STAmount := wAmount 3000000000000000 (-21)
+
+/-- One base unit. -/
+def waOne : STAmount := wAmount 1000000000000000 (-21)
+
+/-- An IOU broker with no debt and CoverAvailable `1000000000000000.6`, off the integer grid. -/
+def wbOffGrid : LoanBroker :=
+  ⟨{ numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 10000
+   , coverRateLiquidation := 10000, debtTotal := Number.zero, debtMaximum := Number.zero
+   , coverAvailable := ⟨false, 1000000000000000600, -3⟩, loanCount := 0 },
+   by native_decide, by native_decide⟩
+
+/-- An IOU broker with a debt of `10` at 10% minimum cover and CoverAvailable `1000000000000001.6`, off
+the integer grid. -/
+def wbOffGridDebt : LoanBroker :=
+  ⟨{ numericType := .fractional, managementFeeRate := 0, coverRateMinimum := 10000
+   , coverRateLiquidation := 10000, debtTotal := ⟨false, 1000000000000000000, -17⟩
+   , debtMaximum := ⟨false, 1000000000000000000, -16⟩
+   , coverAvailable := ⟨false, 1000000000000001600, -3⟩, loanCount := 1 },
+   by native_decide, by native_decide⟩
+
+/-- A new broker is reachable. -/
+lemma wbEmpty_reachable : wbEmpty.Reachable (-6) :=
+  ⟨wvBase6, wtxCreate, wbEmpty, by native_decide, by native_decide, by native_decide, .refl⟩
+
+/-- The broker after the deposit is reachable. -/
+lemma wbHeld_reachable : wbHeld.Reachable (-6) :=
+  ⟨wvBase6, wtxCreate, wbEmpty, by native_decide, by native_decide, by native_decide,
+    .coverDeposit wbEmpty wvBase6 (wAmount 1234567890123456 (-14)) wrHeld .refl (by native_decide)
+      (by native_decide) (STAmount.canonical_of_canonicalB _ (by native_decide)) (by native_decide)
+      (by native_decide) (by native_decide) (by native_decide) (by native_decide)⟩
 
 end XRPL.Model.Lending

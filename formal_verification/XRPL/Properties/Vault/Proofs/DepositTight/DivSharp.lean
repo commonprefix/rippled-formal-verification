@@ -17,7 +17,7 @@ def divSharpε : ℚ := 555 / 10 ^ 21
 set_option maxHeartbeats 3200000 in
 -- Four-stage pipeline composition over large UInt128 terms needs a raised budget.
 /-- `doNormalize128_rounds_to_nearest` with the slip bounded by `11·10⁻²¹`. -/
-lemma doNormalize128_rounds_to_nearest_sharp
+private lemma doNormalize128_rounds_to_nearest_sharp
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool)
     (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
     (hsticky_zero : sticky = false → δ = 0)
@@ -31,7 +31,6 @@ lemma doNormalize128_rounds_to_nearest_sharp
     ∧ result.negative_ = zn := by
   have hminM_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxM_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
-  -- M ≠ 0.
   have hM_ne : ¬ (M == 0) = true := by
     intro h
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
@@ -40,14 +39,12 @@ lemma doNormalize128_rounds_to_nearest_sharp
   unfold doNormalize128 at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  -- scaleUp stage.
   rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
-  -- Unified post-scaleUp facts: the value is exact and the tail rescales to δ₁
-  -- (δ₁ = δ·10^(e−e₁) ≤ 1 since either scaleUp is the identity or M₁ < 10^19
-  -- with the tail-vs-mantissa ratio δ·10^20 ≤ M preserved by the rescale).
-  obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
+  -- Post-scaleUp facts: the value is exact and the tail rescales to δ₁ = δ·10^(e−e₁) ≤ 1, since
+  -- scaleUp is the identity or M₁ < 10^19 with the ratio δ·10^20 ≤ M preserved by the rescale.
+  obtain ⟨hval_su, -, hM₁_lt, -, hM₁_size⟩ :
       ((M₁.toNat : ℚ) * 10 ^ e₁ = (M.toNat : ℚ) * 10 ^ e)
       ∧ 1 ≤ M₁.toNat ∧ M₁.toNat < 10 ^ 23 ∧ e₁ ≤ e
       ∧ (M₁ = M ∧ e₁ = e ∨ M₁.toNat < 10 ^ 19) := by
@@ -99,9 +96,7 @@ lemma doNormalize128_rounds_to_nearest_sharp
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
-  -- (`set g₀` has already abstracted the model's seeded guard inside `hok`.)
-  -- scaleDown stage.
+      exact g0_represents_zero zn
   cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
@@ -132,25 +127,21 @@ lemma doNormalize128_rounds_to_nearest_sharp
         apply absurd (decide_eq_true (show sd.1 < toUInt128 largeRange.min from by
           rw [BitVec.lt_def, toNat_toUInt128, hminM_v]; exact h))
         rw [hund2]; simp
-      -- Convert to UInt64.
       have hM₂_fit : sd.1.toNat < 2 ^ 64 := by
         rw [hmaxM_v] at h2le
         omega
       have hM₂u_toNat : (toUInt64 sd.1).toNat = sd.1.toNat := toNat_toUInt64 hM₂_fit
-      -- capAtMaxRep stage.
       cases hcap : doNormalize_capAtMaxRep (toUInt64 sd.1) sd.2.1 sd.2.2 with
       | error err =>
         except_clash hcap hok
       | ok cp =>
         rw [hcap] at hok
         simp only [] at hok
-        obtain ⟨φ₃, ftilde₃, h3nn, h3lt, h3rep, h3slip, h3val, h3floor, h3le, h3exp, h3sbit, h3xbit,
-                _, _⟩ :=
+        obtain ⟨φ₃, ftilde₃, -, -, h3rep, h3slip, h3val, h3floor, h3le, -, -, -, -, -⟩ :=
           doNormalize_capAtMaxRep_repr (toUInt64 sd.1) sd.2.1 sd.2.2
             (by rw [hM₂u_toNat]; exact hM₂_ge)
             (by rw [hM₂u_toNat]; rw [hmaxM_v] at h2le; exact h2le)
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
-        -- Final doRoundUp.
         cases hru : cp.2.2.doRoundUp zn cp.1 cp.2.1 largeRange.min largeRange.max
             .to_nearest .normalize2 with
         | error err =>
@@ -161,10 +152,8 @@ lemma doNormalize128_rounds_to_nearest_sharp
           have hres_mant : res.mantissa_ ≠ 0 := by
             rw [h_result] at hres
             exact hres
-          -- Positive-sign doRoundUp for the supTight lemma.
           set res_pos : RoundResult :=
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
-            with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
               .to_nearest .normalize2 = .ok res_pos :=
             doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 .to_nearest .normalize2 res hru
@@ -177,7 +166,6 @@ lemma doNormalize128_rounds_to_nearest_sharp
           have h_sup := doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp
             cp.2.2 cp.1 cp.2.1 ftilde₃ h3rep h_floor_le h3le h_floor_vac
             .normalize2 res_pos h_rup_pos hres_pos_mant
-          -- |result.toRat| in terms of res.
           have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
             rfl
@@ -186,7 +174,6 @@ lemma doNormalize128_rounds_to_nearest_sharp
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
               .normalize2 res hru hres_mant
           refine ⟨?_, h_neg⟩
-          -- Assemble the triangle.
           set V : ℚ := ((M.toNat : ℚ) + δ) * 10 ^ e with hV_def
           set A : ℚ := ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1 with hA_def
           set W : ℚ := ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 with hW_def
@@ -195,14 +182,12 @@ lemma doNormalize128_rounds_to_nearest_sharp
           have h_sup' : |(|result.toRat|) - A| ≤ A * (5 / ((2 ^ 63 + 7 : ℕ) : ℚ)) := by
             rw [h_abs, hA_def]
             exact h_sup
-          -- Slip at the final scale, bounded uniformly via the tail-vs-mantissa
-          -- ratio: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁, and M₁ + δ₁ ≥ 10¹⁸
-          -- (the post-scaleDown mantissa is ≥ 10¹⁸ at a no-smaller exponent),
-          -- so the slip is at most V/10¹⁹.
-          have h_slip_chain : |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := by
+          -- The slip at the final scale is at most V/10¹⁹: |δ₁ − f̃₀| ≤ δ₁ + 10⁻¹⁷, δ₁·10²⁰ ≤ M₁, and
+          -- M₁ + δ₁ ≥ 10¹⁸ since the post-scaleDown mantissa is ≥ 10¹⁸ at a no-smaller exponent.
+          have h_slip_chain :
+              |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := by
             calc |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 ≤ |φ₂ - ftilde₂| * (10 : ℚ) ^ sd.2.1 := h3slip
               _ ≤ |δ₁ - ftilde₀| * (10 : ℚ) ^ e₁ := h2slip
-          -- |A - V| ≤ slip at scale.
           have hAV : |A - V| ≤ |φ₃ - ftilde₃| * (10 : ℚ) ^ cp.2.1 := by
             rw [← hVW, hA_def, hW_def]
             rw [show ((cp.1.toNat : ℚ) + ftilde₃) * 10 ^ cp.2.1
@@ -244,17 +229,14 @@ lemma doNormalize128_rounds_to_nearest_sharp
                   mul_le_mul_of_nonneg_right h_core (le_of_lt h10e₁_pos)
               _ = (((M₁.toNat : ℚ) + δ₁) * (10 : ℚ) ^ e₁) * (11 / 10 ^ 21) := by ring
               _ = V * (11 / 10 ^ 21) := by rw [hval₁]
-          -- A ≤ V + slip.
           have hA_le : A ≤ V + V * (11 / 10 ^ 21) := by
             have h1 : A - V ≤ |A - V| := le_abs_self _
-            have h2 := le_trans hAV h_slip_small
             linarith
           have hV_pos : 0 < V := by
             rw [hV_def]
             have hM1 : (1 : ℚ) ≤ (M.toNat : ℚ) := by exact_mod_cast hM_pos
             have : (0 : ℚ) < (M.toNat : ℚ) + δ := by linarith
             exact mul_pos this (zpow_pos (by norm_num) _)
-          -- Final triangle.
           have h_denom : (((2 ^ 63 + 7 : ℕ)) : ℚ) = 9223372036854775815 := by push_cast; norm_num
           calc |(|result.toRat|) - V|
               ≤ |(|result.toRat|) - A| + |A - V| := abs_sub_le _ A _

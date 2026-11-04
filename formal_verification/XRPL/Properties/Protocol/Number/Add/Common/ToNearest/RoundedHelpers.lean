@@ -1,5 +1,4 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
--- Discrete-grid rounding identification for `operator_add` under `.to_nearest`.
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.BoundProof
 import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
@@ -10,8 +9,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `result.toRat` and the sum
-when `result.toRat ≤ x + y`. -/
+/-- No normalized Number lies above `result.toRat` and at or below the sum when `result.toRat ≤ x + y`. -/
 theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -22,7 +20,7 @@ theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
     ∀ m : Number, m.isNormalized →
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat + y.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · -- Same-sign: the facts bundle is frame-ready (true fraction represented).
+  · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor_constr, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _, _, _⟩ :=
       operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
@@ -38,7 +36,7 @@ theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
       h_le
-  · -- Diff-sign: through the `doNormalize128` keystone (shadow transfers).
+  · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
       operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy
@@ -68,8 +66,7 @@ theorem operator_add_no_inbetween_below_to_nearest (x y result : Number)
         exact Number.toRat_nonneg_of_nonnegative result (h_neg.trans hzn_false))
       h_le
 
-/-- No normalized Number sits strictly between the sum and `result.toRat`
-when `x + y ≤ result.toRat`. -/
+/-- No normalized Number lies at or above the sum and below `result.toRat` when `x + y ≤ result.toRat`. -/
 theorem operator_add_no_inbetween_above (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

@@ -4,30 +4,24 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 
 /-! # Shared definitions for the `IOUAmount` proof tree
 
-Mirrors `Number/Common/Defs.lean`: the type-specific predicates the per-area proofs build
-on. `IOUAmount` is a `(mantissa, exponent)` decimal float that rounds through the `Number`
-layer; the canonical-form predicate `InRange16` lives in the STAmount tree (shared), and
-this file adds the comparison precondition `ToNumberExact` and the directed-rounding error
-budget `εDirected`. -/
+The comparison precondition `ToNumberExact` and the add/sub error budgets. The canonical form `InRange16`
+lives in the STAmount tree. -/
 
 namespace XRPL.Model.Protocol
 
-/-- Directed-mode IOU add/sub relative-error bound (`≈2·10⁻¹⁵`): the `Number` op
-(`11/(2⁶³−18)`) composed with the 16-digit canonical re-round (`10⁻¹⁵`). -/
+/-- Relative error bound of directed IOU add and sub, about `10⁻¹⁵`: the `Number` error `11/(2⁶³−18)` combined
+with the 16-digit re-round error `10⁻¹⁵`. -/
 abbrev IOUAmount.εDirected : ℚ :=
   11 / (2 ^ 63 - 18 : ℚ) + (10 : ℚ) ^ (-15 : ℤ) + 11 / (2 ^ 63 - 18 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)
 
-/-- `to_nearest` IOU add/sub relative-error bound (`≈½·10⁻¹⁵`): the `Number` op
-(`ε₁ = 6/(2⁶³−3)`) composed with the 16-digit canonical re-round (`ε₂ = ½·10⁻¹⁵`).
-Both round-to-nearest (each a half-ULP), so the composed bound is `ε₁ + ε₂ + ε₁·ε₂`.
-Half the directed `εDirected`. -/
+/-- Relative error bound of `to_nearest` IOU add and sub, about `½·10⁻¹⁵`: the `Number` error `6/(2⁶³−3)`
+combined with the 16-digit re-round error `½·10⁻¹⁵`. -/
 abbrev IOUAmount.εToNearest : ℚ :=
   6 / (2 ^ 63 - 3 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
     + 6 / (2 ^ 63 - 3 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))
 
-/-- Precondition under which `IOUAmount.toNumber` is value-exact, hence the ordering
-operators are faithful: the mantissa is not the lone non-representable `Int64.minValue`,
-and the exponent leaves room for the `largeRange` scale-up. Far weaker than `InRange16`. -/
+/-- Precondition for an exact `IOUAmount.toNumber` and correct ordering operators: the mantissa is not
+`Int64.minValue` and the exponent leaves room for the `largeRange` scale-up. Far weaker than `InRange16`. -/
 structure IOUAmount.ToNumberExact (a : IOUAmount) : Prop where
   mant_ne_min : a.mantissa_ ≠ Int64.minValue
   exp_lo : minExponent + 18 ≤ a.exponent_

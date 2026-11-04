@@ -8,11 +8,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Result-shape facts for `Number.normalize`
 
-`Number.normalize` ends in `doRoundUp` with **no** re-normalize stage, so the
-discrete-rounding consumers need direct proofs that the result is normalized
-and that the mantissa stays `≤ maxRepUp` at the top exponent. Both follow from
-a mode-generic pipeline walk (`normalize_doRoundUp_stage`) plus per-mode
-`doRoundUp` output invariants. -/
+`Number.normalize` ends in `doRoundUp` with no second normalize, so the result needs its own proofs that it is
+normalized and that its mantissa stays `≤ maxRepUp` at the top exponent. -/
 
 /-- `doRoundUp` succeeds only with exponent `≤ maxExponent` (the final overflow
 check errors otherwise). -/
@@ -53,12 +50,8 @@ lemma doRoundUp_exponent_le_max
 
 set_option maxHeartbeats 800000 in
 -- full 6-leaf doRoundUp navigation with per-leaf bringIntoRange case analysis
-/-- At the top exponent the `doRoundUp` output mantissa stays `≤ maxRepUp`.
-The two dangerous paths are dead: the drop-digit leg needs a fired round
-decision with `m ∈ {maxRep, maxRepUp}`, where the guard is empty (so the
-decision is the sentinel `-2`); the `bringIntoRange` rescale path lowers the
-exponent below `maxExponent` (its input mantissa `< 10^18` certifies, via
-`h_cap_exp`, that the incoming exponent was already `≤ maxExponent`). -/
+/-- At the top exponent the `doRoundUp` output mantissa stays `≤ maxRepUp`, given that the guard is empty
+whenever the input mantissa is above `1844674407370955161`. -/
 lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_m_le : m.toNat ≤ maxRepUp.toNat)
@@ -193,11 +186,8 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
 
 set_option maxHeartbeats 800000 in
 -- full 6-leaf doRoundUp navigation including the live drop-digit leg
-/-- Weak top-exponent mantissa cap, without any guard-emptiness hypothesis:
-the `doRoundUp` output mantissa stays `≤ maxRepNat + 13` (`= 9223372036854775820`)
-at the top exponent. The drop-digit leg can fire here (a `doNormalize128`
-caller seeds a sticky guard), but its rescaled output is at most
-`(maxRepUp/10 + 1)·10`. -/
+/-- Without any guard-emptiness hypothesis, the `doRoundUp` output mantissa at the top exponent stays
+`≤ maxRepNat + 13` (`= 9223372036854775820`), since the drop-digit leg outputs at most `(maxRepUp/10 + 1)·10`. -/
 lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_m_le : m.toNat ≤ maxRepUp.toNat)
@@ -316,11 +306,8 @@ lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
         have := h_cap_exp (by omega)
         omega
 
-/-- A successful `doRoundUp` at an exponent already above `maxExponent` with a
-nonzero result forces the input mantissa below `10^18`: only the
-`bringIntoRange` rescale arm (which lowers the exponent back) survives the
-final overflow check. Same-sign addition's drop-digit leg hits this at
-`e_common = maxExponent`. -/
+/-- If `doRoundUp` starts above `maxExponent` and still succeeds with a nonzero result, the input mantissa is
+below `10^18`, since only the rescale in `bringIntoRange` lowers the exponent. -/
 lemma doRoundUp_ok_high_exp_mantissa_small
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode) (loc : Error)
     (h_e_gt : maxExponent < e)
@@ -436,11 +423,8 @@ lemma doRoundUp_ok_high_exp_mantissa_small
       · exfalso; rw [hexp] at h_no_ovf; omega
       · omega
 
-/-- Truth-top bound from a surviving `doRoundUp` stage: if
-`|truth| = (zm + f)·10^ze'` with `zm ≤ maxRepUp`, `f < 1`, and the stage's
-exponent is at most `maxExponent + 1`, then `|truth| < 10^19 · 10^maxExponent`.
-At `ze' = maxExponent + 1` (addition's drop-digit leg at the top exponent) the
-mantissa must have been below `10^18` for `doRoundUp` to succeed at all. -/
+/-- If `|truth| = (zm + f)·10^ze'` with `zm ≤ maxRepUp`, `f < 1`, `ze' ≤ maxExponent + 1` and the `doRoundUp`
+stage succeeds with a nonzero result, then `|truth| < 10^19 · 10^maxExponent`. -/
 lemma doRoundUp_stage_truth_top (truth : ℚ) (g : Guard) (neg : Bool) (zm : UInt64) (ze' : Int)
     (f : ℚ) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (habs : |truth| = ((zm.toNat : ℚ) + f) * 10 ^ ze')
@@ -491,9 +475,8 @@ lemma doRoundUp_stage_truth_top (truth : ℚ) (g : Guard) (neg : Bool) (zm : UIn
       _ ≤ 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) :=
           mul_le_mul_of_nonneg_left h_pow_le (by norm_num)
 
-/-- Mode-generic pipeline walk: a successful `normalize` with nonzero result
-exposes the `doRoundUp` stage together with the input-side facts the result
-lemmas need. -/
+/-- In every mode, a successful `normalize` with nonzero result exposes its `doRoundUp` stage together with
+the input-side facts the result lemmas need. -/
 theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
@@ -697,9 +680,8 @@ theorem normalize_result_isNormalized (n result : Number) (mode : rounding_mode)
   · right
     exact h4 (by omega)
 
-/-- A successful `normalize` with nonzero result mantissa forces a nonzero
-operand mantissa: `doNormalize` short-circuits a zero-mantissa input to
-`Number.zero` (whose mantissa is `0`), contradicting `hresult`. -/
+/-- A successful `normalize` with nonzero result mantissa forces a nonzero operand mantissa, since
+`doNormalize` returns `Number.zero` for a zero-mantissa input. -/
 theorem normalize_operand_ne_zero (n result : Number) (mode : rounding_mode)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :

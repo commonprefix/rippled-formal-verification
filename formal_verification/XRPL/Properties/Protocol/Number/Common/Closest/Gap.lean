@@ -3,8 +3,6 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 
 namespace XRPL.Model.Protocol
 
-/-! ## No normalized Number in an open ULP-grid gap -/
-
 /-- No positive normalized Number's `toRat` lies strictly between consecutive
 grid points `k · 10^e` and `(k+1) · 10^e` for `k ∈ [10^18, 10^19)`. -/
 theorem no_normalized_in_open_ulp_gap_pos
@@ -87,12 +85,6 @@ theorem no_normalized_in_open_ulp_gap_pos
     have h_step3 : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ e ≤ (k : ℚ) * (10 : ℚ) ^ e :=
       mul_le_mul_of_nonneg_right h_k_ge_q (le_of_lt h_pow_e_pos)
     linarith
-
-/-! ### Stronger gap lemmas for the post-scaleDown range
-
-After `scaleDown128`, `zm.toNat ∈ [mantissaFloor, maxRep]`, which extends
-below `10^18`. These lemmas use the cusp invariant of `isNormalized` to exclude
-in-between candidates at exponent `e - 1`. -/
 
 /-- No mantissa `m ∈ (10k, 10k+10)` satisfies the cusp invariant when `k ≥ cuspMin/10`. -/
 private lemma no_valid_mantissa_at_eminus1 (k m : ℕ)
@@ -261,9 +253,8 @@ theorem no_normalized_in_open_ulp_gap_neg_zm
   exact no_normalized_in_open_ulp_gap_pos_zm e k h_k_min h_k_max n' h_n'_norm
     h_n'_pos h_lt_lo' h_lt_hi'
 
-/-- Gap lemma for `k = mantissaFloor` (post-scaleDown floor). Requires the extra
-lower bound `(k + 8/10) * 10^e ≤ n.toRat` to exclude mantissa candidates
-`9223372036854775801..maxRepNat` at exponent `e - 1`. -/
+/-- No positive normalized Number lies in `[(k + 8/10) · 10^e, (k + 1) · 10^e)` for `k = mantissaFloor`. The lower
+bound excludes the mantissas `9223372036854775801..maxRepNat` at exponent `e - 1`. -/
 theorem no_normalized_in_ulp_gap_at_floor_pos
     (e : Int) (k : ℕ)
     (h_k_eq : k = mantissaFloor) (_h_k_max : k < (10 : ℕ) ^ 19)
@@ -532,11 +523,8 @@ theorem no_normalized_in_cusp_gap_pos
       exact_mod_cast h_m_lt
     linarith
 
-/-- Upper-cusp-gap lemma: no positive normalized Number's toRat lies in
-`(maxRepCuspTarget * 10^e, (maxRepNat + 13) * 10^e)` — mantissas `…811`–`…819`
-exceed `maxRep` with a nonzero last digit, lower exponents overflow the mantissa
-range, higher exponents skip the interval. Consumed by the `to_nearest`
-drop-digit leaf at `zm = maxRepUp`. -/
+/-- No positive normalized Number lies strictly between `maxRepCuspTarget · 10^e` and `(2^63 + 12) · 10^e`. At
+exponent `e` those mantissas are above `maxRep` and do not end in 0, other exponents miss the interval. -/
 theorem no_normalized_in_upper_cusp_gap_pos
     (e : Int) (n : Number) (h_norm : n.isNormalized)
     (h_n_pos : 0 < n.toRat)

@@ -10,12 +10,10 @@ namespace XRPL.Model.Protocol
 
 /-! # `Number.normalize` is correctly rounded under `.upward`
 
-The result is `Number.upper` of the input value — the smallest representable
-above it. `hresult` is genuinely required: an underflow flush returns zero
-regardless of direction, and for a tiny positive input `0 < n.toRat` violates
-`.upward` itself — the discrete claim is false at the flush. -/
+The result is `Number.upper` of the input value, the smallest representable at or above it. A nonzero result
+is needed: an underflow returns zero even for a tiny positive input, and zero is below that input. -/
 
-/-- No normalized Number sits strictly between `n.toRat` and `result.toRat`. -/
+/-- No normalized Number lies at or above `n.toRat` and below `result.toRat`. -/
 theorem normalize_no_inbetween_above_upward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
@@ -54,11 +52,8 @@ theorem normalize_no_inbetween_above_upward (n result : Number)
     h_ge
 
 
-/-- `Number.normalize` under `.upward` is **correctly rounded**: the result
-is `Number.upper` of the input value. A zero input is excluded automatically
-by `hresult` (it short-circuits to the zero result). `hresult` itself is
-essential: the underflow flush returns zero regardless of direction, which for
-a tiny positive input violates `.upward`. -/
+/-- A nonzero `Number.normalize` result under `.upward` is correctly rounded, equal to `Number.upper` of the
+input. The nonzero condition is needed because the underflow flush returns zero even for a tiny positive input. -/
 theorem normalize_rounded_upward_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :

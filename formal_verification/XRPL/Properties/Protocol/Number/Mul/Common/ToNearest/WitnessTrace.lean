@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_mul_rounding_bound_to_nearest`
+/-! # Witness for `operator_mul_rounding_bound_to_nearest`
 
 The bound `5/(2^63 + 7)` is attained at `x = 5*10^18`, `y = (2^63 + 7)/5`. -/
 
@@ -71,7 +71,6 @@ lemma operator_mul_to_nearest_witness :
   have hy_ne : (⟨false, 1844674407370955163, 0⟩ : Number).operator_eq Number.zero = false := by decide
   simp only [hx_ne, hy_ne, Bool.false_eq_true, if_false, bne_self_eq_false, add_zero]
   rw [scaleDown128_to_nearest_witness]
-  -- Now the goal has doRoundUp { digits_ := ..., xbit_ := false, sbit_ := false } false mantissaFloorSucc 19 ...
   have h_rup : ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false } : Guard).doRoundUp
       false (mantissaFloorSucc : UInt64) (19 : Int) largeRange.min largeRange.max .to_nearest
       .overflow =

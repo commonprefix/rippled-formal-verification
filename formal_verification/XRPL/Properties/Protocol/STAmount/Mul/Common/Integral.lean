@@ -1,11 +1,11 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 
-namespace XRPL.Model.Protocol
-
 /-! # Integral (XRP/MPT) multiplication exactness -/
 
-/-- For a non-negative offset-0 STAmount, the `UInt64` view of its `signedDrops`
-reads back `mValue`. -/
+namespace XRPL.Model.Protocol
+
+/-- For a non-negative STAmount with `mValue < 2^63`, the `UInt64` view of its `signedDrops` reads back
+`mValue`. -/
 lemma STAmount.signed_toUInt64_toNat (s : STAmount) (hn : s.mIsNegative = false)
     (hlt : s.mValue.toNat < 2 ^ 63) :
     s.signedDrops.toInt64.toUInt64.toNat = s.mValue.toNat := by
@@ -25,8 +25,8 @@ lemma STAmount.toRat_of_nonneg_offset_zero (s : STAmount) (hn : s.mIsNegative = 
   rw [STAmount.toRat_of_offset_zero s ho]
   unfold STAmount.signedDrops; rw [hn]; simp
 
-/-- Integral (XRP/MPT) multiplication of two non-negative integral amounts (same
-numericType `nt`) whose product is within range is **exact**: -/
+/-- Multiplying two non-negative integral (XRP/MPT) amounts of the same numeric type `nt` is exact when the
+product is within range. -/
 theorem STAmount.operator_mul_integral_exact (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hc1 : v1.IntegralCanonical) (hc2 : v2.IntegralCanonical)

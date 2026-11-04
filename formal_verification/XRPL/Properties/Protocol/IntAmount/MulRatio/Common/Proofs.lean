@@ -2,21 +2,17 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IntAmount
 import XRPL.Properties.Protocol.Common.AmountArith
 
-/-! # Proof body for the `IntAmount.mulRatio` correctness headline.
+/-! # Proof of the `IntAmount.mulRatio` theorem
 
-`mulRatio amt num den roundUp` is the one `IntAmount` operation that **rounds**: it computes
+`mulRatio amt num den roundUp` is the one `IntAmount` arithmetic operation that rounds: it computes
 `amt · num / den` with truncated integer division, nudges by `±1` to realize floor
 (`roundUp = false`) or ceil (`roundUp = true`), errors on positive overflow, and saturates to
-`Int64.minValue` on negative underflow. The unified correctness proof lives here; the
-direction-specialized forms (the `roundUp` analog of `Number`'s per-mode split) are in
-`MulRatio.Common.Floor.Proofs` / `MulRatio.Common.Ceil.Proofs`. The integer / rational
-rounding brackets are the shared `AmountArith` lemmas. -/
+`Int64.minValue` on negative underflow. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`mulRatio` rounds correctly (floor for `roundUp = false`, ceil for `roundUp = true`).**
-On a successful (`.ok`) result the drops are either saturated to `Int64.minValue`
-(negative underflow) or the correctly-rounded quotient of `amt * num / den`. -/
+/-- `mulRatio` rounds correctly. On a successful result the drops are either saturated to `Int64.minValue`
+(negative underflow) or `amt * num / den` rounded down for `roundUp = false` and up for `roundUp = true`. -/
 theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (roundUp : Bool)
     (result : IntAmount)
     (hok : IntAmount.mulRatio amt num den roundUp = .ok result) :
@@ -26,7 +22,7 @@ theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (ro
             result.toRat - 1 < amt.toRat * (num.toNat : ℚ) / (den.toNat : ℚ)
        else result.toRat ≤ amt.toRat * (num.toNat : ℚ) / (den.toNat : ℚ) ∧
             amt.toRat * (num.toNat : ℚ) / (den.toNat : ℚ) < result.toRat + 1) := by
-  -- `den = 0` makes `mulRatio` error, contradicting `hok`; the real work is `den ≠ 0`.
+  -- `den = 0` makes `mulRatio` error, contradicting `hok`.
   by_cases hden : den = 0
   · rw [show IntAmount.mulRatio amt num den roundUp = Except.error .divByZero from by
           unfold IntAmount.mulRatio; rw [if_pos (by simpa using hden)]] at hok
@@ -37,11 +33,9 @@ theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (ro
                  if (!decide (amt.value < 0) && roundUp) = true then m.tdiv d + 1
                  else if (decide (amt.value < 0) && !roundUp) = true then m.tdiv d - 1 else m.tdiv d
                else m.tdiv d with hR_def
-  -- `d > 0`
   have hdnat : den.toNat ≠ 0 := by
     intro h; exact hden (by simpa using (UInt32.toNat_inj.mp (by simpa using h)))
   have hd : (0 : ℤ) < d := by rw [hd_def]; exact_mod_cast Nat.pos_of_ne_zero hdnat
-  -- reduce the function call to a clean three-way if on `R`
   have key : IntAmount.mulRatio amt num den roundUp =
       (if R > Int64.maxValue.toInt then Except.error .overflow
        else if R < Int64.minValue.toInt then Except.ok ⟨Int64.minValue⟩
@@ -49,7 +43,7 @@ theorem IntAmount.mulRatio_rounds_proof (amt : IntAmount) (num den : UInt32) (ro
     unfold IntAmount.mulRatio; rw [if_neg (by simpa using hden)]
   rw [key] at hok
   split_ifs at hok with hMax hMin
-  · -- saturation (the overflow `error = ok` case is discharged by `split_ifs`)
+  · -- saturation. The overflow branch returns an error, which contradicts `hok`.
     left; exact (congrArg IntAmount.value (Except.ok.inj hok)).symm
   · -- normal: result = ⟨R.toInt64⟩
     right

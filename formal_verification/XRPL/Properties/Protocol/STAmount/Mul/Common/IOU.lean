@@ -7,11 +7,15 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 
+/-! # STAmount IOU multiplication rounding
+
+`STAmount.multiply` on IOU amounts lifts both to 19-digit `Number`s, multiplies them, and rounds the product back to
+16 digits. In `to_nearest` the two roundings stay within `εMulIOUToNearest`, about `½·10⁻¹⁵`. -/
+
 namespace XRPL.Model.Protocol
 
-/-- **`IOUAmount.normalize` on a canonical 16-digit signed mantissa.** The 19-digit
-re-lift then 16-digit re-round round-trips exactly (it's already canonical), so the
-only effect is the `[cMinOffset, cMaxOffset]` exponent clamp. -/
+/-- `IOUAmount.normalize` on a canonical 16-digit signed mantissa. The 19-digit re-lift and 16-digit
+re-round are exact, so the only effect is the `[cMinOffset, cMaxOffset]` exponent clamp. -/
 lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (mode : rounding_mode)
     (h_lo : 10 ^ 15 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 16)
     (he_lo : minExponent + 3 ≤ exp) (he_hi : exp ≤ maxExponent) :
@@ -66,17 +70,8 @@ lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (
     rw [m_div_thousand_toNat (mant * 10 * 10 * 10), hM_toNat]; omega
   rw [h_q3]
 
-/-! # STAmount IOU multiplication rounding
-
-`STAmount.multiply` on the IOU path lifts both operands to 19-digit `Number`s
-(`toNumber`), multiplies (`Number.operator_mul`), then snaps back to the 16-digit
-IOU grid via `STAmount.ofNumber`/`checked`. This double-rounds, so the headline is
-a relative-error bound `εMul = ε₁ + ε₂ + ε₁·ε₂` with `ε₁ = 5/(2⁶³+7)` (the `Number`
-multiply bound) and `ε₂ = 10⁻¹⁵` (the 16-digit re-round). -/
-
-/-- **`STAmount.checked` on a canonical 16-digit IOU mantissa.** A successful,
-nonzero result forces the exponent into `[cMinOffset, cMaxOffset]` and reproduces
-the record exactly (out-of-range exponents would error or flush to zero). -/
+/-- `STAmount.checked` on a canonical 16-digit IOU mantissa. A successful, nonzero result forces the exponent
+into `[cMinOffset, cMaxOffset]` and reproduces the record exactly. -/
 lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) (neg : Bool)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -235,9 +230,8 @@ lemma STAmount.toNumber_iou_canonical_isNormalized (s : STAmount) (hc : s.IOUCan
   · show minExponent ≤ s.mOffset - 3; have := hc.exp_lo; unfold minExponent; omega
   · show s.mOffset - 3 ≤ maxExponent; have := hc.exp_hi; unfold maxExponent; omega
 
-/-- **`STAmount.ofNumber` IOU re-rounding bound.** Snapping a 19-digit-normalized
-`Number` `r` to the 16-digit IOU grid (via `normalizeToRange` then the
-value-preserving `checked`) loses at most one 16-digit ULP. -/
+/-- `STAmount.ofNumber` IOU re-rounding bound. Snapping a 19-digit-normalized `Number` `r` to the 16-digit
+IOU grid (`normalizeToRange`, then the value-preserving `checked`) loses at most one 16-digit ULP. -/
 lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : rounding_mode)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -292,7 +286,7 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     obtain ⟨mant, exp⟩ := me
     rw [hnorm] at hok
     simp only at hok
-    -- keystone facts (kMinValue/kMaxValue ≡ cMinValue/cMaxValue).
+    -- 16-digit rounding facts (kMinValue and kMaxValue equal cMinValue and cMaxValue).
     have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
     have hbound := normalizeToRange_16_within_ulp working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
     have hmrange := normalizeToRange_16_mantissa_range working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
@@ -332,7 +326,6 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
-    -- value transport.
     have hres_toRat : result.toRat = (if neg then (-1 : ℚ) else 1) * ((mant.toInt : ℚ) * 10 ^ exp) := by
       rw [hres_eq, STAmount.toRat_signed]
       show (if neg then (-1 : ℚ) else 1) * (mant.toUInt64.toNat : ℚ) * 10 ^ exp = _
@@ -350,9 +343,8 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     rw [hsabs, one_mul, hw_exp] at *
     exact ⟨hbound, hexp⟩
 
-/-- **Tight (half-ULP) `STAmount.ofNumber` IOU bound, `to_nearest`.** Identical to
-`ofNumber_iou_within_ulp` but the round-to-nearest snap lands within *half* a 16-digit
-ULP, the tight `ε₂` for `to_nearest` IOU arithmetic. -/
+/-- Tight (half-ULP) `STAmount.ofNumber` IOU bound, `to_nearest`. The round-to-nearest snap lands within
+*half* a 16-digit ULP. -/
 lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -526,9 +518,8 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
         else IOUAmount.zero.mantissa_).toUInt64 = 0
   decide
 
-/-- The `Number` product of two normalized operands with bounded exponents has an
-exponent well below the `maxExponent` ceiling (`|r| ≈ |n1|·|n2|`, so `r.exp ≲
-n1.exp + n2.exp`). Discharges the cusp side condition of the 16-digit re-round. -/
+/-- The `Number` product of two normalized operands with bounded exponents has `r.exponent_ + 4 ≤ maxExponent`,
+which the 16-digit re-round needs. -/
 lemma operator_mul_exponent_hi (n1 n2 r : Number) (E : Int)
     (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized)
     (hn1_ne : n1.mantissa_ ≠ 0) (hn2_ne : n2.mantissa_ ≠ 0) (hr_ne : r.mantissa_ ≠ 0)
@@ -597,10 +588,8 @@ lemma operator_mul_exponent_hi (n1 n2 r : Number) (E : Int)
       _ ≤ (10 : ℚ) ^ (maxExponent + 15) := hfin
   linarith [hlower, hupper]
 
-/-- **STAmount IOU multiplication rel-error engine (`to_nearest`).** Two canonical
-16-digit IOU amounts multiply (lift to 19-digit `Number`s, multiply, snap back to
-the 16-digit grid) within the composed double-rounding relative error
-`εMul = ε₁ + ε₂ + ε₁·ε₂`, `ε₁ = 5/(2⁶³+7)`, `ε₂ = 10⁻¹⁵`. -/
+/-- IOU `STAmount` multiplication with `to_nearest` on two canonical amounts has relative error at most
+`ε₁ + ε₂ + ε₁·ε₂`, with `ε₁ = 5/(2⁶³+7)` for the `Number` multiply and `ε₂ = 10⁻¹⁵/2`. -/
 theorem STAmount.operator_mul_iou_rel_error (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -614,7 +603,6 @@ theorem STAmount.operator_mul_iou_rel_error (v1 v2 result : STAmount) (nt : Nume
   have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
   have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
   have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  -- navigate guards down to the `Number` path
   unfold STAmount.multiply at hok
   rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by
         simp [STAmount.isZero, hv1ne, hv2ne]),
@@ -678,9 +666,8 @@ theorem STAmount.operator_mul_iou_rel_error (v1 v2 result : STAmount) (nt : Nume
     rw [hn1_val, hn2_val] at hmb
     exact rel_error_trans hmb h2 (by positivity)
 
-/-- **IOU multiply pipeline decomposition (`to_nearest`).** Exposes the 19-digit
-`Number` product `r` (`= ofNumber → result`), its range, and the `Number`-multiply
-relative-error bound. Feeds both the relative headline and the ULP/repr headline. -/
+/-- IOU multiply pipeline decomposition (`to_nearest`). Exposes the 19-digit `Number` product `r`
+(`= ofNumber → result`), its range, and the `Number`-multiply relative-error bound. -/
 lemma STAmount.operator_mul_iou_decompose (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

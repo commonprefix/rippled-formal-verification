@@ -3,7 +3,7 @@ import XRPL.Properties.Vault.Proofs.Support.Integral
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
 import XRPL.Properties.Vault.Proofs.WithdrawMono.Exponent
 
-/-! # `.to_nearest` `ofNumber` on a non-negative source: shape, anchor, monotonicity -/
+/-! # `.to_nearest` `ofNumber` on a non-negative source: shape and monotonicity -/
 
 namespace XRPL.Model.SingleAssetVault.WdMono
 
@@ -90,102 +90,24 @@ lemma int_pack (nt : NumericType) (hint : nt.isIntegral = true) (n : Number) (r 
     rw [zpow_zero, mul_one]
     exact_mod_cast toUInt64_toNat_of_nonneg iv hnn'
 
-private lemma frac_of_not_int (nt : NumericType) (h : nt.isIntegral = false) :
-    nt = .fractional := by
-  cases nt with
-  | fractional => rfl
-  | integral mv mo ms msh => simp [NumericType.isIntegral] at h
-
-private lemma mValue_zero_of_toRat (r : STAmount) (h : r.toRat = 0) : r.mValue = 0 := by
-  by_contra hz
-  have habs := STAmount.abs_toRat r
-  rw [h, abs_zero] at habs
-  have : r.mValue.toNat ≠ 0 := fun h' => hz (UInt64.toNat_inj.mp (by rw [h']; rfl))
-  have : (0 : ℚ) < (r.mValue.toNat : ℚ) := by exact_mod_cast Nat.pos_of_ne_zero this
-  have : (0 : ℚ) < (r.mValue.toNat : ℚ) * 10 ^ r.mOffset := by positivity
-  linarith
-
-private lemma zero_frac_eq (r : STAmount)
-    (hok : STAmount.ofNumber .fractional Number.zero .to_nearest = .ok r) :
-    r = ⟨.fractional, 0, -100, false⟩ := by
-  have h : STAmount.ofNumber .fractional Number.zero .to_nearest
-      = .ok ⟨.fractional, 0, -100, false⟩ := by rfl
-  rw [h] at hok
-  exact (Except.ok.inj hok).symm
-
-/-- Shape of a `.to_nearest` pack of a non-negative source. -/
-lemma ofNumber_facts (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNormalized)
-    (hnn : 0 ≤ n.toRat) (hok : STAmount.ofNumber nt n .to_nearest = .ok r) :
-    0 ≤ r.toRat ∧ r.mNumericType = nt ∧
-    (nt.isIntegral = false → r.mValue ≠ 0 → r.IOUCanonical) ∧
-    (∀ pn, r.toNumber .to_nearest = .ok pn → pn.isNormalized ∧ pn.toRat = r.toRat) := by
-  have hnt := STAmount.ofNumber_mNumericType nt n .to_nearest r hok
+/-- A `.to_nearest` pack of a non-negative source is non-negative. -/
+lemma ofNumber_nonneg (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNormalized)
+    (hnn : 0 ≤ n.toRat) (hok : STAmount.ofNumber nt n .to_nearest = .ok r) : 0 ≤ r.toRat := by
   by_cases hint : nt.isIntegral = true
-  · obtain ⟨z, hz, hz0, _, hoff, hmax, _⟩ := int_pack nt hint n r hn hnn hok
-    refine ⟨by rw [hz]; exact_mod_cast hz0, hnt, fun h => absurd hint (by simp [h]), ?_⟩
-    intro pn hpn
-    obtain ⟨sn, hsn, hval, hnorm, _⟩ := STAmount.toNumber_offset_zero_exact r .to_nearest
-      (by rw [hnt]; exact hint) hoff hmax
-    rw [Except.ok.inj (hpn.symm.trans hsn)]; exact ⟨hnorm, hval⟩
-  have hfr := frac_of_not_int nt (by simpa using hint)
+  · obtain ⟨z, hz, hz0, -, -, -, -⟩ := int_pack nt hint n r hn hnn hok
+    rw [hz]; exact_mod_cast hz0
+  have hfr := NumericType.eq_fractional_of_not_integral (by simpa using hint)
   subst hfr
-  have hzero : r.mValue = 0 → 0 ≤ r.toRat ∧ r.mNumericType = .fractional ∧
-      (∀ pn, r.toNumber .to_nearest = .ok pn → pn.isNormalized ∧ pn.toRat = r.toRat) := by
-    intro h0
-    refine ⟨by rw [STAmount.toRat_eq_zero_of_mValue_zero r h0], hnt, ?_⟩
-    intro pn hpn
-    rw [STAmount.toNumber_zero_fractional r .to_nearest (by
-      show r.mNumericType.isIntegral = false; rw [hnt]; rfl) h0] at hpn
-    rw [← Except.ok.inj hpn, Number.toRat_zero, STAmount.toRat_eq_zero_of_mValue_zero r h0]
-    exact ⟨Or.inl rfl, rfl⟩
   by_cases hr : r.mValue = 0
-  · obtain ⟨a, b, c⟩ := hzero hr
-    exact ⟨a, b, fun _ h => absurd hr h, c⟩
+  · rw [STAmount.toRat_eq_zero_of_mValue_zero r hr]
   by_cases hnz : n.mantissa_ = 0
   · rw [Number.eq_zero_of_mantissa_zero n hn hnz] at hok
     rw [zero_frac_eq r hok] at hr; exact absurd rfl hr
   have hneg := Number.negative_false_of_nonneg n hn hnn
-  obtain ⟨hc, hrneg, _, _, _⟩ := frac_pack n r hn hneg hnz hok hr
-  refine ⟨by rw [STAmount.toRat_of_nonneg r hrneg]; positivity, hnt, fun _ _ => hc, ?_⟩
-  intro pn hpn
-  obtain ⟨sn, hsn, hval, hnorm⟩ := STAmount.toNumber_iou_exact r .to_nearest hc
-  rw [Except.ok.inj (hpn.symm.trans hsn)]; exact ⟨hnorm, hval⟩
+  obtain ⟨-, hrneg, -, -, -⟩ := frac_pack n r hn hneg hnz hok hr
+  rw [STAmount.toRat_of_nonneg r hrneg]; positivity
 
-/-- **Anchor.** A nonzero `.to_nearest` pack comes from a source of at least `10⁻⁸²`. -/
-lemma ofNumber_anchor (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNormalized)
-    (hnn : 0 ≤ n.toRat) (hok : STAmount.ofNumber nt n .to_nearest = .ok r)
-    (hr : r.mValue ≠ 0) : (10 : ℚ) ^ (-82 : ℤ) ≤ n.toRat := by
-  by_cases hint : nt.isIntegral = true
-  · obtain ⟨z, hz, hz0, hhalf, _⟩ := int_pack nt hint n r hn hnn hok
-    have hz1 : 1 ≤ z := by
-      rcases eq_or_lt_of_le hz0 with h | h
-      · exfalso; apply hr; apply mValue_zero_of_toRat; rw [hz, ← h]; simp
-      · omega
-    have hzq : (1 : ℚ) ≤ z := by exact_mod_cast hz1
-    have hab := (abs_le.mp hhalf).2
-    have h82 : (10 : ℚ) ^ (-82 : ℤ) ≤ 1 / 2 := by
-      rw [zpow_neg]; apply inv_le_of_inv_le₀ (by norm_num); norm_num
-    have hn2 : (1 / 2 : ℚ) ≤ n.toRat := by linarith
-    exact le_trans h82 hn2
-  have hfr := frac_of_not_int nt (by simpa using hint)
-  subst hfr
-  have hnz : n.mantissa_ ≠ 0 := by
-    intro h; rw [Number.eq_zero_of_mantissa_zero n hn h] at hok
-    rw [zero_frac_eq r hok] at hr; exact hr rfl
-  have hneg := Number.negative_false_of_nonneg n hn hnn
-  obtain ⟨hc, _, _, _, hk4⟩ := frac_pack n r hn hneg hnz hok hr
-  have hk : -100 ≤ n.exponent_ := by have := hc.exp_lo; unfold STAmount.exponent at hk4; omega
-  obtain ⟨hlo, _⟩ := hn.mantissaBounds_nat hnz
-  rw [Number.toRat_of_nonneg n hneg]
-  have hm : (10 : ℚ) ^ 18 ≤ (n.mantissa_.toNat : ℚ) := by exact_mod_cast hlo
-  have hp : (10 : ℚ) ^ (-100 : ℤ) ≤ 10 ^ n.exponent_ := zpow_le_zpow_right₀ (by norm_num) hk
-  have he : (10 : ℚ) ^ (-82 : ℤ) = 10 ^ 18 * 10 ^ (-100 : ℤ) := by
-    rw [show (-82 : ℤ) = 18 + (-100) from rfl, zpow_add₀ (by norm_num)]; norm_num
-  rw [he]
-  have : (0 : ℚ) ≤ 10 ^ (-100 : ℤ) := by positivity
-  nlinarith
-
-/-- **`.to_nearest` `ofNumber` is monotone on non-negative sources.** -/
+/-- `.to_nearest` `ofNumber` is monotone on non-negative sources. -/
 lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmount)
     (hn₁ : n₁.isNormalized) (hn₂ : n₂.isNormalized) (h0 : 0 ≤ n₁.toRat)
     (hle : n₁.toRat ≤ n₂.toRat)
@@ -210,9 +132,9 @@ lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmoun
     have heq : n₁.toRat = n₂.toRat := by linarith
     have := hdet heq
     linarith
-  have hfr := frac_of_not_int nt (by simpa using hint)
+  have hfr := NumericType.eq_fractional_of_not_integral (by simpa using hint)
   subst hfr
-  have hr₂nn := (ofNumber_facts .fractional n₂ r₂ hn₂ h0₂ hok₂).1
+  have hr₂nn := ofNumber_nonneg .fractional n₂ r₂ hn₂ h0₂ hok₂
   by_cases hr₁ : r₁.mValue = 0
   · rw [STAmount.toRat_eq_zero_of_mValue_zero r₁ hr₁] at hlt; linarith
   have hnz₁ : n₁.mantissa_ ≠ 0 := by
@@ -262,7 +184,8 @@ lemma ofNumber_mono (nt : NumericType) (n₁ n₂ : Number) (r₁ r₂ : STAmoun
     have hmm : r₂.mValue.toNat < r₁.mValue.toNat := by
       have := lt_of_mul_lt_mul_right hlt (le_of_lt hp0)
       exact_mod_cast this
-    have hq : ((r₂.mValue.toNat : ℚ) + 1) * 10 ^ r₁.mOffset ≤ (r₁.mValue.toNat : ℚ) * 10 ^ r₁.mOffset := by
+    have hq : ((r₂.mValue.toNat : ℚ) + 1) * 10 ^ r₁.mOffset ≤
+        (r₁.mValue.toNat : ℚ) * 10 ^ r₁.mOffset := by
       have : (r₂.mValue.toNat : ℚ) + 1 ≤ r₁.mValue.toNat := by exact_mod_cast hmm
       nlinarith
     rw [hE₁] at hh₁; rw [hE₂, ← heq'] at hh₂

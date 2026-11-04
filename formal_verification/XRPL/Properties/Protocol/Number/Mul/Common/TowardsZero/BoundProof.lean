@@ -9,7 +9,7 @@ namespace XRPL.Model.Protocol
 set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) plus the cusp-range legs need extra heartbeats
 /-- Relative-error bound for `Number.operator_mul` under `.towards_zero` rounding.
-The bound `10/(2^63 + 2)` matches `.downward` (twice the `.to_nearest` bound). -/
+The bound `10/(2^63 + 2)` matches `.downward`, about twice the `.to_nearest` bound. -/
 theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

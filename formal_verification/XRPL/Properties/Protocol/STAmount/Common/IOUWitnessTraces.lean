@@ -1,30 +1,15 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
 
-/-! # Symbolic computation traces for the IOU tightness witnesses
+/-! # Step-by-step evaluations of the IOU witnesses
 
-The IOU `RoundsWithin` headlines (`operator_{add,sub,mul}_rounds_iou`) bound the
-relative error by `≈10⁻¹⁵`. The companion `…_witness` theorems exhibit concrete
-canonical operands whose error exceeds `|truth|·4/10¹⁶`, a half-ULP re-rounding
-case, proving the bound's numerator is optimal up to a small constant.
-
-Establishing `operator_* … = .ok result` for the concrete witnesses requires
-evaluating the model's well-founded recursions (`Number.operator_add/_mul`,
-`normalizeToRange`), which `rfl`/`decide` cannot reduce. This file provides those
-evaluations as `unfold`+`decide` step traces (std-axioms, no `native_decide`):
-
-* `add_lift_trace` / `mul_lift_trace`: the inner `Number` op on the 19-digit lifts.
-* `reround_trace`: the 16-digit canonical re-round (`10¹⁶+5 → 10¹⁶`).
-* `ofnum_trace` / `ofnum_st_trace`: `IOUAmount`/`STAmount` `ofNumber` wrappers.
-* `operator_add_iou_witness_eq` / `multiply_iou_witness_eq`: the full `STAmount`
-  operations on the witnesses, assembled from the above plus the canonical
-  conversion lemmas. The witness theorems live next to their headlines. -/
+The witness results err by more than `|truth|·4/10¹⁶`, so the `to_nearest` IOU bounds of about `½·10⁻¹⁵` are close
+to optimal. -/
 
 namespace XRPL.Model.Protocol
 
-/-- Inner `Number` addition of the two same-exponent 19-digit lifts
-(`5·10¹⁵+3` and `5·10¹⁵+2`, each `×1000` then exponent `−3`): same-sign add,
-overflow, scale-down by one digit (dropped digit `0`, no rounding). -/
+/-- Inner `Number` addition of the 19-digit lifts of `5·10¹⁵+3` and `5·10¹⁵+2`: same-sign add, overflow, and a
+one-digit scale-down that drops a `0` (no rounding). -/
 lemma add_lift_trace :
     Number.operator_add ⟨false, 5000000000000003000, -3⟩ ⟨false, 5000000000000002000, -3⟩ .to_nearest
       = .ok ⟨false, 1000000000000000500, -2⟩ := by
@@ -121,9 +106,8 @@ lemma reround_trace :
   simp only [RoundResult.toNumber]
   rfl
 
-/-- Inner `Number` multiplication of the two 19-digit lifts
-(`(2·10¹⁵+1)·1000·10⁻³` and `5·10¹⁵·1000·10⁻¹⁸`): the `10³⁷`-scale product
-scales down 19 zero digits to `1000000000000000500·10⁻²`, identical to the add case. -/
+/-- Inner `Number` multiplication of the 19-digit lifts `(2·10¹⁵+1)·1000·10⁻³` and `5·10¹⁵·1000·10⁻¹⁸`: the
+product scales down 19 zero digits to `1000000000000000500·10⁻²`, as in the add case. -/
 lemma mul_lift_trace :
     Number.operator_mul ⟨false, 2000000000000001000, -3⟩ ⟨false, 5000000000000000000, -18⟩ .to_nearest
       = .ok ⟨false, 1000000000000000500, -2⟩ := by
@@ -293,7 +277,7 @@ lemma ofnum_st_trace :
       STAmount.canonicalize_canonical_id _ .to_nearest hc_result]
   rfl
 
-/-- **Full `STAmount.operator_add` evaluation on the add/sub witness operands.** -/
+/-- Full `STAmount.operator_add` evaluation on the add/sub witness operands. -/
 theorem STAmount.operator_add_iou_witness_eq :
     STAmount.operator_add ⟨.fractional, 5000000000000003, 0, false⟩
         ⟨.fractional, 5000000000000002, 0, false⟩ .to_nearest
@@ -341,7 +325,7 @@ theorem STAmount.operator_add_iou_witness_eq :
   rw [hadd_inner]; simp only []
   rw [hofiou]; rfl
 
-/-- **Full `STAmount.multiply` evaluation on the mul witness operands.** -/
+/-- Full `STAmount.multiply` evaluation on the mul witness operands. -/
 theorem STAmount.multiply_iou_witness_eq :
     STAmount.multiply ⟨.fractional, 2000000000000001, 0, false⟩
         ⟨.fractional, 5000000000000000, -15, false⟩ .fractional .to_nearest

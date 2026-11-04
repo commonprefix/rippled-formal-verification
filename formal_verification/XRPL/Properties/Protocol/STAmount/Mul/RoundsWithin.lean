@@ -1,11 +1,13 @@
--- Multiplication rounding errors, denominated in the ideal product as a rational number
-
 import XRPL.Properties.Protocol.STAmount.Mul.Common.Integral
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Mul.Common.RoundsWithinProofs
 import XRPL.Properties.Protocol.STAmount.Common.IOUWitnessTraces
 import XRPL.Properties.Protocol.STAmount.Common.IOUDirectedWitnesses
+
+/-! # Multiplication, relative error
+
+Each error is measured relative to the exact product. -/
 
 namespace XRPL.Model.Protocol
 
@@ -14,10 +16,8 @@ namespace XRPL.Model.Protocol
 abbrev εMulIOUDirected : ℚ :=
   10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ) + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)
 
-/-- Relative-error bound for `to_nearest` IOU multiplication: `Number` multiply
-(`ε₁ = 5/(2⁶³+7)`) composed with the 16-digit re-round (`ε₂ = ½·10⁻¹⁵`). Both
-round-to-nearest (each a half-ULP), so the composed bound is `ε₁ + ε₂ + ε₁·ε₂`.
-Half the directed `εMulIOUDirected`. -/
+/-- Relative-error bound for `to_nearest` IOU multiplication: `ε₁ + ε₂ + ε₁·ε₂` with the `Number` multiply
+`ε₁ = 5/(2⁶³+7)` and the 16-digit re-round `ε₂ = ½·10⁻¹⁵`. About half the directed `εMulIOUDirected`. -/
 abbrev εMulIOUToNearest : ℚ :=
   5 / (2 ^ 63 + 7 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
     + 5 / (2 ^ 63 + 7 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))
@@ -37,7 +37,7 @@ theorem STAmount.operator_mul_rounds_integral (v1 v2 result : STAmount) (nt : Nu
     (STAmount.operator_mul_integral_exact v1 v2 result nt mode hc1 hc2 hntint hv1nt hv2nt
       hn1 hn2 hbound_val hbound hok)
 
-/-- **IOU multiplication rounds within `εMulIOUToNearest`).** -/
+/-- IOU multiplication rounds within `εMulIOUToNearest`. -/
 theorem STAmount.operator_mul_rounds_iou (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -45,7 +45,7 @@ theorem STAmount.operator_mul_rounds_iou (v1 v2 result : STAmount) (nt : Numeric
     RoundsWithin result (v1.toRat * v2.toRat) .to_nearest εMulIOUToNearest :=
   STAmount.operator_mul_iou_rel_error v1 v2 result nt hnt hc1 hc2 hok hresult
 
-/-- **Tightness witness for the IOU multiplication bound.** -/
+/-- IOU multiplication can err by more than `4/10¹⁶` of the exact product, close to `εMulIOUToNearest`. -/
 theorem STAmount.operator_mul_rounds_iou_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧
@@ -53,7 +53,7 @@ theorem STAmount.operator_mul_rounds_iou_witness :
       RoundsWithinWitness result (v1.toRat * v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   STAmount.operator_mul_rounds_iou_witness_proof
 
-/-- **IOU multiplication of non-negative operands, `downward`.** -/
+/-- IOU multiplication of non-negative operands, `downward`. -/
 theorem STAmount.operator_mul_rounds_iou_downward (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -62,7 +62,7 @@ theorem STAmount.operator_mul_rounds_iou_downward (v1 v2 result : STAmount) (nt 
     RoundsWithin result (v1.toRat * v2.toRat) .downward εMulIOUDirected :=
   STAmount.operator_mul_iou_rounds_directed v1 v2 result nt .downward hnt hc1 hc2 hn1 hn2 hok hresult
 
-/-- **IOU multiplication of non-negative operands, `upward`.** -/
+/-- IOU multiplication of non-negative operands, `upward`. -/
 theorem STAmount.operator_mul_rounds_iou_upward (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -71,7 +71,7 @@ theorem STAmount.operator_mul_rounds_iou_upward (v1 v2 result : STAmount) (nt : 
     RoundsWithin result (v1.toRat * v2.toRat) .upward εMulIOUDirected :=
   STAmount.operator_mul_iou_rounds_directed v1 v2 result nt .upward hnt hc1 hc2 hn1 hn2 hok hresult
 
-/-- **IOU multiplication of non-negative operands, `towards_zero`.** -/
+/-- IOU multiplication of non-negative operands, `towards_zero`. -/
 theorem STAmount.operator_mul_rounds_iou_towards_zero (v1 v2 result : STAmount) (nt : NumericType)
     (hnt : nt = .fractional)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -80,7 +80,7 @@ theorem STAmount.operator_mul_rounds_iou_towards_zero (v1 v2 result : STAmount) 
     RoundsWithin result (v1.toRat * v2.toRat) .towards_zero εMulIOUDirected :=
   STAmount.operator_mul_iou_rounds_directed v1 v2 result nt .towards_zero hnt hc1 hc2 hn1 hn2 hok hresult
 
-/-- **Tightness witness, IOU multiplication `downward`.** -/
+/-- IOU multiplication rounding `downward` can err by more than `4/10¹⁶` of the exact product. -/
 theorem STAmount.operator_mul_rounds_iou_downward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧
@@ -88,7 +88,7 @@ theorem STAmount.operator_mul_rounds_iou_downward_witness :
       RoundsWithinWitness result (v1.toRat * v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   mul_dir_wit_core .downward 1000000000000000 (by decide) (Or.inl rfl)
 
-/-- **Tightness witness, IOU multiplication `upward`.** -/
+/-- IOU multiplication rounding `upward` can err by more than `4/10¹⁶` of the exact product. -/
 theorem STAmount.operator_mul_rounds_iou_upward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧
@@ -96,7 +96,7 @@ theorem STAmount.operator_mul_rounds_iou_upward_witness :
       RoundsWithinWitness result (v1.toRat * v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   mul_dir_wit_core .upward 1000000000000001 (by decide) (Or.inr (Or.inl rfl))
 
-/-- **Tightness witness, IOU multiplication `towards_zero`.** -/
+/-- IOU multiplication rounding `towards_zero` can err by more than `4/10¹⁶` of the exact product. -/
 theorem STAmount.operator_mul_rounds_iou_towards_zero_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧

@@ -5,8 +5,8 @@ import XRPL.Properties.Protocol.IOUAmount.Common.Defs
 
 namespace XRPL.Model.Protocol
 
-/-- **IOU addition, `downward` rounding within `εDirected`.**
-The result never exceeds the true sum and is within `≈2·10⁻¹⁵` of it. -/
+/-- IOU addition rounding downward never lands above the true sum, and its relative error is at most `εDirected`,
+about `10⁻¹⁵`. -/
 theorem IOUAmount.operator_add_rounds_downward (x y result : IOUAmount)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat + y.toRat ≠ 0)
@@ -15,7 +15,7 @@ theorem IOUAmount.operator_add_rounds_downward (x y result : IOUAmount)
     RoundsWithin result (x.toRat + y.toRat) .downward IOUAmount.εDirected :=
   IOUAmount.operator_add_rounds_proof x y result .downward hx hy h_truth_ne hok hresult
 
-/-- **IOU addition, `upward` directed rounding within `εDirected`.** -/
+/-- IOU addition, `upward` directed rounding within `εDirected`. -/
 theorem IOUAmount.operator_add_rounds_upward (x y result : IOUAmount)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat + y.toRat ≠ 0)
@@ -24,7 +24,7 @@ theorem IOUAmount.operator_add_rounds_upward (x y result : IOUAmount)
     RoundsWithin result (x.toRat + y.toRat) .upward IOUAmount.εDirected :=
   IOUAmount.operator_add_rounds_proof x y result .upward hx hy h_truth_ne hok hresult
 
-/-- **IOU addition, `towards_zero` directed rounding within `εDirected`.** -/
+/-- IOU addition, `towards_zero` directed rounding within `εDirected`. -/
 theorem IOUAmount.operator_add_rounds_towards_zero (x y result : IOUAmount)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat + y.toRat ≠ 0)
@@ -33,7 +33,7 @@ theorem IOUAmount.operator_add_rounds_towards_zero (x y result : IOUAmount)
     RoundsWithin result (x.toRat + y.toRat) .towards_zero IOUAmount.εDirected :=
   IOUAmount.operator_add_rounds_proof x y result .towards_zero hx hy h_truth_ne hok hresult
 
-/-- **IOU addition, `to_nearest` half-ULP relative bound.** -/
+/-- IOU addition under `to_nearest` has relative error at most `εToNearest`, about `½·10⁻¹⁵`. -/
 theorem IOUAmount.operator_add_rounds_to_nearest_tight (x y result : IOUAmount)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat + y.toRat ≠ 0)
@@ -42,7 +42,7 @@ theorem IOUAmount.operator_add_rounds_to_nearest_tight (x y result : IOUAmount)
     |result.toRat - (x.toRat + y.toRat)| ≤ |x.toRat + y.toRat| * IOUAmount.εToNearest :=
   IOUAmount.operator_add_rounds_to_nearest_proof x y result hx hy h_truth_ne hok hresult
 
-/-- **IOU addition rounds within `εDirected` in every mode**. -/
+/-- IOU addition rounds within `εDirected` in every mode. -/
 theorem IOUAmount.operator_add_rounds (x y result : IOUAmount) (mode : rounding_mode)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat + y.toRat ≠ 0)

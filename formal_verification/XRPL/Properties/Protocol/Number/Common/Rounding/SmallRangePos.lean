@@ -3,24 +3,22 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeBound
 /-! # Exact fixed-scale directed rounding of the 16-digit re-round, non-negative input.
 
 `normalizeToRange` snaps a 19-digit `Number` (`mantissa ∈ [10¹⁸,10¹⁹)`) onto the
-16-digit grid at scale `10^(e+3)`. For a **non-negative** input the directed modes
+16-digit grid at scale `10^(e+3)`. For a non-negative input the directed modes
 are exact fixed-scale roundings:
 
 * `.upward` rounds the magnitude *up*: the result value is `⌈M/1000⌉·10^(e+3)`
-  (with a carry to exponent `e+4` at the top-of-range cusp);
+  (with a carry to exponent `e+4` at the top-of-range cusp),
 * `.downward`/`.towards_zero` truncate: the result value is `⌊M/1000⌋·10^(e+3)`.
 
 These are the sharp statements behind the "double rounding does not compound" argument
-for directed IOU multiplication (`RoundsToRepresentableWithin … 1`). The existing
-`normalizeToRange_16_{upward,downward,towards_zero}` expose only the one-sided
-inequality; here we expose the exact grid value (nonneg case), which pins the overshoot
-to *strictly* less than one fine ULP `10^(e+3)`. -/
+for directed IOU multiplication (`RoundsToRepresentableWithin … 1`).
+`normalizeToRange_16_{upward,downward,towards_zero}` give only the one-sided inequality. The exact grid value
+keeps the overshoot strictly below one ULP `10^(e+3)`. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **Upward 16-digit re-round of a non-negative 19-digit `Number` is exact ceiling
-at scale `e+3`.** The result value equals `⌈M/1000⌉·10^(e+3)` (nat ceil-division form),
-and the output exponent is `≥ e+3` (equal, except a `+1` carry at the cusp). -/
+/-- `.upward` re-rounding of a non-negative 19-digit `Number` to 16 digits gives exactly `⌈M / 1000⌉ · 10^(e + 3)`,
+with output exponent at least `e + 3`. -/
 theorem normalizeToRange_16_ceil_pos (n : Number) (mant : Int64) (exp : Int)
     (hnf : n.negative_ = false)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
@@ -108,9 +106,8 @@ theorem normalizeToRange_16_ceil_pos (n : Number) (mant : Int64) (exp : Int)
           if_pos hrem_ne]
       simp only [if_neg hneg, one_mul, Int.cast_natCast]
 
-/-- **Truncating 16-digit re-round of a non-negative 19-digit `Number` is exact floor
-at scale `e+3`.** Both `.downward` and `.towards_zero` truncate for a non-negative
-input, so the result value equals `⌊M/1000⌋·10^(e+3)` at output exponent `e+3`. -/
+/-- `.downward` and `.towards_zero` re-rounding of a non-negative 19-digit `Number` to 16 digits gives exactly
+`⌊M / 1000⌋ · 10^(e + 3)` at output exponent `e + 3`. -/
 theorem normalizeToRange_16_floor_pos (n : Number) (mant : Int64) (exp : Int) (mode : rounding_mode)
     (hmode : mode = .downward ∨ mode = .towards_zero)
     (hnf : n.negative_ = false)

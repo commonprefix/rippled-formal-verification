@@ -5,16 +5,13 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.RoundsToRepresentable
 
+/-! # Exact results of rounding operations
+
+An operation that rounds to a neighbouring `Number` returns a value that already is a `Number` unchanged, in every
+mode, since both neighbours of such a value are the value itself. This file states it for addition of opposite signs,
+with the uniqueness lemmas for normalized `Number`s it needs. -/
 
 namespace XRPL.Model.Protocol
-
-/-! # Exactness corollaries of the discrete-rounding program
-
-A correctly/faithfully rounded operation returns an exactly representable
-result *exactly*, in every mode: the two grid neighbors of a grid point
-coincide with it. This file packages that for addition (the diff-sign form
-the `roundToExponent` proof needs) together with the normalized-representation
-uniqueness lemmas it rests on. -/
 
 /-- Two normalized mantissa/exponent pairs in the canonical decade denote
 different values unless they are componentwise equal. -/
@@ -81,7 +78,7 @@ lemma Number.normalized_rep_of_abs (x : Number) (hx : x.isNormalized)
       omega
     exact decade_uniq hx_lo hx_hi hm hm' h1.symm
 
-/-- The smallest positive normalized magnitude. -/
+/-- A nonzero normalized Number has magnitude at least `10^18 · 10^minExponent`, the smallest positive Number. -/
 lemma Number.abs_toRat_ge_spr (x : Number) (hx : x.isNormalized)
     (hx_ne : x.mantissa_ ≠ 0) :
     (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) ≤ |x.toRat| := by
@@ -107,7 +104,6 @@ lemma Number.abs_toRat_ge_spr (x : Number) (hx : x.isNormalized)
 /-- Normalized Numbers are injectively embedded by `toRat`. -/
 lemma Number.isNormalized.toRat_inj {x y : Number} (hx : x.isNormalized) (hy : y.isNormalized)
     (h : x.toRat = y.toRat) : x = y := by
-  -- Zero cases first.
   by_cases hx0 : x.mantissa_ = 0
   · have hx_zero : x = Number.zero := by
       rcases hx with hz | ⟨hmin, _, _, _, _⟩
@@ -137,7 +133,6 @@ lemma Number.isNormalized.toRat_inj {x y : Number} (hx : x.isNormalized) (hy : y
     have hy0 : y.mantissa_ ≠ 0 := by
       intro hm
       exact hy_ne (Number.toRat_eq_zero_of_mantissa_zero y hm)
-    -- Signs agree.
     have h_sign : x.negative_ = y.negative_ := by
       rcases hxn : x.negative_ with _ | _ <;> rcases hyn : y.negative_ with _ | _
       · rfl
@@ -173,9 +168,8 @@ lemma Number.isNormalized.toRat_inj {x y : Number} (hx : x.isNormalized) (hy : y
     simp only at h_sign hm_eq he_eq
     rw [h_sign, he_eq, UInt64.toNat_inj.mp hm_eq]
 
-/-- Witness constructor: `k · 10^s` is a (positive) normalized grid point for
-any integer `1 ≤ k < 10^16` — with three trailing zero digits and a pinned
-exponent window (the 16-digit renormalization consumes both). -/
+/-- For `1 ≤ k < 10^16`, `k · 10^s` is a positive normalized Number whose mantissa ends in three zeros and whose
+exponent lies in `[s - 18, s - 3]`. -/
 lemma exists_normalized_of_int_mul_pow (k : ℕ) (s : ℤ)
     (hk : 1 ≤ k) (hk' : k < 10 ^ 16)
     (hs_lo : minExponent + 18 ≤ s) (hs_hi : s ≤ maxExponent) :
@@ -269,7 +263,7 @@ private lemma operator_eq_refl (x : Number) : x.operator_eq x = true := by
   simp
 
 /-- Diff-sign addition with an exactly representable sum returns it exactly,
-in **every** rounding mode: the two grid neighbors of a grid point coincide. -/
+in every rounding mode: the two grid neighbors of a grid point coincide. -/
 theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_ne : x.mantissa_ ≠ 0) (hy_ne : y.mantissa_ ≠ 0)

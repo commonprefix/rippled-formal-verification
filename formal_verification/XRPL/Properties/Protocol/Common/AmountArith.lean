@@ -3,11 +3,9 @@ import XRPL.Model.Protocol.Number
 
 /-! # Shared `Int64`/`ℤ` arithmetic helpers for the integer amount types
 
-`XRPAmount` and `MPTAmount` are both single signed `Int64` wrappers with identical
-raw arithmetic and an identical `mulRatio` (truncated divide, `±1` rounding nudge,
-overflow error, underflow saturation). These generic `Int64`/`ℤ` facts are shared by both proof trees: the
-no-overflow `bmod` collapse, the `Int.toInt64` round-trip, and the floor/ceil
-brackets behind `mulRatio` rounding. -/
+`Int64` arithmetic whose exact result is in the `Int64` range does not wrap, and `Int.toInt64` gives such
+values back unchanged. The file also has the floor and ceiling brackets behind `mulRatio` rounding and facts about
+whole rational numbers. -/
 
 namespace XRPL.Model.Protocol.AmountArith
 
@@ -15,8 +13,8 @@ namespace XRPL.Model.Protocol.AmountArith
 lemma _root_.UInt32.toNat_eq_zero_iff (a : UInt32) : a.toNat = 0 ↔ a = 0 := by
   rw [← UInt32.toNat_inj]; rfl
 
-/-- An `Int64`-range integer is its own balanced residue mod `2⁶⁴`. The no-overflow
-collapse of `Int64.toInt_{add,sub,neg,mul}`. -/
+/-- An integer in the `Int64` range is unchanged by `bmod 2^64`, so an `Int64` add, sub, neg or mul whose exact
+result is in that range does not wrap. -/
 lemma toInt_bmod_self {n : ℤ}
     (h_lo : Int64.minValue.toInt ≤ n) (h_hi : n ≤ Int64.maxValue.toInt) :
     n.bmod (2 ^ 64) = n := by
@@ -58,10 +56,8 @@ lemma rat_ceil_bracket {m d r : ℤ} (hd : 0 < d)
   · rw [div_le_iff₀ hdQ]; exact_mod_cast h1
   · rw [lt_div_iff₀ hdQ]; exact_mod_cast h2
 
-/-- **Integer bracket for the `mulRatio` rounding choice.**
-With `d > 0`, the rounded quotient `r` brackets the exact ratio `m / d`:
-floor when `roundUp = false`, ceil when `roundUp = true`. `neg` is the truncation
-sign flag, which the caller links to the sign of `m`. -/
+/-- Integer bracket for the `mulRatio` rounding choice. With `d > 0`, `r` is the floor of `m / d` when
+`roundUp = false` and the ceil when `roundUp = true`. `neg` is the truncation sign flag (the sign of `m`). -/
 lemma mulRatio_int_bracket (m d r : ℤ) (hd : 0 < d) (roundUp neg : Bool)
     (hneg_lo : m < 0 → neg = true) (hneg_hi : 0 < m → neg = false)
     (hr : r = if m.tmod d ≠ 0 then

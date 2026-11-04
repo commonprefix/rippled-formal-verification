@@ -1,5 +1,4 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
--- Discrete-grid rounding identification for `operator_add` under `.towards_zero`.
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.TowardsZero.BoundProof
 import XRPL.Properties.Protocol.Number.Add.RoundsWithin
@@ -21,7 +20,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
     ∀ m : Number, m.isNormalized →
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat + y.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · -- Same-sign: the facts bundle is frame-ready.
+  · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ, _, _, _⟩ :=
       operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
@@ -32,7 +31,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
       h_le
-  · -- Diff-sign: through the `doNormalize128` keystone.
+  · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
       operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy

@@ -70,10 +70,8 @@ lemma operator_add_to_nearest_witness :
   rw [h_rup2]
   simp only [RoundResult.toNumber]
 
-/-- The bound `5/(2^63 + 7)` is attained exactly, so it is the tight supremum.
-Witness: `x = 5e18`, `y = 4223372036854775815`. Sum = `9223372036854775815 = 2^63 + 7`.
-After scaleDown: mantissa at `floor + 1` (odd), guard digit = 5 → tie-to-even rounds up.
-Error = 5, relative = `5/(2^63 + 7)`. -/
+/-- The bound `5/(2^63 + 7)` is attained exactly by `x = 5e18`, `y = 4223372036854775815`, whose sum `2^63 + 7`
+ties at an odd mantissa and rounds up by 5. -/
 theorem operator_add_to_nearest_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧

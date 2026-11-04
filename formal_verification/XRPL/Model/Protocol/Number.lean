@@ -135,7 +135,7 @@ def Guard.doDropDigit (g : Guard) (mantissa : UInt64) (exponent : Int) : Guard �
 def Guard.doDropDigit128 (g : Guard) (mantissa : UInt128) (exponent : Int) : Guard × UInt128 × Int :=
   (g.push (toUInt64 (mantissa % 10)), mantissa / 10, exponent + 1)
 
--- no recoverable digits in the guard; xbit_ may still record that one was dropped
+-- no recoverable digits in the guard, but xbit_ may still record that one was dropped
 def Guard.unrecoverable (g : Guard) : Bool := g.digits_ == 0
 
 def Guard.empty (g : Guard) : Bool := g.unrecoverable && !g.xbit_
@@ -209,11 +209,9 @@ def Guard.pushOverflow (g : Guard) (mantissa : UInt64) (mode : rounding_mode) : 
                 let r := g.round mode
                 if r == 1 || (r == 0 && mantissa == midpoint) then mantissa + 1 else mantissa
             else mantissa
-        if mantissa == maxRep then g
-        else
-            let diff := mantissa - maxRep
-            let digit := (diff * 10) / spread
-            g.push digit
+        let diff := mantissa - maxRep
+        let digit := (diff * 10) / spread
+        g.push digit
     else
         g
 
@@ -305,8 +303,8 @@ def Number.normalized (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   (Number.unchecked negative mantissa exponent).normalize minMant maxMant mode
 
--- C++ `Number(rep mantissa, int exponent)` — the signed-int64 entry-point ctor.
--- `rep = std::int64_t`; sign + magnitude split happens inside via `externalToInternal`.
+-- C++ `Number(rep mantissa, int exponent)`, the signed-int64 entry-point ctor.
+-- `rep = std::int64_t`, and `externalToInternal` splits it into sign and magnitude.
 def Number.from_rep (mantissa : Int64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   Number.normalized (mantissa < 0) mantissa.toInt.natAbs.toUInt64 exponent minMant maxMant mode
@@ -325,7 +323,7 @@ def Number.truncateAux (m : UInt64) (e : Int) : UInt64 × Int :=
 termination_by (-e).toNat
 decreasing_by omega
 
--- Round toward zero to an integer. Sign is preserved; the exponent is ≥ 0 afterwards
+-- Round toward zero to an integer. Sign is preserved. The exponent is ≥ 0 afterwards,
 -- so re-normalization neither rounds nor throws (mode is inert).
 def Number.truncate (n : Number) : Except Error Number :=
   if n.exponent_ ≥ 0 ∨ n.mantissa_ = 0 then
@@ -534,7 +532,6 @@ def Number.operator_add (x y : Number)
           else (m, e, g)
       let (zm128, ze, g) := recover zm128 ze g 40
       -- doRoundDown (Enabled330): borrow 1 unless the guard is exactly empty.
-      -- DELIBERATE DEVIATION from the vendored C++ (PR 7389 head)
       let stickyTail := !g.empty
       let zm128 := if g.empty then zm128 else zm128 - 1
       doNormalize128 zn zm128 ze largeRange.min largeRange.max mode stickyTail

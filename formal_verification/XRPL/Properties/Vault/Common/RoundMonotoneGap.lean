@@ -3,15 +3,10 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
-/-! # Normalized minimal-relative-gap lemma
+/-! # Normalized minimal relative gap
 
-The novel arithmetic core resolving the cusp exact-tie in the vault monotonicity
-proofs. Two distinct positive normalized `Number`s never sit closer than one
-coarsest ULP apart in *relative* terms: `maxRep · (b − a) ≥ a`, i.e. the relative
-gap is at least `1 / maxRep`. Since `1 / maxRep > 1 / (maxRep + ½) = 10^e / t` at
-the cusp tie `t = (maxRep + ½)·10^e`, a larger normalized product jumps clear over
-the sub-tie window, which defeats the (real) non-monotonicity of `doRoundUp` at the
-cusp. -/
+Two distinct positive normalized `Number`s are at least `1 / maxRep` apart in relative terms. A larger exact value
+therefore never rounds back below the cusp tie of a smaller one. -/
 
 namespace XRPL.Model.Protocol
 
@@ -20,13 +15,9 @@ lemma toRat_pos_val (n : Number) (hpos : 0 < n.toRat) :
     n.toRat = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := by
   rw [← abs_of_pos hpos]; exact abs_toRat_eq n
 
-/-- **Normalized minimal relative gap.** Two positive normalized numbers with
-`a < b` satisfy `a ≤ maxRep · (b − a)`. Proof: `b` skips the open unit-cell above
-`a`. When `a`'s mantissa `M ≤ maxRep`, the cell is `(M·10^E, (M+1)·10^E)`; when
-`M > maxRep` (so `M % 10 = 0`), rescale one decade up and the cell is
-`(M·10^E, (M+10)·10^E)`. In both cases `no_normalized_in_open_ulp_gap_pos_zm`
-excludes `b`, forcing `b ≥` the cell top, whence the bound. -/
-theorem normalized_gap_bound (a b : Number)
+/-- Two positive normalized numbers with `a < b` satisfy `a ≤ maxRep · (b − a)`. The larger one cannot sit inside the
+open unit cell above `a`. -/
+lemma normalized_gap_bound (a b : Number)
     (ha : a.isNormalized) (hb : b.isNormalized)
     (hapos : 0 < a.toRat) (hlt : a.toRat < b.toRat) :
     a.toRat ≤ (maxRepNat : ℚ) * (b.toRat - a.toRat) := by
@@ -48,7 +39,7 @@ theorem normalized_gap_bound (a b : Number)
     · exact h.2.2.1
   by_contra hcon
   push Not at hcon
-  rw [ha_val] at hcon  -- hcon : maxRepNat * (b.toRat - MA*10^EA) < MA*10^EA
+  rw [ha_val] at hcon
   by_cases hle : MA ≤ maxRepNat
   · -- M ≤ maxRep: cell (M·10^E, (M+1)·10^E)
     have hM_le : (MA : ℚ) ≤ (maxRepNat : ℚ) := by exact_mod_cast hle
@@ -58,7 +49,7 @@ theorem normalized_gap_bound (a b : Number)
     have hb_lo : (MA : ℚ) * 10 ^ EA < b.toRat := by rw [← ha_val]; exact hlt
     exact no_normalized_in_open_ulp_gap_pos_zm EA MA (by omega) (by omega) b hb hbpos hb_lo hb_hi
   · -- M > maxRep so M % 10 = 0: rescale, cell (M·10^E, (M+10)·10^E)
-    push Not at hle  -- hle : maxRepNat < MA
+    push Not at hle
     have hmod : MA % 10 = 0 := by
       rcases hcusp with h | h
       · exfalso; have := UInt64.le_iff_toNat_le.mp h; rw [maxRep_val] at this; omega

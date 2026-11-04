@@ -1,0 +1,573 @@
+import XRPL.Properties.Vault.Proofs.PerShareValue
+import XRPL.Properties.Vault.Proofs.ClawbackShareFloor
+import XRPL.Properties.Vault.Proofs.WithdrawUpdates
+import XRPL.Properties.Vault.Proofs.DepositChargeFloor
+
+/-! # Withdrawals and clawbacks that keep the per-share value
+
+On a reachable vault a withdrawal or a clawback whose shares are worth a whole number of base units takes at most
+that worth, so the per-share value of the shares that remain does not drop. -/
+
+namespace XRPL.Model.SingleAssetVault
+
+open XRPL.Model.Protocol
+
+open private Vault.withdrawNav_of_cash Vault.withdrawNav_le_total from XRPL.Properties.Vault.Proofs.PerShareValue
+
+/-- A debit of at most the burned shares' worth keeps the net asset value per share. -/
+private lemma debit_le_worth (A S x π : ℚ) (hS : 0 < S) (hπ : π ≤ A * x / S) : (A - π) * S ≥ A * (S - x) := by
+  have h1 : π * S ≤ A * x := by
+    have := mul_le_mul_of_nonneg_right hπ hS.le
+    rwa [div_mul_cancel₀ _ hS.ne'] at this
+  nlinarith
+
+/-- Proof of `Vault.withdraw_no_dilution`. -/
+lemma Vault.Reachable.withdraw_no_dilution_intended_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
+    (t t0 : UInt32) (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
+    (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
+  have hz := Vault.Reachable.openZone_proof v t0 hr hmax
+  obtain ⟨hsic, hs64, hspos⟩ := Vault.withdraw_shares_form v amount waive t hpos hc hty r hok
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨hAA', hz'⟩ := Vault.withdraw_openZone v amount waive t hpos hz hmax r hok
+  have hST' := Vault.withdraw_exact_sharesTotal v amount waive t hpos hc hty r hok
+  have hcast := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
+  have hS'0 : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  rw [hST', hcast] at hS'0
+  have hI := hz.idealAssetsWithdraw_eq waive r.shares.toRat
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST', hcast]
+  have hSpos : 0 < v.sharesTotal.toRat := by linarith
+  refine debit_le_worth _ _ _ _ hSpos ?_
+  rw [← hI]
+  rcases lt_or_eq_of_le (show r.shares.toRat ≤ v.sharesTotal.toRat by linarith) with hlt | hfin
+  · -- shares remain: the payout is at most the price, which is at most the worth
+    obtain ⟨priced, hpr, hpay, -⟩ :=
+      Vault.withdraw_payout_proof v amount waive t t0 hpos hr hc hty hmax r hok (by rw [hcast]; exact hlt)
+    have hpc := Vault.Reachable.sharesToAssetsWithdraw_le_cash v t0 hr hmax r.shares priced waive hspos.le hsc
+      (by rw [hcast]; exact hlt.le) hpr
+    have hle := hz.priced_le_worth hmax r.shares priced waive hspos.le hsc hpr hpc hworth
+    have hp0 := (Vault.sharesToAssetsWithdraw_bounds_proof v r.shares priced waive hspos.le hsc
+      (Vault.Reachable.withdrawNavExact_proof v t0 hr waive) hpr).1
+    have hρ := Vault.earlyExitFeeRateAt_le v t
+    have hρ' : (0 : ℚ) ≤ (v.earlyExitFeeRateAt t).toNat / 100000 := by positivity
+    have hρ1 : ((v.earlyExitFeeRateAt t).toNat : ℚ) / 100000 ≤ 1 := by
+      rw [div_le_one (by norm_num)]; exact_mod_cast hρ
+    nlinarith
+  · -- the final withdrawal pays exactly the worth of every share
+    exact le_of_eq (Vault.withdraw_final_payout_proof v amount waive t t0 hpos hr hc hty hmax r hok
+      (by rw [hcast]; exact hfin))
+
+/-- Proof of `Vault.clawback_no_dilution`. -/
+lemma Vault.Reachable.clawback_no_dilution_intended_proof (v : Vault) (assets holderShares : STAmount)
+    (waive : Bool) (t0 : UInt32) (hnn : 0 ≤ assets.toRat) (hr : Vault.Reachable v t0)
+    (hc : assets.CanonicalOrZero) (hhs : holderShares.ShareBalance)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
+  have hz := Vault.Reachable.openZone_proof v t0 hr hmax
+  obtain ⟨rec, hcp, hsnz, -⟩ := Vault.clawback_recovery_cases v assets holderShares waive hnn r hok
+  obtain ⟨hsic, hs64, hs0, -⟩ := hcp.form hc hnn hhs hmax
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨priced, hpr, -, -, hple, -, hrle, -⟩ :=
+    Vault.clawback_recovery_le v assets holderShares waive hnn hmax r hok (Or.inl hsc) hs0
+  have hle := hz.priced_le_worth hmax r.shares priced waive hs0 hsc hpr hple hworth
+  obtain ⟨hAA', hz'⟩ := Vault.clawback_openZone v assets holderShares waive hnn hc hhs hmax hz r hok
+  have hST' := Vault.clawback_exact_sharesTotal v assets holderShares waive hnn hc hhs hmax r hok
+  have hcast := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
+  have hS'0 : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  rw [hST', hcast] at hS'0
+  have hI := hz.idealAssetsWithdraw_eq waive r.shares.toRat
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST', hcast]
+  have hspos : 0 < r.shares.toRat := by
+    rcases lt_or_eq_of_le hs0 with h | h
+    · exact h
+    · exact absurd h.symm (STAmount.toRat_ne_zero _ (by simpa [STAmount.isZero] using hsnz))
+  have hSpos : 0 < v.sharesTotal.toRat := by linarith
+  refine debit_le_worth _ _ _ _ hSpos ?_
+  rw [← hI]
+  exact le_trans hrle hle
+
+/-- A deposit's charge times the share total, from a charge priced at least at the issued shares' worth at the
+computed total: at least that worth times the share total. -/
+lemma Vault.deposit_charge_mul_of_ge (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (hcanon : amountDeposit.Canonical) (navN : Number)
+    (hat : v.assetsTotal = .ok navN) (r : VaultWithAmounts)
+    (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
+    (hge : v.idealChargeDepositAt navN.toRat r.shares.toRat ≤ r.assets.toRat) :
+    navN.toRat * r.shares.toRat ≤ r.assets.toRat * (v.toExact.sharesTotal : ℚ) := by
+  obtain ⟨-, priced, navN', -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, hat', hcl, -⟩ :=
+    DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
+  rw [hat, Except.ok.injEq] at hat'
+  subst hat'
+  have hc0 := DepAcc.Vault.deposit_charge_nonneg v r.shares priced r.assets navN hshc hshnt hshpos hsad hcl
+  have hS0 : (0 : ℚ) ≤ (v.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  by_cases hmz : navN.mantissa_ = 0
+  · rw [Number.toRat_eq_zero_of_mantissa_zero navN hmz, zero_mul]
+    exact mul_nonneg hc0 hS0
+  have hnpos := (Vault.assetsTotal_pos v navN hat hmz).2
+  have hSpos : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by
+    have hne : v.toExact.sharesTotal ≠ 0 := fun h0 => by
+      have := Vault.exact_assetsTotal_eq_zero v h0
+      linarith [Vault.assetsTotal_le_exact v navN hat]
+    exact_mod_cast Nat.pos_of_ne_zero hne
+  have hI : v.idealChargeDepositAt navN.toRat r.shares.toRat =
+      navN.toRat * r.shares.toRat / (v.toExact.sharesTotal : ℚ) := by
+    unfold RawVault.idealChargeDepositAt
+    rw [if_neg (ne_of_gt hnpos)]
+  rw [hI, div_le_iff₀ hSpos] at hge
+  exact hge
+
+/-- A deposit's charge times a positive share total, from a charge short of the issued shares' worth by less than
+one step: strictly above that worth less one step per existing share. -/
+lemma Vault.deposit_charge_mul_strict (v : Vault) (navN : Number) (shares charge : ℚ) (g : ℤ)
+    (hS : (0 : ℚ) < (v.toExact.sharesTotal : ℚ)) (hc0 : 0 ≤ charge)
+    (hg : v.idealChargeDepositAt navN.toRat shares - (10 : ℚ) ^ g < charge) :
+    navN.toRat * shares - (10 : ℚ) ^ g * (v.toExact.sharesTotal : ℚ) < charge * (v.toExact.sharesTotal : ℚ) := by
+  unfold RawVault.idealChargeDepositAt at hg
+  split_ifs at hg with hn
+  · -- a zero total prices nothing
+    rw [hn, zero_mul, zero_sub]
+    have hg0 : (0 : ℚ) < 10 ^ g := zpow_pos (by norm_num) _
+    nlinarith [mul_pos hg0 hS, mul_nonneg hc0 hS.le]
+  · have := mul_lt_mul_of_pos_right hg hS
+    have heq : (navN.toRat * shares / (v.toExact.sharesTotal : ℚ) - 10 ^ g) * (v.toExact.sharesTotal : ℚ) =
+        navN.toRat * shares - 10 ^ g * (v.toExact.sharesTotal : ℚ) := by field_simp
+    linarith
+
+/-- Proof of `Vault.deposit_no_dilution`. -/
+lemma Vault.Reachable.deposit_no_dilution_intended_proof (v : Vault) (amountDeposit : STAmount) (t t0 : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (hr : Vault.Reachable v t0) (hcanon : amountDeposit.Canonical)
+    (hty : amountDeposit.mNumericType = v.numericType)
+    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
+    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1) :
+    ((0 : ℚ) < (v.toExact.sharesTotal : ℚ) →
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) >
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) -
+          (10 : ℚ) ^ v.baseExponent * (v.toExact.sharesTotal : ℚ)) ∧
+    ((∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) →
+      v.numericType.isIntegral = true →
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ)) := by
+  have hz := Vault.Reachable.openZone_proof v t0 hr (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty)
+  obtain ⟨hAA', hz'⟩ := Vault.deposit_openZone v amountDeposit false t hpos hcanon hty hz r hok
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r hok hSsz
+  have hI : v.idealChargeDepositAt v.assetsAvailable.toRat r.shares.toRat = v.idealChargeDeposit r.shares.toRat := by
+    rw [← hz.depositNav_eq, RawVault.idealChargeDepositAt_depositNav]
+  obtain ⟨-, h2, -, -, hw⟩ := Vault.Reachable.deposit_charge_intended_proof v amountDeposit t t0 hpos hr hcanon r hok
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST']
+  refine ⟨fun hS => ?_, fun hworth hint => ?_⟩
+  · have := Vault.deposit_charge_mul_strict v v.assetsAvailable r.shares.toRat r.assets.toRat v.baseExponent hS
+      (Vault.deposit_charge_form v amountDeposit false t hpos hcanon hty r hok).2.2 (by rw [hI]; exact h2)
+    nlinarith
+  · have := Vault.deposit_charge_mul_of_ge v amountDeposit t hpos hcanon v.assetsAvailable hz.assetsTotal_eq r hok
+      (by rw [hI]; exact (hw hworth).2 hint)
+    nlinarith
+
+/-- Proof of the valid-vault line of `Vault.deposit_no_dilution`. -/
+lemma Vault.deposit_no_dilution_intended_total_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (assetsTotal : Number) (hat : v.assetsTotal = .ok assetsTotal) (hpos : 0 < amountDeposit.toRat)
+    (hcanon : amountDeposit.Canonical)
+    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
+    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1) :
+    ((0 : ℚ) < (v.toExact.sharesTotal : ℚ) →
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) >
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) -
+          ((10 : ℚ) ^ v.baseExponent + (v.toExact.assetsTotal - assetsTotal.toRat) * r.shares.toRat /
+              (v.toExact.sharesTotal : ℚ) +
+            (v.assetsAvailable.toRat + r.assets.toRat - r.vault'.assetsAvailable.toRat)) *
+            (v.toExact.sharesTotal : ℚ)) ∧
+    ((∃ k : ℤ, v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
+      v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent →
+      v.numericType.isIntegral = true →
+      r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
+        v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) -
+          ((v.toExact.assetsTotal - assetsTotal.toRat) * r.shares.toRat / (v.toExact.sharesTotal : ℚ) +
+            (v.assetsAvailable.toRat + r.assets.toRat - r.vault'.assetsAvailable.toRat)) *
+            (v.toExact.sharesTotal : ℚ)) := by
+  have hty := Vault.deposit_amount_numericType v amountDeposit t hpos hcanon r hok
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r hok hSsz
+  obtain ⟨aa', st', hv⟩ := Vault.deposit_frame v _ _ _ _ r hok
+  have hN' := Vault.withdrawNav_of_cash v r.vault' aa' st' hv
+  have h5 := (Vault.deposit_charge_at_proof v amountDeposit t hcanon hpos assetsTotal hat r hok).2.2.2.2
+  rw [hN', hST']
+  have hS0 : (0 : ℚ) ≤ (v.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  have hs0 : 0 ≤ r.shares.toRat := by
+    obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
+      DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
+    exact hshpos.le
+  have hNT := Vault.withdrawNav_le_total v
+  have hTc := Vault.assetsTotal_le_exact v assetsTotal hat
+  have hnav0 : 0 ≤ assetsTotal.toRat :=
+    le_trans v.exact.assetsDeployed_nonneg (Vault.assetsTotal_ge_deployed v _ hat).2
+  -- the residue of the computed total, per existing share, covers the price it leaves out
+  have hres : (v.toExact.assetsTotal - assetsTotal.toRat) * r.shares.toRat ≤
+      (v.toExact.assetsTotal - assetsTotal.toRat) * r.shares.toRat / (v.toExact.sharesTotal : ℚ) *
+        (v.toExact.sharesTotal : ℚ) := by
+    rcases eq_or_lt_of_le hS0 with hSz | hSpos
+    · have hz0 : v.toExact.sharesTotal = 0 := by exact_mod_cast hSz.symm
+      have h0 := Vault.exact_assetsTotal_eq_zero v hz0
+      have : v.toExact.assetsTotal - assetsTotal.toRat = 0 := by linarith
+      rw [this]; simp
+    · rw [div_mul_cancel₀ _ hSpos.ne']
+  refine ⟨fun hS => ?_, fun hworth hsmall hint => ?_⟩
+  · have hmul := Vault.deposit_charge_mul_strict v assetsTotal r.shares.toRat r.assets.toRat v.baseExponent hS
+      (Vault.deposit_charge_form v amountDeposit false t hpos hcanon hty r hok).2.2 h5
+    nlinarith [mul_nonneg (sub_nonneg.mpr hNT) hs0]
+  · have hb : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
+    obtain ⟨hw, -⟩ := Vault.deposit_charge_worth v amountDeposit t hcanon hpos assetsTotal hat r hok (by nlinarith)
+    have hmul := Vault.deposit_charge_mul_of_ge v amountDeposit t hpos hcanon assetsTotal hat r hok
+      ((hw hworth).2 hint)
+    nlinarith [mul_nonneg (sub_nonneg.mpr hNT) hs0]
+
+/-- The cash, converted to the asset to nearest, stays at or below itself when it is a whole number of base units
+within the Open limit. -/
+private lemma cash_payout_le_of_grid (v : Vault)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (π : STAmount) (hok : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok π)
+    (k : ℤ) (hk : v.assetsAvailable.toRat = k * 10 ^ v.baseExponent)
+    (hsmall : v.assetsAvailable.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
+    π.toRat ≤ v.assetsAvailable.toRat := by
+  have hA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  by_cases hm : π.mValue = 0
+  · rw [(STAmount.toRat_eq_zero_iff _).mpr hm]; exact hA0
+  have hh := abs_le.mp (STAmount.ofNumber_to_nearest_within_half _ _ _ v.wf.assetsAvailable_norm hA0 hok hm)
+  obtain ⟨hcz, hty⟩ := STAmount.ofNumber_canonicalOrZero _ _ _ _ hmax hok
+  have hcan : π.Canonical := hcz.resolve_right (by simpa [STAmount.isZero] using hm)
+  have hu : (0 : ℚ) < 10 ^ π.exponent := zpow_pos (by norm_num) _
+  have hπ0 : 0 ≤ π.toRat := STAmount.ofNumber_nonneg _ _ _ _ v.wf.assetsAvailable_norm
+    (Number.negative_false_of_nonneg _ v.wf.assetsAvailable_norm hA0) hok
+  have hπpos : 0 < π.toRat := lt_of_le_of_ne hπ0 (Ne.symm (STAmount.toRat_ne_zero _ hm))
+  have hπv : π.toRat = (π.mValue.toNat : ℚ) * 10 ^ π.exponent :=
+    STAmount.toRat_of_nonneg π (STAmount.mIsNegative_false_of_pos π hπpos)
+  have heb : π.exponent ≤ v.baseExponent := by
+    by_cases hint : v.numericType.isIntegral = true
+    · have hic : π.IntegralCanonical := (hcan.1 (by unfold STAmount.integral; rw [hty]; exact hint)).1
+      have he : π.exponent = 0 := hic.offset_zero
+      rw [he, (Vault.baseExponent_bounds v).2.2 hint]
+    have hvfr : v.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
+    have hio : π.IOUCanonical := hcan.2 (by unfold STAmount.integral; rw [hty, hvfr]; rfl)
+    have hmlo : (10 ^ 15 : ℚ) ≤ π.mValue.toNat := by exact_mod_cast hio.mant_lo
+    have hbig : 10 ^ 15 * (10 : ℚ) ^ π.exponent ≤ π.toRat := by
+      rw [hπv]; exact mul_le_mul_of_nonneg_right hmlo hu.le
+    by_contra h
+    push Not at h
+    have h1 : (10 : ℚ) ^ (v.baseExponent + 1) ≤ 10 ^ π.exponent := zpow_le_zpow_right₀ (by norm_num) (by omega)
+    have h2 : (10 : ℚ) ^ (v.baseExponent + 1) = 10 * 10 ^ v.baseExponent := by
+      rw [zpow_add_one₀ (by norm_num)]; ring
+    nlinarith
+  exact le_of_grid_lt _ k _ _ heb _ _ hπv hk (by linarith)
+
+/-- Proof of the valid-vault line of `Vault.withdraw_no_dilution`. -/
+lemma Vault.withdraw_no_dilution_intended_total_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
+    (t : UInt32) (netAssetValue : Number) (hnav : v.assetsTotalForWithdrawal waive = .ok netAssetValue)
+    (hpos : 0 < amount.amount.toRat) (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat = k * 10 ^ v.baseExponent)
+    (hsmall : v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
+      v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) -
+        (v.assetsAvailable.toRat - r.assets.toRat - r.vault'.assetsAvailable.toRat) * (v.toExact.sharesTotal : ℚ) -
+        (netAssetValue.toRat - v.withdrawNav) * r.shares.toRat := by
+  obtain ⟨hsic, hs64, hspos⟩ := Vault.withdraw_shares_form v amount waive t hpos hc hty r hok
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨aa', st', hv⟩ := Vault.withdraw_frame v _ _ _ _ r hok
+  have hN' := Vault.withdrawNav_of_cash v r.vault' aa' st' hv
+  have hST' := Vault.withdraw_exact_sharesTotal v amount waive t hpos hc hty r hok
+  have hS'0 : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  have hSpos : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by linarith
+  have hI : v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat =
+      netAssetValue.toRat * r.shares.toRat / (v.toExact.sharesTotal : ℚ) := rfl
+  -- the payout is at most the burned shares' worth at the computed value
+  have hπ : r.assets.toRat ≤ netAssetValue.toRat * r.shares.toRat / (v.toExact.sharesTotal : ℚ) := by
+    rw [← hI]
+    rcases lt_or_eq_of_le (show r.shares.toRat ≤ (v.toExact.sharesTotal : ℚ) by linarith) with hlt | hfin
+    · obtain ⟨priced, hpr, hpay⟩ := Vault.withdraw_payout_le_proof v amount waive t hpos hc hty hmax r hok hlt
+      have hle := Vault.priced_le_worth_total v hmax r.shares priced waive netAssetValue hnav hspos.le hsc hpr hsmall
+        hworth
+      have hp0 := (Vault.sharesToAssetsWithdraw_total_proof v r.shares priced waive netAssetValue hnav hspos.le hsc
+        hpr).1
+      have hρ := Vault.earlyExitFeeRateAt_le v t
+      have hρ' : (0 : ℚ) ≤ (v.earlyExitFeeRateAt t).toNat / 100000 := by positivity
+      have hρ1 : ((v.earlyExitFeeRateAt t).toNat : ℚ) / 100000 ≤ 1 := by
+        rw [div_le_one (by norm_num)]; exact_mod_cast hρ
+      nlinarith
+    · -- the final withdrawal: nothing is deployed, so the vault prices at the cash and pays it out
+      have hraw := (Vault.withdraw_final_iff_proof v amount waive t hpos hc hty r hok).mp hfin
+      have hAD : v.assetsDeployed = Number.zero := by
+        have h0 := (r.vault'.valid.empty_shares (by rw [hraw])).2
+        rw [hraw] at h0
+        exact h0
+      have hnavAA : netAssetValue = v.assetsAvailable := by
+        rw [Vault.assetsTotalForWithdrawal_of_noLending v hAD waive] at hnav
+        exact (Except.ok.inj hnav).symm
+      have hpay := Vault.withdraw_final_pays_cash v amount waive t hpos hc hty r hok hfin
+      rw [hI, hnavAA, hfin, mul_div_assoc, div_self hSpos.ne', mul_one] at hworth hsmall ⊢
+      obtain ⟨k, hk⟩ := hworth
+      exact cash_payout_le_of_grid v hmax r.assets hpay k hk hsmall
+  have h1 : r.assets.toRat * (v.toExact.sharesTotal : ℚ) ≤ netAssetValue.toRat * r.shares.toRat := by
+    have := mul_le_mul_of_nonneg_right hπ hSpos.le
+    rwa [div_mul_cancel₀ _ hSpos.ne'] at this
+  rw [hN', hST']
+  nlinarith
+
+/-- Proof of the valid-vault line of `Vault.clawback_no_dilution`. -/
+lemma Vault.clawback_no_dilution_intended_total_proof (v : Vault) (assets holderShares : STAmount) (waive : Bool)
+    (netAssetValue : Number) (hnav : v.assetsTotalForWithdrawal waive = .ok netAssetValue)
+    (hnn : 0 ≤ assets.toRat) (hc : assets.CanonicalOrZero) (hhs : holderShares.ShareBalance)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat = k * 10 ^ v.baseExponent)
+    (hsmall : v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥
+      v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) -
+        (v.assetsAvailable.toRat - r.assets.toRat - r.vault'.assetsAvailable.toRat) * (v.toExact.sharesTotal : ℚ) -
+        (netAssetValue.toRat - v.withdrawNav) * r.shares.toRat := by
+  obtain ⟨rec, hcp, hsnz, -⟩ := Vault.clawback_recovery_cases v assets holderShares waive hnn r hok
+  obtain ⟨hsic, hs64, hs0, -⟩ := hcp.form hc hnn hhs hmax
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  have hspos : 0 < r.shares.toRat := lt_of_le_of_ne hs0 (Ne.symm (STAmount.toRat_ne_zero _
+    (by simpa [STAmount.isZero] using hsnz)))
+  have hST' := Vault.clawback_exact_sharesTotal v assets holderShares waive hnn hc hhs hmax r hok
+  have hS'0 : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  have hSpos : (0 : ℚ) < (v.toExact.sharesTotal : ℚ) := by linarith
+  obtain ⟨priced, hpr, -, -, -, -, hrle, -⟩ :=
+    Vault.clawback_recovery_le v assets holderShares waive hnn hmax r hok (Or.inl hsc) hs0
+  have hle := Vault.priced_le_worth_total v hmax r.shares priced waive netAssetValue hnav hs0 hsc hpr hsmall hworth
+  have hI : v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat =
+      netAssetValue.toRat * r.shares.toRat / (v.toExact.sharesTotal : ℚ) := rfl
+  rw [hI] at hle
+  obtain ⟨aa', st', hv⟩ := Vault.clawback_frame v _ _ _ _ r hok
+  have hN' := Vault.withdrawNav_of_cash v r.vault' aa' st' hv
+  have h1 : r.assets.toRat * (v.toExact.sharesTotal : ℚ) ≤ netAssetValue.toRat * r.shares.toRat := by
+    have := mul_le_mul_of_nonneg_right (le_trans hrle hle) hSpos.le
+    rwa [div_mul_cancel₀ _ hSpos.ne'] at this
+  rw [hN', hST']
+  nlinarith
+
+/-- A non-final withdrawal from an Open-zone vault, whose burned shares are worth a whole number of base units,
+keeps the per-share value. -/
+lemma Vault.OpenZone.withdraw_keeps_perShare {v : Vault} (hz : v.OpenZone)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat)
+    (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
+    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
+    (hlt : r.shares.toRat < (v.toExact.sharesTotal : ℚ))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
+  obtain ⟨hsic, hs64, hspos⟩ := Vault.withdraw_shares_form v amount waive t hpos hc hty r hok
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨hAA', hz'⟩ := Vault.withdraw_openZone v amount waive t hpos hz hmax r hok
+  have hST' := Vault.withdraw_exact_sharesTotal v amount waive t hpos hc hty r hok
+  have hcast := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
+  have hI := hz.idealAssetsWithdraw_eq waive r.shares.toRat
+  obtain ⟨priced, hpr, hpay⟩ := Vault.withdraw_payout_le_proof v amount waive t hpos hc hty hmax r hok hlt
+  have hpc := hz.sharesToAssetsWithdraw_le_cash hmax r.shares priced waive hspos.le hsc hlt.le hpr
+  have hle := hz.priced_le_worth hmax r.shares priced waive hspos.le hsc hpr hpc hworth
+  have hp0 := (Vault.sharesToAssetsWithdraw_bounds_proof v r.shares priced waive hspos.le hsc
+    (hz.withdrawNavExact waive) hpr).1
+  have hρ := Vault.earlyExitFeeRateAt_le v t
+  have hρ' : (0 : ℚ) ≤ (v.earlyExitFeeRateAt t).toNat / 100000 := by positivity
+  have hρ1 : ((v.earlyExitFeeRateAt t).toNat : ℚ) / 100000 ≤ 1 := by
+    rw [div_le_one (by norm_num)]; exact_mod_cast hρ
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST', hcast]
+  have hSpos : 0 < v.sharesTotal.toRat := by rw [← hcast]; linarith
+  refine debit_le_worth _ _ _ _ hSpos ?_
+  rw [← hI]
+  nlinarith
+
+/-- A clawback from an Open-zone vault, whose destroyed shares are worth a whole number of base units, keeps the
+per-share value. -/
+lemma Vault.OpenZone.clawback_keeps_perShare {v : Vault} (hz : v.OpenZone)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (assets holderShares : STAmount) (waive : Bool) (hnn : 0 ≤ assets.toRat)
+    (hc : assets.CanonicalOrZero) (hhs : holderShares.ShareBalance)
+    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r))
+    (hworth : ∃ k : ℤ, v.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
+  obtain ⟨rec, hcp, hsnz, -⟩ := Vault.clawback_recovery_cases v assets holderShares waive hnn r hok
+  obtain ⟨hsic, hs64, hs0, -⟩ := hcp.form hc hnn hhs hmax
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨priced, hpr, -, -, hple, -, hrle, -⟩ :=
+    Vault.clawback_recovery_le v assets holderShares waive hnn hmax r hok (Or.inl hsc) hs0
+  have hle := hz.priced_le_worth hmax r.shares priced waive hs0 hsc hpr hple hworth
+  obtain ⟨hAA', hz'⟩ := Vault.clawback_openZone v assets holderShares waive hnn hc hhs hmax hz r hok
+  have hST' := Vault.clawback_exact_sharesTotal v assets holderShares waive hnn hc hhs hmax r hok
+  have hcast := RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
+  have hS'0 : (0 : ℚ) ≤ (r.vault'.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+  rw [hST', hcast] at hS'0
+  have hI := hz.idealAssetsWithdraw_eq waive r.shares.toRat
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST', hcast]
+  have hspos : 0 < r.shares.toRat := by
+    rcases lt_or_eq_of_le hs0 with h | h
+    · exact h
+    · exact absurd h.symm (STAmount.toRat_ne_zero _ (by simpa [STAmount.isZero] using hsnz))
+  have hSpos : 0 < v.sharesTotal.toRat := by linarith
+  refine debit_le_worth _ _ _ _ hSpos ?_
+  rw [← hI]
+  exact le_trans hrle hle
+
+/-- An integral deposit into an Open-zone vault, whose issued shares are worth a whole number of units, keeps the
+per-share value. -/
+lemma Vault.OpenZone.deposit_integral_keeps_perShare {v : Vault} (hz : v.OpenZone) (amountDeposit : STAmount)
+    (t : UInt32) (hpos : 0 < amountDeposit.toRat) (hcanon : amountDeposit.Canonical)
+    (hty : amountDeposit.mNumericType = v.numericType)
+    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
+    (hSsz : (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1)
+    (hint : v.numericType.isIntegral = true)
+    (hworth : ∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) :
+    r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) ≥ v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) := by
+  obtain ⟨hAA', hz'⟩ := Vault.deposit_openZone v amountDeposit false t hpos hcanon hty hz r hok
+  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit false t hpos hcanon hty r hok hSsz
+  have hI : v.idealChargeDepositAt v.assetsAvailable.toRat r.shares.toRat = v.idealChargeDeposit r.shares.toRat := by
+    rw [← hz.depositNav_eq, RawVault.idealChargeDepositAt_depositNav]
+  have h2 := (Vault.deposit_charge_at_proof v amountDeposit t hcanon hpos v.assetsAvailable hz.assetsTotal_eq r
+    hok).2.2.2.2
+  have hopen := hz.deposit_open amountDeposit false t hpos hcanon hty r hok
+  have hA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hb : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
+  have h9 : (9 : ℚ) * 10 ^ (15 + v.baseExponent) = 9 * 10 ^ 15 * 10 ^ v.baseExponent := by
+    rw [zpow_add₀ (by norm_num)]; norm_num; ring
+  obtain ⟨hw, -⟩ := Vault.deposit_charge_worth v amountDeposit t hcanon hpos v.assetsAvailable hz.assetsTotal_eq r hok
+    (by rw [hI] at h2 ⊢; nlinarith)
+  have hge := (hw (by rw [hI]; exact hworth)).2 hint
+  have := Vault.deposit_charge_mul_of_ge v amountDeposit t hpos hcanon v.assetsAvailable hz.assetsTotal_eq r hok hge
+  rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST']
+  nlinarith
+
+/-- A cross-multiplied bound with a per-share budget is a per-share one, on positive share totals. -/
+private lemma perShare_of_cross_budget (N N' S S' b : ℚ) (hS : 0 < S) (hS' : 0 < S')
+    (h : N' * S ≥ N * S' - b * S) : N' / S' ≥ N / S - b / S' := by
+  rw [ge_iff_le, ← sub_nonneg]
+  have heq : N' / S' - (N / S - b / S') = (N' * S - (N * S' - b * S)) / (S * S') := by field_simp
+  rw [heq]
+  exact div_nonneg (by linarith) (mul_pos hS hS').le
+
+/-- Proof of `Vault.ReachableFromIn.no_dilution`. Every vault along the history stays in the Open zone, where an
+IOU deposit lowers the per-share value by less than its budget and every other step keeps it. -/
+lemma Vault.ReachableFromIn.no_dilution_intended_proof (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
+    (t : UInt32) (n : ℕ) (D : ℚ) (w : Vault) (h : Vault.ReachableFromIn true v t w n D) :
+    w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) - D := by
+  rcases Vault.Reachable.maxValue_fits_or_no_shares v t0 hr with hmax | hS
+  swap
+  · exact Vault.ReachableFromIn.no_dilution_of_no_shares true v hS t n D w h
+  have hz0 := Vault.Reachable.openZone_proof v t0 hr hmax
+  suffices H : w.OpenZone ∧ w.numericType = v.numericType ∧
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) - D from H.2.2
+  induction h with
+  | refl => exact ⟨hz0, rfl, by rw [sub_zero]⟩
+  | deposit u _ t' n D amount isDonation r hrun _ hc hty hpos hok hSsz hwhole ih =>
+    obtain ⟨hz, hnt, hP⟩ := ih
+    have hD := Vault.ReachableFromIn.budget_nonneg true _ _ _ _ _ hrun
+    obtain ⟨_, _, hv⟩ := Vault.deposit_frame u _ _ _ _ r hok
+    have hnt' : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
+    have hz' := (Vault.deposit_openZone u amount isDonation t' hpos hc hty hz r hok).2
+    refine ⟨hz', hnt'.trans hnt, ?_⟩
+    have hP0 := Vault.perShareValue_nonneg u
+    have hP0' := Vault.perShareValue_nonneg r.vault'
+    have hb : (0 : ℚ) ≤ if u.numericType.isIntegral then 0
+        else (10 : ℚ) ^ u.baseExponent / (r.vault'.toExact.sharesTotal : ℚ) := by split_ifs <;> positivity
+    -- from a vault without shares the per-share value starts at zero
+    have hS0 : (0 : ℚ) ≤ (u.toExact.sharesTotal : ℚ) := Nat.cast_nonneg _
+    rcases lt_or_eq_of_le hS0 with hSpos | hSz
+    swap
+    · rw [← hSz, div_zero] at hP
+      linarith
+    suffices hstep : r.vault'.withdrawNav / (r.vault'.toExact.sharesTotal : ℚ) ≥
+        u.withdrawNav / (u.toExact.sharesTotal : ℚ) -
+          (if u.numericType.isIntegral then 0 else (10 : ℚ) ^ u.baseExponent / (r.vault'.toExact.sharesTotal : ℚ)) by
+      linarith
+    cases isDonation with
+    | false =>
+      have hST' := Vault.deposit_exact_sharesTotal u amount false t' hpos hc hty r hok hSsz
+      have hs0 : 0 ≤ r.shares.toRat := by
+        obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
+          DepAcc.Vault.deposit_success_reduces u amount t' hpos hc r hok
+        exact hshpos.le
+      have hS'pos : 0 < (r.vault'.toExact.sharesTotal : ℚ) := by rw [hST']; linarith
+      by_cases hint : u.numericType.isIntegral = true
+      · rw [if_pos hint, sub_zero]
+        have hd := hz.deposit_integral_keeps_perShare amount t' hpos hc hty r hok hSsz hint (hwhole rfl hint)
+        have := perShare_of_cross_budget u.withdrawNav r.vault'.withdrawNav (u.toExact.sharesTotal : ℚ)
+          (r.vault'.toExact.sharesTotal : ℚ) 0 hSpos hS'pos (by rw [zero_mul, sub_zero]; exact hd)
+        rwa [zero_div, sub_zero] at this
+      · rw [if_neg hint]
+        exact perShare_of_cross_budget _ _ _ _ _ hSpos hS'pos (hz.deposit_no_dilution amount t' hpos hc hty r hok hSsz)
+    | true =>
+      obtain ⟨hlt, hSe⟩ := hz.deposit_donation_no_dilution amount t' hpos hc hty r hok
+      rw [hSe] at hb ⊢
+      have : u.withdrawNav / (u.toExact.sharesTotal : ℚ) ≤ r.vault'.withdrawNav / (u.toExact.sharesTotal : ℚ) :=
+        div_le_div_of_nonneg_right hlt.le hS0
+      linarith
+  | withdraw u _ t' n D amount holderShares waive r _ _ hc hty _ _ hpos hok _ hlt hwhole ih =>
+    obtain ⟨hz, hnt, hP⟩ := ih
+    have hmax' : u.numericType.isIntegral = true → u.numericType.maxValue.toNat ≤ maxRep.toNat := hnt ▸ hmax
+    obtain ⟨_, _, hv⟩ := Vault.withdraw_frame u _ _ _ _ r hok
+    have hnt' : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
+    have hz' := (Vault.withdraw_openZone u amount waive t' hpos hz hmax' r hok).2
+    refine ⟨hz', hnt'.trans hnt, ?_⟩
+    obtain ⟨-, -, hspos⟩ := Vault.withdraw_shares_form u amount waive t' hpos hc hty r hok
+    have hST' := Vault.withdraw_exact_sharesTotal u amount waive t' hpos hc hty r hok
+    have hSpos : 0 < (u.toExact.sharesTotal : ℚ) := by linarith
+    have hS'pos : 0 < (r.vault'.toExact.sharesTotal : ℚ) := by rw [hST']; linarith
+    have hd := hz.withdraw_keeps_perShare hmax' amount waive t' hpos hc hty r hok hlt (hwhole rfl)
+    have := perShare_of_cross_budget u.withdrawNav r.vault'.withdrawNav (u.toExact.sharesTotal : ℚ)
+      (r.vault'.toExact.sharesTotal : ℚ) 0 hSpos hS'pos (by rw [zero_mul, sub_zero]; exact hd)
+    rw [zero_div, sub_zero] at this
+    linarith
+  | clawback u _ t' n D assets holderShares waive r _ _ hc _ hhs _ hnn hok _ hlt hwhole ih =>
+    obtain ⟨hz, hnt, hP⟩ := ih
+    have hmax' : u.numericType.isIntegral = true → u.numericType.maxValue.toNat ≤ maxRep.toNat := hnt ▸ hmax
+    obtain ⟨_, _, hv⟩ := Vault.clawback_frame u _ _ _ _ r hok
+    have hnt' : r.vault'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
+    have hz' := (Vault.clawback_openZone u assets holderShares waive hnn hc hhs hmax' hz r hok).2
+    refine ⟨hz', hnt'.trans hnt, ?_⟩
+    have hST' := Vault.clawback_exact_sharesTotal u assets holderShares waive hnn hc hhs hmax' r hok
+    have hSpos : 0 < (u.toExact.sharesTotal : ℚ) := by
+      have := Nat.cast_nonneg (α := ℚ) u.toExact.sharesTotal
+      rcases lt_or_eq_of_le this with h | h
+      · exact h
+      · exfalso
+        have : r.shares.toRat < 0 := by rw [h]; exact hlt
+        obtain ⟨rec, hcp, -, -⟩ := Vault.clawback_recovery_cases u assets holderShares waive hnn r hok
+        linarith [(hcp.form hc hnn hhs hmax').2.2.1]
+    have hS'pos : 0 < (r.vault'.toExact.sharesTotal : ℚ) := by rw [hST']; linarith
+    have hd := hz.clawback_keeps_perShare hmax' assets holderShares waive hnn hc hhs r hok (hwhole rfl)
+    have := perShare_of_cross_budget u.withdrawNav r.vault'.withdrawNav (u.toExact.sharesTotal : ℚ)
+      (r.vault'.toExact.sharesTotal : ℚ) 0 hSpos hS'pos (by rw [zero_mul, sub_zero]; exact hd)
+    rw [zero_div, sub_zero] at this
+    linarith
+  | burnShares u _ t' n D amount holderShares sharesTotalAmount u' _ _ _ hcan hok ih =>
+    obtain ⟨hz, hnt, hP⟩ := ih
+    obtain ⟨st', hv⟩ := Vault.burnShares_frame u _ u' hok
+    have hnt' : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
+    refine ⟨Vault.burnShares_openZone u _ u' hz hok, hnt'.trans hnt, ?_⟩
+    -- a burn runs only on a vault with no cash and nothing deployed
+    obtain ⟨hins, -, -⟩ := Vault.canBurnShares_ok_reduces u amount holderShares sharesTotalAmount hcan
+    have hAm : u.assetsAvailable.mantissa_ = 0 := by
+      unfold Vault.isInsolvent at hins
+      simp only [Bool.and_eq_true, decide_eq_true_eq] at hins
+      exact hins.1.1
+    rw [hz.withdrawNav_eq, Number.toRat_eq_zero_of_mantissa_zero _ hAm, zero_div] at hP
+    have := Vault.perShareValue_nonneg u'
+    linarith
+  | update u _ t' n D assetsMaximum blockDeposit unblockDeposit u' _ _ _ hok ih =>
+    obtain ⟨hz, hnt, hP⟩ := ih
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+    have hnt' : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
+    have hz' := Vault.update_openZone u _ _ _ u' hz hok
+    refine ⟨hz', hnt'.trans hnt, ?_⟩
+    -- an update keeps the cash and the share total
+    have hP' : u'.withdrawNav / (u'.toExact.sharesTotal : ℚ) = u.withdrawNav / (u.toExact.sharesTotal : ℚ) := by
+      rw [hz'.withdrawNav_eq, hz.withdrawNav_eq, RawVault.WF.toExact_sharesTotal u'.toRawVault u'.wf,
+        RawVault.WF.toExact_sharesTotal u.toRawVault u.wf]
+      have hAA : u'.assetsAvailable = u.assetsAvailable := (congrArg RawVault.assetsAvailable hv).trans rfl
+      have hST : u'.sharesTotal = u.sharesTotal := (congrArg RawVault.sharesTotal hv).trans rfl
+      rw [hAA, hST]
+    rw [hP']
+    exact hP
+
+end XRPL.Model.SingleAssetVault

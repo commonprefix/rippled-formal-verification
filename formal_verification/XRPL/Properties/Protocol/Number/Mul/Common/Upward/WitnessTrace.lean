@@ -5,12 +5,12 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_mul_rounding_bound_upward`
+/-! # Witness for `operator_mul_rounding_bound_upward`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = maxRepNat`, `y = 1000000000000000009` exceeds `9/(2^63+2)`.
-The guard is nonzero so `.upward` rounds up, producing a mantissa > maxRep;
-`normalize` fires `capAtMaxRep` to reach `mulUpwardWitness * 10^18`. -/
+The guard is nonzero so `.upward` rounds up, giving a mantissa above `maxRepUp`, so `normalize` fires
+`capAtMaxRep` and returns `mulUpwardWitness * 10^18`. -/
 
 local syntax "sd_step" : tactic
 local macro_rules | `(tactic| sd_step) => `(tactic|
@@ -33,7 +33,7 @@ lemma scaleDown128_upward_witness :
   rfl
 
 /-- `doNormalize` trace for the upward witness result.
-The mantissa `mulUpwardWitness > maxRep`, so `capAtMaxRep` fires. -/
+The mantissa `mulUpwardWitness` is above `maxRepUp`, so `capAtMaxRep` fires. -/
 lemma doNormalize_upward_witness :
     doNormalize false (mulUpwardWitness : UInt64) (18 : Int)
         largeRange.min largeRange.max .upward =
@@ -108,10 +108,7 @@ theorem operator_mul_upward_attained :
                 = mulUpwardWitness * (10 : ℚ) ^ (18 : ℕ) := by
       unfold Number.toRat; simp; ring
     rw [hx_rat, hy_rat, hr_rat]
-    -- truth = maxRepNat * 1000000000000000009
-    -- result = mulUpwardWitness * 10^18
-    -- error = result - truth = mulUpwardWitness * 10^18 - maxRepNat * 1000000000000000009
-    --       = 9989651668307017737
+    -- error = mulUpwardWitness · 10^18 - maxRepNat · 1000000000000000009 = 9989651668307017737
     rw [show (maxRepNat : ℚ) * 1000000000000000009
           = 9223372036854775890010348331692982263 / 1 by norm_num]
     rw [show mulUpwardWitness * (10 : ℚ) ^ (18 : ℕ) - 9223372036854775890010348331692982263 / 1

@@ -2,8 +2,9 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 import XRPL.Properties.Protocol.Number.Common.Rounding.BitVec
 import XRPL.Properties.Protocol.Number.Common.Rounding.DivQuotient
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
+import XRPL.Properties.Protocol.Number.Compare.Compare
 
-/-! # Forward totality of the `Number` pipeline
+/-! # When the `Number` operations succeed
 
 Success conditions for `doRoundUp`, `doNormalize`, `doNormalize128`, `operator_mul`, `operator_div`
 and `operator_sub` on normalized operands with exponent headroom. -/
@@ -16,26 +17,27 @@ theorem Number.operator_neg_of_mantissa_zero (n : Number) (h : n.mantissa_ = 0) 
   unfold Number.operator_neg
   rw [if_pos (by rw [h]; rfl)]
 
-/-- Adding the canonical zero on the right is the identity, and total. -/
+/-- Adding the canonical zero on the right is the identity and never errors. -/
 theorem Number.operator_add_zero_right (x : Number) (mode : rounding_mode) :
     x.operator_add Number.zero mode = .ok x := by
   unfold Number.operator_add
   rw [if_pos (by decide : Number.zero.operator_eq Number.zero = true)]
   rfl
 
-/-- Subtracting a mantissa-zero `Number` is the identity, and total. This is how
-a reachable vault's zero loss drops out of the pricing prefix. -/
+/-- Adding the canonical zero on the left returns the other operand and never errors. -/
+theorem Number.operator_add_zero_left (y : Number) (mode : rounding_mode) :
+    Number.zero.operator_add y mode = .ok y := by
+  unfold Number.operator_add
+  by_cases hy : y.operator_eq Number.zero = true
+  · rw [if_pos hy, (Number.operator_eq_iff_eq y Number.zero).mp hy]; rfl
+  · rw [if_neg hy, if_pos (by decide : Number.zero.operator_eq Number.zero = true)]; rfl
+
+/-- Subtracting a mantissa-zero `Number` returns the first operand unchanged, in every mode. -/
 theorem Number.operator_sub_of_mantissa_zero (x y : Number) (mode : rounding_mode)
     (h : y.mantissa_ = 0) :
     x.operator_sub y mode = .ok x := by
   unfold Number.operator_sub
   rw [Number.operator_neg_of_mantissa_zero y h, Number.operator_add_zero_right]
-
-/-! ## Escaping the zero guards of `operator_mul` / `operator_div`
-
-`operator_div` opens with a divide-by-zero guard keyed on `operator_eq Number.zero`.
-A nonzero divisor (here `0 < sharesTotal`, so `mantissa_ ≠ 0`) escapes it, reducing
-the divide totality to `doNormalize128`. -/
 
 /-- `operator_eq Number.zero` detects a zero mantissa, so a nonzero mantissa is not
 equal to the canonical zero. -/
@@ -46,9 +48,8 @@ theorem Number.operator_eq_zero_false_of_mantissa_ne (n : Number) (h : n.mantiss
     simp only [Number.zero]; exact beq_false_of_ne h
   simp [this]
 
-/-- **Divide-by-zero escape.** With a nonzero divisor the divide reduces to the
-`doNormalize128` pipeline (past the divide-by-zero guard), isolating the divide
-totality to that stage. -/
+/-- With a nonzero divisor, `operator_div` passes the divide-by-zero check and reduces to the
+`doNormalize128` pipeline. -/
 theorem Number.operator_div_of_divisor_ne (x y : Number) (mode : rounding_mode)
     (hy : y.mantissa_ ≠ 0) :
     x.operator_div y mode =
@@ -61,16 +62,8 @@ theorem Number.operator_div_of_divisor_ne (x y : Number) (mode : rounding_mode)
   unfold Number.operator_div
   rw [Number.operator_eq_zero_false_of_mantissa_ne y hy, if_neg Bool.false_ne_true]
 
-/-! ## Forward totality of `Guard.doRoundUp`
-
-`doRoundUp` is the shared tail of `operator_mul` and `operator_add` (hence
-`operator_sub`). Its only error is the final overflow check `res.exponent_ >
-maxExponent`, and the rounding result never raises the exponent above the input
-`e + 1` (`bringIntoRange` keeps or lowers it, only the carry drop-digit leg bumps
-it by one). So a source exponent bounded by `maxExponent - 1` guarantees success. -/
-
-/-- **Forward totality of `doRoundUp`.** When the source exponent is at most
-`maxExponent - 1`, the rounding step cannot overflow, so it returns `.ok`. -/
+/-- `doRoundUp` succeeds when the source exponent is at most `maxExponent - 1`, since the rounding step cannot
+overflow. -/
 theorem Guard.doRoundUp_ok_of_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     (minM maxM : UInt64) (mode : rounding_mode) (loc : Error)
     (he : e + 1 ≤ maxExponent) :
@@ -83,10 +76,8 @@ theorem Guard.doRoundUp_ok_of_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : 
       | exact ⟨_, rfl⟩
       | (exfalso; (try simp only [] at *); omega)
 
-/-- **`doRoundUp` output exponent bound.** The rounding step never raises the
-exponent above the source `e + 1`: `bringIntoRange` keeps or lowers it, and only
-the carry drop-digit leg bumps it once. (The flush sentinel is far below any
-`e ≥ minExponent`.) This bounds the tail of `operator_mul` and `operator_add`. -/
+/-- From a source exponent `e ≥ minExponent`, a successful `doRoundUp` never raises the exponent above `e + 1`.
+Only the carry drop-digit leg raises it, by one. -/
 theorem Guard.doRoundUp_ok_output_exp_le (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     (minM maxM : UInt64) (mode : rounding_mode) (loc : Error) (res : RoundResult)
     (he_lo : minExponent ≤ e)
@@ -101,18 +92,8 @@ theorem Guard.doRoundUp_ok_output_exp_le (g : Guard) (neg : Bool) (m : UInt64) (
     (try simp only []) <;>
     omega
 
-/-! ## Forward totality of the `doNormalize` back half
-
-`doNormalize`'s only error sites past `scaleUp` are `scaleDown` (mantissa above
-`maxMantissa` at `maxExponent`), `capAtMaxRep` (mantissa above `maxRepUp` at
-`maxExponent`), and the final `doRoundUp`. For an operand already inside the
-mantissa range with a bounded exponent, `scaleDown` is the identity, `capAtMaxRep`
-does at most one safe digit drop, and `doRoundUp` succeeds by the linchpin above.
-This is exactly the final `res.toNumber.normalize` stage of `operator_mul` and the
-same-sign leg of `operator_add`. -/
-
-/-- **Forward totality of `capAtMaxRep`.** Below `maxExponent` it never errors: it
-either keeps the mantissa or drops one digit (raising the exponent by one). -/
+/-- `capAtMaxRep` succeeds below `maxExponent`. It either keeps the mantissa or drops one digit, raising the
+exponent by one. -/
 theorem doNormalize_capAtMaxRep_ok_of_exp (m : UInt64) (e : Int) (g : Guard)
     (he : e < maxExponent) :
     ∃ (m' : UInt64) (e' : Int) (g' : Guard),
@@ -124,20 +105,8 @@ theorem doNormalize_capAtMaxRep_ok_of_exp (m : UInt64) (e : Int) (g : Guard)
   · rw [if_neg h]
     exact ⟨m, e, g, rfl, by omega⟩
 
-/-! ## Forward output bound for the `scaleDown128` front-half loop
-
-`scaleDown128` is the shared front-half loop of `operator_mul`'s normalize and
-`operator_div`'s `doNormalize128`: it divides a `UInt128` mantissa by ten and
-raises the exponent by one until the mantissa drops to `maxRepUp`. Emptying a
-vault needs its output exponent bounded so the tail `Guard.doRoundUp_ok_of_exp_le`
-fires: the output exponent stays within `e + 20`, because a `UInt128 < 2 ^ 128`
-needs at most twenty digit drops to reach `maxRepUp` (`≈ 2 ^ 63`). -/
-
-/-- **`scaleDown128` iteration-count invariant.** The loop runs `k` steps, so the
-output exponent is exactly `e + k` and the output mantissa meets the exit bound
-`≤ maxRepUp`. Every step past the first forces another power of ten into the input
-mantissa above `maxRepUp + 1 = 9223372036854775811`, which caps `k` once the input
-is known to fit in `2 ^ 128`. -/
+/-- `scaleDown128` runs some `k` steps: the output exponent is `e + k`, the output mantissa is `≤ maxRepUp`, and
+`k ≥ 1` forces the input mantissa to be at least `9223372036854775811 * 10^(k - 1)`. -/
 theorem scaleDown128_forward_exp_bound (M : UInt128) (e : Int) (g0 : Guard) :
     ∃ k : ℕ,
       (scaleDown128 M e g0).2.1 = e + (k : Int) ∧
@@ -191,11 +160,8 @@ theorem scaleDown128_forward_exp_bound (M : UInt128) (e : Int) (g0 : Guard) :
       rw [toNat_toUInt64 hfit]; exact hM_le
     · intro h; exact absurd h (by omega)
 
-/-- **`scaleDown128` output bound.** The digit-drop loop stops once the mantissa
-reaches `maxRepUp`, and a `UInt128 < 2 ^ 128` input needs at most twenty drops, so
-the output exponent stays within `[e, e + 20]` and the output mantissa within the
-exit bound `≤ maxRepUp`. The exponent bracket feeds `Guard.doRoundUp_ok_of_exp_le`:
-a source exponent `≤ maxExponent - 21` keeps the multiply / divide tail total. -/
+/-- `scaleDown128` returns a mantissa `≤ maxRepUp` and an exponent in `[e, e + 20]`, since a `UInt128` input
+needs at most twenty digit drops. -/
 theorem scaleDown128_output_bound (M : UInt128) (e : Int) (g0 : Guard) :
     (scaleDown128 M e g0).1.toNat ≤ maxRepUp.toNat ∧
     e ≤ (scaleDown128 M e g0).2.1 ∧
@@ -219,32 +185,8 @@ theorem scaleDown128_output_bound (M : UInt128) (e : Int) (g0 : Guard) :
   · rw [hek]; omega
   · rw [hek]; omega
 
-/-! ## Forward totality of `operator_mul` on two normalized operands
-
-`operator_mul` is the first fully-total operator of the withdraw pricing chain.
-This composes the pieces above into a `.ok` for the multiply used by the emptying
-run (`navN * 1`, where both operands carry a mantissa in `largeRange`, so their
-`UInt128` product exceeds `maxRepUp` and the front-half loop always runs).
-
-The proof escapes the two zero guards, keeps the well-founded `scaleDown128` and
-`doNormalize` recursions opaque, and bounds the pipeline exponent so both the mid
-`doRoundUp` and the final `normalize` succeed:
-
-* the `UInt128` product is `x.mantissa_ * y.mantissa_`, so with both mantissas at
-  least `10 ^ 18` it exceeds `maxRepUp`. `scaleDown128_lower_bound` then puts the
-  loop output mantissa at or above `mantissaFloor`, and `scaleDown128_output_bound`
-  keeps it at or below `maxRepUp` with the exponent inside `[ze, ze + 20]`.
-* the mid `doRoundUp` is `.ok` by `Guard.doRoundUp_ok_of_exp_le` (its output
-  exponent is at most `ze + 21`, which the hypothesis keeps below `maxExponent`).
-* the final `normalize` is total. On a flushed (zero) mantissa it takes the
-  `mantissa == 0` branch. Otherwise the `doRoundUp` output invariants
-  (`doRoundUp_output_invariants_upTo_maxRepUp_anyMode`) place the mantissa in
-  `largeRange`, and `doNormalize_id` returns it unchanged. -/
-
-/-- **Forward totality of `operator_mul` for two `largeRange`-floored operands.**
-When both mantissas are at least `largeRange.min` (so nonzero and product above
-`maxRepUp`) and the product exponent `x.exponent_ + y.exponent_` sits in
-`[minExponent, maxExponent - 22]`, the multiply reaches a success in every mode. -/
+/-- `operator_mul` succeeds in every mode when both mantissas are at least `largeRange.min` and the exponent
+sum `x.exponent_ + y.exponent_` lies in `[minExponent, maxExponent - 22]`. -/
 theorem Number.operator_mul_ok_of_large_operands
     (x y : Number) (mode : rounding_mode)
     (hxm : largeRange.min ≤ x.mantissa_) (hym : largeRange.min ≤ y.mantissa_)
@@ -300,7 +242,7 @@ theorem Number.operator_mul_ok_of_large_operands
   have hexp_out : res.exponent_ ≤ sd.2.1 + 1 :=
     Guard.doRoundUp_ok_output_exp_le sd.2.2 zn sd.1 sd.2.1 largeRange.min largeRange.max mode
       .overflow res (by omega) hres
-  -- the final normalize is total: a flushed mantissa takes the zero branch, an
+  -- the final normalize always succeeds: a flushed mantissa takes the zero branch, an
   -- in-range mantissa is returned unchanged by doNormalize_id
   by_cases hrm : res.mantissa_ = 0
   · refine ⟨Number.zero, ?_⟩
@@ -318,12 +260,8 @@ theorem Number.operator_mul_ok_of_large_operands
     exact ⟨res.toNumber, doNormalize_id mode res.negative_ res.mantissa_ res.exponent_
       h_res_min h_res_max h_res_exp h_res_mod h_exp_le h_mru_exp⟩
 
-/-- **Forward totality of `operator_mul` on two normalized nonzero operands.** The
-caller-facing form of `Number.operator_mul_ok_of_large_operands`. This is the
-`navN * 1` multiply of the emptying run, where `navN` (the net asset value) and the
-share `Number` one are both normalized. The product exponent must sit in
-`[minExponent, maxExponent - 22]`, which the emptying caller has from its
-`hcap`-derived exponent bound on `navN`. -/
+/-- `operator_mul` succeeds in every mode on two normalized nonzero operands whose exponent sum lies in
+`[minExponent, maxExponent - 22]`. -/
 theorem Number.operator_mul_ok_of_normalized
     (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -334,32 +272,8 @@ theorem Number.operator_mul_ok_of_normalized
   Number.operator_mul_ok_of_large_operands x y mode
     (hx.mantissaBounds hx0).1 (hy.mantissaBounds hy0).1 he_lo he_hi
 
-/-! ## Forward totality of `operator_div` on two normalized operands
-
-`operator_div` is the next operator of the withdraw pricing chain
-(`NAVShares / sharesTotal`). It mirrors the multiply composition: escape the
-divide-by-zero guard, keep the well-founded recursions opaque, and bound the
-pipeline exponent so the whole back half succeeds.
-
-The front half is the straight-line `divQuotient128` (a 128-bit staged divide,
-no loop) whose quotient exponent is `x.exponent_ - y.exponent_ - N` with
-`N ∈ {17, 22}` (`divQuotient128_correct`), so it never exceeds
-`x.exponent_ - y.exponent_ - 17`. The back half `doNormalize128` differs from
-`doNormalize` only in operating on a `UInt128`: an inner `scaleUp` (which only
-lowers the exponent), then `doNormalize_scaleDown128` (a divide-by-ten loop that
-errors only if the exponent reaches `maxExponent` before the mantissa drops to
-`maxMantissa`), then the shared `capAtMaxRep` / `doRoundUp` tail.
-
-Totality of the back half needs only an *exponent* bound: the input mantissa is a
-`UInt128`, hence `< 2 ^ 128 < 10 ^ 39 = (maxMantissa + 1) · 10 ^ 20`, so at most
-twenty drops reach `maxMantissa`, keeping the output exponent within `e + 20`. The
-tail then adds at most two. So `e + 22 ≤ maxExponent` suffices for `doNormalize128`,
-and with the `-17` divide offset the caller needs
-`x.exponent_ - y.exponent_ ≤ maxExponent - 5`. -/
-
-/-- **`doNormalize128.scaleUp` lowers the exponent.** The scale-up loop only
-multiplies the mantissa and decrements the exponent, so its output exponent never
-exceeds the input. -/
+/-- `doNormalize128.scaleUp` never raises the exponent, since it only multiplies the mantissa by 10 and
+decrements the exponent. -/
 theorem doNormalize128_scaleUp_exp_le (minMant : UInt64) (m : UInt128) (e : Int) :
     (doNormalize128.scaleUp minMant m e).2 ≤ e := by
   induction m, e using doNormalize128.scaleUp.induct (minMantissa := minMant) with
@@ -374,14 +288,8 @@ theorem doNormalize128_scaleUp_exp_le (minMant : UInt64) (m : UInt128) (e : Int)
       rw [doNormalize128.scaleUp.eq_def]; simp only [if_neg hcond]
     rw [h]
 
-/-- **Forward totality of `doNormalize_scaleDown128`.** A `UInt128` mantissa within
-`(maxMantissa + 1) · 10 ^ d` needs at most `d` divide-by-ten drops to reach
-`maxMantissa`, and the loop errors only when it must drop while the exponent has
-already hit `maxExponent`. So a source exponent with `d` steps of headroom
-(`e + d ≤ maxExponent`) keeps the loop total, and the output exponent stays within
-`e + d`. Proved by induction on the headroom `d`, whose value is the loop invariant:
-each fired drop lowers the mantissa magnitude by one power of ten while raising the
-exponent by one, so `e + d` is preserved. -/
+/-- If the mantissa is below `(maxMantissa + 1) · 10^d` and `e + d ≤ maxExponent`, `doNormalize_scaleDown128`
+succeeds with an output exponent at most `e + d`. -/
 theorem doNormalize_scaleDown128_ok_aux (d : ℕ) :
     ∀ (m : UInt128) (e : Int) (g : Guard),
       m.toNat < (largeRange.max.toNat + 1) * 10 ^ d →
@@ -420,13 +328,8 @@ theorem doNormalize_scaleDown128_ok_aux (d : ℕ) :
       · rw [doNormalize_scaleDown128.eq_def, dif_neg hgt]
       · push_cast; omega
 
-/-- **Forward totality of `doNormalize128`.** With the source exponent bounded by
-`maxExponent - 22`, every stage of the `UInt128` normalize pipeline succeeds. The
-magnitude budget is free: the input mantissa is a `UInt128`, so `< 2 ^ 128 < 10 ^ 39`,
-and twenty drops suffice. The exponent budget carries: `scaleUp` only lowers it, the
-scale-down adds at most twenty, `capAtMaxRep` at most one, and `doRoundUp` at most one
-more. No mantissa bound and no lower exponent bound are needed (a zero or underflowing
-mantissa takes the canonical-zero exit). -/
+/-- `doNormalize128` succeeds whenever the source exponent is at most `maxExponent - 22`, with no mantissa
+bound and no lower exponent bound. -/
 theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
     (mode : rounding_mode) (sticky : Bool) (he : e + 22 ≤ maxExponent) :
     ∃ result, doNormalize128 zn M e largeRange.min largeRange.max mode sticky = .ok result := by
@@ -463,12 +366,8 @@ theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
       rw [hru]
       exact ⟨res.toNumber, rfl⟩
 
-/-- **Forward totality of `operator_div` on two normalized nonzero operands.** This
-is the `NAVShares / sharesTotal` divide of the emptying run, where the dividend
-(net-asset-value share) and divisor (`sharesTotal`, nonzero from `0 < sharesTotal`)
-are both normalized. The quotient exponent `x.exponent_ - y.exponent_` must sit at
-or below `maxExponent - 5`, which (with the `divQuotient128` `-17` scale offset)
-gives the `doNormalize128` stage the `e + 22 ≤ maxExponent` headroom it needs. -/
+/-- `operator_div` succeeds in every mode on two normalized nonzero operands with
+`x.exponent_ - y.exponent_ ≤ maxExponent - 5`, which leaves `doNormalize128` the headroom it needs. -/
 theorem Number.operator_div_ok_of_normalized
     (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -491,19 +390,8 @@ theorem Number.operator_div_ok_of_normalized
   rw [Number.operator_div_of_divisor_ne x y mode hy0, hxeq, if_neg Bool.false_ne_true, hdq]
   exact doNormalize128_ok_of_exp (x.negative_ != y.negative_) zmq zeq mode drp hze
 
-/-! ## Forward totality of the different-sign `operator_add`
-
-The different-sign branch routes through the `recover` loop and `doNormalize128`,
-and its totality needs only an exponent bound. The aligned common exponent is the
-maximum of the two (`alignDown_e_eq`), and the `recover` loop only lowers it
-(`recover_exponent_le`). So a nonpositive input exponent stays well inside the
-`maxExponent - 22` headroom of `doNormalize128_ok_of_exp`. -/
-
-/-- **Forward totality of the different-sign `operator_add` tail.** The `recover`
-loop followed by `doNormalize128` is total whenever the pre-`recover` exponent is
-nonpositive. This is agnostic to the result sign, the pre-`recover` mantissa and
-the guard, because `recover` only decreases the exponent (`recover_exponent_le`)
-and the tail keeps 22 steps of headroom to `maxExponent`. -/
+/-- The diff-sign `operator_add` tail (`recover` then `doNormalize128`) succeeds for any sign, mantissa and
+guard when the pre-`recover` exponent `E` has `E + 22 ≤ maxExponent`, since `recover` never raises it. -/
 lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
     (g : Guard) (mode : rounding_mode) (hE : E + 22 ≤ maxExponent) :
     ∃ result, doNormalize128 zn
@@ -518,12 +406,8 @@ lemma Number.diffSign_recover_tail_ok (zn : Bool) (m : UInt128) (E : Int)
   have hle : R.2.1 ≤ E := by rw [hR]; exact recover_exponent_le _ _ _ _ _
   exact doNormalize128_ok_of_exp zn _ R.2.1 mode _ (by omega)
 
-/-- **Forward totality of the different-sign `operator_add`.** A nonzero second
-operand of opposite sign to the first, with both raw exponents nonpositive, reaches
-a success. The zero and exact-cancellation guards short-circuit to a success, and
-the different-sign body reduces to `Number.diffSign_recover_tail_ok`. The aligned
-common exponent is `max x.exponent_ y.exponent_ ≤ 0` (`alignDown_e_eq`), which
-feeds the tail. -/
+/-- Diff-sign `operator_add` with a nonzero second operand succeeds in every mode when both exponents are at
+least 22 below `maxExponent`. -/
 private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_mode)
     (hy0 : y.mantissa_ ≠ 0)
     (hsign : (x.negative_ == y.negative_) = false)
@@ -541,18 +425,8 @@ private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_
       apply Number.diffSign_recover_tail_ok
       split_ifs <;> first | (rw [alignDown_e_eq]; omega) | omega
 
-/-! ## Forward totality of the same-sign `operator_add`
-
-With both operands of one sign, `operator_add` aligns the smaller exponent up to the larger one,
-adds the two mantissas in `UInt128`, drops at most one digit, then rounds and normalizes. The
-larger-exponent operand keeps its `largeRange` mantissa, so the sum is at least `10^18` and below
-`2·10^19`. After the optional drop the mantissa sits in `[mantissaFloor, maxRepUp]` with the
-exponent raised by at most one. `doRoundUp` then succeeds with 3 steps of headroom to
-`maxExponent`, and its output normalizes unchanged. -/
-
-/-- **Forward totality of the same-sign `operator_add` tail.** Two aligned mantissas below
-`10^19` whose sum is at least `10^18`, at a common exponent 3 steps below `maxExponent`, add,
-round and normalize without error. -/
+/-- Two aligned mantissas below `10^19` with sum at least `10^18`, at a common exponent in
+`[minExponent, maxExponent - 3]`, add, round and normalize without error. -/
 lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g : Guard)
     (mode : rounding_mode) (hxm : xm_a.toNat < 10 ^ 19) (hym : ym_a.toNat < 10 ^ 19)
     (hsum : 10 ^ 18 ≤ xm_a.toNat + ym_a.toNat)
@@ -645,8 +519,8 @@ lemma Number.exponent_ge_min (n : Number) (hn : n.isNormalized) (hn0 : n.mantiss
   · exfalso; apply hn0; rw [hz]; rfl
   · exact hemin
 
-/-- **Forward totality of the same-sign `operator_add`.** Two nonzero normalized operands of the
-same sign, each exponent 3 steps below `maxExponent`, add without error in every mode. -/
+/-- Same-sign `operator_add` succeeds. Two nonzero normalized operands of the same sign, each exponent at least
+3 below `maxExponent`, add without error in every mode. -/
 lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
@@ -694,8 +568,8 @@ lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
       hx_b.2 hy_b.2 (by omega) hxe_min hxe
     exact ⟨r, by simpa only [hsn, if_true] using hr⟩
 
-/-- **Forward totality of `operator_add` for two normalized operands with exponent headroom.**
-Either operand may be zero, and the signs may differ. -/
+/-- `operator_add` succeeds on two normalized operands with exponent headroom. Either operand may be zero, and the
+signs may differ. -/
 lemma Number.operator_add_ok_of_exp (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :
@@ -713,9 +587,8 @@ lemma Number.operator_add_ok_of_exp (x y : Number) (mode : rounding_mode)
   · exact Number.operator_add_sameSign_ok x y mode hx hy hx0 hy0 hs (by omega) (by omega)
   · exact Number.operator_add_diffSign_ok x y mode hy0 (beq_eq_false_iff_ne.mpr hs) hxe hye
 
-/-- **Forward totality of `operator_sub` for two normalized operands with exponent headroom.**
-`x - y` is `x + (-y)`, and negating keeps a normalized operand normalized with the same exponent
-(or turns it into the zero sentinel). Either operand may be zero, and the signs may differ. -/
+/-- `operator_sub` succeeds on two normalized operands with exponent headroom. Either operand may be zero, and the
+signs may differ. -/
 lemma Number.operator_sub_ok_of_exp (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxe : x.exponent_ + 22 ≤ maxExponent) (hye : y.exponent_ + 22 ≤ maxExponent) :

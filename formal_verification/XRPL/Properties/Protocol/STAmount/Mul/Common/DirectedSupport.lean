@@ -5,10 +5,9 @@ import XRPL.Properties.Protocol.Number.Mul.Common.Decompose
 
 /-! # Directed-mode support for the IOU `multiply` `RoundsWithin` headlines
 
-Directed-mode (`downward`/`upward`/`towards_zero`) versions for IOU multiplication of
-**non-negative** operands. (Non-negativity matches the native/MPT `multiply` headlines
-and avoids the magnitude-based sign flip in `STAmount.ofNumber`, which rounds `|r|`.)
-`Number`-multiply bound `10/(2⁶³+2)` composed with the 16-digit re-round `10⁻¹⁵`. -/
+Directed-mode versions for IOU multiplication, mostly for non-negative operands, which avoids the sign
+flip of `STAmount.ofNumber` rounding `|r|`. The `Number` multiply bound `10/(2⁶³+2)` composes with the re-round
+`10⁻¹⁵`. -/
 
 namespace XRPL.Model.Protocol
 
@@ -28,7 +27,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
     unfold Number.signum
     rcases hrn : r.negative_ with _ | _ <;> simp only [hmne, if_true, if_false,
       Bool.false_eq_true] <;> decide
-  -- `neg`/`working` as in `ofNumber`; `working = |r|` is non-negative, same magnitude/exponent.
+  -- `neg`/`working` as in `ofNumber`. `working = |r|` is non-negative, same magnitude/exponent.
   set neg : Bool := decide (r.signum < 0) with hneg_def
   set working : Number := if neg then r.operator_neg else r with hw_def
   have hw_mant : working.mantissa_ = r.mantissa_ := by
@@ -57,7 +56,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
     by_cases hn : neg = true
     · rw [if_pos hn, if_pos hn, Number.toRat_neg]; ring
     · rw [if_neg hn, if_neg hn]; ring
-  -- `asset` is non-integral, so `ofNumber` reduces to `checked` on the `normalizeToRange` output.
+  -- `.fractional` is not integral, so `ofNumber` reduces to `checked` on the `normalizeToRange` output.
   unfold STAmount.ofNumber at hok
   rw [if_neg (by decide), ← hneg_def, ← hw_def] at hok
   cases hnorm : working.normalizeToRange kMinValue kMaxValue mode with
@@ -66,7 +65,7 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
     obtain ⟨mant, exp⟩ := me
     rw [hnorm] at hok
     simp only at hok
-    -- keystone facts (kMinValue/kMaxValue ≡ cMinValue/cMaxValue).
+    -- 16-digit rounding facts (kMinValue and kMaxValue equal cMinValue and cMaxValue).
     have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
     have hbound := normalizeToRange_16_within_ulp working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
     have hmrange := normalizeToRange_16_mantissa_range working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
@@ -106,7 +105,6 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
-    -- value transport.
     have hres_toRat : result.toRat = (if neg then (-1 : ℚ) else 1) * ((mant.toInt : ℚ) * 10 ^ exp) := by
       rw [hres_eq, STAmount.toRat_signed]
       show (if neg then (-1 : ℚ) else 1) * (mant.toUInt64.toNat : ℚ) * 10 ^ exp = _
@@ -160,10 +158,8 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
         rw [abs_sub_comm result.toRat r.toRat]; exact abs_sub_abs_le_abs_sub r.toRat result.toRat
       linarith [hrev, hmag']
 
-/-- **`towards_zero` snap never increases magnitude, any sign.** `STAmount.ofNumber`
-rounds the magnitude `|r|` toward zero, so `|result| ≤ |r|`. (Unlike the *signed*
-directional clause of `ofNumber_iou_rounds_within`, this magnitude statement needs no
-non-negativity hypothesis.) -/
+/-- `towards_zero` snap never increases magnitude, any sign. `STAmount.ofNumber` rounds the magnitude `|r|`
+toward zero, so `|result| ≤ |r|` with no non-negativity hypothesis. -/
 lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) (result : STAmount)
     (hnt : nt = .fractional)
     (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
@@ -282,8 +278,8 @@ theorem operator_mul_negative_eq (x y result : Number) (mode : rounding_mode)
   rw [hres_eq, show res.toNumber.negative_ = res.negative_ from rfl, hres_neg]
   exact d.neg_eq
 
-/-- `Number`-multiply relative-error bound, uniform across modes at the looser directed
-value `10/(2⁶³+2)` (`to_nearest` is tighter, lifted by monotonicity). -/
+/-- The `Number` multiplication relative-error bound in every mode, at the looser directed value `10/(2⁶³+2)`.
+The smaller `to_nearest` bound implies it. -/
 lemma operator_mul_RoundsWithin_anyMode (n1 n2 r : Number) (mode : rounding_mode)
     (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized) (hr_ne : r.mantissa_ ≠ 0)
     (hmul : Number.operator_mul n1 n2 mode = .ok r) :
@@ -296,10 +292,8 @@ lemma operator_mul_RoundsWithin_anyMode (n1 n2 r : Number) (mode : rounding_mode
   | upward => exact operator_mul_rounds_upward n1 n2 r hn1_norm hn2_norm hmul hr_ne
   | towards_zero => exact operator_mul_rounds_towards_zero n1 n2 r hn1_norm hn2_norm hmul hr_ne
 
-/-- **Magnitude form of the `Number`-multiply directed bound, every mode, any operand
-signs.** For `to_nearest`/`downward`/`upward` it is the `RoundsWithin` magnitude directly;
-for `towards_zero` the product `r` is sign-aligned with `n1·n2` (its sign is the XOR of
-the operand signs), so `|r − n1·n2| = |n1·n2| − |r|`. -/
+/-- Magnitude form of the `Number`-multiply directed bound, every mode, any operand signs. Under
+`towards_zero` the product `r` has the sign of `n1·n2`, so `|r − n1·n2| = |n1·n2| − |r|`. -/
 lemma operator_mul_abs_diff_le_anyMode (n1 n2 r : Number) (mode : rounding_mode)
     (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized)
     (hn1_ne : n1.mantissa_ ≠ 0) (hn2_ne : n2.mantissa_ ≠ 0) (hr_ne : r.mantissa_ ≠ 0)
@@ -395,9 +389,8 @@ lemma operator_mul_exponent_hi_anyMode (n1 n2 r : Number) (E : Int) (mode : roun
       _ ≤ (10 : ℚ) ^ (maxExponent + 15) := hfin
   linarith [hlower, hupper]
 
-/-- **STAmount IOU multiplication of non-negative operands rounds within the directed
-relative-error bound, every mode.** `Number`-multiply (`10/(2⁶³+2)`) composed with the
-16-digit re-round (`10⁻¹⁵`) via `RoundsWithin_trans`. -/
+/-- STAmount IOU multiplication of non-negative operands rounds within the directed relative-error bound in
+every mode: `10/(2⁶³+2)` for the `Number` multiply, composed with `10⁻¹⁵` for the 16-digit re-round. -/
 theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -458,9 +451,8 @@ theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (nt 
     rw [hn1_val, hn2_val] at htrans
     exact htrans
 
-/-- **IOU multiply pipeline decomposition (any mode, non-negative operands).** Exposes
-the 19-digit `Number` product `r`, its range/sign, and the mode-generic `Number`-multiply
-`RoundsWithin` bound. Feeds the directed ULP/repr headlines. -/
+/-- IOU multiply pipeline decomposition (any mode, non-negative operands). Exposes the 19-digit `Number`
+product `r`, its range and sign, and the mode-generic `Number`-multiply `RoundsWithin` bound. -/
 lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -515,11 +507,8 @@ lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (nt 
     rw [hn1_val, hn2_val] at hmb
     exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hr_neg, hmb⟩
 
-/-- **Sign-agnostic IOU multiply pipeline decomposition (any mode, any operand signs).**
-Like `operator_mul_iou_decompose_anyMode` but with no non-negativity assumption: it
-exposes the 19-digit `Number` product `r`, its range, and the *magnitude* relative-error
-bound (rather than the one-sided directional `RoundsWithin`, whose signed direction the
-`STAmount.ofNumber` magnitude re-round flips for negative products). -/
+/-- Sign-agnostic IOU multiply pipeline decomposition (any mode, any operand signs). Exposes the 19-digit
+`Number` product `r`, its range, and the *magnitude* relative-error bound. -/
 lemma STAmount.operator_mul_iou_decompose_mag (v1 v2 result : STAmount) (nt : NumericType)
     (mode : rounding_mode)
     (hnt : nt = .fractional)

@@ -46,7 +46,7 @@ private lemma guard_round_tn (g : Guard) (r : ℕ) (hr : r < 1000)
       · intro h; subst h; norm_num
     exact ⟨h1.trans hhalf, h0.trans heq⟩
 
-/-- **Exponent of the `.to_nearest` 16-digit pack.** `k+3`, or `k+4` exactly at the
+/-- Exponent of the `.to_nearest` 16-digit pack. `k+3`, or `k+4` exactly at the
 carry `m ≥ 9999999999999999500`. -/
 lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
@@ -224,9 +224,8 @@ lemma checked_frac_zero (mant : UInt64) (exp : Int) (neg : Bool) (mode : roundin
       rw [hz] at h_lo
       simp at h_lo
 
-/-- **Exponent of a positive fractional `.to_nearest` `ofNumber`.** The pack
-exponent `exp` is `k+3` or (at the carry) `k+4`; the result is zero with offset
-`-100` iff `exp` underflows, and otherwise has offset `exp`. -/
+/-- Exponent of a positive fractional `.to_nearest` `ofNumber`. The pack exponent `exp` is `k+3`,
+or `k+4` at the carry. The result is zero with offset `-100` iff `exp` underflows, else its offset is `exp`. -/
 lemma ofNumber_frac_tn_exp (n : Number) (r : STAmount) (hn : n.isNormalized)
     (hneg : n.negative_ = false) (hnz : n.mantissa_ ≠ 0)
     (hok : STAmount.ofNumber .fractional n .to_nearest = .ok r) :
@@ -269,16 +268,17 @@ lemma ofNumber_frac_tn_exp (n : Number) (r : STAmount) (hn : n.isNormalized)
         .to_nearest rfl hmtu_lo hmtu_hi hexp_lo3 hexp_le r hok hz
       exact Or.inr ⟨hlo96, hz, by rw [hres]; rfl⟩
 
-private lemma zero_ofNumber_frac (r : STAmount)
-    (hok : STAmount.ofNumber .fractional Number.zero .to_nearest = .ok r) : r.exponent = -100 := by
+/-- The fractional `.to_nearest` pack of a zero `Number` is the zero amount with offset `-100`. -/
+lemma zero_frac_eq (r : STAmount)
+    (hok : STAmount.ofNumber .fractional Number.zero .to_nearest = .ok r) :
+    r = ⟨.fractional, 0, -100, false⟩ := by
   have h : STAmount.ofNumber .fractional Number.zero .to_nearest
       = .ok ⟨.fractional, 0, -100, false⟩ := by rfl
   rw [h] at hok
-  rw [← Except.ok.inj hok]; rfl
+  exact (Except.ok.inj hok).symm
 
-/-- **Exponent threshold.** For a non-negative normalized `n`, the stored exponent of
-its fractional `.to_nearest` pack reaches `j+4` (with `j ≥ -100`) iff
-`n ≥ carryPt j`. -/
+/-- Exponent threshold. For a non-negative normalized `n`, the stored exponent of its fractional
+`.to_nearest` pack reaches `j+4` (with `j ≥ -100`) iff `n ≥ carryPt j`. -/
 lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ n.toRat)
     (hok : STAmount.ofNumber .fractional n .to_nearest = .ok r) (j : ℤ) (hj : -100 ≤ j) :
     j + 4 ≤ r.exponent ↔ carryPt j ≤ n.toRat := by
@@ -289,7 +289,8 @@ lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
       · exact h0
       · exfalso; rw [hnz] at hlo; exact absurd hlo (by decide)
     subst hn0
-    rw [zero_ofNumber_frac r hok, Number.toRat_zero, carryPt]
+    rw [zero_frac_eq r hok, Number.toRat_zero, carryPt]
+    show j + 4 ≤ -100 ↔ _
     constructor
     · intro h; omega
     · intro h; nlinarith
@@ -307,7 +308,6 @@ lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
   have hmq_lo : (10 : ℚ) ^ 18 ≤ (m : ℚ) := by exact_mod_cast hr_lo
   have hmq_hi : (m : ℚ) < 10 ^ 19 := by exact_mod_cast hr_hi
   have hk0 : (0 : ℚ) < 10 ^ k := zpow_pos (by norm_num) _
-  -- `10^k` against `10^j`
   have hpow : ∀ d : ℤ, (10 : ℚ) ^ (j + d) = 10 ^ j * 10 ^ d := fun d => zpow_add₀ (by norm_num) _ _
   rw [carryPt, hv]
   constructor
@@ -317,15 +317,13 @@ lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
       · omega
       · omega
     rcases hexp with ⟨he, _⟩ | ⟨he, hC⟩
-    · -- `k ≥ j+1`
-      have hk1 : (10 : ℚ) ^ (j + 1) ≤ 10 ^ k := zpow_le_zpow_right₀ (by norm_num) (by omega)
+    · have hk1 : (10 : ℚ) ^ (j + 1) ≤ 10 ^ k := zpow_le_zpow_right₀ (by norm_num) (by omega)
       rw [hpow, zpow_one] at hk1
       nlinarith
     · have hkj : (10 : ℚ) ^ j ≤ 10 ^ k := zpow_le_zpow_right₀ (by norm_num) (by omega)
       have hCq : (9999999999999999500 : ℚ) ≤ (m : ℚ) := by exact_mod_cast hC
       nlinarith
   · intro hle
-    -- `k ≥ j`
     have hkj : j ≤ k := by
       by_contra hlt
       push Not at hlt
@@ -344,39 +342,5 @@ lemma exp_ge_iff (n : Number) (r : STAmount) (hn : n.isNormalized) (hnn : 0 ≤ 
     rcases hres with ⟨hlt, _, _⟩ | ⟨_, _, he⟩
     · omega
     · omega
-
-/-- The stored exponent of a non-negative fractional pack is `-100` (zero) or in
-`[-96, 80]`. -/
-lemma exp_cases (n : Number) (r : STAmount)
-    (hok : STAmount.ofNumber .fractional n .to_nearest = .ok r) :
-    r.exponent = -100 ∨ ((-96 : ℤ) ≤ r.exponent ∧ r.exponent ≤ 80) := by
-  unfold STAmount.ofNumber at hok
-  rw [if_neg (by decide : ¬ NumericType.fractional.isIntegral = true)] at hok
-  cases hnr : (if decide (n.signum < 0) = true then n.operator_neg else n).normalizeToRange
-      kMinValue kMaxValue .to_nearest with
-  | error e => rw [hnr] at hok; exact absurd hok (by simp)
-  | ok me =>
-    obtain ⟨m', e'⟩ := me
-    rw [hnr] at hok
-    simp only [] at hok
-    rw [STAmount.checked] at hok
-    have hint : ¬ (STAmount.unchecked .fractional m'.toUInt64 e' (decide (n.signum < 0))).integral
-        = true := by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
-    unfold STAmount.canonicalize at hok
-    rw [if_neg hint] at hok
-    unfold STAmount.iou at hok
-    rw [if_neg hint] at hok
-    cases hone : IOUAmount.ofMantissaExp
-        (STAmount.unchecked .fractional m'.toUInt64 e' (decide (n.signum < 0))).signedDrops.toInt64
-        (STAmount.unchecked .fractional m'.toUInt64 e' (decide (n.signum < 0))).mOffset
-        .to_nearest with
-    | error e => rw [hone] at hok; exact absurd hok (by simp)
-    | ok i =>
-      rw [hone] at hok
-      simp only [] at hok
-      have hres : r.mOffset = i.exponent_ := by rw [← Except.ok.inj hok]
-      show r.mOffset = -100 ∨ ((-96 : ℤ) ≤ r.mOffset ∧ r.mOffset ≤ 80)
-      rw [hres]
-      exact IOUAmount.ofMantissaExp_exponent_cases _ _ _ i hone
 
 end XRPL.Model.SingleAssetVault.WdMono

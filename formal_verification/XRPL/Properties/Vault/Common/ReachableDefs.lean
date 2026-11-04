@@ -4,109 +4,148 @@ import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.Create
 import XRPL.Model.Vault.VaultBurn
 import XRPL.Model.Vault.VaultClawback
+import XRPL.Model.Vault.VaultSet
 
 /-! # Reachability inductives
 
-The two inductive families the reachability and dilution proof trees induct on.
-`Vault.Reachable` (used in `Reachable.lean`) collects the states reachable from a
-`Vault.create_lawful` under the vault operations; `Vault.ReachableFromIn` (used in
-`Dilution.lean`) additionally tracks the source vault, the operation count and the
-accumulated per-share dilution budget, and
-restricts to margin-respecting, non-loss-waiving histories. They live here, apart
-from the headline files, so the induction proofs can be extracted into `Common`
-without an import cycle. -/
+`Vault.Reachable` collects the states reachable from a `Vault.create` under the vault transactions,
+with the parent ledger close time of the last one. Each step assumes only facts C++ guarantees: canonical
+amounts of the right asset, canonical share balances, minting within the MPT maximum, a holder redeeming
+at most its own shares, and only the sole shareholder waiving the unrealized loss. -/
+
+namespace XRPL.Model.Protocol
+
+/-- A holder's share balance: a canonical, nonnegative MPT amount. -/
+structure STAmount.ShareBalance (s : STAmount) : Prop where
+  int64 : s.mNumericType = .int64
+  canonical : s.Canonical
+  nonneg : s.negative = false
+
+end XRPL.Model.Protocol
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- Lawful states reachable from `Vault.create_lawful` under all operations. The ops
-return `Vault`, so every reachable state is lawful by construction -/
-inductive Vault.Reachable : Vault → Prop where
-  | create (nt : NumericType) (scale : UInt8) (assetsMaximum : Option Number)
-      (hmax_norm : ∀ m ∈ assetsMaximum, m.isNormalized)
-      (hmax_pos : ∀ m ∈ assetsMaximum, 0 < m.toRat)
-      (hscale_int : nt.isIntegral = true → scale = 0) (hscale_le : scale.toNat ≤ 18) :
-      Vault.Reachable (Vault.create_lawful nt scale assetsMaximum hmax_norm hmax_pos hscale_int hscale_le)
-  | deposit (v : Vault) (amount : STAmount) (isDonation : Bool) (r : DepositResult) :
-      Vault.Reachable v → (hpos : 0 < amount.toRat) → v.deposit amount isDonation hpos = .ok r →
-      amount.Canonical → -- the deposit amount is a stored-canonical user input
-      (v.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 → -- share domain
-      Vault.Reachable r.vault'
-  | withdraw (v : Vault) (amount : WithdrawAmount) (waive : Bool) (r : WithdrawResult) :
-      Vault.Reachable v → (hpos : 0 < amount.amount.toRat) → v.withdraw amount waive hpos = .ok r →
-      r.sharesBurned.IntegralCanonical → -- the burned shares are canonical int64
-      r.sharesBurned.mNumericType = .int64 →
-      r.sharesBurned.negative = false →
-      r.sharesBurned.toRat ≤ (v.toExact.sharesTotal : ℚ) → -- within the share total
-      (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
-      Vault.Reachable r.vault'
-  | clawback (v : Vault) (assets holderShares : STAmount) (r : ClawbackResult) :
-      Vault.Reachable v → (hnn : 0 ≤ assets.toRat) → v.clawback assets holderShares hnn = .ok r →
-      assets.Canonical → -- the clawback amount is a stored-canonical user input
-      holderShares.IntegralCanonical → -- the holder balance is a stored integral MPT amount
-      holderShares.Canonical → -- and value-exact through toNumber
-      holderShares.negative = false → -- a balance is nonnegative
-      r.sharesDestroyed.toRat < (v.toExact.sharesTotal : ℚ) → -- strictly partial
-      (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
-      Vault.Reachable r.vault'
-  | burnShares (v : Vault) (sharesDestroyed sharesTotalAmount : STAmount) (v' : Vault) :
-      Vault.Reachable v →
-      v.canBurnShares = .ok (.assets sharesTotalAmount) → -- the burn permission guard passed
-      sharesDestroyed.IntegralCanonical → -- stored as a plain integral amount
-      sharesDestroyed.negative = false →
-      sharesDestroyed.toRat ≤ sharesTotalAmount.toRat → -- a holder cannot burn more than exists
-      (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
-      v.burnShares sharesDestroyed = .ok v' →
-      Vault.Reachable v'
+/-- The amount a withdrawal names is in the vault's asset or in its shares. -/
+def WithdrawAmount.InAsset (amount : WithdrawAmount) (nt : NumericType) : Prop :=
+  match amount with
+  | .vaultAssets assets => assets.mNumericType = nt
+  | .vaultShares shares => shares.mNumericType = .int64
 
-/-- `Vault.ReachableFromIn w v n D` holds when `v` results from `w` by `n`
-successful operations, with `D` the sum over the steps of each step's
-absolute dilution budget divided by the share total after it: `3/2·10^e` for a deposit
-(`e` its post-deposit grid exponent), half a unit of the payout (recovery) for a
-withdrawal (clawback), `0` for a burn. Loss-waiving withdrawals are excluded, and
-withdrawals and clawbacks keep at least half the shares, matching
-`withdraw_no_dilution` and `clawback_no_dilution`. -/
-inductive Vault.ReachableFromIn : Vault → Vault → ℕ → ℚ → Prop where
-  | refl (w : Vault) : Vault.ReachableFromIn w w 0 0
-  | deposit (w u : Vault) (n : ℕ) (D : ℚ) (amount : STAmount) (isDonation : Bool)
-      (r : DepositResult) (e : ℤ) :
-      Vault.ReachableFromIn w u n D → (hpos : 0 < amount.toRat) →
-      u.deposit amount isDonation hpos = .ok r → r.error = none →
-      amount.Canonical → -- the deposit amount is a stored-canonical user input
-      (u.toExact.sharesTotal : ℚ) + r.sharesIssued.toRat ≤ 2 ^ 63 - 1 → -- share domain
-      postSumExponent u.assetsTotal amount = .ok e → -- the post-deposit grid exponent
-      Vault.ReachableFromIn w r.vault' (n + 1)
-        (D + 3 / 2 * (10 : ℚ) ^ e / (r.vault'.toExact.sharesTotal : ℚ))
-  | withdraw (w u : Vault) (n : ℕ) (D : ℚ) (amount : WithdrawAmount) (r : WithdrawResult) :
-      Vault.ReachableFromIn w u n D → (hpos : 0 < amount.amount.toRat) →
-      u.withdraw amount false hpos = .ok r → r.error = none →
-      0 ≤ r.sharesBurned.toRat → -- a real withdrawal burns a nonnegative share count
-      r.sharesBurned.Canonical → -- value-exact through `toNumber`
-      r.sharesBurned.mNumericType = .int64 → -- the `int64` share amount
-      -- near-final margin: at least half the shares remain
-      r.sharesBurned.toRat ≤ (u.toExact.sharesTotal : ℚ) / 2 →
-      (u.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
-      Vault.ReachableFromIn w r.vault' (n + 1)
-        (D + 1 / 2 * (10 : ℚ) ^ r.assets'.exponent / (r.vault'.toExact.sharesTotal : ℚ))
-  | clawback (w u : Vault) (n : ℕ) (D : ℚ) (assets holderShares : STAmount)
-      (r : ClawbackResult) :
-      Vault.ReachableFromIn w u n D → (hnn : 0 ≤ assets.toRat) →
-      u.clawback assets holderShares hnn = .ok r → r.error = none →
-      assets.Canonical → -- the clawed-back amount is a stored-canonical user input
-      holderShares.IntegralCanonical → -- the holder balance is a stored integral MPT amount
-      holderShares.Canonical → -- and value-exact through toNumber
-      holderShares.negative = false → -- a balance is nonnegative
-      -- near-final margin: at least half the shares remain
-      r.sharesDestroyed.toRat ≤ (u.toExact.sharesTotal : ℚ) / 2 →
-      (u.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1 → -- share domain
-      Vault.ReachableFromIn w r.vault' (n + 1)
-        (D + 1 / 2 * (10 : ℚ) ^ r.assetsRecovered.exponent / (r.vault'.toExact.sharesTotal : ℚ))
-  | burnShares (w u : Vault) (n : ℕ) (D : ℚ) (sharesDestroyed sharesTotalAmount : STAmount)
-      (u' : Vault) :
-      Vault.ReachableFromIn w u n D →
-      u.canBurnShares = .ok (.assets sharesTotalAmount) → -- the burn permission guard passed
-      u.burnShares sharesDestroyed = .ok u' →
-      Vault.ReachableFromIn w u' (n + 1) D
+/-- C++ `isSoleShareholder`: the holder owns every outstanding share. -/
+def Vault.IsSoleShareholder (v : Vault) (holderShares : STAmount) : Prop :=
+  0 < (v.toExact.sharesTotal : ℚ) ∧ holderShares.toRat = v.toExact.sharesTotal
+
+/-- The state a vault-only history keeps: nothing is lent out, and the cash is a whole number of
+base units within the Open-zone limit, stored exactly. -/
+structure Vault.OpenZone (v : Vault) : Prop where
+  assetsDeployed : v.assetsDeployed = Number.zero
+  lossUnrealized : v.lossUnrealized = Number.zero
+  yieldUnrealized : v.yieldUnrealized = Number.zero
+  cash : ∃ k : ℕ, k ≤ 9 * 10 ^ 15 ∧ v.assetsAvailable.toRat = (k : ℚ) * (10 : ℚ) ^ v.baseExponent
+  cashExact : STAmount.isRounded v.numericType v.assetsAvailable = false
+
+/-- Lawful states reachable from `Vault.create` under all transactions, with the parent ledger close time of the last
+one. The transactions return `Vault`, so every reachable state is lawful by construction. -/
+inductive Vault.Reachable : Vault → UInt32 → Prop where
+  | create (scale : Option UInt8) (assetsMaximum : Option Number) (schedule : Option VaultSchedule)
+      (earlyExitFeeRate : Option TenthBips32) (ownerCanBlockDeposit : Bool) (nt : NumericType)
+      (t : UInt32) (v : Vault) :
+      Vault.canCreate scale assetsMaximum schedule t nt = .ok .tesSUCCESS →
+      Vault.create scale assetsMaximum schedule earlyExitFeeRate ownerCanBlockDeposit nt = .ok v →
+      Vault.Reachable v t
+  | deposit (v : Vault) (t t' : UInt32) (amount : STAmount) (isDonation : Bool)
+      (r : VaultWithAmounts) :
+      Vault.Reachable v t → t ≤ t' →
+      amount.Canonical → amount.mNumericType = v.numericType →
+      (hpos : 0 < amount.toRat) → (v.deposit amount isDonation t' hpos).run = .ok (.ok r) →
+      (v.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
+      Vault.Reachable r.vault' t'
+  | withdraw (v : Vault) (t t' : UInt32) (amount : WithdrawAmount) (holderShares : STAmount)
+      (waive : Bool) (r : VaultWithAmounts) :
+      Vault.Reachable v t → t ≤ t' →
+      amount.amount.Canonical → amount.InAsset v.numericType → holderShares.ShareBalance →
+      (waive = true ↔ v.IsSoleShareholder holderShares) →
+      (hpos : 0 < amount.amount.toRat) → (v.withdraw amount waive t' hpos).run = .ok (.ok r) →
+      r.shares.toRat ≤ holderShares.toRat →
+      Vault.Reachable r.vault' t'
+  | clawback (v : Vault) (t t' : UInt32) (assets holderShares : STAmount) (waive : Bool)
+      (r : VaultWithAmounts) :
+      Vault.Reachable v t → t ≤ t' →
+      assets.CanonicalOrZero → assets.mNumericType = v.numericType → holderShares.ShareBalance →
+      (waive = true ↔ v.IsSoleShareholder holderShares) →
+      (hnn : 0 ≤ assets.toRat) → (v.clawback assets holderShares waive hnn).run = .ok (.ok r) →
+      r.shares.toRat ≤ holderShares.toRat →
+      Vault.Reachable r.vault' t'
+  | burnShares (v : Vault) (t t' : UInt32) (amount holderShares sharesTotalAmount : STAmount)
+      (v' : Vault) :
+      Vault.Reachable v t → t ≤ t' →
+      holderShares.ShareBalance →
+      (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
+      (v.burnShares holderShares).run = .ok (.ok v') →
+      Vault.Reachable v' t'
+  | update (v : Vault) (t t' : UInt32) (assetsMaximum : Option Number)
+      (blockDeposit unblockDeposit : Bool) (v' : Vault) :
+      Vault.Reachable v t → t ≤ t' →
+      v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
+      v.update assetsMaximum blockDeposit unblockDeposit = .ok v' →
+      Vault.Reachable v' t'
+
+/-- `u` results from `w` by `n` successful transactions, the last at parent close time `t`. `D` adds one base unit per
+IOU deposit over the share total after it. With `whole`, exits and integral deposits move a whole base-unit worth. -/
+inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → ℕ → ℚ → Prop where
+  | refl (w : Vault) (t : UInt32) : Vault.ReachableFromIn whole w t w 0 0
+  | deposit (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (amount : STAmount) (isDonation : Bool)
+      (r : VaultWithAmounts) :
+      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      amount.Canonical → amount.mNumericType = u.numericType →
+      (hpos : 0 < amount.toRat) → (u.deposit amount isDonation t' hpos).run = .ok (.ok r) →
+      (u.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
+      (whole = true → u.numericType.isIntegral = true →
+        ∃ k : ℤ, u.idealChargeDeposit r.shares.toRat = k * 10 ^ u.baseExponent) →
+      Vault.ReachableFromIn whole w t' r.vault' (n + 1)
+        (D + if u.numericType.isIntegral then 0 else (10 : ℚ) ^ u.baseExponent / (r.vault'.toExact.sharesTotal : ℚ))
+  | withdraw (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (amount : WithdrawAmount)
+      (holderShares : STAmount) (waive : Bool) (r : VaultWithAmounts) :
+      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      amount.amount.Canonical → amount.InAsset u.numericType → holderShares.ShareBalance →
+      (waive = true ↔ u.IsSoleShareholder holderShares) →
+      (hpos : 0 < amount.amount.toRat) → (u.withdraw amount waive t' hpos).run = .ok (.ok r) →
+      r.shares.toRat ≤ holderShares.toRat →
+      r.shares.toRat < (u.toExact.sharesTotal : ℚ) → -- shares remain
+      (whole = true → ∃ k : ℤ, u.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ u.baseExponent) →
+      Vault.ReachableFromIn whole w t' r.vault' (n + 1) D
+  | clawback (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (assets holderShares : STAmount) (waive : Bool)
+      (r : VaultWithAmounts) :
+      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      assets.CanonicalOrZero → assets.mNumericType = u.numericType → holderShares.ShareBalance →
+      (waive = true ↔ u.IsSoleShareholder holderShares) →
+      (hnn : 0 ≤ assets.toRat) → (u.clawback assets holderShares waive hnn).run = .ok (.ok r) →
+      r.shares.toRat ≤ holderShares.toRat →
+      r.shares.toRat < (u.toExact.sharesTotal : ℚ) → -- shares remain
+      (whole = true → ∃ k : ℤ, u.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ u.baseExponent) →
+      Vault.ReachableFromIn whole w t' r.vault' (n + 1) D
+  | burnShares (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ)
+      (amount holderShares sharesTotalAmount : STAmount) (u' : Vault) :
+      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      holderShares.ShareBalance →
+      (u.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
+      (u.burnShares holderShares).run = .ok (.ok u') →
+      Vault.ReachableFromIn whole w t' u' (n + 1) D
+  | update (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (assetsMaximum : Option Number)
+      (blockDeposit unblockDeposit : Bool) (u' : Vault) :
+      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      u.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
+      u.update assetsMaximum blockDeposit unblockDeposit = .ok u' →
+      Vault.ReachableFromIn whole w t' u' (n + 1) D
+
+/-- Withdrawals from time `t` on that drain the vault to zero shares. `done`: no shares are left.
+`step`: one successful non-loss-waiving withdrawal at a time `t'` no earlier than `t`, then the rest. -/
+inductive CanEmpty : Vault → UInt32 → Prop where
+  | done (v : Vault) (t : UInt32) : v.toExact.sharesTotal = 0 → CanEmpty v t
+  | step (v : Vault) (t t' : UInt32) (amount : WithdrawAmount) (r : VaultWithAmounts) :
+      t ≤ t' → (hpos : 0 < amount.amount.toRat) → (v.withdraw amount false t' hpos).run = .ok (.ok r) →
+      CanEmpty r.vault' t' → CanEmpty v t
 
 end XRPL.Model.SingleAssetVault

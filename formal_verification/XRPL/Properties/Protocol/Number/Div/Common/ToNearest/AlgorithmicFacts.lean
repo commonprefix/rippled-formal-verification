@@ -10,28 +10,26 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128
 
 namespace XRPL.Model.Protocol
 
-/-! # Division algorithmic decomposition (staged form, PR 7389 head)
+/-! # How `operator_div` reaches `doNormalize128`
 
 `operator_div` routes the staged quotient through `doNormalize128` with the
 `dropped` sticky flag, exactly like diff-sign addition. This file packages
-`operator_div x y mode = .ok result` into the `doNormalize128` keystone
-inputs `(M, ze', δ, zn, sticky)`:
+`operator_div x y mode = .ok result` into the inputs `(M, ze', δ, zn, sticky)` of the
+general `doNormalize128` lemmas:
 
 * `δ = r/ym ∈ [0, 1)` is the division residual, with `sticky = false → δ = 0`
-  (the staged `dropped` flag is exact);
-* `1 ≤ M < 10^23` (the corrected quotient reaches `~10^23` when `xm ≥ ym`);
+  (the staged `dropped` flag is exact),
+* `1 ≤ M < 10^23` (the corrected quotient reaches `~10^23` when `xm ≥ ym`),
 * the tail-vs-mantissa ratio `δ·10^20 ≤ M` holds in both stages: the corrected
   stage has `M ≥ 10^21`, and the correction-free stage has the tiny residual
-  `r·10^5 < ym` (i.e. `δ < 10⁻⁵`) against `M ≥ 10^16`;
-* `|x/y| = (M + δ)·10^ze'` — the value equation;
-* `doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result`;
+  `r·10^5 < ym` (so `δ < 10⁻⁵`) against `M ≥ 10^16`,
+* `|x/y| = (M + δ)·10^ze'` , the value equation,
+* `doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result`,
 * `zn` matches the sign of the quotient.
 
 These are exactly the inputs of `doNormalize128_rounds_to_nearest` /
 `doNormalize128_rounds_any` / `doNormalize128_rounds_direction`. -/
 
-set_option maxHeartbeats 1600000 in
--- Large existential packaging with ℚ cross-multiplication algebra.
 structure DivDecomp (x y result : Number) (mode : rounding_mode)
     (M : UInt128) (ze' : Int) (δ : ℚ) (zn sticky : Bool) : Prop where
   δ_nonneg : 0 ≤ δ
@@ -70,10 +68,7 @@ theorem operator_div_algorithmic_facts_represents
       (by rw [largeRange_max_val]; omega)
       (by rw [largeRange_max_val]; omega)
       (by rw [largeRange_min_val]; omega)
-  -- Reduce operator_div to the doNormalize128 call. Every step is equational
-  -- (if_neg / the divQuotient128 tuple equation) or a small zeta+iota `change`,
-  -- keeping each kernel defeq shallow (the kernel's recursion guard cannot
-  -- survive a one-shot defeq against the unfolded staged body).
+  -- Rewrite `operator_div` to its `doNormalize128` call step by step, since one `change` is too deep.
   unfold Number.operator_div at hok
   rw [if_neg hy_ne_zero, if_neg hx_ne_zero, heq] at hok
   change doNormalize128 (x.negative_ != y.negative_) zmq zeq

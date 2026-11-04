@@ -2,7 +2,7 @@ import XRPL.Properties.Protocol.IntAmount.Mul.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- **`operator_mul` multiplies by an `Int64` (no overflow).** -/
+/-- `operator_mul` multiplies by an `Int64` (no overflow). -/
 theorem IntAmount.operator_mul_exact (x : IntAmount) (rhs : Int64)
     (h_lo : Int64.minValue.toInt ≤ x.value.toInt * rhs.toInt)
     (h_hi : x.value.toInt * rhs.toInt ≤ Int64.maxValue.toInt) :

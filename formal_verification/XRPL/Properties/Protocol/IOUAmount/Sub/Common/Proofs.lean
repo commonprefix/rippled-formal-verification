@@ -3,12 +3,10 @@ import XRPL.Model.Protocol.IOUAmount
 import XRPL.Properties.Protocol.IOUAmount.Neg.Common.Proofs
 import XRPL.Properties.Protocol.IOUAmount.Add.Common.Proofs
 
-/-! # Proof bodies for the `IOUAmount` subtraction correctness headlines.
+/-! # Proofs of the `IOUAmount` subtraction theorems
 
-`operator_sub x y = operator_add x (-y)`: a successful subtraction reduces to an addition of
-`x` and the (canonical, exact) negation of `y`, so the rounding bounds are inherited from
-`Add.Common.Proofs` and `Neg.Common.Proofs`. The thin headlines live in
-`IOUAmount.Sub.RoundsWithin`. -/
+`operator_sub x y = operator_add x (-y)`, and the negation of `y` is exact and canonical, so the addition
+rounding bounds carry over. -/
 
 namespace XRPL.Model.Protocol
 
@@ -28,7 +26,7 @@ private lemma IOUAmount.sub_eq_add_neg (x y result : IOUAmount) (mode : rounding
   rw [hny_ok, hny_eq] at hok
   exact hok
 
-/-- **`operator_sub` rounds within the IOU ULP bound (every mode).** -/
+/-- `operator_sub` has relative error at most `εDirected` in every mode. -/
 theorem IOUAmount.operator_sub_rounds_proof (x y result : IOUAmount) (mode : rounding_mode)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat - y.toRat ≠ 0)
@@ -50,7 +48,7 @@ theorem IOUAmount.operator_sub_rounds_proof (x y result : IOUAmount) (mode : rou
     (by rw [htr]; exact h_truth_ne) hadd hresult
   rwa [htr] at key
 
-/-- **`operator_sub` rounds within a half-ULP (relative) under `to_nearest`.** -/
+/-- `operator_sub` has relative error at most `εToNearest` under `to_nearest`. -/
 theorem IOUAmount.operator_sub_rounds_to_nearest_proof (x y result : IOUAmount)
     (hx : x.InRange16) (hy : y.InRange16)
     (h_truth_ne : x.toRat - y.toRat ≠ 0)

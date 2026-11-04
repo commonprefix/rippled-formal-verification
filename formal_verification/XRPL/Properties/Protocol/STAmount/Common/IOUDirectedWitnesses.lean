@@ -2,14 +2,10 @@ import XRPL.Properties.Protocol.STAmount.Common.IOUWitnessTraces
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRange
 
-/-! # Tightness witnesses for the directed-mode IOU `RoundsWithin` headlines
+/-! # Witnesses for the directed-mode IOU `RoundsWithin` headlines
 
-Companions to `operator_{add,sub,mul}_rounds_iou_{downward,upward,towards_zero}`: concrete
-canonical operands whose directed rounding error exceeds `|truth|·4/10¹⁶` (the same
-half-ULP construction as the `to_nearest` witnesses; `downward`/`towards_zero` truncate,
-`upward` rounds up, all err 5 of a 10-ULP). The inner `Number` op is exact for these
-operands, so its trace is mode-generic (`*_lift_trace_g`); the directed re-round is the
-proven `normalizeToRange_16_per_mode`. -/
+Concrete canonical operands whose directed rounding error exceeds `|truth|·4/10¹⁶`, for the add, sub and mul
+headlines. The inner `Number` op is exact on them, so only the 16-digit re-round errs. -/
 
 namespace XRPL.Model.Protocol
 
@@ -124,7 +120,7 @@ lemma operator_add_dir_eq (mode : rounding_mode) (sumI : IOUAmount)
   rw [hiou2]; simp only []
   rw [hadd_inner]
 
--- explicit per-mode add witnesses (downward/towards_zero → m16=10^15; upward → 10^15+1; all error 5)
+-- per-mode add witnesses: downward/towards_zero give m16 = 10^15, upward gives 10^15+1, all err by 5
 lemma add_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
@@ -404,7 +400,7 @@ theorem sub_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     ⟨by show 10 ^ 15 ≤ (m16.toInt64).toInt.natAbs; rw [hnat, hmv]; split <;> decide,
      by show (m16.toInt64).toInt.natAbs < 10 ^ 16; rw [hnat, hmv]; split <;> decide,
      by show (-96 : ℤ) ≤ 1; decide, by show (1 : ℤ) ≤ 80; decide⟩
-  -- operator_sub v1 v2 = operator_add v1 (−v2); −v2 is the addition witness operand
+  -- operator_sub v1 v2 = operator_add v1 (−v2), and −v2 is the addition witness operand
   have hop : STAmount.operator_sub ⟨.fractional, 5000000000000003, 0, false⟩
       ⟨.fractional, 5000000000000002, 0, true⟩ mode
       = .ok ⟨.fractional, (m16.toInt64).toInt.natAbs.toUInt64, 1, decide ((m16.toInt64) < 0)⟩ := by

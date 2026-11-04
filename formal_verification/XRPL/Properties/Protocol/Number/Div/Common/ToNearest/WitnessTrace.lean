@@ -4,14 +4,6 @@ import XRPL.Properties.Protocol.Number.Div.Common.ToNearest.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_div` under `.to_nearest`
-
-`x = 1000735865998743757`, `y = 1085000000000000630`: staged quotient
-`9223372036854775815000` + sticky. The `capAtMaxRep` step pushes the `5`,
-leaving the guard at exactly `0x5000…` with `xbit` set — the tie breaks
-upward, losing ≈ ½ ulp at scale `mantissaFloorSucc`, giving relative error
-≈ 5.42·10⁻¹⁹ > 4/(2⁶³−3). -/
-
 /-- The staged quotient on the witness inputs. -/
 lemma divQuotient128_to_nearest_witness :
     divQuotient128 (1000735865998743757 : UInt64) (1085000000000000630 : UInt64) 0 0
@@ -85,11 +77,8 @@ lemma operator_div_to_nearest_witness :
   exact doNormalize128_to_nearest_witness
 
 
-/-- The `.to_nearest` bound is sharp up to its integer numerator: the
-half-ulp tie loss at the `capAtMaxRep → mantissaFloorSucc` corner exceeds
-`4/(2^63 − 3)`. (`5/(2^63 − 3)` is unattainable — the true supremum is the
-half-ulp `5/(2^63 + 7)` — so the provable numerator over this denominator is
-at most `4` while the bound holds with `6`.) -/
+/-- Division rounding to nearest can be off by more than `4/(2^63 − 3)` of the value, just above a tie at the
+`capAtMaxRep` corner. -/
 theorem operator_div_to_nearest_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧

@@ -5,14 +5,13 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRange
 import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
-
 namespace XRPL.Model.Protocol
 
-/-! # Plumbing for the `roundToExponent` discrete theorem
+/-! # Exact IOU round trip for the `roundToExponent` grid theorem
 
 The IOU pipeline (`STAmount.iou` → `IOUAmount.normalize` → `from_rep` at
 `largeRange` → `normalizeToRange` at the 16-digit range → exponent clamp)
-is the **identity** on canonical 16-digit inputs. This file proves that
+is the identity on canonical 16-digit inputs. This file proves that
 round-trip plus the reference-amount construction. -/
 
 /-- A canonical (post-`canonicalize`) nonzero IOU STAmount. -/
@@ -45,6 +44,21 @@ lemma STAmount.toRat_of_neg (s : STAmount) (h : s.mIsNegative = true) :
   rw [STAmount.toRat_eq_number]
   exact Number.toRat_of_neg _ h
 
+/-- A nonnegative amount with a nonzero mantissa is not negative. -/
+lemma STAmount.mIsNegative_false_of_nonneg (a : STAmount) (h0 : 0 ≤ a.toRat) (hm : a.mValue ≠ 0) :
+    a.mIsNegative = false := by
+  by_contra hc
+  have hn : a.mIsNegative = true := by simpa using hc
+  have hv := STAmount.toRat_of_neg a hn
+  have hm' : (0 : ℚ) < (a.mValue.toNat : ℚ) := by
+    have : 0 < a.mValue.toNat := by
+      rcases Nat.eq_zero_or_pos a.mValue.toNat with h | h
+      · exact absurd (by rw [← UInt64.toNat_inj, h]; rfl) hm
+      · exact h
+    exact_mod_cast this
+  have : 0 < (a.mValue.toNat : ℚ) * 10 ^ a.mOffset := mul_pos hm' (zpow_pos (by norm_num) _)
+  linarith
+
 /-- The `Int64` view of `signedDrops` is exact for 16-digit mantissas. -/
 lemma STAmount.signedDrops_toInt64_toInt (s : STAmount)
     (h_hi : s.mValue.toNat < 10 ^ 16) :
@@ -56,7 +70,7 @@ lemma STAmount.signedDrops_toInt64_toInt (s : STAmount)
     split <;> omega
 
 /-- The full IOU round-trip is the identity on canonical 16-digit inputs:
-`value.iou mode = .ok ⟨signedDrops, mOffset⟩` in **every** mode. -/
+`value.iou mode = .ok ⟨signedDrops, mOffset⟩` in every mode. -/
 theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     (hc : s.IOUCanonical) :
     s.iou mode = .ok ⟨s.signedDrops.toInt64, s.mOffset⟩ := by
@@ -160,7 +174,6 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
   have h_q3_eq : v.mantissa_ / 10 / 10 / 10 = s.mValue := UInt64.toNat_inj.mp h_q3
   rw [h_q3_eq]
   congr 2
-  -- ⊢ (if neg₀ then -s.mValue.toInt64 else s.mValue.toInt64) = sd
   have h_neg₀_val : neg₀ = s.mIsNegative := by
     rw [hneg₀_def]
     rcases hneg : s.mIsNegative with _ | _

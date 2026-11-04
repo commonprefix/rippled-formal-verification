@@ -4,15 +4,6 @@ import XRPL.Properties.Protocol.Number.Div.Common.TowardsZero.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_div` under `.towards_zero`
-
-`x = 1000735865998746448`, `y = 1085000000000003547`: the staged quotient is
-`⌊x·10²²/y⌋ = 9223372036854775819999` with a nonzero residual (sticky), whose
-trace drops `9,9,9` in `doNormalize_scaleDown128` and a fourth `9` in
-`doNormalize_capAtMaxRep` (guard `0x9999…`, the `capAtMaxRep → mantissaFloorSucc`
-corner). Truncation then loses ≈ 1 ulp at scale `mantissaFloorSucc`, giving
-relative error ≈ 1.084·10⁻¹⁸ > 9/(2⁶³−18). -/
-
 /-- The staged quotient on the witness inputs. -/
 lemma divQuotient128_towards_zero_witness :
     divQuotient128 (1000735865998746448 : UInt64) (1085000000000003547 : UInt64) 0 0
@@ -86,11 +77,8 @@ lemma operator_div_towards_zero_witness :
   exact doNormalize128_towards_zero_witness
 
 
-/-- The directed bound is sharp up to its integer numerator: the truncation
-loss at the `capAtMaxRep → mantissaFloorSucc` corner exceeds `9/(2^63 − 18)`.
-(`10/(2^63 − 18)` is unattainable — the true supremum is `10/(2^63 + 12)`,
-one full ulp at `mantissaFloorSucc + 1` — so the provable numerator over this
-denominator is at most `9` while the bound holds with `11`.) -/
+/-- Division rounding towards zero can lose more than `9/(2^63 − 18)`, at the `capAtMaxRep → mantissaFloorSucc`
+corner. The true supremum is `10/(2^63 + 12)`, so 9 is the largest numerator reachable over this denominator. -/
 theorem operator_div_towards_zero_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧

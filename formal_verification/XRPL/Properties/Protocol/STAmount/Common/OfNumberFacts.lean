@@ -132,8 +132,8 @@ lemma Number.signum_neg_decide (n : Number) : decide (n.signum < 0) = n.negative
   · by_cases hm : (n.mantissa_ != 0) = true <;> simp [hm]
   · simp
 
-/-- `STAmount.canonicalize` on an integral offset-`0` record: the result is a
-canonical integral record of the same numeric type. -/
+/-- `STAmount.canonicalize` of an integral record gives a canonical integral record of the same numeric
+type. -/
 lemma STAmount.canonicalize_integral_canonical (s result : STAmount) (mode : rounding_mode)
     (hint : s.integral = true)
     (hok : s.canonicalize mode = .ok result) :

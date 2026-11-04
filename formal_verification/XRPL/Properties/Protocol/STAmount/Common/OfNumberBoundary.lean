@@ -6,19 +6,8 @@ import XRPL.Properties.Protocol.Number.ToRep.ToRep
 
 /-! # Boundary facts for the fractional `ofNumber` pipeline
 
-The IOU `ofNumber` rounding lemmas (`ofNumber_iou_within_ulp`,
-`ofNumber_iou_within_half_ulp`, `ofNumber_iou_rounds_within`,
-`ofNumber_iou_snap_pos`) need a 19-digit source mantissa,
-`minExponent ≤ r.exponent_`, and `r.exponent_ + 4 ≤ maxExponent`. This file
-derives the exponent side conditions from the success of the run itself:
-
-* **Success bounds the source exponent.** A successful fractional `ofNumber`
-  with a nonzero result forces `r.exponent_ + 4 ≤ maxExponent`.
-* **Fractional outputs are canonical or zero.** A `.ok` fractional `ofNumber`
-  gives a canonical 16-digit record or a zero-mantissa record.
-* **Directional `to_rep` facts.** On a sign-cleared normalized `Number`,
-  `.downward` is the integer floor, `.upward` the integer ceiling, and
-  `.to_nearest` lands within `1/2`. -/
+A successful fractional `ofNumber` with a nonzero result forces `r.exponent_ + 4 ≤ maxExponent` and gives a
+canonical 16-digit record. The file also proves the directional `to_rep` floor, ceiling and half-unit facts. -/
 
 namespace XRPL.Model.Protocol
 
@@ -30,9 +19,8 @@ lemma doNormalize_scaleDown_step_error {maxMant M : UInt64} {e : Int} {g : Guard
   conv_lhs => unfold doNormalize_scaleDown
   rw [dif_pos hgt, if_pos he]
 
-/-- A 19-digit mantissa needs three `scaleDown` steps to reach 16 digits. An
-exponent within two of `maxExponent` at entry trips one of their guards, so the
-loop errors. -/
+/-- A 19-digit mantissa needs three `scaleDown` steps to reach 16 digits. An exponent within two of
+`maxExponent` at entry trips one of their guards, so the loop errors. -/
 lemma doNormalize_scaleDown_errors_of_ge (M : UInt64) (e : Int) (g : Guard)
     (hM_lo : 10 ^ 18 ≤ M.toNat) (hM_hi : M.toNat < 10 ^ 19)
     (he : maxExponent ≤ e + 2) :
@@ -56,9 +44,8 @@ lemma doNormalize_scaleDown_errors_of_ge (M : UInt64) (e : Int) (g : Guard)
       exact doNormalize_scaleDown_step_error
         (by rw [UInt64.lt_iff_toNat_lt, cMaxValue_val, hm2]; omega) (by omega)
 
-/-- **Success of the 16-digit `doNormalize` bounds the source exponent.** A `.ok`
-result of `doNormalize _ M _ cMinValue cMaxValue _` on a 19-digit mantissa forces
-`e + 3 ≤ maxExponent` (otherwise the `scaleDown` loop would abort). -/
+/-- Success of the 16-digit `doNormalize` bounds the source exponent. A `.ok` result on a 19-digit mantissa
+forces `e + 3 ≤ maxExponent`, otherwise the `scaleDown` loop would abort. -/
 lemma doNormalize_iou_exp_hi (neg : Bool) (M : UInt64) (e : Int) (mode : rounding_mode)
     (res : Number)
     (hM_lo : 10 ^ 18 ≤ M.toNat) (hM_hi : M.toNat < 10 ^ 19)
@@ -81,18 +68,8 @@ lemma doNormalize_iou_exp_hi (neg : Bool) (M : UInt64) (e : Int) (mode : roundin
   rw [← hg0_def, herr] at hok
   exact absurd hok (by simp)
 
-/-! ## Success-keyed 16-digit `normalizeToRange` facts
-
-`normalizeToRange_16_mantissa_range` / `_exp_range` characterize the output but
-require `n.exponent_ + 4 ≤ maxExponent`. Keyed on **success** we only have
-`n.exponent_ + 3 ≤ maxExponent` (from `doNormalize_iou_exp_hi`). The carry-cusp
-branch, which would push the exponent to `n.exponent_ + 4`, is then handled by a
-combined `doRoundUp` characterization whose overflow guard errors when
-`maxExponent < n.exponent_ + 4`. -/
-
-/-- **Combined carry-cusp `doRoundUp` characterization.** Rounding up the top of
-the 16-digit range gives `(cMinValue, e+1)`, or an error when `e+1` overflows
-`maxExponent`. -/
+/-- Rounding up the largest 16-digit mantissa `cMaxValue` carries to `(cMinValue, e+1)`, or errors when `e+1` is
+above `maxExponent`. -/
 lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : rounding_mode)
     (loc : Error)
     (hb : (g.round mode == 1 || (g.round mode == 0 && cMaxValue % 2 == 1)) = true)
@@ -166,9 +143,8 @@ lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : roundin
               (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
             if_neg (not_or.mpr ⟨by omega, by decide⟩)]]
 
-/-- **Success-keyed 16-digit `normalizeToRange` facts.** A `.ok` result on a
-19-digit input has a canonical 16-digit mantissa, an exponent in
-`[n.exponent_ + 3, maxExponent]`, and a mantissa with the same sign as the source. -/
+/-- A successful 16-digit `normalizeToRange` of a 19-digit input gives a canonical 16-digit mantissa with the
+source's sign and an exponent in `[n.exponent_ + 3, maxExponent]`. -/
 lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
     (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
@@ -183,7 +159,7 @@ lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
     m_div_thousand_toNat n.mantissa_
   have hcMax : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
   have hcMin : cMinValue.toNat = 10 ^ 15 := by decide
-  -- A sign-cleared `if`-mantissa over a sub-`2^63` magnitude is non-negative.
+  -- `±X` with `X < 2^63` has the sign of `n`: at least zero when `n` is positive, at most zero when negative.
   have hsign : ∀ (X : UInt64), X.toNat < 2 ^ 63 →
       (if n.negative_ then -X.toInt64 else X.toInt64) = mant →
       (n.negative_ = false → 0 ≤ mant.toInt) ∧ (n.negative_ = true → mant.toInt ≤ 0) := by
@@ -206,7 +182,7 @@ lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
   by_cases hround : (g.round mode == 1
       || (g.round mode == 0 && (n.mantissa_ / 10 / 10 / 10) % 2 == 1)) = true
   · by_cases hcusp : n.mantissa_ / 10 / 10 / 10 = cMaxValue
-    · -- carry-cusp: admissible only when `(n.exponent_+3)+1 ≤ maxExponent`.
+    · -- carry to the next exponent: possible only when `(n.exponent_+3)+1 ≤ maxExponent`.
       have hbr : (g.round mode == 1 || (g.round mode == 0 && cMaxValue % 2 == 1)) = true := by
         rw [hcusp] at hround; exact hround
       have hcusp_eq := doRoundUp_small_cusp_eq g n.negative_ (n.exponent_ + 3) mode
@@ -287,17 +263,8 @@ lemma normalizeToRange_iou_exp_hi (n : Number) (mode : rounding_mode) (mant : In
   obtain ⟨res, hd⟩ := normalizeToRange_ok_doNormalize_ok n cMinValue cMaxValue mode mant exp hok
   exact doNormalize_iou_exp_hi n.negative_ n.mantissa_ n.exponent_ mode res h_lo h_hi hd
 
-/-! ## Success shape of a fractional `ofNumber`
-
-The shared reduction below feeds the 19-digit `normalizeToRange` output through
-`checked_iou_cases`: a nonzero result is exactly the canonical 16-digit record
-`⟨.fractional, m, e, neg⟩` with `e ∈ [-96, 80]`, which is `IOUCanonical`
-(`ofNumber_iou_canonical_or_zero`) and forces `r.exponent_ ≤ 77`
-(`ofNumber_iou_success_exp_range`). -/
-
-/-- **Core success shape of a nonzero fractional `ofNumber`.** The result is a
-canonical 16-digit IOU record and the source exponent obeys `r.exponent_ + 4 ≤
-maxExponent`. -/
+/-- Core success shape of a nonzero fractional `ofNumber`. The result is a canonical 16-digit IOU record and
+the source exponent obeys `r.exponent_ + 4 ≤ maxExponent`. -/
 lemma STAmount.ofNumber_iou_ok_facts (r : Number) (mode : rounding_mode) (result : STAmount)
     (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
     (hre_lo : minExponent ≤ r.exponent_)
@@ -358,9 +325,8 @@ lemma STAmount.ofNumber_iou_ok_facts (r : Number) (mode : rounding_mode) (result
       have hme : maxExponent = 32768 := rfl
       omega
 
-/-- **A successful IOU `ofNumber` keeps the source exponent away from
-`maxExponent`.** This gives the `r.exponent_ + 4 ≤ maxExponent` side condition of
-the IOU `ofNumber` rounding lemmas. -/
+/-- A successful IOU `ofNumber` keeps the source exponent away from `maxExponent`. This gives the
+`r.exponent_ + 4 ≤ maxExponent` side condition of the IOU `ofNumber` rounding lemmas. -/
 lemma STAmount.ofNumber_iou_success_exp_range (r : Number) (mode : rounding_mode)
     (result : STAmount)
     (hr_lo : 10 ^ 18 ≤ r.mantissa_.toNat) (hr_hi : r.mantissa_.toNat < 10 ^ 19)
@@ -369,7 +335,7 @@ lemma STAmount.ofNumber_iou_success_exp_range (r : Number) (mode : rounding_mode
     r.exponent_ + 4 ≤ maxExponent :=
   (STAmount.ofNumber_iou_ok_facts r mode result hr_lo hr_hi hre_lo hok hresult).2
 
-/-- **Fractional `ofNumber` output is `IOUCanonical` or zero**, so `toNumber` is
+/-- Fractional `ofNumber` output is `IOUCanonical` or zero, so `toNumber` is
 exact on it with no separate 16-digit hypothesis. -/
 lemma STAmount.ofNumber_iou_canonical_or_zero (r : Number) (mode : rounding_mode)
     (result : STAmount)
@@ -387,8 +353,7 @@ lemma Guard.pushOverflow_sbit (g : Guard) (m : UInt64) (mode : rounding_mode) :
   unfold Guard.pushOverflow
   by_cases h : maxRep ≤ m ∧ m < maxRepUp
   · rw [if_pos h]
-    simp only []
-    rw [apply_ite Guard.sbit_, Guard.push_sbit, ite_self]
+    rfl
   · rw [if_neg h]
 
 /-- `to_rep.shift` never touches the sign bit (it only `push`es digits). -/
@@ -401,9 +366,8 @@ lemma Number.to_rep_shift_sbit (D : Int64) (off : Int) (g : Guard) :
   | case2 drops offset gg hnneg =>
     rw [shiftSpec, if_neg hnneg]
 
-/-- **`.downward` `to_rep` on a sign-cleared `Number` is the integer floor**:
-`r ≤ n.toRat < r + 1`. The `.downward` decision never bumps the truncated
-magnitude. -/
+/-- `.downward` `to_rep` on a sign-cleared `Number` is the integer floor: `r ≤ n.toRat < r + 1`. The
+`.downward` decision never bumps the truncated magnitude. -/
 lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
     (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : n.to_rep .downward = .ok r) :
@@ -492,9 +456,8 @@ private lemma int_emod_pow10_succ (x : ℤ) (m : ℕ) :
   rw [Int.add_mul_emod_self_left,
       Int.emod_eq_of_lt (by omega) (by nlinarith [hrm.1, hrm.2, hr10.2, hpos])]
 
-/-- **`to_rep.shift` accumulates the dropped fraction in the guard.** Starting from
-a guard representing `f`, shifting `D ≥ 0` down by `k = (-off).toNat` decimal places
-leaves a guard representing `f / 10^k + (D mod 10^k) / 10^k`. -/
+/-- `to_rep.shift` accumulates the dropped fraction in the guard. Shifting `D ≥ 0` down `k = (-off).toNat`
+places turns a guard representing `f` into one representing `f / 10^k + (D mod 10^k) / 10^k`. -/
 lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     0 ≤ D.toInt → ∀ f : ℚ, represents g f →
     represents (Number.to_rep.shift D off g).2
@@ -520,7 +483,6 @@ lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     have hk_pos : 1 ≤ (-offset).toNat := by omega
     set k : ℕ := (-offset).toNat with hkdef
     rw [hk1] at hgoal
-    -- the accumulated fraction equals the target closed form
     have hEq : f / 10 ^ k + ((drops.toInt % 10 ^ k : ℤ) : ℚ) / 10 ^ k
         = (f + ((drops % 10).toUInt64.toNat : ℚ)) / 10 / 10 ^ (k - 1)
           + (((drops / 10).toInt % 10 ^ (k - 1) : ℤ) : ℚ) / 10 ^ (k - 1) := by
@@ -546,9 +508,8 @@ lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     simp only [pow_zero, Int.emod_one, div_one, Int.cast_zero, add_zero]
     exact hg
 
-/-- **`.to_nearest` `to_rep` on a normalized `Number` rounds within `1/2`.** The
-guard rounds to nearest with ties to even, so the integer result is within half a
-unit of the value. -/
+/-- `.to_nearest` `to_rep` on a normalized `Number` rounds within `1/2`. The guard rounds to nearest with
+ties to even, so the integer result is within half a unit of the value. -/
 lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
     (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : n.to_rep .to_nearest = .ok r) :
@@ -676,9 +637,8 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
         clear hno_cusp hb hok hrep
         constructor <;> linarith
 
-/-- **`.upward` `to_rep` on a sign-cleared `Number` is the integer ceiling.** A
-nonzero dropped fraction always bumps the result up by one, and a zero one leaves
-it alone, so `n.toRat ≤ r < n.toRat + 1`. -/
+/-- `.upward` `to_rep` on a sign-cleared `Number` is the integer ceiling: `n.toRat ≤ r < n.toRat + 1`. A
+nonzero dropped fraction always bumps the result up by one. -/
 lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
     (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : n.to_rep .upward = .ok r) :

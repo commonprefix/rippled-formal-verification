@@ -2,16 +2,14 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IntAmount
 import XRPL.Properties.Protocol.Common.AmountArith
 
-/-! # Proof bodies for the `IntAmount` subtraction / negation correctness headlines.
+/-! # Proofs of the `IntAmount` subtraction / negation theorems
 
 `IntAmount` subtraction and negation are raw signed `Int64` (wraps mod 2⁶⁴), so they are
-value-exact precisely when the exact integer result stays in the `Int64` range (no
-overflow). The generic no-overflow `bmod` collapse is the shared
-`AmountArith.toInt_bmod_self`. The thin headlines live in `IntAmount.Sub.Sub`. -/
+value-exact precisely when the exact integer result stays in the `Int64` range (no overflow). -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`operator_sub` is value-exact (no overflow).** -/
+/-- `operator_sub` is value-exact (no overflow). -/
 theorem IntAmount.operator_sub_exact_proof (x y : IntAmount)
     (h_lo : Int64.minValue.toInt ≤ x.value.toInt - y.value.toInt)
     (h_hi : x.value.toInt - y.value.toInt ≤ Int64.maxValue.toInt) :
@@ -20,9 +18,8 @@ theorem IntAmount.operator_sub_exact_proof (x y : IntAmount)
   show ((x.value - y.value).toInt : ℚ) = (x.value.toInt : ℚ) - (y.value.toInt : ℚ)
   rw [Int64.toInt_sub, AmountArith.toInt_bmod_self h_lo h_hi]; push_cast; ring
 
-/-- **`operator_neg` is value-exact (overflows only at `minValue`).** The lower bound
-`minValue ≤ -x` is automatic (since `x ≤ maxValue < 2⁶³`), so only the upper bound
-`-x ≤ maxValue` is required, i.e. `x ≠ minValue`. -/
+/-- `operator_neg` is value-exact (overflows only at `minValue`). Only `-x ≤ maxValue`, that is
+`x ≠ minValue`, is required, since `minValue ≤ -x` always holds. -/
 theorem IntAmount.operator_neg_exact_proof (x : IntAmount)
     (h_hi : -x.value.toInt ≤ Int64.maxValue.toInt) :
     (IntAmount.operator_neg x).toRat = -x.toRat := by
@@ -35,7 +32,7 @@ theorem IntAmount.operator_neg_exact_proof (x : IntAmount)
   show ((-x.value).toInt : ℚ) = -(x.value.toInt : ℚ)
   rw [Int64.toInt_neg, AmountArith.toInt_bmod_self h_lo h_hi]; push_cast; ring
 
-/-- **`operator_sub_int` is value-exact (no overflow).** -/
+/-- `operator_sub_int` is value-exact (no overflow). -/
 theorem IntAmount.operator_sub_int_exact_proof (x : IntAmount) (v : Int64)
     (h_lo : Int64.minValue.toInt ≤ x.value.toInt - v.toInt)
     (h_hi : x.value.toInt - v.toInt ≤ Int64.maxValue.toInt) :

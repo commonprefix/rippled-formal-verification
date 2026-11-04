@@ -1,8 +1,7 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Add.Common.DirectedTight
 
-/-! # Proof bodies for the IOU addition discrete/ULP (`RoundsToRepresentableWithin`)
-headlines. The thin headlines live in `Add.RoundsToRepresentable`. -/
+/-! # Proofs that IOU addition lands within one ULP of the exact sum -/
 
 namespace XRPL.Model.Protocol
 
@@ -47,8 +46,8 @@ theorem STAmount.operator_add_repr_iou_to_nearest_proof (v1 v2 result : STAmount
     .to_nearest 1 (1 / 2) (11 / (2 ^ 63 - 18 : ℚ)) trivial hsnap hr_ulp hop (by positivity)
     (by norm_num) (by norm_num)
 
-/-- Proof of `operator_add_repr_iou`: half-ULP re-rounding bound for `to_nearest`;
-sign-split minimality argument for the directed modes. -/
+/-- Proof of `operator_add_repr_iou`: the half-ULP re-round bound for `to_nearest`, and for the directed modes
+one proof for a positive and one for a negative exact sum. -/
 theorem STAmount.operator_add_repr_iou_proof (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

@@ -4,7 +4,7 @@ import XRPL.Properties.Protocol.IOUAmount.Neg.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- **`operator_neg` is value-exact on canonical inputs** and returns a canonical amount. -/
+/-- `operator_neg` is value-exact on canonical inputs and returns a canonical amount. -/
 theorem IOUAmount.operator_neg_exact (x : IOUAmount) (mode : rounding_mode)
     (hx : x.InRange16) :
     ∃ r : IOUAmount, IOUAmount.operator_neg x mode = .ok r ∧ r.toRat = -x.toRat ∧ r.InRange16 :=

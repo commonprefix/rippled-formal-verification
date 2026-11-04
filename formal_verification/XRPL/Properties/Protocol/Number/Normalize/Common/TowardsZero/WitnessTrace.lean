@@ -4,14 +4,6 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.TowardsZero.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `normalize_rounding_bound_towards_zero`
-
-Witness value `10^19 + 9` (positive mantissa, exponent 0). `scaleUp` is a no-op;
-`scaleDown` fires once (the value exceeds `largeRange.max`), peeling guard digit
-`9` and producing mantissa `10^18` at exponent 1; `capAtMaxRep` is the identity.
-`.towards_zero` truncates (`round = -1`). Error = 9, relative error
-`9/(10^19 + 9) > 8/(2^63 + 2)`. -/
-
 /-- `Number.normalize` trace for the towards_zero witness input `10^19 + 9`. -/
 lemma normalize_towards_zero_witness :
     Number.normalize ⟨false, 10000000000000000009, 0⟩
@@ -47,9 +39,8 @@ lemma normalize_towards_zero_witness :
   simp only [RoundResult.toNumber]
 
 
-/-- Sharpness witness: the relative error exceeds `8/(2^63 + 2)`. (The truncation
-supremum after the f765ab1 cusp threshold is `9·10⁻¹⁹` — witnessed by 19-digit
-inputs with guard digit 9 — slightly below the stated `10/(2^63 + 2)` scale.) -/
+/-- Rounding towards zero can be off by more than `8/(2^63 + 2)` of the value, here on the input `10^19 + 9`. The
+largest error is `9/(2^63 + 11)`, on the input `2^63 + 11` or its negative. -/
 theorem normalize_towards_zero_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .towards_zero = .ok result ∧

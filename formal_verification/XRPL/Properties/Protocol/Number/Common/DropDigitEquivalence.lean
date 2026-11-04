@@ -4,16 +4,14 @@ import XRPL.Model.Protocol.Number
 
 /-! # The digit-dropping loops with and without the early exit
 
-`alignDownSpec` and `shiftSpec` are the loops as implemented before rippled PR 7825: one
-digit dropped per step, with no early exit.
+`alignDownSpec` and `shiftSpec` drop one digit per step with no early exit. C++ `doDropDigitWithTarget`
+(Number.cpp:428) jumps to the target exponent once the mantissa and the guard digits are all zero.
 
 `alignDown_eq_spec` equates `Number.operator_add.alignDown` with `alignDownSpec`, and
 `shift_eq_spec` equates `Number.to_rep.shift` with `shiftSpec`: each pair returns the same
 result on every input. -/
 
 namespace XRPL.Model.Protocol
-
-/-! ## `alignDown` (the `operator_add` exponent alignment) -/
 
 /-- The alignment loop written without the early exit: one `doDropDigit` per step. -/
 def alignDownSpec (m : UInt64) (e : Int) (g : Guard) (target : Int) : UInt64 × Int × Guard :=
@@ -64,9 +62,8 @@ lemma alignDownSpec_fixed (e : Int) (g : Guard) (target : Int) (h : g.digits_ = 
     alignDownSpec 0 e g target = (0, (if e < target then target else e), g) :=
   alignDownSpec_fixed_aux (target - e).toNat e g target h rfl
 
-/-- `doDropDigitWithTargetU64` returns the same result as `alignDownSpec`: when it exits
-early, the steps it skips would have left the mantissa and guard unchanged
-(`alignDownSpec_fixed`). -/
+/-- `doDropDigitWithTargetU64` returns the same result as `alignDownSpec`. When it exits early, the steps it skips
+would leave the mantissa and guard unchanged. -/
 private lemma doDropDigitWithTargetU64_eq_spec_aux :
     ∀ (n : Nat) (g : Guard) (m : UInt64) (e target : Int),
     (target - e).toNat = n →
@@ -104,8 +101,6 @@ theorem alignDown_eq_spec (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     Number.operator_add.alignDown m e g target = alignDownSpec m e g target := by
   rw [Number.operator_add.alignDown.eq_def]
   exact doDropDigitWithTargetU64_eq_spec g m e target
-
-/-! ## `shift` (the `to_rep` mantissa shift) -/
 
 /-- The `shift` loop written without the early exit: one digit dropped per step. -/
 def shiftSpec (drops : rep) (offset : Int) (g : Guard) : rep × Guard :=

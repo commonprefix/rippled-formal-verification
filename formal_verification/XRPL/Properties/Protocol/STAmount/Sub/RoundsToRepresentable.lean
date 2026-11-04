@@ -1,8 +1,8 @@
 import XRPL.Properties.Protocol.STAmount.Sub.Common.RoundsToRepresentableProofs
 
-namespace XRPL.Model.Protocol
+/-! # STAmount subtraction lands within one ULP of the exact difference -/
 
-/-! # Subtraction, discrete/ULP -/
+namespace XRPL.Model.Protocol
 
 /-- Integral (XRP/MPT) subtraction is exact. -/
 theorem STAmount.operator_sub_repr_integral (v1 v2 result : STAmount) (mode : rounding_mode)
@@ -14,7 +14,7 @@ theorem STAmount.operator_sub_repr_integral (v1 v2 result : STAmount) (mode : ro
   RoundsToRepresentableWithin_of_eq result (v1.toRat - v2.toRat) mode
     (STAmount.operator_sub_integral_exact v1 v2 result mode hc1 hc2 hbound_val hsum hok)
 
-/-- **IOU subtraction lands within `1` ULP of `v1 − v2`** -/
+/-- IOU subtraction lands within one ULP of `v1 − v2`, on the correct side for `downward` and `upward`. -/
 theorem STAmount.operator_sub_repr_iou (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

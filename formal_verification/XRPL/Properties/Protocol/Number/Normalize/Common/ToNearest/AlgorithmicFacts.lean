@@ -6,7 +6,7 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
 
 namespace XRPL.Model.Protocol
 
-/-! # Value-preservation lemmas for `Number.normalize` (`.to_nearest`)
+/-! # Value-preservation lemmas for `Number.normalize`
 
 The normalize pipeline is: exact `scaleUp`, then `scaleDown`+`capAtMaxRep`
 (each dropped decimal digit pushed into the guard), then `doRoundUp`. This file
@@ -14,8 +14,7 @@ proves that the pre-`doRoundUp` state exactly captures `|n.toRat|` in the
 `represents` form `((m.toNat : ℚ) + f) * 10 ^ e`. -/
 
 /-- `doNormalize_scaleDown` preserves the guard's sign bit: every recursive step
-pushes a digit (`Guard.push` keeps `sbit_`), and the base case returns `g`.
-Shared by the directed-mode `Normalize` algorithmic-facts files. -/
+pushes a digit (`Guard.push` keeps `sbit_`), and the base case returns `g`. -/
 lemma doNormalize_scaleDown_sbit_preserved
     (maxM m : UInt64) (e : Int) (g : Guard) (m' : UInt64) (e' : Int) (g' : Guard)
     (h : doNormalize_scaleDown maxM m e g = .ok (m', e', g')) :
@@ -32,9 +31,8 @@ lemma doNormalize_scaleDown_sbit_preserved
     have hg' : g = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
     rw [← hg']
 
-/-- `doNormalize_capAtMaxRep` preserves the guard's sign bit: the only mutating
-branch pushes a digit (`Guard.push` keeps `sbit_`), and both other branches
-return `g` unchanged. Shared by the directed-mode `Normalize` files. -/
+/-- `doNormalize_capAtMaxRep` preserves the guard's sign bit, since its only guard change is a `Guard.push`,
+which keeps `sbit_`. -/
 lemma doNormalize_capAtMaxRep_sbit_preserved
     (m : UInt64) (e : Int) (g : Guard) (m' : UInt64) (e' : Int) (g' : Guard)
     (h : doNormalize_capAtMaxRep m e g = .ok (m', e', g')) :
@@ -52,11 +50,8 @@ lemma doNormalize_capAtMaxRep_sbit_preserved
     have hg' : g = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
     rw [← hg']
 
-/-- `doNormalize_scaleUp` preserves the exact value `m.toNat * 10^e`.
-
-The loop multiplies `m` by `10` (and decrements the exponent) while
-`m < minMantissa`; with `minMantissa.toNat ≤ 10^18` no `UInt64` overflow occurs
-since `m.toNat < 10^18 ⇒ m.toNat * 10 < 10^19 < 2^64`. -/
+/-- `doNormalize_scaleUp` preserves the exact value `m.toNat * 10^e`. The bound `minMantissa.toNat ≤ 10^18`
+rules out `UInt64` overflow when the loop multiplies by 10. -/
 theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
     (hminMant : minMant.toNat ≤ 10 ^ 18) :
     let (m', e') := doNormalize_scaleUp minMant m e
@@ -80,7 +75,6 @@ theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
       apply Nat.mod_eq_of_lt
       omega
     rw [IH]
-    -- goal: (m*10).toNat * 10^(e-1) = m.toNat * 10^e
     rw [hm10_nat]
     push_cast
     have he : (10 : ℚ) ^ e = 10 ^ (e - 1) * 10 := by
@@ -93,12 +87,8 @@ theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
       rw [doNormalize_scaleUp]; rw [if_neg hcond]
     rw [hunfold]
 
-/-- `doNormalize_scaleDown` preserves value as a `represents` fraction.
-
-Mirrors `scaleDown128_correct`: dividing `m` by 10 pushes the dropped digit
-`m % 10` into the guard, and the loop stops at `m ≤ maxMantissa`. When it
-returns `.ok (m', e', g')`, the value `m.toNat * 10^e` equals
-`(m'.toNat + f') * 10^e'` with `represents g' f'`. -/
+/-- When `doNormalize_scaleDown` returns `.ok (m', e', g')`, `m' ≤ maxMantissa` and the value `(m + f0) * 10^e`
+equals `(m' + f') * 10^e'`, where `g'` represents `f'`. Same as `scaleDown128_correct` for 64 bits. -/
 theorem doNormalize_scaleDown_correct
     (maxMant m : UInt64) (e : Int) (g0 : Guard) (f0 : ℚ)
     (hrep0 : represents g0 f0)
@@ -156,10 +146,8 @@ theorem doNormalize_scaleDown_correct
       omega
     exact ⟨0, f0, by simp, hmle, by simp, hrep0⟩
 
-/-- `doNormalize_capAtMaxRep` preserves value as a `represents` fraction.
-
-It is either the identity (`m ≤ maxRepUp`) or one further scale-down step
-(`m > maxRepUp`), pushing the dropped digit `m % 10` into the guard. -/
+/-- `doNormalize_capAtMaxRep` preserves the value `(m + f0) * 10^e` as `(m' + f') * 10^e'` with `m' ≤ maxRepUp`,
+where `g'` represents `f'`. -/
 theorem doNormalize_capAtMaxRep_correct
     (m : UInt64) (e : Int) (g0 : Guard) (f0 : ℚ)
     (hrep0 : represents g0 f0)
@@ -217,7 +205,7 @@ theorem doNormalize_capAtMaxRep_correct
     omega
 
 /-- If `doNormalize_scaleDown` actually fires (`m > maxMantissa`), its output
-mantissa is at most `(2^64 − 1)/10` — in particular strictly below `maxRep`. -/
+mantissa is at most `(2^64 − 1)/10`, in particular strictly below `maxRep`. -/
 lemma doNormalize_scaleDown_fired_output_le
     (maxM m : UInt64) (e : Int) (g : Guard) (m' : UInt64) (e' : Int) (g' : Guard)
     (hgt : m > maxM)
@@ -239,16 +227,8 @@ lemma doNormalize_scaleDown_fired_output_le
   | case3 m e g hgt' =>
     exact absurd hgt hgt'
 
-/-- Combined value-preservation + side conditions for `Number.normalize` (`.to_nearest`).
-
-When `n.normalize largeRange.min largeRange.max .to_nearest = .ok result` with a
-non-zero result mantissa, there is a pre-`doRoundUp` state `(zm, ze, g)` together
-with a fraction `f` such that:
-* the captured value `((zm.toNat : ℚ) + f) * 10 ^ ze` equals `|n.toRat|`,
-* `g` represents `f`, with `mantissaFloor ≤ zm.toNat ≤ maxRep.toNat`,
-* the floor constraint is vacuous (`zm.toNat = mantissaFloor` never holds since
-  `zm.toNat ≥ minMantissa > mantissaFloor`),
-* `g.doRoundUp false zm ze ...` succeeds with the `positive` form of `result`. -/
+/-- In every mode, a successful `normalize` with nonzero result has a pre-`doRoundUp` state `(zm, ze, g)` and a
+fraction `f` represented by `g` with `|n| = (zm + f) * 10^ze`, and `doRoundUp` on it yields `|result|`. -/
 theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
@@ -351,9 +331,8 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
     have hm3_le_maxRepUp_v : m3.toNat ≤ maxRepUp.toNat := hm3_le_maxRep
     have hf3_nn : 0 ≤ f3 := represents_nonneg hrep3
     have hf3_lt : f3 < 1 := represents_lt_one hrep3
-    -- Floor constraint is vacuous under the maxRepUp cap: in the divide case
-    -- m3 = m2/10 ≥ (maxRepUp+1)/10 > mantissaFloor, and in the identity case
-    -- m3 = m2 ≥ minMantissa = 10^18 > mantissaFloor.
+    -- Floor constraint is vacuous: m3 = m2/10 ≥ (maxRepUp+1)/10 in the divide case and
+    -- m3 = m2 ≥ 10^18 in the identity case, both above mantissaFloor.
     have hfloor_constraint : m3.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f3 := by
       intro hm3_floor
       exfalso
@@ -454,7 +433,7 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
         doNormalize_capAtMaxRep_sbit_preserved m2 e2 g2 m3 e3 g3 hcap
       rw [h_g3_sbit, h_g2_sbit, h_g0_sbit]
     -- Strong lower bound: the capAtMaxRep stage exits at ≥ floorSucc (divide
-    -- case: m2 > maxRepUp ⟹ m2/10 ≥ (maxRepUp+1)/10; identity: m3 = m2 ≥ 10^18).
+    -- case: m2 > maxRepUp ⟹ m2/10 ≥ (maxRepUp+1)/10, identity: m3 = m2 ≥ 10^18).
     have hm3_ge_floorSucc : mantissaFloorSucc ≤ m3.toNat := by
       unfold doNormalize_capAtMaxRep at hcap
       by_cases hmr : m2 > maxRepUp

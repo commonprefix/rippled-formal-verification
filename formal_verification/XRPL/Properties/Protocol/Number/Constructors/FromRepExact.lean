@@ -7,13 +7,10 @@ import XRPL.Properties.Protocol.Number.Constructors.Common.Proofs
 
 /-! # `from_rep` is value-exact on any in-range `Int64` mantissa
 
-`from_rep` (hence `IOUAmount.toNumber`) only ever scales an `Int64` mantissa **up** into the
+`from_rep` (hence `IOUAmount.toNumber`) only ever scales an `Int64` mantissa up into the
 internal `largeRange = [10¹⁸, 10¹⁹)`, which is exact, with no rounding. The single
 exception is `mantissa = Int64.minValue`, whose magnitude `2⁶³` lands in the cusp
-`(maxRep, maxRepUp)` where `pushOverflow` rounds; we exclude it via `m ≤ maxRep`.
-
-This file proves the exact-value characterization and feeds the hypothesis-minimal
-`IOUAmount` comparison headlines. -/
+`(maxRep, maxRepUp)` where `pushOverflow` rounds, so the theorem excludes it. -/
 
 namespace XRPL.Model.Protocol
 
@@ -74,9 +71,8 @@ lemma doNormalize_scaleUp_id_or_mul10 (minMant m : UInt64) (e : Int)
 
 set_option maxHeartbeats 800000 in
 -- unfolds the full normalize pipeline (scaleUp / scaleDown / capAtMaxRep / doRoundUp)
-/-- **`doNormalize` is value-exact** on any `Int64`-range mantissa `m ∈ [1, maxRep]`
-(i.e. `m ≠ 2⁶³`) with enough exponent room: it scales `m` up into `largeRange` with no
-rounding, returning a normalized number of the same value `m · 10^e`, in every mode. -/
+/-- With enough exponent room, `doNormalize` scales any mantissa `m ∈ [1, maxRep]` into `largeRange` with no
+rounding, in every mode, and returns a normalized number of the same value `m · 10^e`. -/
 lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
     (h_pos : 1 ≤ m.toNat) (h_le : m.toNat ≤ maxRep.toNat)
     (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent - 1) :
@@ -88,7 +84,6 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
   have hmaxRepN : maxRep.toNat = 9223372036854775807 := maxRep_val
   have hmaxRepUpN : maxRepUp.toNat = 9223372036854775810 := rfl
   obtain ⟨M, e1, hMe1⟩ : ∃ M e1, doNormalize_scaleUp largeRange.min m e = (M, e1) := ⟨_, _, rfl⟩
-  -- value preservation
   have hval' : (M.toNat : ℚ) * 10 ^ e1 = (m.toNat : ℚ) * 10 ^ e := by
     have hval := doNormalize_scaleUp_value largeRange.min m e (by rw [hminN]; norm_num)
     simp only [hMe1] at hval; exact hval
@@ -102,7 +97,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
     have h := doNormalize_scaleUp_exp_le largeRange.min m e; simp only [hMe1] at h; exact h
   have he1_ge : minExponent ≤ e1 := by
     have h := doNormalize_scaleUp_exp_ge largeRange.min m e (by omega); simp only [hMe1] at h; exact h
-  -- the keystone lower bound `M ≥ 10^18`, from exit-exponent + value + exponent room
+  -- the lower bound `M ≥ 10^18`, from the exit exponent, the value and the exponent room
   have hM_lo : 10 ^ 18 ≤ M.toNat := by
     by_contra hlt
     push Not at hlt
@@ -136,7 +131,6 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
       (by rw [hmaxRepN] at h_le; omega) with h | h
     · simp only [hMe1] at h; left; rw [h]; exact h_le
     · simp only [hMe1] at h; right; exact h
-  -- result is normalized
   have hnormal : Number.isnormal ⟨neg, M, e1⟩ := by
     right
     refine ⟨?_, hM_le_max, ?_, he1_ge, ?_⟩
@@ -149,7 +143,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
     · show e1 ≤ maxExponent
       omega
   refine ⟨M, e1, ?_, hval', hnormal⟩
-  -- run the doNormalize pipeline: scaleUp lands at (M, e1); scaleDown is identity; the
+  -- run the doNormalize pipeline: scaleUp lands at (M, e1), scaleDown is identity, and the
   -- empty guard makes capAtMaxRep / doRoundUp exact (both arms).
   have hm_ne : ¬ (m == 0) = true := by
     intro h; have : m = 0 := by exact_mod_cast beq_iff_eq.mp h
@@ -205,9 +199,8 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
         (by rw [UInt64.le_iff_toNat_le, hminN]; omega) h_no_cusp he1_ge (by omega)]
     rfl
 
-/-- **`from_rep` is value-exact** on any `Int64` mantissa except `Int64.minValue`
-(whose magnitude `2⁶³` falls in the `pushOverflow` cusp), given enough exponent room:
-the result equals `mantissa · 10^e` and is normalized, in every mode. -/
+/-- With enough exponent room, `from_rep` is exact on any `Int64` mantissa except `Int64.minValue` (magnitude
+`2⁶³`, the `pushOverflow` cusp): the result equals `mantissa · 10^e` and is normalized, in every mode. -/
 theorem Number.from_rep_exact (mantissa : Int64) (e : Int) (mode : rounding_mode)
     (h_ne_min : mantissa ≠ Int64.minValue)
     (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent - 1) :

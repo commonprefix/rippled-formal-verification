@@ -30,8 +30,6 @@ def represents (g : Guard) (f : ℚ) : Prop :=
     (g.xbit_ = true ↔ x > 0) ∧
     allNibblesAtMost9 g.digits_
 
-/-! ## Core lemmas -/
-
 /-- Every nibble of `(0 : UInt64)` is `0`. -/
 lemma nibble_zero (p : ℕ) : nibble 0 p = 0 := by
   simp [nibble]
@@ -52,9 +50,8 @@ lemma represents_new : represents Guard.new 0 := by
   · simp [Guard.new]
   · exact allNibblesAtMost9_zero
 
-/-- `Guard.new` and `Guard.new.set_negative` both represent the fraction `0`.
-Shared by the `Normalize` and `Mul` algorithmic-facts files (the initial guard
-seeded by sign). -/
+/-- `Guard.new` and `Guard.new.set_negative` (the initial guard seeded by sign) both represent
+the fraction `0`. -/
 lemma g0_represents_zero (negative : Bool) :
     represents (if negative then Guard.new.set_negative else Guard.new) 0 := by
   cases negative
@@ -69,9 +66,7 @@ lemma g0_represents_zero (negative : Bool) :
     · have : Guard.new.set_negative.digits_ = Guard.new.digits_ := rfl
       rw [this]; exact hall
 
-/-- A guard with no packed digits and a clear overflow bit represents exactly
-the fraction `0`: `decimalValue` of `digits_ = 0` is `0`, and `xbit_ = false`
-forces the hidden tail `x` to be `0`. -/
+/-- A guard with no digits and a clear `xbit_` represents exactly the fraction `0`. -/
 lemma represents_eq_zero_of_digits_zero_xbit_false {g : Guard} {f : ℚ}
     (hd : g.digits_ = 0) (hx : g.xbit_ = false) (hrep : represents g f) :
     f = 0 := by
@@ -83,8 +78,6 @@ lemma represents_eq_zero_of_digits_zero_xbit_false {g : Guard} {f : ℚ}
     rw [hx] at this; exact Bool.noConfusion this
   rw [hf_eq, hd, decimalValue_zero, hx_zero]
   norm_num
-
-/-! ### Supporting lemmas for `represents_push` -/
 
 /-- A UInt64's low nibble equals its `.toNat` mod 16. -/
 lemma UInt64.and_15_toNat (a : UInt64) : (a &&& 15).toNat = a.toNat % 16 := by
@@ -132,9 +125,7 @@ lemma toNat_push_digits (g : Guard) (d : UInt64) :
   have : (2 : Nat)^4 = 16 := by norm_num
   rw [this]; ring
 
-/-- `push` cannot empty a guard's content: if the pushed guard has zero digits
-and a clear sticky bit, the source guard had zero digits and a clear sticky bit
-(`push` shifts the old low nibble into `xbit_` and keeps the other nibbles). -/
+/-- `push` cannot empty a guard: if the pushed guard has zero digits and a clear `xbit_`, so did the source. -/
 lemma push_content_empty (g : Guard) (d : UInt64)
     (hd : (g.push d).digits_ = 0) (hx : (g.push d).xbit_ = false) :
     g.digits_ = 0 ∧ g.xbit_ = false := by
@@ -194,9 +185,7 @@ lemma nibble_push_lt {g : Guard} {d : UInt64} {p : ℕ} (hp : p < 15) :
         rw [pow_succ]; ring]
   exact Nat.add_mul_mod_self_right _ _ _
 
-/-! ### `represents_push` helpers -/
-
-/-- Key identity relating `decimalValue` before and after `push`, in `ℕ`. -/
+/-- How `decimalValue` changes under `push`, in `ℕ`. -/
 lemma decimalValue_push (g : Guard) (d : UInt64) :
     10 * decimalValue (g.push d).digits_ + nibble g.digits_ 0
       = decimalValue g.digits_ + (d.toNat % 16) * 10 ^ 16 := by
@@ -221,8 +210,6 @@ lemma decimalValue_push (g : Guard) (d : UInt64) :
     rw [Finset.sum_range_succ' (fun p => nibble g.digits_ p * 10 ^ p) 15]
     simp [pow_zero, Nat.add_comm]
   rw [lhs_expand, rhs_expand]; ring
-
-/-! ### Per-bullet helpers for `represents_push` -/
 
 /-- `1/10^16 = 10/10^17`. -/
 lemma rat_inv_16_eq : (1 : ℚ) / 10 ^ 16 = 10 / 10 ^ 17 := by
@@ -330,16 +317,6 @@ theorem represents_push {g : Guard} {f : ℚ} {d : UInt64}
       rw [hp15, nibble_push_top, d_eq]
       omega
 
-/-! ### `Guard.pop` semantics
-
-`pop` is the inverse-direction primitive of `push`: it returns the top
-nibble (position 15) and shifts the remaining digits up by one nibble
-(filling the bottom with zero). This block proves nibble-level identities,
-the algebraic `decimalValue` relation, and a "loose" represents
-counterpart — the precision of the hidden fraction `x` degrades by a
-factor of 10 with each pop, so the bound widens from `1/10^16` to
-`1/10^15`. -/
-
 /-- Nat-level formula for the `pop`ped guard's `digits_`. -/
 lemma toNat_pop_digits (g : Guard) :
     (g.pop.1.digits_).toNat = 16 * (g.digits_.toNat % 16 ^ 15) := by
@@ -384,8 +361,8 @@ lemma allNibblesAtMost9_pop (g : Guard) (h : allNibblesAtMost9 g.digits_) :
     rw [hq, nibble_pop_succ g hq_lt]
     exact h ⟨q, by omega⟩
 
-/-- Key algebraic identity for `pop`: pulling out the top nibble multiplies the
-decimal-interpreted value by 10 and subtracts the popped digit at position 16. -/
+/-- `pop` takes out the top nibble: the decimal value is multiplied by 10 and loses the popped digit at
+position 16. -/
 lemma decimalValue_pop_eq (g : Guard) :
     decimalValue (g.pop.1.digits_) + nibble g.digits_ 15 * 10 ^ 16
       = 10 * decimalValue g.digits_ := by
@@ -429,9 +406,7 @@ lemma decimalValue_pop_rat (g : Guard) :
   push_cast at hcast
   linarith
 
-/-- The popped digit equals the top nibble (position 15) of `g.digits_`.
-(Inlined to keep the `pop` block self-contained — `nibble_15` is defined
-later, so we expand the definition of `nibble` directly.) -/
+/-- The popped digit equals the top nibble (position 15) of `g.digits_`. -/
 lemma pop_digit_eq_nibble_15 (g : Guard) :
     g.pop.2.toNat = nibble g.digits_ 15 := by
   change ((g.digits_ >>> 60) &&& 0xF).toNat = _
@@ -441,21 +416,12 @@ lemma pop_digit_eq_nibble_15 (g : Guard) :
   rw [Nat.shiftRight_eq_div_pow]
   have h60 : (2 : ℕ) ^ 60 = 16 ^ 15 := by decide
   rw [h60]
-  -- LHS: g.digits_.toNat / 16^15 &&& 15
-  -- Replace `15` by `2^4 - 1` on LHS only (via conv_lhs):
   conv_lhs => rw [show (15 : ℕ) = 2 ^ 4 - 1 from by decide]
   rw [Nat.and_two_pow_sub_one_eq_mod]
-  -- Goal: g.digits_.toNat / 16^15 % 2^4 = g.digits_.toNat / 16^15 % 16
   congr 1
 
-/-- `Guard.pop` semantics, "loose" form. If `g` represents `f`, then the
-popped guard `g'` represents the value `10 * f - d.toNat` with a precision
-loss: the hidden fraction `x'` is bounded by `1/10^15` instead of `1/10^16`,
-because one decimal digit has been pulled out of the captured-digit window.
-
-Like `represents_push`, this returns the full "represents" structure (modulo
-the looser `x` bound), making it a drop-in algebraic primitive for the
-`recover` loop of `Number.operator_add`'s different-sign branch. -/
+/-- If `g` represents `f` and `pop` returns digit `d`, the new guard represents `10 · f - d` with a hidden fraction
+below `1/10^15` instead of `1/10^16`, since one digit left the captured window. -/
 theorem represents_pop {g : Guard} {f : ℚ} (hg : represents g f) :
     ∃ x' : ℚ, 0 ≤ x' ∧ x' < 1 / 10 ^ 15 ∧
       10 * f - (g.pop.2.toNat : ℚ)
@@ -489,14 +455,8 @@ theorem represents_pop {g : Guard} {f : ℚ} (hg : represents g f) :
       rw [hx0] at h10pos
       linarith
 
-/-- Refinement of `represents_pop` when the input guard's `xbit_` is `false`.
-
-When `g.xbit_ = false`, the input hidden fraction `x` is forced to `0` (by
-the `xbit_ ↔ x > 0` clause of `represents`), so the popped value
-`10 * f - d.toNat` has hidden fraction `0` as well. This means the popped
-guard `g.pop.1` genuinely *represents* `10 * f - d.toNat` in the full
-`represents` sense (hidden fraction in `[0, 1/10^16)`), not just the looser
-`1/10^15` bound of `represents_pop`. -/
+/-- When `g.xbit_ = false`, the popped guard represents `10 · f - d` exactly in the `represents` sense, not just
+within the looser `1/10^15` bound of `represents_pop`. -/
 theorem represents_pop_of_xbit_false {g : Guard} {f : ℚ}
     (hg : represents g f) (hx : g.xbit_ = false) :
     represents g.pop.1 (10 * f - (g.pop.2.toNat : ℚ)) := by
@@ -523,12 +483,8 @@ theorem represents_pop_of_xbit_false {g : Guard} {f : ℚ}
     · intro h; exact absurd h (by decide)
     · intro h; exact absurd h (lt_irrefl 0)
 
-/-! ### Hex-vs-decimal helpers for `round_correct` -/
-
 /-- The magic constant `0x5000_0000_0000_0000.toNat = 5 * 16^15`. -/
 lemma toNat_half_mark : (0x5000_0000_0000_0000 : UInt64).toNat = 5 * 16 ^ 15 := rfl
-
-/-! ### Hex-vs-decimal equivalence (nibble-level) -/
 
 /-- The top nibble of `d` equals `d.toNat / 16^15`. -/
 lemma nibble_15 (d : UInt64) : nibble d 15 = d.toNat / 16 ^ 15 := by
@@ -561,6 +517,18 @@ lemma decimalValue_decomp (d : UInt64) (hall : allNibblesAtMost9 d) :
           exact Nat.mul_le_mul_right _ this
       _ = 9 * ∑ p ∈ Finset.range 15, 10 ^ p := by rw [Finset.mul_sum]
       _ < 10 ^ 15 := by decide
+
+/-- `decimalValue` of a valid decimal guard fits in 16 digits. -/
+lemma decimalValue_lt_pow_16 {d : UInt64} (hall : allNibblesAtMost9 d) :
+    decimalValue d < 10 ^ 16 := by
+  unfold decimalValue
+  have hbound : ∀ p ∈ Finset.range 16, nibble d p * 10 ^ p ≤ 9 * 10 ^ p := by
+    intro p hp
+    have : nibble d p ≤ 9 := hall ⟨p, Finset.mem_range.mp hp⟩
+    exact Nat.mul_le_mul_right _ this
+  calc ∑ p ∈ Finset.range 16, nibble d p * 10 ^ p
+      ≤ ∑ p ∈ Finset.range 16, 9 * 10 ^ p := Finset.sum_le_sum hbound
+    _ < 10 ^ 16 := by decide
 
 /-- Auxiliary: `d.toNat % 16^k = 0 ↔ ∀ p < k, nibble d p = 0`. -/
 lemma mod_pow_16_zero_iff (d : UInt64) : ∀ k : ℕ,
@@ -734,8 +702,8 @@ lemma round_to_nearest_def {g : Guard} (hne : ¬ g.empty) :
   unfold Guard.round
   rw [if_neg hne]
 
-/-- `Guard.round` in `to_nearest` mode agrees with the rational-level oracle.
-Requires `¬ g.empty`; an empty guard returns the exact-sentinel `-2` (and `f = 0`). -/
+/-- For a non-empty guard holding fraction `f`, `to_nearest` `round` is `1` when `f > 1/2`, `-1` when `f < 1/2` and
+`0` when `f = 1/2`. -/
 theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents g f) :
     (g.round .to_nearest = 1 ↔ f > 1 / 2) ∧
     (g.round .to_nearest = -1 ↔ f < 1 / 2) ∧
@@ -809,23 +777,34 @@ theorem round_correct {g : Guard} {f : ℚ} (hne : ¬ g.empty) (hg : represents 
         · exact ⟨fun h => absurd h (by decide),
                  fun h => absurd feq (by intro hh; rw [hh] at h; exact lt_irrefl _ h)⟩
 
-/-! ## `round_correct` corollaries that derive `¬ g.empty` from the round value / `f`. -/
+/-- An empty guard represents the fraction zero. -/
+lemma represents_empty_eq_zero {g : Guard} {f : ℚ} (hemp : g.empty = true) (hrep : represents g f) :
+    f = 0 := by
+  have h : (g.digits_ == 0 && !g.xbit_) = true := hemp
+  rw [Bool.and_eq_true] at h
+  exact represents_eq_zero_of_digits_zero_xbit_false (beq_iff_eq.mp h.1) (by simpa using h.2) hrep
 
-/-- A `round = -2` ⟺ empty bridge used to discharge the non-emptiness side condition. -/
+/-- A guard representing exactly one half reports a tie. -/
+lemma represents_half_round_eq_zero {g : Guard} {f : ℚ} (hrep : represents g f) (h : f = 1 / 2) :
+    g.round .to_nearest = 0 := by
+  have hne : ¬ g.empty = true := fun he => by rw [represents_empty_eq_zero he hrep] at h; norm_num at h
+  exact (round_correct hne hrep).2.2.mpr h
+
+/-- `to_nearest` `round` is `-2` exactly when the guard is empty. -/
 private lemma round_neg_two_iff_empty (g : Guard) : g.round .to_nearest = -2 ↔ g.empty = true := by
   constructor
   · intro h; by_contra he; rw [round_to_nearest_def he] at h
     revert h; split_ifs <;> decide
   · intro he; unfold Guard.round; rw [if_pos he]
 
-/-- `round = 1` (which forces the guard non-empty) characterizes `f > 1/2`. -/
+/-- If the `to_nearest` `round` is `1`, the guard's fraction is above `1/2`. -/
 lemma represents_round_eq_one {g : Guard} {f : ℚ} (hg : represents g f)
     (h : g.round .to_nearest = 1) : f > 1 / 2 := by
   have hne : ¬ g.empty := by
     intro he; rw [(round_neg_two_iff_empty g).mpr he] at h; exact absurd h (by decide)
   exact (round_correct hne hg).1.mp h
 
-/-- `round = 0` (which forces the guard non-empty) characterizes `f = 1/2`. -/
+/-- If the `to_nearest` `round` is `0`, the guard's fraction is exactly `1/2`. -/
 lemma represents_round_eq_zero {g : Guard} {f : ℚ} (hg : represents g f)
     (h : g.round .to_nearest = 0) : f = 1 / 2 := by
   have hne : ¬ g.empty := by

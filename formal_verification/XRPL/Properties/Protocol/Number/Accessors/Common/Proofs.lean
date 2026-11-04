@@ -3,12 +3,10 @@ import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 
 namespace XRPL.Model.Protocol
 
-/-- `maxRep.toNat = 2^63 - 1 < 2^63`  the internal mantissa always fits in
-the positive `Int64` range when below the `maxRep` cusp. -/
+/-- `maxRep` is `2^63 - 1`, so a mantissa at or below `maxRep` fits in a positive `Int64`. -/
 private lemma maxRep_lt_2pow63 : maxRep.toNat < 2 ^ 63 := by rw [maxRep_val]; norm_num
 
-/-- The external mantissa view as an integer:
-`n.mantissa.toInt = sign · (post-`/10`-or-not internal magnitude)`. -/
+/-- The signed `mantissa()` as an integer: the sign times `mantissa_`, divided by 10 when `mantissa_ > maxRep`. -/
 lemma Number.mantissa_toInt (n : Number) :
     n.mantissa.toInt =
       (if n.negative_ then -1 else 1) *

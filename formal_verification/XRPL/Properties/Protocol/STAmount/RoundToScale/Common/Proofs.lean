@@ -2,19 +2,15 @@ import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
 
+/-! # `STAmount.roundToExponent` is correctly rounded onto the scale grid
+
+`roundToExponent` returns the floor or ceiling on `10^s·ℤ` in the directed modes, and one of the two enclosing
+grid points for `.to_nearest`, where double rounding through the 19-digit stage blurs the tie decision. -/
 
 namespace XRPL.Model.Protocol
 
-/-! # `STAmount.roundToExponent` is correctly rounded onto the scale grid
-
-The flagship discrete theorem for the quantization layer: `roundToExponent`
-returns the value rounded onto `10^s·ℤ`, exactly the floor/ceiling per the
-directed modes, and one of the two enclosing grid points for `.to_nearest`
-(faithful rounding; the tie decision is blurred by double rounding through
-the 19-digit stage). -/
-
 /-- A zero-mantissa `Number` renormalizes to the zero `IOUAmount`. -/
-private lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
+lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
     (h : n.mantissa_ = 0) :
     IOUAmount.ofNumber n mode = .ok IOUAmount.zero := by
   have hd : doNormalize n.negative_ n.mantissa_ n.exponent_ cMinValue cMaxValue mode
@@ -26,7 +22,7 @@ private lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mod
   rfl
 
 /-- `ofIOUAmount` of the zero `IOUAmount` is the canonical zero record. -/
-private lemma STAmount.ofIOU_zero (mode : rounding_mode) :
+lemma STAmount.ofIOU_zero (mode : rounding_mode) :
     STAmount.ofIOUAmount IOUAmount.zero mode = .ok ⟨.fractional, 0, -100, false⟩ := by
   unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
   simp only [STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
@@ -158,15 +154,8 @@ private lemma RoundsToRepresentableAt_grid_self (result : STAmount) (truth : ℚ
 
 set_option maxHeartbeats 3200000 in
 -- assembles the full pipeline: guards, reference, sum stage, exact subtraction
-/-- **`roundToExponent` is correctly rounded onto the grid `10^s·ℤ`** (faithfully
-for `.to_nearest`): the result is the floor/ceiling of the value at scale `s`
-per the directed mode, or one of the two enclosing grid points for
-`.to_nearest`. Hypotheses: a canonical IOU value, a scale in the full IOU range
-`[-96, 80]`, and a nonzero result (`result.mValue ≠ 0`). Below `-81` the 16-digit
-exponent clamp can flush a grid coefficient of small magnitude to zero; the
-nonzero-result hypothesis rules that flush out, so the exact grid point survives
-across the whole `[-96, 80]` range (above `80` the reference construction
-overflows). -/
+/-- `roundToExponent` rounds onto the grid `10^s·ℤ`: the floor or ceiling per directed mode, or one of the two
+enclosing grid points for `.to_nearest`. The result must be nonzero, since below scale `-81` it can flush to zero. -/
 theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : ℤ)
     (mode : rounding_mode)
     (hc : value.IOUCanonical)
@@ -272,7 +261,6 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         rw [h1] at hok₃
         exact ⟨sumI₂, rfl, hok₃⟩
     clear h_sub_ok hok₃ hok
-    -- Operand records of the subtraction.
     have hs1_norm : s1n.isNormalized :=
       lift_isNormalized sum.mIsNegative sum.mValue sum.mOffset
         hc_sum.mant_lo hc_sum.mant_hi
@@ -334,7 +322,6 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
       · simp only [if_true]
         push_cast
         ring
-    -- Split on exact cancellation, deriving the result value either way.
     have h_res_val : result.toRat = (if value.mIsNegative then (-1 : ℚ) else 1)
         * (k : ℚ) * 10 ^ s := by
       rcases Nat.eq_zero_or_pos k with hk0 | hk_pos
@@ -443,10 +430,8 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
           (by rw [hw_mant]; exact hw₀_mod)
           (by rw [hw_exp]; have := hw₀_exp_lo; unfold minExponent; omega)
           (by rw [hw_exp]; have := hw₀_exp_hi; unfold maxExponent; omega)
-        -- The 16-digit repack keeps `w`'s exponent within the IOU floor `cMinOffset`.
-        -- Below `-81` the coefficient `k·10^s` could underflow that floor, in which
-        -- case the repack flushes to the canonical zero; the nonzero-result
-        -- hypothesis `hnz` rules that flush out, so the floor bound holds.
+        -- The grid point never passes `cMaxOffset`. Below scale `-81` it could fall under `cMinOffset`
+        -- and flush to zero, which the nonzero-result hypothesis `hnz` rules out.
         have h_no_over : ¬ w.exponent_ + 3 > cMaxOffset := by
           rw [hw_exp]; unfold cMaxOffset; have := hw₀_exp_hi; omega
         have hexp_ge : cMinOffset ≤ w.exponent_ + 3 := by
@@ -475,7 +460,6 @@ theorem STAmount.roundToExponent_rounded_proof (value result : STAmount) (s : �
         have h_sumI₂_eq : sumI₂ = ⟨if w.negative_ then -(w.mantissa_ / 10 / 10 / 10).toInt64
             else (w.mantissa_ / 10 / 10 / 10).toInt64, w.exponent_ + 3⟩ :=
           Except.ok.inj (h_of₂.symm.trans h_of_explicit)
-        -- Repack.
         have h_q3 : (w.mantissa_ / 10 / 10 / 10).toNat = w.mantissa_.toNat / 1000 :=
           m_div_thousand_toNat w.mantissa_
         have h_q3_lo : 10 ^ 15 ≤ (w.mantissa_ / 10 / 10 / 10).toNat := by

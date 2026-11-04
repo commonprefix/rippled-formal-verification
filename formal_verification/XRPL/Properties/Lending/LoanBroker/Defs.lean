@@ -1,7 +1,7 @@
 import XRPL.Model.Lending.LoanBroker.LoanBroker
 import XRPL.Model.Lending.LoanBroker.BrokerCover
 
-/-! # LoanBroker state validity (exact-rational view) -/
+/-! # LoanBroker exact state, cover floor and asset rounding -/
 
 namespace XRPL.Model.Lending
 
@@ -27,6 +27,7 @@ def RawLoanBroker.toExact (rb : RawLoanBroker) : RawLoanBroker.Exact where
   coverRateMinimum := rb.coverRateMinimum.toNat
   coverRateLiquidation := rb.coverRateLiquidation.toNat
 
+/-- The `Valid` checks of a loan-broker state, in exact arithmetic. -/
 structure RawLoanBroker.Exact.Valid (s : RawLoanBroker.Exact) : Prop where
   debtTotal_nonneg : 0 ≤ s.debtTotal
   coverAvailable_nonneg : 0 ≤ s.coverAvailable

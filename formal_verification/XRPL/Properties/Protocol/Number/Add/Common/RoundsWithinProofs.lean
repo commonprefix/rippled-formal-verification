@@ -15,15 +15,8 @@ namespace XRPL.Model.Protocol
 
 set_option maxHeartbeats 1600000 in
 -- Two-sign × in-range/cusp leaf navigation with nlinarith over 2^63-scale literals.
-/-- `RoundsWithin`-shaped restatement of `operator_add_rounding_bound_same_sign_downward`,
-for **both** operand signs.
-
-For non-negative operands the guard's sign bit is clear, so no round-up ever
-fires and the algorithm truncates the magnitude (the cusp range clamps to
-`maxRep`, also below the truth). For negative operands the sign bit is set, so
-the round decision fires exactly when the guard has content (`f > 0`),
-rounding the magnitude up — which is downward in value; when it does not fire
-the guard content is empty (`f = 0`) and the result is exact. -/
+/-- `RoundsWithin` form of `operator_add_rounding_bound_same_sign_downward` for both operand signs: same-sign
+addition rounding downward never lands above the true sum, with relative error at most `10/(2^63 + 2)`. -/
 theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -61,12 +54,10 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     have h_result_eq_abs : result.toRat = |result.toRat| := by
       have h_result_nn : 0 ≤ result.toRat := Number.toRat_nonneg_of_nonnegative result h_result_pos
       rw [abs_of_nonneg h_result_nn]
-    -- Truth via positive form.
     have h_xy_signed : x.toRat + y.toRat = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
       have := habs_xy_eq; rw [h_abs_truth] at this; exact this
     have h_result_signed : result.toRat = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [h_result_eq_abs]; exact h_result_abs
-    -- For positive operands, g.sbit_ = false.
     have h_g_sbit_false : g.sbit_ = false := h_sbit.trans h_pos
     -- The downward round decision never fires when sbit is clear.
     have h_bool_false : ∀ g' : Guard, g'.sbit_ = false →
@@ -116,7 +107,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
             ≤ (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) * 10 ^ ze' :=
               mul_le_mul_of_nonneg_right h_inner h10ze'_nn
           _ = (((zm.toNat : ℚ) + f)) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
-    · -- Cusp range: maxRep < zm ≤ maxRepUp; truncate clamps stay below the truth.
+    · -- Cusp range: maxRep < zm ≤ maxRepUp, where truncate clamps stay below the truth.
       push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
         h_zm_le_rep hzm_le_maxRep .overflow res_pos h_rup_pos hres_pos_mant_ne
@@ -185,7 +176,6 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
       have h2 := Number.toRat_of_neg result h_result_neg
       rw [h2, h_result_abs_via_self]
     have h_g_sbit_true : g.sbit_ = true := h_sbit.trans h_neg
-    -- Rewriting the goal into magnitude form.
     have h_truth_abs_eq : |x.toRat + y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_xy_eq
     by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
     · -- ===== in range: zm ≤ maxRep =====
@@ -193,7 +183,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
       · -- round-up fires: f > 0 and the output magnitude exceeds the truth's.
         have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_downward g f hf_rep h_sru
         by_cases h_cusp : zm = maxRep
-        · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
+        · -- Cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_downward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
           try simp only at h_cusp_val
@@ -253,7 +243,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
                     = 10 * ((zm.toNat : ℚ) + f) / maxRepCuspTarget from by ring,
                   le_div_iff₀ (by norm_num : (0 : ℚ) < maxRepCuspTarget)]
               nlinarith [hzm_q_gt, hf_nn, hf_lt1, hf_pos]
-      · -- no round-up: sbit is set, so the guard content is empty and f = 0; exact.
+      · -- no round-up: sbit is set, so the guard content is empty and f = 0, so the result is exact.
         obtain ⟨h_dig0, h_xbit0⟩ :=
           content_empty_of_not_shouldRoundUp_downward g h_g_sbit_true h_sru
         have hf_zero : f = 0 :=
@@ -349,13 +339,8 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
               le_div_iff₀ (by norm_num : (0 : ℚ) < maxRepCuspTarget)]
           nlinarith [hf_nn]
 
-/-- `RoundsWithin`-shaped restatement of the unified tight bound
-`operator_add_rounding_bound_downward_tight`. Covers both same-sign and diff-sign
-branches with the uniform magnitude scale `11/(2^63 - 18)`, **unconditionally**:
-the same-sign direction is `operator_add_rounds_same_sign_downward` (both
-operand signs), and the diff-sign direction is
-`operator_add_rounding_bound_diff_sign_downward_dir` (via the recover-loop
-digit-exactness fact `0 ≤ δ` and the `doNormalize128` direction keystone). -/
+/-- Addition rounding downward with a nonzero result never lands above the true sum and has relative error at most
+`11/(2^63 - 18)`, for both operand signs. -/
 theorem operator_add_rounds_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -383,16 +368,8 @@ theorem operator_add_rounds_downward_proof (x y result : Number)
 
 set_option maxHeartbeats 1600000 in
 -- Two-sign × in-range/cusp leaf navigation with nlinarith over 2^63-scale literals.
-/-- `RoundsWithin`-shaped restatement of `operator_add_rounding_bound_same_sign_upward`,
-for **both** operand signs.
-
-For non-negative operands the guard's sign bit is clear, so the round decision
-fires exactly when the guard has content (`f > 0`), rounding the magnitude — and
-hence the value — up; when it does not fire the guard content is empty (`f = 0`)
-and the result is exact. For negative operands the sign bit is set, so no
-round-up ever fires and the algorithm truncates the magnitude (the cusp range
-clamps to `maxRep`, also at or below the truth's magnitude), which is upward in
-value. -/
+/-- `RoundsWithin` form of `operator_add_rounding_bound_same_sign_upward` for both operand signs: same-sign
+addition rounding upward never lands below the true sum, with relative error at most `10/(2^63 + 2)`. -/
 theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -439,7 +416,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
       · -- round-up fires: f > 0 and the output magnitude exceeds the truth's.
         have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_upward g f hf_rep h_sru
         by_cases h_cusp : zm = maxRep
-        · -- E1 cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
+        · -- Cusp: zm = maxRep, output magnitude maxRepCuspTarget = maxRepNat + 3.
           have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
             .overflow res_pos h_rup_pos hres_pos_mant_ne
           try simp only at h_cusp_val
@@ -498,7 +475,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
                     = 10 * ((zm.toNat : ℚ) + f) / maxRepCuspTarget from by ring,
                   le_div_iff₀ (by norm_num : (0 : ℚ) < maxRepCuspTarget)]
               nlinarith [hzm_q_gt, hf_nn, hf_lt1, hf_pos]
-      · -- no round-up: sbit is clear, so the guard content is empty and f = 0; exact.
+      · -- no round-up: sbit is clear, so the guard content is empty and f = 0, so the result is exact.
         obtain ⟨h_dig0, h_xbit0⟩ :=
           content_empty_of_not_shouldRoundUp_upward g h_g_sbit_false h_sru
         have hf_zero : f = 0 :=
@@ -630,7 +607,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
       have : g.sbit_ = false := h.1
       rw [h_g_sbit_true] at this; exact Bool.noConfusion this
     by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
-    · -- In-range: doRoundUp truncates; -(zm·10^ze') sits at or above the truth.
+    · -- In-range: doRoundUp truncates, so -(zm·10^ze') sits at or above the truth.
       have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_no_sru h_zm_le_rep
         .overflow res_pos h_rup_pos hres_pos_mant_ne
       try simp only at h_tr_val
@@ -654,7 +631,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
             le_div_iff₀ (by norm_num : (0 : ℚ) < maxRepCuspTarget)]
         have h10zm : 9223372036854775800 ≤ 10 * (zm.toNat : ℚ) := by linarith
         nlinarith [hf_lt1, hf_nn]
-    · -- Cusp range: maxRep < zm ≤ maxRepUp; truncate clamps stay at or below the
+    · -- Cusp range: maxRep < zm ≤ maxRepUp, where truncate clamps stay at or below the
       -- truth's magnitude, hence at or above the truth.
       push Not at h_zm_le_rep
       obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward
@@ -706,13 +683,8 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
         rw [h_bool_false g zm h_g_sbit_true] at hfire
         exact absurd hfire Bool.noConfusion
 
-/-- `RoundsWithin`-shaped restatement of the unified tight bound
-`operator_add_rounding_bound_upward_tight`. Covers both same-sign and diff-sign
-branches with the uniform magnitude scale `11/(2^63 - 18)`, **unconditionally**:
-the same-sign direction is `operator_add_rounds_same_sign_upward` (both operand
-signs), and the diff-sign direction is
-`operator_add_rounding_bound_diff_sign_upward_dir` (via the recover-loop
-digit-exactness fact `0 ≤ δ` and the `doNormalize128` direction keystone). -/
+/-- Addition rounding upward with a nonzero result never lands below the true sum and has relative error at most
+`11/(2^63 - 18)`, for both operand signs. -/
 theorem operator_add_rounds_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -747,18 +719,8 @@ theorem operator_add_rounds_same_sign_towards_zero_proof (x y result : Number)
     hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
   exact ⟨h_dir, le_of_lt h_mag⟩
 
-/-- `RoundsWithin`-shaped restatement of the unified tight bound
-`operator_add_rounding_bound_towards_zero_tight`. Covers both same-sign and
-diff-sign branches with the uniform magnitude scale `11/(2^63 - 18)`,
-**unconditionally**: the same-sign direction is
-`operator_add_rounds_same_sign_towards_zero`, and the diff-sign direction is
-`operator_add_rounding_bound_diff_sign_towards_zero_dir`.
-
-(Historical note: before the f765ab1 borrow, diff-sign `.towards_zero` could
-round the magnitude *away* from zero — the pipeline truncated the un-borrowed
-mantissa above the truth. The borrowed form `(zm - 1) + δ` with `δ ∈ [0,1]`
-restored the direction, proved through the `doNormalize128` direction
-keystone.) -/
+/-- Addition rounding towards zero with a nonzero result never exceeds the true sum's magnitude and has relative
+error at most `11/(2^63 - 18)`, for both operand signs. -/
 theorem operator_add_rounds_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -795,9 +757,8 @@ theorem operator_add_rounds_same_sign_to_nearest_proof (x y result : Number)
   operator_add_rounding_bound_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
     h_same_sign h_not_zero hok
 
-/-- `RoundsWithin`-shaped restatement of the unified tight bound
-`operator_add_rounding_bound_to_nearest_tight`. Covers both same-sign and diff-sign
-branches with the uniform `ε = 6/(2^63 - 3)`, with no input-magnitude hypothesis. -/
+/-- Addition rounding to nearest with a nonzero result has relative error at most `6/(2^63 - 3)`, for both operand
+signs, with no bound on the input magnitudes. -/
 theorem operator_add_rounds_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

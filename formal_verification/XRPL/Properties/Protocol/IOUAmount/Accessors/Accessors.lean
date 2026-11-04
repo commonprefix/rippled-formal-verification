@@ -4,12 +4,12 @@ import XRPL.Properties.Protocol.IOUAmount.Accessors.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- **The public `mantissa` / `exponent` accessors are faithful.** -/
+/-- The public `mantissa` and `exponent` accessors give back the value: `mantissa · 10^exponent = toRat`. -/
 theorem IOUAmount.mantissa_exponent_eq_toRat (a : IOUAmount) :
     ((IOUAmount.mantissa a).toInt : ℚ) * (10 : ℚ) ^ (IOUAmount.exponent a) = a.toRat :=
   IOUAmount.mantissa_exponent_eq_toRat_proof a
 
-/-- **`toBool` decides non-zeroness.** -/
+/-- `toBool` decides non-zeroness. -/
 theorem IOUAmount.toBool_iff (a : IOUAmount) :
     IOUAmount.toBool a = true ↔ a.toRat ≠ 0 :=
   IOUAmount.toBool_iff_proof a

@@ -1,17 +1,21 @@
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 
+/-! # Negation of an STAmount
+
+`operator_neg` flips the sign flag (or is the identity on zero), keeps the numericType, offset and magnitude,
+and negates the exact value. Subtraction reuses the addition results via `v1 - v2 = v1 + (-v2)`. -/
+
 namespace XRPL.Model.Protocol
-
-/-! ## `operator_neg` value and field invariants
-
-`operator_neg` flips the sign flag (or is the identity on zero); it preserves the
-numericType, offset, and magnitude, and negates the exact value. These let the
-subtraction theorems reuse the addition engine via `v1 - v2 = v1 + (-v2)`. -/
 
 lemma STAmount.operator_neg_mNumericType (s : STAmount) :
     s.operator_neg.mNumericType = s.mNumericType := by
   unfold STAmount.operator_neg; split <;> rfl
+
+/-- Negating an amount keeps whether it is an XRP or MPT amount. -/
+lemma STAmount.operator_neg_integral (s : STAmount) : s.operator_neg.integral = s.integral := by
+  unfold STAmount.integral
+  rw [STAmount.operator_neg_mNumericType]
 
 lemma STAmount.operator_neg_mOffset (s : STAmount) : s.operator_neg.mOffset = s.mOffset := by
   unfold STAmount.operator_neg; split <;> rfl

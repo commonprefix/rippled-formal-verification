@@ -363,7 +363,8 @@ private def UnsettledPayment.payInstalments {α : Type} (payment : UnsettledPaym
     else payment'.payInstalments remaining amount
 
 -- Reverse any impairment before paying
-private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) :=
+private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α)
+    : TerExcept (LoanWithPool α) :=
   if loan.isImpaired then loan.manageUnimpair pool else pure { loan' := loan, pool' := pool }
 
 private def Loan.payScheduledInstalments {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
@@ -457,7 +458,7 @@ def Loan.latePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amoun
   let pc ← loan.lateComponents now
   loan.paySingleInstalment pool pc amount
 
--- Pay off the loan early: clear the whole outstanding value plus early-payoff interest and the close fee
+-- Pay off the loan early: pay the principal plus early-payoff interest and the close fee
 def Loan.fullPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
     (now : UInt32) : TerExcept (LoanWithAmounts α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then

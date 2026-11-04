@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 
 namespace XRPL.Model.Protocol
 
-/-- 16-digit `doRoundUp`, **carry-cusp** branch: rounding up at the top of the range
-(`m = cMaxValue`) drops the trailing `9`, re-rounds (which always fires, since the
-dropped digit is `9`), and renormalizes to `(cMinValue, e+1)`. -/
+/-- 16-digit `doRoundUp` at the top of the range (`m = cMaxValue`): a round-up drops the trailing `9`, rounds up
+again and renormalizes to `(cMinValue, e + 1)`. -/
 lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_mode) (loc : Error)
     (hb : (g.round mode == 1 || (g.round mode == 0 && cMaxValue % 2 == 1)) = true)
     (hexp_lo : minExponent ≤ e + 1) (hexp_hi : e + 1 ≤ maxExponent) :
@@ -80,11 +79,8 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
   dsimp only
   rw [if_neg (by omega)]
 
-/-- **16-digit re-rounding bound.** Rounding a near-largeRange-bottom mantissa
-(`[10^18, 2·10^18]`, the IOU-sum decade) down to the 16-digit range loses at most
-the dropped 3-digit tail: the result is within one 16-digit ULP (`10^(exponent+3)`)
-of the true value, in every mode. This is the missing piece for IOU arithmetic
-rounding bounds (compose with the `Number` operation bound via `rel_error_trans`). -/
+/-- In every mode, re-rounding a 19-digit mantissa to the 16-digit range moves the value by at most one 16-digit
+unit `10^(exponent + 3)`. -/
 theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
     (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
@@ -193,12 +189,8 @@ theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
         mul_le_mul_of_nonneg_left hbound (le_of_lt hpe_pos)
     _ = (10 : ℚ) ^ (n.exponent_ + 3) := hpow.symm
 
-/-- **Tight (half-ULP) 16-digit re-rounding bound, `to_nearest`.** Round-to-nearest
-picks the *closer* 16-digit grid point, so the error is at most **half** a 16-digit
-ULP (`½·10^(exp+3)`), not a full one. The round decision is tied to the dropped
-3-digit tail `M%1000` vs `500` via `round_correct`. This is the tight companion to
-`normalizeToRange_16_within_ulp` and halves the `ε₂` term of every `to_nearest` IOU
-arithmetic bound. -/
+/-- With `to_nearest`, re-rounding a 19-digit mantissa to the 16-digit range moves the value by at most half a
+16-digit unit, `10^(exponent + 3) / 2`. -/
 theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
     (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 4 ≤ maxExponent)
@@ -362,10 +354,8 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
       ≤ (10 : ℚ) ^ n.exponent_ * 500 := mul_le_mul_of_nonneg_left hbound (le_of_lt hpe_pos)
     _ = (1 / 2 : ℚ) * (10 : ℚ) ^ (n.exponent_ + 3) := by rw [hpow]; ring
 
-/-- Companion to `normalizeToRange_16_within_ulp`: the 16-digit re-rounding output
-mantissa is itself a canonical 16-digit mantissa — `|mant| ∈ [cMinValue, cMaxValue]`.
-Same three-case structure (truncate / fire / carry-cusp). Needed to show an
-`IOUAmount.ofNumber` result is `InRange16`. -/
+/-- The 16-digit re-rounding output mantissa lies in `[cMinValue, cMaxValue]` in absolute value. Used to show that
+an `IOUAmount.ofNumber` result is `InRange16`. -/
 theorem normalizeToRange_16_mantissa_range (n : Number) (mode : rounding_mode)
     (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
@@ -478,15 +468,7 @@ theorem normalizeToRange_16_exp_range (n : Number) (mode : rounding_mode)
     obtain ⟨_, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hexp]; omega
 
-/-! ## `normalizeToRange` at the 16-digit range: directed-mode correct-side (directional)
-
-Companions to `normalizeToRange_16_within_ulp` (magnitude). For the directed modes,
-the re-rounded value lands on the correct side of the source: `downward` never
-exceeds, `upward` never undershoots, `towards_zero` never grows in magnitude. Same
-three-case structure (truncate / fire / carry-cusp), with the round-bit fixed by
-sign via `round_bool_{downward,upward}_*`. These give the directional half of the
-directed-mode IOU re-rounding bound. -/
-
+/-- With `.downward`, re-rounding a 19-digit mantissa to 16 digits never lands above the source value. -/
 theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
     (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 4 ≤ maxExponent)
@@ -623,6 +605,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
     nlinarith [hpe_pos, hle]
 
 
+/-- With `.upward`, re-rounding a 19-digit mantissa to 16 digits never lands below the source value. -/
 theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
     (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 4 ≤ maxExponent)
@@ -751,6 +734,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
             _ = ((n.mantissa_.toNat / 1000 + 1 : ℕ) : ℚ) * 1000 := by push_cast; ring
         nlinarith [hpe_pos, hval]
 
+/-- With `.towards_zero`, re-rounding a 19-digit mantissa to 16 digits never grows the magnitude. -/
 theorem normalizeToRange_16_towards_zero (n : Number) (mant : Int64) (exp : Int)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
     (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 4 ≤ maxExponent)

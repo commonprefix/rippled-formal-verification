@@ -40,11 +40,8 @@ theorem operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result 
   rw [← h_bound_eq]
   exact doRoundUp_rounds_to_nearest_supTight_upTo_maxRepUp g zm ze' f hf_rep hzm_ge hzm_le_maxRep
     h_floor_constraint .overflow res_pos h_rup_pos hres_pos_mant_ne
-/-- Unified tight `to_nearest` addition bound. For ALL normalized operands —
-same-sign or different-sign — the relative rounding error of `operator_add` is at
-most `6/(2^63 - 3) ≈ 6.5·10⁻¹⁹`, with **no** input-magnitude hypothesis. The
-same-sign branch achieves `5/(2^63 + 7)` and the different-sign branch
-`6/(2^63 - 3)`; the uniform constant is the larger of the two. -/
+/-- For nonzero operands that do not cancel, `to_nearest` addition with a nonzero result has relative error at most
+`6/(2^63 - 3)`. The same-sign bound `5/(2^63 + 7)` is smaller. -/
 theorem operator_add_rounding_bound_to_nearest_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

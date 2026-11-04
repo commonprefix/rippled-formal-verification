@@ -1,13 +1,13 @@
 import XRPL.Properties.Protocol.STAmount.Sub.Common.Sub
 import XRPL.Properties.Protocol.STAmount.Add.RoundsToRepresentable
 
-/-! # Proof bodies for the IOU subtraction discrete/ULP (`RoundsToRepresentableWithin`)
-headlines. Subtraction reduces to addition via `v1 - v2 = v1 + (-v2)`. The thin headlines
-live in `Sub.RoundsToRepresentable`. -/
+/-! # Proofs that IOU subtraction lands within one ULP of the exact difference
+
+Subtraction reduces to addition via `v1 - v2 = v1 + (-v2)`. -/
 
 namespace XRPL.Model.Protocol
 
-/-- Proof of `operator_sub_repr_iou` (IOU subtraction within **1** ULP, any mode,
+/-- Proof of `operator_sub_repr_iou` (IOU subtraction within 1 ULP, any mode,
 any sign). -/
 theorem STAmount.operator_sub_repr_iou_proof (v1 v2 result : STAmount)
     (mode : rounding_mode)

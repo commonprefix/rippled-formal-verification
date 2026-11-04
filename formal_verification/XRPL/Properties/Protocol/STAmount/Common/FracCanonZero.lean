@@ -6,17 +6,14 @@ import XRPL.Properties.Protocol.STAmount.Common.OfNumberBoundary
 /-! # Canonical-or-zero fractional amounts
 
 A fractional `STAmount` that `canonicalize` produced is either stored canonically
-(`IOUCanonical`) or zero. `operator_add`, `operator_sub` and `roundToExponent`
-keep that, and `toNumber` of the zero amount is the exact zero. `canonicalize` and
-`ofNumber` keep the numeric type. -/
+(`IOUCanonical`) or zero. `operator_add`, `operator_sub` and `roundToExponent` keep that. -/
 
 namespace XRPL.Model.Protocol
 
 set_option maxRecDepth 4000
 
-/-- A successful `IOUAmount.normalize` output is a canonical 16-digit amount
-(`InRange16`) or the zero amount. The offset clamps that a `.ok` passed pin the
-exponent to `[-96, 80]`. -/
+/-- A successful `IOUAmount.normalize` output is a canonical 16-digit amount (`InRange16`) or the zero amount.
+The offset clamps that a `.ok` passed pin the exponent to `[-96, 80]`. -/
 lemma IOUAmount.normalize_InRange16_or_zero (a : IOUAmount) (mode : rounding_mode)
     (i : IOUAmount) (hok : IOUAmount.normalize a mode = .ok i) :
     i.InRange16 ∨ i.mantissa_ = 0 := by
@@ -97,9 +94,8 @@ lemma IOUAmount.normalize_InRange16_or_zero (a : IOUAmount) (mode : rounding_mod
           · show ee ≤ (80 : ℤ)
             have := not_lt.mp hhi; unfold cMaxOffset at this; omega
 
-/-- **`IOUAmount.normalize` keeps a nonnegative mantissa nonnegative.** Each stage
-carries the cleared sign into its output. Unlike the `RoundsWithin` facts it
-needs no magnitude bound. -/
+/-- `IOUAmount.normalize` keeps a nonnegative mantissa nonnegative. Each stage carries the cleared sign into
+its output, so unlike the `RoundsWithin` facts it needs no magnitude bound. -/
 lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding_mode)
     (i : IOUAmount) (hm : 0 ≤ m.toInt)
     (hok : IOUAmount.normalize ⟨m, e⟩ mode = .ok i) :
@@ -182,9 +178,8 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
           rw [hir, hrmm]
           exact hsign.1 hvneg
 
-/-- **`canonicalize` of a sign-cleared fractional source is nonnegative.** It
-needs only that the stored magnitude fits `Int64`, so it also covers small
-mantissas. -/
+/-- `canonicalize` of a sign-cleared fractional source is nonnegative. It needs only that the stored
+magnitude fits `Int64`, so it also covers small mantissas. -/
 lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : rounding_mode)
     (hfr : s.mNumericType = .fractional) (hneg : s.mIsNegative = false)
     (hfit : s.mValue.toNat < 2 ^ 63)
@@ -219,9 +214,8 @@ rounding pipeline preserves this. -/
 def STAmount.FracCanonZero (s : STAmount) : Prop :=
   s.mNumericType = .fractional ∧ (s.IOUCanonical ∨ s.mValue = 0)
 
-/-- `canonicalize` on a fractional record yields a `FracCanonZero` result: the IOU
-branch routes `iou → ofMantissaExp → normalize`, whose output is `InRange16`-or-zero
-(`normalize_InRange16_or_zero`), and the packed record keeps the fractional type. -/
+/-- `canonicalize` on a fractional record yields a `FracCanonZero` result: the IOU branch ends in `normalize`,
+whose output is `InRange16` or zero, and the packed record keeps the fractional type. -/
 lemma STAmount.canonicalize_fczr (s result : STAmount) (mode : rounding_mode)
     (hfr : s.mNumericType = .fractional) (hok : s.canonicalize mode = .ok result) :
     result.FracCanonZero := by
@@ -272,9 +266,8 @@ lemma STAmount.ofIOUAmount_fczr (a : IOUAmount) (mode : rounding_mode) (result :
   unfold STAmount.ofIOUAmount at hok
   exact STAmount.canonicalize_fczr _ result mode rfl hok
 
-/-- `operator_add` of a `FracCanonZero` first operand is `FracCanonZero`: the
-`v2 = 0` branch returns the operand, and both other reachable branches
-(`v1 = 0` and the IOU add) canonicalize a fractional record. -/
+/-- `operator_add` of a `FracCanonZero` first operand is `FracCanonZero`: the `v2 = 0` branch returns the
+operand, and both other reachable branches (`v1 = 0` and the IOU add) canonicalize a fractional record. -/
 lemma STAmount.operator_add_fczr (v1 v2 result : STAmount) (mode : rounding_mode)
     (h1 : v1.FracCanonZero) (hok : STAmount.operator_add v1 v2 mode = .ok result) :
     result.FracCanonZero := by
@@ -347,9 +340,8 @@ lemma STAmount.ofNumber_fractional_fczr (n : Number) (mode : rounding_mode) (res
     · rw [STAmount.checked] at hok
       exact STAmount.canonicalize_fczr _ result mode rfl hok
 
-/-- `roundToExponent` keeps `FracCanonZero`. The early exits return the value, and
-the general path adds and then subtracts a fractional reference, which both keep
-it. -/
+/-- `roundToExponent` keeps `FracCanonZero`. The early exits return the value, and the general path adds and
+then subtracts a fractional reference, which both keep it. -/
 lemma STAmount.roundToExponent_fczr (value result : STAmount) (scale : Int)
     (rounding : rounding_mode) (h : value.FracCanonZero)
     (hok : STAmount.roundToExponent value scale rounding = .ok result) :
@@ -376,9 +368,8 @@ lemma STAmount.roundToExponent_fczr (value result : STAmount) (scale : Int)
             STAmount.operator_add_fczr value referenceValue sum rounding ⟨hnt, hcz⟩ hsum
           exact STAmount.operator_sub_fczr sum referenceValue result rounding hsum_fczr hok
 
-/-- **`toNumber` of a zero-magnitude fractional amount is the exact zero.** The IOU
-lift short-circuits: `signedDrops = 0`, `ofMantissaExp` returns `IOUAmount.zero`,
-whose `from_rep` normalizes a zero mantissa to `Number.zero`. -/
+/-- `toNumber` of a zero-magnitude fractional amount is the exact zero. `ofMantissaExp` returns
+`IOUAmount.zero`, whose `from_rep` normalizes a zero mantissa to `Number.zero`. -/
 lemma STAmount.toNumber_zero_fractional (s : STAmount) (mode : rounding_mode)
     (hfr : s.integral = false) (hz : s.mValue = 0) :
     s.toNumber mode = .ok Number.zero := by

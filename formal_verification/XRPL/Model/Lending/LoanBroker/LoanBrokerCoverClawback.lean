@@ -36,6 +36,8 @@ def LoanBroker.roundedCoverClawback {α : Type} [AssetPool α] (lb : LoanBroker)
 -- LoanBrokerCoverClawback -> preclaim
 def LoanBroker.canCoverClawback {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) : Except Error TER := do
+  if lb.numericType == NumericType.native then return .tecNO_PERMISSION
+
   match ← (lb.roundedCoverClawback pool amount).run with
   | .error ter => return ter
   | .ok _ => return .tesSUCCESS

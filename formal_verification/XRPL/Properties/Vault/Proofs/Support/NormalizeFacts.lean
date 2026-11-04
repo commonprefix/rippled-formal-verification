@@ -2,7 +2,7 @@ import XRPL.Properties.Protocol.Common.AmountArith
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberBoundary
--- Re-exported for the files that import this one (these lemmas moved to Protocol)
+-- Re-exported for the files that import this one
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberFacts
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberTotality
 
@@ -13,6 +13,7 @@ Facts about `Number` normalization: `doNormalize`, `normalizeToRange`, the guard
 
 namespace XRPL.Model.Protocol
 
+/-- Normalizing a nonpositive mantissa gives a nonpositive mantissa. -/
 lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding_mode)
     (i : IOUAmount) (hm : m.toInt ≤ 0)
     (hok : IOUAmount.normalize ⟨m, e⟩ mode = .ok i) :
@@ -51,10 +52,7 @@ lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding
       have hv_norm : v.isNormalized :=
         normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
       obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv_ne
-      have hv_exp_lo : minExponent ≤ v.exponent_ := by
-        rcases hv_norm with hz | ⟨_, _, _, hlo', _⟩
-        · exact absurd (show v.mantissa_ = 0 by rw [hz]; rfl) hv_ne
-        · exact hlo'
+      have hv_exp_lo : minExponent ≤ v.exponent_ := Number.exponent_ge_min v hv_norm hv_ne
       have hvneg : v.negative_ = true := by
         obtain ⟨m3, e3, g3, res, hrup, hres_eq, -, -, -, -⟩ :=
           normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
@@ -128,9 +126,8 @@ lemma IOUAmount.normalize_exp_range (a : IOUAmount) (mode : rounding_mode) (i : 
             · have : cMaxOffset = (80 : ℤ) := rfl
               omega
 
-/-- A zero-mantissa `IOUAmount.normalize` output is the `-100` zero sentinel: the
-only exits that can produce one return `IOUAmount.zero`, and the general exit
-lands in the canonical 16-digit window. -/
+/-- A zero result of `IOUAmount.normalize` is the `-100` zero sentinel: a nonzero source always packs to a nonzero
+16-digit mantissa. -/
 lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : IOUAmount)
     (hok : IOUAmount.normalize a mode = .ok i) (hz : i.mantissa_ = 0) : i.exponent_ = -100 := by
   unfold IOUAmount.normalize at hok
@@ -181,7 +178,7 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
           simp only [] at hfn
           have hrmm : r = ⟨mm, ee⟩ := (Except.ok.inj hfn).symm
           by_cases hv0 : v.mantissa_ = 0
-          · -- the 19-digit lift flushed to zero; its exponent sits far below `cMinOffset`,
+          · -- the 19-digit lift flushed to zero, so its exponent sits far below `cMinOffset`,
             -- so the underflow branch would have fired before this one
             have hnr' : v.normalizeToRange cMinValue cMaxValue mode
                 = .ok ((if Number.zero.negative_ then -Number.zero.mantissa_.toInt64
@@ -202,10 +199,7 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
             have hv_norm : v.isNormalized :=
               normalize_result_isNormalized _ v mode hun_ne hfr' hv0
             obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv0
-            have hv_exp_lo : minExponent ≤ v.exponent_ := by
-              rcases hv_norm with h0 | ⟨_, _, _, hlo', _⟩
-              · exact absurd (show v.mantissa_ = 0 by rw [h0]; rfl) hv0
-              · exact hlo'
+            have hv_exp_lo : minExponent ≤ v.exponent_ := Number.exponent_ge_min v hv_norm hv0
             have hexp3 : v.exponent_ + 3 ≤ maxExponent :=
               normalizeToRange_iou_exp_hi v mode mm ee hvm_lo hvm_hi hnr
             obtain ⟨⟨hmlo, -⟩, -, -⟩ :=
@@ -216,92 +210,5 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
               have : mm = 0 := hz
               rw [this]; decide
             omega
-
-/-- **Full-range 16-digit bracketing.** The `normalizeToRange` result magnitude is
-either the floor `M/1000` or the ceiling `M/1000 + 1` of the source mantissa, scaled
-by `10^(exponent+3)` -- for EVERY rounding mode and over the whole 19-digit range. -/
-lemma normalizeToRange_16_bracket (n : Number) (mode : rounding_mode)
-    (mant : Int64) (exp : Int)
-    (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat < 10 ^ 19)
-    (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 4 ≤ maxExponent)
-    (hok : n.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp)) :
-    ∃ k : ℕ, (k = n.mantissa_.toNat / 1000 ∨ k = n.mantissa_.toNat / 1000 + 1) ∧
-      k < 2 ^ 63 ∧
-      (mant.toInt : ℚ) * 10 ^ exp
-        = (if n.negative_ then (-1 : ℚ) else 1) * ((k : ℚ) * 10 ^ (n.exponent_ + 3)) := by
-  obtain ⟨g, _hrep, _hsbit, _h_empty_of, h_red⟩ :=
-    doNormalize_small_facts n.negative_ n.mantissa_ n.exponent_ mode h_lo h_hi he_lo (by omega)
-  have hm3 : (n.mantissa_ / 10 / 10 / 10).toNat = n.mantissa_.toNat / 1000 :=
-    m_div_thousand_toNat n.mantissa_
-  have hcMax : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
-  have hcMin : cMinValue.toNat = 10 ^ 15 := by decide
-  -- value characterization: the result magnitude is `(M/1000 or M/1000+1)·10^(e+3)`
-  by_cases hround : (g.round mode == 1
-      || (g.round mode == 0 && (n.mantissa_ / 10 / 10 / 10) % 2 == 1)) = true
-  · by_cases hcusp : n.mantissa_ / 10 / 10 / 10 = cMaxValue
-    · -- carry-cusp: result `(cMinValue, e+4)`, value `(M/1000+1)·10^(e+3)`
-      have hcompute : n.normalizeToRange cMinValue cMaxValue mode
-          = .ok (if n.negative_ then -cMinValue.toInt64 else cMinValue.toInt64,
-                 (n.exponent_ + 3) + 1) := by
-        unfold Number.normalizeToRange
-        rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) mode
-          .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-        rfl
-      rw [hcompute] at hok
-      obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
-      have hMk : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by
-        have := congrArg UInt64.toNat hcusp; rw [hm3, hcMax] at this; exact this
-      refine ⟨n.mantissa_.toNat / 1000 + 1, Or.inr rfl, by omega, ?_⟩
-      rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega)]
-      rw [hcMin, hMk, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0) (n.exponent_ + 3) 1,
-          zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0) n.exponent_ 3]
-      push_cast; ring
-    · -- fire: result `(M/1000+1, e+3)`
-      have hlt : (n.mantissa_ / 10 / 10 / 10).toNat < cMaxValue.toNat := by
-        have hne : (n.mantissa_ / 10 / 10 / 10).toNat ≠ cMaxValue.toNat :=
-          fun h => hcusp (UInt64.toNat_inj.mp h)
-        rw [hcMax, hm3] at hne ⊢; omega
-      have hadd : (n.mantissa_ / 10 / 10 / 10 + 1).toNat = n.mantissa_.toNat / 1000 + 1 := by
-        rw [UInt64.toNat_add, hm3, show (1 : UInt64).toNat = 1 from rfl]
-        exact Nat.mod_eq_of_lt (by omega)
-      have hcompute : n.normalizeToRange cMinValue cMaxValue mode
-          = .ok (if n.negative_ then -(n.mantissa_ / 10 / 10 / 10 + 1).toInt64
-                 else (n.mantissa_ / 10 / 10 / 10 + 1).toInt64, n.exponent_ + 3) := by
-        unfold Number.normalizeToRange
-        rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
-          .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-        rfl
-      rw [hcompute] at hok
-      obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
-      refine ⟨(n.mantissa_ / 10 / 10 / 10 + 1).toNat, Or.inr hadd, by rw [hadd]; omega, ?_⟩
-      rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega)]
-      push_cast; ring
-  · -- truncate: result `(M/1000, e+3)`
-    have hcompute : n.normalizeToRange cMinValue cMaxValue mode
-        = .ok (if n.negative_ then -(n.mantissa_ / 10 / 10 / 10).toInt64
-               else (n.mantissa_ / 10 / 10 / 10).toInt64, n.exponent_ + 3) := by
-      unfold Number.normalizeToRange
-      rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
-        .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
-        (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-      rfl
-    rw [hcompute] at hok
-    obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
-    refine ⟨(n.mantissa_ / 10 / 10 / 10).toNat, Or.inl hm3, by rw [hm3]; omega, ?_⟩
-    rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega)]
-    push_cast; ring
-
-/-- A zero-mantissa `Number` renormalizes to the zero `IOUAmount`. (The version in
-`RoundToScale.Common.Proofs` is `private`, so it is reproven here.) -/
-lemma IOUAmount.ofNumber_zero_mant (n : Number) (mode : rounding_mode)
-    (h : n.mantissa_ = 0) :
-    IOUAmount.ofNumber n mode = .ok IOUAmount.zero := by
-  have hd : doNormalize n.negative_ n.mantissa_ n.exponent_ cMinValue cMaxValue mode
-      = .ok Number.zero := by
-    unfold doNormalize
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr h, if_pos rfl]
-  unfold IOUAmount.ofNumber IOUAmount.fromNumber Number.normalizeToRange
-  rw [hd]
-  rfl
 
 end XRPL.Model.Protocol

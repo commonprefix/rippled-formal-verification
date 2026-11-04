@@ -72,9 +72,8 @@ lemma Number.from_rep_isNormalized (m : Int64) (e : Int) (mode : rounding_mode)
     result.isNormalized :=
   Number.normalize_isNormalized _ result mode hok
 
-/-- Every successful `operator_mul` of normalized `Number`s gives a normalized
-`Number`. A zero operand is returned as it is, and every other product goes
-through `normalize`. -/
+/-- Every successful `operator_mul` of normalized `Number`s gives a normalized `Number`. A zero operand is
+returned as it is, and every other product goes through `normalize`. -/
 lemma Number.operator_mul_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y mode = .ok result) : result.isNormalized := by
@@ -89,9 +88,8 @@ lemma Number.operator_mul_isNormalized (x y result : Number) (mode : rounding_mo
     · exact absurd hok (by simp)
     · exact Number.normalize_isNormalized _ result mode hok
 
-/-- Every successful `operator_div` of normalized `Number`s gives a normalized
-`Number`. A zero numerator is returned as it is, and a zero quotient is the
-literal `Number.zero`. -/
+/-- Every successful `operator_div` of normalized `Number`s gives a normalized `Number`. A zero numerator is
+returned as it is, and a zero quotient is the literal `Number.zero`. -/
 lemma Number.operator_div_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y mode = .ok result) : result.isNormalized := by

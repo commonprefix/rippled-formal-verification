@@ -8,11 +8,10 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128Facts
 
 namespace XRPL.Model.Protocol
 
-/-! # Shared pieces for the addition discrete-rounding files
+/-! # Shared pieces for the addition rounding files
 
-Sign-transfer helpers for the same-sign branch, the exact-cancellation
-characterization for the `x = -y` guard, and the underflow/result-shape
-bridges for the diff-sign branch (which routes through `doNormalize128`). -/
+Sign helpers for same-sign sums, the exact `x = -y` case, and underflow and result-shape facts for opposite-sign
+sums, which go through `doNormalize128`. -/
 
 /-- A positive same-sign sum forces the shared sign bit clear. -/
 lemma add_same_sign_xn_false_of_truth_pos (x y : Number)
@@ -50,9 +49,7 @@ lemma add_truth_zero_of_eq_neg (x y : Number)
   rw [h_x_toRat, Number.toRat_neg]
   ring
 
-/-- A nonzero sum of nonzero operands (excluding exact cancellation): the
-diff-sign keystone facts certify it through the value frame; the same-sign
-side is immediate. -/
+/-- When addition succeeds on nonzero operands that do not cancel exactly, the true sum `x + y` is nonzero. -/
 theorem operator_add_truth_ne (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -74,7 +71,7 @@ theorem operator_add_truth_ne (x y : Number)
       have hy_np : y.toRat ≤ 0 := Number.toRat_nonpos_of_negative y (h_sign_eq ▸ hxn)
       have hx_neg : x.toRat < 0 := lt_of_le_of_ne hx_np hx_ne
       linarith
-  · -- Diff sign: the keystone facts expose `|x + y| = (M + δ)·10^ze` with `M ≥ 1`.
+  · -- Diff sign: the diff-sign facts give `|x + y| = (M + δ)·10^ze` with `M ≥ 1`.
     obtain ⟨M, ze', δ, zn, sticky, hδ_low, _, _, hM_pos, _, _, htruth, _, _, _, _⟩ :=
       operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
@@ -84,9 +81,7 @@ theorem operator_add_truth_ne (x y : Number)
     have h10 : (0 : ℚ) < (10 : ℚ) ^ ze' := zpow_pos (by norm_num) _
     nlinarith
 
-/-- The addition result with nonzero mantissa is normalized. (Same-sign: from
-the facts' `doRoundUp`+`normalize` invariants; diff-sign: from the
-`doNormalize128` keystone.) -/
+/-- A diff-sign addition result with nonzero mantissa is normalized. -/
 theorem operator_add_result_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -122,7 +117,7 @@ theorem operator_add_underflow_truth_small (x y result : Number) (mode : roundin
       linarith [le_of_lt hδ_lt])
     result hok128 hres0
 
-/-- Every normalized value sits strictly below the lattice top. -/
+/-- Every normalized value is below `10^19 · 10^maxExponent` in magnitude. -/
 lemma Number.abs_toRat_lt_top (x : Number) (hx : x.isNormalized) :
     |x.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
   have h_pow_pos : (0 : ℚ) < (10 : ℚ) ^ (maxExponent : ℤ) := zpow_pos (by norm_num) _
@@ -151,8 +146,8 @@ lemma Number.abs_toRat_lt_top (x : Number) (hx : x.isNormalized) :
             (show (10 ^ 19 - 1 : ℚ) < 10 ^ 19 by norm_num) h_pow_pos
           linarith
 
-/-- Opposite-sign sums never reach the lattice top: the sum magnitude is
-bounded by the larger operand magnitude. -/
+/-- An opposite-sign sum is below `10^19 · 10^maxExponent` in magnitude, since it is no larger than the larger
+operand. -/
 lemma add_diff_sign_truth_top (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (h_diff_sign : x.negative_ ≠ y.negative_) :

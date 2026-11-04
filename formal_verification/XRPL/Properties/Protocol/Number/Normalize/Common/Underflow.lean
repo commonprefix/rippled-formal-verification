@@ -10,10 +10,8 @@ namespace XRPL.Model.Protocol
 
 A zero result mantissa (with a nonzero input mantissa) means either the
 explicit zero branch fired (`e2 < minExponent ∨ m2 < minMantissa` after the
-scaling stages) or the final `doRoundUp` flushed. All paths pin the input
-value strictly below the smallest positive representable
-`10^18 · 10^minExponent`. The hypothesis-minimal discrete-rounding theorems
-consume this in their underflow branches. -/
+scaling stages) or the final `doRoundUp` flushed. In both cases the input's magnitude is below the
+smallest positive `Number`, `10^18 · 10^minExponent`. -/
 
 /-- A fired `doNormalize_scaleDown` exits at or above `(maxMantissa+1)/10`:
 with `maxMantissa = largeRange.max = 10^19 − 1` the output is `≥ 10^18`. -/
@@ -174,12 +172,11 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
           ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
         apply mul_le_mul_of_nonneg_left _ (by norm_num)
         exact zpow_le_zpow_right₀ (by norm_num) he2_le
-      -- The mantissa bound is strict only when m2 + 1 < 10^18 or f2 < 1 bites;
-      -- combine the strict first step with the two ≤ steps.
+      -- One step is strict and the other two are ≤, so the whole chain is strict.
       calc |n.toRat| < ((m2.toNat : ℚ) + 1) * 10 ^ e2 := h1
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * 10 ^ e2 := h2
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := h3
-  · -- Round-stage flush: `doRoundUp_flush_value_small` pins the frame.
+  · -- The rounding step flushed to zero: `doRoundUp_flush_value_small` bounds the value.
     push Not at hzero
     obtain ⟨he2_ge, hm2_ge⟩ := hzero
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by

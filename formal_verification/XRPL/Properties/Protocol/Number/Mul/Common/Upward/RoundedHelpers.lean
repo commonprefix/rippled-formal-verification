@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `truth` and `result.toRat`. -/
+/-- No normalized Number lies at or above `truth` and below `result.toRat`. -/
 theorem operator_mul_no_inbetween_above_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

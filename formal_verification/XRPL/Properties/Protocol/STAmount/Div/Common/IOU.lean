@@ -5,12 +5,11 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 import XRPL.Properties.Protocol.Number.Constructors.Constructors
 import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
 
-/-! # IOU division rounding (`STAmount.divide`)
+/-! # Steps of IOU division (`STAmount.divide`)
 
-`STAmount.divide` computes `q = ⌊numVal·10¹⁷ / denVal⌋` (`muldiv`), adds the `+5`
-rounding bias, then re-rounds via `checked`/`canonicalize`. For IOU this re-round
-routes `iou → from_rep` (exact 19-digit scale-up) `→ fromNumber = normalizeToRange`,
-so it reuses the 16-digit re-round keystone. -/
+`STAmount.divide` computes `q = ⌊numVal·10¹⁷ / denVal⌋` with `muldiv`, adds `5`, and rounds back to 16 digits with
+`checked`. This file bounds each step and the 16-digit `IOUAmount.normalize` they share. No theorem combines them
+into a bound for `divide` itself. -/
 
 namespace XRPL.Model.Protocol
 
@@ -45,10 +44,8 @@ lemma from_rep_RoundsWithin_anyMode (m : Int64) (e : Int) (mode : rounding_mode)
   | upward => exact from_rep_rounds_upward m e v hok hv_ne
   | towards_zero => exact from_rep_rounds_towards_zero m e v hok hv_ne
 
-/-- **Shared `IOUAmount.normalize` decomposition facts** for a 17-to-18-digit signed
-mantissa. The normalize routes through the exact 19-digit re-lift (`from_rep`) to a
-`Number` `v` then the 16-digit re-round (`ofNumber`). This bundles the `v` facts both
-the rel-error bound and the `InRange16` range bound downstream need. -/
+/-- Shared `IOUAmount.normalize` decomposition facts for a 17-to-18-digit signed mantissa: the exact
+19-digit re-lift `v` (`from_rep`) and its 16-digit re-round (`ofNumber`). -/
 lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
     (hok : IOUAmount.normalize ⟨m, e⟩ mode = .ok result) (hne : result.mantissa_ ≠ 0) :
@@ -64,7 +61,6 @@ lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (r
   | error err => rw [hfr] at hok; simp at hok
   | ok v =>
     rw [hfr] at hok; simp only at hok
-    -- hok : IOUAmount.ofNumber v mode = .ok result
     have hv_ne : v.mantissa_ ≠ 0 := IOUAmount.ofNumber_mantissa_ne_zero v mode result hok hne
     have hfr' : (Number.unchecked (m < 0) m.toInt.natAbs.toUInt64 e).normalize
         largeRange.min largeRange.max mode = .ok v := hfr
@@ -100,10 +96,8 @@ lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (r
       nlinarith [habs, h1, hvm18, hmlt, hpe, hpow1]
     exact ⟨v, rfl, hok, hv_ne, hv_mant.1, hv_mant.2, hv_exp_lo, hvexp⟩
 
-/-- **`IOUAmount.normalize` rel-error on a 17-to-18-digit signed mantissa** (the divide
-keystone). `m·10^e` with `10^16 ≤ |m| < 10^18` re-rounds via the exact 19-digit lift
-then the 16-digit snap, within the composed relative error `ε₁ + ε₂ + ε₁·ε₂`
-(`ε₁ = 10/(2⁶³+2)`, `ε₂ = 10⁻¹⁵`). -/
+/-- `IOUAmount.normalize` rel-error on a 17-to-18-digit signed mantissa. `m·10^e` with `10^16 ≤ |m| < 10^18`
+re-rounds within `ε₁ + ε₂ + ε₁·ε₂`, with `ε₁ = 10/(2⁶³+2)` and `ε₂ = 10⁻¹⁵`. -/
 lemma IOUAmount.normalize_rounds_within (m : Int64) (e : Int) (mode : rounding_mode) (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
     (he_hi : e + 4 ≤ maxExponent)
@@ -119,7 +113,7 @@ lemma IOUAmount.normalize_rounds_within (m : Int64) (e : Int) (mode : rounding_m
     ((10 : ℚ) ^ (-15 : ℤ)) mode hfr_bd
     (by rw [show RatValued.toRat v = v.toRat from rfl]; exact hofn) (by positivity) (by positivity)
 
-/-- The keystone's normalize output is a canonical 16-digit IOU amount (`InRange16`). -/
+/-- `IOUAmount.normalize` of a 17-to-18-digit mantissa gives a canonical 16-digit amount (`InRange16`). -/
 lemma IOUAmount.normalize_InRange16 (m : Int64) (e : Int) (mode : rounding_mode) (result : IOUAmount)
     (hm_lo : 10 ^ 16 ≤ m.toInt.natAbs) (hm_hi : m.toInt.natAbs < 10 ^ 18)
     (he_hi : e + 4 ≤ maxExponent)
@@ -159,9 +153,8 @@ lemma IOUAmount.absMant_toNat (i : IOUAmount) (h_fit : i.mantissa_.toInt.natAbs 
   rw [h_absToInt] at h1
   omega
 
-/-- **The canonicalize IOU pack preserves value.** The `STAmount` record built from a
-canonical 16-digit `IOUAmount` `i` (magnitude `|i.mantissa_|`, exponent `i.exponent_`,
-sign from `i.signum`) has rational value `i.toRat`. -/
+/-- The canonicalize IOU pack preserves value. The `STAmount` record of a canonical `IOUAmount` `i`
+(magnitude `|i.mantissa_|`, exponent `i.exponent_`, sign from `i.signum`) has value `i.toRat`. -/
 lemma STAmount.iou_pack_toRat (i : IOUAmount) (hr : i.InRange16) :
     (⟨.fractional, (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
        i.exponent_, decide (i.signum < 0)⟩ : STAmount).toRat = i.toRat := by
@@ -192,9 +185,8 @@ lemma STAmount.iou_pack_toRat (i : IOUAmount) (hr : i.InRange16) :
       rw [hc]; ring
   linear_combination (10 : ℚ) ^ i.exponent_ * hsign
 
-/-- **`STAmount.checked` rel-error on a 17-to-18-digit IOU mantissa** (divide step a).
-The `checked`/`canonicalize` re-round of `±mant·10^exp` (an IOU asset) lands within the
-keystone relative error of that value, where the result mantissa is nonzero. -/
+/-- `STAmount.checked` rel-error on a 17-to-18-digit IOU mantissa. The re-round of `±mant·10^exp` lands
+within the `normalize_rounds_within` relative error when the result mantissa is nonzero. -/
 lemma STAmount.checked_iou_rounds_within (nt : NumericType) (mant : UInt64) (exp : Int) (neg : Bool)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -244,10 +236,8 @@ lemma STAmount.checked_iou_rounds_within (nt : NumericType) (mant : UInt64) (exp
     rw [htruth] at hkey
     exact RoundsWithin_toRat_congr result i _ _ mode hval hkey
 
-/-- **The divide `+5` rounding-bias bound** (step b). With `q = ⌊N·10¹⁷/D⌋` the
-floored quotient, the biased mid-value `±(q+5)·10^(eN−eD−17)` is within relative
-error `5/10¹⁶` of the true quotient `±(N/D)·10^(eN−eD)`. The bias is ≤ 5 ULP of the
-17-digit quotient and the quotient magnitude `N·10¹⁷/D ≥ 10¹⁶`, giving the bound. -/
+/-- The divide `+5` rounding-bias bound. With `q = ⌊N·10¹⁷/D⌋`, `±(q+5)·10^(eN−eD−17)` is within relative
+error `5/10¹⁶` of `±(N/D)·10^(eN−eD)`, because `N·10¹⁷/D ≥ 10¹⁶`. -/
 lemma STAmount.divide_iou_bias_bound (N D q : ℕ) (eN eD : ℤ) (neg : Bool)
     (hN_lo : 10 ^ 15 ≤ N) (hN_hi : N < 10 ^ 16)
     (hD_lo : 10 ^ 15 ≤ D) (hD_hi : D < 10 ^ 16)
@@ -324,19 +314,5 @@ lemma STAmount.divide_iou_q_bounds (N D q : ℕ)
       omega
     have hqle : q ≤ N * 100 := Nat.le_of_mul_le_mul_right hq15 (by norm_num)
     omega
-
-/- **NOTE: `divide → checked` IOU reduction (the final plumbing) is deferred.**
-All the divide *math* is proven above and below: `muldiv_eq` (floored quotient value),
-`divide_iou_q_bounds` (17-to-18-digit range of `q+5`), `divide_iou_bias_bound` (the `+5`
-bias is within `5/10¹⁶`), and `checked_iou_rounds_within` (the `checked` re-round bound).
-The only missing step is the purely-definitional equation
-`STAmount.divide num den (.issue iss) mode = STAmount.checked (.issue iss) (q+5) … mode`:
-reducing `divide`'s final `match` to its `.ok` arm forces the kernel to `whnf` the
-`checked`/`canonicalize` term, whose well-founded recursion (`doNormalize_scaleDown`)
-overflows the kernel recursion limit (`(kernel) deep recursion detected`). Every
-reduction route tried (`simp`/`dsimp`/`rfl`/`split`/matcher `unfold`) hits the same
-ceiling. This is a Lean-kernel limitation, not a gap in the bound; revisit with a
-matcher-equation `rw` that keeps `checked` opaque, or a model tweak making the WF
-functions kernel-irreducible. -/
 
 end XRPL.Model.Protocol

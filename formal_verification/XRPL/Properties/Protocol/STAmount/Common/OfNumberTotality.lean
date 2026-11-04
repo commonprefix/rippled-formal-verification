@@ -2,7 +2,7 @@ import XRPL.Properties.Protocol.Number.Totality
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberRounding
 import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 
-/-! # Forward totality of the integral `ofNumber` path
+/-! # The integral `ofNumber` path does not error
 
 Integral `STAmount.ofNumber` sends a sign-cleared value through `Number.to_rep`
 and repacks it with `STAmount.checked`. For a bounded value both steps succeed, and
@@ -11,9 +11,8 @@ is false on it. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **A value within `2 ^ 63 - 1` has a nonpositive `Number.exponent`.** With a
-mantissa above `maxRep` the accessor bumps the exponent by one, and a nonnegative
-raw exponent would already push the value past `maxRep`. -/
+/-- A value within `2 ^ 63 - 1` has a nonpositive `Number.exponent`. With a mantissa above `maxRep` the
+accessor bumps the exponent by one, and a nonnegative raw exponent would push the value past `maxRep`. -/
 lemma Number.exponent_le_zero_of_cap (n : Number) (hnorm : n.isNormalized)
     (hneg : n.negative_ = false) (hcap : n.toRat ≤ 2 ^ 63 - 1) :
     n.exponent ≤ 0 := by
@@ -99,9 +98,8 @@ lemma Number.to_rep_of_exponent_zero (n : Number) (mode : rounding_mode)
         rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
         omega)]
 
-/-- **Forward totality of `Number.to_rep` on a nonnegative operand with nonpositive
-`Number.exponent`.** `grow` is entered only at offset `0` and returns its input.
-The floor-divide lands below `maxRep`, so the round-up bump never overflows. -/
+/-- `Number.to_rep` succeeds on a nonnegative operand with nonpositive `Number.exponent`. The
+floor-divide lands below `maxRep`, so the round-up bump never overflows. -/
 lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
     (hneg : n.negative_ = false) (hexp : n.exponent ≤ 0) :
     ∃ r : Int64, n.to_rep mode = .ok r := by
@@ -153,9 +151,8 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
           omega)]
       exact ⟨_, rfl⟩
 
-/-- **Forward totality of the integral `STAmount.canonicalize` against the type's
-own bound.** An offset-`0`, sign-cleared integral record whose magnitude fits
-`maxRep` and the type's `maxValue` canonicalizes without error. -/
+/-- The integral `STAmount.canonicalize` succeeds within the type's own bound. An offset-`0`,
+sign-cleared integral record whose magnitude fits `maxRep` and `maxValue` canonicalizes without error. -/
 lemma STAmount.canonicalize_integral_ok_of_le (s : STAmount) (mode : rounding_mode)
     (hint : s.integral = true) (hoff : s.mOffset = 0) (hsneg : s.mIsNegative = false)
     (hv : s.mValue.toNat ≤ maxRep.toNat)
@@ -221,9 +218,8 @@ private lemma STAmount.ofNumber_integral_reduce (nt : NumericType) (n : Number)
   simp only []
   rw [hnegf]
 
-/-- **Forward totality of the integral `STAmount.ofNumber`.** A normalized
-nonnegative `Number` within `2 ^ 63 - 1` converts into any integral type whose
-`maxValue` covers `maxRep` and whose `maxOffset` is nonnegative. -/
+/-- The integral `STAmount.ofNumber` succeeds. A normalized nonnegative `Number` within
+`2 ^ 63 - 1` converts into any integral type whose `maxValue` covers `maxRep` and `maxOffset` is nonnegative. -/
 lemma STAmount.ofNumber_integral_ok_of_cap (nt : NumericType) (n : Number)
     (mode : rounding_mode) (hnt : nt.isIntegral = true)
     (hmaxval : maxRep.toNat ≤ nt.maxValue.toNat) (hmaxoff : (0 : Int) ≤ nt.maxOffset)
@@ -237,18 +233,16 @@ lemma STAmount.ofNumber_integral_ok_of_cap (nt : NumericType) (n : Number)
     hmaxoff
   exact ⟨result, by rw [STAmount.checked]; exact hres⟩
 
-/-- An `int64` conversion of a normalized nonnegative `Number` bounded by
-`2 ^ 63 - 1` succeeds in every mode. `NumericType.int64` carries
-`maxValue = maxRep` and `maxOffset = 18`, so the general cap totality applies. -/
+/-- An `int64` conversion of a normalized nonnegative `Number` bounded by `2 ^ 63 - 1` succeeds in every mode,
+since `NumericType.int64` carries `maxValue = maxRep` and `maxOffset = 18`. -/
 lemma STAmount.ofNumber_int64_ok (n : Number) (mode : rounding_mode)
     (hnorm : n.isNormalized) (hneg : n.negative_ = false) (hcap : n.toRat ≤ 2 ^ 63 - 1) :
     ∃ result, STAmount.ofNumber .int64 n mode = .ok result :=
   STAmount.ofNumber_integral_ok_of_cap .int64 n mode (by decide) (by decide) (by decide)
     hnorm hneg hcap
 
-/-- **Forward totality of `operator_sub` for two normalized capped operands.**
-Nonnegative normalized values at most `2 ^ 63 - 1` have a nonpositive exponent,
-which gives `operator_sub_ok_of_exp` its headroom. -/
+/-- `operator_sub` succeeds for two normalized capped operands. Nonnegative normalized values at
+most `2 ^ 63 - 1` have a nonpositive exponent, which gives `operator_sub_ok_of_exp` its headroom. -/
 lemma Number.operator_sub_ok_of_normalized_cap (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
@@ -263,9 +257,8 @@ lemma Number.operator_sub_ok_of_normalized_cap (x y : Number) (mode : rounding_m
     exact Number.operator_sub_ok_of_exp x y mode hx hy
       (by unfold maxExponent; omega) (by unfold maxExponent; omega)
 
-/-- **Forward totality of the integral `STAmount.ofNumber` up to the type's own
-bound.** A normalized, nonnegative whole `Number` within the type's `maxValue`
-and `2 ^ 63 - 1` converts without error. -/
+/-- The integral `STAmount.ofNumber` succeeds up to the type's own bound. A normalized,
+nonnegative whole `Number` within the type's `maxValue` and `2 ^ 63 - 1` converts without error. -/
 lemma STAmount.ofNumber_integral_ok_of_le (nt : NumericType) (n : Number)
     (mode : rounding_mode) (hnt : nt.isIntegral = true) (hmaxoff : (0 : Int) ≤ nt.maxOffset)
     (hnorm : n.isNormalized) (hneg : n.negative_ = false) (hden : n.toRat.den = 1)
@@ -291,9 +284,8 @@ lemma STAmount.ofNumber_integral_ok_of_le (nt : NumericType) (n : Number)
     (STAmount.unchecked nt r.toUInt64 0 false) mode hnt rfl rfl hru64 hrmax hmaxoff
   exact ⟨result, by rw [STAmount.checked]; exact hres⟩
 
-/-- **An integral type stores a bounded whole `Number` exactly.** A normalized,
-nonnegative whole `Number` within the type's `maxValue` and `2 ^ 63 - 1` is not
-rounded by the conversion to the asset. -/
+/-- An integral type stores a bounded whole `Number` exactly. A normalized, nonnegative whole `Number`
+within the type's `maxValue` and `2 ^ 63 - 1` is not rounded by the conversion to the asset. -/
 lemma STAmount.isRounded_integral_eq_false (nt : NumericType) (n : Number)
     (hnt : nt.isIntegral = true) (hmaxoff : (0 : Int) ≤ nt.maxOffset)
     (hnorm : n.isNormalized) (h0 : 0 ≤ n.toRat) (hden : n.toRat.den = 1)

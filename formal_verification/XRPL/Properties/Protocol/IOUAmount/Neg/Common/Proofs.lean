@@ -6,12 +6,10 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 import XRPL.Properties.Protocol.STAmount.Mul.Common.IOU
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 
-/-! # Proof bodies for the `IOUAmount` negation correctness headline.
+/-! # Proof of the `IOUAmount` negation theorem
 
-`operator_neg` is **value-exact** on canonical inputs: negating the mantissa keeps it
-canonical (`InRange16`), so the constructor's `normalize` is the identity. Supporting
-`normalize`-identity / sign-magnitude lemmas live here. The thin headline lives in
-`IOUAmount.Neg.Neg`. -/
+`operator_neg` is value-exact on canonical inputs: negating the mantissa keeps it
+canonical (`InRange16`), so the constructor's `normalize` is the identity. -/
 
 namespace XRPL.Model.Protocol
 
@@ -75,7 +73,7 @@ lemma IOUAmount.neg_InRange16 (x : IOUAmount) (hx : x.InRange16) :
   · show (-x.mantissa_).toInt.natAbs < 10 ^ 16
     rw [IOUAmount.neg_mantissa_toInt x hx, Int.natAbs_neg]; exact hx.mant_hi
 
-/-- **`operator_neg` is value-exact on canonical inputs**, returning a canonical amount. -/
+/-- `operator_neg` is value-exact on canonical inputs, returning a canonical amount. -/
 theorem IOUAmount.operator_neg_exact_proof (x : IOUAmount) (mode : rounding_mode)
     (hx : x.InRange16) :
     ∃ r : IOUAmount, IOUAmount.operator_neg x mode = .ok r ∧ r.toRat = -x.toRat ∧ r.InRange16 := by

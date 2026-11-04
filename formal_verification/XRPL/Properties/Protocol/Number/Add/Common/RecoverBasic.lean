@@ -9,8 +9,6 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.ScaleDown
 
 namespace XRPL.Model.Protocol
 
-/-! ## Equation lemmas for `recover` -/
-
 /-- No-op case: `recover` with no fuel returns its inputs. -/
 lemma recover_noop_zero (upperLimit m : UInt128) (e : Int) (g : Guard) :
     Number.operator_add.recover upperLimit m e g 0 = (m, e, g) := by
@@ -41,7 +39,7 @@ lemma recover_exit_idemp {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : 
   | zero => exact recover_noop_zero upperLimit m e g
   | succ n => exact recover_noop_exit h
 
-/-- `recover` preserves the guard's overflow bit (`Guard.pop` keeps `xbit_`). -/
+/-- `recover` keeps the guard's sticky bit `xbit_`, since `Guard.pop` does not change it. -/
 theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
     (Number.operator_add.recover upperLimit m e g fuel).2.2.xbit_ = g.xbit_ := by
   induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
@@ -56,13 +54,6 @@ theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ)
   | case3 m e g fuel hcond =>
     rw [recover_noop_exit hcond]
 
-/-! ## Pop digit bounds
-
-(`pop_digit_eq_nibble_15` and its `≤ 9` consequence are now proved in
-`XRPL/Number/Properties/Rounding/Guard.lean` alongside the other
-`Guard.pop` algebraic identities. We re-state the remaining bound here
-for backwards compatibility with downstream proofs.) -/
-
 /-- The popped digit is strictly less than 16 (it's a nibble). -/
 lemma pop_digit_lt_16 (g : Guard) : g.pop.2.toNat < 16 := by
   rw [pop_digit_eq_nibble_15]
@@ -76,57 +67,8 @@ lemma pop_digit_le_9 (g : Guard) (hall : allNibblesAtMost9 g.digits_) :
   rw [pop_digit_eq_nibble_15]
   exact hall ⟨15, by omega⟩
 
-/-! ## Mantissa-arithmetic helpers (no UInt64 wrap-around) -/
-
 /-- `largeRange.min` in `ℕ` is `10^18`. -/
 lemma largeRange_min_toNat : largeRange.min.toNat = 10 ^ 18 := by decide
-
-/-- When `m < largeRange.min`, the product `m * 10` does not overflow `UInt64`. -/
-lemma mul_ten_no_overflow_of_lt_lr_min {m : UInt64}
-    (h : m < largeRange.min) :
-    (m * 10).toNat = m.toNat * 10 := by
-  rw [UInt64.toNat_mul]
-  have h10 : (10 : UInt64).toNat = 10 := uint64_ten_toNat
-  rw [h10]
-  rw [UInt64.lt_iff_toNat_lt, largeRange_min_toNat] at h
-  apply Nat.mod_eq_of_lt
-  have h1 : m.toNat * 10 < 10 ^ 18 * 10 := by nlinarith
-  have h2 : (10 ^ 18 * 10 : ℕ) < 2 ^ 64 := by decide
-  omega
-
-/-- A sufficient condition for the loop body's subtraction not to underflow:
-if `m < largeRange.min`, `1 ≤ m.toNat`, and the popped digit `d ≤ 9`, then
-`d ≤ m * 10` as `UInt64`s. -/
-lemma pop_digit_le_mul_ten_of_pos {m d : UInt64}
-    (hm_pos : 1 ≤ m.toNat) (hm_lt : m < largeRange.min) (hd : d.toNat ≤ 9) :
-    d ≤ m * 10 := by
-  rw [UInt64.le_iff_toNat_le, UInt64.toNat_mul]
-  have h10 : (10 : UInt64).toNat = 10 := uint64_ten_toNat
-  rw [h10]
-  rw [UInt64.lt_iff_toNat_lt, largeRange_min_toNat] at hm_lt
-  have hbnd : m.toNat * 10 < 2 ^ 64 := by
-    have h1 : m.toNat * 10 < 10 ^ 18 * 10 := by nlinarith
-    have h2 : (10 ^ 18 * 10 : ℕ) < 2 ^ 64 := by decide
-    omega
-  rw [Nat.mod_eq_of_lt hbnd]
-  have : (9 : ℕ) ≤ m.toNat * 10 := by nlinarith
-  omega
-
-/-- Nat-level identity for the loop body's mantissa update:
-if `m < largeRange.min` (so `m * 10` does not overflow) and `d ≤ m * 10`
-(so the subtraction does not underflow), then
-`(m * 10 - d).toNat = m.toNat * 10 - d.toNat`. -/
-lemma recover_step_mantissa_nat {m d : UInt64}
-    (hm : m < largeRange.min) (hd : d ≤ m * 10) :
-    (m * 10 - d).toNat = m.toNat * 10 - d.toNat := by
-  rw [UInt64.toNat_sub_of_le _ _ hd, mul_ten_no_overflow_of_lt_lr_min hm]
-
-/-! ## UInt128 step arithmetic (new recover loop)
-
-The rewritten loop works on `UInt128` mantissas bounded by an `upperLimit`
-(`toUInt128 largeRange.min * 1000 = 10^21` at the model's call site). The
-single hypothesis `upperLimit.toNat * 10 < 2^128` makes every step's
-`m * 10` overflow-free; it is discharged by `decide` at the call site. -/
 
 /-- When `m < upperLimit` and `upperLimit.toNat * 10 < 2^128`, the product
 `m * 10` does not overflow `UInt128`. -/
@@ -147,17 +89,14 @@ lemma pop_digit_le_mul_ten_of_pos128 {upperLimit m : UInt128} {d : UInt64}
   rw [BitVec.le_def, toNat_toUInt128, mul_ten_no_overflow_of_lt_upperLimit hUL hm_lt]
   omega
 
-/-- Nat-level identity for the new loop body's mantissa update:
-`(m * 10 - toUInt128 d).toNat = m.toNat * 10 - d.toNat` under the no-overflow
-and no-underflow side conditions. -/
+/-- Nat-level identity for the `UInt128` loop body's mantissa update:
+`(m * 10 - toUInt128 d).toNat = m.toNat * 10 - d.toNat` when nothing overflows or underflows. -/
 lemma recover_step_mantissa_nat128 {upperLimit m : UInt128} {d : UInt64}
     (hUL : upperLimit.toNat * 10 < 2 ^ 128)
     (hm : m < upperLimit) (hd : toUInt128 d ≤ m * 10) :
     (m * 10 - toUInt128 d).toNat = m.toNat * 10 - d.toNat := by
   rw [BitVec.toNat_sub_of_le hd, mul_ten_no_overflow_of_lt_upperLimit hUL hm,
       toNat_toUInt128]
-
-/-! ## Exponent bounds -/
 
 /-- Output exponent is at most the input exponent: each step decrements `e`. -/
 theorem recover_exponent_le (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
@@ -203,11 +142,8 @@ theorem recover_exponent_eq (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel
     refine ⟨0, by omega, ?_⟩
     rw [recover_noop_exit hcond]; simp
 
-/-! ## Exit characterization -/
-
-/-- Exit characterization: either the output satisfies the loop-exit condition
-(so the loop terminated naturally), or fuel was completely exhausted
-(exponent decreased by exactly `fuel`). -/
+/-- Either the `recover` output meets the loop-exit condition, or the fuel ran out and the exponent dropped by
+exactly `fuel`. -/
 theorem recover_output_exits_or_fuel_exhausted
     (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
     let r := Number.operator_add.recover upperLimit m e g fuel
@@ -224,8 +160,6 @@ theorem recover_output_exits_or_fuel_exhausted
   | case3 m e g fuel hcond =>
     rw [recover_noop_exit hcond]
     left; exact hcond
-
-/-! ## Fuel monotonicity -/
 
 /-- Once the output satisfies the exit condition, additional fuel is a no-op. -/
 theorem recover_fuel_add_of_exits {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}

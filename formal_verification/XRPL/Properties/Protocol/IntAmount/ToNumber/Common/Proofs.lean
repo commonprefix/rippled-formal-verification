@@ -2,16 +2,15 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IntAmount
 import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
 
-/-! # Proof body for the `IntAmount.toNumber` correctness headline.
+/-! # Proof of the `IntAmount.toNumber` theorem
 
 `toNumber x mode = Number.from_rep x.value 0 …`, which (for `value ≠ Int64.minValue`) is
 value-exact via `Number.from_rep_exact`. No rounding, since an exponent-0 integer mantissa
-scales up into `largeRange` exactly. Mirrors `Number/ToRep/`. The thin headline lives in
-`IntAmount.ToNumber.ToNumber`. -/
+scales up into `largeRange` exactly. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`toNumber` is value-exact** (drops `≠ Int64.minValue`): it produces a normalized
+/-- `toNumber` is value-exact (drops `≠ Int64.minValue`): it produces a normalized
 `Number` of value `toRat`. -/
 theorem IntAmount.toNumber_exact_proof (x : IntAmount) (mode : rounding_mode)
     (h_ne_min : x.value ≠ Int64.minValue) :

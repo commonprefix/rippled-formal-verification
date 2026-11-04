@@ -6,30 +6,19 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.ScaleDown
 namespace XRPL.Model.Protocol
 
 
-/-! # `divQuotient128` correctness (staged form, PR 7389 head)
+/-! # `divQuotient128` correctness
 
 The staged division quotient `divQuotient128 xm ym xe ye` expands the numerator
 by `10^17` (Stage 1), refines a nonzero remainder by a further `10^5`
-(Stage 2 — total factor `10^22`), and reports whether any residual survives
+(Stage 2, total factor `10^22`), and reports whether any residual survives
 (Stage 3, the `dropped` sticky flag).
 
 The key property: `xm · 10^N = zm128 · ym + r` with `0 ≤ r < ym`, `N ∈ {17, 22}`,
 `ze = xe - ye - N`, and `dropped = true ↔ r ≠ 0`. This means
 `|x/y| = (zm128 + r/ym) · 10^ze` with the sticky flag exactly tracking `r ≠ 0`.
 When the Stage-2 correction is zero (`N = 17` with `r ≠ 0` possible), the
-residual is tiny: `r · 10^5 < ym`, i.e. `δ = r/ym < 10⁻⁵` — the
-`doNormalize128` keystones consume this through their `δ·10^20 ≤ M` ratio
-hypothesis.
-
-## Kernel-checkability
-
-The kernel's defeq blows its recursion guard whenever it must relate the full
-`divQuotient128` application to a reduced form in one step (`simp`-unfolding,
-`extract_lets`, whole-body `change`, and `.1/.2` projection forms all die).
-Small steps are fine, so the proof navigates equationally: `unfold` (one
-equation), then one single-let zeta `change` per `let` (head-zeta + syntactic
-comparison each), then `rw [if_pos/if_neg]` (equations) and per-leaf `rfl`s
-whose defeq is one `Prod` iota. -/
+residual is tiny: `r · 10^5 < ym`, so `δ = r/ym < 10⁻⁵`. The
+`doNormalize128` lemmas need this as their `δ·10^20 ≤ M` hypothesis. -/
 
 abbrev divQuotientTail (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ)
     (xm ym : UInt64) (xe ye : Int) : Prop :=
@@ -39,12 +28,6 @@ abbrev divQuotientTail (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ)
   zeq = xe - ye - N ∧
   (dropped = true ↔ r ≠ 0) ∧
   (N = 17 → r * 10 ^ 5 < ym.toNat)
-
-/-! ### Branch equations
-
-`divQuotient128` is navigated through these three `simp only` equations rather than by
-zeta-expanding its body in the main proof: each one resolves the two `if`s from the branch
-hypotheses, so the kernel only ever sees a case-resolved body. -/
 
 private lemma divQuotient128_eq_rem_zero (xm ym : UInt64) (xe ye : Int)
     (hrem : ¬ ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true) :
@@ -69,24 +52,16 @@ private lemma divQuotient128_eq_corr_zero (xm ym : UInt64) (xe ye : Int)
          toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
   simp only [divQuotient128, if_pos hrem, if_neg hcorr]
 
-/-- Branch pins. The `Div/Common/*/WitnessTrace.lean` witnesses cover `correction ≠ 0`;
-these cover the other two branches. -/
+/-- Sample runs of the other two branches. The `Div/Common/*/WitnessTrace.lean` witnesses cover
+`correction ≠ 0`. -/
 example : divQuotient128 10 999999999999999989 0 0 = (1, -17, true) := by decide
 
 example : divQuotient128 7 100000000000000000 0 0 = (7, -17, false) := by decide
 
 set_option maxHeartbeats 3200000 in
--- The correction path does UInt128 multiplications by 10^17/10^5; bounding them
--- below 2^128 requires the Euclidean-division chain across two stages. The
--- incremental zeta-expansion blocks add elaboration work on top.
-/-- `divQuotient128` satisfies the Euclidean division property:
-there exist `N ∈ {17, 22}` and a remainder `r < ym` such that
-`xm * 10^N = zm128 * ym + r`, `ze = xe - ye - N`, the `dropped` flag is set
-iff `r ≠ 0`, and in the `N = 17` case the residual is tiny (`r·10^5 < ym`).
-
-The output is exposed through an explicit tuple equation; the witnesses are
-the spelled-out branch values, and each branch equation closes by a small
-`rfl` (one `Prod` iota), keeping every kernel defeq shallow. -/
+-- The UInt128 overflow bounds for both stages need a raised budget.
+/-- `divQuotient128` returns `(zmq, zeq, dropped)` with `xm · 10^N = zmq · ym + r`, `r < ym`, `N ∈ {17, 22}`,
+`zeq = xe - ye - N`, `dropped` set iff `r ≠ 0`, and `r · 10^5 < ym` when `N = 17`. -/
 theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
     (_hxm_pos : 0 < xm.toNat)
     (hym_pos : 0 < ym.toNat)
@@ -96,10 +71,8 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
     ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
       divQuotient128 xm ym xe ye = (zmq, zeq, dropped) ∧
       divQuotientTail zmq zeq dropped N r xm ym xe ye := by
-  -- Key constant values
   have hmax_val : largeRange.max.toNat = 10 ^ 19 - 1 := by decide
   have hmin_val : largeRange.min.toNat = 10 ^ 18 := by decide
-  -- UInt128 <-> Nat bridge
   have hym_nat : (toUInt128 ym).toNat = ym.toNat := toNat_toUInt128 ym
   -- numerator doesn't overflow UInt128
   have hxm_bound : xm.toNat ≤ 10 ^ 19 - 1 := by omega
@@ -121,7 +94,6 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
   have heuc : ym.toNat * ((xm.toNat * 10 ^ 17) / ym.toNat)
       + (xm.toNat * 10 ^ 17) % ym.toNat = xm.toNat * 10 ^ 17 := Nat.div_add_mod _ _
   have hrem_lt : (xm.toNat * 10 ^ 17) % ym.toNat < ym.toNat := Nat.mod_lt _ hym_pos
-  -- Bounds
   have hym_lower : 10 ^ 18 ≤ ym.toNat := by omega
   have hzm_bound : (xm.toNat * 10 ^ 17) / ym.toNat ≤ 999999999999999999 := by
     calc (xm.toNat * 10 ^ 17) / ym.toNat
@@ -129,8 +101,6 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
       _ ≤ ((10 ^ 19 - 1) * 10 ^ 17) / (10 ^ 18) :=
           Nat.div_le_div_right (Nat.mul_le_mul_right _ hxm_bound)
       _ = 999999999999999999 := by norm_num
-  -- Unfold and zeta-expand the staged body, one let per step.
-  -- Case split on the Stage-1 remainder.
   by_cases hrem : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym != 0) = true
   · ---- Case: remainder != 0, Stage-2 refinement ----
     have hrem_ne_nat : (xm.toNat * 10 ^ 17) % ym.toNat ≠ 0 := by

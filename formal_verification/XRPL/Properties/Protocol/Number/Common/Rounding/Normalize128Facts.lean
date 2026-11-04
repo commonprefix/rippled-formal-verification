@@ -8,16 +8,10 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.ResultFacts
 
 namespace XRPL.Model.Protocol
 
-/-! # Frame facts for `doNormalize128`
+/-! # Facts about `doNormalize128`
 
-`doNormalize128` consumes a 128-bit mantissa `M` with a sticky tail `δ` and
-ends in the same `(zm, ze', g) → doRoundUp → res.toNumber` frame as the other
-pipelines. This file packages a successful run into the no-inbetween frame
-inputs (with `f` the **true** residual fraction — the guard's represented
-shadow `f̃` differs from it by the slip, so the decision-side facts are
-exported through the shadow-transfer implications), plus the result-shape
-facts (`isNormalized`, weak top-exponent mantissa cap) and the underflow
-characterization. Division and diff-sign addition consume these. -/
+Facts about a successful `doNormalize128` run, used by division and opposite-sign addition: the state before its
+final `doRoundUp`, that the result is normalized, the mantissa cap at the top exponent, and when the result is zero. -/
 
 /-- If the 128-bit scale-up exits below the minimum mantissa, it exhausted the
 exponent range. -/
@@ -112,9 +106,9 @@ lemma doNormalize_scaleDown128_output_le
     exact hle
 
 set_option maxHeartbeats 1600000 in
--- Five-stage UInt128 pipeline walk with per-stage equational extraction.
-/-- Value-free pipeline walk for `doNormalize128`: exposes the final
-`doRoundUp` stage with the input-side bounds the result-shape lemmas need. -/
+-- The UInt128 terms in this proof need a raised budget.
+/-- A successful `doNormalize128` with a nonzero result ends in a `doRoundUp` call with mantissa in
+`[mantissaFloor, maxRepUp]`. -/
 theorem doNormalize128_doRoundUp_stage
     (zn : Bool) (M : UInt128) (e : Int) (sticky : Bool) (mode : rounding_mode)
     (hM_pos : 1 ≤ M.toNat)
@@ -287,7 +281,7 @@ theorem doNormalize128_result_isNormalized
   · right
     exact h4 (by omega)
 
-/-- Weak top-exponent mantissa cap for `doNormalize128`. -/
+/-- At the top exponent, a nonzero `doNormalize128` result has mantissa at most `maxRep + 13`. -/
 theorem doNormalize128_no_overflow_mantissa
     (zn : Bool) (M : UInt128) (e : Int) (sticky : Bool) (mode : rounding_mode)
     (hM_pos : 1 ≤ M.toNat)
@@ -303,15 +297,9 @@ theorem doNormalize128_no_overflow_mantissa
     .normalize2 hle hcap_exp res hru h_exp_ge
 
 set_option maxHeartbeats 12800000 in
--- Full value-laden walk: scaleUp facts + two slip-threaded repr stages over
--- giant UInt128 terms, with the shadow-transfer derivations on top.
-/-- Frame decomposition for `doNormalize128` against the true value
-`(M + δ)·10^e`. The exported fraction `f` is the **true** residual; the
-guard's represented shadow `f̃` (which drives the round decision) is exported
-alongside with the two transfer implications the no-inbetween frames need:
-a positive shadow certifies a positive residual, and a zero shadow certifies
-an exact residual. (With the sticky flag off the two coincide; with it on the
-seeded tail keeps both strictly positive.) -/
+-- The UInt128 terms in this proof need a raised budget.
+/-- Before its final `doRoundUp`, `doNormalize128` holds the value `(zm + f) · 10^ze' = (M + δ) · 10^e`. The guard
+holds a fraction `f̃`: a positive `f̃` forces a positive `f`, and a zero `f̃` forces `f = 0`. -/
 theorem doNormalize128_algorithmic_facts
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool) (mode : rounding_mode)
     (hδ_low : 0 ≤ δ) (hδ_lt : δ < 1)
@@ -403,7 +391,7 @@ theorem doNormalize128_algorithmic_facts
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
+      exact g0_represents_zero zn
   have h_g0_sbit : g₀.sbit_ = zn := by
     rw [hg₀_def]
     by_cases hst : sticky = true
@@ -490,7 +478,7 @@ theorem doNormalize128_algorithmic_facts
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
               .normalize2 res hru hres_mant
           have h_sbit : cp.2.2.sbit_ = zn := h3sbit.trans (h2sbit.trans h_g0_sbit)
-          -- Shadow ↔ residual transfers.
+          -- Move positivity and zero between the guard fraction and the exact fraction.
           have h_eq_nonsticky : sticky = false → φ₃ = ftilde₃ := by
             intro hst'
             have hft₀_eq : ftilde₀ = 0 := by
@@ -540,8 +528,7 @@ theorem doNormalize128_algorithmic_facts
             h3rep, h_pos_transfer, h_zero_transfer⟩
 
 set_option maxHeartbeats 12800000 in
--- Same value-laden walk as the facts theorem, plus the flush/zero-branch
--- spr-algebra closers.
+-- The UInt128 terms in this proof need a raised budget.
 /-- A zero result mantissa from `doNormalize128` forces the input value
 strictly below the smallest positive representable. -/
 theorem doNormalize128_underflow_value_small
@@ -618,7 +605,7 @@ theorem doNormalize128_underflow_value_small
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
+      exact g0_represents_zero zn
   cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
@@ -708,7 +695,7 @@ theorem doNormalize128_underflow_value_small
           apply mul_le_mul_of_nonneg_left _ (by norm_num)
           exact zpow_le_zpow_right₀ (by norm_num) he₁_le_min
         linarith
-    · -- Round-stage flush: `doRoundUp_flush_value_small` pins the frame.
+    · -- The rounding step flushed to zero: `doRoundUp_flush_value_small` bounds the value.
       rw [if_neg hund] at hok
       rw [Bool.not_eq_true, Bool.or_eq_false_iff] at hund
       obtain ⟨hund1, hund2⟩ := hund

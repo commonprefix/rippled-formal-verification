@@ -9,17 +9,12 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-! # `Number.normalize` is faithfully rounded under `.to_nearest`
+/-! # `Number.normalize` under `.to_nearest` returns a neighbouring `Number`
 
-The result is `Number.lower` or `Number.upper` of the input value. (True
-nearest-ness is quantized at the `pushOverflow` cusp, exactly as for the
-arithmetic operators — faithful rounding is the C++-faithful statement.)
-No nonzero hypotheses: a zero input mantissa short-circuits to the zero grid
-point, and an underflow flush lands on zero, which is a grid neighbor of any
-input below the smallest positive representable. -/
+The result is `Number.lower` or `Number.upper` of the input value. A zero input or an underflow gives zero, which is a
+neighbour of any value below the smallest positive `Number`, so no nonzero hypothesis is needed. -/
 
-/-- No normalized Number sits strictly between `result.toRat` and `n.toRat`
-when `result.toRat ≤ n.toRat`. -/
+/-- No normalized Number lies above `result.toRat` and at or below `n.toRat` when `result.toRat ≤ n.toRat`. -/
 theorem normalize_no_inbetween_below_to_nearest (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
@@ -47,8 +42,7 @@ theorem normalize_no_inbetween_below_to_nearest (n result : Number)
       exact Number.toRat_nonneg_of_nonnegative result (h_sign.trans hn_nneg))
     h_le
 
-/-- No normalized Number sits strictly between `n.toRat` and `result.toRat`
-when `n.toRat ≤ result.toRat`. -/
+/-- No normalized Number lies at or above `n.toRat` and below `result.toRat` when `n.toRat ≤ result.toRat`. -/
 theorem normalize_no_inbetween_above (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
@@ -83,9 +77,8 @@ theorem normalize_no_inbetween_above (n result : Number)
     h_ge
 
 
-/-- `Number.normalize` under `.to_nearest` is **faithfully rounded**: the
-result is `Number.lower` or `Number.upper` of the input value. Only `hok` is
-assumed. -/
+/-- Any successful `Number.normalize` under `.to_nearest` returns `Number.lower` or `Number.upper` of the input
+value. -/
 theorem normalize_rounded_to_nearest_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result) :
     Number.RoundsToRepresentable result n.toRat .to_nearest := by

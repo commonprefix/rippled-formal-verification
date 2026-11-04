@@ -34,11 +34,8 @@ lemma nat_mod_pow_step (a k : ℕ) :
   rw [Nat.mul_add_mod]
   exact Nat.mod_eq_of_lt hbound
 
-/-- Main invariant of scaleDown128. The 5th conjunct constrains the residue
-when the output mantissa is `(maxRep + 1) / 10` — under the `maxRepUp`
-threshold that case is unreachable when digits were dropped (the output is
-`≥ (maxRepUp + 1) / 10 = mantissaFloor + 1`), so the conjunct is kept only
-for the consumers' destructuring shape. -/
+/-- Main invariant of `scaleDown128`: the output mantissa is at most `maxRepUp` and the guard represents the dropped
+digits. The last conjunct is vacuous, since a drop always leaves a mantissa above `mantissaFloor`. -/
 theorem scaleDown128_correct :
     ∀ (M : UInt128) (e : Int) (g0 : Guard) (f0 : ℚ) (_hrep0 : represents g0 f0),
       let (m, e', g) := scaleDown128 M e g0
@@ -169,9 +166,8 @@ theorem scaleDown128_correct :
     · rintro ⟨h, _⟩
       exact absurd h (by omega)
 
-/-- Lower bound on scaleDown128 output: `m.toNat ≥ (maxRepUp.toNat + 1) / 10`
-(`= mantissaFloor + 1` — strictly above the floor, which is what makes the
-floor residue case vacuous downstream). -/
+/-- On an input above `maxRepUp`, `scaleDown128` outputs a mantissa of at least
+`(maxRepUp + 1) / 10 = mantissaFloor + 1`. -/
 theorem scaleDown128_lower_bound :
     ∀ (M : UInt128) (e : Int) (g0 : Guard),
       M.toNat > maxRepUp.toNat →

@@ -121,7 +121,7 @@ def STAmount.checked (nt : NumericType) (mValue : UInt64) (mOffset : Int) (mIsNe
     (mode : rounding_mode) : Except Error STAmount :=
   (STAmount.unchecked nt mValue mOffset mIsNegative).canonicalize mode
 
--- Zero amount of a numericType (C++ `STAmount(Asset)`), canonicalized; zero never rounds/overflows.
+-- Zero amount of a numericType (C++ `STAmount(Asset)`), canonicalized. Zero never rounds or overflows.
 def STAmount.zero (nt : NumericType) : STAmount :=
   match STAmount.checked nt 0 0 false rounding_mode.to_nearest with
   | .ok s => s
@@ -260,7 +260,7 @@ private def STAmount.muldivRound (multiplier multiplicand divisor rounding : UIn
   else
     .ok (toUInt64 q)
 
--- Caller guarantees `val > 0`; the `val ≠ 0` guard keeps the recursion total.
+-- Caller guarantees `val > 0`. The `val ≠ 0` guard keeps the recursion total.
 def STAmount.normalizeIntegralMantissa (val : UInt64) (offset : Int) : UInt64 × Int :=
   if val < kMinValue && val ≠ 0 then
     normalizeIntegralMantissa (val * 10) (offset - 1)
@@ -323,7 +323,7 @@ decreasing_by
     rw [UInt64.toNat_div, h10]
   rw [hdiv]; omega
 
--- Legacy XRPL rounding (pre-2022). `_roundUp` is unused on this path; the
+-- Legacy XRPL rounding (pre-2022). `_roundUp` is unused on this path, and the
 -- integral addend is `loops≥2 ? 9 : 10`, matching drops-conversion rounding.
 def STAmount.canonicalizeRound (integral : Bool) (value : UInt64) (offset : Int) (_roundUp : Bool)
     : UInt64 × Int :=

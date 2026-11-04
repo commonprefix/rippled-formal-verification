@@ -1,195 +1,136 @@
-import XRPL.Model.Vault.VaultWithdraw
-import XRPL.Properties.Approx
+import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 import XRPL.Properties.Vault.Common.WithdrawDefs
-import XRPL.Properties.Vault.Common.VaultDecidable
 
 /-! # Witnesses for the `sharesToAssetsWithdraw` pricing bounds
 
-* `wpA`: 3 assets / 7·10¹⁵ shares, redeeming 2333333333333333 shares is worth
-  `0.99999999999999985714…`, priced `0.9999999999999999`; the miss exceeds `depositε`
-  relative.
-* `wpI`: an integral vault of 3 assets / 2 shares, one share is worth `1.5` and is
-  priced `2` (ties to even), a full half unit above the worth.
-* `wpF`: a fractional vault of `2.000000000000003` assets / 2 shares, one share is worth
-  `1.0000000000000015` and is priced `1.000000000000002`, half a ULP above.
-* `wpI5`: 5 assets / 2 shares, one share is worth `2.5` and is priced `2`, and
-  `wpF5`: `2.000000000000001` assets / 2 shares, worth `1.0000000000000005`, priced `1`;
-  both fall half a ULP short.
-* The `wpI`/`wpF` runs overdraw an `assetsAvailable` just under the payout. -/
+Each vault comes from a reachable history the model computes: a create, a deposit, then a donation.
 
-namespace XRPL.Model.SingleAssetVault.WdPrice
+* `vI`: an integral vault of 3 assets / 2 shares, one share is worth `1.5` and is priced `2`
+  (ties to even), a full half unit above the worth.
+* `vF`: a fractional vault of `2000000000000003` assets / 2 shares, one share is worth
+  `1000000000000001.5` and is priced `1000000000000002`, half a ULP above.
+* `vW`: an integral vault of `8419983878422141` assets / `13252` shares, and `vWF`, the same as a scale-0 IOU
+  vault. `13128` shares are worth `8341197431023684.5040…` and are priced `8341197431023684`: the product needs 21
+  digits and rounds down, the quotient lands on the tie `…684.500`, which rounds to even, down. -/
+
+set_option linter.style.nativeDecide false
+
+namespace XRPL.Model.SingleAssetVault.WdPriceWit
 
 open XRPL.Model.Protocol
 
-set_option linter.style.nativeDecide false
+def int64Amount (n : UInt64) : STAmount := ⟨.int64, n, 0, false⟩
 
-/-- A vault with no loss and `assetsAvailable` given separately. -/
-def wRaw (nt : NumericType) (at_ av st : Number) : RawVault :=
-  { assetsTotal := at_, assetsAvailable := av, assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := nt, scale := 0
-  , sharesTotal := st, lossUnrealized := Number.zero }
+def iouAmount (m : UInt64) (e : Int) : STAmount := ⟨.fractional, m, e, false⟩
 
-def wvA : Vault := ⟨wRaw .fractional ⟨false, 3000000000000000000, -18⟩
-  ⟨false, 3000000000000000000, -18⟩ ⟨false, 7000000000000000000, -3⟩,
-  by native_decide, by native_decide⟩
+/-- An integral vault: deposit `d`, then donate `g`. -/
+def intVault (d g : UInt64) : Vault :=
+  createHistory.vault Vault.placeholder .int64 0 none none 0 [(int64Amount d, false), (int64Amount g, true)]
 
-def wshA : STAmount := STAmount.unchecked .int64 2333333333333333 0 false
+/-- A fractional scale-0 vault: deposit 2, then donate `g`. -/
+def iouVault (g : UInt64) : Vault :=
+  createHistory.vault Vault.placeholder .fractional 0 none none 0
+    [(iouAmount 2000000000000000 (-15), false), (iouAmount g 0, true)]
 
-def wpA : STAmount := STAmount.unchecked .fractional 9999999999999999 (-16) false
+def vW : Vault := intVault 13252 8419983878408889
+def vWF : Vault :=
+  createHistory.vault Vault.placeholder .fractional 0 none none 0
+    [(iouAmount 1325200000000000 (-11), false), (iouAmount 8419983878408889 0, true)]
 
-/-- Integral vault, `assetsAvailable = 3`. -/
-def wvI : Vault := ⟨wRaw .int64 ⟨false, 3000000000000000000, -18⟩
-  ⟨false, 3000000000000000000, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+lemma vW_reach : Vault.Reachable vW 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+lemma vWF_reach : Vault.Reachable vWF 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
 
-/-- Integral vault, `assetsAvailable = 1.999999999999999999`. -/
-def wvI' : Vault := ⟨wRaw .int64 ⟨false, 3000000000000000000, -18⟩
-  ⟨false, 1999999999999999999, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+/-- The shares burned in the `vW` runs. -/
+def burnW : STAmount := int64Amount 13128
 
-/-- Fractional vault, `assetsAvailable = 2.000000000000003`. -/
-def wvF : Vault := ⟨wRaw .fractional ⟨false, 2000000000000003000, -18⟩
-  ⟨false, 2000000000000003000, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+def vI : Vault := intVault 2 1
+def vF : Vault := iouVault 2000000000000001
 
-/-- Fractional vault, `assetsAvailable = 1.000000000000001999`. -/
-def wvF' : Vault := ⟨wRaw .fractional ⟨false, 2000000000000003000, -18⟩
-  ⟨false, 1000000000000001999, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+lemma vI_reach : Vault.Reachable vI 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+lemma vF_reach : Vault.Reachable vF 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
 
-/-- Integral vault, 5 assets / 2 shares. -/
-def wvI5 : Vault := ⟨wRaw .int64 ⟨false, 5000000000000000000, -18⟩
-  ⟨false, 5000000000000000000, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+/-- One share. -/
+def one : STAmount := int64Amount 1
 
-/-- Fractional vault, `2.000000000000001` assets / 2 shares. -/
-def wvF5 : Vault := ⟨wRaw .fractional ⟨false, 2000000000000001000, -18⟩
-  ⟨false, 2000000000000001000, -18⟩ ⟨false, 2000000000000000000, -18⟩,
-  by native_decide, by native_decide⟩
+lemma one_canonical : one.Canonical := STAmount.canonical_of_canonicalB _ (by native_decide)
 
-def wpF5 : STAmount := STAmount.unchecked .fractional 1000000000000000 (-15) false
+/-- The net asset value a vault's withdrawal prices at, as the model computes it. -/
+def nav (v : Vault) : Number := (v.assetsTotalForWithdrawal false).toOption.getD Number.zero
 
-def wsh1 : STAmount := STAmount.unchecked .int64 1 0 false
-
-def wpI : STAmount := STAmount.unchecked .int64 2 0 false
-
-def wpF : STAmount := STAmount.unchecked .fractional 1000000000000002 (-15) false
-
-end XRPL.Model.SingleAssetVault.WdPrice
+end XRPL.Model.SingleAssetVault.WdPriceWit
 
 namespace XRPL.Model.SingleAssetVault
 
-open XRPL.Model.Protocol WdPrice
+open XRPL.Model.Protocol WdPriceWit
 
-set_option linter.style.nativeDecide false
-set_option maxRecDepth 10000
-
-/-- Witness for the half-ULP term of `Vault.sharesToAssetsWithdraw_bounds`: on an
-integral vault the payout is exactly half a unit above the shares' worth. -/
+/-- Integral overshoot: one share worth `1.5` is priced `2`. -/
 lemma Vault.sharesToAssetsWithdraw_overshoot_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      0 < shares.toRat ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
+    ∃ (v : Vault) (t0 : UInt32) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
+      Vault.Reachable v t0 ∧ 0 ≤ shares.toRat ∧ shares.Canonical ∧ shares.toRat ≤ v.toExact.sharesTotal ∧
       v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      assets.toRat = v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat +
-        (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent :=
-  ⟨wvI, wsh1, wpI, false, by native_decide,
-    ⟨⟨false, 3000000000000000000, -18⟩, by native_decide, by native_decide⟩,
+      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat < assets.toRat :=
+  ⟨vI, 0, one, int64Amount 2, false, vI_reach, by native_decide, one_canonical, by native_decide,
     by native_decide, by native_decide⟩
 
-/-- The fractional analogue: half a 16-digit ULP above the shares' worth. -/
+/-- Fractional overshoot: one share worth `1000000000000001.5` is priced `1000000000000002`. -/
 lemma Vault.sharesToAssetsWithdraw_overshoot_frac_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      v.numericType = .fractional ∧
-      0 < shares.toRat ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
+    ∃ (v : Vault) (t0 : UInt32) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
+      v.numericType = .fractional ∧ Vault.Reachable v t0 ∧ 0 ≤ shares.toRat ∧ shares.Canonical ∧
+      shares.toRat ≤ v.toExact.sharesTotal ∧
       v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      assets.toRat = v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat +
-        (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent :=
-  ⟨wvF, wsh1, wpF, false, rfl, by native_decide,
-    ⟨⟨false, 2000000000000003000, -18⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide⟩
+      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat < assets.toRat :=
+  ⟨vF, 0, one, iouAmount 1000000000000002 0, false, by native_decide, vF_reach, by native_decide,
+    one_canonical, by native_decide, by native_decide, by native_decide⟩
 
-/-- Witness for the lower half-ULP term of `Vault.sharesToAssetsWithdraw_bounds`: on an
-integral vault a nonzero payout is exactly half a unit below the shares' worth. -/
+/-- Integral shortfall: `13128` shares worth `8341197431023684.5040…` are priced `8341197431023684`. -/
 lemma Vault.sharesToAssetsWithdraw_shortfall_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      0 < shares.toRat ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      assets.isZero = false ∧
-      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat - assets.toRat =
-        (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent :=
-  ⟨wvI5, wsh1, wpI, false, by native_decide,
-    ⟨⟨false, 5000000000000000000, -18⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide⟩
-
-/-- The fractional analogue: half a 16-digit ULP below the shares' worth. -/
-lemma Vault.sharesToAssetsWithdraw_shortfall_frac_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      v.numericType = .fractional ∧
-      0 < shares.toRat ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      assets.isZero = false ∧
-      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat - assets.toRat =
-        (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent :=
-  ⟨wvF5, wsh1, wpF5, false, rfl, by native_decide,
-    ⟨⟨false, 2000000000000001000, -18⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide⟩
-
-/-- Witness for the lower conjunct of `Vault.sharesToAssetsWithdraw_total`: shrinking the
-half-ULP term by `10⁻¹⁶` breaks it. -/
-lemma Vault.sharesToAssetsWithdraw_total_shortfall_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      0 < shares.toRat ∧
-      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      assets.isZero = false ∧
-      v.navSlack * shares.toRat / (v.toExact.sharesTotal : ℚ) * (1 + depositε) +
-        (1 / 2 - (10 : ℚ) ^ (-16 : ℤ)) * (10 : ℚ) ^ assets.exponent <
+    ∃ (v : Vault) (t0 : UInt32) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
+      Vault.Reachable v t0 ∧ 0 ≤ shares.toRat ∧ shares.Canonical ∧ shares.toRat ≤ v.toExact.sharesTotal ∧
+      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧ assets.isZero = false ∧
+      (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent <
         v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat - assets.toRat :=
-  ⟨wvI5, wsh1, wpI, false, by native_decide, by native_decide, by native_decide,
+  ⟨vW, 0, burnW, int64Amount 8341197431023684, false, vW_reach, by native_decide,
+    STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, by native_decide, by native_decide,
     by native_decide⟩
 
-/-- Witness for `Vault.sharesToAssetsWithdraw_total`: shrinking the half-ULP term by
-`10⁻¹⁶` breaks the upper conjunct. -/
+/-- Fractional shortfall: the same `13128` shares on the IOU vault `vWF`, priced `8341197431023684`. -/
+lemma Vault.sharesToAssetsWithdraw_shortfall_frac_witness :
+    ∃ (v : Vault) (t0 : UInt32) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
+      v.numericType = .fractional ∧ Vault.Reachable v t0 ∧ 0 ≤ shares.toRat ∧ shares.Canonical ∧
+      shares.toRat ≤ v.toExact.sharesTotal ∧
+      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧ assets.isZero = false ∧
+      (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent <
+        v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat - assets.toRat :=
+  ⟨vWF, 0, burnW, iouAmount 8341197431023684 0, false, by native_decide, vWF_reach, by native_decide,
+    STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, by native_decide, by native_decide,
+    by native_decide⟩
+
+/-- `_total` overshoot: one share worth `1.5` at the computed net asset value is priced `2`. -/
 lemma Vault.sharesToAssetsWithdraw_total_witness :
-    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool),
-      0 < shares.toRat ∧
+    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number),
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ 0 ≤ shares.toRat ∧
+      shares.Canonical ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      (v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat +
-          v.navSlack * shares.toRat / (v.toExact.sharesTotal : ℚ)) * (1 + depositε) +
-        (1 / 2 - (10 : ℚ) ^ (-16 : ℤ)) * (10 : ℚ) ^ assets.exponent < assets.toRat :=
-  ⟨wvI, wsh1, wpI, false, by native_decide, by native_decide, by native_decide⟩
+      v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
+      v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat < assets.toRat :=
+  ⟨vI, one, int64Amount 2, false, nav vI, by native_decide, by native_decide, one_canonical,
+    fun _ => by native_decide, by native_decide, by native_decide, by native_decide⟩
 
-/-- Witness for `Vault.withdraw_under_available`, integral half: a margin of
-`1/2 - 10⁻¹⁶` units lets the guard fire. -/
-lemma Vault.withdraw_under_available_witness :
-    ∃ (v : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-      (hpos : 0 < shares.toRat),
-      v.numericType.isIntegral = true ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw (.vaultShares shares) waiveUnrealizedLoss hpos = .ok r ∧
-      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat * (1 + depositε) +
-        (1 / 2 - (10 : ℚ) ^ (-16 : ℤ)) ≤ v.toExact.assetsAvailable ∧
-      r.error = some .tecINSUFFICIENT_FUNDS :=
-  ⟨wvI', wsh1, false, WithdrawResult.rejected wvI' .tecINSUFFICIENT_FUNDS, by native_decide,
-    rfl, ⟨⟨false, 3000000000000000000, -18⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, rfl⟩
-
-/-- Witness for `Vault.withdraw_under_available`, fractional half: a relative margin of
-`4.98·10⁻¹⁶` (99.2% of `½·10⁻¹⁵ + 2·10⁻¹⁸`) lets the guard fire. -/
-lemma Vault.withdraw_under_available_frac_witness :
-    ∃ (v : Vault) (shares : STAmount) (waiveUnrealizedLoss : Bool) (r : WithdrawResult)
-      (hpos : 0 < shares.toRat),
-      v.numericType = .fractional ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw (.vaultShares shares) waiveUnrealizedLoss hpos = .ok r ∧
-      v.idealAssetsWithdraw waiveUnrealizedLoss shares.toRat * (1 + 498 * (10 : ℚ) ^ (-18 : ℤ))
-        ≤ v.toExact.assetsAvailable ∧
-      r.error = some .tecINSUFFICIENT_FUNDS :=
-  ⟨wvF', wsh1, false, WithdrawResult.rejected wvF' .tecINSUFFICIENT_FUNDS, by native_decide,
-    rfl, ⟨⟨false, 2000000000000003000, -18⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, rfl⟩
+/-- `_total` shortfall: the `vW` run, within the Open limit, more than half a unit short of the worth at the
+computed net asset value. -/
+lemma Vault.sharesToAssetsWithdraw_total_shortfall_witness :
+    ∃ (v : Vault) (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number),
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ 0 ≤ shares.toRat ∧
+      shares.Canonical ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
+      v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
+      assets.isZero = false ∧
+      (1 / 2 : ℚ) * (10 : ℚ) ^ assets.exponent <
+        v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat - assets.toRat :=
+  ⟨vW, burnW, int64Amount 8341197431023684, false, nav vW, by native_decide, by native_decide,
+    STAmount.canonical_of_canonicalB _ (by native_decide), fun _ => by native_decide, by native_decide,
+    by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

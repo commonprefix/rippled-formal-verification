@@ -6,16 +6,10 @@ import XRPL.Properties.Approx
 
 namespace XRPL.Model.Protocol
 
-/-! ## upward -/
-
 set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) needs extra heartbeats
-/-- Relative-error bound for `Number.normalize` under `.upward` rounding.
-
-`normalize` accepts an arbitrary `(mantissa, exponent)` pair. Its final stage is
-`doRoundUp`, so the error matches the same-sign `.upward` supremum
-`10/(2^63 + 2)`, the tight supremum (not attained — see
-`normalize_rounding_bound_upward_attained`). -/
+/-- `Number.normalize` under `.upward` on any nonzero `(mantissa, exponent)` pair with a nonzero result never rounds
+below the input and has relative error strictly below `10/(2^63 + 2)`. -/
 theorem normalize_rounding_bound_upward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
@@ -34,7 +28,6 @@ theorem normalize_rounding_bound_upward (n result : Number)
     linarith
   have h_denom_val : ((2 ^ 63 + 2 : ℚ)) = maxRepCuspTarget := by norm_num
   have h_denom_pos : (0 : ℚ) < ((2 ^ 63 + 2 : ℚ)) := by rw [h_denom_val]; norm_num
-  -- Extract `f`'s structure for direction analysis.
   have hf_rep' := hf_rep
   obtain ⟨x_rep, hx_nn, _hx_lt, hf_eq, hxbit_iff, _hall⟩ := hf_rep
   -- Local helper: convert |result.toRat| identity to signed form.
@@ -163,7 +156,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
           have h_inner : f < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) := f_lt_releps hzm_q_ge hf_lt1
           exact releps_lift h_inner h10ze'_pos
         exact ⟨h_direction, h_magnitude⟩
-      · -- n ≥ 0. sbit=false; ¬shouldRoundUp_upward ⇒ guard = 0 ⇒ f = 0 ⇒ result = n.
+      · -- n ≥ 0. sbit=false and ¬shouldRoundUp_upward ⇒ guard = 0 ⇒ f = 0 ⇒ result = n.
         have h_n_nonneg : n.negative_ = false := Bool.not_eq_true _ |>.mp h_zn
         have h_g_sbit_false : g.sbit_ = false := by rw [h_g_sbit]; exact h_n_nonneg
         have h_no_or : ¬ (g.digits_ > 0 ∨ g.xbit_ = true) := by
@@ -216,7 +209,7 @@ theorem normalize_rounding_bound_upward (n result : Number)
           have h_eps_pos : (0 : ℚ) < 10 / ((2 ^ 63 + 2 : ℚ)) := by
             apply div_pos (by norm_num) h_denom_pos
           exact mul_pos h_abs_pos h_eps_pos
-  · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp — no digits were pushed, f = 0 =====
+  · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp: no digits were pushed, f = 0 =====
     push Not at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .upward

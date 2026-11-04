@@ -2,13 +2,12 @@ import XRPL.Properties.Protocol.IntAmount.MulRatio.Common.Proofs
 
 /-! # `mulRatio` floor direction (`roundUp = false`).
 
-The `roundUp = false` specialization of the unified `mulRatio_rounds_proof`: the result is
-either saturated to `Int64.minValue` or **floored**: the largest representable value not
-exceeding `amt · num / den`. (Direction analog of `Number`'s per-mode `Downward`.) -/
+The `roundUp = false` case of `mulRatio_rounds_proof`: the result is saturated to `Int64.minValue` or is the
+largest representable value not exceeding `amt · num / den`. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`mulRatio` floors when `roundUp = false`.** -/
+/-- `mulRatio` floors when `roundUp = false`. -/
 theorem IntAmount.mulRatio_rounds_floor_proof (amt : IntAmount) (num den : UInt32)
     (result : IntAmount)
     (hok : IntAmount.mulRatio amt num den false = .ok result) :

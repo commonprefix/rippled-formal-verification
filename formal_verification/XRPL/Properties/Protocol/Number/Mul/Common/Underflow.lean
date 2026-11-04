@@ -13,12 +13,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Underflow characterization for `operator_mul`
 
-A zero result mantissa (with nonzero normalized operands) means the mul-stage
-`doRoundUp` flushed — the normalize stage cannot introduce a zero on the
-invariant range — and a flush pins the value frame to the representable floor.
-Hence the exact product is strictly below the smallest positive representable.
-The hypothesis-minimal discrete-rounding theorems consume this in their
-underflow branches. -/
+If both operands are nonzero and the result is zero, the rounding step flushed the product to zero. So the exact
+product is below the smallest positive `Number`, `10^18 · 10^minExponent`. -/
 
 /-- With the product strictly positive, the result of `operator_mul` carries the
 nonnegative sign (the factors agree in sign, so `zn = false`). -/
@@ -100,7 +96,7 @@ lemma mul_result_nonpos_of_truth_neg (x y result : Number)
     (by rw [h_sign, mul_zn_true_of_truth_neg x y h_truth_neg])
 
 set_option maxHeartbeats 1600000 in
--- Product-frame derivation + per-mode invariant dispatch.
+-- Long case split over the rounding modes.
 theorem operator_mul_underflow_truth_small (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -187,7 +183,6 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     have : (maxRepUp.toNat + 1) / 10 = mantissaFloorSucc := by
       rw [show maxRepUp.toNat = maxRepUpNat from rfl]
     omega
-  -- Extract the doRoundUp result.
   have h_rup_exists : ∃ res : RoundResult,
       g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
     match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow with
@@ -200,11 +195,11 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     rw [habs_xy_eq2]
     exact mul_lt_mul_of_pos_right (by linarith) (zpow_pos (by norm_num) _)
   by_cases hres_mant : res.mantissa_ = 0
-  · -- The mul-stage doRoundUp flushed: the frame is at the representable floor.
+  · -- The rounding step flushed to zero, so the product is below the smallest positive Number.
     have h_small := doRoundUp_flush_value_small g zn zm ze' mode hzm_ge hzm_le_maxRep
       .overflow res h_rup hres_mant
     linarith
-  · -- No flush: normalize is the identity on the invariant range — contradiction.
+  · -- No flush: normalize is the identity on the invariant range, a contradiction.
     exfalso
     have h_inv : largeRange.min.toNat ≤ res.mantissa_.toNat ∧
         res.mantissa_.toNat ≤ largeRange.max.toNat ∧

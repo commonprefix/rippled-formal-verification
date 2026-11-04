@@ -1,7 +1,10 @@
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Proofs.Support.Integral
 
-/-! # Exact `Number` subtraction on a decimal grid -/
+/-! # Representable values on a decimal grid
+
+A whole number of steps of a decimal grid is the value of a normalized `Number`, and so is a
+difference that stays on the grid. -/
 
 namespace XRPL.Model.SingleAssetVault.Exact
 
@@ -62,7 +65,7 @@ lemma exists_normalized_grid (K : ℕ) (g : ℤ) (h1 : 1 ≤ K) (h2 : K < 2 ^ 63
     field_simp
 
 /-- A positive integer below `2^63` times `10^g` (as an integer) is representable. -/
-lemma exists_normalized_grid_int (K : ℤ) (g : ℤ) (h1 : 0 < K) (h2 : K < 2 ^ 63)
+private lemma exists_normalized_grid_int (K : ℤ) (g : ℤ) (h1 : 0 < K) (h2 : K < 2 ^ 63)
     (hlo : minExponent + 18 ≤ g) (hhi : g ≤ maxExponent) :
     ∃ w : Number, w.isNormalized ∧ w.toRat = (K : ℚ) * 10 ^ g := by
   obtain ⟨w, hw, hwv⟩ := exists_normalized_grid K.toNat g (by omega) (by omega) hlo hhi
@@ -72,45 +75,13 @@ lemma exists_normalized_grid_int (K : ℤ) (g : ℤ) (h1 : 0 < K) (h2 : K < 2 ^ 
   have : ((K.toNat : ℤ) : ℚ) = (K : ℚ) := by rw [Int.toNat_of_nonneg h1.le]
   exact_mod_cast this
 
-/-- The exponent of a positive normalized `Number` is monotone in its value. -/
-lemma exponent_le_of_le (a b : Number) (ha : a.isNormalized) (hb : b.isNormalized)
-    (ha0 : 0 < a.toRat) (hab : a.toRat ≤ b.toRat) : a.exponent_ ≤ b.exponent_ := by
-  have hb0 : 0 < b.toRat := lt_of_lt_of_le ha0 hab
-  have ham : a.mantissa_ ≠ 0 := fun h => by
-    rw [Number.toRat_eq_zero_of_mantissa_zero a h] at ha0; exact lt_irrefl _ ha0
-  have hbm : b.mantissa_ ≠ 0 := fun h => by
-    rw [Number.toRat_eq_zero_of_mantissa_zero b h] at hb0; exact lt_irrefl _ hb0
-  have hav := Number.toRat_of_nonneg a (Number.negative_false_of_nonneg a ha ha0.le)
-  have hbv := Number.toRat_of_nonneg b (Number.negative_false_of_nonneg b hb hb0.le)
-  obtain ⟨halo, -⟩ := ha.mantissaBounds_nat ham
-  obtain ⟨-, hbhi⟩ := hb.mantissaBounds_nat hbm
-  by_contra hlt
-  rw [not_le] at hlt
-  have h1 : (10 : ℚ) ^ (18 : ℕ) * 10 ^ a.exponent_ ≤ a.toRat := by
-    rw [hav]
-    exact mul_le_mul_of_nonneg_right (by exact_mod_cast halo) (by positivity)
-  have h2 : b.toRat < (10 : ℚ) ^ (19 : ℕ) * 10 ^ b.exponent_ := by
-    rw [hbv]
-    exact mul_lt_mul_of_pos_right (by exact_mod_cast hbhi) (by positivity)
-  have h3 : (10 : ℚ) ^ (19 : ℕ) * 10 ^ b.exponent_ ≤ (10 : ℚ) ^ (18 : ℕ) * 10 ^ a.exponent_ := by
-    rw [← zpow_natCast, ← zpow_natCast, ← zpow_add₀ (by norm_num), ← zpow_add₀ (by norm_num)]
-    exact zpow_le_zpow_right₀ (by norm_num) (by push_cast; omega)
-  linarith
-
-/-- **Exact subtraction on a grid.** Subtracting `0 ≤ y ≤ x` with `y ∈ 10^s·ℤ` is
-exact when the difference fits `2^63` steps of `10^s` in case `s ≤ exponent x`. -/
-lemma sub_exact_grid (x y res : Number) (s j : ℤ)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hy0 : 0 ≤ y.toRat) (hyx : y.toRat ≤ x.toRat)
-    (hj : y.toRat = (j : ℚ) * 10 ^ s)
+/-- A difference on a grid is representable. `x - y` with `0 ≤ y ≤ x` and `y ∈ 10^s·ℤ` is the
+value of a normalized `Number` when it fits `2^63` steps of `10^s` in case `s ≤ exponent x`. -/
+lemma sub_representable_grid (x : Number) (yv : ℚ) (s j : ℤ) (hx : x.isNormalized)
+    (hy0 : 0 ≤ yv) (hyx : yv ≤ x.toRat) (hj : yv = (j : ℚ) * 10 ^ s)
     (hs : minExponent + 37 ≤ s) (hs' : s ≤ maxExponent)
-    (hnear : 0 < y.toRat → s ≤ x.exponent_ → x.toRat - y.toRat < 2 ^ 63 * 10 ^ s)
-    (hok : x.operator_sub y .to_nearest = .ok res) :
-    res.toRat = x.toRat - y.toRat := by
-  have hrtr := operator_sub_rounded_to_nearest x y res hx hy hok
-  suffices h : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat - y.toRat by
-    obtain ⟨w, hw, hwv⟩ := h
-    exact Number.RoundsToRepresentable.eq_of_representable res _ hrtr w hw hwv
+    (hnear : 0 < yv → s ≤ x.exponent_ → x.toRat - yv < 2 ^ 63 * 10 ^ s) :
+    ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat - yv := by
   rcases eq_or_lt_of_le hy0 with hy00 | hypos
   · exact ⟨x, hx, by rw [← hy00, sub_zero]⟩
   rcases eq_or_lt_of_le (sub_nonneg.mpr hyx) with hD0 | hDpos
@@ -134,7 +105,7 @@ lemma sub_exact_grid (x y res : Number) (s j : ℤ)
   set e := x.exponent_ with he_def
   by_cases hse : s ≤ e
   · obtain ⟨d, hd⟩ : ∃ d : ℕ, e = s + d := ⟨(e - s).toNat, by omega⟩
-    have hD : x.toRat - y.toRat = (((m : ℤ) * 10 ^ d - j : ℤ) : ℚ) * 10 ^ s := by
+    have hD : x.toRat - yv = (((m : ℤ) * 10 ^ d - j : ℤ) : ℚ) * 10 ^ s := by
       rw [hxv, hj, hd, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
       push_cast; ring
     have hKpos : (0 : ℤ) < (m : ℤ) * 10 ^ d - j := by
@@ -155,7 +126,7 @@ lemma sub_exact_grid (x y res : Number) (s j : ℤ)
     have hse19 : s < e + 19 := by
       by_contra hc
       rw [not_lt] at hc
-      have h1 : (10 : ℚ) ^ s ≤ y.toRat := by
+      have h1 : (10 : ℚ) ^ s ≤ yv := by
         rw [hj]
         have : (1 : ℚ) ≤ (j : ℚ) := by exact_mod_cast hj1
         nlinarith
@@ -164,7 +135,7 @@ lemma sub_exact_grid (x y res : Number) (s j : ℤ)
         exact mul_lt_mul_of_pos_right (by exact_mod_cast hmhi) he0
       have h3 : (10 : ℚ) ^ (e + 19) ≤ 10 ^ s := zpow_le_zpow_right₀ (by norm_num) hc
       linarith
-    have hD : x.toRat - y.toRat = (((m : ℤ) - 10 * (j * 10 ^ d) : ℤ) : ℚ) * 10 ^ e := by
+    have hD : x.toRat - yv = (((m : ℤ) - 10 * (j * 10 ^ d) : ℤ) : ℚ) * 10 ^ e := by
       rw [hxv, hj, hd, zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0),
         zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
       push_cast; ring
@@ -179,7 +150,7 @@ lemma sub_exact_grid (x y res : Number) (s j : ℤ)
       obtain ⟨w, hw, hwv⟩ := exists_normalized_grid_int _ e hKpos (by omega) (by omega) hxe_hi
       exact ⟨w, hw, by rw [hwv, hD]⟩
     · obtain ⟨m', hm'⟩ : ∃ m' : ℕ, m = 10 * m' := ⟨m / 10, by omega⟩
-      have hD' : x.toRat - y.toRat = (((m' : ℤ) - j * 10 ^ d : ℤ) : ℚ) * 10 ^ (e + 1) := by
+      have hD' : x.toRat - yv = (((m' : ℤ) - j * 10 ^ d : ℤ) : ℚ) * 10 ^ (e + 1) := by
         rw [hD, hm', zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
         push_cast; ring
       have hK'pos : (0 : ℤ) < (m' : ℤ) - j * 10 ^ d := by omega

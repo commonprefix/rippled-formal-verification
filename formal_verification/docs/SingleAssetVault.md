@@ -240,8 +240,8 @@ Some theorems here are proven, but need to be tightened as the bugs are fixed, n
 | `VaultSet.lean`            | `Vault.canVaultSet_below_total`                     | new maximum below the total → `tecLIMIT_EXCEEDED`              | Proven |
 |                            | `Vault.canVaultSet_success`                         | otherwise → `tesSUCCESS`                                       | Proven |
 |                            | `Vault.canVaultSet_error_codes`                     | success or `tecLIMIT_EXCEEDED`                                 | Proven |
-|                            | `Vault.lawful_canVaultSet_iff`                      | success ⟺ the new maximum is zero or at least the total        | Proven |
-| `VaultDelete.lean`         | `Vault.lawful_canVaultDelete_iff`                   | success ⟺ the vault is empty                                   | Proven |
+|                            | `Vault.canVaultSet_lawful_iff`                      | success ⟺ the new maximum is zero or at least the total        | Proven |
+| `VaultDelete.lean`         | `Vault.canVaultDelete_lawful_iff`                   | success ⟺ the vault is empty                                   | Proven |
 |                            | `Vault.canVaultDelete_error_codes`                  | success or `tecHAS_OBLIGATIONS`                                | Proven |
 |                            | `Vault.canVaultDelete_has_obligations_iff`          | `tecHAS_OBLIGATIONS` ⟺ some stored field is nonzero            | Proven |
 | `Unchanged.lean`           | `Vault.{deposit,withdraw,clawback}_error_unchanged` | any rejected deposit / withdrawal / clawback → vault unchanged | Proven |

@@ -6,14 +6,8 @@ import XRPL.Properties.Approx
 
 namespace XRPL.Model.Protocol
 
-/-! ## towards_zero -/
-
-/-- Relative-error bound for `Number.normalize` under `.towards_zero` rounding.
-
-`normalize` accepts an arbitrary `(mantissa, exponent)` pair (the input need not
-be normalized). Its final stage is `doRoundUp`, which under `.towards_zero`
-always truncates toward zero. The error matches the same-sign `.towards_zero`
-truncation supremum `10/(2^63 + 2)`. -/
+/-- `Number.normalize` under `.towards_zero` on any nonzero `(mantissa, exponent)` pair with a nonzero result never
+increases the magnitude and has relative error below `10/(2^63 + 2)`. -/
 theorem normalize_rounding_bound_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
@@ -27,16 +21,14 @@ theorem normalize_rounding_bound_towards_zero (n result : Number)
   have h10ze_nn : (0 : ℚ) ≤ 10 ^ ze := le_of_lt h10ze_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge
   by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
-  · -- ===== IN RANGE: zm ≤ maxRep — towards_zero truncates: |result| = zm·10^ze =====
+  · -- ===== IN RANGE: zm ≤ maxRep, towards_zero truncates: |result| = zm·10^ze =====
     have h_tr_val := doRoundUp_value_towards_zero_truncate g false zm ze h_zm_le_rep
       .normalize2 res_pos h_rup_pos hres_pos_mant_ne
     have h_result_abs_eq : |result.toRat| = (zm.toNat : ℚ) * 10 ^ ze := by
       rw [h_result_abs]; exact h_tr_val
-    -- |result| ≤ |n|
     have h_direction : |result.toRat| ≤ |n.toRat| := by
       rw [habs_n_eq, h_result_abs_eq]
       nlinarith [h10ze_nn, hf_nn]
-    -- magnitude shortfall < |n| · ε
     have h_magnitude : |n.toRat| - |result.toRat| < |n.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
       rw [habs_n_eq, h_result_abs_eq]
       have h_lhs_eq : ((zm.toNat : ℚ) + f) * 10 ^ ze - (zm.toNat : ℚ) * 10 ^ ze
