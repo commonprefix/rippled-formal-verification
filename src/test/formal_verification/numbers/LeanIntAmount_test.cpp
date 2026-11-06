@@ -3,6 +3,7 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -24,6 +25,7 @@ lean_int_amount_to_number(int64_t v, uint8_t mode);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 class LeanIntAmount_test : public LeanSuite
 {
@@ -204,6 +206,68 @@ public:
         }
     }
 
+    // ---- Cusp sweeps ----
+
+    // m * 10^e as both sides store it: a stored mantissa above kMaxRep is reported divided by 10.
+    static NumberPair
+    storedNumber(std::int64_t m, std::int64_t e)
+    {
+        Number const n{
+            false, static_cast<std::uint64_t>(m), static_cast<int>(e), Number::Normalized{}};
+        std::uint64_t mantissa = magnitude(n.mantissa());
+        int exponent = n.exponent();
+        if (mantissa != 0 && mantissa < Number::minMantissa())
+        {
+            mantissa *= 10;
+            --exponent;
+        }
+        return makeNumberPair(false, mantissa, exponent);
+    }
+
+    void
+    testInt64RangeSweep()
+    {
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        for (auto const mode : kRoundingModes)
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            sweepOfNumber(mode);
+        }
+        sweepMulRatioOverflow(false);
+        sweepMulRatioOverflow(true);
+    }
+
+    // Number to int64: m * 10^e up to int64 max converts, the next Number above it throws.
+    void
+    sweepOfNumber(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIntAmount.ofNumber int64 max " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kIntOfNumberCases, [&](Scaled const& c) {
+            NumberPair const x = [&] {
+                NumberRoundModeGuard const g(Number::RoundingMode::ToNearest);
+                return storedNumber(c.mantissa, c.exponent);
+            }();
+            checkOfNumber(x, mode);
+            return cppVerdict([&] { return MPTAmount{x.cppNum}.value() == 0; });
+        });
+    }
+
+    // mulRatio: value * num / den up to int64 max fits, above it throws.
+    void
+    sweepMulRatioOverflow(bool roundUp)
+    {
+        beginCase(
+            (std::string("LeanIntAmount.mulRatio overflow ") + (roundUp ? "up" : "down") + "-Sweep")
+                .c_str());
+        runAroundCusp(kIntMulRatioCases, [&](Ratio const& c) {
+            auto const v = makeMPTAmountPair(c.value);
+            auto const num = static_cast<std::uint32_t>(c.num);
+            auto const den = static_cast<std::uint32_t>(c.den);
+            checkMulRatio(v, num, den, roundUp);
+            return cppVerdict([&] { return mulRatio(v.cppMpt, num, den, roundUp).value() == 0; });
+        });
+    }
+
 private:
     void
     runTests() override
@@ -212,6 +276,7 @@ private:
         test_fuzz_to_number();
         test_known_values();
         test_extreme_values();
+        testInt64RangeSweep();
     }
 };
 

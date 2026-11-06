@@ -1,6 +1,8 @@
 #include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
+#include <test/formal_verification/tx/vault/DepositSweepCases.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -18,38 +20,79 @@
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <initializer_list>
+#include <limits>
 #include <optional>
+#include <set>
+#include <span>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace xrpl::test::formal_verification {
 
 class LeanVaultDeposit_test : public LeanSuite
 {
-    // Model of preclaim: leanRoundedDepositAmount rounds to the vault scale and returns exactly
-    // one of the rounded amount (success) or an error TER.
+    // The old single-value tests run on the sweep ledger: each stages its vault on a throwaway
+    // view (seed deposits become the shares a first deposit mints) and checks the expected
+    // verdict on top of checkDeposit's Lean/C++ comparison.
+
+    // A seed deposit of `seed` into an empty vault: the vault holds it and has minted seed *
+    // 10^scale shares.
+    static StagedVault
+    seededVault(jtx::Env& env, Keylet const& vault, STAmount const& seed)
+    {
+        int const scale = env.le(vault)->at(sfScale);
+        Number const shares = Number{seed} * Number{1, scale};
+        return StagedVault{
+            .available = seed,
+            .sharesTotal = static_cast<std::uint64_t>(static_cast<std::int64_t>(shares))};
+    }
+
+    // A holder other than the asset's issuer holds exactly the amount it deposits.
+    static StagedVault
+    fundDepositor(StagedVault staged, jtx::Account const& depositor, STAmount const& amount)
+    {
+        if (!amount.native() && amount.holds<Issue>() && depositor.id() != amount.getIssuer())
+            staged.depositorBalance = amount;
+        return staged;
+    }
+
     void
-    compareRoundedDepositAmount(
+    expectStagedDeposit(
         jtx::Env& env,
-        Keylet const& vaultKeylet,
+        Keylet const& vault,
         jtx::Account const& depositor,
-        Asset const& asset,
+        StagedVault const& staged,
+        STAmount const& amount,
+        TER expected,
+        bool donate = false)
+    {
+        TER const cpp = checkDeposit(env, vault, depositor, staged, amount, donate);
+        BEAST_EXPECTS(
+            cpp == expected,
+            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
+    }
+
+    // Model of preclaim: leanRoundedDepositAmount rounds to the vault scale and returns exactly
+    // one of the rounded amount (success) or an error TER; C++ runs the whole deposit.
+    void
+    expectRoundedDeposit(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        StagedVault const& staged,
         STAmount const& amount,
         TER expected)
     {
-        using namespace jtx;
-        Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanRoundingResult const rounded = leanRoundedDepositAmount(state, amount);
+        AppliedDeposit const cpp = applyDeposit(env, vault, depositor, staged, amount);
+        LeanAmountResult const rounded = leanRoundedDepositAmount(cpp.pre, amount);
         expectLawful(rounded);
-
-        env(jtx::Vault::deposit({.depositor = depositor, .id = vaultKeylet.key, .amount = amount}),
-            jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        env.close();
-
         BEAST_EXPECTS(
-            cppTer == expected,
-            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
+            cpp.ter == expected,
+            std::string("cpp=") + transToken(cpp.ter) + " expected " + transToken(expected));
 
         std::optional<TER> const leanError =
             rounded.leanError.has_value() ? std::optional<TER>{tefEXCEPTION} : rounded.error;
@@ -73,480 +116,263 @@ class LeanVaultDeposit_test : public LeanSuite
                 " expected " + (expectedAmount ? to_string(*expectedAmount) : "none"));
     }
 
-    // Model of doApply: leanVaultDeposit computes shares and the new vault state.
     void
-    compareVaultDeposit(
+    testVaultDepositXRP(
         jtx::Env& env,
-        Keylet const& vaultKeylet,
+        Keylet const& vault,
         jtx::Account const& depositor,
-        Asset const& asset,
-        STAmount const& amount,
-        TER expected,
-        bool isDonation = false)
-    {
-        using namespace jtx;
-        Vault const state = readVaultState(env, vaultKeylet, asset);
-        LeanDepositResult const deposit = leanVaultDeposit(state, amount, isDonation);
-        expectLawful(deposit);
-
-        jtx::Vault::DepositArgs depositArgs{
-            .depositor = depositor, .id = vaultKeylet.key, .amount = amount};
-        if (isDonation)
-            depositArgs.flags = tfVaultDonate;
-        env(jtx::Vault::deposit(depositArgs), jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        env.close();
-
-        BEAST_EXPECTS(
-            cppTer == expected,
-            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
-
-        // A model raise surfaces as tefEXCEPTION, matching the C++ transactor.
-        std::optional<TER> const leanError =
-            deposit.leanError.has_value() ? std::optional<TER>{tefEXCEPTION} : deposit.error;
-        std::optional<TER> const expectedError =
-            expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
-        BEAST_EXPECTS(
-            leanError == expectedError,
-            std::string("error lean=") + (leanError ? transToken(*leanError) : "none") +
-                " expected " + (expectedError ? transToken(*expectedError) : "none"));
-
-        if (cppTer != tesSUCCESS)
-            return;
-
-        auto const newVaultSle = env.le(vaultKeylet);
-        auto const issuanceKeylet = keylet::mptokenIssuance(newVaultSle->at(sfShareMPTID));
-        Number const cppAssetsTotal = newVaultSle->at(sfAssetsTotal);
-        Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
-        Number const cppSharesTotal{
-            static_cast<std::int64_t>(env.le(issuanceKeylet)->at(sfOutstandingAmount))};
-        BEAST_EXPECTS(
-            deposit.vault.assetsTotal == cppAssetsTotal,
-            "assetsTotal lean=" + to_string(deposit.vault.assetsTotal) +
-                " cpp=" + to_string(cppAssetsTotal));
-        BEAST_EXPECTS(
-            deposit.vault.assetsAvailable == cppAssetsAvailable,
-            "assetsAvailable lean=" + to_string(deposit.vault.assetsAvailable) +
-                " cpp=" + to_string(cppAssetsAvailable));
-        BEAST_EXPECTS(
-            deposit.vault.sharesTotal == cppSharesTotal,
-            "sharesTotal lean=" + to_string(deposit.vault.sharesTotal) +
-                " cpp=" + to_string(cppSharesTotal));
-        Number const cppLossUnrealized = newVaultSle->at(sfLossUnrealized);
-        BEAST_EXPECTS(
-            deposit.vault.lossUnrealized == cppLossUnrealized,
-            "lossUnrealized lean=" + to_string(deposit.vault.lossUnrealized) +
-                " cpp=" + to_string(cppLossUnrealized));
-    }
-
-    void
-    runVaultDeposit(
-        jtx::Env& env,
-        jtx::Account const& vaultOwner,
-        jtx::Account const& seeder,
-        jtx::Account const& depositor,
-        Asset const& asset,
         STAmount const& vaultBalanceBeforeDeposit,
         STAmount const& amount,
-        TER expected,
-        STAmount const& donation = STAmount{})
+        TER expected)
     {
-        using namespace jtx;
-        auto const vaultKeylet = createVault(env, vaultOwner, asset);
-
-        if (vaultBalanceBeforeDeposit.signum() != 0)
-        {
-            env(jtx::Vault::deposit(
-                    {.depositor = seeder,
-                     .id = vaultKeylet.key,
-                     .amount = vaultBalanceBeforeDeposit}),
-                jtx::Ter(tesSUCCESS));
-            env.close();
-        }
-
-        // An owner donation adds assets without shares, drifting NAV off shareTotal/10^scale to
-        // exercise the exchange-rate path.
-        if (donation.signum() != 0)
-        {
-            env(jtx::Vault::deposit(
-                    {.depositor = vaultOwner,
-                     .id = vaultKeylet.key,
-                     .amount = donation,
-                     .flags = tfVaultDonate}),
-                jtx::Ter(tesSUCCESS));
-            env.close();
-        }
-
-        compareVaultDeposit(env, vaultKeylet, depositor, asset, amount, expected);
-    }
-
-    void
-    testVaultDepositXRP(STAmount vaultBalanceBeforeDeposit, STAmount amount, TER expected)
-    {
-        using namespace jtx;
         testcase(
             "deposit XRP " + amount.getText() + " into " + vaultBalanceBeforeDeposit.getText());
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const holder{"holder"};
-        env.fund(STAmount(vaultBalanceBeforeDeposit) + XRP(1'000'000), vaultOwner);
-        env.fund(STAmount(amount) + XRP(1'000'000), holder);
-        env.close();
-
-        runVaultDeposit(
+        expectStagedDeposit(
             env,
-            vaultOwner,
-            vaultOwner,
-            holder,
-            xrpIssue(),
-            vaultBalanceBeforeDeposit,
+            vault,
+            depositor,
+            seededVault(env, vault, vaultBalanceBeforeDeposit),
             amount,
             expected);
     }
 
     void
     testVaultDepositIOU(
-        Number vaultBalanceBeforeDeposit,
-        Number amount,
-        bool depositorIsIssuer,
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        Number const& vaultBalanceBeforeDeposit,
+        Number const& amount,
         TER expected)
     {
-        using namespace jtx;
+        Asset const asset = env.le(vault)->at(sfAsset);
+        bool const depositorIsIssuer = depositor.id() == asset.getIssuer();
         testcase(
             "deposit IOU " + to_string(amount) + " into " + to_string(vaultBalanceBeforeDeposit) +
             (depositorIsIssuer ? " (issuer)" : ""));
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        Account const depositor = depositorIsIssuer ? issuer : holder;
-        if (!depositorIsIssuer)
-        {
-            // limit large enough to cover any tested amount
-            env(trust(holder, asset(10'000'000'000'000'000LL)));
-            env.close();
-            env(pay(issuer, holder, asset(amount)));
-            env.close();
-        }
-
-        // The issuer seeds the vault, since it can issue any amount of its own IOU.
-        runVaultDeposit(
-            env,
-            vaultOwner,
-            issuer,
-            depositor,
-            asset.raw(),
-            asset(vaultBalanceBeforeDeposit),
-            asset(amount),
-            expected);
+        STAmount const a{asset, amount};
+        StagedVault const staged = fundDepositor(
+            seededVault(env, vault, STAmount{asset, vaultBalanceBeforeDeposit}), depositor, a);
+        expectStagedDeposit(env, vault, depositor, staged, a, expected);
     }
 
     void
-    testVaultDepositMPT(std::int64_t vaultBalanceBeforeDeposit, std::int64_t amount, TER expected)
+    testVaultDepositMPT(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        std::int64_t vaultBalanceBeforeDeposit,
+        std::int64_t amount,
+        TER expected)
     {
-        using namespace jtx;
         testcase(
             "deposit MPT " + std::to_string(amount) + " into " +
             std::to_string(vaultBalanceBeforeDeposit));
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        // The holder seeds and deposits, so it must hold both amounts (an MPT issuer cannot
-        // deposit an MPToken it does not itself hold).
-        env(pay(issuer, holder, asset(vaultBalanceBeforeDeposit + amount)));
-        env.close();
-
-        runVaultDeposit(
+        expectStagedDeposit(
             env,
-            vaultOwner,
-            holder,
-            holder,
-            asset.raw(),
-            asset(vaultBalanceBeforeDeposit),
-            asset(amount),
+            vault,
+            depositor,
+            seededVault(env, vault, gridUnits(env, vault, vaultBalanceBeforeDeposit)),
+            gridUnits(env, vault, amount),
             expected);
     }
 
     // Exchange-rate path: an owner donation drifts NAV so shares come from a non-terminating
     // division, exercising the non-empty assetsToShares / sharesToAssets arithmetic.
     void
-    testVaultDepositExchangeRate()
+    testVaultDepositExchangeRate(jtx::Env& env, Keylet const& vault, jtx::Account const& issuer)
     {
-        using namespace jtx;
         testcase("deposit exchange rate (NAV-drifted vault)");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        // The owner must hold the asset to donate it.
-        env(trust(vaultOwner, asset(1'000'000)));
-        env.close();
-        env(pay(issuer, vaultOwner, asset(1'000)));
-        env.close();
-
+        Asset const asset = env.le(vault)->at(sfAsset);
         // Seed 1 + donate 2 -> NAV 3, shareTotal 1e6 (ratio 1e6/3); deposit 100 -> 33'333'333
         // shares.
-        runVaultDeposit(
-            env,
-            vaultOwner,
-            issuer,
-            issuer,
-            asset.raw(),
-            asset(Number{1}),
-            asset(Number{100}),
-            tesSUCCESS,
-            asset(Number{2}));
+        StagedVault staged = seededVault(env, vault, STAmount{asset, Number{1}});
+        staged.available = STAmount{asset, Number{3}};
+        expectStagedDeposit(env, vault, issuer, staged, STAmount{asset, Number{100}}, tesSUCCESS);
     }
 
     // Update an MPT vault to an extreme state a real deposit cannot reach, then deposit and
     // compare.
     void
     testVaultDepositUpdatedStateMPT(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
         Number const& assetsTotal,
         std::uint64_t sharesTotal,
         std::int64_t amount,
-        TER expected)
+        TER expected,
+        Number const& yieldUnrealized = Number{0})
     {
-        using namespace jtx;
         testcase(
             "updated-state MPT deposit " + std::to_string(amount) + " (assetsTotal=" +
+            to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) +
+            ", yield=" + to_string(yieldUnrealized) + ")");
+        Asset const asset = env.le(vault)->at(sfAsset);
+        StagedVault const staged{
+            .available = STAmount{asset, assetsTotal},
+            .yield = STAmount{asset, yieldUnrealized},
+            .sharesTotal = sharesTotal};
+        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, amount), expected);
+    }
+
+    // The owner blocked deposits (VaultSet), so a deposit is tecLOCKED on both sides.
+    void
+    testVaultDepositBlocked(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        testcase("deposit into a vault with deposits blocked");
+        StagedVault staged = seededVault(env, vault, gridUnits(env, vault, 1'000'000'000));
+        staged.depositBlocked = true;
+        expectStagedDeposit(
+            env, vault, depositor, staged, gridUnits(env, vault, 100'000'000), tecLOCKED);
+    }
+
+    // Stage an IOU vault with a share price below the grid: the shares a deposit buys are worth
+    // less than one grid unit, so the clamped deposit is zero.
+    void
+    testVaultDepositUpdatedStateIOU(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& issuer,
+        Number const& assetsTotal,
+        std::uint64_t sharesTotal,
+        Number const& amount,
+        TER expected)
+    {
+        testcase(
+            "updated-state IOU deposit " + to_string(amount) + " (assetsTotal=" +
             to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) + ")");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        env(pay(issuer, holder, asset(amount)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
-        compareVaultDeposit(env, vaultKeylet, holder, asset.raw(), asset(amount), expected);
+        Asset const asset = env.le(vault)->at(sfAsset);
+        StagedVault const staged{
+            .available = STAmount{asset, assetsTotal}, .sharesTotal = sharesTotal};
+        expectStagedDeposit(env, vault, issuer, staged, STAmount{asset, amount}, expected);
     }
 
     // Update an IOU vault to an extreme AssetsTotal so a small issuer deposit rounds to zero (or
     // overflows) at the vault scale.
     void
-    testRoundedDepositUpdatedStateIOU(Number const& assetsTotal, Number const& amount, TER expected)
+    testRoundedDepositUpdatedStateIOU(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& issuer,
+        Number const& assetsTotal,
+        Number const& amount,
+        TER expected)
     {
-        using namespace jtx;
         testcase(
             "updated-state IOU deposit " + to_string(amount) +
             " (assetsTotal=" + to_string(assetsTotal) + ")");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        // Update shares so the vault is not zero-sized, the deposit still rejects on rounding.
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, 1'000'000));
-        compareRoundedDepositAmount(env, vaultKeylet, issuer, asset.raw(), asset(amount), expected);
+        Asset const asset = env.le(vault)->at(sfAsset);
+        // Shares so the vault is not zero-sized, the deposit still rejects on rounding.
+        StagedVault const staged{
+            .available = STAmount{asset, assetsTotal}, .sharesTotal = 1'000'000};
+        expectRoundedDeposit(env, vault, issuer, staged, STAmount{asset, amount}, expected);
     }
 
     // A normal deposit is already at the vault scale, so roundedDepositAmount returns it unchanged
     // with no error.
     void
-    testRoundedDepositSuccess()
+    testRoundedDepositSuccess(jtx::Env& env, Keylet const& vault, jtx::Account const& issuer)
     {
-        using namespace jtx;
         testcase("roundedDepositAmount at vault scale");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        compareRoundedDepositAmount(
-            env, vaultKeylet, issuer, asset.raw(), asset(Number{1'000}), tesSUCCESS);
+        Asset const asset = env.le(vault)->at(sfAsset);
+        expectRoundedDeposit(
+            env,
+            vault,
+            issuer,
+            seededVault(env, vault, STAmount{asset, Number{1, 9}}),
+            STAmount{asset, Number{1'000}},
+            tesSUCCESS);
     }
 
-    // Under ULP deposit into a non-empty vault: preclaim rounds it to zero at the vault scale
+    // A deposit below the vault's 1e-6 grid: preclaim rounds it to zero
     void
-    testRoundedDepositBelowVaultScale(bool depositorIsIssuer)
+    testRoundedDepositBelowVaultScale(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor)
     {
-        using namespace jtx;
+        Asset const asset = env.le(vault)->at(sfAsset);
+        bool const depositorIsIssuer = depositor.id() == asset.getIssuer();
         testcase(std::string("deposit below vault scale") + (depositorIsIssuer ? " (issuer)" : ""));
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        Account const depositor = depositorIsIssuer ? issuer : holder;
-        if (!depositorIsIssuer)
-        {
-            env(trust(holder, asset(10'000'000'000'000'000LL)));
-            env.close();
-            env(pay(issuer, holder, asset(Number{1, -4})));
-            env.close();
-        }
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        // Vault holds 1e12 USD -> ULP ~1e-3, so depositing 1e-4 rounds to zero at the vault scale.
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{1, 12})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        compareRoundedDepositAmount(
-            env, vaultKeylet, depositor, asset.raw(), asset(Number{1, -4}), tecPRECISION_LOSS);
+        STAmount const amount{asset, Number{1, -7}};
+        expectRoundedDeposit(
+            env,
+            vault,
+            depositor,
+            fundDepositor(
+                seededVault(env, vault, STAmount{asset, Number{1, 9}}), depositor, amount),
+            amount,
+            tecPRECISION_LOSS);
     }
 
     // AssetsTotal + amount near the IOU maximum overflows.
     void
-    testRoundedDepositOverflow()
+    testRoundedDepositOverflow(jtx::Env& env, Keylet const& vault, jtx::Account const& issuer)
     {
         testRoundedDepositUpdatedStateIOU(
-            Number{9'999'999'999'999'999LL, 80}, Number{9'999'999'999'999'999LL, 80}, tefEXCEPTION);
+            env,
+            vault,
+            issuer,
+            Number{9'999'999'999'999'999LL, 80},
+            Number{9'999'999'999'999'999LL, 80},
+            tefEXCEPTION);
     }
 
     // Finding (C++ bug): a deposit charges round-to-nearest, so a deposit into a vault
     // can be undercharged, overvaluing the new shares and diluting existing holders.
     void
-    testVaultDepositOvervaluedShares()
+    testVaultDepositOvervaluedShares(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor)
     {
-        using namespace jtx;
         testcase("deposit overvalued shares");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const bob{"bob"};
-        env.fund(XRP(1'000'000), vaultOwner, bob);
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
-        // After the donation 1 share = 1.667 drops. bob's 4-drop deposit buys 2 shares:
-        // C++ charges round(3.33) = 3, the model charges ceil = 4.
-        env(jtx::Vault::deposit(
-                {.depositor = vaultOwner, .id = vaultKeylet.key, .amount = drops(3)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        env(jtx::Vault::deposit(
-                {.depositor = vaultOwner,
-                 .id = vaultKeylet.key,
-                 .amount = drops(2),
-                 .flags = tfVaultDonate}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        compareVaultDeposit(env, vaultKeylet, bob, xrpIssue(), drops(4), tesSUCCESS);
+        // A 3-drop seed and a 2-drop donation: 1 share = 1.667 drops. A 4-drop deposit buys 2
+        // shares: C++ charges round(3.33) = 3, the model charges ceil = 4.
+        StagedVault staged = seededVault(env, vault, gridUnits(env, vault, 3));
+        staged.available = gridUnits(env, vault, 5);
+        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, 4), tesSUCCESS);
     }
 
     // Donating to a vault with no outstanding shares is rejected
     void
-    testVaultDonationEmptyVault()
+    testVaultDonationEmptyVault(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
     {
-        using namespace jtx;
         testcase("donation to empty vault");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        env.fund(XRP(1'000'000), vaultOwner);
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, xrpIssue());
-        compareVaultDeposit(
-            env, vaultKeylet, vaultOwner, xrpIssue(), XRP(100), tecNO_PERMISSION, true);
+        StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
+        expectStagedDeposit(
+            env, vault, owner, empty, gridUnits(env, vault, 100'000'000), tecNO_PERMISSION, true);
     }
 
-    // A deposit that pushes AssetsTotal past a non-zero AssetsMaximum is rejected with
-    // tecLIMIT_EXCEEDED (a zero maximum means unlimited).
+    // A deposit of 1000 into a vault holding 1000 under the AssetsMaximum `cap`: rejected with
+    // tecLIMIT_EXCEEDED when the total would pass a non-zero cap (a zero maximum means unlimited).
     void
-    testVaultDepositLimitExceeded()
+    testVaultDepositCap(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        Number const& cap,
+        TER expected)
     {
-        using namespace jtx;
-        testcase("deposit exceeds assetsMaximum");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        env(pay(issuer, holder, asset(10'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        // Cap the vault at 1000 with 1000 already in; a further 1000 deposit reaches 2000 > 1000.
-        BEAST_EXPECT(
-            updateVaultState(env, vaultKeylet, Number{1'000}, Number{1'000}, 1'000, Number{1'000}));
-        compareVaultDeposit(env, vaultKeylet, holder, asset.raw(), asset(1'000), tecLIMIT_EXCEEDED);
+        testcase("deposit under assetsMaximum " + to_string(cap));
+        Asset const asset = env.le(vault)->at(sfAsset);
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 1'000),
+            .maximum = STAmount{asset, cap},
+            .sharesTotal = 1'000};
+        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, 1'000), expected);
     }
 
     // A donation to an insolvent vault (assetsTotal=0, sharesTotal>0) is NOT blocked
     void
-    testVaultDonationInsolvent()
+    testVaultDonationInsolvent(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
     {
-        using namespace jtx;
         testcase("donation to insolvent vault");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = vaultOwner});
-        env.close();
-        env(pay(issuer, vaultOwner, asset(10'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, Number{0}, Number{0}, 1'000'000));
-        compareVaultDeposit(
-            env, vaultKeylet, vaultOwner, asset.raw(), asset(1'000), tesSUCCESS, true);
+        StagedVault const insolvent{
+            .available = gridUnits(env, vault, 0), .sharesTotal = 1'000'000};
+        expectStagedDeposit(
+            env, vault, owner, insolvent, gridUnits(env, vault, 1'000), tesSUCCESS, true);
     }
 
     // FV_M2_8 (both sides): the sfAssetsTotal += update re-rounds, dropping the sum's low
@@ -567,7 +393,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         Vault const before = readVaultState(env, vaultKeylet, asset.raw());
         STAmount const amount = asset(depositN);
-        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
 
@@ -589,87 +415,38 @@ class LeanVaultDeposit_test : public LeanSuite
             "model deposit lowered the share price");
     }
 
-    // FV_M2_14: a donation rounds assetsTotal and assetsAvailable independently, so their
-    // difference can drop below lossUnrealized and trip the invariant (tecINVARIANT_FAILED).
+    // FV_M2_15 (regression): an IOU deposit whose exact new total needed 17 significant digits
+    // rounded up when stored, crediting more than the depositor paid. Such a total is now past the
+    // open limit (9e15 grid units), which is what rejects the deposit on both sides.
     void
-    testDonationLossInvariant()
+    testDepositPastOpenLimit(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& issuer,
+        Number const& seed,
+        Number const& deposit)
     {
-        using namespace jtx;
-        testcase("donation shrinks the loss gap and trips the invariant");
-
-        Env env(*this);
-        Account const vaultOwner{"vaultOwner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), vaultOwner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(vaultOwner, asset(1'000'000)));
-        env.close();
-        env(pay(issuer, vaultOwner, asset(1'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, vaultOwner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(Number{100})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        // Valid state: lossUnrealized == assetsTotal - assetsAvailable == 0.999999999999995.
-        Number const total{2'000'000'000'000'001LL, -15};      // 2.000000000000001
-        Number const available{1'000'000'000'000'006LL, -15};  // 1.000000000000006
-        Number const loss{999'999'999'999'995LL, -15};         // 0.999999999999995
-        BEAST_EXPECT(
-            updateVaultState(env, vaultKeylet, total, available, 100'000'000, Number{0}, loss));
-
-        // Donating 50 rounds the two totals in opposite directions, decreasing the gap below the
-        // loss. The donation is valid and should succeed, but the invariant fires.
-        env(jtx::Vault::deposit(
-                {.depositor = vaultOwner,
-                 .id = vaultKeylet.key,
-                 .amount = asset(Number{50}),
-                 .flags = tfVaultDonate}),
-            jtx::Ter(tesSUCCESS));
-    }
-
-    // FV_M2_15: an IOU deposit whose exact new total needs 17 significant digits rounds up
-    // when stored, so sfAssetsTotal is credited more than the depositor paid.
-    void
-    testDepositOvercredit(Number const& seed, Number const& deposit, int vaultScale)
-    {
-        using namespace jtx;
+        int const vaultScale = env.le(vault)->at(sfScale);
         testcase(
-            "deposit overcredit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
-            std::to_string(vaultScale));
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        env.fund(XRP(1'000'000), owner, issuer);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        jtx::Vault vault{env};
-        auto [tx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
-        tx[sfScale] = vaultScale;
-        env(tx);
-        env.close();
-        env(jtx::Vault::deposit(
-                {.depositor = issuer, .id = vaultKeylet.key, .amount = asset(seed)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        // The exact new total needs 17 digits, C++ rounds sfAssetsTotal up, the model keeps it.
-        compareVaultDeposit(env, vaultKeylet, issuer, asset.raw(), asset(deposit), tesSUCCESS);
+            "deposit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
+            std::to_string(vaultScale) + " passes the open limit");
+        Asset const asset = env.le(vault)->at(sfAsset);
+        expectStagedDeposit(
+            env,
+            vault,
+            issuer,
+            seededVault(env, vault, STAmount{asset, seed}),
+            STAmount{asset, deposit},
+            tecLIMIT_EXCEEDED);
     }
 
-    // The round-trip charge is never re-rounded to the vault scale, so the totals move by
-    // slightly more than the depositor pays (both C++ and the model).
+    // The round-trip charge is clamped to the vault grid, so the totals move by exactly what the
+    // depositor pays (both C++ and the model).
     void
     testDepositAppliedDelta()
     {
         using namespace jtx;
-        testcase("deposit moves the vault totals by a different amount than paid");
+        testcase("deposit moves the vault totals by exactly the amount paid");
 
         Env env(*this);
         Account const owner{"owner"};
@@ -688,7 +465,7 @@ class LeanVaultDeposit_test : public LeanSuite
 
         // Deposit 0.001, an amount already on the vault grid.
         STAmount const amount = asset(Number{1, -3});
-        LeanDepositResult const lean = leanVaultDeposit(before, amount, false);
+        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean deposit failed");
 
@@ -708,27 +485,278 @@ class LeanVaultDeposit_test : public LeanSuite
         // Model: the vault must gain exactly the charge it reports.
         Number const leanDelta = lean.vault.assetsTotal - before.assetsTotal;
         BEAST_EXPECTS(
-            leanDelta == Number{lean.amountDeposit},
+            leanDelta == Number{lean.assets},
             "model booked " + to_string(leanDelta) + " but charged " +
-                to_string(Number{lean.amountDeposit}));
+                to_string(Number{lean.assets}));
 
         // C++: the paid amount must be on the vault scale.
-        STAmount const paidRounded = roundToVaultScale(asset, before.assetsTotal, paid);
+        STAmount const paidRounded =
+            roundToVaultGrid(asset, before.scale, before.assetsTotal, paid);
         BEAST_EXPECTS(
             Number{paidRounded} == paid,
             "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
 
         // Model: its charge must be on the vault scale as well.
-        LeanRoundingResult const chargeRounded =
-            leanRoundedDepositAmount(before, lean.amountDeposit);
+        LeanAmountResult const chargeRounded = leanRoundedDepositAmount(before, lean.assets);
         expectLawful(chargeRounded);
         BEAST_EXPECTS(
             !chargeRounded.leanError.has_value() && chargeRounded.amount,
             "rounding the charge failed");
         BEAST_EXPECTS(
-            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.amountDeposit},
-            "the charge " + to_string(Number{lean.amountDeposit}) + " re-rounds to " +
+            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.assets},
+            "the charge " + to_string(Number{lean.assets}) + " re-rounds to " +
                 (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
+    }
+
+    // The vaults a sweep runs on, each with the account that deposits into it.
+    using SweepVaults = std::vector<std::pair<Keylet, jtx::Account>>;
+
+    // The values of one sample, prefixed to every failure message.
+    static std::string
+    sampleText(StagedVault const& s, STAmount const& amount)
+    {
+        return "amount " + amount.getText() + ", available " + s.available.getText() + ", yield " +
+            s.yield.getText() + ", maximum " + (s.maximum ? s.maximum->getText() : "none") +
+            ", sharesTotal " + std::to_string(s.sharesTotal) + ": ";
+    }
+
+    // One sample: C++ (on a throwaway view) and the model run on the same staged vault; they must
+    // agree, and a deposit never charges more than offered. Returns the C++ verdict.
+    TER
+    checkDeposit(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        StagedVault const& staged,
+        STAmount const& amount,
+        bool donate = false)
+    {
+        AppliedDeposit const cpp = applyDeposit(env, vault, depositor, staged, amount, donate);
+        LeanVaultResult const lean =
+            leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
+        std::string const at = sampleText(staged, amount);
+        BEAST_EXPECTS(
+            lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
+
+        TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+        BEAST_EXPECTS(
+            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
+        if (cpp.ter != tesSUCCESS || leanTer != tesSUCCESS)
+            return cpp.ter;
+
+        auto const same = [&](char const* field, Number const& l, Number const& c) {
+            BEAST_EXPECTS(l == c, at + field + " lean=" + to_string(l) + " cpp=" + to_string(c));
+        };
+        same("assetsTotal", lean.vault.assetsTotal, cpp.post.assetsTotal);
+        same("assetsAvailable", lean.vault.assetsAvailable, cpp.post.assetsAvailable);
+        same("sharesTotal", lean.vault.sharesTotal, cpp.post.sharesTotal);
+        same("lossUnrealized", lean.vault.lossUnrealized, cpp.post.lossUnrealized);
+        Number const charged = cpp.post.assetsTotal - cpp.pre.assetsTotal;
+        BEAST_EXPECTS(charged <= Number{amount}, at + "cpp charged " + to_string(charged));
+        BEAST_EXPECTS(
+            Number{lean.assets} <= Number{amount},
+            at + "lean charged " + to_string(Number{lean.assets}));
+        return cpp.ter;
+    }
+
+    // One price case: the row's amount deposited into its assets total and shares total.
+    TER
+    checkPriceCase(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        PriceCusp const& c)
+    {
+        StagedVault const staged{
+            .available = gridUnits(env, vault, c.total),
+            .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
+        return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
+    }
+
+    void
+    testOpenLimitSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepOpenLimit(env, vault, depositor);
+        }
+    }
+
+    // Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets total +
+    // charge exceeds 9e15 grid units. kOpenLimitCases stage price 1, so the charge is the amount.
+    void
+    sweepOpenLimit(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " open limit-Sweep").c_str());
+        runAroundCusp(kOpenLimitCases, [&](OpenLimitCusp const& c) {
+            StagedVault const staged{
+                .available = gridUnits(env, vault, c.total),
+                .yield = gridUnits(env, vault, c.yield),
+                .sharesTotal = static_cast<std::uint64_t>(c.total)};
+            return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
+        });
+    }
+
+    void
+    testAssetsMaximumSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepAssetsMaximum(env, vault, depositor);
+        }
+    }
+
+    // Assets maximum: a deposit is rejected (tecLIMIT_EXCEEDED) once assets total + charge exceeds
+    // a non-zero AssetsMaximum. kAssetsMaximumCases stage price 1, so the charge is the amount.
+    void
+    sweepAssetsMaximum(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " assets maximum-Sweep").c_str());
+        // std::int64_t const assetsTotal = 1'000'000;
+        // std::int64_t const assetsMaximum = 1'001'000;
+        runAroundCusp(kAssetsMaximumCases, [&](AssetsMaximumCusp const& c) {
+            StagedVault const staged{
+                .available = gridUnits(env, vault, c.total),
+                .maximum = gridUnits(env, vault, c.maximum),
+                .sharesTotal = static_cast<std::uint64_t>(c.total)};
+            return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
+        });
+    }
+
+    void
+    testZeroSharesSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepZeroShares(env, vault, depositor);
+        }
+    }
+
+    // Zero shares: a deposit buying trunc(shares total * amount / assets total) = 0 shares is
+    // rejected (tecPRECISION_LOSS). Each row of kZeroSharesCases buys exactly one share.
+    void
+    sweepZeroShares(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " zero shares-Sweep").c_str());
+        runAroundCusp(kZeroSharesCases, [&](PriceCusp const& c) {
+            return checkPriceCase(env, vault, depositor, c);
+        });
+    }
+
+    void
+    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepClampToZero(env, vault, depositor);
+        }
+    }
+
+    // Clamp to zero: when the shares bought are worth less than a grid step, the charge floors to
+    // zero and the deposit is rejected (tecPRECISION_LOSS). Each row of kClampToZeroCases charges
+    // exactly one unit.
+    void
+    sweepClampToZero(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
+        runAroundCusp(kClampToZeroCases, [&](PriceCusp const& c) {
+            return checkPriceCase(env, vault, depositor, c);
+        });
+    }
+
+    void
+    testChargeRoundingSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepChargeRounding(env, vault, depositor);
+        }
+    }
+
+    // Charge rounding: the charge assets total * shares bought / shares total rounds to the nearest
+    // unit, half to even. Each row of kChargeRoundingCases is an exact half; both sides succeed
+    // there, so the cusp shows only in the post-state totals.
+    void
+    sweepChargeRounding(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " charge rounding-Sweep").c_str());
+        runAroundCusp(
+            kChargeRoundingCases,
+            [&](PriceCusp const& c) { return checkPriceCase(env, vault, depositor, c); },
+            false);
+    }
+
+    void
+    testShareMintCapSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepShareMintCap(env, vault, depositor);
+        }
+    }
+
+    // Share mint cap: minting past 2^63 - 1 outstanding shares fails the share send
+    // (tecPATH_DRY). Each row of kShareMintCapCases mints up to exactly the cap.
+    void
+    sweepShareMintCap(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " share mint cap-Sweep").c_str());
+        runAroundCusp(kShareMintCapCases, [&](PriceCusp const& c) {
+            return checkPriceCase(env, vault, depositor, c);
+        });
+    }
+
+    void
+    testSubGridAmountSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepSubGridAmount(env, vault, depositor);
+        }
+    }
+
+    // Sub-grid amount: an IOU amount below one grid step rounds to zero in preclaim
+    // (tecPRECISION_LOSS). kOneGridStepCases are mantissas at exponent -(scale + 15), where
+    // kOneGridStepMantissa is exactly one grid step.
+    void
+    sweepSubGridAmount(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " sub-grid amount-Sweep").c_str());
+        auto const sle = env.le(vault);
+        Asset const asset = sle->at(sfAsset);
+        int const scale = sle->at(sfScale);
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 1'000'000), .sharesTotal = 1'000'000};
+        runAroundCusp(kOneGridStepCases, [&](std::int64_t mantissa) {
+            STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), -(scale + 15)};
+            return checkDeposit(env, vault, depositor, staged, amount);
+        });
+    }
+
+    void
+    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, depositor] : vaults)
+        {
+            sweepShareOverflow(env, vault, depositor);
+        }
+    }
+
+    // Share overflow: a first IOU deposit mints amount * 10^scale shares; at 2^63 the count
+    // overflows (tecPATH_DRY), just below it the amount is past the open limit (tecLIMIT_EXCEEDED).
+    // kShareOverflowCases are mantissas at exponent 3 - scale.
+    void
+    sweepShareOverflow(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " share overflow-Sweep").c_str());
+        auto const sle = env.le(vault);
+        Asset const asset = sle->at(sfAsset);
+        int const scale = sle->at(sfScale);
+        StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
+        runAroundCusp(kShareOverflowCases, [&](std::int64_t mantissa) {
+            STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), 3 - scale};
+            return checkDeposit(env, vault, depositor, empty, amount);
+        });
     }
 
     void
@@ -736,91 +764,218 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         using namespace jtx;
 
+        // One ledger holding a vault per asset; every staged deposit (old tests and sweeps) runs
+        // on a throwaway view of it.
+        Env env{*this};
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const depositor{"depositor"};
+        Account const holder{"holder"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.fund(XRP(9'500'000'000), depositor);
+        env.close();
+
+        PrettyAsset const xrp = xrpIssue();
+        PrettyAsset const iou = issuer["USD"];
+        // An IOU holder that is not the issuer; its balance is staged per test.
+        env(trust(holder, iou(10'000'000'000'000'000LL)));
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        mptt.authorize({.account = depositor});
+        mptt.authorize({.account = owner});
+        PrettyAsset const mpt = mptt.issuanceID();
+        env(pay(issuer, depositor, mpt(9'200'000'000'000'000)));
+        env(pay(issuer, owner, mpt(10'000)));
+        env.close();
+
+        // The IOU depositor is the issuer, which skips the C++-only trust-line precision checks.
+        Keylet const xrpVault = createSweepVault(env, owner, depositor, xrp);
+        Keylet const mptVault = createSweepVault(env, owner, depositor, mpt);
+        // IOU at the smallest, the default and the largest vault scale.
+        Keylet const iouScale0Vault = createSweepVault(env, owner, issuer, iou, 0);
+        Keylet const iouScale6Vault = createSweepVault(env, owner, issuer, iou, 6);
+        Keylet const iouScale10Vault = createSweepVault(env, owner, issuer, iou, 10);
+
         // XRP: scale 0, no share overflow within the XRP domain.
-        testVaultDepositXRP(XRP(0), drops(1), tesSUCCESS);  // minimum deposit
-        testVaultDepositXRP(XRP(0), XRP(1'000), tesSUCCESS);
-        testVaultDepositXRP(XRP(0), XRP(80'000'000'000), tesSUCCESS);
-        testVaultDepositXRP(XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
-        testVaultDepositXRP(XRP(1'000), drops(1), tesSUCCESS);    // minimum deposit, non-empty
+        testVaultDepositXRP(
+            env, xrpVault, depositor, XRP(0), drops(1), tesSUCCESS);  // minimum deposit
+        testVaultDepositXRP(env, xrpVault, depositor, XRP(0), XRP(1'000), tesSUCCESS);
+        // Open limit: 9e15 drops. Covered by testOpenLimitSweep.
+        testVaultDepositXRP(env, xrpVault, depositor, XRP(0), drops(kOpenLimitUnits), tesSUCCESS);
+        testVaultDepositXRP(
+            env, xrpVault, depositor, XRP(0), drops(kOpenLimitUnits + 1), tecLIMIT_EXCEEDED);
+        testVaultDepositXRP(
+            env, xrpVault, depositor, XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
+        testVaultDepositXRP(
+            env,
+            xrpVault,
+            depositor,
+            XRP(1'000),
+            drops(1),
+            tesSUCCESS);  // minimum deposit, non-empty
 
-        // IOU: default vault scale 6, so shares ~ amount * 1e6; over kMaxMpTokenAmount / 1e6 the
-        // share amount overflows.
-        testVaultDepositIOU(Number{0}, Number{1}, false, tesSUCCESS);
-        testVaultDepositIOU(Number{0}, Number{1'000}, false, tesSUCCESS);
-        testVaultDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, false, tesSUCCESS);
-        // Over the share ceiling: the share amount overflows the MPT domain. C++ returns
-        // tecPATH_DRY; the model's computeDeposit catches the overflow and returns the same.
+        // IOU: default vault scale 6, so shares ~ amount * 1e6.
+        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, Number{1}, tesSUCCESS);
+        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, Number{1'000}, tesSUCCESS);
+        // Open limit at scale 6: 9e9. It keeps the shares (amount * 1e6) far below INT64_MAX.
+        // Covered by testOpenLimitSweep.
+        Number const iouOpenLimit{kOpenLimitUnits, -6};
+        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, iouOpenLimit, tesSUCCESS);
         testVaultDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, false, tecPATH_DRY);
-
-        testVaultDepositIOU(Number{0}, Number{1}, true, tesSUCCESS);
-        testVaultDepositIOU(Number{0}, Number{kMaxMpTokenAmount / 1'000'000}, true, tesSUCCESS);
+            env,
+            iouScale6Vault,
+            holder,
+            Number{0},
+            iouOpenLimit + Number{1, -6},
+            tecLIMIT_EXCEEDED);
+        // 1e10 at scale 6 needs 17 digits: the total would leave the base exponent.
         testVaultDepositIOU(
-            Number{0}, Number{(kMaxMpTokenAmount / 1'000'000) + 1}, true, tecPATH_DRY);
+            env, iouScale6Vault, holder, Number{0}, Number{1, 10}, tecLIMIT_EXCEEDED);
+        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, Number{1}, tesSUCCESS);
+        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, iouOpenLimit, tesSUCCESS);
+        testVaultDepositIOU(
+            env,
+            iouScale6Vault,
+            issuer,
+            Number{0},
+            iouOpenLimit + Number{1, -6},
+            tecLIMIT_EXCEEDED);
 
-        // IOU STAmount magnitude extremes (offset range is [kMinOffset, kMaxOffset] = [-96, 80]).
-        testVaultDepositIOU(Number{0}, Number{9'999'999'999'999'999LL, 80}, true, tecPATH_DRY);
-        testVaultDepositIOU(Number{0}, Number{1, -80}, true, tecPRECISION_LOSS);
+        // covered by testShareOverflowSweep
+        testVaultDepositIOU(
+            env,
+            iouScale6Vault,
+            issuer,
+            Number{0},
+            Number{9'999'999'999'999'999LL, 80},
+            tecPATH_DRY);
+        testVaultDepositIOU(
+            env, iouScale6Vault, issuer, Number{0}, Number{1, -80}, tecPRECISION_LOSS);
 
         // roundedDepositAmount
-        testRoundedDepositSuccess();
-        testRoundedDepositBelowVaultScale(false);
-        testRoundedDepositBelowVaultScale(true);
+        testRoundedDepositSuccess(env, iouScale6Vault, issuer);
+        // covered by testSubGridAmountSweep
+        testRoundedDepositBelowVaultScale(env, iouScale6Vault, holder);
+        testRoundedDepositBelowVaultScale(env, iouScale6Vault, issuer);
         // sanity: a normal deposit into the same non-empty vault still succeeds
-        testVaultDepositIOU(Number{1, 12}, Number{1'000}, false, tesSUCCESS);
+        testVaultDepositIOU(env, iouScale6Vault, holder, Number{1, 9}, Number{1'000}, tesSUCCESS);
 
-        // MPT: scale 0, sfMPTAmount and shares are int64, with kMaxMpTokenAmount == INT64_MAX.
-        testVaultDepositMPT(0, 1, tesSUCCESS);
-        testVaultDepositMPT(0, 1'000, tesSUCCESS);
-        testVaultDepositMPT(0, kMaxMpTokenAmount, tesSUCCESS);  // deposit the type maximum
-        testVaultDepositMPT(1'000, 1'000, tesSUCCESS);          // non-empty vault
-        // Integer extremes: a big multiply (sharesTotal * amount) that lands outstanding shares
-        // exactly on INT64_MAX
-        testVaultDepositMPT(1, kMaxMpTokenAmount - 1, tesSUCCESS);
-        testVaultDepositMPT(kMaxMpTokenAmount - 1, 1, tesSUCCESS);
-        // (kMax/2)^2 / (kMax/2) rounds up a ULP in Number (~16 sig digits), so amountDeposit'
-        // exceeds the deposit and C++ rejects with tecINTERNAL
-        testVaultDepositMPT(kMaxMpTokenAmount / 2, kMaxMpTokenAmount / 2, tecINTERNAL);
+        // MPT: scale 0, sfMPTAmount and shares are int64.
+        testVaultDepositMPT(env, mptVault, depositor, 0, 1, tesSUCCESS);
+        testVaultDepositMPT(env, mptVault, depositor, 0, 1'000, tesSUCCESS);
+        // Open limit: 9e15 units, far below the share type maximum INT64_MAX. Covered by
+        // testOpenLimitSweep.
+        testVaultDepositMPT(env, mptVault, depositor, 0, kOpenLimitUnits, tesSUCCESS);
+        testVaultDepositMPT(env, mptVault, depositor, 1'000, 1'000, tesSUCCESS);  // non-empty vault
+        testVaultDepositMPT(env, mptVault, depositor, 1, kOpenLimitUnits - 1, tesSUCCESS);
+        testVaultDepositMPT(env, mptVault, depositor, kOpenLimitUnits - 1, 1, tesSUCCESS);
+        testVaultDepositMPT(env, mptVault, depositor, kOpenLimitUnits - 1, 2, tecLIMIT_EXCEEDED);
 
-        // Rounding-mode regression traps, these values catch potential rounding mode changes
-        testVaultDepositIOU(Number{1, 12}, Number{100006, -4}, false, tesSUCCESS);
-        testVaultDepositIOU(Number{1, 12}, Number{100001, -4}, false, tesSUCCESS);
+        // Truncated to the 1e-6 grid on both sides. Covered by testSubGridAmountSweep.
+        testVaultDepositIOU(
+            env, iouScale6Vault, holder, Number{1, 9}, Number{100'000'006, -7}, tesSUCCESS);
+        testVaultDepositIOU(
+            env, iouScale6Vault, holder, Number{1, 9}, Number{100'000'001, -7}, tesSUCCESS);
 
         // Empty-vault share truncation (C++ truncates toward zero, not to-nearest):
         // 1.5e-6 USD * 1e6 scale = 1.5 shares -> 1.
-        testVaultDepositIOU(Number{0}, Number{15, -7}, true, tesSUCCESS);
+        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, Number{15, -7}, tesSUCCESS);
         // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 -> tecPRECISION_LOSS.
-        testVaultDepositIOU(Number{0}, Number{6, -7}, true, tecPRECISION_LOSS);
+        // covered by testSubGridAmountSweep (preclaim rounds it to zero first)
+        testVaultDepositIOU(
+            env, iouScale6Vault, issuer, Number{0}, Number{6, -7}, tecPRECISION_LOSS);
 
-        testVaultDepositExchangeRate();
+        testVaultDepositExchangeRate(env, iouScale6Vault, issuer);
 
         // Extreme NAV ratio AssetsTotal >> SharesTotal: a unit deposit buys zero shares.
-        testVaultDepositUpdatedStateMPT(Number{1, 18}, 1, 1, tecPRECISION_LOSS);
+        // covered by testZeroSharesSweep
+        testVaultDepositUpdatedStateMPT(
+            env, mptVault, depositor, Number{1, 18}, 1, 1, tecPRECISION_LOSS);
+        // Share price 3e-7: one grid unit buys 3 shares worth 9e-7, which clamps to nothing.
+        // covered by testClampToZeroSweep
+        testVaultDepositUpdatedStateIOU(
+            env,
+            iouScale6Vault,
+            issuer,
+            Number{1'000},
+            3'333'333'333ULL,
+            Number{1, -6},
+            tecPRECISION_LOSS);
         // AssetsTotal near the STAmount exponent ceiling: a small IOU deposit rounds to zero.
         testRoundedDepositUpdatedStateIOU(
-            Number{9'999'999'999'999'999LL, 80}, Number{1}, tecPRECISION_LOSS);
+            env,
+            iouScale6Vault,
+            issuer,
+            Number{9'999'999'999'999'999LL, 80},
+            Number{1},
+            tecPRECISION_LOSS);
         // IOU AssetsTotal + amount overflows
-        testRoundedDepositOverflow();
+        testRoundedDepositOverflow(env, iouScale6Vault, issuer);
 
         // Insolvent vault (assetsTotal=0, sharesTotal>0): deposits are blocked with tecLOCKED.
-        testVaultDepositUpdatedStateMPT(Number{0}, 1'000'000, 1'000, tecLOCKED);
+        testVaultDepositUpdatedStateMPT(
+            env, mptVault, depositor, Number{0}, 1'000'000, 1'000, tecLOCKED);
+        // Deposits blocked by the owner.
+        testVaultDepositBlocked(env, xrpVault, depositor);
+        // Unrealized yield counts toward the open-limit capacity: 10 under the limit (one share
+        // per unit) with 10 of yield rejects one unit, with 9 of yield it fits exactly.
+        // covered by testOpenLimitSweep
+        testVaultDepositUpdatedStateMPT(
+            env,
+            mptVault,
+            depositor,
+            Number{kOpenLimitUnits - 10},
+            static_cast<std::uint64_t>(kOpenLimitUnits - 10),
+            1,
+            tecLIMIT_EXCEEDED,
+            Number{10});
+        testVaultDepositUpdatedStateMPT(
+            env,
+            mptVault,
+            depositor,
+            Number{kOpenLimitUnits - 10},
+            static_cast<std::uint64_t>(kOpenLimitUnits - 10),
+            1,
+            tesSUCCESS,
+            Number{9});
         // Donation to an empty vault is blocked with tecNO_PERMISSION
-        testVaultDonationEmptyVault();
+        testVaultDonationEmptyVault(env, xrpVault, owner);
         // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
-        testVaultDepositLimitExceeded();
+        // covered by testAssetsMaximumSweep
+        testVaultDepositCap(env, mptVault, depositor, Number{1'000}, tecLIMIT_EXCEEDED);
+        testVaultDepositCap(env, mptVault, depositor, Number{2'000}, tesSUCCESS);
 
-        // Known discrepancies, each fails until the C++ code is fixed.
+        // Open discrepancies, disabled until the C++ code is fixed.
         // clang-format off
-        testVaultDepositOvervaluedShares();  // FV_M2_3: model rounds up, C++ undercharges
-        // testVaultDonationInsolvent();   // FV_M2_7: model tesSUCCESS, C++ tecLOCKED
         // testDepositDilution();          // FV_M2_8_c: deposit lowers the share price (both)
-        testDonationLossInvariant();         // FV_M2_14: donation trips the loss invariant
-        testDepositAppliedDelta();           // totals move by more than paid (both)
+        // testDepositPastOpenLimit(env, iouScale6Vault, issuer, Number{9'999'999'999'999'999LL, -6}, Number{1, -5});  // FV_M2_15_b
 
-        // FV_M2_15: a deposit needing 17 digits rounds sfAssetsTotal up (associateAsset):
-        testDepositOvercredit(Number{9'999'999'999'999'999LL, -15}, Number{5}, 15);
-        // testDepositOvercredit(Number{9'999'999'999'999'999LL, -6}, Number{1, -5}, 6);  // FV_M2_15_b
+        // Properties both sides now satisfy, kept as regression tests.
+        // covered by testChargeRoundingSweep
+        testVaultDepositOvervaluedShares(env, xrpVault, depositor);  // FV_M2_3: the share charge rounds up
+        testDepositAppliedDelta();                                   // totals move by exactly the amount paid
+        testVaultDonationInsolvent(env, mptVault, owner);            // FV_M2_7: a donation passes the insolvency check
+        // FV_M2_15: 899999.9999999999 is at the scale-10 open limit (9e5); +5 passes it.
+        // covered by testOpenLimitSweep
+        testDepositPastOpenLimit(env, iouScale10Vault, issuer, Number{8'999'999'999'999'999LL, -10}, Number{5});
         // clang-format on
+
+        // Sweeps.
+        SweepVaults const ious{
+            {iouScale0Vault, issuer}, {iouScale6Vault, issuer}, {iouScale10Vault, issuer}};
+        SweepVaults const integral{{xrpVault, depositor}, {mptVault, depositor}};
+        SweepVaults all = integral;
+        all.insert(all.end(), ious.begin(), ious.end());
+
+        testOpenLimitSweep(env, all);
+        testAssetsMaximumSweep(env, all);
+        testZeroSharesSweep(env, all);
+        testChargeRoundingSweep(env, integral);
+        testSubGridAmountSweep(env, ious);
+        testShareOverflowSweep(env, ious);
+        testClampToZeroSweep(env, ious);
+
+        testShareMintCapSweep(env, all);
     }
 };
 

@@ -63,6 +63,7 @@ structure RawVault.WF (rv : RawVault) : Prop where
   sharesTotal_int : rv.sharesTotal.toRat.den = 1
   scale_integral : rv.numericType.isIntegral = true → rv.scale = 0
   scale_le : rv.scale ≤ vaultMaximumIOUScale
+  assetsMaximum_representable : ∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false
 
 /-- The vault invariant stated with the modeled `Number` operators -/
 structure RawVault.Valid (rv : RawVault) : Prop where
@@ -93,9 +94,10 @@ instance (rv : RawVault) : Decidable rv.WF :=
       rv.assetsReserved.isNormalized ∧ (∀ m ∈ rv.assetsMaximum, m.isNormalized) ∧
       rv.sharesTotal.isNormalized ∧ rv.lossUnrealized.isNormalized ∧ rv.yieldUnrealized.isNormalized ∧
       0 ≤ rv.sharesTotal.toRat ∧ rv.sharesTotal.toRat.den = 1 ∧
-      (rv.numericType.isIntegral = true → rv.scale = 0) ∧ rv.scale ≤ vaultMaximumIOUScale)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩⟩
+      (rv.numericType.isIntegral = true → rv.scale = 0) ∧ rv.scale ≤ vaultMaximumIOUScale ∧
+      (∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false))
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩⟩
 
 -- Deciding `Valid` reduces to the conjunction of its clauses, each decidable above.
 instance (rv : RawVault) : Decidable rv.Valid :=

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 
 #include <xrpl/beast/unit_test.h>
+#include <xrpl/protocol/TER.h>
 
 #include <lean/lean.h>
 
@@ -10,13 +12,15 @@
 #include <functional>
 #include <mutex>
 #include <random>
+#include <set>
+#include <string>
 #include <string_view>
 
 extern "C" void
 lean_initialize_runtime_module(void);
 
 extern "C" lean_object*
-initialize_XRPL_XRPL_FFI_FFI(uint8_t builtin, lean_object* w);
+initialize_XRPL_XRPL_FFI_FFI(uint8_t builtin);
 
 namespace xrpl::test::formal_verification {
 
@@ -46,9 +50,10 @@ class LeanSuite : public beast::unit_test::Suite
         static bool ok = false;
         std::call_once(flag, [] {
             lean_initialize_runtime_module();
-            lean_object* res = initialize_XRPL_XRPL_FFI_FFI(1, lean_io_mk_world());
+            lean_object* res = initialize_XRPL_XRPL_FFI_FFI(1);
             if (!lean_io_result_is_ok(res))
             {
+                lean_io_result_show_error(res);
                 lean_dec(res);
                 return;
             }
@@ -88,6 +93,30 @@ protected:
     {
         BEAST_EXPECTS(
             r.leanError != LeanError::notLawful, "model rejected the staged state as not lawful");
+    }
+
+    // Runs every case of every row through `check` (which returns the C++ verdict); unless
+    // `crosses` is false, the verdicts of each row's cases must differ, or the row missed its cusp.
+    // `describe(row)` labels the row in the failure message.
+    template <class Row, class Check>
+    void
+    runAroundCusp(std::vector<AroundCusp<Row>> const& rows, Check check, bool crosses = true)
+    {
+        for (auto const& [cusp, cases] : rows)
+        {
+            std::set<TER> seen;
+            for (Row const& c : cases)
+            {
+                seen.insert(check(c));
+            }
+            if (crosses)
+            {
+                BEAST_EXPECTS(
+                    seen.size() > 1,
+                    describe(cusp) + ": the row never crossed its cusp, always " +
+                        (seen.empty() ? std::string{"nothing run"} : transToken(*seen.begin())));
+            }
+        }
     }
 
 public:

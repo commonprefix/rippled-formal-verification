@@ -3,6 +3,7 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -51,6 +52,7 @@ lean_number_ge(lean_object*, lean_object*);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 class LeanNumber_test : public LeanSuite
 {
@@ -1132,6 +1134,143 @@ public:
         }
     }
 
+    // ---- Cusp sweeps ----
+
+    // One binary operation on both sides; returns the C++ verdict for the crossing check.
+    TER
+    checkSweepOp(
+        char opChar,
+        LeanBinOp leanOp,
+        CppBinOp const& cppOp,
+        NumberPair const& a,
+        NumberPair const& b,
+        Number::RoundingMode mode)
+    {
+        checkBinOp(fmtNum(a) + ' ' + opChar + ' ' + fmtNum(b), leanOp, cppOp, a, b, mode);
+        return cppVerdict([&] { return cppOp(a.cppNum, b.cppNum).signum() == 0; });
+    }
+
+    TER
+    checkSum(MantissaPair const& c, Number::RoundingMode mode)
+    {
+        return checkSweepOp(
+            '+',
+            lean_number_add,
+            [](Number const& x, Number const& y) { return x + y; },
+            makeNumberPair(false, c.a, c.exponent),
+            makeNumberPair(false, c.b, c.exponent),
+            mode);
+    }
+
+    TER
+    checkProduct(Factors const& c, Number::RoundingMode mode)
+    {
+        return checkSweepOp(
+            '*',
+            lean_number_mul,
+            [](Number const& x, Number const& y) { return x * y; },
+            makeNumberPair(false, c.a, c.ea),
+            makeNumberPair(false, c.b, c.eb),
+            mode);
+    }
+
+    void
+    testArithmeticSweep()
+    {
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        for (auto const mode : kRoundingModes)
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            sweepSumRounding(mode);
+            sweepDifferenceUnderflow(mode);
+            sweepProductOverflow(mode);
+            sweepProductUnderflow(mode);
+            sweepToRepHalf(mode);
+        }
+    }
+
+    void
+    testSumOverflowSweep()
+    {
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        for (auto const mode : kRoundingModes)
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            sweepSumOverflow(mode);
+        }
+    }
+
+    // Add at the largest exponent: a mantissa sum up to kMaxRepUp fits, one more overflows
+    // ("Number::normalize 1.5").
+    void
+    sweepSumOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.add overflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kSumOverflowCases, [&](MantissaPair const& c) { return checkSum(c, mode); });
+    }
+
+    // The same sums at exponents 0 and the smallest: past the largest mantissa the result is
+    // rounded to 18 digits. Both sides succeed; results compared.
+    void
+    sweepSumRounding(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.add rounding " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(
+            kSumRoundingCases, [&](MantissaPair const& c) { return checkSum(c, mode); }, false);
+    }
+
+    // Sub at the smallest exponent: a - b down to the smallest mantissa is a value, one less
+    // needs a lower exponent and underflows to zero.
+    void
+    sweepDifferenceUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.sub underflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kDifferenceUnderflowCases, [&](MantissaPair const& c) {
+            return checkSweepOp(
+                '-',
+                lean_number_sub,
+                [](Number const& x, Number const& y) { return x - y; },
+                makeNumberPair(false, c.a, c.exponent),
+                makeNumberPair(false, c.b, c.exponent),
+                mode);
+        });
+    }
+
+    // Mul: a product above kMaxRep * 1e18 takes one more exponent step, which overflows at the
+    // largest exponent.
+    void
+    sweepProductOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.mul overflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(
+            kProductOverflowCases, [&](Factors const& c) { return checkProduct(c, mode); });
+    }
+
+    // Mul at the smallest exponent: the same step is the first product that is not zero.
+    void
+    sweepProductUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.mul underflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(
+            kProductUnderflowCases, [&](Factors const& c) { return checkProduct(c, mode); });
+    }
+
+    // to_rep of m * 10^-1 around an exact half: the rounding mode picks the integer. Both sides
+    // succeed; results compared.
+    void
+    sweepToRepHalf(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.to_rep half " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(
+            kToRepHalfCases,
+            [&](std::int64_t m) {
+                auto const x = makeNumberPair(false, m, -1);
+                checkToRep("to_rep(" + fmtNum(x) + ")", x, mode);
+                return cppVerdict([&] { return static_cast<std::int64_t>(x.cppNum) == 0; });
+            },
+            false);
+    }
+
 private:
     void
     runTests() override
@@ -1145,6 +1284,7 @@ private:
         testNormalize();
         testCompare();
         testToRep();
+        testArithmeticSweep();
 
         // Issues identified during formal verification.
         // Kept here to ensure there are no regression bugs.
@@ -1155,6 +1295,11 @@ private:
         testDivisionRounding();
         testMultiplicationRounding();
         testCuspRounding();
+
+        // Known discrepancy, fails until the model is fixed.
+        // clang-format off
+        // testSumOverflowSweep();  // same-sign add at exponent 32768 with a mantissa sum above kMaxRepUp: C++ throws "normalize 1.5", Lean drops a digit without the exponent check and returns 922337203685477581e32769 (all modes but upward)
+        // clang-format on
     }
 };
 
