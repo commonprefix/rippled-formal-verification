@@ -100,7 +100,7 @@ class LeanCuspScratch_test : public LeanSuite
             true,
             parentCloseTime(env),
             holderOwnsAllShares(env, vault, holder),
-            fetchHolderShares(env, vault, holder));
+            Number{fetchHolderShares(env, vault, holder)});
         env(jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}),
             jtx::Ter(std::ignore));
         report(
@@ -493,8 +493,7 @@ class LeanCuspScratch_test : public LeanSuite
             jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = a}));
         std::int64_t const h = s.holderShares.value_or(s.sharesTotal);
         LeanVaultResult const lean = leanVaultWithdraw(
-            cpp.pre, a, byShares, parentCloseTime(env), h == s.sharesTotal,
-            STAmount{MPTIssue{env.le(vault)->at(sfShareMPTID)}, static_cast<std::uint64_t>(h)});
+            cpp.pre, a, byShares, parentCloseTime(env), h == s.sharesTotal, Number{h});
         TER lean_ter = leanVerdict(lean.leanError, lean.error);
         std::string text = stageText(s) + (byShares ? " shares " : " assets ") +
             std::to_string(amount) + " cpp=" + transToken(cpp.ter) +

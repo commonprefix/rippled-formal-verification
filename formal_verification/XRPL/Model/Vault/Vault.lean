@@ -63,6 +63,7 @@ structure RawVault.WF (rv : RawVault) : Prop where
   sharesTotal_int : rv.sharesTotal.toRat.den = 1
   scale_integral : rv.numericType.isIntegral = true → rv.scale = 0
   scale_le : rv.scale ≤ vaultMaximumIOUScale
+  assetsMaximum_representable : ∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false
 
 /-- The vault invariant stated with the modeled `Number` operators -/
 structure RawVault.Valid (rv : RawVault) : Prop where
@@ -72,7 +73,6 @@ structure RawVault.Valid (rv : RawVault) : Prop where
   lossUnrealized_nonneg : Number.zero.operator_le rv.lossUnrealized = true
   yieldUnrealized_nonneg : Number.zero.operator_le rv.yieldUnrealized = true
   assetsMaximum_pos : ∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true
-  assetsMaximum_representable : ∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false
   empty_shares : rv.sharesTotal = Number.zero →
     rv.assetsAvailable = Number.zero ∧ rv.assetsDeployed = Number.zero
   lossUnrealized_le : rv.lossUnrealized.operator_le rv.assetsDeployed = true
@@ -91,9 +91,10 @@ instance (rv : RawVault) : Decidable rv.WF :=
       rv.assetsReserved.isNormalized ∧ (∀ m ∈ rv.assetsMaximum, m.isNormalized) ∧
       rv.sharesTotal.isNormalized ∧ rv.lossUnrealized.isNormalized ∧ rv.yieldUnrealized.isNormalized ∧
       0 ≤ rv.sharesTotal.toRat ∧ rv.sharesTotal.toRat.den = 1 ∧
-      (rv.numericType.isIntegral = true → rv.scale = 0) ∧ rv.scale ≤ vaultMaximumIOUScale)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k⟩⟩
+      (rv.numericType.isIntegral = true → rv.scale = 0) ∧ rv.scale ≤ vaultMaximumIOUScale ∧
+      (∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false))
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩⟩
 
 -- Deciding `Valid` reduces to the conjunction of its clauses, each decidable above.
 instance (rv : RawVault) : Decidable rv.Valid :=
@@ -104,7 +105,6 @@ instance (rv : RawVault) : Decidable rv.Valid :=
       Number.zero.operator_le rv.lossUnrealized = true ∧
       Number.zero.operator_le rv.yieldUnrealized = true ∧
       (∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true) ∧
-      (∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false) ∧
       (rv.sharesTotal = Number.zero →
         rv.assetsAvailable = Number.zero ∧ rv.assetsDeployed = Number.zero) ∧
       rv.lossUnrealized.operator_le rv.assetsDeployed = true ∧
@@ -115,8 +115,8 @@ instance (rv : RawVault) : Decidable rv.Valid :=
       (∀ s ∈ rv.schedule, s.hasValidGap = true) ∧
       (rv.earlyExitFeeRate.isSome = true → rv.schedule.isSome = true) ∧
       (∀ r ∈ rv.earlyExitFeeRate, r ≤ maxEarlyExitFeeRate))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩⟩
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩⟩
 
 /-- A `Vault` extends `RawVault` with proofs that the representation is
 well-formed (`wf`) and satisfies the invariant (`valid`, in Number operators). -/

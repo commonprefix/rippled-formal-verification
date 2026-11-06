@@ -77,7 +77,7 @@ leanVaultWithdraw(
     bool byShares,
     std::uint32_t parentCloseTime,
     bool waiveUnrealizedLoss = false,
-    std::optional<STAmount> const& holderShares = std::nullopt)
+    std::optional<Number> const& holderShares = std::nullopt)
 {
     auto lawful = VaultFFI::build(state);
     if (!lawful)
@@ -88,6 +88,6 @@ leanVaultWithdraw(
         WithdrawAmountFFI::build(amount, byShares),
         static_cast<std::uint8_t>(waiveUnrealizedLoss ? 1 : 0),
         parentCloseTime,
-        holderShares ? leanSome(STAmountFFI::build(*holderShares)) : leanNone()));
+        holderShares ? leanSome(NumberFFI::build(*holderShares)) : leanNone()));
 }
 }  // namespace xrpl::test::formal_verification

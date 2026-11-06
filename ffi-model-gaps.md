@@ -14,7 +14,7 @@ Gaps between the Lean model and the C++ found by the rfv-ffi differential tests,
 
 **Fix:** `Vault.clawback` rejects with `tecINSUFFICIENT_FUNDS` when the shares to burn exceed `holderShares`, after the dust check, as in C++ (`VaultClawback.lean`). Compares the two `STAmount`s directly, like C++'s integer compare in `directSendNoFeeMPT` (`TokenHelpers.cpp`).
 
-**Side cleanup (withdraw):** `Vault.withdraw` took `holderShares` as a `Number` (added in #52) and compared after a `toNumber` conversion. Now `Option STAmount`, compared with `STAmount.operator_lt`, as C++ does (`VaultWithdraw.cpp:432`). FFI export and C++ callers updated. No behaviour change: int64 shares convert to `Number` exactly.
+**Withdraw left as is:** `Vault.withdraw` keeps `holderShares : Option Number`. A switch to `STAmount` was tried and reverted: it changes no behaviour (int64 shares convert to `Number` exactly), and upstream's ledger proofs (#54) pass a `Number` (`LendingLedger.sharesOf`).
 
 **Test:** `testHolderValueSweep` re-enabled in `LeanVaultClawback_test.cpp`. Repro: `gapClawbackOverHolderValue` in `LeanCuspScratch_test.cpp`.
 
@@ -53,11 +53,11 @@ Gaps between the Lean model and the C++ found by the rfv-ffi differential tests,
 
 **Impact:** low. No total can reach the cap, so no deposit verdict changes. But lawful model vaults could hold a cap C++ cannot store.
 
-**Fix:** new lawfulness clause `assetsMaximum_representable` in `RawVault.Valid` (`Vault.lean`): the cap must fit the asset's amount type. `Vault.create` now returns `notLawful`, which the harness matches with C++ `tem`. Also covers `Vault.update`.
+**Fix:** new clause `assetsMaximum_representable` in `RawVault.WF` (`Vault.lean`): the cap must fit the asset's amount type. `Vault.create` now returns `notLawful`, which the harness matches with C++ `tem`. Also covers `Vault.update`. It sits in `WF` (representation), not `Valid`: upstream #54 adds its own clauses at the end of `Valid`, and `WF` is untouched there, so the merge is clean.
 
 **Test:** `testXrpMaximumSweep` re-enabled in `LeanVaultCreate_test.cpp`. New cases in `LeanVault_test.cpp`: 17-digit IOU cap and XRP cap 1e17+1 not lawful, XRP cap 1e17 lawful. Repro: `gapCreateXrpMaximum` in `LeanCuspScratch_test.cpp`.
 
-**Status:** fix applied, Lean builds; FFI run pending. Proofs under `Properties/Vault` that build `RawVault.Valid` need the new clause (they look stale already).
+**Status:** fix applied, Lean builds; FFI run pending. Proofs that build `RawVault.WF` with a new cap need the clause (upstream: `RecheckVault.lean`, from the `canVaultUpdate` grid check).
 
 ## Gap 4: deposit past the share cap (2^63 - 1 shares)
 
@@ -104,7 +104,7 @@ Gaps between the Lean model and the C++ found by the rfv-ffi differential tests,
 
 **Finding:** the suite had a commented-out `NumberSO const so{true};` with "TODO: add back when fixes merged". `NumberSO` no longer exists: #5962 (2026-06-10, retire fixUniversalNumber) removed the switchover and made the `Number`-based `IOUAmount` path the only one. The model follows that path, so the suite already tests the right behaviour. The TODO came with the copy from `lending-protocol-fv`, which predated #5962.
 
-**Action:** replaced the stale lines with a one-line note (`LeanIOUAmount_test.cpp`).
+**Action:** replaced the stale lines with a one-line note (`LeanIOUAmount_test.cpp`). Upstream #54 still has the TODO; the note merges cleanly into its version.
 
 ## Gap 13: Scale on an XRP or MPT vault at create
 
@@ -201,4 +201,46 @@ With both flags, C++ doApply would set then clear the flag (unblock wins); the m
 
 **Possible actions:** keep as decided; recheck if MPTokensV2 changes before it ships. Model the legacy path only if a modelled transaction ever uses `mulRound`.
 
-**Status:** known, by design.
+**Status:** no longer applies after #54: upstream removes `STAmount.mulRound` / `divRound` from the model, the FFI and `LeanSTAmount_test`. Our comment on `mulRoundImpl` was reverted to the base version, so the merge takes the deletion.
+
+## Merging with `lending-protocol-fv` (#54)
+
+Upstream `178ef1bb9` (Lending theorems + no-wrap theorem, #54) on top of our base #52. Checked with `git merge-file` per file and a build of the merged model and FFI.
+
+**Per gap:**
+
+| Gap | After the merge |
+| --- | --- |
+| 1 | Kept. Merges cleanly next to upstream's XRP check in `Vault.clawback`. Upstream's `Reachable.clawback` assumption `r.shares ≤ holderShares` now follows from the model. |
+| 1, withdraw | Reverted (see gap 1). |
+| 2 | Open. Upstream has no fee rule. Option A now means a 24th loan clause. |
+| 3 | Kept, moved to `RawVault.WF`. Merges cleanly. |
+| 4 | Kept. Merges cleanly. Upstream's `Reachable.deposit` assumption `sharesTotal + shares ≤ 2^63 - 1` now follows from the model. |
+| 5 | Open. Still present; upstream rewrote the branch with checked operations, so any fix goes on upstream's version. |
+| 12 | Kept. Merges cleanly into upstream's version. |
+| 13, 15, 16 | Open. Unchanged upstream. |
+| 14 | Kept. Merges cleanly (`VaultCreate.lean` unchanged upstream). |
+| 17 | Gone (upstream removes `mulRound`). Our comment reverted, so the merge takes the deletion. |
+
+**Conflicts to resolve by hand** (both from earlier ms4-ffi work, not from the gap fixes):
+
+- `Model/Lending/Loan/LoanSet.lean`, `Loan.canCreate`: keep our signature (`parentCloseTime`) and take upstream's `let scheduleTer ← schedule.checkTimeAvailability`.
+- `numbers/LeanSTAmount_test.cpp`: two blocks; our added sweeps use functions upstream removed. Take upstream's version, then re-add only sweeps that still compile.
+
+**Fix needed after the merge** (no textual conflict, but does not compile):
+
+- `FFI/Lending/Loan.lean:148`: upstream's `Loan.canManage` now returns `Except Error TER`. Change `pure (loan.canManage (manageActionOf action) now).code` to `return (← loan.canManage (manageActionOf action) now).code`.
+
+With those, the merged `XRPL.FFI.FFI` builds. Also expected after the merge: the 3 `LeanLoan_test` cases flipped to lawful after #52 flip back (upstream restores those loan clauses).
+
+**Proofs** (upstream's `Properties` built on the merged model, targets `Vault.VaultValid`, `Vault.Common.Create`, `Vault.Reachable`, `Vault.Proofs.Reachable`, `Lending.Ledger.Common.RecheckVault`). Everything below these builds except:
+
+| Gap | File | Break | Fix |
+| --- | --- | --- | --- |
+| 14 | `Vault/Common/Create.lean:35` | `Vault.create_ok_toRawVault` states the old filtered `earlyExitFeeRate` | write `earlyExitFeeRate` (checked: builds) |
+| 3 | `Vault/Proofs/Support/VaultBalances.lean:510, 526` | `v.wf` taken apart and rebuilt as 11 fields; `WF` has 12 | add the new field (`hmr`) to both; the cap is unchanged (checked: builds) |
+| 1 | `Vault/Proofs/ClawbackExits.lean:150` (`clawback_lawful`) | the walk meets the new holder-shares branch | close the extra goal (that branch throws a TER, never `notLawful`) |
+| 1 | `Vault/Proofs/ClawbackExits.lean:195` (`clawback_error_codes_proof`) | the statement lists the possible TERs | add `tecINSUFFICIENT_FUNDS` to the list; callers of the lemma may need the same |
+| 4 | `Vault/Proofs/DepositExits.lean:174` (`deposit_success_of_lawful`) | the success path now passes the share-cap check | add the premise `sharesTotal + shares ≤ 2^63 - 1` (callers already have it from `Reachable.deposit`) |
+
+The build stops at these, so modules that depend on them (e.g. `Vault.Proofs.Reachable`) are not checked yet.
