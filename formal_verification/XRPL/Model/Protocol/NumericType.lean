@@ -20,9 +20,5 @@ def NumericType.maxValue : NumericType → UInt64
   | .integral mv _ _ _ => mv | .fractional => 0
 def NumericType.maxOffset : NumericType → Int
   | .integral _ mo _ _ => mo | .fractional => 0
-def NumericType.mulSqrt : NumericType → UInt64
-  | .integral _ _ ms _ => ms | .fractional => 0
-def NumericType.mulShift : NumericType → UInt64
-  | .integral _ _ _ msh => msh | .fractional => 0
 
 end XRPL.Model.Protocol

@@ -1,23 +1,17 @@
-import XRPL.Properties.Vault.Common.VaultDecidable
+import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 import XRPL.Properties.Vault.Common.WithdrawDefs
-import XRPL.Properties.Vault.Defs
 
-/-! # Witnesses for the tight `withdraw_sharesBurned` and `withdraw_payout` bounds
+/-! # Witnesses for `withdraw_sharesRedeemed` and `withdraw_payout`
 
-Each run's result is computed by the model and checked by `native_decide`.
+Each run's result is computed by the model and checked by `native_decide`. Every vault comes from a
+reachable history: a create, a deposit, then a donation.
 
-* Truncation: 1 asset, `10¹⁵` shares, withdraw `1.999999999999999·10⁻¹⁵`: ideal
-  `1.999999999999999` shares, burned `1`, short by `1 - 10⁻¹⁵`.
-* Sharp share overshoot: `99999999999889682.7` assets, 1844674407370955163 shares, withdraw
-  `5·10¹⁵`: both `.to_nearest` stages round up by almost half a step of the maxRep band, burning
-  `92233720368649508` shares, `1.0841995·10⁻¹⁸` relatively above the ideal.
-* Payout overshoot: int64, `10¹⁸ + 2` assets, `2·10¹⁸` shares, burn 1: worth
-  `0.5 + 10⁻¹⁸`, paid `1`.
-* Payout rounding shortfall: int64, `3·10¹⁸ - 2` assets, `2·10¹⁸` shares, burn 1: worth
-  `1.5 - 10⁻¹⁸`, paid `1`.
-* Payout clamp shortfall: `1999999.999999999499` assets, `10⁶` shares, burn 1: worth
-  `1.999999999999999499`, priced `1.999999999999999`, floored onto the `10⁻⁹` grid of the
-  post-withdrawal total to `1.999999999`. -/
+* Truncation: `4577096644444257` assets and shares, withdraw `5005`: ideal `5005` shares, burned
+  `5004`, a whole share short.
+* Sharp share overshoot: a scale-1 vault of `100000000500000` assets and `100001000500005` shares,
+  withdraw `10000000098999.01`: the ideal sits just below a whole share and both `.to_nearest` stages
+  round up onto it, so the withdrawal burns more shares than the ideal.
+* Payout at the bound: 3 assets and 2 shares, burn 1: priced `2`, paid `2`. -/
 
 set_option linter.style.nativeDecide false
 
@@ -25,53 +19,45 @@ namespace XRPL.Model.SingleAssetVault.WdTightWit
 
 open XRPL.Model.Protocol
 
-def rv (nt : NumericType) (a s : Number) : RawVault :=
-  { assetsTotal := a, assetsAvailable := a, assetsReserved := Number.zero
-  , assetsMaximum := none, numericType := nt, scale := 0
-  , sharesTotal := s, lossUnrealized := Number.zero }
+def int64Amount (n : UInt64) : STAmount := ⟨.int64, n, 0, false⟩
 
-def vT : Vault := ⟨rv .fractional ⟨false, 1000000000000000000, -18⟩
-  ⟨false, 1000000000000000000, -3⟩, by native_decide, by native_decide⟩
-def aT : STAmount := STAmount.unchecked .fractional 1999999999999999 (-30) false
+def iouAmount (m : UInt64) (e : Int) : STAmount := ⟨.fractional, m, e, false⟩
+
+/-- The closed-ended schedule of the fee witnesses: withdrawals at time 500 are in the investment
+phase. -/
+def schedule : VaultSchedule := ⟨100, 1000⟩
+
+def vT : Vault :=
+  createHistory.vault Vault.placeholder .int64 0 none none 0 [(int64Amount 4577096644444257, false)]
+def vS : Vault :=
+  createHistory.vault Vault.placeholder .fractional 1 none none 0
+    [(iouAmount 1000010005000050 (-2), false), (iouAmount 8999990044999950 (-2), true)]
+def vP : Vault :=
+  createHistory.vault Vault.placeholder .int64 0 none none 0 [(int64Amount 2, false), (int64Amount 1, true)]
+lemma vT_reach : Vault.Reachable vT 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+lemma vS_reach : Vault.Reachable vS 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+def aT : STAmount := int64Amount 5005
+def aS : STAmount := iouAmount 1000000009899901 (-2)
 lemma aT_pos : 0 < aT.toRat := by native_decide
-def rT : WithdrawResult :=
-  (vT.withdraw (.vaultAssets aT) false aT_pos).toOption.getD (WithdrawResult.rejected vT .tecINTERNAL)
-
-def vS : Vault := ⟨rv .fractional ⟨false, 9999999999988968270, -2⟩
-  ⟨false, 1844674407370955163, 0⟩, by native_decide, by native_decide⟩
-def aS : STAmount := STAmount.unchecked .fractional 5000000000000000 0 false
 lemma aS_pos : 0 < aS.toRat := by native_decide
-def rS : WithdrawResult :=
-  (vS.withdraw (.vaultAssets aS) false aS_pos).toOption.getD (WithdrawResult.rejected vS .tecINTERNAL)
 
-def wOne : STAmount := STAmount.unchecked .int64 1 0 false
-lemma wOne_pos : 0 < (WithdrawAmount.vaultShares wOne).amount.toRat := by native_decide
+/-- Burning `n` shares. -/
+def burn (n : UInt64) : WithdrawAmount := .vaultShares (int64Amount n)
 
-def vU : Vault := ⟨rv .int64 ⟨false, 1000000000000000002, 0⟩
-  ⟨false, 2000000000000000000, 0⟩, by native_decide, by native_decide⟩
-def rU : WithdrawResult :=
-  (vU.withdraw (.vaultShares wOne) false wOne_pos).toOption.getD (WithdrawResult.rejected vU .tecINTERNAL)
-def sU : STAmount := STAmount.unchecked .int64 2000000000000000000 0 false
+lemma burn1_pos : 0 < (burn 1).amount.toRat := by native_decide
+def rT : VaultWithAmounts :=
+  ((vT.withdraw (.vaultAssets aT) false 0 aT_pos).run.toOption.bind Except.toOption).getD ⟨⟨aT, aT⟩, vT⟩
+def rS : VaultWithAmounts :=
+  ((vS.withdraw (.vaultAssets aS) false 0 aS_pos).run.toOption.bind Except.toOption).getD ⟨⟨aS, aS⟩, vS⟩
+def rP : VaultWithAmounts :=
+  ((vP.withdraw (burn 1) false 0 (burn1_pos)).run.toOption.bind Except.toOption).getD
+    ⟨⟨aT, aT⟩, vP⟩
+/-- The net asset value a vault's withdrawal prices at, as the model computes it. -/
+def nav (v : Vault) : Number := (v.assetsTotalForWithdrawal false).toOption.getD Number.zero
 
-def vH : Vault := ⟨rv .int64 ⟨false, 2999999999999999998, 0⟩
-  ⟨false, 2000000000000000000, 0⟩, by native_decide, by native_decide⟩
-def rH : WithdrawResult :=
-  (vH.withdraw (.vaultShares wOne) false wOne_pos).toOption.getD (WithdrawResult.rejected vH .tecINTERNAL)
-
-def vC : Vault := ⟨rv .fractional ⟨false, 1999999999999999499, -12⟩
-  ⟨false, 1000000000000000000, -12⟩, by native_decide, by native_decide⟩
-def rC : WithdrawResult :=
-  (vC.withdraw (.vaultShares wOne) false wOne_pos).toOption.getD (WithdrawResult.rejected vC .tecINTERNAL)
-def sC : STAmount := STAmount.unchecked .int64 1000000 0 false
-
-lemma wOne_canonical : wOne.Canonical :=
-  ⟨fun _ => ⟨⟨rfl, rfl, by decide⟩, by decide⟩, fun h => absurd h (by decide)⟩
-
-lemma frac_canonical (m : UInt64) (e : Int) (h1 : 10 ^ 15 ≤ m.toNat) (h2 : m.toNat < 10 ^ 16)
-    (h3 : (-96 : ℤ) ≤ e) (h4 : e ≤ 80) :
-    (STAmount.unchecked .fractional m e false).Canonical :=
-  ⟨fun h => absurd h (by simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]),
-    fun _ => ⟨rfl, h1, h2, h3, h4⟩⟩
+/-- The priced amount of `n` shares. -/
+def priced (v : Vault) (n : UInt64) : STAmount :=
+  (v.sharesToAssetsWithdraw (int64Amount n) false).toOption.getD (int64Amount 0)
 
 end XRPL.Model.SingleAssetVault.WdTightWit
 
@@ -79,95 +65,40 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol WdTightWit
 
-/-- Truncation: a withdrawal by assets burns `1 - 10⁻¹⁵` of a share less than the ideal,
-the one-share term of `withdraw_sharesBurned` less `10⁻¹⁴` beyond the relative error. -/
-lemma Vault.withdraw_sharesBurned_witness :
-    ∃ (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) (hpos : 0 < assets.toRat)
-      (r : WithdrawResult),
-      assets.Canonical ∧ v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw (.vaultAssets assets) waiveUnrealizedLoss hpos = .ok r ∧ r.error = none ∧
-      v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * sharesε + (1 - 1 / 10 ^ 14) <
-        v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat - r.sharesBurned.toRat :=
-  ⟨vT, aT, false, aT_pos, rT, frac_canonical _ _ (by decide) (by decide) (by decide) (by decide),
-    ⟨⟨false, 1000000000000000000, -18⟩, by native_decide, by native_decide⟩,
+/-- Truncation: a withdrawal by assets redeems fewer shares than the ideal rounded down. -/
+lemma Vault.withdraw_sharesRedeemed_witness :
+    ∃ (v : Vault) (t t0 : UInt32) (assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
+      (hpos : 0 < assets.toRat) (r : VaultWithAmounts),
+      Vault.Reachable v t0 ∧ assets.Canonical ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
+      (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
+      r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ :=
+  ⟨vT, 0, 0, aT, false, nav vT, aT_pos, rT, vT_reach, STAmount.canonical_of_canonicalB _ (by native_decide),
     by native_decide, by native_decide, by native_decide⟩
 
-/-- Sharp share overshoot: the burned shares exceed the ideal by `1.0841995·10⁻¹⁸`
-relatively, 98.56% of `sharesε`. -/
-lemma Vault.withdraw_sharesBurned_sharp_witness :
-    ∃ (v : Vault) (assets : STAmount) (waiveUnrealizedLoss : Bool) (hpos : 0 < assets.toRat)
-      (r : WithdrawResult),
-      assets.Canonical ∧ v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw (.vaultAssets assets) waiveUnrealizedLoss hpos = .ok r ∧ r.error = none ∧
-      v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat * (10841995 / 10 ^ 25) <
-        r.sharesBurned.toRat - v.idealSharesWithdraw waiveUnrealizedLoss assets.toRat :=
-  ⟨vS, aS, false, aS_pos, rS, frac_canonical _ _ (by decide) (by decide) (by decide) (by decide),
-    ⟨⟨false, 9999999999988968270, -2⟩, by native_decide, by native_decide⟩,
+/-- Sharp share overshoot: the redeemed shares exceed the ideal rounded down. -/
+lemma Vault.withdraw_sharesRedeemed_sharp_witness :
+    ∃ (v : Vault) (t t0 : UInt32) (assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
+      (hpos : 0 < assets.toRat) (r : VaultWithAmounts),
+      Vault.Reachable v t0 ∧ assets.Canonical ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
+      (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
+      ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=
+  ⟨vS, 0, 0, aS, false, nav vS, aS_pos, rS, vS_reach, STAmount.canonical_of_canonicalB _ (by native_decide),
     by native_decide, by native_decide, by native_decide⟩
 
-/-- Payout overshoot: the payout exceeds the burned shares' worth plus the relative error
-by all but `10⁻¹⁵` of the half-unit term of `withdraw_payout`. -/
-lemma Vault.withdraw_payout_overshoot_witness :
-    ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (hpos : 0 < amount.amount.toRat) (sharesTotalAmount : STAmount) (r : WithdrawResult),
-      0 ≤ r.sharesBurned.toRat ∧ r.sharesBurned.Canonical ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw amount waiveUnrealizedLoss hpos = .ok r ∧ r.error = none ∧
-      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
-      r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * (1 + depositε) +
-          (1 - 1 / 10 ^ 15) * (1 / 2 * (10 : ℚ) ^ r.assets'.exponent) < r.assets'.toRat := by
-  have hb : rU.sharesBurned = wOne := by native_decide
-  refine ⟨vU, .vaultShares wOne, false, wOne_pos, sU, rU, by rw [hb]; native_decide,
-    by rw [hb]; exact wOne_canonical,
-    ⟨⟨false, 1000000000000000002, 0⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
-
-/-- Rounding shortfall: without the clamp the payout falls short of the burned shares'
-worth by the relative error plus all but `10⁻¹⁵` of the half-unit term. -/
-lemma Vault.withdraw_payout_round_witness :
-    ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (hpos : 0 < amount.amount.toRat) (sharesTotalAmount : STAmount) (r : WithdrawResult),
-      0 ≤ r.sharesBurned.toRat ∧ r.sharesBurned.Canonical ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw amount waiveUnrealizedLoss hpos = .ok r ∧ r.error = none ∧
-      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
-      r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      ∃ atr' : STAmount,
-        STAmount.ofNumber v.numericType r.vault'.assetsTotal .to_nearest = .ok atr' ∧
-        v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * depositε +
-            (1 - 1 / 10 ^ 15) * max (1 / 2 * (10 : ℚ) ^ r.assets'.exponent)
-              ((10 : ℚ) ^ atr'.exponent - 1 / 2 * (10 : ℚ) ^ r.assets'.exponent) <
-          v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat - r.assets'.toRat := by
-  have hb : rH.sharesBurned = wOne := by native_decide
-  refine ⟨vH, .vaultShares wOne, false, wOne_pos, sU, rH, by rw [hb]; native_decide,
-    by rw [hb]; exact wOne_canonical,
-    ⟨⟨false, 2999999999999999998, 0⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide, by native_decide,
-    STAmount.unchecked .int64 2999999999999999997 0 false, by native_decide, by native_decide⟩
-
-/-- Clamp shortfall: the payout floored onto the post-withdrawal grid falls short of the
-burned shares' worth by the relative error plus all but `10⁻⁷` of the grid term. -/
-lemma Vault.withdraw_payout_clamp_witness :
-    ∃ (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (hpos : 0 < amount.amount.toRat) (sharesTotalAmount : STAmount) (r : WithdrawResult),
-      0 ≤ r.sharesBurned.toRat ∧ r.sharesBurned.Canonical ∧
-      v.WithdrawNavExact waiveUnrealizedLoss ∧
-      v.withdraw amount waiveUnrealizedLoss hpos = .ok r ∧ r.error = none ∧
-      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
-      r.sharesBurned.operator_eq sharesTotalAmount = false ∧
-      ∃ atr' : STAmount,
-        STAmount.ofNumber v.numericType r.vault'.assetsTotal .to_nearest = .ok atr' ∧
-        v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat * depositε +
-            (1 - 1 / 10 ^ 7) * max (1 / 2 * (10 : ℚ) ^ r.assets'.exponent)
-              ((10 : ℚ) ^ atr'.exponent - 1 / 2 * (10 : ℚ) ^ r.assets'.exponent) <
-          v.idealAssetsWithdraw waiveUnrealizedLoss r.sharesBurned.toRat - r.assets'.toRat := by
-  have hb : rC.sharesBurned = wOne := by native_decide
-  refine ⟨vC, .vaultShares wOne, false, wOne_pos, sC, rC, by rw [hb]; native_decide,
-    by rw [hb]; exact wOne_canonical,
-    ⟨⟨false, 1999999999999999499, -12⟩, by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide, by native_decide,
-    STAmount.unchecked .fractional 1999998000000000 (-9) false, by native_decide,
-    by native_decide⟩
+/-- Payout at the bound: with no fee the payout is the whole priced amount. -/
+lemma Vault.withdraw_payout_total_witness :
+    ∃ (v : Vault) (t : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+      (hpos : 0 < amount.amount.toRat) (r : VaultWithAmounts),
+      amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
+      r.shares.toRat < v.toExact.sharesTotal ∧
+      ∃ priced : STAmount, v.sharesToAssetsWithdraw r.shares waiveUnrealizedLoss = .ok priced ∧
+        r.assets.toRat = priced.toRat * (1 - (v.earlyExitFeeRateAt t).toNat / 100000) :=
+  ⟨vP, 0, burn 1, false, burn1_pos, rP,
+    STAmount.canonical_of_canonicalB _ (by native_decide), rfl, fun _ => by native_decide, by native_decide,
+    by native_decide, priced vP 1, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

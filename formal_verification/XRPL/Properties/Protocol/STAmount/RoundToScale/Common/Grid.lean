@@ -59,7 +59,6 @@ private lemma STAmount.repack_exact (x : Number) (mode : rounding_mode) (hx : x.
     rw [← UInt64.toNat_inj, UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; omega)]
   have hc : (⟨.fractional, q, x.exponent_ + 3, false⟩ : STAmount).IOUCanonical :=
     ⟨rfl, hq_lo, hq_hi, he_lo, he_hi⟩
-  -- the value is unchanged
   have hval : (⟨.fractional, q, x.exponent_ + 3, false⟩ : STAmount).toRat = x.toRat := by
     rw [STAmount.toRat_of_nonneg _ rfl, Number.toRat_of_nonneg x hneg]
     show (q.toNat : ℚ) * 10 ^ (x.exponent_ + 3) = (x.mantissa_.toNat : ℚ) * 10 ^ x.exponent_

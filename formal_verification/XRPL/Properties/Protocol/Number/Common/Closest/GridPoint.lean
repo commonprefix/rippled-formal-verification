@@ -12,48 +12,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Grid-point idempotence
 
-`Number.lower`/`Number.upper` of a value that is itself a normalized grid
-point return (a representative of) that very value. The addition operator's
-zero-operand guards return the other operand exactly, so its discrete-rounding
-theorems consume these. -/
-
-/-- `Number.upper` never undershoots its argument. -/
-lemma Number.upper_ge (q : ℚ) (n : Number) (h : Number.upper q = some n) :
-    q ≤ n.toRat := by
-  unfold Number.upper at h
-  split_ifs at h with hq0 hqneg
-  · have h_eq : n = Number.zero := (Option.some.inj h).symm
-    rw [h_eq, Number.toRat_zero, hq0]
-  · rw [Option.map_eq_some_iff] at h
-    obtain ⟨n', hn', heq⟩ := h
-    have hnq : 0 < -q := by linarith
-    have h_le := lowerPosAux_le (-q) hnq n' hn'
-    have h_n'_pos : n'.negative_ = false := by
-      unfold lowerPosAux at hn'
-      simp only at hn'
-      split at hn'
-      · split at hn'
-        · exact congrArg (·.negative_) (Option.some.inj hn').symm
-        · split at hn'
-          · exact congrArg (·.negative_) (Option.some.inj hn').symm
-          · exact absurd hn' (by simp)
-      · split at hn'
-        · exact congrArg (·.negative_) (Option.some.inj hn').symm
-        · split at hn'
-          · exact congrArg (·.negative_) (Option.some.inj hn').symm
-          · exact absurd hn' (by simp)
-    rw [← heq]
-    split_ifs with h_nz
-    · rw [Number.toRat_zero]
-      linarith
-    · rw [Number.toRat_set_neg_true_of_nn n' h_n'_pos]
-      linarith
-  · have hq_pos : 0 < q := by
-      rcases lt_trichotomy q 0 with h1 | h1 | h1
-      · exact absurd h1 hqneg
-      · exact absurd h1 hq0
-      · exact h1
-    exact upperPosAux_ge q hq_pos n h
+`Number.lower`/`Number.upper` of a value that is itself a normalized grid point return that
+value. -/
 
 /-- The positive twin of a nonzero normalized Number is normalized. -/
 private lemma pos_twin_isNormalized (x : Number) (h_norm : x.isNormalized)
@@ -124,7 +84,7 @@ theorem Number.upper_value_self (x : Number) (h_norm : x.isNormalized)
       exact ⟨n, hn⟩
   obtain ⟨n, hn⟩ := h_exists
   exact ⟨n, hn, le_antisymm
-    (Number.upper_ge x.toRat n hn)
+    (Number.le_upper x.toRat n hn)
     (Number.upper_tight x.toRat n hn x h_norm (le_refl _))⟩
 
 end XRPL.Model.Protocol

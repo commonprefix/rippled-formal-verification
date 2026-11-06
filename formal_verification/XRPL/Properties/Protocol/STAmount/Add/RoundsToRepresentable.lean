@@ -1,9 +1,9 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 import XRPL.Properties.Protocol.STAmount.Add.Common.RoundsToRepresentableProofs
 
-namespace XRPL.Model.Protocol
+/-! # STAmount addition lands within one ULP of the exact sum -/
 
-/-! # Addition, discrete/ULP -/
+namespace XRPL.Model.Protocol
 
 /-- Integral (XRP/MPT) addition is exact. -/
 theorem STAmount.operator_add_repr_integral (v1 v2 result : STAmount) (mode : rounding_mode)
@@ -15,7 +15,7 @@ theorem STAmount.operator_add_repr_integral (v1 v2 result : STAmount) (mode : ro
   RoundsToRepresentableWithin_of_eq result (v1.toRat + v2.toRat) mode
     (STAmount.operator_add_integral_exact v1 v2 result mode hc1 hc2 hbound_val hsum hok)
 
-/-- **IOU addition lands within `1` ULP of `v1 + v2`** -/
+/-- IOU addition lands within one ULP of `v1 + v2`, on the correct side for `downward` and `upward`. -/
 theorem STAmount.operator_add_repr_iou (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

@@ -1,19 +1,19 @@
-import XRPL.Properties.Vault.Proofs.DepositTight.DivSharp
+import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize128.Facts
+import XRPL.Properties.Protocol.Number.Common.ProofTactics
+import XRPL.Properties.Protocol.Number.Div.Common.ToNearest.AlgorithmicFacts
+import XRPL.Properties.Protocol.Number.Common.Helpers
+import XRPL.Properties.Protocol.Number.Div.Common.Decompose
 import XRPL.Properties.Vault.Proofs.DepositTight.DivExactRound
 
-/-! # Slip-free `.to_nearest` division bound
-
-The sticky tail never moves a rounding decision: after `k ≥ 1` dropped digits the
-true fraction and the guard's shadow share the integer part `D` of `frac·10^k`,
-and `1/2·10^k` is an integer; with no drop the tail is below `1/10`. -/
+/-! # Slip-free `.to_nearest` division bound -/
 
 namespace XRPL.Model.SingleAssetVault.DepTight
 
 open XRPL.Model.Protocol
 
-/-- Integer-cell transfer: the shadow `(D + t)/P` and the truth `(D + s)/P` sit on the
-same side of `1/2` when `P = 2H` is even. -/
-lemma cell_of_even (D H : ℤ) (t s : ℚ) (ht0 : 0 ≤ t) (ht1 : t < 1) (hs0 : 0 ≤ s) (hs1 : s ≤ 1)
+/-- The shadow `(D + t)/P` and the truth `(D + s)/P` sit on the same side of `1/2` when `P = 2H` is
+even. -/
+private lemma cell_of_even (D H : ℤ) (t s : ℚ) (ht0 : 0 ≤ t) (ht1 : t < 1) (hs0 : 0 ≤ s) (hs1 : s ≤ 1)
     (hts : t = 0 → s = 0) :
     ((D : ℚ) + t < H → (D : ℚ) + s ≤ H) ∧ ((H : ℚ) < D + t → (H : ℚ) ≤ D + s) ∧
     ((D : ℚ) + t = H → (D : ℚ) + s = H) := by
@@ -40,10 +40,10 @@ lemma cell_of_even (D H : ℤ) (t s : ℚ) (ht0 : 0 ≤ t) (ht1 : t < 1) (hs0 : 
     linarith
 
 set_option maxHeartbeats 3200000 in
--- Same four-stage pipeline as the sharp keystone, run twice (truth and shadow).
-/-- `doNormalize128` in `.to_nearest` is within the half-ULP `5/(2^63+7)` of the true
-value `(M + δ)·10^e`: the sticky tail costs nothing. -/
-lemma doNormalize128_rounds_to_nearest_exact
+-- The four stages are run twice, once on the true tail and once on the guard's shadow of it.
+/-- The stages of `doNormalize128` before its final `doRoundUp`: the capped mantissa carries the value
+exactly, and the guard's shadow fraction sits on the same side of one half as the true fraction. -/
+lemma doNormalize128_to_nearest_stages
     (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool)
     (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
     (hsticky_zero : sticky = false → δ = 0)
@@ -52,9 +52,15 @@ lemma doNormalize128_rounds_to_nearest_exact
     (result : Number)
     (hok : doNormalize128 zn M e largeRange.min largeRange.max .to_nearest sticky = .ok result)
     (hres : result.mantissa_ ≠ 0) :
-    |(|result.toRat|) - ((M.toNat : ℚ) + δ) * 10 ^ e|
-      ≤ ((M.toNat : ℚ) + δ) * 10 ^ e * (5 / (2 ^ 63 + 7 : ℕ))
-    ∧ result.negative_ = zn := by
+    ∃ (g : Guard) (zm : UInt64) (ze : Int) (ft f : ℚ) (res : RoundResult),
+      represents g ft ∧ 0 ≤ f ∧ f ≤ 1 ∧ (δ < 1 → f < 1) ∧
+      (ft < 1 / 2 → f ≤ 1 / 2) ∧ (1 / 2 < ft → 1 / 2 ≤ f) ∧ (ft = 1 / 2 → f = 1 / 2) ∧
+      (mantissaFloor : ℕ) < zm.toNat ∧ zm.toNat ≤ maxRepUp.toNat ∧
+      ((zm.toNat : ℚ) + f) * 10 ^ ze = ((M.toNat : ℚ) + δ) * 10 ^ e ∧
+      g.doRoundUp false zm ze largeRange.min largeRange.max .to_nearest .normalize2 = .ok res ∧
+      res.mantissa_ ≠ 0 ∧
+      |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ ∧
+      result.negative_ = zn := by
   have hminM_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxM_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
   have hM_ne : ¬ (M == 0) = true := by
@@ -62,13 +68,14 @@ lemma doNormalize128_rounds_to_nearest_exact
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
-  obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
+  obtain ⟨hval_su, -, hM₁_lt, -, hM₁_size⟩ :
       ((M₁.toNat : ℚ) * 10 ^ e₁ = (M.toNat : ℚ) * 10 ^ e)
       ∧ 1 ≤ M₁.toNat ∧ M₁.toNat < 10 ^ 23 ∧ e₁ ≤ e
       ∧ (M₁ = M ∧ e₁ = e ∨ M₁.toNat < 10 ^ 19) := by
@@ -103,10 +110,17 @@ lemma doNormalize128_rounds_to_nearest_exact
     · rw [Bool.not_eq_true] at hst
       rw [hδ₁_zero hst, zero_mul]
       exact Nat.cast_nonneg _
+  -- the rescaled tail keeps the tail's bounds: either `scaleUp` is the identity or `M₁ < 10^19`
   have hδ₁_le : δ₁ ≤ 1 := by
     rcases hM₁_size with ⟨_, heeq⟩ | hlt19
     · rw [hδ₁_def, heeq, sub_self, zpow_zero, mul_one]
       exact hδ_le
+    · have hM₁q : (M₁.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hlt19
+      linarith [hδ₁M, hM₁q]
+  have hδ₁_lt : δ < 1 → δ₁ < 1 := fun hδ_lt => by
+    rcases hM₁_size with ⟨_, heeq⟩ | hlt19
+    · rw [hδ₁_def, heeq, sub_self, zpow_zero, mul_one]
+      exact hδ_lt
     · have hM₁q : (M₁.toNat : ℚ) < 10 ^ 19 := by exact_mod_cast hlt19
       linarith [hδ₁M, hM₁q]
   set g₀ : Guard := (if sticky = true
@@ -119,7 +133,7 @@ lemma doNormalize128_rounds_to_nearest_exact
     · rw [if_pos hst, if_pos hst]
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
-      exact represents_initial128 zn
+      exact g0_represents_zero zn
   have hft₀_nn : (0 : ℚ) ≤ ftilde₀ := by rw [hft₀_def]; split_ifs <;> positivity
   have hft₀_lt : ftilde₀ < 1 := by rw [hft₀_def]; split_ifs <;> norm_num
   have hft₀_zero : ftilde₀ = 0 → δ₁ = 0 := by
@@ -127,18 +141,19 @@ lemma doNormalize128_rounds_to_nearest_exact
     by_cases hst : sticky = true
     · rw [hft₀_def, if_pos hst] at h; norm_num at h
     · exact hδ₁_zero (by simpa using hst)
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
     rw [hsd] at hok
     simp only [] at hok
-    obtain ⟨φ₂, -, h2nn, h2lt, -, -, h2val, h2le, -, h2exp, -, -, -, -⟩ :=
+    obtain ⟨φ₂, -, h2nn, h2lt, -, -, h2val, h2le, -, h2exp, -, -, -, h2lt1⟩ :=
       doNormalize_scaleDown128_repr largeRange.max M₁ e₁ g₀ hmaxM_v δ₁ ftilde₀
         hδ₁_nn hδ₁_le hrep₀ hM₁_lt sd hsd
     obtain ⟨ψ₂, ftilde₂, -, -, h2rep, h2slip, h2sval, -, -, -, -, -, -, -⟩ :=
       doNormalize_scaleDown128_repr largeRange.max M₁ e₁ g₀ hmaxM_v ftilde₀ ftilde₀
         hft₀_nn (le_of_lt hft₀_lt) hrep₀ hM₁_lt sd hsd
+    -- the shadow run has no slip, so it lands on the guard's own fraction
     have hψ₂ : ψ₂ = ftilde₂ := by
       rw [sub_self, abs_zero, zero_mul] at h2slip
       have h := abs_nonneg (ψ₂ - ftilde₂)
@@ -175,7 +190,7 @@ lemma doNormalize128_rounds_to_nearest_exact
         have hge : 1000000000000000000 ≤ (toUInt64 sd.1).toNat := by rw [hM₂u_toNat]; exact hM₂_ge
         have hle : (toUInt64 sd.1).toNat ≤ 9999999999999999999 := by
           rw [hM₂u_toNat]; rw [hmaxM_v] at h2le; exact h2le
-        obtain ⟨φ₃, -, h3nn, h3le1, -, -, h3val, h3floor, h3le, h3exp, -, -, -, -⟩ :=
+        obtain ⟨φ₃, -, h3nn, h3le1, -, -, h3val, h3floor, h3le, h3exp, -, -, -, h3lt1⟩ :=
           doNormalize_capAtMaxRep_repr (toUInt64 sd.1) sd.2.1 sd.2.2 hge hle
             φ₂ ftilde₂ h2nn h2lt h2rep cp hcap
         obtain ⟨ψ₃, ftilde₃, -, -, h3rep, h3slip, h3sval, -, -, -, -, -, -, -⟩ :=
@@ -201,18 +216,16 @@ lemma doNormalize128_rounds_to_nearest_exact
             exact hres
           set res_pos : RoundResult :=
             { negative_ := false, mantissa_ := res.mantissa_, exponent_ := res.exponent_ }
-            with hres_pos_def
           have h_rup_pos : cp.2.2.doRoundUp false cp.1 cp.2.1 largeRange.min largeRange.max
               .to_nearest .normalize2 = .ok res_pos :=
             doRoundUp_false_from_ok cp.2.2 zn cp.1 cp.2.1 .to_nearest .normalize2 res hru
-          have h_abs : |result.toRat| = (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ := by
+          have h_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
             rw [h_result, abs_toRat_eq res.toNumber]
             rfl
           have h_neg : result.negative_ = zn := by
             rw [h_result]
             exact doRoundUp_negative_of_mant_ne cp.2.2 zn cp.1 cp.2.1 _ _ _
               .normalize2 res hru hres_mant
-          refine ⟨?_, h_neg⟩
           -- truth and shadow at the final scale
           obtain ⟨k, hk⟩ : ∃ k : ℕ, cp.2.1 = e₁ + k :=
             ⟨(cp.2.1 - e₁).toNat, by omega⟩
@@ -254,9 +267,6 @@ lemma doNormalize128_rounds_to_nearest_exact
                 linarith
               have hcap_q : (cp.1.toNat : ℚ) ≤ 9223372036854775810 := by
                 exact_mod_cast (show cp.1.toNat ≤ 9223372036854775810 from h3le)
-              have hδ₁_small : δ₁ < 1 / 2 := by
-                rw [hM₁eq] at hδ₁M
-                nlinarith
               have hft_small : ftilde₀ ≤ 1 / 10 ^ 17 := by
                 rw [hft₀_def]; split_ifs <;> norm_num
               refine ⟨fun _ => by linarith, fun h => ?_, fun h => ?_⟩
@@ -270,7 +280,6 @@ lemma doNormalize128_rounds_to_nearest_exact
               obtain ⟨c1, c2, c3⟩ := cell_of_even D H ftilde₀ δ₁ hft₀_nn hft₀_lt hδ₁_nn hδ₁_le
                 hft₀_zero
               rw [hHq] at hφ₃P hf₃P
-              have hH_pos : (0 : ℚ) < H := by rw [hH_def]; positivity
               refine ⟨fun h => ?_, fun h => ?_, fun h => ?_⟩
               · have := c1 (by nlinarith)
                 nlinarith
@@ -280,12 +289,34 @@ lemma doNormalize128_rounds_to_nearest_exact
                 have h2 : φ₃ * (2 * H) = 1 / 2 * (2 * H) := by rw [hφ₃P, this]; ring
                 exact mul_right_cancel₀ (by positivity) h2
           obtain ⟨hc1, hc2, hc3⟩ := hcell
-          have h_cell := doRoundUp_to_nearest_cell cp.2.2 cp.1 cp.2.1 ftilde₃ φ₃ h3rep h3nn h3le1
-            hc1 hc2 hc3 h3floor h3le .normalize2 res_pos h_rup_pos hres_mant
           have hV : ((cp.1.toNat : ℚ) + φ₃) * 10 ^ cp.2.1 = ((M.toNat : ℚ) + δ) * 10 ^ e := by
             rw [← hval₁, h2val, ← hM₂u_toNat, h3val]
-          rw [h_abs, ← hV]
-          exact h_cell
+          exact ⟨cp.2.2, cp.1, cp.2.1, ftilde₃, φ₃, res_pos, h3rep, h3nn, h3le1,
+            fun hδ_lt => h3lt1 (h2lt1 (hδ₁_lt hδ_lt)), hc1, hc2, hc3, h3floor, h3le, hV, h_rup_pos,
+            hres_mant, h_abs, h_neg⟩
+
+/-- `doNormalize128` in `.to_nearest` is within the half-ULP `5/(2^63+7)` of the true value
+`(M + δ)·10^e`: the sticky tail never moves a rounding decision, so it costs nothing. -/
+private lemma doNormalize128_rounds_to_nearest_exact
+    (zn : Bool) (M : UInt128) (e : Int) (δ : ℚ) (sticky : Bool)
+    (hδ_low : 0 ≤ δ) (hδ_le : δ ≤ 1)
+    (hsticky_zero : sticky = false → δ = 0)
+    (hM_pos : 1 ≤ M.toNat) (hM_lt : M.toNat < 10 ^ 23)
+    (hδM : sticky = true → δ * 10 ^ 20 ≤ (M.toNat : ℚ))
+    (result : Number)
+    (hok : doNormalize128 zn M e largeRange.min largeRange.max .to_nearest sticky = .ok result)
+    (hres : result.mantissa_ ≠ 0) :
+    |(|result.toRat|) - ((M.toNat : ℚ) + δ) * 10 ^ e|
+      ≤ ((M.toNat : ℚ) + δ) * 10 ^ e * (5 / (2 ^ 63 + 7 : ℕ))
+    ∧ result.negative_ = zn := by
+  obtain ⟨g, zm, ze, ft, f, res, hrep, hnn, hle1, -, hc1, hc2, hc3, hfloor, hub, hV, hru, hne, habs,
+      hneg⟩ :=
+    doNormalize128_to_nearest_stages zn M e δ sticky hδ_low hδ_le hsticky_zero hM_pos hM_lt hδM
+      result hok hres
+  refine ⟨?_, hneg⟩
+  rw [habs, ← hV]
+  exact doRoundUp_to_nearest_cell g zm ze ft f hrep hnn hle1 hc1 hc2 hc3 hfloor hub .normalize2 res
+    hru hne
 
 /-- `operator_div` in `.to_nearest` rounds to within the half-ULP `5/(2^63+7)` of
 the exact quotient. -/

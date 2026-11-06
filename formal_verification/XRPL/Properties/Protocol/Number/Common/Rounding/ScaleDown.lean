@@ -5,9 +5,9 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Guard
 
 namespace XRPL.Model.Protocol
 
-/-! # scaleDown128 invariant
+/-! # scaleDown128Spec invariant
 
-`scaleDown128` divides a UInt128 product `M` by 10 repeatedly until
+`scaleDown128Spec` divides a UInt128 product `M` by 10 repeatedly until
 `m ≤ maxRepUp` (the Enabled330 `repLimit`), pushing each dropped digit into
 the guard. -/
 
@@ -34,14 +34,11 @@ lemma nat_mod_pow_step (a k : ℕ) :
   rw [Nat.mul_add_mod]
   exact Nat.mod_eq_of_lt hbound
 
-/-- Main invariant of scaleDown128. The 5th conjunct constrains the residue
-when the output mantissa is `(maxRep + 1) / 10` — under the `maxRepUp`
-threshold that case is unreachable when digits were dropped (the output is
-`≥ (maxRepUp + 1) / 10 = mantissaFloor + 1`), so the conjunct is kept only
-for the consumers' destructuring shape. -/
+/-- Main invariant of `scaleDown128Spec`: the output mantissa is at most `maxRepUp` and the guard represents the dropped
+digits. The last conjunct is vacuous, since a drop always leaves a mantissa above `mantissaFloor`. -/
 theorem scaleDown128_correct :
     ∀ (M : UInt128) (e : Int) (g0 : Guard) (f0 : ℚ) (_hrep0 : represents g0 f0),
-      let (m, e', g) := scaleDown128 M e g0
+      let (m, e', g) := scaleDown128Spec M e g0
       ∃ k : ℕ,
         e' = e + k ∧
         m.toNat ≤ maxRepUp.toNat ∧
@@ -49,7 +46,7 @@ theorem scaleDown128_correct :
         represents g ((f0 + ((M.toNat % 10 ^ k : ℕ) : ℚ)) / 10 ^ k) ∧
         (k > 0 ∧ m.toNat = (maxRep.toNat + 1) / 10 → 8 * 10 ^ (k - 1) ≤ M.toNat % 10 ^ k) := by
   intro M e g0
-  induction M, e, g0 using scaleDown128.induct with
+  induction M, e, g0 using scaleDown128Spec.induct with
   | case1 M e g0 hcond d IH =>
     intro f0 hrep0
     have hd_def : d = toUInt64 (M % 10) := rfl
@@ -70,13 +67,13 @@ theorem scaleDown128_correct :
       have := BitVec.lt_def.mp hcond
       rwa [toNat_toUInt128] at this
     have hpush : represents (g0.push d) ((f0 + d.toNat) / 10) := represents_push hrep0 hd_lt
-    have hunfold : scaleDown128 M e g0
-        = scaleDown128 (M / 10) (e + 1) (g0.push d) := by
-      conv_lhs => rw [scaleDown128]
+    have hunfold : scaleDown128Spec M e g0
+        = scaleDown128Spec (M / 10) (e + 1) (g0.push d) := by
+      conv_lhs => rw [scaleDown128Spec]
       simp [hcond, hd_def]
     rw [hunfold]
     obtain ⟨k, hek, hrep, hM_decomp, hrep_g, hfloor_IH⟩ := IH _ hpush
-    set result := scaleDown128 (M / 10) (e + 1) (g0.push d)
+    set result := scaleDown128Spec (M / 10) (e + 1) (g0.push d)
     refine ⟨k + 1, ?_, hrep, ?_, ?_, ?_⟩
     · rw [hek]; push_cast; ring
     · have hstep := nat_mod_pow_step M.toNat k
@@ -150,8 +147,8 @@ theorem scaleDown128_correct :
   | case2 M e g0 hcond =>
     intro f0 hrep0
     have hrep_le : M ≤ toUInt128 maxRepUp := BitVec.not_lt.mp hcond
-    have hexit : scaleDown128 M e g0 = (toUInt64 M, e, g0) := by
-      unfold scaleDown128
+    have hexit : scaleDown128Spec M e g0 = (toUInt64 M, e, g0) := by
+      unfold scaleDown128Spec
       simp [hcond]
     rw [hexit]
     have hM_le_rep : M.toNat ≤ maxRepUp.toNat := by
@@ -169,16 +166,15 @@ theorem scaleDown128_correct :
     · rintro ⟨h, _⟩
       exact absurd h (by omega)
 
-/-- Lower bound on scaleDown128 output: `m.toNat ≥ (maxRepUp.toNat + 1) / 10`
-(`= mantissaFloor + 1` — strictly above the floor, which is what makes the
-floor residue case vacuous downstream). -/
+/-- On an input above `maxRepUp`, `scaleDown128Spec` outputs a mantissa of at least
+`(maxRepUp + 1) / 10 = mantissaFloor + 1`. -/
 theorem scaleDown128_lower_bound :
     ∀ (M : UInt128) (e : Int) (g0 : Guard),
       M.toNat > maxRepUp.toNat →
-      let (m, _, _) := scaleDown128 M e g0
+      let (m, _, _) := scaleDown128Spec M e g0
       m.toNat ≥ (maxRepUp.toNat + 1) / 10 := by
   intro M e g0
-  induction M, e, g0 using scaleDown128.induct with
+  induction M, e, g0 using scaleDown128Spec.induct with
   | case1 M e g0 hcond d IH =>
     intro _hM_gt
     have h10_128 : (10 : UInt128).toNat = 10 := by decide
@@ -187,15 +183,15 @@ theorem scaleDown128_lower_bound :
     by_cases h_next_gt : (M / 10 : UInt128).toNat > maxRepUp.toNat
     · have h_rec := IH h_next_gt
       simp only at h_rec ⊢
-      unfold scaleDown128
+      unfold scaleDown128Spec
       simp only [hcond]
       exact h_rec
     · push Not at h_next_gt
       have h_div_ge : M.toNat / 10 ≥ (maxRepUp.toNat + 1) / 10 :=
         Nat.div_le_div_right _hM_gt
-      unfold scaleDown128
+      unfold scaleDown128Spec
       simp only [hcond]
-      unfold scaleDown128
+      unfold scaleDown128Spec
       have h_next_cond :
           ¬ ((M / 10 : UInt128) > toUInt128 maxRepUp) := by
         intro h_gt_rep

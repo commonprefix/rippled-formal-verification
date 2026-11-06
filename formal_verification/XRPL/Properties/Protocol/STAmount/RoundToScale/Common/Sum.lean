@@ -4,13 +4,12 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 import XRPL.Properties.Protocol.Number.Common.Closest.OpExact
 import XRPL.Properties.Protocol.Number.Common.Closest.DecadeBridge
 
-
-namespace XRPL.Model.Protocol
-
-/-! # Stage A of the `roundToExponent` discrete theorem
+/-! # The reference sum inside `roundToExponent`
 
 Characterizes `value + reference`: the sum lands at `(10^15 + k)·10^s` with
 `k` the per-mode rounding of `|value|/10^s`. -/
+
+namespace XRPL.Model.Protocol
 
 /-- The `×1000` lift of a 16-digit record is normalized. -/
 lemma lift_isNormalized (neg : Bool) (m : UInt64) (e : Int)
@@ -79,9 +78,8 @@ private lemma nat_ceilDiv_cast (a : ℕ) :
 
 set_option maxHeartbeats 3200000 in
 -- single pass through the full two-stage rounding pipeline, 4 modes × 2 signs
-/-- Stage A: the sum of a canonical value (with `mOffset < s`) and the
-reference `±10^15·10^s` is the record `(10^15 + k)·10^s` with `k` the
-per-mode rounding of `|value|/10^s`. -/
+/-- Stage A: the sum of a canonical value with `mOffset < s` and the reference `±10^15·10^s` is the record
+`(10^15 + k)·10^s`, where `k` is the per-mode rounding of `|value|/10^s`. -/
 theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : rounding_mode)
     (hc : value.IOUCanonical) (h_ev : value.mOffset < s)
     (h_s : (-96 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
@@ -108,14 +106,12 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       mant_hi := by show kMinValue.toNat < 10 ^ 16; rw [h_kMin_toNat]; norm_num
       exp_lo := h_s
       exp_hi := h_s_hi }
-  -- Reduce the STAmount add to the Number pipeline.
   rw [STAmount.operator_add_iou_unfold value refA mode hc hcr] at hok
   set neg : Bool := value.mIsNegative with hneg_def
   set v1n : Number := ⟨value.mIsNegative, value.mValue * 10 * 10 * 10, value.mOffset - 3⟩
     with hv1n_def
   set v2n : Number := ⟨refA.mIsNegative, refA.mValue * 10 * 10 * 10, refA.mOffset - 3⟩
     with hv2n_def
-  -- Destructure the chain.
   obtain ⟨n₁, h_add, hok₂⟩ : ∃ n₁, Number.operator_add v1n v2n mode = .ok n₁ ∧
       (match IOUAmount.ofNumber n₁ mode with
        | .error e => (Except.error e : Except Error STAmount)
@@ -133,7 +129,6 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       rw [h_of] at hok₂
       exact ⟨sumI, rfl, hok₂⟩
   clear hok hok₂
-  -- Operand records: normalized, valued, nonzero.
   have hv1_norm : v1n.isNormalized :=
     lift_isNormalized _ _ _ hc.mant_lo hc.mant_hi
       (by have := hc.exp_lo; unfold minExponent; omega)
@@ -284,7 +279,6 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
     linarith
   have hFC : Fσ ≤ Cσ := Int.floor_le_ceil _
   have hCF : Cσ ≤ Fσ + 1 := Int.ceil_le_floor_add_one _
-  -- n₁'s mantissa is nonzero and the record is normalized (mode-cased facts).
   have h_basics : n₁.mantissa_ ≠ 0 ∧ n₁.isNormalized := by
     rcases mode with _ | _ | _ | _
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_ne, h_norm, _⟩ :=
@@ -455,7 +449,6 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
       rcases hn : neg with _ | _ <;> rw [hn] at this <;> simp at this <;> omega
     · have := hM_up rfl
       rcases hn : neg with _ | _ <;> rw [hn] at this <;> simp at this <;> omega
-  -- Pin n₁'s record.
   set M₁ℕ : ℕ := M₁.toNat with hM₁ℕ_def
   have hM₁ℕ_cast : (M₁ℕ : ℤ) = M₁ := Int.toNat_of_nonneg (by omega)
   have h_n₁_abs : |n₁.toRat| = (M₁ℕ : ℚ) * 10 ^ E := by
@@ -512,7 +505,6 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         if_neg (by show ¬ s < cMinOffset; unfold cMinOffset; omega)]
   have h_sumI : sumI = ⟨if n₁.negative_ then -m₁₆.toInt64 else m₁₆.toInt64, s⟩ :=
     Except.ok.inj (h_of.symm.trans h_of_explicit)
-  -- Repack via ofIOU.
   have h_m₁₆_lo : 10 ^ 15 ≤ m₁₆.toNat := by
     rcases mode with _ | _ | _ | _
     · rcases h_m₁₆_tn rfl with h | h <;> rw [h, h_n₁_mant] <;> omega
@@ -553,7 +545,6 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
   have h_sum : sum = ⟨.fractional, m₁₆, s, n₁.negative_⟩ := by
     rw [h_sumI] at h_pack
     exact Except.ok.inj (h_pack.symm.trans h_pack_explicit)
-  -- Cast and composition prework for the k-characterization.
   have h_A_div : A / 10 ^ E = V / 10 ^ E + 10 ^ 18 := by
     rw [hA_def]
     field_simp

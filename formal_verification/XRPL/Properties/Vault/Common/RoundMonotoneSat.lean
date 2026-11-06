@@ -1,23 +1,20 @@
 import XRPL.Properties.Vault.Common.RoundMonotoneCusp
 import XRPL.Properties.Protocol.Number.Common.Rounding.Guard
 
-/-! # `RoundsCuspAware` satisfaction for `operator_mul` / `operator_div`
+/-! # Cusp-aware rounding for `operator_mul` and `operator_div`
 
-Establishes `op x y … = .ok r → r.RoundsCuspAware (truth)`, the linchpin that makes
-`operator_*_mono_of_cuspAware` unconditional. Uses the algorithmic decomposition
-`truth = (zm + f)·10^ze'`, `branchA`/`branchB` to pin the neighbour `r` equals, and
-`no_normalized_in_open_ulp_gap_pos_zm` to bound the *other* neighbour to the cell
-top/bottom (needing no explicit grid-point construction). -/
+A positive `to_nearest` product or quotient is a cusp-aware grid image of its exact value (`RoundsCuspAware`). The
+bounding neighbour comes from the grid gap, so no grid point has to be built. -/
 
 namespace XRPL.Model.Protocol
 
 /-- The upper neighbour of `t` clears the cell top `(k+1)·10^e` when `k·10^e < t`
 and `k` is a valid scaled mantissa. -/
-theorem upper_ge_cell_top (t : ℚ) (U : Number) (hU : Number.upper t = some U)
+private lemma upper_ge_cell_top (t : ℚ) (U : Number) (hU : Number.upper t = some U)
     (k : ℕ) (e : ℤ) (hk_ge : mantissaFloorSucc ≤ k) (hk_lt : k < 10 ^ 19)
     (ht_lo : (k : ℚ) * 10 ^ e < t) :
     ((k : ℚ) + 1) * 10 ^ e ≤ U.toRat := by
-  have hUge : t ≤ U.toRat := Number.upper_ge t U hU
+  have hUge : t ≤ U.toRat := Number.le_upper t U hU
   have hUpos : 0 < U.toRat := lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
   by_contra h
   push Not at h
@@ -26,23 +23,23 @@ theorem upper_ge_cell_top (t : ℚ) (U : Number) (hU : Number.upper t = some U)
 
 /-- The lower neighbour of `t` stays at/below the cell bottom `k·10^e` when
 `t < (k+1)·10^e` and `k` is a valid scaled mantissa. -/
-theorem lower_le_cell_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L)
+private lemma lower_le_cell_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L)
     (k : ℕ) (e : ℤ) (hk_ge : mantissaFloorSucc ≤ k) (hk_lt : k < 10 ^ 19)
     (ht_hi : t < ((k : ℚ) + 1) * 10 ^ e) :
     L.toRat ≤ (k : ℚ) * 10 ^ e := by
   have hLle : L.toRat ≤ t := Number.lower_le t L hL
   by_contra h
-  push Not at h  -- k·10^e < L.toRat
+  push Not at h
   have hLpos : 0 < L.toRat := lt_of_le_of_lt (by positivity) h
   exact no_normalized_in_open_ulp_gap_pos_zm e k hk_ge hk_lt L
     (Number.lower_isNormalized t L hL) hLpos h (lt_of_le_of_lt hLle ht_hi)
 
 /-- Cusp analog: the upper neighbour clears `maxRepUp·10^e` when `maxRep·10^e < t`
 (no representable sits in the width-3 cusp gap). -/
-theorem upper_ge_cusp_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) (e : ℤ)
+private lemma upper_ge_cusp_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) (e : ℤ)
     (ht_lo : (maxRepNat : ℚ) * 10 ^ e < t) :
     (maxRepUpNat : ℚ) * 10 ^ e ≤ U.toRat := by
-  have hUge : t ≤ U.toRat := Number.upper_ge t U hU
+  have hUge : t ≤ U.toRat := Number.le_upper t U hU
   have hmaxR : (maxRep.toNat : ℚ) = (maxRepNat : ℚ) := by rw [maxRep_val]; norm_num
   have hUpos : 0 < U.toRat :=
     lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
@@ -54,7 +51,7 @@ theorem upper_ge_cusp_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) 
 
 /-- Cusp analog: the lower neighbour stays at/below `maxRep·10^e` when
 `t < maxRepUp·10^e`. -/
-theorem lower_le_cusp_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L) (e : ℤ)
+private lemma lower_le_cusp_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L) (e : ℤ)
     (ht_hi : t < (maxRepUpNat : ℚ) * 10 ^ e) :
     L.toRat ≤ (maxRepNat : ℚ) * 10 ^ e := by
   have hLle : L.toRat ≤ t := Number.lower_le t L hL
@@ -69,10 +66,10 @@ theorem lower_le_cusp_bot (t : ℚ) (L : Number) (hL : Number.lower t = some L) 
 
 /-- Coarse analog: above `maxRepUp` the grid step is `10·10^e`, so the upper
 neighbour clears `(maxRepUp+10)·10^e` when `maxRepUp·10^e < t`. -/
-theorem upper_ge_coarse_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) (e : ℤ)
+private lemma upper_ge_coarse_top (t : ℚ) (U : Number) (hU : Number.upper t = some U) (e : ℤ)
     (ht_lo : (maxRepUpNat : ℚ) * 10 ^ e < t) :
     (twoPow63Add12 : ℚ) * 10 ^ e ≤ U.toRat := by
-  have hUge : t ≤ U.toRat := Number.upper_ge t U hU
+  have hUge : t ≤ U.toRat := Number.le_upper t U hU
   have hUpos : 0 < U.toRat := lt_of_lt_of_le (lt_of_le_of_lt (by positivity) ht_lo) hUge
   by_contra h
   push Not at h
@@ -80,10 +77,8 @@ theorem upper_ge_coarse_top (t : ℚ) (U : Number) (hU : Number.upper t = some U
     (by rw [show (maxRepCuspTarget : ℚ) = (maxRepUpNat : ℚ) from by norm_num]
         exact lt_of_lt_of_le ht_lo hUge) h
 
-/-! ## Cusp-interior pushOverflow decision -/
-
 /-- Pushing decimal digit `6` makes the guard round up (top nibble `6 > 5`). -/
-lemma push6_round_one (g : Guard) : (g.push 6).round .to_nearest = 1 := by
+private lemma push6_round_one (g : Guard) : (g.push 6).round .to_nearest = 1 := by
   have h260 : (2 : ℕ) ^ 60 = 1152921504606846976 := by norm_num
   have hd : (g.push 6).digits_.toNat = g.digits_.toNat / 16 + 6 * 2 ^ 60 := by
     rw [toNat_push_digits, show (6 : UInt64).toNat % 16 = 6 from by decide]
@@ -98,128 +93,101 @@ lemma push6_round_one (g : Guard) : (g.push 6).round .to_nearest = 1 := by
     rw [hd, h260] at hz0; omega
   rw [round_to_nearest_def hne, if_pos hgt]
 
-/-- **Cusp-interior down forces `zm = maxRep+1` and `f < ½`.** In the strict cusp
-`maxRep < zm < maxRepUp` (so `zm ∈ {maxRep+1, maxRep+2}`), if `doRoundUp`'s
-pushOverflow-adjusted round decision is `false` (rounds down to `maxRep`), then
-`zm = maxRep+1` and the fractional position is below `½`. At `zm = maxRep+2` the
-overflow digit `6` always rounds up, so `zm = maxRep+2` is excluded; at
-`zm = maxRep+1` the down decision means the midpoint bump did not fire, i.e.
-`g.round ∉ {0,1}`, i.e. `f < ½`. -/
-theorem cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ) (hf : represents g f)
+/-- In the strict cusp `maxRep < zm < maxRepUp`, a decision to round down to `maxRep` forces `zm = maxRep + 1` and
+`f < 1/2`. At `zm = maxRep + 2` the overflow digit `6` always rounds up. -/
+private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
+    (hf_gt : f > 1 / 2 → g.round .to_nearest = 1)
+    (hf_eq : f = 1 / 2 → g.round .to_nearest = 0)
     (hlo : maxRep.toNat < zm.toNat) (hhi : zm.toNat < maxRepUp.toNat)
-    (hdec : ((g.pushOverflow zm .to_nearest).round .to_nearest == 1
-       || ((g.pushOverflow zm .to_nearest).round .to_nearest == 0 && zm % 2 == 1)) = false) :
+    (hdec : ((g.pushOverflowSpec zm .to_nearest).round .to_nearest == 1
+       || ((g.pushOverflowSpec zm .to_nearest).round .to_nearest == 0 && zm % 2 == 1)) = false) :
     zm.toNat = maxRep.toNat + 1 ∧ f < 1 / 2 := by
   have hmaxR : maxRep.toNat = maxRepNat := maxRep_val
   have hmaxRU : maxRepUp.toNat = maxRepUpNat := rfl
   have hcase : zm.toNat = maxRepNat + 1 ∨ zm.toNat = maxRepNat + 2 := by omega
   rcases hcase with hz1 | hz2
-  · -- zm = maxRep + 1
-    have hzeq : zm = 9223372036854775808 := UInt64.toNat_inj.mp (by rw [hz1]; decide)
-    -- the pushOverflow reduces (per the midpoint bump) to `push 6` (bump) or `push 3` (no bump)
+  · have hzeq : zm = 9223372036854775808 := UInt64.toNat_inj.mp (by rw [hz1]; decide)
     have hpo_bump : (g.round .to_nearest == 1 || g.round .to_nearest == 0) = true →
-        g.pushOverflow zm .to_nearest = g.push 6 := by
+        g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       intro hr
-      rw [hzeq]; unfold Guard.pushOverflow
+      rw [hzeq]; unfold Guard.pushOverflowSpec
       rw [if_pos (by decide : maxRep ≤ (9223372036854775808 : UInt64) ∧
         (9223372036854775808 : UInt64) < maxRepUp)]
       simp only [show ((9223372036854775808 : UInt64) % 10 < 9) = true from by decide, if_true,
         show (maxRep + (maxRepUp - maxRep) / 2) = (9223372036854775808 : UInt64) from by decide,
         show ((9223372036854775808 : UInt64) == 9223372036854775808) = true from by decide,
         Bool.and_true, if_pos hr,
-        show ((9223372036854775808 : UInt64) + 1 == maxRep) = false from by decide,
-        Bool.false_eq_true, if_false,
         show ((9223372036854775808 : UInt64) + 1 - maxRep) * 10 / (maxRepUp - maxRep) = 6 from by decide]
-    -- decision false forces the ¬bump branch; bump would push 6 → decision true
     have hnobump : ¬ ((g.round .to_nearest == 1 || g.round .to_nearest == 0) = true) := by
       intro hr
       rw [hpo_bump hr, push6_round_one] at hdec
       simp only [beq_self_eq_true, Bool.true_or] at hdec
       exact absurd hdec (by decide)
-    -- g.round ∉ {0,1}
     simp only [Bool.not_eq_true, Bool.or_eq_false_iff, beq_eq_false_iff_ne] at hnobump
     obtain ⟨hr1, hr0⟩ := hnobump
     have hflt : f < 1 / 2 := by
       by_contra h; push Not at h
       rcases lt_or_eq_of_le h with hgt | heq
-      · exact hr1 (represents_f_gt_half hf hgt)
-      · -- f = 1/2 → round = 0, contradiction
-        by_cases hemp : g.empty = true
-        · have : f = 0 := by
-            obtain ⟨hdd, hxx⟩ : g.digits_ = 0 ∧ g.xbit_ = false := by
-              have h' : (g.digits_ == 0 && !g.xbit_) = true := hemp
-              rw [Bool.and_eq_true] at h'; exact ⟨beq_iff_eq.mp h'.1, by simpa using h'.2⟩
-            exact represents_eq_zero_of_digits_zero_xbit_false hdd hxx hf
-          rw [this] at heq; norm_num at heq
-        · have hround0 : g.round .to_nearest = 0 :=
-            (round_correct (by simpa using hemp) hf).2.2.mpr heq.symm
-          exact hr0 hround0
+      · exact hr1 (hf_gt hgt)
+      · exact hr0 (hf_eq heq.symm)
     exact ⟨by omega, hflt⟩
-  · -- zm = maxRep + 2: decision always true, contradicting hdec
-    exfalso
+  · exfalso
     have hzeq : zm = 9223372036854775809 := UInt64.toNat_inj.mp (by rw [hz2]; decide)
-    have hpo : g.pushOverflow zm .to_nearest = g.push 6 := by
+    have hpo : g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       rw [hzeq]
-      unfold Guard.pushOverflow
+      unfold Guard.pushOverflowSpec
       rw [if_pos (by decide : maxRep ≤ (9223372036854775809 : UInt64) ∧
         (9223372036854775809 : UInt64) < maxRepUp)]
       simp only [show ((9223372036854775809 : UInt64) % 10 < 9) = false from by decide,
         Bool.false_eq_true, if_false]
-      rw [show ((9223372036854775809 : UInt64) == maxRep) = false from by decide, if_neg (by decide),
-        show ((9223372036854775809 : UInt64) - maxRep) * 10 / (maxRepUp - maxRep) = 6 from by decide]
+      rw [show ((9223372036854775809 : UInt64) - maxRep) * 10 / (maxRepUp - maxRep) = 6 from by decide]
     rw [hpo, push6_round_one] at hdec
     simp only [beq_self_eq_true, Bool.true_or] at hdec
     exact absurd hdec (by decide)
 
-/-! ## `RoundsCuspAware` satisfaction for `operator_mul` -/
-
-/-- **`operator_mul` produces a cusp-aware grid image.** For normalized nonzero
-factors with a positive product and a nonzero result, the rounded product is
-`RoundsCuspAware` of the exact product — the property that makes rounding monotone
-across every band, including the cusp exact-tie. -/
-theorem operator_mul_roundsCuspAware (x y r : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hxm : x.mantissa_ ≠ 0) (hym : y.mantissa_ ≠ 0)
-    (hok : Number.operator_mul x y .to_nearest = .ok r) (hrm : r.mantissa_ ≠ 0)
-    (hpos : 0 < x.toRat * y.toRat) :
-    r.RoundsCuspAware (x.toRat * y.toRat) := by
-  obtain ⟨zm, ze', f, g, res_pos, hF⟩ :=
-    operator_mul_algorithmic_facts_to_nearest x y r hx hy hxm hym hok hrm
-  set t : ℚ := x.toRat * y.toRat with htdef
-  have h10 : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
-  have ht_val : t = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
-    rw [← abs_of_pos hpos]; exact hF.value_eq
-  have hrnn : 0 ≤ r.toRat := mul_result_nonneg_of_truth_pos x y r hF.result_neg hpos
+/-- A positive `to_nearest` result of `doRoundUp` on `(zm + f)·10^ze'` is a cusp-aware grid image of that value, given
+the round decision facts and the two rounding branches of the operation. -/
+lemma roundsCuspAware_of_doRoundUp (t : ℚ) (r : Number) (zm : UInt64) (ze' : ℤ) (f : ℚ) (g : Guard)
+    (res_pos : RoundResult) (loc : Error)
+    (hpos : 0 < t) (ht_val : t = ((zm.toNat : ℚ) + f) * 10 ^ ze') (hrnn : 0 ≤ r.toRat)
+    (hresult_abs : |r.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_)
+    (hrounds : g.doRoundUp false zm ze' largeRange.min largeRange.max .to_nearest loc = .ok res_pos)
+    (hres_ne : res_pos.mantissa_ ≠ 0)
+    (hf_nn : 0 ≤ f) (hf_lt : f < 1)
+    (hzm_ge_floor : mantissaFloor ≤ zm.toNat) (hzm_le_maxRepUp : zm.toNat ≤ maxRepUp.toNat)
+    (hfloor_cusp : zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f)
+    (hround_one : g.round .to_nearest = 1 → f > 1 / 2)
+    (hround_zero : g.round .to_nearest = 0 → f = 1 / 2)
+    (hf_gt_half : f > 1 / 2 → g.round .to_nearest = 1)
+    (hf_eq_half : f = 1 / 2 → g.round .to_nearest = 0)
+    (hbelow : r.toRat ≤ t → ∃ L, Number.lower t = some L ∧ r.toRat = L.toRat)
+    (habove : t ≤ r.toRat → ∃ U, Number.upper t = some U ∧ r.toRat = U.toRat) :
+    r.RoundsCuspAware t := by
   have hmpos : 0 < (res_pos.mantissa_.toNat : ℚ) := by
     have : res_pos.mantissa_.toNat ≠ 0 := fun h =>
-      hF.res_mant_ne (UInt64.toNat_inj.mp (by rw [h]; rfl))
+      hres_ne (UInt64.toNat_inj.mp (by rw [h]; rfl))
     exact_mod_cast Nat.pos_of_ne_zero this
   have hrpos : 0 < r.toRat := by
     rcases lt_or_eq_of_le hrnn with h | h
     · exact h
-    · exfalso; have := hF.result_abs; rw [← h, abs_zero] at this
+    · exfalso; have := hresult_abs; rw [← h, abs_zero] at this
       have : (0 : ℚ) < (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ :=
         mul_pos hmpos (zpow_pos (by norm_num) _)
-      linarith [hF.result_abs ▸ this, h]
+      linarith [hresult_abs ▸ this, h]
   have hr_val : r.toRat = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
-    rw [← abs_of_pos hrpos]; exact hF.result_abs
-  -- fractional facts
-  have hf_nn := hF.f_nonneg
-  have hf_lt := hF.f_lt_one
+    rw [← abs_of_pos hrpos]; exact hresult_abs
   -- f ≤ 1/2 whenever the guard does not decide to round up (regular)
   have hf_le_of_noRU : ¬ g.shouldRoundUp_to_nearest zm → f ≤ 1 / 2 := by
     intro hru
     by_contra h; push Not at h
-    exact hru (Or.inl (represents_f_gt_half hF.represents_f h))
+    exact hru (Or.inl (hf_gt_half h))
   have hmaxRq : (maxRep.toNat : ℚ) = (maxRepNat : ℚ) := by exact_mod_cast maxRep_val
   have hpow : ∀ e : ℤ, (0 : ℚ) < 10 ^ e := fun e => zpow_pos (by norm_num) e
   have hUpNat : (maxRepUpNat : ℚ) = (maxRepNat : ℚ) + 3 := by norm_num
   by_cases hdir : r.toRat ≤ t
   · -- DOWN
     left
-    have hnoinb := operator_mul_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hrm hdir
-    obtain ⟨L, hL, hLeq⟩ :=
-      operator_mul_rounded_branchA x y r hx hy hxm hym hok hrm hdir hnoinb
+    obtain ⟨L, hL, hLeq⟩ := hbelow hdir
     refine ⟨L, hL, hLeq, ?_⟩
     intro U hU
     have closeDown : ∀ (V T zc : ℚ) (e : ℤ), t = zc * 10 ^ e → r.toRat = V * 10 ^ e →
@@ -234,29 +202,19 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         · -- regular roundUp: value (zm+1)·10^ze' > t, contra DOWN
           exfalso
           have hval := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' hru hcusp
-            .overflow res_pos hF.rounds hF.res_mant_ne
+            loc res_pos hrounds hres_ne
           have hV : r.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hr_val.trans hval
           rw [hV, ht_val] at hdir
           have := le_of_mul_le_mul_right hdir (hpow ze'); linarith [hf_lt]
-        · -- zm = maxRep, roundUp: round = 1 (tie → maxRepUp > t)
+        · -- zm = maxRep: `doRoundUp` keeps `maxRep`, and the round-up request means `f > 0`
           have hzm_eq : zm.toNat = maxRep.toNat := by omega
           have hzmU : zm = maxRep := UInt64.toNat_inj.mp hzm_eq
           have hzmq : (zm.toNat : ℚ) = (maxRepNat : ℚ) := by exact_mod_cast (hzm_eq.trans maxRep_val)
-          have hround1 : g.round .to_nearest = 1 := by
-            rcases hru with h1 | ⟨h0, hodd⟩
-            · exact h1
-            · exfalso
-              have hval := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' hzmU ⟨h0, hodd⟩
-                .overflow res_pos hF.rounds hF.res_mant_ne
-              have hV : r.toRat = (maxRepCuspTarget : ℚ) * 10 ^ ze' := hr_val.trans hval
-              rw [hV, ht_val] at hdir
-              have hc : (maxRepCuspTarget : ℚ) = (zm.toNat : ℚ) + 3 := by rw [hzmq]; norm_num
-              rw [hc] at hdir
-              have := le_of_mul_le_mul_right hdir (hpow ze'); linarith [hf_lt]
           have hfpos : (0 : ℚ) < f := by
-            have := represents_round_eq_one hF.represents_f hround1; linarith
-          have hval := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' hzmU hround1
-            .overflow res_pos hF.rounds hF.res_mant_ne
+            rcases hru with h1 | ⟨h0, _⟩
+            · have := hround_one h1; linarith
+            · have := hround_zero h0; linarith
+          have hval := doRoundUp_value_to_nearest_maxRep g zm ze' hzmU loc res_pos hrounds hres_ne
           have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by
             rw [hr_val, hval, hmaxRq]
           have hUb : (maxRepUpNat : ℚ) * 10 ^ ze' ≤ U.toRat :=
@@ -267,17 +225,17 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
       · -- no roundUp: value zm·10^ze', f ≤ 1/2
         have hf_le := hf_le_of_noRU hru
         have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-          .overflow res_pos hF.rounds hF.res_mant_ne
+          loc res_pos hrounds hres_ne
         have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
         have hzm_ge : mantissaFloorSucc ≤ zm.toNat := by
           by_contra h; push Not at h
-          have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
-          have := hF.floor_cusp hzf; linarith [hf_le]
+          have hzf : zm.toNat = mantissaFloor := by have := hzm_ge_floor; omega
+          have := hfloor_cusp hzf; linarith [hf_le]
         have hzm_lt : zm.toNat < 10 ^ 19 := by
-          have := hF.zm_le_maxRepUp
+          have := hzm_le_maxRepUp
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at this; omega
         by_cases hf0 : f = 0
-        · have hUb : t ≤ U.toRat := Number.upper_ge t U hU
+        · have hUb : t ≤ U.toRat := Number.le_upper t U hU
           have hLv : L.toRat = t := by rw [← hLeq, hV, ht_val, hf0]; ring
           rw [hLv]; linarith [hUb]
         · have hUb : ((zm.toNat : ℚ) + 1) * 10 ^ ze' ≤ U.toRat :=
@@ -288,7 +246,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
             ht_val hV hUb (by linarith [hf_le])
     · -- zm > maxRep (cusp interior / maxRepUp)
       push Not at hzm_le_rep
-      have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
+      have hzm_le : zm.toNat ≤ maxRepUp.toNat := hzm_le_maxRepUp
       have hzmq_ge : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
         have : maxRepNat < zm.toNat := by rw [maxRep_val] at hzm_le_rep; exact hzm_le_rep
         exact_mod_cast this
@@ -297,12 +255,12 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           rw [show maxRepUp.toNat = maxRepUpNat from rfl] at hzm_le; exact hzm_le
         exact_mod_cast this
       obtain ⟨v, hvval, hvcases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .to_nearest
-        hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
+        hzm_le_rep hzm_le loc res_pos hrounds hres_ne
       have hrv : r.toRat = (v : ℚ) * 10 ^ ze' := hr_val.trans hvval
       have hA : (0 : ℚ) < 10 ^ ze' := hpow ze'
       rcases hvcases with ⟨hv, hzlt, hdecf⟩ | ⟨hv, hsub⟩ | ⟨hv, hzeqU, _⟩
       · -- v = maxRep (down): zm = maxRep+1, f < 1/2
-        obtain ⟨hzm1, hflt⟩ := cusp_interior_down_forces g zm f hF.represents_f hzm_le_rep hzlt hdecf
+        obtain ⟨hzm1, hflt⟩ := cusp_interior_down_forces g zm f hf_gt_half hf_eq_half hzm_le_rep hzlt hdecf
         have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by rw [hrv, hv]
         have hUb : (maxRepUpNat : ℚ) * 10 ^ ze' ≤ U.toRat :=
           upper_ge_cusp_top t U hU ze'
@@ -318,7 +276,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           have hzmU : (zm.toNat : ℚ) = (maxRepUpNat : ℚ) :=
             by exact_mod_cast (hzeqU.trans (rfl : maxRepUp.toNat = maxRepUpNat))
           by_cases hf0 : f = 0
-          · have hUb : t ≤ U.toRat := Number.upper_ge t U hU
+          · have hUb : t ≤ U.toRat := Number.le_upper t U hU
             have hLv : L.toRat = t := by rw [← hLeq, hV, ht_val, hzmU, hf0]; ring
             rw [hLv]; linarith [hUb]
           · have hfpos : (0 : ℚ) < f := lt_of_le_of_ne hf_nn (Ne.symm hf0)
@@ -339,8 +297,8 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         exfalso
         have hzmU : (zm.toNat : ℚ) = (maxRepUpNat : ℚ) :=
           by exact_mod_cast (hzeqU.trans (rfl : maxRepUp.toNat = maxRepUpNat))
-        have hbound := doRoundUp_rounds_to_nearest_supTight_cusp g zm ze' f hF.represents_f
-          hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
+        have hbound := doRoundUp_rounds_to_nearest_supTight_cusp_bounds g zm ze' f hf_nn hf_lt.le
+          hzm_le_rep hzm_le loc res_pos hrounds hres_ne
         rw [hvval, hv, hzmU] at hbound
         have habs : |((maxRepNat : ℚ) + 13) * 10 ^ ze' - ((maxRepUpNat : ℚ) + f) * 10 ^ ze'|
             = (10 - f) * 10 ^ ze' := by
@@ -360,9 +318,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
   · -- UP
     push Not at hdir
     right
-    have hnoinb := operator_mul_no_inbetween_above x y r hx hy hxm hym hok hrm (le_of_lt hdir)
-    obtain ⟨U, hU, hUeq⟩ :=
-      operator_mul_rounded_branchB x y r hx hy hxm hym hok hrm (le_of_lt hdir) hnoinb
+    obtain ⟨U, hU, hUeq⟩ := habove (le_of_lt hdir)
     refine ⟨U, hU, hUeq, ?_⟩
     intro L hL
     have closeUp : ∀ (V B zc : ℚ) (e : ℤ), t = zc * 10 ^ e → U.toRat = V * 10 ^ e →
@@ -387,7 +343,7 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
       intro zc e htv
       by_contra h; push Not at h
       have : t ≤ 0 := by rw [htv]; exact mul_nonpos_of_nonpos_of_nonneg h (le_of_lt (hpow e))
-      exact absurd hpos (by rw [htdef] at this ⊢; linarith)
+      linarith
     have closeUpMid : ∀ (V B zc : ℚ) (e : ℤ), t = zc * 10 ^ e → U.toRat = V * 10 ^ e →
         L.toRat ≤ B * 10 ^ e → B + V ≤ 2 * zc →
         2 * t * ((maxRepNat : ℚ) + 1) > (maxRepNat : ℚ) * (L.toRat + U.toRat) := by
@@ -400,26 +356,26 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
     have hUv0 : U.toRat = r.toRat := hUeq.symm
     by_cases hzm_le_rep : zm.toNat ≤ maxRep.toNat
     · by_cases hcusp : zm.toNat + 1 ≤ maxRep.toNat
-      · -- regular: UP forces roundUp; value (zm+1)·10^ze'
+      · -- regular: UP forces roundUp, value (zm+1)·10^ze'
         have hru : g.shouldRoundUp_to_nearest zm := by
           by_contra hru
           have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-            .overflow res_pos hF.rounds hF.res_mant_ne
+            loc res_pos hrounds hres_ne
           have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
           rw [hV, ht_val] at hdir
           have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
         have hf_ge : 1 / 2 ≤ f := by
           rcases hru with h1 | ⟨h0, _⟩
-          · exact le_of_lt (represents_round_eq_one hF.represents_f h1)
-          · exact le_of_eq (represents_round_eq_zero hF.represents_f h0).symm
+          · exact le_of_lt (hround_one h1)
+          · exact le_of_eq (hround_zero h0).symm
         have hval := doRoundUp_value_to_nearest_roundUp_noCusp g zm ze' hru hcusp
-          .overflow res_pos hF.rounds hF.res_mant_ne
+          loc res_pos hrounds hres_ne
         have hV : r.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hr_val.trans hval
         have hUv : U.toRat = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := hUv0.trans hV
         by_cases hzm_ge : mantissaFloorSucc ≤ zm.toNat
         · -- fine cell
           have hzm_lt : zm.toNat < 10 ^ 19 := by
-            have := hF.zm_le_maxRepUp
+            have := hzm_le_maxRepUp
             rw [show maxRepUp.toNat = maxRepUpNat from rfl] at this; omega
           have hLb : L.toRat ≤ (zm.toNat : ℚ) * 10 ^ ze' :=
             lower_le_cell_bot t L hL zm.toNat ze' hzm_ge hzm_lt
@@ -428,8 +384,8 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
             ht_val hUv hLb (by linarith [hf_ge])
         · -- floor band: zm = mantissaFloor, cusp cell at ze'-1
           push Not at hzm_ge
-          have hzf : zm.toNat = mantissaFloor := by have := hF.zm_ge_floor; omega
-          have hff : (8 : ℚ) / 10 ≤ f := hF.floor_cusp hzf
+          have hzf : zm.toNat = mantissaFloor := by have := hzm_ge_floor; omega
+          have hff : (8 : ℚ) / 10 ≤ f := hfloor_cusp hzf
           have hzfq : (zm.toNat : ℚ) = (922337203685477580 : ℚ) := by rw [hzf]; norm_num
           have hpowsplit : (10 : ℚ) ^ ze' = 10 ^ (ze' - 1) * 10 := by
             rw [eq_comm, ← zpow_add_one₀ (by norm_num : (10 : ℚ) ≠ 0)]; congr 1; ring
@@ -448,50 +404,24 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
             linarith [h1, hff]
           exact closeUp (maxRepUpNat : ℚ) (maxRepNat : ℚ) ((maxRepNat : ℚ) - 7 + 10 * f) (ze' - 1)
             htvE hUvE hLbE hfhcore
-      · -- zm = maxRep: UP forces round = 0 (tie); value maxRepUp
+      · -- zm = maxRep: `doRoundUp` keeps `maxRep`, which is not above t
+        exfalso
         have hzm_eq : zm.toNat = maxRep.toNat := by omega
         have hzmU : zm = maxRep := UInt64.toNat_inj.mp hzm_eq
         have hzmq : (zm.toNat : ℚ) = (maxRepNat : ℚ) := by exact_mod_cast (hzm_eq.trans maxRep_val)
-        have hround0 : g.round .to_nearest = 0 ∧ zm % 2 = 1 := by
-          -- shouldRoundUp holds (UP), and round=1 gives value maxRep ≤ t (DOWN), excluded
-          have hru : g.shouldRoundUp_to_nearest zm := by
-            by_contra hru
-            have hval := doRoundUp_value_no_roundUp g zm ze' hru hzm_le_rep
-              .overflow res_pos hF.rounds hF.res_mant_ne
-            have hV : r.toRat = (zm.toNat : ℚ) * 10 ^ ze' := hr_val.trans hval
-            rw [hV, ht_val] at hdir
-            have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
-          rcases hru with h1 | ⟨h0, hodd⟩
-          · exfalso
-            have hval := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' hzmU h1
-              .overflow res_pos hF.rounds hF.res_mant_ne
-            have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by rw [hr_val, hval, hmaxRq]
-            rw [hV, ht_val, hzmq] at hdir
-            have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
-          · exact ⟨h0, hodd⟩
-        have hfeq : f = 1 / 2 := represents_round_eq_zero hF.represents_f hround0.1
-        have hval := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' hzmU hround0
-          .overflow res_pos hF.rounds hF.res_mant_ne
-        have hUv : U.toRat = (maxRepUpNat : ℚ) * 10 ^ ze' := by rw [hUv0, hr_val, hval]
-        have hLb : L.toRat ≤ (maxRepNat : ℚ) * 10 ^ ze' :=
-          lower_le_cusp_bot t L hL ze'
-            (by rw [ht_val, hzmq, hfeq]; exact mul_lt_mul_of_pos_right (by linarith [hUpNat]) (hpow ze'))
-        have htiehcore : (maxRepNat : ℚ) * ((maxRepNat : ℚ) + (maxRepUpNat : ℚ)
-            - 2 * ((zm.toNat : ℚ) + f)) < 2 * ((zm.toNat : ℚ) + f) := by
-          rw [hzmq, hfeq, hUpNat]
-          have h1 : (maxRepNat : ℚ) + ((maxRepNat : ℚ) + 3) - 2 * ((maxRepNat : ℚ) + 1 / 2) = 2 := by ring
-          rw [h1]; norm_num
-        exact closeUp (maxRepUpNat : ℚ) (maxRepNat : ℚ) ((zm.toNat : ℚ) + f) ze'
-          ht_val hUv hLb htiehcore
-    · -- zm > maxRep: cusp interior UP (zm ∈ {maxRep+1, maxRep+2}); value maxRepUp
+        have hval := doRoundUp_value_to_nearest_maxRep g zm ze' hzmU loc res_pos hrounds hres_ne
+        have hV : r.toRat = (maxRepNat : ℚ) * 10 ^ ze' := by rw [hr_val, hval, hmaxRq]
+        rw [hV, ht_val, hzmq] at hdir
+        have := lt_of_mul_lt_mul_right hdir (le_of_lt (hpow ze')); linarith [hf_nn]
+    · -- zm > maxRep: cusp interior UP (zm ∈ {maxRep+1, maxRep+2}), value maxRepUp
       push Not at hzm_le_rep
-      have hzm_le : zm.toNat ≤ maxRepUp.toNat := hF.zm_le_maxRepUp
+      have hzm_le : zm.toNat ≤ maxRepUp.toNat := hzm_le_maxRepUp
       have hA : (0 : ℚ) < 10 ^ ze' := hpow ze'
       have hzmq_ge : (maxRepNat : ℚ) + 1 ≤ (zm.toNat : ℚ) := by
         have : maxRepNat + 1 ≤ zm.toNat := by rw [maxRep_val] at hzm_le_rep; omega
         exact_mod_cast this
       obtain ⟨v, hvval, hvcases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .to_nearest
-        hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
+        hzm_le_rep hzm_le loc res_pos hrounds hres_ne
       have hrv : r.toRat = (v : ℚ) * 10 ^ ze' := hr_val.trans hvval
       -- the interior closer: from zm < maxRepUp and V = maxRepUp, B = maxRep
       have finishInterior : (zm.toNat : ℚ) ≤ (maxRepNat : ℚ) + 2 →
@@ -531,8 +461,8 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
         exfalso
         have hzmU : (zm.toNat : ℚ) = (maxRepUpNat : ℚ) :=
           by exact_mod_cast (hzeqU.trans (rfl : maxRepUp.toNat = maxRepUpNat))
-        have hbound := doRoundUp_rounds_to_nearest_supTight_cusp g zm ze' f hF.represents_f
-          hzm_le_rep hzm_le .overflow res_pos hF.rounds hF.res_mant_ne
+        have hbound := doRoundUp_rounds_to_nearest_supTight_cusp_bounds g zm ze' f hf_nn hf_lt.le
+          hzm_le_rep hzm_le loc res_pos hrounds hres_ne
         rw [hvval, hv, hzmU] at hbound
         have habs : |((maxRepNat : ℚ) + 13) * 10 ^ ze' - ((maxRepUpNat : ℚ) + f) * 10 ^ ze'|
             = (10 - f) * 10 ^ ze' := by
@@ -549,5 +479,26 @@ theorem operator_mul_roundsCuspAware (x y r : Number)
           rw [← mul_div_assoc, div_lt_iff₀ (by norm_num : (0:ℚ) < 9223372036854775815)]
           nlinarith [hf_lt]
         linarith [hcancel, hrhs, hf_lt]
+
+/-- A positive `to_nearest` product of nonzero normalized factors is a cusp-aware grid image of the exact product. -/
+lemma operator_mul_roundsCuspAware (x y r : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hxm : x.mantissa_ ≠ 0) (hym : y.mantissa_ ≠ 0)
+    (hok : Number.operator_mul x y .to_nearest = .ok r) (hrm : r.mantissa_ ≠ 0)
+    (hpos : 0 < x.toRat * y.toRat) :
+    r.RoundsCuspAware (x.toRat * y.toRat) := by
+  obtain ⟨zm, ze', f, g, res_pos, hF⟩ :=
+    operator_mul_algorithmic_facts_to_nearest x y r hx hy hxm hym hok hrm
+  have hrep := hF.represents_f
+  exact roundsCuspAware_of_doRoundUp _ r zm ze' f g res_pos .overflow hpos
+    (by rw [← abs_of_pos hpos]; exact hF.value_eq)
+    (mul_result_nonneg_of_truth_pos x y r hF.result_neg hpos) hF.result_abs hF.rounds hF.res_mant_ne
+    hF.f_nonneg hF.f_lt_one hF.zm_ge_floor hF.zm_le_maxRepUp hF.floor_cusp
+    (represents_round_eq_one hrep) (represents_round_eq_zero hrep) (represents_f_gt_half hrep)
+    (represents_half_round_eq_zero hrep)
+    (fun hdir => operator_mul_rounded_branchA x y r hx hy hxm hym hok hrm hdir
+      (operator_mul_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hrm hdir))
+    (fun hdir => operator_mul_rounded_branchB x y r hx hy hxm hym hok hrm hdir
+      (operator_mul_no_inbetween_above x y r hx hy hxm hym hok hrm hdir))
 
 end XRPL.Model.Protocol

@@ -7,8 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between the quotient and
-`result.toRat`. -/
+/-- No normalized Number lies at or above the quotient and below `result.toRat`. -/
 theorem operator_div_no_inbetween_above_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -46,10 +45,8 @@ theorem operator_div_no_inbetween_above_upward (x y result : Number)
     h_ge
 
 
-/-- `operator_div` under `.upward` is **correctly rounded**: the result is
-`Number.upper` of the exact quotient. A zero numerator is excluded
-automatically by `hresult`; `hresult` itself is essential (the underflow flush
-ignores the direction). -/
+/-- A nonzero `operator_div` result under `.upward` is correctly rounded, equal to `Number.upper` of the exact
+quotient. The nonzero condition is needed because the underflow flush ignores the direction. -/
 theorem operator_div_rounded_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .upward = .ok result)

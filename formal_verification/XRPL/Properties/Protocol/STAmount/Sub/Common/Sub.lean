@@ -1,13 +1,11 @@
 import XRPL.Properties.Protocol.STAmount.Sub.Common.Neg
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 
+/-! # Integral subtraction exactness
+
+`operator_sub v1 v2` is `operator_add v1 (operator_neg v2)`, so subtraction reuses the addition results. -/
+
 namespace XRPL.Model.Protocol
-
-/-! ## Subtraction engines
-
-`operator_sub v1 v2 = operator_add v1 (operator_neg v2)`, so each subtraction
-exactness result is the corresponding addition engine applied to the negated
-second operand (which stays canonical and keeps its magnitude). -/
 
 /-- Integral (XRP/MPT) subtraction is exact. -/
 theorem STAmount.operator_sub_integral_exact (v1 v2 result : STAmount) (mode : rounding_mode)

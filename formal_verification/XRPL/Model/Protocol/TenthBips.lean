@@ -7,7 +7,7 @@ abbrev TenthBips32 := UInt32
 abbrev TenthBips16 := UInt16
 
 def TenthBips32.toNumber (bips : TenthBips32) : Number :=
-  Number.ofInt64 bips.toUInt64.toInt64
+  Number.ofInt64 bips.toInt64
 
 def TenthBips16.toTenthBips32 (bips : TenthBips16) : TenthBips32 := bips.toUInt32
 

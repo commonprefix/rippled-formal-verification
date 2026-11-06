@@ -5,13 +5,10 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeNeg
 import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 import XRPL.Properties.Protocol.Number.Common.GridNeighbors
 
-/-! # IOU addition is within **1 ULP** for the directed modes
+/-! # IOU addition is within 1 ULP for the directed modes
 
-The directed double rounding (19-digit `Number` sum, then the 16-digit
-`IOUAmount.ofNumber` re-round) does not compound: the sum is correctly rounded
-(`operator_add_rounded_*`), the re-round is an exact fixed-scale ceiling/floor, and
-`Number.upper`/`lower` minimality bounds `result` to within one ULP of the exact sum.
-Same argument as `STAmount.Mul.Common.DirectedTight`, split by the sign of the sum. -/
+The directed double rounding does not compound: the `Number` sum is correctly rounded, the 16-digit re-round is
+an exact ceiling or floor, and `Number.upper`/`lower` minimality keeps `result` within one ULP. -/
 
 namespace XRPL.Model.Protocol
 
@@ -121,7 +118,7 @@ private lemma directed_grid_facts_neg (mant : Int64) (exp : ℤ)
 
 set_option maxHeartbeats 400000 in
 -- the per-mode re-rounding and minimality algebra exceeds the default heartbeat budget
-/-- **Directed IOU addition of a non-negative exact sum is within 1 ULP.** -/
+/-- Directed IOU addition of a non-negative exact sum is within 1 ULP. -/
 lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hmode : mode = .upward ∨ mode = .downward ∨ mode = .towards_zero)
@@ -327,8 +324,8 @@ lemma Number.RoundsToRepresentable.neg_of_neg (s : Number) (t : ℚ) (mode : rou
     linarith
 
 set_option maxHeartbeats 400000 in
--- negative mirror: `downward` = magnitude ceiling, `upward`/`towards_zero` = magnitude floor
-/-- **Directed IOU addition of a non-positive exact sum is within 1 ULP.** -/
+-- negative sum: `downward` is the magnitude ceiling, `upward` and `towards_zero` the magnitude floor
+/-- Directed IOU addition of a non-positive exact sum is within 1 ULP. -/
 lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hmode : mode = .upward ∨ mode = .downward ∨ mode = .towards_zero)

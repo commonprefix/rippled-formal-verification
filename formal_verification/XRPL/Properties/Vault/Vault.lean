@@ -1,5 +1,5 @@
 import XRPL.Properties.Vault.Defs
-import XRPL.Properties.Vault.Common.State
+import XRPL.Properties.Vault.Common.GuardProofs
 
 /-! # `Vault.isInsolvent`
 

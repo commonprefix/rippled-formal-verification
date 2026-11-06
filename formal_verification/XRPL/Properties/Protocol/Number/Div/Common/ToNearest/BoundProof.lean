@@ -10,12 +10,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Division rounding bound (`.to_nearest`)
 
-The staged `operator_div` routes through `doNormalize128` with an exact sticky
-flag, so the bound is the `doNormalize128` to-nearest keystone constant
-`6/(2^63 − 3)`: the algorithmic facts package the quotient state as keystone
-inputs `(M, ze', δ, zn, sticky)`, the keystone delivers the relative bound on
-`|result.toRat|` plus the sign fact `result.negative_ = zn`, and the sign
-facts of the quotient collapse `|result.toRat - Q|` to `||result.toRat| - |Q||`. -/
+`operator_div` ends in `doNormalize128` with an exact sticky flag, so the bound is the general `doNormalize128`
+to-nearest bound `6/(2^63 − 3)`, applied to the quotient state from the division facts. -/
 
 theorem operator_div_rounding_bound_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)

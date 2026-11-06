@@ -7,10 +7,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Helper lemmas about `Number.toRat` and absolute-difference reasoning.
 
-These are the basic facts about how `Number.toRat` interacts with sign,
-absolute value, and multiplication. They're used to reduce the signed
-rational arithmetic in `operator_mul_rounding_bound_to_nearest` to non-negative
-mantissa arithmetic over `ℚ`. -/
+Basic facts about how `Number.toRat` interacts with sign, absolute value, negation and
+multiplication. -/
 
 /-- `Number.zero.toRat = 0`, immediate from the `mantissa = 0` guard. -/
 lemma Number.toRat_zero : Number.zero.toRat = 0 := by
@@ -25,8 +23,7 @@ lemma Number.isNormalized.mantissaBounds {n : Number}
   · exact ⟨hmin, hmax⟩
 
 /-- The normalized mantissa `.toNat` bounds `[10^18, 10^19)`, derived from the
-`UInt64` `mantissaBounds` pair. Absorbs the recurring `UInt64.le_iff_toNat_le …
-rw [largeRange_min_val/max_val]` extraction blocks. -/
+`UInt64` `mantissaBounds` pair. -/
 lemma mantissaBounds_nat_of {n : Number}
     (hb : largeRange.min ≤ n.mantissa_ ∧ n.mantissa_ ≤ largeRange.max) :
     10 ^ 18 ≤ n.mantissa_.toNat ∧ n.mantissa_.toNat < 10 ^ 19 := by
@@ -210,10 +207,7 @@ lemma Number.toRat_eq_zero_iff_eq_zero {n : Number} (hn : n.isNormalized) :
   · intro h; exact Number.eq_zero_of_mantissa_zero n hn (Number.toRat_eq_zero_iff.mp h)
   · intro h; rw [h, Number.toRat_zero]
 
-/-- `n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0`, the contrapositive of `toRat_eq_zero_iff`.
-Absorbs the recurring "mantissa is nonzero because the value is nonzero/pos/neg"
-inline blocks: feed it `h.ne'` (from `0 < toRat`), `h.ne` (from `toRat < 0`), or a
-`toRat ≠ 0` directly. -/
+/-- `n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0`, the contrapositive of `toRat_eq_zero_iff`. -/
 lemma Number.mantissa_ne_zero_iff {n : Number} : n.mantissa_ ≠ 0 ↔ n.toRat ≠ 0 :=
   (not_congr Number.toRat_eq_zero_iff).symm
 
@@ -222,8 +216,7 @@ lemma Number.mantissa_ne_zero_of_toRat_ne_zero {n : Number} (h : n.toRat ≠ 0) 
     n.mantissa_ ≠ 0 :=
   Number.mantissa_ne_zero_iff.mpr h
 
-/-- `x.operator_eq Number.zero` forces a zero mantissa. Absorbs the recurring
-3-line `unfold operator_eq … ; simp … ; obtain ⟨⟨_, ·⟩, _⟩` incantation. -/
+/-- `x.operator_eq Number.zero` forces a zero mantissa. -/
 lemma Number.mantissa_eq_zero_of_operator_eq_zero {x : Number}
     (h : x.operator_eq Number.zero = true) : x.mantissa_ = 0 := by
   unfold Number.operator_eq Number.zero at h
@@ -231,14 +224,12 @@ lemma Number.mantissa_eq_zero_of_operator_eq_zero {x : Number}
   obtain ⟨⟨_, hmeq⟩, _⟩ := h
   exact hmeq
 
-/-- A nonzero mantissa rules out `operator_eq Number.zero`. Absorbs the recurring
-`intro h; mantissa_eq_zero_of_operator_eq_zero; … ; omega` guard blocks. -/
+/-- A nonzero mantissa rules out `operator_eq Number.zero`. -/
 lemma Number.not_operator_eq_zero_of_mantissa_ne {x : Number} (h : x.mantissa_ ≠ 0) :
     ¬ x.operator_eq Number.zero = true :=
   fun heq => h (Number.mantissa_eq_zero_of_operator_eq_zero heq)
 
-/-- Two 19-digit mantissas multiply below `2^128` (the `UInt128` product fits).
-Absorbs the recurring `calc … < 10^19*10^19 = 10^38 < 2^128` block. -/
+/-- Two 19-digit mantissas multiply below `2^128`, since `10^19 * 10^19 = 10^38 < 2^128`. -/
 lemma nat_mul_lt_two_pow_128 {a b : ℕ} (ha : a < 10 ^ 19) (hb : b < 10 ^ 19) :
     a * b < 2 ^ 128 :=
   calc a * b < 10 ^ 19 * 10 ^ 19 := Nat.mul_lt_mul'' ha hb
@@ -282,9 +273,8 @@ lemma Number.operator_neg_negative_of_ne (n : Number) (hne : n.mantissa_ ≠ 0) 
     rw [beq_eq_false_iff_ne]; exact hne
   rw [if_neg (by rw [hm_bool]; decide)]
 
-/-- `operator_neg` preserves `isNormalized` (for non-zero mantissa, it flips the
-sign bit but keeps the other fields. For zero mantissa, it returns `Number.zero`
-which is normalized by the `n = Number.zero` disjunct). -/
+/-- `operator_neg` preserves `isNormalized`. A nonzero mantissa keeps every field but the sign, and a zero mantissa
+gives `Number.zero`. -/
 lemma Number.operator_neg_isNormalized (n : Number) (h : n.isNormalized) :
     n.operator_neg.isNormalized := by
   unfold Number.operator_neg
@@ -309,7 +299,6 @@ lemma Number.toRat_neg (n : Number) : n.operator_neg.toRat = -n.toRat := by
     have hn_zero : n.toRat = 0 := Number.toRat_eq_zero_iff.mpr hm_eq
     rw [Number.toRat_zero, hn_zero, neg_zero]
   · rw [if_neg hm]
-    -- The negated Number has the same mantissa and exponent, flipped negative bit.
     set n' : Number := { n with negative_ := !n.negative_ } with hn'_def
     have hn'_mant : n'.mantissa_ = n.mantissa_ := rfl
     have hn'_exp : n'.exponent_ = n.exponent_ := rfl
@@ -327,8 +316,7 @@ lemma Number.toRat_neg (n : Number) : n.operator_neg.toRat = -n.toRat := by
       rw [Number.toRat_of_neg n hneg]
       ring
 
-/-- Double negation on a nonzero-mantissa `Number` is the identity (the sign bit
-flips twice). Shared by the four `Sub` rounding-bound files. -/
+/-- Double negation on a nonzero-mantissa `Number` is the identity (the sign bit flips twice). -/
 lemma neg_neg_of_mant_ne {y : Number} (hy_mant_ne : y.mantissa_ ≠ 0) :
     y.operator_neg.operator_neg = y := by
   obtain ⟨yn, ym, ye⟩ := y
@@ -339,7 +327,7 @@ lemma neg_neg_of_mant_ne {y : Number} (hy_mant_ne : y.mantissa_ ≠ 0) :
   simp only [hbool, Bool.false_eq_true, if_false]
   cases yn <;> rfl
 
-/-- Subtraction as addition of the negation, on `toRat`. Shared by `Sub`. -/
+/-- Subtraction as addition of the negation, on `toRat`. -/
 lemma sub_eq_add_neg_toRat (x y : Number) :
     x.toRat - y.toRat = x.toRat + y.operator_neg.toRat := by
   rw [Number.toRat_neg]; ring

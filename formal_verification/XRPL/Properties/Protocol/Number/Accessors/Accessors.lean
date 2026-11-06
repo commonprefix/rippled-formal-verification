@@ -3,8 +3,7 @@ import XRPL.Properties.Protocol.Number.Accessors.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- The public mantissa() and exponent() accessors are faithful:
-  `mantissa · 10^exponent = toRat`. -/
+/-- The public `mantissa()` and `exponent()` accessors give back the value: `mantissa · 10^exponent = toRat`. -/
 theorem mantissa_mul_exponent_eq_toRat (n : Number) (hn : n.isNormalized) :
     (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent = n.toRat :=
   mantissa_mul_exponent_eq_toRat_proof n hn

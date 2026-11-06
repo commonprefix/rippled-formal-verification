@@ -1,14 +1,12 @@
 import XRPL.Properties.Lending.LoanBroker.Common.GuardProofs
 
-/-! # Proof bodies for `LoanBroker.create` and `LoanBroker.update`
-
-Proofs for `create` and `update`. -/
+/-! # Proof bodies for `LoanBroker.create` and `LoanBroker.update` -/
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-/-- **Proof body of `create_debtMaximum_out_of_range`.** -/
+/-- Proof body of the DebtMaximum line of `LoanBroker.create_not_lawful`. -/
 lemma LoanBroker.create_debtMaximum_out_of_range_proof (tx : LoanBrokerSetCreate)
     (nt : NumericType) (dm : Number) (hdm : tx.debtMaximum = some dm)
     (hbad : ¬ dm.isNormalized ∨ Number.zero.operator_le dm = false ∨
@@ -26,7 +24,7 @@ lemma LoanBroker.create_debtMaximum_out_of_range_proof (tx : LoanBrokerSetCreate
   · have h1 : dm.operator_le debtMaximumCap = true := hraw ▸ hv.debtMaximum_cap
     simp [h1] at hcap
 
-/-- **Proof body of `create_rate_above_maximum`.** -/
+/-- Proof body of the rate line of `LoanBroker.create_not_lawful`. -/
 lemma LoanBroker.create_rate_above_maximum_proof (tx : LoanBrokerSetCreate) (nt : NumericType)
     (hbad : maxManagementFeeRate < tx.managementFeeRate.getD 0 ∨
       maxCoverRate < tx.coverRateMinimum.getD 0 ∨ maxCoverRate < tx.coverRateLiquidation.getD 0) :
@@ -39,7 +37,7 @@ lemma LoanBroker.create_rate_above_maximum_proof (tx : LoanBrokerSetCreate) (nt 
   · exact UInt32.not_le.mpr h hv.coverRateMinimum_cap
   · exact UInt32.not_le.mpr h hv.coverRateLiquidation_cap
 
-/-- **Proof body of `create_cover_rates_uncoupled`.** -/
+/-- Proof body of the cover rates line of `LoanBroker.create_not_lawful`. -/
 lemma LoanBroker.create_cover_rates_uncoupled_proof (tx : LoanBrokerSetCreate)
     (nt : NumericType)
     (hbad : ¬ (tx.coverRateMinimum.getD 0 = 0 ↔ tx.coverRateLiquidation.getD 0 = 0)) :
@@ -49,7 +47,7 @@ lemma LoanBroker.create_cover_rates_uncoupled_proof (tx : LoanBrokerSetCreate)
   rintro ⟨_, hv⟩
   exact hbad hv.coverRates_coupled
 
-/-- **Proof body of `create_success`.** -/
+/-- Proof body of the creation line of `LoanBroker.create_success`. -/
 lemma LoanBroker.create_success_proof (tx : LoanBrokerSetCreate) (nt : NumericType)
     (hdm : ∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
       dm.operator_le debtMaximumCap = true)
@@ -86,7 +84,7 @@ lemma LoanBroker.create_success_proof (tx : LoanBrokerSetCreate) (nt : NumericTy
   unfold LoanBroker.create
   exact RawLoanBroker.to_lawful_ok_of hwf hv
 
-/-- **Proof body of `create_no_exposure`.** -/
+/-- Proof body of the no exposure line of `LoanBroker.create_success`. -/
 lemma LoanBroker.create_no_exposure_proof (tx : LoanBrokerSetCreate) (nt : NumericType)
     (lb : LoanBroker) (hok : LoanBroker.create tx nt = .ok lb) :
     lb.debtTotal = Number.zero ∧ lb.coverAvailable = Number.zero ∧ lb.loanCount = 0 := by
@@ -103,7 +101,7 @@ lemma LoanBroker.update_eq (lb : LoanBroker) (debtMaximum : Option Number) :
       ({ lb.toRawLoanBroker with debtMaximum := debtMaximum.getD lb.debtMaximum } :
         RawLoanBroker).to_lawful := rfl
 
-/-- **Proof body of `update_not_lawful`.** -/
+/-- Proof body of `update_not_lawful`. -/
 lemma LoanBroker.update_not_lawful_proof (lb : LoanBroker) (dm : Number)
     (hbad : ¬ dm.isNormalized ∨ Number.zero.operator_le dm = false ∨
       dm.operator_le debtMaximumCap = false ∨
@@ -121,7 +119,7 @@ lemma LoanBroker.update_not_lawful_proof (lb : LoanBroker) (dm : Number)
   · have h1 : lb.debtTotal.operator_le dm = true := hv.debt_within_cap hne
     simp [h1] at hlt
 
-/-- **Proof body of `update_success`.** -/
+/-- Proof body of the DebtMaximum line of `LoanBroker.update_success`. -/
 lemma LoanBroker.update_success_proof (lb : LoanBroker) (dm : Number)
     (hnorm : dm.isNormalized) (hnn : Number.zero.operator_le dm = true)
     (hcap : dm.operator_le debtMaximumCap = true)
@@ -138,7 +136,7 @@ lemma LoanBroker.update_success_proof (lb : LoanBroker) (dm : Number)
   rw [LoanBroker.update_eq]
   exact RawLoanBroker.to_lawful_ok_of hwf hv
 
-/-- **Proof body of `update_none`.** -/
+/-- Proof body of the no DebtMaximum line of `LoanBroker.update_success`. -/
 lemma LoanBroker.update_none_proof (lb : LoanBroker) : lb.update none = .ok lb := by
   rw [LoanBroker.update_eq]
   unfold RawLoanBroker.to_lawful

@@ -5,11 +5,10 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
 namespace XRPL.Model.Protocol
 
-/-! # Division shared bridges
+/-! # Shared facts for division
 
-The staged `operator_div` routes through `doNormalize128`; these wrappers
-instantiate the mode-generic `doNormalize128` result-shape and underflow
-keystones with the division facts bundle, for the discrete-rounding files. -/
+`operator_div` ends in `doNormalize128`. These wrappers apply the general `doNormalize128` result-shape and underflow
+lemmas to division. -/
 
 /-- A quotient of nonzero operands is nonzero. -/
 theorem operator_div_truth_ne (x y : Number)
@@ -18,8 +17,7 @@ theorem operator_div_truth_ne (x y : Number)
   div_ne_zero (Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant_ne)
     (Number.toRat_ne_zero_of_mantissa_ne_zero y hy_mant_ne)
 
-/-- A successful `operator_div` has a nonzero divisor (division by the canonical
-zero errors out). Shared across the four directed-mode `Rounded` files. -/
+/-- A successful `operator_div` has a nonzero divisor, since dividing by zero is an error. -/
 theorem operator_div_divisor_ne_zero (x y result : Number) (mode : rounding_mode)
     (hy : y.isNormalized)
     (hok : Number.operator_div x y mode = .ok result) :
@@ -42,7 +40,7 @@ theorem operator_div_result_isNormalized (x y result : Number) (mode : rounding_
       hx_mant_ne hy_mant_ne hok
   exact doNormalize128_result_isNormalized zn M ze' sticky mode hM_pos result hok128 hresult
 
-/-- Weak top-exponent mantissa cap for the division result. -/
+/-- At the top exponent, a nonzero division result has mantissa at most `9223372036854775820`. -/
 theorem operator_div_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -72,9 +70,8 @@ theorem operator_div_underflow_truth_small (x y result : Number) (mode : roundin
   exact doNormalize128_underflow_value_small zn M ze' δ sticky mode hδ_low hδ_lt
     hsticky_zero hM_pos hM_lt hδM result hok128 hres0
 
-/-- Both operands of a successful, nonzero `operator_div` have nonzero mantissa.
-A zero divisor errors out (so `hok = .ok` forces `y ≠ 0`); a zero numerator
-returns the zero operand `x`, contradicting `hresult` (so `x ≠ 0`). -/
+/-- Both operands of a successful, nonzero `operator_div` have nonzero mantissa, since a zero divisor errors
+out and a zero numerator returns zero. -/
 theorem operator_div_operands_ne_zero {x y result : Number} {mode : rounding_mode}
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :

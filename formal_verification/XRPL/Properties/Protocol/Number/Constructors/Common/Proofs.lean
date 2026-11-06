@@ -15,9 +15,8 @@ lemma Number.unchecked_toRat (neg : Bool) (m : UInt64) (e : Int) :
     rw [if_neg hneg, Number.toRat_of_nonneg (Number.unchecked neg m e) hf]
     simp only [Number.unchecked]; ring
 
-/-- The exact value of the magnitude/sign split performed by `from_rep`:
-the unchecked number built from `mantissa`'s sign and `|mantissa|` equals the
-signed value `mantissa · 10^exponent`. -/
+/-- The magnitude/sign split in `from_rep` is exact: the unchecked number built from `mantissa`'s sign and
+`|mantissa|` equals the signed value `mantissa · 10^exponent`. -/
 lemma Number.from_rep_input_toRat (mantissa : Int64) (e : Int) :
     (Number.unchecked (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e).toRat
       = (mantissa.toInt : ℚ) * (10 : ℚ) ^ e := by
@@ -37,12 +36,6 @@ lemma Number.from_rep_input_toRat (mantissa : Int64) (e : Int) :
   · rw [if_neg (by rw [decide_eq_true_eq, hsign]; exact h),
       abs_of_nonneg (by exact_mod_cast not_lt.mp h)]
     ring
-
-/-! ### `Number.normalized` — the `(negative, mantissa, exponent)` constructor
-
-`Number.normalized neg m e min max mode` is `(Number.unchecked neg m e).normalize`,
-so each constructor `RoundsWithin` fact is the corresponding `normalize` fact applied to
-the literal input value `sign · m · 10^e`. -/
 
 theorem normalized_rounds_to_nearest_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
     (hok : Number.normalized neg m e largeRange.min largeRange.max .to_nearest = .ok result)

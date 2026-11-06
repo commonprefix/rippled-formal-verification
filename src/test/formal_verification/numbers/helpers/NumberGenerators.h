@@ -185,13 +185,15 @@ canSign(uint64_t mv) noexcept
     return mv != 0 && mv != (uint64_t{1} << 63);
 }
 
-// Broad STAmountPair: integral spans the full uint64 mantissa range (offset 0),
-// fractional is 10% canonical zero plus full-uint64 mantissa over [kMinOffset-100, kMaxOffset+100].
+// Broad STAmountPair inside the STAmount invariant mValue < 2^63: integral spans [0, INT64_MAX]
+// (offset 0), fractional is 10% canonical zero plus such a mantissa over
+// [kMinOffset-100, kMaxOffset+100].
 inline STAmountPair
 randomSTAmountPair(std::mt19937_64& rng, uint8_t nt)
 {
     std::bernoulli_distribution sign(0.5);
-    std::uniform_int_distribution<uint64_t> mant(0, std::numeric_limits<uint64_t>::max());
+    std::uniform_int_distribution<uint64_t> mant(
+        0, static_cast<uint64_t>(std::numeric_limits<int64_t>::max()));
     if (nt == kFractional)
     {
         if (std::uniform_int_distribution<int>{0, 9}(rng) == 0)

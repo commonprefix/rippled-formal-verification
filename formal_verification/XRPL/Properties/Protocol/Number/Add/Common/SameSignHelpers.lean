@@ -21,21 +21,6 @@ lemma abs_add_eq_of_same_sign {x y : Number} (h : x.negative_ = y.negative_) :
     rw [abs_of_nonpos (add_nonpos hx_np hy_np), abs_of_nonpos hx_np, abs_of_nonpos hy_np]
     ring
 
-lemma represents_initial_guard_eq (xn : Bool) :
-    represents (if xn then Guard.new.set_negative else Guard.new) 0 := by
-  by_cases hxn : xn
-  · rw [if_pos hxn]
-    obtain ⟨x_rep, hx_nn, hx_lt, hf_eq, hxbit, hall⟩ := represents_new
-    refine ⟨x_rep, hx_nn, hx_lt, ?_, ?_, ?_⟩
-    · show (0 : ℚ) = _
-      have : Guard.new.set_negative.digits_ = Guard.new.digits_ := rfl
-      rw [this]; exact hf_eq
-    · have hxbit_eq : Guard.new.set_negative.xbit_ = Guard.new.xbit_ := rfl
-      rw [hxbit_eq]; exact hxbit
-    · have : Guard.new.set_negative.digits_ = Guard.new.digits_ := rfl
-      rw [this]; exact hall
-  · rw [if_neg hxn]; exact represents_new
-
 lemma alignDown_abs_value
     (n : Number) (g₀ : Guard) (target : Int) (h_le : n.exponent_ ≤ target)
     (f₀ : ℚ) :

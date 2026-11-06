@@ -1,6 +1,7 @@
-import XRPL.Properties.Vault.Proofs.WithdrawAccuracy
-import XRPL.Properties.Vault.Proofs.WithdrawMono
+import XRPL.Properties.Vault.Proofs.WithdrawMono.OfNumber
 import XRPL.Properties.Vault.Proofs.DepositTight.DivSharp
+import XRPL.Properties.Vault.Proofs.Support.WithdrawExchange
+import XRPL.Properties.Vault.Common.WithdrawDefs
 
 /-! # Shares burned by an asset-denominated withdrawal
 
@@ -14,9 +15,7 @@ open XRPL.Model.Protocol
 /-- The pricing steps of the truncating `assetsToSharesWithdraw`. -/
 lemma shares_reduces (v : Vault) (a s : STAmount) (w : Bool)
     (hok : assetsToSharesWithdraw v a true w = .ok s) :
-    ∃ nav, v.assetsTotal.operator_sub (match w with
-        | true => Number.zero
-        | false => v.lossUnrealized) .to_nearest = .ok nav ∧
+    ∃ nav, v.assetsTotalForWithdrawal w = .ok nav ∧
       ((nav.mantissa_ = 0 ∧ s = STAmount.zero .int64) ∨
        (nav.mantissa_ ≠ 0 ∧ ∃ an SA SN t, a.toNumber .to_nearest = .ok an ∧
           v.sharesTotal.operator_mul an .to_nearest = .ok SA ∧
@@ -28,26 +27,32 @@ lemma shares_reduces (v : Vault) (a s : STAmount) (w : Bool)
     | exact ⟨_, ‹_›, Or.inl ⟨beq_iff_eq.mp ‹_›, rfl⟩⟩
     | exact ⟨_, ‹_›, Or.inr ⟨by simp_all, _, _, _, _, ‹_›, ‹_›, ‹_›, ‹_›, ‹_›⟩⟩
 
-/-- A successful error-free withdrawal by assets burns the nonzero truncated shares. -/
-lemma burned_of_assets (v : Vault) (a : STAmount) (w : Bool) (r : WithdrawResult)
-    (hpos : 0 < a.toRat) (hok : v.withdraw (.vaultAssets a) w hpos = .ok r)
-    (herr : r.error = none) :
-    assetsToSharesWithdraw v a true w = .ok r.sharesBurned ∧ r.sharesBurned.isZero = false := by
-  obtain ⟨cw, -, -, hcomp, hcerr, -, -, -, hsb, -⟩ :=
-    WdAcc.withdraw_ok_cases v (.vaultAssets a) w r hpos hok herr
-  rw [hsb]
-  simp only [computeWithdrawByAssets, bind, Except.bind, pure, Except.pure, tryCatch, tryCatchThe,
-    MonadExceptOf.tryCatch, Except.tryCatch] at hcomp
+/-- A withdrawal by shares burns the named shares. -/
+lemma computeWithdraw_vaultShares_shares (v : Vault) (shares : STAmount) (w : Bool) (amounts : VaultAmounts)
+    (hcomp : (computeWithdraw v (.vaultShares shares) w).run = .ok (.ok amounts)) : amounts.shares = shares := by
+  simp only [computeWithdraw] at hcomp
+  unfold_ter at hcomp
   walk_ok
-  all_goals first
-    | (simp at hcerr; done)
-    | exact ⟨‹_›, by simpa using ‹¬ _ = true›⟩
+  all_goals rfl
 
-lemma pipe_up : ((1 : ℚ) + 5 / (2 ^ 63 + 7)) * (1 + 6 / (2 ^ 63 - 3)) ≤ 1 + depositε := by
-  rw [WdAcc.depositε_val]; norm_num
-
-lemma pipe_lo : (1 : ℚ) - depositε ≤ (1 - 5 / (2 ^ 63 + 7)) * (1 - 6 / (2 ^ 63 - 3)) := by
-  rw [WdAcc.depositε_val]; norm_num
+/-- A successful withdrawal by assets burns the nonzero shares the amount prices to. -/
+lemma burned_of_assets (v : Vault) (a : STAmount) (w : Bool) (t : UInt32) (r : VaultWithAmounts)
+    (hpos : 0 < a.toRat) (hok : (v.withdraw (.vaultAssets a) w t hpos).run = .ok (.ok r)) :
+    assetsToSharesWithdraw v a true w = .ok r.shares ∧ r.shares.isZero = false := by
+  have key : ∀ amounts : VaultAmounts, (computeWithdraw v (.vaultAssets a) w).run = .ok (.ok amounts) →
+      assetsToSharesWithdraw v a true w = .ok amounts.shares ∧ amounts.shares.isZero = false := by
+    intro amounts hcomp
+    simp only [computeWithdraw] at hcomp
+    unfold_ter at hcomp
+    walk_ok
+    exact ⟨‹_›, by simpa using ‹¬ _ = true›⟩
+  simp only [Vault.withdraw] at hok
+  unfold_ter at hok
+  walk_ok
+  all_goals
+    have hcomp : (computeWithdraw v (.vaultAssets a) w).run = .ok (.ok _) := ‹_›
+    have h := key _ hcomp
+    exact h
 
 lemma pipe_up_sharp :
     ((1 : ℚ) + 5 / (2 ^ 63 + 7)) * (1 + DepTight.divSharpε) ≤ 1 + sharesε := by
@@ -57,16 +62,19 @@ lemma pipe_lo_sharp :
     (1 : ℚ) - sharesε ≤ (1 - 5 / (2 ^ 63 + 7)) * (1 - DepTight.divSharpε) := by
   unfold DepTight.divSharpε sharesε; norm_num
 
-/-- Bounds of the truncated shares against `idealSharesWithdraw`. -/
-lemma shares_bounds (v : Vault) (a s : STAmount) (w : Bool)
-    (hnav : v.WithdrawNavExact w) (hpos : 0 < a.toRat) (hc : a.Canonical)
+/-- The shares a truncating withdrawal by assets burns, priced at the computed net asset value `nav`: a
+whole positive count at most `sharesε` relatively above the ideal, and less than one share plus `sharesε` below. -/
+lemma shares_bounds (v : Vault) (a s : STAmount) (w : Bool) (nav : Number)
+    (hnavN : v.assetsTotalForWithdrawal w = .ok nav) (hpos : 0 < a.toRat) (hc : a.Canonical)
     (hok : assetsToSharesWithdraw v a true w = .ok s) (hnz : s.isZero = false) :
     s.toRat.den = 1 ∧ 0 < s.toRat ∧
-    s.toRat ≤ v.idealSharesWithdraw w a.toRat * (1 + sharesε) ∧
-    v.idealSharesWithdraw w a.toRat * (1 - sharesε) - 1 < s.toRat := by
+    s.toRat ≤ v.idealSharesWithdrawAt nav.toRat a.toRat * (1 + sharesε) ∧
+    v.idealSharesWithdrawAt nav.toRat a.toRat * (1 - sharesε) - 1 < s.toRat := by
   have hmv : s.mValue ≠ 0 := ne_of_beq_false (show (s.mValue == 0) = false from hnz)
-  obtain ⟨nav, hsub, hcase⟩ := shares_reduces v a s w hok
-  obtain ⟨hnavn, hnav0, hnavq⟩ := WdMono.nav_facts v w nav hsub hnav
+  obtain ⟨nav', hsub, hcase⟩ := shares_reduces v a s w hok
+  rw [hnavN, Except.ok.injEq] at hsub
+  subst hsub
+  obtain ⟨hnavn, hnav0⟩ := Vault.assetsTotalForWithdrawal_nonneg v w nav hnavN
   rcases hcase with ⟨-, rfl⟩ | ⟨hnm, an, SA, SN, t, han, hmul, hdiv, htr, hof⟩
   · exact absurd rfl hmv
   obtain ⟨an0, han0, hanv, hann⟩ := STAmount.toNumber_exact_canonical a .to_nearest
@@ -118,9 +126,9 @@ lemma shares_bounds (v : Vault) (a s : STAmount) (w : Bool)
     have : z = ⌊SN.toRat⌋ := by omega
     rw [this]
   have hst : s.toRat = (⌊SN.toRat⌋ : ℚ) := by rw [hz, hzt, hfl]
-  have hideal : v.idealSharesWithdraw w a.toRat = T0 / N := by
-    unfold RawVault.idealSharesWithdraw
-    rw [← hnavq, RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+  have hideal : v.idealSharesWithdrawAt nav.toRat a.toRat = T0 / N := by
+    unfold RawVault.idealSharesWithdrawAt
+    rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
   have hfle : (⌊SN.toRat⌋ : ℚ) ≤ SN.toRat := Int.floor_le _
   have hflt : SN.toRat - 1 < (⌊SN.toRat⌋ : ℚ) := Int.sub_one_lt_floor _
   have hs0 : s.toRat ≠ 0 := STAmount.toRat_ne_zero s hmv

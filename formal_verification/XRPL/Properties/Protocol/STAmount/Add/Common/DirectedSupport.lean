@@ -3,12 +3,8 @@ import XRPL.Properties.Protocol.Number.Add.Common.TowardsZero.DiffSignTight
 
 /-! # Directed-mode support for the IOU `RoundsWithin` headlines
 
-Mode-generic versions of the `to_nearest` IOU-addition composition lemmas, plus the
-re-rounding `RoundsWithin` (directional + magnitude). These feed the directed-mode
-(`downward`/`upward`/`towards_zero`) IOU headlines via `RoundsWithin_trans`. The
-`Number`-addition relative-error bound for every directed mode is `11/(2⁶³−18)`
-(double the `to_nearest` half-ULP bound), and the 16-digit re-rounding bound is
-`10⁻¹⁵`, so the composed directed bound is `εd = 11/(2⁶³−18) + 10⁻¹⁵ + 11/(2⁶³−18)·10⁻¹⁵`. -/
+Mode-generic versions of the `to_nearest` IOU-addition composition lemmas. The directed bound is
+`εd = 11/(2⁶³−18) + 10⁻¹⁵ + 11/(2⁶³−18)·10⁻¹⁵`, from the `Number` add and the 16-digit re-round. -/
 
 namespace XRPL.Model.Protocol
 
@@ -84,8 +80,8 @@ lemma IOUAmount.ofNumber_rounds_within (sum : Number) (mode : rounding_mode) (re
             rw [abs_sub_comm result.toRat sum.toRat]
             exact abs_sub_abs_le_abs_sub sum.toRat result.toRat
           linarith [hrev, hmag']
-/-- The `Number`-addition relative-error bound, uniform across modes at the looser
-directed value `11/(2⁶³−18)` (`to_nearest` is tighter, lifted by monotonicity). -/
+/-- The `Number` addition relative-error bound in every mode, at the looser directed value `11/(2⁶³−18)`. The
+smaller `to_nearest` bound implies it. -/
 lemma operator_add_RoundsWithin_anyMode (xn yn sum : Number) (mode : rounding_mode)
     (hxn_norm : xn.isNormalized) (hyn_norm : yn.isNormalized)
     (hxn_ne : xn.mantissa_ ≠ 0) (hyn_ne : yn.mantissa_ ≠ 0)
@@ -104,11 +100,8 @@ lemma operator_add_RoundsWithin_anyMode (xn yn sum : Number) (mode : rounding_mo
   | towards_zero =>
     exact operator_add_rounds_towards_zero xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
 
-/-- **Magnitude form of the `Number`-addition directed bound, every mode, any operand
-signs** (no non-negativity needed). For `to_nearest`/`downward`/`upward` it is the
-`RoundsWithin` magnitude directly; for `towards_zero` the result is sign-aligned with the
-exact sum: same-sign via the result-sign lemma, different-sign via the tight
-cancellation bound, so `|sum − truth| = |truth| − |sum|`. -/
+/-- Magnitude form of the `Number`-addition directed bound, every mode, any operand signs. Under
+`towards_zero` the result has the sign of the exact sum, so `|sum − truth| = |truth| − |sum|`. -/
 lemma operator_add_abs_diff_le_anyMode (xn yn sum : Number) (mode : rounding_mode)
     (hxn_norm : xn.isNormalized) (hyn_norm : yn.isNormalized)
     (hxn_ne : xn.mantissa_ ≠ 0) (hyn_ne : yn.mantissa_ ≠ 0)
@@ -154,9 +147,8 @@ lemma operator_add_abs_diff_le_anyMode (xn yn sum : Number) (mode : rounding_mod
       exact le_of_lt (operator_add_rounding_bound_diff_sign_towards_zero_tight xn yn sum
         hxn_norm hyn_norm hxn_ne hyn_ne hss h_no_cancel hadd hsum_ne)
 
-/-- Mode-generic version of `IOUAmount.add_sum_exponent_hi`: the `Number` sum's
-exponent stays `≤ maxExponent − 4` for any rounding mode (the `|sum| ≤ 2·|x+y|`
-magnitude bound is uniform across modes). -/
+/-- Mode-generic version of `IOUAmount.add_sum_exponent_hi`: the `Number` sum's exponent stays
+`≤ maxExponent − 4` in every mode, because `|sum| ≤ 2·|x+y|` holds in every mode. -/
 lemma IOUAmount.add_sum_exponent_hi_anyMode (x y : IOUAmount) (xn yn sum : Number) (mode : rounding_mode)
     (hxn_val : xn.toRat = x.toRat) (hyn_val : yn.toRat = y.toRat)
     (hxn_norm : xn.isNormalized) (hyn_norm : yn.isNormalized)
@@ -273,9 +265,8 @@ lemma IOUAmount.operator_add_decompose_anyMode (x y result : IOUAmount) (mode : 
     exact ⟨xn, yn, sum, hxn_val, hyn_val, hxn_norm, hyn_norm, hxn_ne, hyn_ne, h_no_cancel,
       hsum_ne, hadd, hsum_mant.1, hsum_mant.2, by omega, he_hi, hofn⟩
 
-/-- **IOU addition rounds within the directed relative-error bound `εd ≈ 2·10⁻¹⁵`,
-every mode.** `Number`-addition (bound `11/(2⁶³−18)`) composed with the 16-digit
-re-rounding (bound `10⁻¹⁵`) via `RoundsWithin_trans`. -/
+/-- IOU addition rounds within the directed relative-error bound `εd`, about `10⁻¹⁵`, in every mode. It is the
+`Number` add bound `11/(2⁶³−18)` composed with the 16-digit re-round bound `10⁻¹⁵`. -/
 lemma IOUAmount.operator_add_rounds_directed (x y result : IOUAmount) (mode : rounding_mode)
     (hx_lo : 10 ^ 15 ≤ x.mantissa_.toInt.natAbs) (hx_hi : x.mantissa_.toInt.natAbs < 10 ^ 16)
     (hy_lo : 10 ^ 15 ≤ y.mantissa_.toInt.natAbs) (hy_hi : y.mantissa_.toInt.natAbs < 10 ^ 16)
@@ -315,9 +306,8 @@ lemma IOUAmount.operator_add_InRange16_anyMode (x y result : IOUAmount) (mode : 
       hxe_lo hxe_hi hye_lo hye_hi h_truth_ne hok hresult
   exact IOUAmount.ofNumber_InRange16 sum mode result h_lo h_hi he_lo he_hi hofn hresult
 
-/-- **STAmount IOU addition rounds within the directed relative-error bound, every
-mode.** The `STAmount → IOUAmount → STAmount` round-trip is value-exact; the bound
-is inherited from `IOUAmount.operator_add_rounds_directed`. -/
+/-- STAmount IOU addition rounds within the directed relative-error bound, every mode. The conversions
+to and from `IOUAmount` are exact, so the bound is the one of `IOUAmount.operator_add_rounds_directed`. -/
 theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -376,13 +366,8 @@ theorem STAmount.operator_add_iou_rounds_directed (v1 v2 result : STAmount)
     rw [hi1v, hi2v] at hbound
     exact RoundsWithin_toRat_congr result sumI _ _ _ hrv hbound
 
-/-- **STAmount IOU addition decomposition (mode-generic).** Exposes the 19-digit
-`Number` summands `xn`, `yn`, their `Number` sum `sum`, the intermediate `IOUAmount`
-`sumI`, and every fact the discrete (`RoundsToRepresentableWithin`) headlines need:
-the value/exponent bridge `result.toRat = sumI.toRat`, `result.exponent = sumI.exponent_`
-(the `STAmount → IOUAmount → STAmount` round-trip is value- and exponent-exact), the
-closing snap `IOUAmount.ofNumber sum = sumI`, the 19-digit range of `sum`, and the
-`Number`-add reduction. -/
+/-- STAmount IOU addition decomposition (mode-generic). Exposes the 19-digit summands `xn`, `yn`, their
+`Number` sum, the intermediate `IOUAmount` `sumI`, and the exact value and exponent bridges to `result`. -/
 lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
@@ -442,7 +427,6 @@ lemma STAmount.operator_add_iou_decompose_anyMode (v1 v2 result : STAmount)
     have hres_eq : result = ⟨.fractional, sumI.mantissa_.toInt.natAbs.toUInt64, sumI.exponent_,
         decide (sumI.mantissa_ < 0)⟩ := Except.ok.inj hpack
     have hexp_br : result.exponent = sumI.exponent_ := by rw [hres_eq]; rfl
-    -- the IOUAmount-level decomposition gives the `Number` summands and sum.
     obtain ⟨xn, yn, sum, hxn_val, hyn_val, hxn_norm, hyn_norm, hxn_ne, hyn_ne, h_no_cancel,
         hsum_ne, hadd', h_lo, h_hi, he_lo, he_hi, hofn⟩ :=
       IOUAmount.operator_add_decompose_anyMode i1 i2 sumI mode

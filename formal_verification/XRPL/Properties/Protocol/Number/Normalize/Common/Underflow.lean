@@ -10,10 +10,8 @@ namespace XRPL.Model.Protocol
 
 A zero result mantissa (with a nonzero input mantissa) means either the
 explicit zero branch fired (`e2 < minExponent ∨ m2 < minMantissa` after the
-scaling stages) or the final `doRoundUp` flushed. All paths pin the input
-value strictly below the smallest positive representable
-`10^18 · 10^minExponent`. The hypothesis-minimal discrete-rounding theorems
-consume this in their underflow branches. -/
+scaling stages) or the final `doRoundUp` flushed. In both cases the input's magnitude is below the
+smallest positive `Number`, `10^18 · 10^minExponent`. -/
 
 /-- A fired `doNormalize_scaleDown` exits at or above `(maxMantissa+1)/10`:
 with `maxMantissa = largeRange.max = 10^19 − 1` the output is `≥ 10^18`. -/
@@ -40,17 +38,17 @@ lemma doNormalize_scaleDown_fired_output_ge
   | case3 m e g hgt' =>
     exact absurd hgt hgt'
 
-/-- If `doNormalize_scaleUp` exits below the minimum mantissa, it exhausted the
+/-- If `doNormalize_scaleUpSpec` exits below the minimum mantissa, it exhausted the
 exponent range: the exit exponent is `≤ minExponent`. -/
 lemma doNormalize_scaleUp_exit_exp (minMant m : UInt64) (e : Int) :
-    (doNormalize_scaleUp minMant m e).1 < minMant →
-    (doNormalize_scaleUp minMant m e).2 ≤ minExponent := by
-  induction m, e using doNormalize_scaleUp.induct (minMantissa := minMant) with
+    (doNormalize_scaleUpSpec minMant m e).1 < minMant →
+    (doNormalize_scaleUpSpec minMant m e).2 ≤ minExponent := by
+  induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
-    rw [doNormalize_scaleUp, if_pos hcond]
+    rw [doNormalize_scaleUpSpec, if_pos hcond]
     exact IH
   | case2 m e hcond =>
-    rw [doNormalize_scaleUp, if_neg hcond]
+    rw [doNormalize_scaleUpSpec, if_neg hcond]
     intro hlt
     by_contra hgt
     push Not at hgt
@@ -66,10 +64,12 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
     (hres0 : result.mantissa_ = 0) :
     |n.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
   have habs_n : |n.toRat| = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := abs_toRat_eq n
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hn_mant_ne] at hok
   simp only [Bool.false_eq_true, if_false] at hok
-  set su := doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_ with hsu_def
+  set su := doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_ with hsu_def
   set m1 : UInt64 := su.1 with hm1_def
   set e1 : Int := su.2 with he1_def
   set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0_def
@@ -84,8 +84,8 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
   have hsu_val := doNormalize_scaleUp_value largeRange.min n.mantissa_ n.exponent_
     (by rw [largeRange_min_val]; norm_num)
   have hsu_val' : (m1.toNat : ℚ) * 10 ^ e1 = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := by
-    have h1 : (doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_).1 = m1 := rfl
-    have h2 : (doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_).2 = e1 := rfl
+    have h1 : (doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_).1 = m1 := rfl
+    have h2 : (doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_).2 = e1 := rfl
     simpa [h1, h2] using hsu_val
   obtain ⟨k2, f2, he2_eq, hm2_le_maxMant, hval2, hrep2⟩ :=
     doNormalize_scaleDown_correct largeRange.max m1 e1 g0 0 hg0_rep m2 e2 g2 hsd
@@ -174,12 +174,11 @@ theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mod
           ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
         apply mul_le_mul_of_nonneg_left _ (by norm_num)
         exact zpow_le_zpow_right₀ (by norm_num) he2_le
-      -- The mantissa bound is strict only when m2 + 1 < 10^18 or f2 < 1 bites;
-      -- combine the strict first step with the two ≤ steps.
+      -- One step is strict and the other two are ≤, so the whole chain is strict.
       calc |n.toRat| < ((m2.toNat : ℚ) + 1) * 10 ^ e2 := h1
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * 10 ^ e2 := h2
         _ ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := h3
-  · -- Round-stage flush: `doRoundUp_flush_value_small` pins the frame.
+  · -- The rounding step flushed to zero: `doRoundUp_flush_value_small` bounds the value.
     push Not at hzero
     obtain ⟨he2_ge, hm2_ge⟩ := hzero
     rw [show (decide (e2 < minExponent) || decide (m2 < largeRange.min)) = false from by

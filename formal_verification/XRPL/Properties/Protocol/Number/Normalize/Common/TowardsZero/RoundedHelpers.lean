@@ -11,15 +11,11 @@ namespace XRPL.Model.Protocol
 
 /-! # `Number.normalize` is correctly rounded under `.towards_zero`
 
-`.towards_zero` always truncates, so the result is `Number.lower` of the input
-value for nonnegative inputs and `Number.upper` for negative ones. The
-no-inbetween dischargers are the generic frames instantiated with the
-normalize facts bundle. No nonzero hypotheses: a zero input mantissa
-short-circuits to the zero grid point, and underflow flushes to zero — which
-is itself correct rounding toward zero. -/
+`.towards_zero` always truncates, so the result is `Number.lower` of the input value for nonnegative inputs and
+`Number.upper` for negative ones. No nonzero hypothesis is needed: a zero input gives zero, and an underflow flushes
+to zero, which is itself correct rounding toward zero. -/
 
-/-- No normalized Number sits strictly between `result.toRat` and `n.toRat`
-when `result.toRat ≤ n.toRat`. -/
+/-- No normalized Number lies above `result.toRat` and at or below `n.toRat` when `result.toRat ≤ n.toRat`. -/
 theorem normalize_no_inbetween_below_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
@@ -41,8 +37,7 @@ theorem normalize_no_inbetween_below_towards_zero (n result : Number)
       exact Number.toRat_nonneg_of_nonnegative result (h_sign.trans hn_nneg))
     h_le
 
-/-- No normalized Number sits strictly between `n.toRat` and `result.toRat`
-when `n.toRat ≤ result.toRat`. -/
+/-- No normalized Number lies at or above `n.toRat` and below `result.toRat` when `n.toRat ≤ result.toRat`. -/
 theorem normalize_no_inbetween_above_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
@@ -64,8 +59,7 @@ theorem normalize_no_inbetween_above_towards_zero (n result : Number)
       exact Number.toRat_nonpos_of_negative result (h_sign.trans hn_neg))
     h_ge
 
-/-- Underflow dispatch: a zero result mantissa always lands on the correct
-grid point for `.towards_zero` (flush-to-zero *is* rounding toward zero). -/
+/-- A zero result is correctly rounded toward zero, since flushing to zero is rounding toward zero. -/
 lemma normalize_rounded_towards_zero_of_result_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
@@ -91,16 +85,17 @@ lemma normalize_rounded_towards_zero_of_result_zero (n result : Number)
     · rw [h_res0, Number.toRat_zero]
 
 
-/-- `Number.normalize` under `.towards_zero` is **correctly rounded**: the
-result is `Number.lower` of the input value for nonnegative inputs and
-`Number.upper` for negative ones. Only `hok` is assumed. -/
+/-- Any successful `Number.normalize` under `.towards_zero` is correctly rounded: the result is `Number.lower`
+of the input for nonnegative inputs and `Number.upper` for negative ones. -/
 theorem normalize_rounded_towards_zero_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result) :
     Number.RoundsToRepresentable result n.toRat .towards_zero := by
   -- Zero input: the model short-circuits to the canonical zero.
   by_cases hnz : n.mantissa_ = 0
   · have h_truth0 : n.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero n hnz
-    unfold Number.normalize doNormalize at hok
+    unfold Number.normalize at hok
+    replace hok := doNormalize_ok_spec hok
+    unfold doNormalizeSpec at hok
     rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, if_pos rfl] at hok
     have h_result : result = Number.zero := (Except.ok.inj hok).symm
     rw [h_truth0]

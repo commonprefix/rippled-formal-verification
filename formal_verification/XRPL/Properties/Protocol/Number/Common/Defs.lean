@@ -8,8 +8,8 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
 
 namespace XRPL.Model.Protocol
 
-/-- `result` rounds the exact rational `truth` to one of the two adjacent
-representable Numbers. Discrete-grid analog of `RoundsWithin`. -/
+/-- `result` has the value of a representable neighbour of `truth`: `upper` for `upward`, `lower` for `downward`,
+the one toward zero for `towards_zero`, and either one for `to_nearest`. -/
 def Number.RoundsToRepresentable (result : Number) (truth : ℚ) (mode : rounding_mode) : Prop :=
   match mode with
   | .to_nearest   =>

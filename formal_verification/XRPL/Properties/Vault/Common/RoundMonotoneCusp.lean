@@ -5,42 +5,29 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 import XRPL.Properties.Protocol.Number.Common.Closest.Normalize
 import XRPL.Properties.Protocol.Number.Common.Closest.Existence
 
-/-! # Cusp-aware round-to-representable monotonicity core
+/-! # Cusp-aware round-to-nearest monotonicity
 
-`Number.RoundsCuspAware r t` pins `r` as `t`'s grid image with just enough
-directional information to prove monotonicity, INCLUDING the cusp exact-tie where
-the model rounds to the far neighbour (so `NearestTo`/`RoundsNearestEven` fail):
-
-* rounding down: `r = lower t` and `2t ≤ L+U` for the cell midpoint;
-* rounding up: `r = upper t` and either `L+U ≤ 2t` (`t ≥` midpoint) OR the
-  "cusp-tie escape" `2t(maxRep+1) > maxRep(L+U)` — the sole sub-midpoint round-up,
-  which sits so close to `L` that the normalized minimal-relative-gap forbids any
-  larger reachable product from landing back below the midpoint.
-
-The direction clauses quantify over the *other* neighbour, so the predicate only
-asserts existence of the neighbour `r` equals; the other is recovered for free in
-the single cross case from `upper`/`lower` minimality.
-
-`roundsCuspAware_mono` proves monotonicity from this plus the normalized gap bound
-(as `t₁ ≤ maxRep(t₂−t₁)`) and rounding determinism at a tie. -/
+At a cusp tie the model rounds up to the far grid neighbour, so a result is only a cusp-aware grid image of its exact
+value (`RoundsCuspAware`). Such results are still monotone, by the normalized gap bound (`roundsCuspAware_mono`). -/
 
 namespace XRPL.Model.Protocol
 
-/-! ## Grid-neighbour monotonicity helpers (re-derived from `Tightness`) -/
-
-theorem Number.lowerV_mono (t₁ t₂ : ℚ) (n₁ n₂ : Number)
+/-- A larger value never has a smaller lower grid neighbour. -/
+private lemma Number.lower_mono (t₁ t₂ : ℚ) (n₁ n₂ : Number)
     (h₁ : Number.lower t₁ = some n₁) (h₂ : Number.lower t₂ = some n₂)
     (hle : t₁ ≤ t₂) : n₁.toRat ≤ n₂.toRat :=
   Number.lower_tight t₂ n₂ h₂ n₁ (Number.lower_isNormalized t₁ n₁ h₁)
     (le_trans (Number.lower_le t₁ n₁ h₁) hle)
 
-theorem Number.upperV_mono (t₁ t₂ : ℚ) (n₁ n₂ : Number)
+/-- A larger value never has a smaller upper grid neighbour. -/
+private lemma Number.upper_mono (t₁ t₂ : ℚ) (n₁ n₂ : Number)
     (h₁ : Number.upper t₁ = some n₁) (h₂ : Number.upper t₂ = some n₂)
     (hle : t₁ ≤ t₂) : n₁.toRat ≤ n₂.toRat :=
   Number.upper_tight t₁ n₁ h₁ n₂ (Number.upper_isNormalized t₂ n₂ h₂)
-    (le_trans hle (Number.upper_ge t₂ n₂ h₂))
+    (le_trans hle (Number.le_upper t₂ n₂ h₂))
 
-theorem Number.no_gridV_between (t : ℚ) (L U : Number)
+/-- No normalized `Number` sits strictly between the two grid neighbours of a value. -/
+private lemma Number.no_grid_between (t : ℚ) (L U : Number)
     (hL : Number.lower t = some L) (hU : Number.upper t = some U)
     (g : Number) (hg : g.isNormalized) :
     ¬ (L.toRat < g.toRat ∧ g.toRat < U.toRat) := by
@@ -50,9 +37,8 @@ theorem Number.no_gridV_between (t : ℚ) (L U : Number)
   · push Not at hgt
     exact absurd (Number.upper_tight t U hU g hg (le_of_lt hgt)) (not_le.mpr h2)
 
-/-! ## The predicate -/
-
-/-- `r` is `t`'s cusp-aware grid image. See the module doc. -/
+/-- `r` is the lower or upper grid neighbour of `t`. Rounding down needs `t` at or below the cell midpoint. Rounding up
+needs `t` above `maxRep / (maxRep + 1)` times the midpoint, which admits the cusp tie the model rounds up. -/
 def Number.RoundsCuspAware (r : Number) (t : ℚ) : Prop :=
   (∃ L, Number.lower t = some L ∧ r.toRat = L.toRat ∧
      (∀ U, Number.upper t = some U → 2 * t ≤ L.toRat + U.toRat))
@@ -61,13 +47,8 @@ def Number.RoundsCuspAware (r : Number) (t : ℚ) : Prop :=
      (∀ L, Number.lower t = some L →
        2 * t * ((maxRepNat : ℚ) + 1) > (maxRepNat : ℚ) * (L.toRat + U.toRat)))
 
-/-! ## The monotonicity core -/
-
-/-- **Cusp-aware round monotonicity.** If `t₁ ≤ t₂`, each `rᵢ` is `tᵢ`'s cusp-aware
-grid image, the results are positive, `0 < t₁`, the normalized gap bound
-`t₁ ≤ maxRep(t₂−t₁)` holds under `t₁ < t₂`, and rounding is deterministic at a tie,
-then `r₁.toRat ≤ r₂.toRat`. -/
-theorem roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
+/-- Cusp-aware rounding is monotone, given the normalized gap bound and equal results at equal exact values. -/
+lemma roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
     (h₁ : r₁.RoundsCuspAware t₁) (h₂ : r₂.RoundsCuspAware t₂)
     (hr₁pos : 0 < r₁.toRat) (hr₂pos : 0 < r₂.toRat) (ht₁pos : 0 < t₁)
     (hle : t₁ ≤ t₂)
@@ -77,16 +58,16 @@ theorem roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
   have ht₂pos : 0 < t₂ := lt_of_lt_of_le ht₁pos hle
   rcases h₁ with ⟨L₁, hL₁, hr₁, hdn₁⟩ | ⟨U₁, hU₁, hr₁, hup₁⟩
   · rcases h₂ with ⟨L₂, hL₂, hr₂, hdn₂⟩ | ⟨U₂, hU₂, hr₂, hup₂⟩
-    · rw [hr₁, hr₂]; exact Number.lowerV_mono t₁ t₂ L₁ L₂ hL₁ hL₂ hle
+    · rw [hr₁, hr₂]; exact Number.lower_mono t₁ t₂ L₁ L₂ hL₁ hL₂ hle
     · rw [hr₁, hr₂]
       calc L₁.toRat ≤ t₁ := Number.lower_le t₁ L₁ hL₁
         _ ≤ t₂ := hle
-        _ ≤ U₂.toRat := Number.upper_ge t₂ U₂ hU₂
+        _ ≤ U₂.toRat := Number.le_upper t₂ U₂ hU₂
   · rcases h₂ with ⟨L₂, hL₂, hr₂, hdn₂⟩ | ⟨U₂, hU₂, hr₂, hup₂⟩
     · -- cross: r₁ = upper t₁, r₂ = lower t₂
       rw [hr₁, hr₂]
       by_contra hcon
-      push Not at hcon  -- hcon : L₂.toRat < U₁.toRat
+      push Not at hcon
       have hL₂pos : 0 < L₂.toRat := hr₂ ▸ hr₂pos
       have hU₁pos : 0 < U₁.toRat := hr₁ ▸ hr₁pos
       have hL₂norm : L₂.isNormalized := Number.lower_isNormalized t₂ L₂ hL₂
@@ -99,25 +80,24 @@ theorem roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
       have hU₁_gt_t₂ : t₂ < U₁.toRat := by
         by_contra h; push Not at h
         exact absurd (Number.lower_tight t₂ L₂ hL₂ U₁ hU₁norm h) (not_le.mpr hcon)
-      -- recover the missing neighbours
       obtain ⟨L₁, hL₁⟩ := Number.lower_some_of_pos_witnesses t₁ ht₁pos
-        L₂ hL₂norm hL₂pos (le_of_lt hL₂_lt_t₁) U₁ hU₁norm (Number.upper_ge t₁ U₁ hU₁)
+        L₂ hL₂norm hL₂pos (le_of_lt hL₂_lt_t₁) U₁ hU₁norm (Number.le_upper t₁ U₁ hU₁)
       obtain ⟨U₂, hU₂⟩ := Number.upper_some_of_pos_witnesses t₂ ht₂pos
         L₂ hL₂norm hL₂pos (Number.lower_le t₂ L₂ hL₂) U₁ hU₁norm (le_of_lt hU₁_gt_t₂)
-      have hLL : L₁.toRat ≤ L₂.toRat := Number.lowerV_mono t₁ t₂ L₁ L₂ hL₁ hL₂ hle
-      have hUU : U₁.toRat ≤ U₂.toRat := Number.upperV_mono t₁ t₂ U₁ U₂ hU₁ hU₂ hle
+      have hLL : L₁.toRat ≤ L₂.toRat := Number.lower_mono t₁ t₂ L₁ L₂ hL₁ hL₂ hle
+      have hUU : U₁.toRat ≤ U₂.toRat := Number.upper_mono t₁ t₂ U₁ U₂ hU₁ hU₂ hle
       have hU₁neL₁ : L₁.toRat ≠ U₁.toRat := fun heq => by
         have : L₂.toRat < L₁.toRat := by rw [heq]; exact hcon
         exact absurd hLL (not_le.mpr this)
       have hL₁eqL₂ : L₁.toRat = L₂.toRat := by
         rcases lt_or_eq_of_le hLL with hlt | heq
         · exact absurd ⟨hlt, hcon⟩
-            (Number.no_gridV_between t₁ L₁ U₁ hL₁ hU₁ L₂ hL₂norm)
+            (Number.no_grid_between t₁ L₁ U₁ hL₁ hU₁ L₂ hL₂norm)
         · exact heq
       have hU₁eqU₂ : U₁.toRat = U₂.toRat := by
         rcases lt_or_eq_of_le hUU with hlt | heq
         · exact absurd ⟨hcon, hlt⟩
-            (Number.no_gridV_between t₂ L₂ U₂ hL₂ hU₂ U₁ hU₁norm)
+            (Number.no_grid_between t₂ L₂ U₂ hL₂ hU₂ U₁ hU₁norm)
         · exact heq
       have hsum : L₁.toRat + U₁.toRat = L₂.toRat + U₂.toRat := by rw [hL₁eqL₂, hU₁eqU₂]
       have hd2 : 2 * t₂ ≤ L₂.toRat + U₂.toRat := hdn₂ U₂ hU₂
@@ -129,13 +109,11 @@ theorem roundsCuspAware_mono (t₁ t₂ : ℚ) (r₁ r₂ : Number)
         have hmr : (0 : ℚ) < (maxRepNat : ℚ) := by norm_num
         nlinarith [htie1, h2t2, hgap', hmr]
       · exact absurd (by rw [← hr₁, ← hr₂]; exact hdet hteq) (ne_of_gt hcon)
-    · rw [hr₁, hr₂]; exact Number.upperV_mono t₁ t₂ U₁ U₂ hU₁ hU₂ hle
+    · rw [hr₁, hr₂]; exact Number.upper_mono t₁ t₂ U₁ U₂ hU₁ hU₂ hle
 
-/-! ## Composition wrappers: `RoundsCuspAware` ⇒ one-operand monotonicity -/
-
-/-- **`operator_mul` monotone in one factor at `.to_nearest`** for fixed positive
+/-- `operator_mul` monotone in one factor at `.to_nearest` for fixed positive
 `x`, given both results are positive cusp-aware grid images. -/
-theorem operator_mul_left_mono_of_cuspAware (x y₁ y₂ r₁ r₂ : Number)
+lemma operator_mul_left_mono_of_cuspAware (x y₁ y₂ r₁ r₂ : Number)
     (hy₁ : y₁.isNormalized) (hy₂ : y₂.isNormalized)
     (hok₁ : Number.operator_mul x y₁ .to_nearest = .ok r₁)
     (hok₂ : Number.operator_mul x y₂ .to_nearest = .ok r₂)
@@ -156,9 +134,9 @@ theorem operator_mul_left_mono_of_cuspAware (x y₁ y₂ r₁ r₂ : Number)
   · intro heq
     exact operator_mul_toRat_eq_of_truth_eq x y₁ y₂ r₁ r₂ hy₁ hy₂ hok₁ hok₂ (ne_of_gt hx) heq
 
-/-- **`operator_div` monotone in the numerator at `.to_nearest`** for fixed positive
+/-- `operator_div` monotone in the numerator at `.to_nearest` for fixed positive
 divisor `b`, given both results are positive cusp-aware grid images. -/
-theorem operator_div_num_mono_of_cuspAware (a₁ a₂ b r₁ r₂ : Number)
+lemma operator_div_num_mono_of_cuspAware (a₁ a₂ b r₁ r₂ : Number)
     (ha₁ : a₁.isNormalized) (ha₂ : a₂.isNormalized)
     (hok₁ : Number.operator_div a₁ b .to_nearest = .ok r₁)
     (hok₂ : Number.operator_div a₂ b .to_nearest = .ok r₂)

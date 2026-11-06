@@ -1,5 +1,5 @@
 import Mathlib.Tactic
-import XRPL.Model.Protocol.Errors
+import XRPL.Model.Protocol.FixedWidth
 
 set_option linter.style.nativeDecide false
 
@@ -7,11 +7,6 @@ namespace XRPL.Model.Protocol
 
 abbrev rep := Int64
 abbrev internalrep := UInt64
-
-abbrev UInt128 := BitVec 128
-
-def toUInt128 (x : UInt64) : UInt128 := x.toBitVec.zeroExtend 128
-def toUInt64 (x : UInt128) : UInt64 := ⟨x.truncate 64⟩
 
 private theorem u64_pos_of_gt {m v : UInt64} (h : m > v) : 0 < m.toNat :=
   Nat.lt_of_le_of_lt (Nat.zero_le _) h
@@ -35,15 +30,6 @@ structure MantissaRange where
   max : UInt64
   hrange : max.toNat + 1 = 10 * min.toNat := by decide
   hfit : cMaxValue.toNat ≤ max.toNat := by decide
-
-instance : BEq MantissaRange where
-  beq a b := a.min == b.min && a.max == b.max
-
-instance : DecidableEq MantissaRange := fun a b =>
-  if h : a.min = b.min ∧ a.max = b.max then
-    isTrue (by cases a; cases b; obtain ⟨rfl, rfl⟩ := h; rfl)
-  else
-    isFalse (by intro heq; apply h; cases heq; exact ⟨rfl, rfl⟩)
 
 def largeRange : MantissaRange := { min := 1_000_000_000_000_000_000, max := 9_999_999_999_999_999_999 }
 def cMinOffset : Int := -96
@@ -77,22 +63,6 @@ abbrev Number.isNormalized (n : Number) : Prop := n.isnormal
 instance Number.instDecidableIsnormal (n : Number) : Decidable n.isnormal := by
   unfold Number.isnormal; infer_instance
 
--- `∀ d, e = .ok d → p d` over an `Except Error Number` is decidable: vacuous on
--- error, `p d` on the single `ok` value.
-instance {e : Except Error Number} {p : Number → Prop} [∀ d, Decidable (p d)] :
-    Decidable (∀ d, e = .ok d → p d) :=
-  match e with
-  | .error _ => isTrue (fun _ h => by simp at h)
-  | .ok d0 =>
-    decidable_of_iff (p d0)
-      ⟨fun hp d hd => by injection hd with hd'; exact hd' ▸ hp, fun h => h d0 rfl⟩
-
--- `∃ d, e = .ok d` over an `Except Error Number` is decidable: true exactly when `e` is `.ok`.
-instance {e : Except Error Number} : Decidable (∃ d, e = .ok d) :=
-  match e with
-  | .error _ => isFalse (by rintro ⟨d, h⟩; simp at h)
-  | .ok d0 => isTrue ⟨d0, rfl⟩
-
 -- For Number.zero we have `mantissa = 0`, whose exponent is `-2^31` that
 -- would build `10 ^ 2^31` in the denominator at runtime, so we early exit
 def Number.toRat (n : Number) : ℚ :=
@@ -116,7 +86,6 @@ structure Guard where
 def Guard.new : Guard := { digits_ := 0, xbit_ := false, sbit_ := false }
 
 def Guard.set_negative (g : Guard) : Guard := { g with sbit_ := true }
-def Guard.set_positive (g : Guard) : Guard := { g with sbit_ := false }
 def Guard.set_sticky (g : Guard) : Guard := { g with xbit_ := true }
 
 def Guard.push (g : Guard) (d : UInt64) : Guard :=
@@ -132,10 +101,12 @@ def Guard.pop (g : Guard) : Guard × UInt64 :=
 def Guard.doDropDigit (g : Guard) (mantissa : UInt64) (exponent : Int) : Guard × UInt64 × Int :=
   (g.push (mantissa % 10), mantissa / 10, exponent + 1)
 
-def Guard.doDropDigit128 (g : Guard) (mantissa : UInt128) (exponent : Int) : Guard × UInt128 × Int :=
-  (g.push (toUInt64 (mantissa % 10)), mantissa / 10, exponent + 1)
+def Guard.doDropDigit128 (g : Guard) (mantissa : UInt128) (exponent : Int)
+    : Except Error (Guard × UInt128 × Int) := do
+  let digit ← toUInt64Checked (mantissa % 10)
+  return (g.push digit, mantissa / 10, exponent + 1)
 
--- no recoverable digits in the guard; xbit_ may still record that one was dropped
+-- no recoverable digits in the guard, but xbit_ may still record that one was dropped
 def Guard.unrecoverable (g : Guard) : Bool := g.digits_ == 0
 
 def Guard.empty (g : Guard) : Bool := g.unrecoverable && !g.xbit_
@@ -156,11 +127,13 @@ decreasing_by simp [Guard.doDropDigit]; omega
 -- `rep` version of `doDropDigitWithTargetU64`, with the drop written out since `doDropDigit`
 -- takes a `UInt64`. `to_rep` uses only the value and guard, so the exponent is not returned.
 def Guard.doDropDigitWithTargetI64 (g : Guard) (drops : rep) (offset target : Int)
-    : rep × Guard :=
+    : Except Error (rep × Guard) :=
   if offset < target then
-    if drops == 0 && g.unrecoverable then (drops, g)
-    else (g.push (drops % 10).toUInt64).doDropDigitWithTargetI64 (drops / 10) (offset + 1) target
-  else (drops, g)
+    if drops == 0 && g.unrecoverable then .ok (drops, g)
+    else do
+      let digit ← (drops % 10).toUInt64Checked
+      (g.push digit).doDropDigitWithTargetI64 (drops / 10) (offset + 1) target
+  else .ok (drops, g)
 termination_by (target - offset).toNat
 decreasing_by omega
 
@@ -191,61 +164,64 @@ def RoundResult.toNumber (r : RoundResult) : Number :=
   { negative_ := r.negative_, mantissa_ := r.mantissa_, exponent_ := r.exponent_ }
 
 @[inline] def Guard.bringIntoRange (negative : Bool) (mantissa : UInt64) (exponent : Int)
-    (minMantissa : UInt64) : RoundResult :=
-  let (mantissa, exponent) :=
-    if mantissa < minMantissa ∧ mantissa ≠ 0 then (mantissa * 10, exponent - 1)
-    else (mantissa, exponent)
+    (minMantissa : UInt64) : Except Error RoundResult := do
+  let (mantissa, exponent) ←
+    (if mantissa < minMantissa ∧ mantissa ≠ 0 then do
+      let mantissa ← mantissa.mulChecked 10
+      pure (mantissa, exponent - 1)
+    else pure (mantissa, exponent))
   if exponent < minExponent ∨ mantissa = 0 then
-    { negative_ := false, mantissa_ := 0, exponent_ := -2147483648 }
+    return { negative_ := false, mantissa_ := 0, exponent_ := -2147483648 }
   else
-    { negative_ := negative, mantissa_ := mantissa, exponent_ := exponent }
+    return { negative_ := negative, mantissa_ := mantissa, exponent_ := exponent }
 
-def Guard.pushOverflow (g : Guard) (mantissa : UInt64) (mode : rounding_mode) : Guard :=
-    if maxRep ≤ mantissa ∧ mantissa < maxRepUp then
+def Guard.pushOverflow (g : Guard) (mantissa : UInt64) (mode : rounding_mode) : Except Error Guard :=
+    if maxRep ≤ mantissa ∧ mantissa < maxRepUp then do
         let spread := maxRepUp - maxRep
-        let mantissa :=
-            if mantissa % 10 < 9 then
+        let mantissa ←
+            (if mantissa % 10 < 9 then
                 let midpoint := maxRep + spread / 2
                 let r := g.round mode
-                if r == 1 || (r == 0 && mantissa == midpoint) then mantissa + 1 else mantissa
-            else mantissa
-        if mantissa == maxRep then g
-        else
-            let diff := mantissa - maxRep
-            let digit := (diff * 10) / spread
-            g.push digit
+                if r == 1 || (r == 0 && mantissa == midpoint) then mantissa.addChecked 1 else pure mantissa
+            else pure mantissa)
+        let diff ← mantissa.subChecked maxRep
+        let scaled ← diff.mulChecked 10
+        let digit := scaled / spread
+        return g.push digit
     else
-        g
+        .ok g
 
 def Guard.doRoundUp (g : Guard) (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMantissa maxMantissa : internalrep) (mode : rounding_mode)
-    (location : Error) : Except Error RoundResult :=
-  let g := g.pushOverflow mantissa mode
+    (location : Error) : Except Error RoundResult := do
+  let g ← g.pushOverflow mantissa mode
   let r := g.round mode
   let roundUp := r == 1 || (r == 0 && mantissa % 2 == 1)
-  let res :=
-    if roundUp then
-      if mantissa < maxMantissa ∧ mantissa < maxRep then
-        Guard.bringIntoRange negative (mantissa + 1) exponent minMantissa
+  let res ←
+    (if roundUp then
+      if mantissa < maxMantissa ∧ mantissa < maxRep then do
+        let mantissa ← mantissa.addChecked 1
+        Guard.bringIntoRange negative mantissa exponent minMantissa
       else if maxRep < mantissa ∧ mantissa < maxRepUp then
         Guard.bringIntoRange negative maxRepUp exponent minMantissa
-      else
+      else do
         let (g', mantissa, exponent) := g.doDropDigit mantissa exponent
         let r' := g'.round mode
         let roundUp' := r' == 1 || (r' == 0 && mantissa % 2 == 1)
-        let mantissa := if roundUp' then mantissa + 1 else mantissa
+        let mantissa ← (if roundUp' then mantissa.addChecked 1 else pure mantissa)
         Guard.bringIntoRange negative mantissa exponent minMantissa
     else if maxRep < mantissa ∧ mantissa < maxRepUp then
       Guard.bringIntoRange negative maxRep exponent minMantissa
     else
-      Guard.bringIntoRange negative mantissa exponent minMantissa
+      Guard.bringIntoRange negative mantissa exponent minMantissa)
   if res.exponent_ > maxExponent then .error location
   else .ok res
 
-def doNormalize_scaleUp (minMantissa : UInt64) (m : UInt64) (e : Int) : UInt64 × Int :=
-  if m < minMantissa ∧ minExponent < e then
-    doNormalize_scaleUp minMantissa (m * 10) (e - 1)
-  else (m, e)
+def doNormalize_scaleUp (minMantissa : UInt64) (m : UInt64) (e : Int) : Except Error (UInt64 × Int) :=
+  if m < minMantissa ∧ minExponent < e then do
+    let m ← m.mulChecked 10
+    doNormalize_scaleUp minMantissa m (e - 1)
+  else .ok (m, e)
 termination_by (e - minExponent).toNat
 decreasing_by omega
 
@@ -273,19 +249,21 @@ def doNormalize (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMantissa maxMantissa : UInt64) (mode : rounding_mode) : Except Error Number :=
   if mantissa == 0 then .ok Number.zero
   else
-    let (m, e) := doNormalize_scaleUp minMantissa mantissa exponent
-    let g0 := if negative then Guard.new.set_negative else Guard.new
-    match doNormalize_scaleDown maxMantissa m e g0 with
+    match doNormalize_scaleUp minMantissa mantissa exponent with
     | .error err => .error err
-    | .ok (m, e, g) =>
-      if e < minExponent || m < minMantissa then .ok Number.zero
-      else
-        match doNormalize_capAtMaxRep m e g with
-        | .error err => .error err
-        | .ok (m, e, g) =>
-          match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
+    | .ok (m, e) =>
+      let g0 := if negative then Guard.new.set_negative else Guard.new
+      match doNormalize_scaleDown maxMantissa m e g0 with
+      | .error err => .error err
+      | .ok (m, e, g) =>
+        if e < minExponent || m < minMantissa then .ok Number.zero
+        else
+          match doNormalize_capAtMaxRep m e g with
           | .error err => .error err
-          | .ok res => .ok res.toNumber
+          | .ok (m, e, g) =>
+            match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
+            | .error err => .error err
+            | .ok res => .ok res.toNumber
 
 def Number.normalize (n : Number) (minMant maxMant : UInt64)
     (mode : rounding_mode) : Except Error Number :=
@@ -295,21 +273,21 @@ def Number.normalizeToRange (n : Number) (minMant maxMant : UInt64)
     (mode : rounding_mode) : Except Error (Int64 × Int) :=
   match doNormalize n.negative_ n.mantissa_ n.exponent_ minMant maxMant mode with
   | .error e => .error e
-  | .ok res =>
+  | .ok res => do
     -- safe only when `maxMant ≤ Int64.maxValue`.
-    let mant : Int64 := res.mantissa_.toInt64
-    let signedM : Int64 := if res.negative_ then -mant else mant
-    .ok (signedM, res.exponent_)
+    let mant ← res.mantissa_.toInt64Checked
+    let signedM ← (if res.negative_ then mant.negChecked else pure mant)
+    return (signedM, res.exponent_)
 
 def Number.normalized (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
   (Number.unchecked negative mantissa exponent).normalize minMant maxMant mode
 
--- C++ `Number(rep mantissa, int exponent)` — the signed-int64 entry-point ctor.
--- `rep = std::int64_t`; sign + magnitude split happens inside via `externalToInternal`.
+-- C++ `Number(rep mantissa, int exponent)`, the signed-int64 entry-point ctor.
+-- `rep = std::int64_t`, and `externalToInternal` splits it into sign and magnitude.
 def Number.from_rep (mantissa : Int64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) : Except Error Number :=
-  Number.normalized (mantissa < 0) mantissa.toInt.natAbs.toUInt64 exponent minMant maxMant mode
+  Number.normalized (mantissa < 0) mantissa.magnitude exponent minMant maxMant mode
 
 -- Number(int64_t) ctor
 def Number.ofInt64 (m : Int64) : Number :=
@@ -325,7 +303,7 @@ def Number.truncateAux (m : UInt64) (e : Int) : UInt64 × Int :=
 termination_by (-e).toNat
 decreasing_by omega
 
--- Round toward zero to an integer. Sign is preserved; the exponent is ≥ 0 afterwards
+-- Round toward zero to an integer. Sign is preserved. The exponent is ≥ 0 afterwards,
 -- so re-normalization neither rounds nor throws (mode is inert).
 def Number.truncate (n : Number) : Except Error Number :=
   if n.exponent_ ≥ 0 ∨ n.mantissa_ = 0 then
@@ -377,11 +355,13 @@ def Number.operator_neg (n : Number) : Number :=
   if n.mantissa_ == 0 then Number.zero
   else { n with negative_ := !n.negative_ }
 
-def scaleDown128 (m : UInt128) (e : Int) (g : Guard) : UInt64 × Int × Guard :=
-  if h : m > toUInt128 maxRepUp then
-    let d := toUInt64 (m % 10)
+def scaleDown128 (m : UInt128) (e : Int) (g : Guard) : Except Error (UInt64 × Int × Guard) :=
+  if h : m > toUInt128 maxRepUp then do
+    let d ← toUInt64Checked (m % 10)
     scaleDown128 (m / 10) (e + 1) (g.push d)
-  else (toUInt64 m, e, g)
+  else do
+    let m ← toUInt64Checked m
+    return (m, e, g)
 termination_by m.toNat
 decreasing_by
   rw [BitVec.toNat_udiv, bv128_ten_val]
@@ -391,7 +371,9 @@ def doNormalize_scaleDown128 (maxMantissa : UInt64) (m : UInt128) (e : Int) (g :
     : Except Error (UInt128 × Int × Guard) :=
   if h : m > toUInt128 maxMantissa then
     if e ≥ maxExponent then .error .normalize1
-    else doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
+    else do
+      let d ← toUInt64Checked (m % 10)
+      doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push d)
   else .ok (m, e, g)
 termination_by m.toNat
 decreasing_by
@@ -403,27 +385,32 @@ def doNormalize128 (negative : Bool) (mantissa : UInt128) (exponent : Int)
     (stickyTail : Bool := false) : Except Error Number :=
   if mantissa == 0 then .ok Number.zero
   else
-    let (m, e) :=
-      let rec scaleUp (m : UInt128) (e : Int) : UInt128 × Int :=
-        if m < toUInt128 minMantissa ∧ minExponent < e then
-          scaleUp (m * 10) (e - 1)
-        else (m, e)
-      termination_by (e - minExponent).toNat
-      decreasing_by omega
-      scaleUp mantissa exponent
-    let g0 := if negative then Guard.new.set_negative else Guard.new
-    let g0 := if stickyTail then g0.set_sticky else g0
-    match doNormalize_scaleDown128 maxMantissa m e g0 with
+    let rec scaleUp (m : UInt128) (e : Int) : Except Error (UInt128 × Int) :=
+      if m < toUInt128 minMantissa ∧ minExponent < e then do
+        let m ← m.mulChecked 10
+        scaleUp m (e - 1)
+      else .ok (m, e)
+    termination_by (e - minExponent).toNat
+    decreasing_by omega
+    match scaleUp mantissa exponent with
     | .error err => .error err
-    | .ok (m, e, g) =>
-      if e < minExponent || m < toUInt128 minMantissa then .ok Number.zero
-      else
-        match doNormalize_capAtMaxRep (toUInt64 m) e g with
-        | .error err => .error err
-        | .ok (m, e, g) =>
-          match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
+    | .ok (m, e) =>
+      let g0 := if negative then Guard.new.set_negative else Guard.new
+      let g0 := if stickyTail then g0.set_sticky else g0
+      match doNormalize_scaleDown128 maxMantissa m e g0 with
+      | .error err => .error err
+      | .ok (m, e, g) =>
+        if e < minExponent || m < toUInt128 minMantissa then .ok Number.zero
+        else
+          match toUInt64Checked m with
           | .error err => .error err
-          | .ok res => .ok res.toNumber
+          | .ok m =>
+            match doNormalize_capAtMaxRep m e g with
+            | .error err => .error err
+            | .ok (m, e, g) =>
+              match g.doRoundUp negative m e minMantissa maxMantissa mode .normalize2 with
+              | .error err => .error err
+              | .ok res => .ok res.toNumber
 
 def Number.operator_mul (x y : Number)
     (mode : rounding_mode) : Except Error Number := do
@@ -431,34 +418,37 @@ def Number.operator_mul (x y : Number)
   else if y.operator_eq Number.zero then return y
   else
     let zn := x.negative_ != y.negative_ -- zn: result sign
-    let zm128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ -- result mantissa in unsigned 128 bits
+    let zm128 ← (toUInt128 x.mantissa_).mulChecked (toUInt128 y.mantissa_) -- result mantissa in unsigned 128 bits
     let ze := x.exponent_ + y.exponent_
     let g := if zn then Guard.new.set_negative else Guard.new
-    let (zm, ze, g) := scaleDown128 zm128 ze g
+    let (zm, ze, g) ← scaleDown128 zm128 ze g
     match g.doRoundUp zn zm ze largeRange.min largeRange.max mode .overflow with
     | .error err => .error err
     | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
 
-def divQuotient128 (xm ym : UInt64) (xe ye : Int) : UInt128 × Int × Bool :=
+def divQuotient128 (xm ym : UInt64) (xe ye : Int) : Except Error (UInt128 × Int × Bool) := do
   let xm128 := toUInt128 xm
   let ym128 := toUInt128 ym
   let f : UInt128 := 100000000000000000         -- 10^17
   let fexp : Int := 17
-  let numerator := xm128 * f
+  let numerator ← xm128.mulChecked f
   let zm128 := numerator / ym128
   let ze : Int := xe - ye - fexp
   let remainder := numerator % ym128
   if remainder != 0 then
     let correctionFactor : UInt128 := 100000    -- 10^5
-    let partialNumerator := remainder * correctionFactor
+    let partialNumerator ← remainder.mulChecked correctionFactor
     let correction := partialNumerator / ym128
     -- `dropped` does not depend on the correction branch, so it is bound before it and each
     -- branch returns the finished triple. Do not reintroduce a `let (zm128, ze) := if …`:
     -- a `match` on an `ite` blows the kernel's recursion guard in `divQuotient128_correct`.
     let dropped := partialNumerator % ym128 != 0
-    if correction != 0 then (zm128 * correctionFactor + correction, ze - 5, dropped)
-    else (zm128, ze, dropped)
-  else (zm128, ze, false)
+    if correction != 0 then
+      let scaled ← zm128.mulChecked correctionFactor
+      let corrected ← scaled.addChecked correction
+      return (corrected, ze - 5, dropped)
+    else return (zm128, ze, dropped)
+  else return (zm128, ze, false)
 
 def Number.operator_div (x y : Number)
     (mode : rounding_mode) : Except Error Number := do
@@ -466,7 +456,7 @@ def Number.operator_div (x y : Number)
   else if x.operator_eq Number.zero then return x
   else
     let zn := x.negative_ != y.negative_
-    let (zm128, ze, dropped) := divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
+    let (zm128, ze, dropped) ← divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
     doNormalize128 zn zm128 ze largeRange.min largeRange.max mode dropped
 
 -- Number::power, exponentiation by squaring (to_nearest multiply)
@@ -509,34 +499,42 @@ def Number.operator_add (x y : Number)
         let g := if xn then Guard.new.set_negative else Guard.new
         (xm, xe, ym, ye, g)
     if xn == yn then
-      let zm128 : UInt128 := toUInt128 xm + toUInt128 ym
-      let (zm, xe, g) :=
-        if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-          let (g', zm128', xe') := g.doDropDigit128 zm128 xe
-          (toUInt64 zm128', xe', g')
-        else (toUInt64 zm128, xe, g)
+      let zm128 ← (toUInt128 xm).addChecked (toUInt128 ym)
+      let (zm, xe, g) ←
+        (if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then do
+          let (g', zm128', xe') ← g.doDropDigit128 zm128 xe
+          let zm ← toUInt64Checked zm128'
+          pure (zm, xe', g')
+        else do
+          let zm ← toUInt64Checked zm128
+          pure (zm, xe, g))
       match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
       | .error err => .error err
       | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
     else
-      let (zm128, zn, ze) :=
-        if xm > ym then (toUInt128 xm - toUInt128 ym, xn, xe)
-        else (toUInt128 ym - toUInt128 xm, yn, xe)
+      let (zm128, zn, ze) ←
+        (if xm > ym then do
+          let zm128 ← (toUInt128 xm).subChecked (toUInt128 ym)
+          pure (zm128, xn, xe)
+        else do
+          let zm128 ← (toUInt128 ym).subChecked (toUInt128 xm)
+          pure (zm128, yn, xe))
       let upperLimit : UInt128 := toUInt128 largeRange.min * 1000
       let rec recover (m : UInt128) (e : Int) (g : Guard)
-          (fuel : Nat) : UInt128 × Int × Guard :=
+          (fuel : Nat) : Except Error (UInt128 × Int × Guard) :=
         match fuel with
-        | 0 => (m, e, g)
+        | 0 => .ok (m, e, g)
         | fuel + 1 =>
-          if m < upperLimit ∧ ¬ g.empty then
+          if m < upperLimit ∧ ¬ g.empty then do
             let (g', d) := g.pop
-            recover (m * 10 - toUInt128 d) (e - 1) g' fuel
-          else (m, e, g)
-      let (zm128, ze, g) := recover zm128 ze g 40
+            let m10 ← m.mulChecked 10
+            let m' ← m10.subChecked (toUInt128 d)
+            recover m' (e - 1) g' fuel
+          else .ok (m, e, g)
+      let (zm128, ze, g) ← recover zm128 ze g 40
       -- doRoundDown (Enabled330): borrow 1 unless the guard is exactly empty.
-      -- DELIBERATE DEVIATION from the vendored C++ (PR 7389 head)
       let stickyTail := !g.empty
-      let zm128 := if g.empty then zm128 else zm128 - 1
+      let zm128 ← (if g.empty then pure zm128 else zm128.subChecked 1)
       doNormalize128 zn zm128 ze largeRange.min largeRange.max mode stickyTail
 
 def Number.operator_sub (x y : Number)
@@ -551,43 +549,43 @@ def Number.mantissa (n : Number) : rep :=
 def Number.exponent (n : Number) : Int :=
   if n.mantissa_ > maxRep then n.exponent_ + 1 else n.exponent_
 
-def Number.to_rep (n : Number) (mode : rounding_mode) : Except Error rep :=
+def Number.to_rep (n : Number) (mode : rounding_mode) : Except Error rep := do
   let drops : rep := n.mantissa
   let offset : Int := n.exponent
   if drops == 0 then .ok 0
   else
     let g := if n.negative_ then Guard.new.set_negative else Guard.new
-    let drops : rep := if n.negative_ then -drops else drops
+    let drops ← (if n.negative_ then drops.negChecked else pure drops)
 
-    let rec shift (drops : rep) (offset : Int) (g : Guard) : rep × Guard :=
+    let rec shift (drops : rep) (offset : Int) (g : Guard) : Except Error (rep × Guard) :=
       g.doDropDigitWithTargetI64 drops offset 0
 
     let rec grow (drops : rep) (offset : Int) : Except Error rep :=
       if offset > 0 then
         if drops > maxRep.toInt64 / 10 then
           .error .overflow
-        else grow (drops * 10) (offset - 1)
+        else do
+          let drops ← drops.mulChecked 10
+          grow drops (offset - 1)
       else .ok drops
     termination_by offset.toNat
     decreasing_by omega
 
-    let (drops, g) :=
-      if offset < 0 then shift drops offset g
-      else (drops, g)
+    let (drops, g) ←
+      (if offset < 0 then shift drops offset g
+      else pure (drops, g))
 
     match (if offset ≥ 0 then grow drops offset else .ok drops) with
     | .error e => .error e
     | .ok drops =>
-      let g := g.pushOverflow drops.toUInt64 mode
       let r := g.round mode
       if r == 1 || (r == 0 && drops % 2 == 1) then
         if drops ≥ maxRep.toInt64 then
           .error .overflow
         else
-          let drops := drops + 1
-          .ok (if n.negative_ then -drops else drops)
+          let drops ← drops.addChecked 1
+          if n.negative_ then drops.negChecked else return drops
       else
-        let drops := if maxRep.toInt64 < drops ∧ drops < maxRepUp.toInt64 then maxRep.toInt64 else drops
-        .ok (if n.negative_ then -drops else drops)
+        if n.negative_ then drops.negChecked else return drops
 
 end XRPL.Model.Protocol

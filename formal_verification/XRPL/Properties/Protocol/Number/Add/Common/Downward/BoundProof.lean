@@ -7,7 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Helpers
 namespace XRPL.Model.Protocol
 
 set_option maxHeartbeats 1600000 in
--- three-way case split on shouldRoundUp_downward × cusp; each branch runs nlinarith over
+-- three-way case split on shouldRoundUp_downward × cusp. Each branch runs nlinarith over
 -- large constants (2^63 + 2 ≈ 9.2e18)
 
 theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : Number)
@@ -38,8 +38,6 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
       have hy_nn' : 0 ≤ y.toRat := Number.toRat_nonneg_of_nonnegative y hy_nn
       linarith
   rw [h_abs_diff_eq, h_result_abs, habs_xy_eq]
-  -- Now: |(res_pos.mantissa : ℚ) * 10^res_pos.exponent_ - (zm + f) * 10^ze'|
-  --        ≤ (zm + f) * 10^ze' * (10/(2^63+2))
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge
@@ -112,7 +110,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
     rw [hv_val]
     obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
     rcases hv_cases with ⟨hv, _, _⟩ | ⟨hv, _⟩ | ⟨hv, hzm_eq, hfire⟩
-    · -- v = maxRepNat: truncate clamp; err = zm + f − maxRepNat ∈ (0, 4).
+    · -- v = maxRepNat: truncate clamp, err = zm + f − maxRepNat ∈ (0, 4).
       subst hv
       rw [show (maxRepNat : ℚ) * 10 ^ ze' - ((zm.toNat : ℚ) + f) * 10 ^ ze'
             = -((((zm.toNat : ℚ) + f) - maxRepNat) * 10 ^ ze') from by ring,

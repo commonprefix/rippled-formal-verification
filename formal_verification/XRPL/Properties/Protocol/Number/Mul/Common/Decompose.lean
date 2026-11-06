@@ -34,13 +34,14 @@ theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
   have hy_mant_pos := mantissa_toNat_pos_of_bounds hy_bounds
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
-  unfold Number.operator_mul at hok
+  rw [Number.operator_mul_eq_spec] at hok
+  unfold Number.operator_mulSpec at hok
   simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
   set zm128 : UInt128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hzm128_def
   set ze : Int := x.exponent_ + y.exponent_ with hze_def
   set g0 : Guard := if zn then Guard.new.set_negative else Guard.new with hg0_def
-  set sd_result : UInt64 × Int × Guard := scaleDown128 zm128 ze g0 with hsd_def
+  set sd_result : UInt64 × Int × Guard := scaleDown128Spec zm128 ze g0 with hsd_def
   set zm : UInt64 := sd_result.1 with hzm_def
   set ze' : Int := sd_result.2.1 with hze'_def
   set g : Guard := sd_result.2.2 with hg_def
@@ -115,7 +116,7 @@ theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
       rw [show maxRepUp.toNat = maxRepUpNat from rfl]
     omega
   have h_g_sbit : g.sbit_ = zn := by
-    have h_g_eq : g = (scaleDown128 zm128 ze g0).2.2 := by rw [hg_def, hsd_def]
+    have h_g_eq : g = (scaleDown128Spec zm128 ze g0).2.2 := by rw [hg_def, hsd_def]
     rw [h_g_eq, scaleDown128_sbit_preserved, hg0_def]
     by_cases hzn : zn
     · rw [if_pos hzn]; exact hzn.symm
@@ -211,16 +212,16 @@ theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding
     doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge hzm_le_maxRep .overflow res h_rup hres_mant_ne
   exact Number.normalize_mantissa_le_maxRepUp_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok' h_exp_ge
 
-/-- `operator_mul` short-circuits on a zero operand (returning that operand), so a
-nonzero result forces both operands' mantissas to be nonzero. Lets the public
-`operator_mul_rounds_<mode>` theorems drop their `hx_mant_ne`/`hy_mant_ne` hypotheses. -/
+/-- `operator_mul` returns a zero operand unchanged, so a nonzero result forces both operands' mantissas to be
+nonzero. -/
 theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mode}
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
     x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 := by
   refine ⟨fun hxz => ?_, fun hyz => ?_⟩
   · have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
-    unfold Number.operator_mul at hok
+    rw [Number.operator_mul_eq_spec] at hok
+    unfold Number.operator_mulSpec at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm

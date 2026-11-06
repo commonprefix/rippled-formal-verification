@@ -6,19 +6,12 @@ import XRPL.Properties.Protocol.Number.Common.Constants
 
 /-! # `STAmount.toNumber` exactness on canonical amounts
 
-Amounts produced by `ofNumber` and `roundToExponent` are canonical for their
-type. The `Number` tree proves `toNumber` exactness for the two canonical shapes
-separately. This file packages both into one value-exact, normalized `Number`
-statement.
-
-* fractional (`IOUCanonical`): `toNumber` is the exact 19-digit lift.
-* integral (`IntegralCanonical`, mantissa fits `Int64`): `toNumber` routes through
-  `IntAmount.toNumber`, exact and integer-valued (`den = 1`). This also covers the
-  integral zero. -/
+Amounts produced by `ofNumber` and `roundToExponent` are canonical for their type. `toNumber` is value-exact
+and normalized on both canonical shapes, fractional (`IOUCanonical`) and integral (`IntegralCanonical`). -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`toNumber` is value-exact and normalized on a canonical IOU amount.** The
+/-- `toNumber` is value-exact and normalized on a canonical IOU amount. The
 19-digit lift preserves the value and is normalized. -/
 lemma STAmount.toNumber_iou_exact (s : STAmount) (mode : rounding_mode)
     (hc : s.IOUCanonical) :
@@ -50,9 +43,8 @@ lemma STAmount.IntegralCanonical.den_eq_one (s : STAmount) (hc : s.IntegralCanon
   rw [STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
   exact Rat.den_intCast _
 
-/-- **`toNumber` is value-exact, normalized, and integer-valued on an offset-`0`
-integral amount within `maxRep`.** It needs no bound from the numeric type, so it
-also covers custom integral types whose bound exceeds `maxRep`. -/
+/-- `toNumber` is value-exact, normalized, and integer-valued on an offset-`0` integral amount within
+`maxRep`. It needs no bound from the numeric type, so it also covers types whose bound exceeds `maxRep`. -/
 lemma STAmount.toNumber_offset_zero_exact (s : STAmount) (mode : rounding_mode)
     (hint : s.mNumericType.isIntegral = true) (hoff : s.mOffset = 0)
     (hval : s.mValue.toNat ≤ maxRep.toNat) :
@@ -77,7 +69,9 @@ lemma STAmount.toNumber_offset_zero_exact (s : STAmount) (mode : rounding_mode)
     split <;> omega
   have hroute : s.toNumber mode = IntAmount.toNumber ⟨s.signedDrops.toInt64⟩ mode := by
     unfold STAmount.toNumber STAmount.intAmount
-    rw [if_pos hint', if_pos hint']
+    rw [if_pos hint', if_pos hint', Int.toInt64Checked_of_bounds (by rw [hmin] at hsd_lo; omega)
+      (by rw [hmax'] at hsd_hi; omega), ok_bind]
+    rfl
   obtain ⟨xn, hokn, hvaln, hnorm⟩ :=
     IntAmount.toNumber_exact ⟨s.signedDrops.toInt64⟩ mode h_ne_min
   have hsd_val : s.toRat = (s.signedDrops : ℚ) := STAmount.toRat_of_offset_zero s hoff
@@ -97,9 +91,8 @@ lemma STAmount.toNumber_integral_small_exact (s : STAmount) (mode : rounding_mod
     hc.offset_zero (by rw [maxRep_val]; omega)
   exact ⟨sn, hok, hv, hn⟩
 
-/-- **`toNumber` is value-exact, normalized, and integer-valued on a canonical
-integral amount** whose type's `maxValue` fits `maxRep`, as for `native` and
-`int64`. This also covers the integral zero. -/
+/-- `toNumber` is value-exact, normalized, and integer-valued on a canonical integral amount whose type's
+`maxValue` fits `maxRep`, as for `native` and `int64`. This also covers the integral zero. -/
 lemma STAmount.toNumber_integral_exact (s : STAmount) (mode : rounding_mode)
     (hc : s.IntegralCanonical)
     (hmax : s.mNumericType.maxValue.toNat ≤ maxRep.toNat) :
@@ -108,9 +101,8 @@ lemma STAmount.toNumber_integral_exact (s : STAmount) (mode : rounding_mode)
   STAmount.toNumber_offset_zero_exact s mode hc.is_integral hc.offset_zero
     (le_trans hc.in_range hmax)
 
-/-- The canonical storage shapes `toNumber` is value-exact on: the fractional
-canonical form, or the integral canonical form with the stored magnitude within
-`Int64`. -/
+/-- The canonical storage shapes `toNumber` is value-exact on: the fractional canonical form, or the integral
+canonical form with the stored magnitude within `Int64`. -/
 def STAmount.ExactCanonical (s : STAmount) : Prop :=
   s.IOUCanonical ∨ (s.IntegralCanonical ∧ s.mValue.toNat ≤ 2 ^ 63 - 1)
 
@@ -143,5 +135,32 @@ lemma STAmount.toNumber_exact_of (a : STAmount) (m : Number) (hc : a.ExactCanoni
   rw [hsn, Except.ok.injEq] at h
   subst h
   exact ⟨hv, hn⟩
+
+/-- An amount stored canonically for its type, with an integral type's bound within `maxRep`. `STAmount.toNumber`
+is exact on it. -/
+def STAmount.Canonical (s : STAmount) : Prop :=
+  (s.integral = true → s.IntegralCanonical ∧ s.mNumericType.maxValue.toNat ≤ maxRep.toNat) ∧
+  (s.integral = false → s.IOUCanonical)
+
+/-- A transaction amount is canonical, or zero where the transaction allows it. -/
+def STAmount.CanonicalOrZero (s : STAmount) : Prop :=
+  s.Canonical ∨ s.isZero = true
+
+/-- A `Canonical` amount is `ExactCanonical`: the integral bound `maxValue ≤ maxRep` keeps the stored magnitude
+below `2^63`. -/
+lemma STAmount.Canonical.exactCanonical (s : STAmount) (hc : s.Canonical) :
+    s.ExactCanonical := by
+  by_cases hint : s.integral = true
+  · obtain ⟨hic, hmax⟩ := hc.1 hint
+    refine Or.inr ⟨hic, ?_⟩
+    have h63 : maxRep.toNat ≤ 2 ^ 63 - 1 := by rw [maxRep_val]; norm_num
+    calc s.mValue.toNat ≤ s.mNumericType.maxValue.toNat := hic.in_range
+      _ ≤ maxRep.toNat := hmax
+      _ ≤ 2 ^ 63 - 1 := h63
+  · have hfr : s.integral = false := by
+      cases hb : s.integral with
+      | false => rfl
+      | true => exact absurd hb hint
+    exact Or.inl (hc.2 hfr)
 
 end XRPL.Model.Protocol

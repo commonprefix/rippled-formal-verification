@@ -82,6 +82,9 @@ structure RawVault.Valid (rv : RawVault) : Prop where
   schedule_gap : ∀ s ∈ rv.schedule, s.hasValidGap = true
   earlyExitFeeRate_closedEnded : rv.earlyExitFeeRate.isSome = true → rv.schedule.isSome = true
   earlyExitFeeRate_le : ∀ r ∈ rv.earlyExitFeeRate, r ≤ maxEarlyExitFeeRate
+  assetsAvailable_representable : STAmount.isRounded rv.numericType rv.assetsAvailable = false
+  assetsAvailable_onGrid : rv.assetsAvailable = Number.zero ∨ rv.assetsAvailable.mantissa_.toNat %
+    10 ^ (rv.numericType.baseExponent rv.scale - rv.assetsAvailable.exponent_).toNat = 0
 
 -- Deciding `WF` reduces to the conjunction of its clauses, each decidable above.
 instance (rv : RawVault) : Decidable rv.WF :=
@@ -112,9 +115,14 @@ instance (rv : RawVault) : Decidable rv.Valid :=
       (rv.depositBlocked = true → rv.ownerCanBlockDeposit = true) ∧
       (∀ s ∈ rv.schedule, s.hasValidGap = true) ∧
       (rv.earlyExitFeeRate.isSome = true → rv.schedule.isSome = true) ∧
-      (∀ r ∈ rv.earlyExitFeeRate, r ≤ maxEarlyExitFeeRate))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩⟩
+      (∀ r ∈ rv.earlyExitFeeRate, r ≤ maxEarlyExitFeeRate) ∧
+      STAmount.isRounded rv.numericType rv.assetsAvailable = false ∧
+      (rv.assetsAvailable = Number.zero ∨ rv.assetsAvailable.mantissa_.toNat %
+        10 ^ (rv.numericType.baseExponent rv.scale - rv.assetsAvailable.exponent_).toNat = 0))
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q⟩ =>
+      ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q⟩ =>
+      ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q⟩⟩
 
 /-- A `Vault` extends `RawVault` with proofs that the representation is
 well-formed (`wf`) and satisfies the invariant (`valid`, in Number operators). -/

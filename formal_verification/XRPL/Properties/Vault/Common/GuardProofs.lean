@@ -2,174 +2,179 @@ import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.VaultValid
 import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
+import XRPL.Properties.Protocol.Number.Signum.Signum
 import XRPL.Model.Vault.VaultSet
 import XRPL.Model.Vault.VaultDelete
+import XRPL.Properties.Vault.Proofs.Walk
 
-/-! # Shared bridges for the pure vault guards
+/-! # Vault state guards
 
-`canVaultSet` and `canVaultDelete` are boolean guards over `Number.operator_ne` /
-`Number.operator_lt`. Their exit theorems need two bridges:
-
-* a structural one, `operator_eq`/`operator_ne` decide record equality of the
-  three `Number` fields, used where the statement compares against `Number.zero`
-  with `=`/`≠`;
-* the rational one from `Compare`, `operator_ne`/`operator_lt` agree with the
-  order on `toRat` once both sides are normalized.
--/
-
-namespace XRPL.Model.Protocol
-
-/-- `Number.operator_eq` decides structural record equality. -/
-theorem Number.operator_eq_iff_eq (x y : Number) :
-    x.operator_eq y = true ↔ x = y := by
-  unfold Number.operator_eq
-  rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, beq_iff_eq, beq_iff_eq]
-  constructor
-  · rintro ⟨⟨hn, hm⟩, he⟩
-    obtain ⟨xn, xm, xe⟩ := x
-    obtain ⟨yn, ym, ye⟩ := y
-    simp only at hn hm he
-    subst hn; subst hm; subst he; rfl
-  · rintro rfl
-    exact ⟨⟨rfl, rfl⟩, rfl⟩
-
-/-- `Number.operator_ne` decides structural record inequality. -/
-theorem Number.operator_ne_iff_ne (x y : Number) :
-    x.operator_ne y = true ↔ x ≠ y := by
-  rw [ne_eq, ← Number.operator_eq_iff_eq]
-  unfold Number.operator_ne
-  cases x.operator_eq y <;> simp
-
-/-- On a normalized number, `operator_ne` against zero is false exactly at
-rational zero. -/
-theorem Number.operator_ne_zero_eq_false_iff (x : Number) (hx : x.isNormalized) :
-    x.operator_ne Number.zero = false ↔ x.toRat = 0 := by
-  rw [Bool.eq_false_iff, ne_eq, operator_ne_iff x Number.zero hx Number.zero_isNormalized,
-      Number.toRat_zero, not_not]
-
-end XRPL.Model.Protocol
+Proof bodies of the `canVaultUpdate`, `canVaultDelete` and `isInsolvent` headlines, and the two facts about the
+maximum an update sets. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-! ## `Vault.canVaultSet` proof bodies -/
+/-- The grid check runs first, so an off-grid maximum stops there. -/
+lemma Vault.canVaultUpdate_off_grid_proof (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
+    (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok false) :
+    v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tecPRECISION_LOSS := by
+  simp [Vault.canVaultUpdate, hgrid, bind, Except.bind, pure, Except.pure]
 
-/-- **Proof body of `canVaultSet_below_total`.** -/
-theorem Vault.canVaultSet_below_total_proof (v : Vault) (assetsMaximum : Number)
-    (hne : assetsMaximum.operator_ne Number.zero = true)
-    (hlt : assetsMaximum.operator_lt v.assetsTotal = true) :
-    v.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
-  unfold Vault.canVaultSet
-  exact if_pos (by rw [Bool.and_eq_true]; exact ⟨hne, hlt⟩)
+/-- With the maximum on the grid, the permission check is the next to fire. -/
+lemma Vault.canVaultUpdate_no_permission_proof (v : Vault) (assetsMaximum : Option Number)
+    (blockDeposit unblockDeposit : Bool)
+    (hgrid : ∀ m ∈ assetsMaximum, m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
+    (howner : v.ownerCanBlockDeposit = false) (hflag : (blockDeposit || unblockDeposit) = true) :
+    v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tecNO_PERMISSION := by
+  cases assetsMaximum with
+  | none => simp [Vault.canVaultUpdate, howner, hflag, bind, Except.bind, pure, Except.pure]
+  | some m =>
+    simp [Vault.canVaultUpdate, hgrid m rfl, howner, hflag, bind, Except.bind, pure, Except.pure]
 
-/-- **Proof body of `canVaultSet_success`.** -/
-theorem Vault.canVaultSet_success_proof (v : Vault) (assetsMaximum : Number)
-    (hok : (assetsMaximum.operator_ne Number.zero &&
-        assetsMaximum.operator_lt v.assetsTotal) = false) :
-    v.canVaultSet assetsMaximum = .tesSUCCESS := by
-  unfold Vault.canVaultSet
-  exact if_neg (by rw [Bool.not_eq_true]; exact hok)
+/-- With the grid and permission checks passed, a nonzero maximum below the total fails the limit check. -/
+lemma Vault.canVaultUpdate_below_total_proof (v : Vault) (m assetsTotal : Number)
+    (blockDeposit unblockDeposit : Bool)
+    (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
+    (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false)
+    (hat : v.assetsTotal = .ok assetsTotal)
+    (hne : m.operator_ne Number.zero = true) (hlt : m.operator_lt assetsTotal = true) :
+    v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tecLIMIT_EXCEEDED := by
+  simp [Vault.canVaultUpdate, hgrid, hperm, hat, hne, hlt, bind, Except.bind, pure, Except.pure]
 
-/-- **Proof body of `canVaultSet_error_codes`.** -/
-theorem Vault.canVaultSet_error_codes_proof (v : Vault) (assetsMaximum : Number) :
-    v.canVaultSet assetsMaximum = .tesSUCCESS ∨
-    v.canVaultSet assetsMaximum = .tecLIMIT_EXCEEDED := by
-  unfold Vault.canVaultSet
-  split_ifs <;> first | exact Or.inl rfl | exact Or.inr rfl
+/-- Walks every exit of `canVaultUpdate`. -/
+lemma Vault.canVaultUpdate_error_codes_proof (v : Vault) (assetsMaximum : Option Number)
+    (blockDeposit unblockDeposit : Bool) (ter : TER)
+    (hok : v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok ter) :
+    ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecNO_PERMISSION ∨
+      ter = .tecLIMIT_EXCEEDED := by
+  simp only [Vault.canVaultUpdate, bind, Except.bind, pure, Except.pure] at hok
+  walk_ok
+  all_goals simp
 
-/-- **Proof body of `lawful_canVaultSet_iff`.** -/
-theorem Vault.lawful_canVaultSet_iff_proof (v : Vault)
-    (assetsMaximum : Number)
-    (hnorm : assetsMaximum.isNormalized) :
-    v.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ v.toExact.assetsTotal ≤ assetsMaximum.toRat := by
-  have htotal : v.assetsTotal.isNormalized := v.wf.assetsTotal_norm
-  -- the nonzero guard vanishes exactly at rational zero
-  have hb1 : assetsMaximum.operator_ne Number.zero = false ↔ assetsMaximum.toRat = 0 :=
-    Number.operator_ne_zero_eq_false_iff assetsMaximum hnorm
-  -- the below-total guard vanishes exactly when the maximum is at least the total
-  have hb2 : assetsMaximum.operator_lt v.assetsTotal = false ↔
-      v.assetsTotal.toRat ≤ assetsMaximum.toRat := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff assetsMaximum v.assetsTotal hnorm htotal, not_lt]
-  -- `v.toExact.assetsTotal` is `v.assetsTotal.toRat` by definition of `toExact`
-  show v.canVaultSet assetsMaximum = .tesSUCCESS ↔
-      assetsMaximum.toRat = 0 ∨ v.assetsTotal.toRat ≤ assetsMaximum.toRat
-  unfold Vault.canVaultSet
-  by_cases hc : (assetsMaximum.operator_ne Number.zero &&
-      assetsMaximum.operator_lt v.assetsTotal) = true
-  · rw [if_pos hc]
-    rw [Bool.and_eq_true] at hc
-    refine iff_of_false (by decide) ?_
-    rintro (h0 | hle)
-    · rw [hb1.mpr h0] at hc; exact absurd hc.1 (by decide)
-    · rw [hb2.mpr hle] at hc; exact absurd hc.2 (by decide)
-  · rw [if_neg hc]
-    rw [Bool.not_eq_true, Bool.and_eq_false_iff] at hc
-    refine iff_of_true rfl ?_
-    rcases hc with h1 | h2
-    · exact Or.inl (hb1.mp h1)
-    · exact Or.inr (hb2.mp h2)
+/-- A lawful vault's exact total is zero exactly when it holds no cash and nothing deployed, both being
+nonnegative. -/
+lemma Vault.toExact_assetsTotal_eq_zero_iff (v : Vault) :
+    v.toExact.assetsTotal = 0 ↔ v.assetsAvailable.toRat = 0 ∧ v.assetsDeployed.toRat = 0 := by
+  have hA : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hD : 0 ≤ v.assetsDeployed.toRat := v.exact.assetsDeployed_nonneg
+  show v.assetsAvailable.toRat + v.assetsDeployed.toRat = 0 ↔ _
+  constructor
+  · intro h; constructor <;> linarith
+  · rintro ⟨h1, h2⟩; rw [h1, h2, add_zero]
 
-/-! ## `Vault.canVaultDelete` proof bodies -/
+/-- Proof of `Vault.isInsolvent_iff`: the total is zero exactly when the cash and the deployed assets are. -/
+lemma Vault.isInsolvent_iff_proof (v : Vault) :
+    v.isInsolvent = true ↔ v.toExact.assetsTotal = 0 ∧ 0 < v.toExact.sharesTotal := by
+  rw [Vault.toExact_assetsTotal_eq_zero_iff]
+  unfold Vault.isInsolvent
+  unfold RawVault.toExact
+  simp only [Bool.and_eq_true, decide_eq_true_eq]
+  rw [Number.toRat_eq_zero_iff.symm, Number.toRat_eq_zero_iff.symm,
+    signum_eq_one_iff v.sharesTotal v.wf.sharesTotal_norm]
+  have hcast : ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = v.sharesTotal.toRat :=
+    RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
+  constructor
+  · rintro ⟨ha, hs⟩
+    refine ⟨ha, ?_⟩
+    have : (0:ℚ) < ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) := by rw [hcast]; exact hs
+    exact_mod_cast this
+  · rintro ⟨ha, hs⟩
+    refine ⟨ha, ?_⟩
+    have : (0:ℚ) < ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) := by exact_mod_cast hs
+    rw [hcast] at this; exact this
 
-/-- **Proof body of `lawful_canVaultDelete_iff`.** On a lawful vault
-`assetsAvailable ≤ assetsTotal` and `0 ≤ assetsAvailable`, so `assetsTotal = 0`
-already forces `assetsAvailable = 0`. The redundant middle conjunct is dropped:
-the success condition is `assetsTotal = 0 ∧ sharesTotal = 0`, and the
-`assetsAvailable` guard (checked first) is discharged from `assetsTotal = 0`. -/
-theorem Vault.lawful_canVaultDelete_iff_proof (v : Vault) :
-    v.canVaultDelete = .tesSUCCESS ↔
+/-- `canVaultDelete` in closed form: once `assetsAvailable` is zero, the computed total is
+`assetsDeployed`, so the check never fails and reads the three stored records. -/
+private lemma Vault.canVaultDelete_eq (v : Vault) :
+    v.canVaultDelete = .ok (if (v.assetsAvailable.operator_ne Number.zero ||
+      v.assetsDeployed.operator_ne Number.zero || v.sharesTotal.operator_ne Number.zero) = true
+      then .tecHAS_OBLIGATIONS else .tesSUCCESS) := by
+  unfold Vault.canVaultDelete
+  cases hAb : v.assetsAvailable.operator_ne Number.zero
+  · have hA : v.assetsAvailable = Number.zero := by
+      by_contra hne
+      have h := (Number.operator_ne_iff_ne _ _).mpr hne
+      rw [hAb] at h
+      exact absurd h (by decide)
+    have hat : v.assetsTotal = .ok v.assetsDeployed := by
+      show v.assetsAvailable.operator_add v.assetsDeployed .downward = _
+      rw [hA]; exact Number.operator_add_zero_left _ _
+    cases hDb : v.assetsDeployed.operator_ne Number.zero <;>
+      cases hSb : v.sharesTotal.operator_ne Number.zero <;>
+      simp [bind, Except.bind, pure, Except.pure, *]
+  · simp [pure, Except.pure]
+
+/-- The closed form's condition read on the stored records. -/
+private lemma Vault.canVaultDelete_cond_iff (v : Vault) :
+    (v.assetsAvailable.operator_ne Number.zero || v.assetsDeployed.operator_ne Number.zero ||
+      v.sharesTotal.operator_ne Number.zero) = true ↔
+    (v.assetsAvailable ≠ Number.zero ∨ v.assetsDeployed ≠ Number.zero ∨
+      v.sharesTotal ≠ Number.zero) := by
+  rw [Bool.or_eq_true, Bool.or_eq_true, Number.operator_ne_iff_ne, Number.operator_ne_iff_ne,
+    Number.operator_ne_iff_ne, or_assoc]
+
+/-- On a lawful vault both parts of the total are nonnegative, so the total is zero exactly when
+`assetsAvailable` and `assetsDeployed` are. -/
+lemma Vault.canVaultDelete_lawful_iff_proof (v : Vault) :
+    v.canVaultDelete = .ok .tesSUCCESS ↔
       v.toExact.assetsTotal = 0 ∧ v.toExact.sharesTotal = 0 := by
-  have hav := Number.operator_ne_zero_eq_false_iff v.assetsAvailable v.wf.assetsAvailable_norm
-  have hat := Number.operator_ne_zero_eq_false_iff v.assetsTotal v.wf.assetsTotal_norm
-  have hst := Number.operator_ne_zero_eq_false_iff v.sharesTotal v.wf.sharesTotal_norm
+  have hA := Number.toRat_eq_zero_iff_eq_zero v.wf.assetsAvailable_norm
+  have hD := Number.toRat_eq_zero_iff_eq_zero v.wf.assetsDeployed_norm
+  have hS := Number.toRat_eq_zero_iff_eq_zero v.wf.sharesTotal_norm
   have hshares : v.toExact.sharesTotal = 0 ↔ v.sharesTotal.toRat = 0 := by
     rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, Nat.cast_eq_zero]
-  -- on a lawful vault `assetsTotal = 0` forces `assetsAvailable = 0`
-  have hAV0 : v.assetsTotal.toRat = 0 → v.assetsAvailable.toRat = 0 := fun h => by
-    have hle : v.assetsAvailable.toRat ≤ v.assetsTotal.toRat := v.exact.assetsAvailable_le
-    have hnn : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
-    rw [h] at hle
-    exact le_antisymm hle hnn
-  show v.canVaultDelete = .tesSUCCESS ↔
-      v.assetsTotal.toRat = 0 ∧ v.toExact.sharesTotal = 0
-  rw [← hat, hshares, ← hst]
-  unfold Vault.canVaultDelete
-  split_ifs with h1 h2 h3
-  · refine iff_of_false (by decide) ?_
-    rintro ⟨hat', _⟩
-    have hAvz : v.assetsAvailable.operator_ne Number.zero = false := hav.mpr (hAV0 (hat.mp hat'))
-    rw [hAvz] at h1; exact absurd h1 (by decide)
-  · refine iff_of_false (by decide) ?_
-    rintro ⟨hat', _⟩; rw [h2] at hat'; exact absurd hat' (by decide)
-  · refine iff_of_false (by decide) ?_
-    rintro ⟨_, hst'⟩; rw [h3] at hst'; exact absurd hst' (by decide)
-  · exact iff_of_true rfl ⟨Bool.eq_false_iff.mpr h2, Bool.eq_false_iff.mpr h3⟩
+  rw [Vault.canVaultDelete_eq, Vault.toExact_assetsTotal_eq_zero_iff, hshares, hA, hD, hS]
+  split_ifs with h
+  · refine iff_of_false (by simp) ?_
+    rintro ⟨⟨h1, h2⟩, h3⟩
+    rcases (Vault.canVaultDelete_cond_iff v).mp h with h | h | h <;> contradiction
+  · refine iff_of_true rfl ?_
+    rw [Vault.canVaultDelete_cond_iff, not_or, not_or, not_not, not_not, not_not] at h
+    exact ⟨⟨h.1, h.2.1⟩, h.2.2⟩
 
-/-- **Proof body of `canVaultDelete_error_codes`.** -/
-theorem Vault.canVaultDelete_error_codes_proof (v : Vault) :
-    v.canVaultDelete = .tesSUCCESS ∨
-    v.canVaultDelete = .tecHAS_OBLIGATIONS := by
-  unfold Vault.canVaultDelete
-  split_ifs <;> first | exact Or.inl rfl | exact Or.inr rfl
+/-- The closed form returns one of the two codes. -/
+lemma Vault.canVaultDelete_error_codes_proof (v : Vault) :
+    v.canVaultDelete = .ok .tesSUCCESS ∨
+    v.canVaultDelete = .ok .tecHAS_OBLIGATIONS := by
+  rw [Vault.canVaultDelete_eq]
+  split_ifs <;> simp
 
-/-- **Proof body of `canVaultDelete_has_obligations_iff`.** -/
-theorem Vault.canVaultDelete_has_obligations_iff_proof (v : Vault) :
-    v.canVaultDelete = .tecHAS_OBLIGATIONS ↔
-      (v.assetsAvailable ≠ Number.zero ∨ v.assetsTotal ≠ Number.zero ∨
+/-- The closed form fails exactly when one of the three stored records is nonzero. -/
+lemma Vault.canVaultDelete_has_obligations_iff_proof (v : Vault) :
+    v.canVaultDelete = .ok .tecHAS_OBLIGATIONS ↔
+      (v.assetsAvailable ≠ Number.zero ∨ v.assetsDeployed ≠ Number.zero ∨
         v.sharesTotal ≠ Number.zero) := by
-  unfold Vault.canVaultDelete
-  rw [← Number.operator_ne_iff_ne v.assetsAvailable, ← Number.operator_ne_iff_ne v.assetsTotal,
-      ← Number.operator_ne_iff_ne v.sharesTotal]
-  split_ifs with h1 h2 h3
-  · exact iff_of_true rfl (Or.inl h1)
-  · exact iff_of_true rfl (Or.inr (Or.inl h2))
-  · exact iff_of_true rfl (Or.inr (Or.inr h3))
-  · refine iff_of_false (by decide) ?_
-    rintro (h | h | h)
-    · exact h1 h
-    · exact h2 h
-    · exact h3 h
+  rw [Vault.canVaultDelete_eq, ← Vault.canVaultDelete_cond_iff]
+  split_ifs with h
+  · exact iff_of_true rfl h
+  · exact iff_of_false (by simp) h
+
+/-- An update the checks accept sets only a maximum on the vault's base grid. -/
+lemma Vault.canVaultUpdate_assetsMaximum (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
+    (h : v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS) :
+    m.isOnExponentGrid v.baseExponent v.numericType = .ok true := by
+  simp only [Vault.canVaultUpdate, bind, Except.bind, pure, Except.pure] at h
+  walk_ok
+  all_goals simp_all
+
+/-- An update keeps the maximum, clears it, or sets the one the transaction names. -/
+lemma Vault.update_assetsMaximum_mem (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
+    (v' : Vault) (hok : v.update assetsMaximum blockDeposit unblockDeposit = .ok v') :
+    ∀ m ∈ v'.assetsMaximum, m ∈ v.assetsMaximum ∨ assetsMaximum = some m := by
+  intro m hm
+  unfold Vault.update at hok
+  have hv := congrArg RawVault.assetsMaximum (RawVault.to_lawful_ok hok).1
+  change v'.assetsMaximum = _ at hv
+  rw [hv] at hm
+  cases assetsMaximum with
+  | none => exact Or.inl hm
+  | some m' =>
+    simp only at hm
+    split at hm
+    · simp at hm
+    · simp only [Option.mem_def, Option.some.injEq] at hm
+      exact Or.inr (by rw [hm])
 
 end XRPL.Model.SingleAssetVault

@@ -12,19 +12,14 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 
 namespace XRPL.Model.Protocol
 
-/-! # Closest-grid identification from direction + no-inbetween
+/-! # Identify `Number.lower` or `Number.upper` from the rounding side
 
-`closest_lower_of_no_inbetween` / `closest_upper_of_no_inbetween` convert
-"the result is on this side of the truth and nothing representable lies
-strictly between" into the discrete claims `result = Number.lower truth` /
-`Number.upper truth`. They are shared by every operation's `Rounded.lean`
-(the operation enters only through `result.isNormalized`, a uniform relative
-error bound, and the overflow-corner truth bound). -/
+`closest_lower_of_no_inbetween` and `closest_upper_of_no_inbetween` turn "the result is on this side of the exact value,
+and no normalized Number lies between them, the exact value included" into `result = Number.lower truth` or
+`Number.upper truth`. -/
 
-/-- If `result ≤ truth` and no representable lies strictly between them,
-`result` equals `Number.lower truth`. Generic over the producing operation:
-the operation enters only through normalization of `result`, the uniform
-relative bound `h_bound`, and the overflow-corner truth bound `h_truth_top`. -/
+/-- If `result ≤ truth` and no normalized Number lies in `(result, truth]`, `result` has the value of
+`Number.lower truth`. -/
 theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
     (h_result_norm : result.isNormalized)
     (hresult : result.mantissa_ ≠ 0)
@@ -326,7 +321,7 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
         rw [this, h_r_pos_eq_n_pos]
       · -- q < smallest_pos_rep: r_pos.mantissa_ is forced to 10^18.
         push Not at h_q_ge
-        -- Coarse ε can't separate 10^18 from 10^18+1; exclude the larger
+        -- Coarse ε can't separate 10^18 from 10^18+1, so exclude the larger
         -- mantissa via no-inbetween against −smallest_pos_rep.
         have h_mant_le_pow18 : r_pos.mantissa_.toNat ≤ 10^18 := by
           by_contra h_gt
@@ -540,9 +535,8 @@ theorem closest_lower_of_no_inbetween (result : Number) (truth : ℚ)
       exact (h_no_inbetween m h_norm h_not) h_m_le
     exact Number.toRat_eq_lower_of_max truth result n_lo h_lo_eq
       h_result_norm h_round_down h_max
-/-- If `truth ≤ result` and no representable lies strictly between them,
-`result` equals `Number.upper truth`. Generic counterpart of
-`closest_lower_of_no_inbetween`. -/
+/-- If `truth ≤ result` and no normalized Number lies in `[truth, result)`, `result` has the value of
+`Number.upper truth`. -/
 theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
     (h_result_norm : result.isNormalized)
     (hresult : result.mantissa_ ≠ 0)
@@ -873,7 +867,7 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
           (by right; exact ⟨h_rmin, h_rmax, h_rcusp, h_remin, h_remax⟩) h_round_up h_min
       · -- truth < smallest_pos_rep: result.mantissa_ is forced to 10^18.
         push Not at h_truth_ge
-        -- Coarse ε can't separate 10^18 from 10^18+1; exclude the larger
+        -- Coarse ε can't separate 10^18 from 10^18+1, so exclude the larger
         -- mantissa via no-inbetween against +smallest_pos_rep.
         have h_mant_le_pow18 : result.mantissa_.toNat ≤ 10^18 := by
           by_contra h_gt
@@ -973,9 +967,8 @@ theorem closest_upper_of_no_inbetween (result : Number) (truth : ℚ)
         refine ⟨n_up_target, h_upper_eq_target, ?_⟩
         rw [h_result_eq_spr, h_n_up_target_toRat]
 
-/-- Bridge for operations whose result mantissa is capped at the top exponent:
-the overflow-corner truth bound `h_truth_top` follows from the mantissa cap
-`≤ 9223372036854775820` plus the uniform relative bound. -/
+/-- For a result at the top exponent with mantissa at most `9223372036854775820`, the relative bound `h_bound`
+gives the overflow-corner bound `|truth| < 10^19 · 10^maxExponent`. -/
 theorem truth_top_of_result_cap (result : Number) (truth : ℚ)
     (h_result_norm : result.isNormalized)
     (hresult : result.mantissa_ ≠ 0)

@@ -9,7 +9,7 @@ namespace XRPL.Model.Protocol
 set_option maxHeartbeats 1600000 in
 -- nlinarith over large constants (2^63+2) plus the cusp-range legs need extra heartbeats
 /-- Relative-error bound for `Number.operator_mul` under `.upward` rounding.
-The bound `10/(2^63 + 2)` is twice the `.to_nearest` bound (sign-flipped `.downward`). -/
+The bound `10/(2^63 + 2)` matches `.downward`, about twice the `.to_nearest` bound. -/
 theorem operator_mul_rounding_bound_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -34,7 +34,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     linarith
   have h_denom_val : ((2 ^ 63 + 2 : ℚ)) = maxRepCuspTarget := by norm_num
   have h_denom_pos : (0 : ℚ) < ((2 ^ 63 + 2 : ℚ)) := by rw [h_denom_val]; norm_num
-  -- Extract `f`'s structure for direction analysis.
   have hf_rep' := hf_rep
   obtain ⟨x_rep, hx_nn, _hx_lt, hf_eq, hxbit_iff, _hall⟩ := hf_rep
   -- Local helper: convert |result.toRat| identity to signed form.
@@ -54,8 +53,8 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     have hzm_q_gt : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
       have : (maxRepNat : ℕ) < zm.toNat := by rw [← maxRep_val]; exact h_zm_gt_rep
       exact_mod_cast this
-    have hgP_sbit : (g.pushOverflow zm .upward).sbit_ = g.sbit_ := by
-      simp only [Guard.pushOverflow, Guard.push]
+    have hgP_sbit : (g.pushOverflowSpec zm .upward).sbit_ = g.sbit_ := by
+      simp only [Guard.pushOverflowSpec, Guard.push]
       split_ifs <;> rfl
     have h_truth_abs_pos : (0 : ℚ) < ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
       apply mul_pos _ h10ze'_pos
@@ -65,7 +64,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       apply mul_pos h_truth_abs_pos
       rw [h_denom_val]; norm_num
     by_cases h_zn : (x.negative_ != y.negative_) = true
-    · -- negative truth: sbit set, the decision is dead — the magnitude truncates,
+    · -- negative truth: sbit set, the decision is dead, so the magnitude truncates,
       -- which rounds the value up.
       have h_g_sbit_true : g.sbit_ = true := by rw [h_g_sbit]; exact h_zn
       have h_result_neg : result.negative_ = true := by rw [h_sign]; exact h_zn
@@ -100,7 +99,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
             Bool.false_and]
         rfl
       rcases hv_cases with ⟨hv, _, _⟩ | ⟨hv, hcoup⟩ | ⟨_, _, hfire⟩
-      · -- v = maxRepNat: the truncating clamp shrinks the magnitude — value up.
+      · -- v = maxRepNat: the truncating clamp shrinks the magnitude, so the value goes up.
         subst hv
         refine ⟨?_, ?_⟩
         · rw [h_result_signed, h_truth_signed]
@@ -121,7 +120,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
         have hzm_eq : zm.toNat = maxRepUp.toNat := by
           rcases hcoup with ⟨h, _⟩ | ⟨_, h⟩
           · exact h
-          · rw [h_bool_false (g.pushOverflow zm .upward) (by rw [hgP_sbit]; exact h_g_sbit_true)] at h
+          · rw [h_bool_false (g.pushOverflowSpec zm .upward) (by rw [hgP_sbit]; exact h_g_sbit_true)] at h
             exact absurd h Bool.noConfusion
         have hzm_q_eq : (zm.toNat : ℚ) = maxRepNat + 3 := by
           rw [hzm_eq, show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num
@@ -142,7 +141,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       · -- v = maxRepNat + 13: requires the decision, dead when sbit is set.
         rw [h_bool_false g h_g_sbit_true] at hfire
         exact absurd hfire Bool.noConfusion
-    · -- positive truth: sbit clear, the decision fires — the magnitude (and value)
+    · -- positive truth: sbit clear, the decision fires, so the magnitude (and value)
       -- round up, or the value is exact.
       have h_zn_false : (x.negative_ != y.negative_) = false := Bool.not_eq_true _ |>.mp h_zn
       have h_g_sbit_false : g.sbit_ = false := by rw [h_g_sbit]; exact h_zn_false
@@ -163,7 +162,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       · -- v = maxRepNat: impossible for positives (the pushed-guard decision fires).
         exfalso
         obtain ⟨hdig_pos, hsb⟩ := pushOverflow_cusp_interior_facts g zm .upward h_zm_gt_rep hzm_lt_up
-        have h1 : (g.pushOverflow zm .upward).round .upward = 1 :=
+        have h1 : (g.pushOverflowSpec zm .upward).round .upward = 1 :=
           (round_upward_eq_one_iff _).mpr ⟨by rw [hsb]; exact h_g_sbit_false, Or.inl hdig_pos⟩
         rw [h1, show ((1 : Int) == 1) = true from rfl, Bool.true_or] at hbool
         exact Bool.noConfusion hbool
@@ -244,7 +243,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
               lt_div_iff₀ (by norm_num : (0 : ℚ) < maxRepCuspTarget)]
           nlinarith [hf_pos]
   -- ===== IN RANGE: zm ≤ maxRep =====
-  -- Case-split: shouldRoundUp_upward or not.
   by_cases h_sru : g.shouldRoundUp_upward
   · -- ===== ROUND UP =====
     have hf_pos : 0 < f := represents_pos_of_shouldRoundUp_upward g f hf_rep' h_sru
@@ -261,12 +259,10 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     have h_truth_nn : 0 ≤ x.toRat * y.toRat := (toRat_mul_sign x y).1 h_xy_neg_eq
     have h_abs_truth_eq : |x.toRat * y.toRat| = x.toRat * y.toRat :=
       abs_of_nonneg h_truth_nn
-    -- result.toRat = + res_pos.mantissa * 10^res_pos.exp.
     have h_result_pos_val : result.toRat
         = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       have := Number.toRat_of_nonneg result h_result_pos
       rw [this, h_result_abs_via_self]
-    -- Sub-case: cusp or non-cusp.
     by_cases h_cusp : zm = maxRep
     · -- ===== CUSP =====
       have h_cusp_val := doRoundUp_value_upward_roundUp_cusp g false zm ze' h_cusp h_sru
@@ -274,12 +270,10 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       try simp only at h_cusp_val
       have hzm_eq_maxRep_q : (zm.toNat : ℚ) = maxRepNat := by
         rw [show zm.toNat = maxRep.toNat from by rw [h_cusp], maxRep_val]; norm_num
-      -- truth = (zm + f)·10^ze' = (maxRepNat + f)·10^ze'.
       have h_truth_signed : x.toRat * y.toRat
           = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
         have h1 : |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' := habs_xy_eq
         rw [h_abs_truth_eq] at h1; exact h1
-      -- result = maxRepCuspTarget · 10^ze'.
       have h_result_signed : result.toRat
           = (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
         rw [h_result_pos_val, h_cusp_val]
@@ -332,7 +326,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
         rw [h_result_signed, h_truth_signed]
         have h_inner : ((zm.toNat : ℚ) + f) ≤ ((zm.toNat : ℚ) + 1) := by linarith
         nlinarith [h10ze'_nn, h_inner]
-      -- Magnitude.
       have h_magnitude : result.toRat - x.toRat * y.toRat
           < |x.toRat * y.toRat| * (10 / ((2 ^ 63 + 2 : ℚ))) := by
         rw [h_abs_truth_eq, h_result_signed, h_truth_signed]
@@ -342,7 +335,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
             (10 / ((2 ^ 63 + 2 : ℚ)))
             = ((zm.toNat : ℚ) + f) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
         rw [h_lhs_eq, h_rhs_arrange]
-        -- Sub-case: zm = floor or zm > floor.
         have h_inner : (1 - f) < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) :=
           one_sub_f_lt_releps hzm_ge h_floor_constraint hf_pos hf_lt1
         exact releps_lift h_inner h10ze'_pos
@@ -351,7 +343,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     have h_tr_val := doRoundUp_value_upward_truncate g false zm ze' h_sru h_zm_le_rep .overflow res_pos h_rup_pos hres_pos_mant_ne
     try simp only at h_tr_val
     -- shouldRoundUp_upward fails: sbit=true OR (digits=0 ∧ xbit=false).
-    -- Direction depends on truth sign.
     by_cases h_zn : (x.negative_ != y.negative_) = true
     · -- zn = true. Truth ≤ 0. shouldRoundUp_upward fails because sbit=true.
       have h_g_sbit_true : g.sbit_ = true := by rw [h_g_sbit]; exact h_zn
@@ -391,7 +382,6 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
             (10 / ((2 ^ 63 + 2 : ℚ)))
             = ((zm.toNat : ℚ) + f) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
         rw [h_lhs_eq, h_rhs_arrange]
-        -- Show: f < ((zm:ℚ) + f) · 10/(2^63+2).
         have h_inner : f < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) := f_lt_releps hzm_q_ge hf_lt1
         exact releps_lift h_inner h10ze'_pos
       exact ⟨h_direction, h_magnitude⟩

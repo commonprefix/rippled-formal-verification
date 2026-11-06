@@ -6,10 +6,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Int64 ↔ ℤ bridges
 
-`Int64` arithmetic is defined modulo `2^64` (`bmod`). The overflow guards in
-`Number.to_rep` / `Number.from_rep` keep every intermediate magnitude below
-`2^63`, so in our setting these operations agree with the corresponding integer
-operations. -/
+`Int64` arithmetic wraps modulo `2^64`. The lemmas below take a bound that keeps every value under `2^63` in
+magnitude, so the operations match integer arithmetic. -/
 
 /-- Int64←UInt64 cast bridge: when a `UInt64` value fits in the non-negative
 `Int64` range (`< 2^63`), `UInt64.toInt64` preserves the value. -/
@@ -20,9 +18,8 @@ lemma UInt64.toInt64_toInt_of_lt (u : UInt64) (h : u.toNat < 2 ^ 63) :
   have hb : u.toBitVec.toNat = u.toNat := rfl
   rw [BitVec.toInt_eq_toNat_of_lt (by rw [hb]; omega), hb]
 
-/-- Negated Int64←UInt64 cast bridge: when a `UInt64` value fits in the
-non-negative `Int64` range (`< 2^63`), negating its `Int64` view negates its
-integer value (the `bmod` wraparound is the identity here). -/
+/-- When a `UInt64` value is below `2^63`, negating its `Int64` view negates its integer value, since the `bmod`
+wraparound has no effect in that range. -/
 lemma UInt64.neg_toInt64_toInt_of_lt (u : UInt64) (h : u.toNat < 2 ^ 63) :
     (-u.toInt64).toInt = -(u.toNat : ℤ) := by
   rw [Int64.toInt_neg, UInt64.toInt64_toInt_of_lt u h, Int.bmod_eq_iff (by norm_num)]
@@ -94,19 +91,12 @@ lemma toUInt64_toNat_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
     rw [Int.bmod_def] at h2
     split at h2 <;> omega
 
-/-- The `UInt64` view of a non-negative `Int64` bounded by `maxRep` stays below
-`maxRep`. -/
+/-- The `UInt64` view of a non-negative `Int64` bounded by `maxRep` is at most `maxRep`. -/
 lemma toUInt64_toNat_le_maxRep (a : Int64) (h0 : 0 ≤ a.toInt)
     (hle : a.toInt ≤ (maxRep.toNat : ℤ)) :
     a.toUInt64.toNat ≤ maxRep.toNat := by
   have hbr := toUInt64_toNat_of_nonneg a h0
   omega
-
-/-! ## Signed `Int64` mantissa from a `UInt64` magnitude + sign flag
-
-The pack/unpack idiom `if neg then -m.toInt64 else m.toInt64` recurs throughout
-the `STAmount`/`IOUAmount` repacking proofs; these three lemmas give its integer
-value, magnitude, and recovered sign in one step (for a magnitude in range). -/
 
 /-- Integer value of the signed mantissa `±m`. -/
 lemma signed_mantissa_toInt (neg : Bool) (m : UInt64) (h : m.toNat < 2 ^ 63) :

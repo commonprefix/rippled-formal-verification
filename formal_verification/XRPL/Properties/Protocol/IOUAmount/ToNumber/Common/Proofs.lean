@@ -4,12 +4,11 @@ import XRPL.Properties.Protocol.IOUAmount.Common.Defs
 import XRPL.Properties.Protocol.IOUAmount.Common.ToRatLemmas
 import XRPL.Properties.Protocol.Number.Constructors.FromRepExact
 
-/-! # Proof body for the `IOUAmount.toNumber` correctness headline.
+/-! # Proof of the `IOUAmount.toNumber` theorem
 
 `toNumber a mode = Number.from_rep a.mantissa_ a.exponent_ …`, which (under `ToNumberExact`)
 is value-exact via `Number.from_rep_exact`. No rounding, since the `Int64` mantissa scales
-up into `largeRange` exactly. Mirrors `Number/ToRep/`. The thin headline lives in
-`IOUAmount.ToNumber.ToNumber`. -/
+up into `largeRange` exactly. -/
 
 namespace XRPL.Model.Protocol
 

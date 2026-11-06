@@ -1,6 +1,7 @@
 import XRPL.Properties.Protocol.Number.Add.Common.Decompose
 import XRPL.Properties.Protocol.Number.Common.ProofTactics
 import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
+import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
 
 
 namespace XRPL.Model.Protocol
@@ -20,12 +21,14 @@ lemma doNormalize_upward_addwitness :
     doNormalize false (1000000000000000001 : UInt64) (20 : Int)
         largeRange.min largeRange.max .upward =
         .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } := by
-  unfold doNormalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show ((1000000000000000001 : UInt64) == 0) = false from rfl]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUp largeRange.min (1000000000000000001 : UInt64) 20
+  rw [show doNormalize_scaleUpSpec largeRange.min (1000000000000000001 : UInt64) 20
         = ((1000000000000000001 : UInt64), (20 : Int)) by
-        unfold doNormalize_scaleUp; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (1000000000000000001 : UInt64) (20 : Int) Guard.new
         = .ok ((1000000000000000001 : UInt64), (20 : Int), Guard.new) by
         unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
@@ -39,7 +42,8 @@ lemma doNormalize_upward_addwitness :
   rw [show Guard.new.doRoundUp false (1000000000000000001 : UInt64) (20 : Int)
         largeRange.min largeRange.max .upward .normalize2 =
         .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl]
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl]
   rfl
 
 /-- `operator_add` trace for the upward witness inputs. -/
@@ -49,7 +53,10 @@ lemma operator_add_upward_witness :
         ⟨false, 1000000000000000000, 20⟩
         .upward =
       .ok ⟨false, 1000000000000000001, 20⟩ := by
-  unfold Number.operator_add
+  rw [Number.operator_add_eq_spec]
+  case hx => decide
+  case hy => decide
+  unfold Number.operator_addSpec
   conv_lhs =>
     rw [show (⟨false, 1000000000000000000, 0⟩ : Number).operator_eq Number.zero = false from by decide,
         show (⟨false, 1000000000000000000, 20⟩ : Number).operator_eq Number.zero = false from by decide,
@@ -74,7 +81,9 @@ lemma operator_add_upward_witness :
         false (1000000000000000000 : UInt64) (20 : Int) largeRange.min largeRange.max .upward
         .overflow =
         .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
+    rw [Guard.doRoundUp_eq_spec]
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit
     rfl]
   simp only [RoundResult.toNumber]
   unfold Number.normalize

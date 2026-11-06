@@ -1,5 +1,4 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
--- Discrete-grid rounding identification for `operator_add` under `.towards_zero`.
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.TowardsZero.BoundProof
 import XRPL.Properties.Protocol.Number.Add.RoundsWithin
@@ -21,7 +20,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
     ∀ m : Number, m.isNormalized →
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat + y.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · -- Same-sign: the facts bundle is frame-ready.
+  · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ, _, _, _⟩ :=
       operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
@@ -32,7 +31,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
       (fun h_pos => Number.toRat_nonneg_of_nonnegative result
         (h_sign.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos)))
       h_le
-  · -- Diff-sign: through the `doNormalize128` keystone.
+  · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
       operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
@@ -110,7 +109,8 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero y hmeq
     have h_result : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [hy0, add_zero]
@@ -141,7 +141,8 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero x hmeq
     have h_result : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant_ne : y.mantissa_ ≠ 0 := by
@@ -165,7 +166,8 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · have h_truth0 : x.toRat + y.toRat = 0 := add_truth_zero_of_eq_neg x y heq_guard
     have h_result : result = Number.zero := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm

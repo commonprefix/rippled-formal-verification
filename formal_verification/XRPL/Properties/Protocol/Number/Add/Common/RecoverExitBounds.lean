@@ -23,17 +23,15 @@ lemma recover_exit_cases {upperLimit m : UInt128} {g : Guard}
 
 set_option maxHeartbeats 16000000 in
 -- heavy: value-preservation instantiation + rational arithmetic (fuel-40 recover terms)
-/-- After running `recover` with the model's `upperLimit = 10^21` and fuel `40`,
-the loop's exit condition holds at the output. If all 40 iterations had popped,
-value preservation would force the output mantissa to at least
-`10^(40-16) = 10^24 > 10^21`, contradicting `m < upperLimit`. -/
+/-- With the model's `upperLimit = 10^21` and fuel 40, the `recover` loop always meets its exit condition, since
+40 pops would push the mantissa to at least `10^24`. -/
 theorem recover_40_exits
     (m : UInt128) (e : Int) (g : Guard)
     (hm_pos : 1 ≤ m.toNat)
     (hall : allNibblesAtMost9 g.digits_) :
-    ¬ (((Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40).1
+    ¬ (((recoverSpec (toUInt128 largeRange.min * 1000) m e g 40).1
           < toUInt128 largeRange.min * 1000)
-        ∧ ¬ (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40).2.2.empty) := by
+        ∧ ¬ (recoverSpec (toUInt128 largeRange.min * 1000) m e g 40).2.2.empty) := by
   have h1000n : (1000 : UInt64).toNat = 1000 := rfl
   have hUL_val : (toUInt128 largeRange.min * 1000).toNat = 10 ^ 21 := by
     rw [show (1000 : UInt128) = toUInt128 (1000 : UInt64) from rfl,
@@ -51,8 +49,7 @@ theorem recover_40_exits
     obtain ⟨x_after, k, hk_le, hk_eq, hxa_nn, _hxa_lt, _hxa_pos, _hall_after, heq⟩ :=
       recover_value_preserved_tight (toUInt128 largeRange.min * 1000) m hUL e g 40 hm_pos hall
         0 (1 / 10 ^ 16) hB_pos (le_refl 0) hB_pos
-    set r := Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40 with hr_def
-    -- k = 40 from hk_eq and hfuel.
+    set r := recoverSpec (toUInt128 largeRange.min * 1000) m e g 40 with hr_def
     have hk_40 : k = 40 := by
       have heq2 : (e - (k : ℤ) : ℤ) = e - (40 : ℤ) := by
         rw [← hk_eq]; exact hfuel
@@ -79,13 +76,11 @@ theorem recover_40_exits
     have h_lhs_ge : (1 : ℚ) / 10 ^ 16 ≤
         ((m.toNat : ℚ) - ((decimalValue g.digits_ : ℚ) / 10 ^ 16 + 0)) := by
       linarith
-    -- Multiply by 10^e:
     have h_pow_e_pos : (0 : ℚ) < (10 : ℚ) ^ e := by positivity
     have h_lhs_full_ge : (1 : ℚ) / 10 ^ 16 * (10 : ℚ) ^ e ≤
         ((m.toNat : ℚ) - ((decimalValue g.digits_ : ℚ) / 10 ^ 16 + 0)) * (10 : ℚ) ^ e := by
       apply mul_le_mul_of_nonneg_right h_lhs_ge (le_of_lt h_pow_e_pos)
     rw [heq] at h_lhs_full_ge
-    -- Rewrite 10^e = 10^{e-k} * 10^k.
     have h_pow_split : (10 : ℚ) ^ e = (10 : ℚ) ^ (e - (k : ℤ)) * (10 : ℚ) ^ (k : ℤ) := by
       rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
       congr 1; ring
@@ -103,7 +98,6 @@ theorem recover_40_exits
     have h_div : (10 : ℚ) ^ k / 10 ^ 16 ≤
         ((r.1.toNat : ℚ) - ((decimalValue r.2.2.digits_ : ℚ) / 10 ^ 16 + x_after)) :=
       le_of_mul_le_mul_right h_combine h_pow_ek_pos
-    -- Substitute k = 40: 10^40 / 10^16 = 10^24.
     have h_pow_div : (10 : ℚ) ^ k / 10 ^ 16 = 10 ^ 24 := by
       rw [hk_40]
       rw [show (10 : ℚ) ^ 40 = (10 : ℚ) ^ 24 * 10 ^ 16 from by norm_num]
@@ -123,17 +117,16 @@ theorem recover_40_exits
       rw [hUL_val] at this; exact this
     omega
 
-/-- The recover output mantissa stays below `upperLimit.toNat * 10`: each popping
-step starts from `m < upperLimit`, so the new mantissa `m*10 - d` stays below
-`upperLimit * 10`; the exit/noop branches return the input, bounded by hypothesis. -/
+/-- The `recover` output mantissa stays below `upperLimit.toNat * 10` when the input mantissa does, since each
+pop starts from `m < upperLimit`. -/
 lemma recover_mantissa_lt
     (upperLimit m : UInt128) (hUL : upperLimit.toNat * 10 < 2 ^ 128)
     (e : Int) (g : Guard) (fuel : ℕ)
     (hm_pos : 1 ≤ m.toNat)
     (hall : allNibblesAtMost9 g.digits_)
     (hm_lt : m.toNat < upperLimit.toNat * 10) :
-    (Number.operator_add.recover upperLimit m e g fuel).1.toNat < upperLimit.toNat * 10 := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    (recoverSpec upperLimit m e g fuel).1.toNat < upperLimit.toNat * 10 := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]; exact hm_lt
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond

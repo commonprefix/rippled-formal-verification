@@ -1,5 +1,6 @@
 import XRPL.Properties.Protocol.Number.Common.Rounding.DoRoundUp.ValueChar
 import XRPL.Properties.Protocol.Number.Common.Rounding.Guard
+import XRPL.Properties.Vault.Proofs.DepositTight.DivExactRound
 
 /-! # Where a `.to_nearest` `doRoundUp` can land below its input -/
 
@@ -7,7 +8,7 @@ namespace XRPL.Model.SingleAssetVault.DepTight
 
 open XRPL.Model.Protocol
 
-lemma push_round_one (g : Guard) (d : UInt64) (hd : 6 ≤ d.toNat) (hd' : d.toNat < 16) :
+private lemma push_round_one (g : Guard) (d : UInt64) (hd : 6 ≤ d.toNat) (hd' : d.toNat < 16) :
     (g.push d).round .to_nearest = 1 := by
   have hdig := toNat_push_digits g d
   have hmod : d.toNat % 16 = d.toNat := Nat.mod_eq_of_lt hd'
@@ -28,7 +29,7 @@ lemma push_round_one (g : Guard) (d : UInt64) (hd : 6 ≤ d.toNat) (hd' : d.toNa
     omega
   rw [if_pos hgt]
 
-lemma push3_round_lt (g : Guard) :
+private lemma push3_round_lt (g : Guard) :
     (g.push 3).round .to_nearest ≠ 1 ∧ (g.push 3).round .to_nearest ≠ 0 := by
   by_cases hemp : (g.push 3).empty = true
   · have : (g.push 3).round .to_nearest = -2 := by unfold Guard.round; rw [if_pos hemp]
@@ -50,25 +51,24 @@ lemma push3_round_lt (g : Guard) :
     decide
 
 /-- The pushed overflow guard of the two interior cusp mantissas. -/
-lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 9223372036854775808 ∨
+private lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 9223372036854775808 ∨
     m.toNat = 9223372036854775809) :
-    (g.pushOverflow m .to_nearest).round .to_nearest = 1 ∨
+    (g.pushOverflowSpec m .to_nearest).round .to_nearest = 1 ∨
       (m.toNat = 9223372036854775808 ∧ g.round .to_nearest ≠ 1 ∧ g.round .to_nearest ≠ 0 ∧
-        (g.pushOverflow m .to_nearest).round .to_nearest ≠ 1 ∧
-        (g.pushOverflow m .to_nearest).round .to_nearest ≠ 0) := by
+        (g.pushOverflowSpec m .to_nearest).round .to_nearest ≠ 1 ∧
+        (g.pushOverflowSpec m .to_nearest).round .to_nearest ≠ 0) := by
   rcases hm with hm | hm
   · have hm' : m = 9223372036854775808 := UInt64.toNat_inj.mp (by rw [hm]; rfl)
     subst hm'
     by_cases hr : g.round .to_nearest = 1 ∨ g.round .to_nearest = 0
     · left
-      have hp : g.pushOverflow 9223372036854775808 .to_nearest = g.push 6 := by
+      have hp : g.pushOverflowSpec 9223372036854775808 .to_nearest = g.push 6 := by
         have hb : (g.round .to_nearest == 1 || (g.round .to_nearest == 0 &&
             (9223372036854775808 : UInt64) == maxRep + (maxRepUp - maxRep) / 2)) = true := by
           rcases hr with h | h <;> (rw [h]; decide)
-        unfold Guard.pushOverflow
+        unfold Guard.pushOverflowSpec
         rw [if_pos (by decide)]
         simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, if_true, hb]
-        rw [if_neg (by decide)]
         congr 1
       rw [hp]
       exact push_round_one g 6 (by decide) (by decide)
@@ -77,45 +77,24 @@ lemma pushOverflow_cusp (g : Guard) (m : UInt64) (hm : m.toNat = 922337203685477
       have hb : (g.round .to_nearest == 1 || (g.round .to_nearest == 0 &&
           (9223372036854775808 : UInt64) == maxRep + (maxRepUp - maxRep) / 2)) = false := by
         simp [hr.1, hr.2]
-      have hp : g.pushOverflow 9223372036854775808 .to_nearest = g.push 3 := by
-        unfold Guard.pushOverflow
+      have hp : g.pushOverflowSpec 9223372036854775808 .to_nearest = g.push 3 := by
+        unfold Guard.pushOverflowSpec
         rw [if_pos (by decide)]
         simp only [show (9223372036854775808 : UInt64) % 10 < 9 from by decide, if_true, hb,
           Bool.false_eq_true, if_false]
-        rw [if_neg (by decide)]
         congr 1
       rw [hp]
       exact ⟨hm, hr.1, hr.2, push3_round_lt g⟩
   · have hm' : m = 9223372036854775809 := UInt64.toNat_inj.mp (by rw [hm]; rfl)
     subst hm'
     left
-    have hp : g.pushOverflow 9223372036854775809 .to_nearest = g.push 6 := by
-      unfold Guard.pushOverflow
+    have hp : g.pushOverflowSpec 9223372036854775809 .to_nearest = g.push 6 := by
+      unfold Guard.pushOverflowSpec
       rw [if_pos (by decide)]
       simp only [show ¬ ((9223372036854775809 : UInt64) % 10 < 9) from by decide, if_false]
-      rw [if_neg (by decide)]
       congr 1
     rw [hp]
     exact push_round_one g 6 (by decide) (by decide)
-
-lemma noRoundUp_half (g : Guard) (m : UInt64) (f : ℚ) (hrep : represents g f)
-    (hru : ¬ g.shouldRoundUp_to_nearest m) : f ≤ 1 / 2 := by
-  by_cases hemp : g.empty = true
-  · obtain ⟨hd, hx⟩ : g.digits_ = 0 ∧ g.xbit_ = false := by
-      have h : (g.digits_ == 0 && !g.xbit_) = true := hemp
-      rw [Bool.and_eq_true] at h
-      exact ⟨beq_iff_eq.mp h.1, by simpa using h.2⟩
-    rw [represents_eq_zero_of_digits_zero_xbit_false hd hx hrep]; norm_num
-  · obtain ⟨hp, hn, hz⟩ := round_correct hemp hrep
-    have hv : g.round .to_nearest = 1 ∨ g.round .to_nearest = 0 ∨
-        g.round .to_nearest = -1 := by
-      rw [round_to_nearest_def hemp]
-      split_ifs <;> simp
-    unfold Guard.shouldRoundUp_to_nearest at hru
-    rcases hv with h | h | h
-    · exact absurd (Or.inl h) hru
-    · exact le_of_eq (hz.mp h)
-    · exact le_of_lt (hn.mp h)
 
 /-- A `.to_nearest` `doRoundUp` of `m + f` lands at `m + 1` or above, at `m` itself,
 or (only from the interior cusp `maxRep + 1` with `f < 1/2`) at `maxRep`. -/
@@ -139,26 +118,23 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
       · left
         rw [doRoundUp_value_to_nearest_roundUp_noCusp g m e hru hno loc res hok hne]
       · have hm : m = maxRep := UInt64.toNat_inj.mp (by omega)
-        rcases hru with h1 | h0
-        · right; left
-          refine ⟨?_, Or.inr (Or.inl (by rw [hm]; exact hmR))⟩
-          rw [doRoundUp_value_to_nearest_roundUp_cusp_round1 g m e hm h1 loc res hok hne, hm]
-        · left
-          rw [doRoundUp_value_to_nearest_roundUp_cusp g m e hm h0 loc res hok hne, hm, hmR]
-          apply mul_le_mul_of_nonneg_right _ (le_of_lt h10)
-          norm_num
+        -- At `maxRep` `doRoundUp` keeps `maxRep` whatever the guard.
+        right; left
+        refine ⟨?_, Or.inr (Or.inl (by rw [hm]; exact hmR))⟩
+        rw [doRoundUp_value_to_nearest_maxRep g m e hm loc res hok hne, hm]
     · right; left
       refine ⟨doRoundUp_value_no_roundUp g m e hru hle loc res hok hne,
         Or.inl ⟨noRoundUp_half g m f hrep hru, by rw [hmR] at hle; exact hle⟩⟩
   · push Not at hle
-    unfold Guard.doRoundUp Guard.bringIntoRange at hok
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec at hok
     dsimp only [Guard.doDropDigit] at hok
     by_cases h_eq_up : m = maxRepUp
     · subst h_eq_up
       right; left
       refine ⟨?_, Or.inr (Or.inr hmU)⟩
-      have h_pof : g.pushOverflow maxRepUp .to_nearest = g := by
-        unfold Guard.pushOverflow
+      have h_pof : g.pushOverflowSpec maxRepUp .to_nearest = g := by
+        unfold Guard.pushOverflowSpec
         rw [if_neg]
         intro ⟨_, h⟩
         exact absurd (UInt64.lt_iff_toNat_lt.mp h) (lt_irrefl _)
@@ -243,11 +219,11 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
       have h_not_noncusp : ¬ (m < largeRange.max ∧ m < maxRep) := by
         intro ⟨_, h⟩
         exact absurd (UInt64.lt_iff_toNat_lt.mp h) (by omega)
-      by_cases h_ru : ((g.pushOverflow m .to_nearest).round .to_nearest == 1
-          || ((g.pushOverflow m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
+      by_cases h_ru : ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 1
+          || ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
       · left
-        rw [show ((g.pushOverflow m .to_nearest).round .to_nearest == 1
-            || ((g.pushOverflow m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
+        rw [show ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 1
+            || ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = true
             from h_ru] at hok
         rw [if_pos rfl, if_neg h_not_noncusp, if_pos h_cusp_cond] at hok
         have h_no_resc : ¬ (maxRepUp < largeRange.min ∧ maxRepUp ≠ 0) := by decide
@@ -277,8 +253,8 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
         rcases hpo with h1 | ⟨hm808, hr1, hr0, -, -⟩
         · rw [h1] at h_ru; simp at h_ru
         refine ⟨?_, hm808, ?_⟩
-        · rw [show ((g.pushOverflow m .to_nearest).round .to_nearest == 1
-              || ((g.pushOverflow m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = false
+        · rw [show ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 1
+              || ((g.pushOverflowSpec m .to_nearest).round .to_nearest == 0 && m % 2 == 1)) = false
               from h_ru] at hok
           simp only [Bool.false_eq_true, if_false] at hok
           rw [if_pos h_cusp_cond] at hok
@@ -298,20 +274,6 @@ lemma doRoundUp_lower (g : Guard) (m : UInt64) (e : Int) (f : ℚ)
             obtain rfl := Except.ok.inj hok
             change (maxRep.toNat : ℚ) * 10 ^ e = _
             rw [hmR]; norm_num
-        · by_cases hemp : g.empty = true
-          · obtain ⟨hd, hx⟩ : g.digits_ = 0 ∧ g.xbit_ = false := by
-              have h : (g.digits_ == 0 && !g.xbit_) = true := hemp
-              rw [Bool.and_eq_true] at h
-              exact ⟨beq_iff_eq.mp h.1, by simpa using h.2⟩
-            rw [represents_eq_zero_of_digits_zero_xbit_false hd hx hrep]; norm_num
-          · obtain ⟨hp, hn, hz⟩ := round_correct hemp hrep
-            have hv : g.round .to_nearest = 1 ∨ g.round .to_nearest = 0 ∨
-                g.round .to_nearest = -1 := by
-              rw [round_to_nearest_def hemp]
-              split_ifs <;> simp
-            rcases hv with h | h | h
-            · exact absurd h hr1
-            · exact absurd h hr0
-            · exact hn.mp h
+        · exact lt_half_of_round_ne g f hrep hr1 hr0
 
 end XRPL.Model.SingleAssetVault.DepTight

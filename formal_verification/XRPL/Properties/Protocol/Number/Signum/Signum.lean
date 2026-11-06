@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.Number.Signum.Common.Proofs
 
 namespace XRPL.Model.Protocol
 
-/-- `Number.signum` returns the sign of the value: `1` if positive, `-1` if
-negative, `0` if zero. The `isNormalized` hypothesis rules out a "negative zero"
-(`negative_ = true`, `mantissa_ = 0`), which is not a canonical value. -/
+/-- `Number.signum` returns the sign of the value: `1` if positive, `-1` if negative, `0` if zero. The
+`isNormalized` hypothesis rules out a "negative zero" (`negative_ = true`, `mantissa_ = 0`). -/
 theorem signum_eq (n : Number) (hn : n.isNormalized) :
     n.signum = if 0 < n.toRat then 1 else if n.toRat < 0 then -1 else 0 :=
   signum_eq_proof n hn

@@ -13,12 +13,8 @@ namespace XRPL.Model.Protocol
 
 /-! # Underflow characterization for `operator_mul`
 
-A zero result mantissa (with nonzero normalized operands) means the mul-stage
-`doRoundUp` flushed — the normalize stage cannot introduce a zero on the
-invariant range — and a flush pins the value frame to the representable floor.
-Hence the exact product is strictly below the smallest positive representable.
-The hypothesis-minimal discrete-rounding theorems consume this in their
-underflow branches. -/
+If both operands are nonzero and the result is zero, the rounding step flushed the product to zero. So the exact
+product is below the smallest positive `Number`, `10^18 · 10^minExponent`. -/
 
 /-- With the product strictly positive, the result of `operator_mul` carries the
 nonnegative sign (the factors agree in sign, so `zn = false`). -/
@@ -100,7 +96,7 @@ lemma mul_result_nonpos_of_truth_neg (x y result : Number)
     (by rw [h_sign, mul_zn_true_of_truth_neg x y h_truth_neg])
 
 set_option maxHeartbeats 1600000 in
--- Product-frame derivation + per-mode invariant dispatch.
+-- Long case split over the rounding modes.
 theorem operator_mul_underflow_truth_small (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -113,13 +109,14 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
   have hy_mant_pos := mantissa_toNat_pos_of_bounds hy_bounds
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
-  unfold Number.operator_mul at hok
+  rw [Number.operator_mul_eq_spec] at hok
+  unfold Number.operator_mulSpec at hok
   simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
   set zm128 : UInt128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hzm128_def
   set ze : Int := x.exponent_ + y.exponent_ with hze_def
   set g0 : Guard := if zn then Guard.new.set_negative else Guard.new with hg0_def
-  set sd_result : UInt64 × Int × Guard := scaleDown128 zm128 ze g0 with hsd_def
+  set sd_result : UInt64 × Int × Guard := scaleDown128Spec zm128 ze g0 with hsd_def
   set zm : UInt64 := sd_result.1 with hzm_def
   set ze' : Int := sd_result.2.1 with hze'_def
   set g : Guard := sd_result.2.2 with hg_def
@@ -187,7 +184,6 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     have : (maxRepUp.toNat + 1) / 10 = mantissaFloorSucc := by
       rw [show maxRepUp.toNat = maxRepUpNat from rfl]
     omega
-  -- Extract the doRoundUp result.
   have h_rup_exists : ∃ res : RoundResult,
       g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
     match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow with
@@ -200,11 +196,11 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     rw [habs_xy_eq2]
     exact mul_lt_mul_of_pos_right (by linarith) (zpow_pos (by norm_num) _)
   by_cases hres_mant : res.mantissa_ = 0
-  · -- The mul-stage doRoundUp flushed: the frame is at the representable floor.
+  · -- The rounding step flushed to zero, so the product is below the smallest positive Number.
     have h_small := doRoundUp_flush_value_small g zn zm ze' mode hzm_ge hzm_le_maxRep
       .overflow res h_rup hres_mant
     linarith
-  · -- No flush: normalize is the identity on the invariant range — contradiction.
+  · -- No flush: normalize is the identity on the invariant range, a contradiction.
     exfalso
     have h_inv : largeRange.min.toNat ≤ res.mantissa_.toNat ∧
         res.mantissa_.toNat ≤ largeRange.max.toNat ∧

@@ -10,25 +10,8 @@ amounts. -/
 
 namespace XRPL.Model.Protocol
 
-/-- The value of a canonical integral amount is bounded by its type's carried
-maximum. -/
-lemma STAmount.IntegralCanonical.abs_toRat_le (s : STAmount) (hc : s.IntegralCanonical) :
-    |s.toRat| ≤ (s.mNumericType.maxValue.toNat : ℚ) := by
-  rw [STAmount.abs_toRat, hc.offset_zero]
-  have := hc.in_range
-  simp only [zpow_zero, mul_one]
-  exact_mod_cast this
-
 /-- The `int64` zero amount reduces to the canonical record `⟨.int64, 0, 0, false⟩`. -/
 lemma STAmount.zero_int64_eq : STAmount.zero .int64 = ⟨.int64, 0, 0, false⟩ := by decide
-
-/-- The `int64` zero amount has zero exact value. -/
-lemma STAmount.zero_int64_toRat : (STAmount.zero .int64).toRat = 0 := by
-  rw [STAmount.zero_int64_eq, STAmount.toRat_signed]; norm_num
-
-/-- The `int64` zero amount carries the `int64` numeric type. -/
-lemma STAmount.zero_int64_mNumericType : (STAmount.zero .int64).mNumericType = .int64 := by
-  rw [STAmount.zero_int64_eq]
 
 /-- `STAmount.ofNumber` on an integral type is monotone for integer-valued
 normalized inputs, in any rounding mode (the conversion is exact). -/
@@ -52,42 +35,15 @@ lemma STAmount.ofNumber_source_ne_zero (nt : NumericType) (n : Number) (mode : r
     n.mantissa_ ≠ 0 := by
   by_cases hint : nt.isIntegral = true
   · exact STAmount.ofNumber_integral_source_ne_zero nt n mode result hint hok hres
-  · have hnt_frac : nt = .fractional := by
-      cases nt with
-      | fractional => rfl
-      | integral mv mo ms msh => simp [NumericType.isIntegral] at hint
-    exact STAmount.ofNumber_iou_mantissa_ne_zero nt n mode result hnt_frac hok hres
+  · exact STAmount.ofNumber_iou_mantissa_ne_zero nt n mode result
+      (NumericType.eq_fractional_of_not_integral (by simpa using hint)) hok hres
 
-/-- A fractional `ofNumber` on a normalized source lands canonical-or-zero. -/
-lemma STAmount.ofNumber_frac_shape (nt : NumericType) (n : Number) (mode : rounding_mode)
-    (result : STAmount) (hnt : nt.isIntegral = false) (hn : n.isNormalized)
-    (hok : STAmount.ofNumber nt n mode = .ok result) :
-    result.IOUCanonical ∨ result.mValue = 0 := by
-  have hfr : nt = .fractional := by
-    cases nt with
-    | fractional => rfl
-    | integral mv mo ms msh => simp [NumericType.isIntegral] at hnt
-  subst hfr
-  by_cases hm : n.mantissa_ = 0
-  · refine Or.inr ?_
-    by_contra h
-    exact (STAmount.ofNumber_source_ne_zero .fractional n mode result hok h) hm
-  · obtain ⟨hlo19, hhi19⟩ := hn.mantissaBounds_nat hm
-    have hexp_lo : minExponent ≤ n.exponent_ := by
-      rcases hn with h0 | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hm
-      · exact hlo
-    exact STAmount.ofNumber_iou_canonical_or_zero n mode result hlo19 hhi19 hexp_lo hok
-
+/-- A fractional `ofNumber` of a negative source is at most zero. -/
 lemma STAmount.ofNumber_signtrue_nonpos (nt : NumericType) (n : Number) (mode : rounding_mode)
     (result : STAmount) (hnt : nt.isIntegral = false) (hn : n.isNormalized)
     (hneg : n.negative_ = true)
     (hok : STAmount.ofNumber nt n mode = .ok result) : result.toRat ≤ 0 := by
-  have hfr : nt = .fractional := by
-    cases nt with
-    | fractional => rfl
-    | integral mv mo ms msh => simp [NumericType.isIntegral] at hnt
-  subst hfr
+  obtain rfl := NumericType.eq_fractional_of_not_integral hnt
   by_cases hz : result.mValue = 0
   · rw [STAmount.toRat_signed, hz]; simp
   have hn_ne : n.mantissa_ ≠ 0 :=
@@ -108,10 +64,7 @@ lemma STAmount.ofNumber_signtrue_nonpos (nt : NumericType) (n : Number) (mode : 
   have hwneg : w.negative_ = false := by
     rw [hwdef]; unfold Number.operator_neg; simp [hn_ne, hneg]
   obtain ⟨hlo19, hhi19⟩ := hn.mantissaBounds_nat hn_ne
-  have hexp_lo : minExponent ≤ n.exponent_ := by
-    rcases hn with h0 | ⟨_, _, _, hlo, _⟩
-    · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hn_ne
-    · exact hlo
+  have hexp_lo : minExponent ≤ n.exponent_ := Number.exponent_ge_min n hn hn_ne
   cases hnorm : w.normalizeToRange cMinValue cMaxValue mode with
   | error e => rw [hnorm] at hok; exact absurd hok (by simp)
   | ok me =>
@@ -130,125 +83,39 @@ lemma STAmount.ofNumber_signtrue_nonpos (nt : NumericType) (n : Number) (mode : 
         have := toUInt64_toNat_of_nonneg mant hmant_nn; omega
       have hcm : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
       omega
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     exact STAmount.canonicalize_signtrue_nonpos
       (STAmount.unchecked .fractional mant.toUInt64 exp true) result mode rfl rfl hfit hok
 
-/-- **A `to_nearest` fractional pack never overshoots a 16-digit-representable bound.** -/
-lemma STAmount.ofNumber_frac_le_canonical (n : Number) (g result : STAmount)
-    (hn : n.isNormalized) (hnneg : n.negative_ = false)
-    (hg : g.IOUCanonical) (hgneg : g.mIsNegative = false)
-    (hle : n.toRat ≤ g.toRat)
-    (hok : STAmount.ofNumber .fractional n .to_nearest = .ok result) :
-    result.toRat ≤ g.toRat := by
-  have hgval : g.toRat = (g.mValue.toNat : ℚ) * (10:ℚ) ^ g.mOffset :=
-    STAmount.toRat_of_nonneg g hgneg
-  have hgnn : 0 ≤ g.toRat := by rw [hgval]; positivity
-  by_cases hrz : result.mValue = 0
-  · rw [STAmount.toRat_signed, hrz]; simpa using hgnn
-  have hnm : n.mantissa_ ≠ 0 :=
-    STAmount.ofNumber_source_ne_zero .fractional n .to_nearest result hok hrz
-  obtain ⟨hlo19, hhi19⟩ := hn.mantissaBounds_nat hnm
-  have hexp_lo : minExponent ≤ n.exponent_ := by
-    rcases hn with h0 | ⟨_, _, _, hlo, _⟩
-    · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hnm
-    · exact hlo
-  have hexp_hi : n.exponent_ + 4 ≤ maxExponent :=
-    STAmount.ofNumber_iou_success_exp_range n .to_nearest result hlo19 hhi19 hexp_lo hok hrz
-  obtain ⟨mant, exp, hnorm, hval, hexpq, hcast, hmlo, hmhi, helo, hehi⟩ :=
-    STAmount.ofNumber_iou_snap_pos .fractional n .to_nearest result rfl hnneg
-      hlo19 hhi19 hexp_lo hexp_hi hok hrz
-  obtain ⟨k, hk, hk_lt, hkval⟩ :=
-    normalizeToRange_16_bracket n .to_nearest mant exp hlo19 hhi19 (by omega) (by omega) hnorm
-  rw [hnneg] at hkval
-  simp only [Bool.false_eq_true, if_false, one_mul] at hkval
-  -- value forms
-  have hnval : n.toRat = (n.mantissa_.toNat : ℚ) * (10:ℚ) ^ n.exponent_ :=
-    Number.toRat_of_nonneg n hnneg
-  set M : ℕ := n.mantissa_.toNat with hM
-  set mg : ℕ := g.mValue.toNat with hmg
-  have hmg_lo : 10 ^ 15 ≤ mg := hg.mant_lo
-  have hmg_hi : mg < 10 ^ 16 := hg.mant_hi
-  have hrval : result.toRat = (k : ℚ) * (10:ℚ) ^ (n.exponent_ + 3) := by rw [hval, hkval]
-  rw [hrval, hgval]
-  have hpe : (0:ℚ) < (10:ℚ) ^ (n.exponent_ + 3) := zpow_pos (by norm_num) _
-  have hpg : (0:ℚ) < (10:ℚ) ^ g.mOffset := zpow_pos (by norm_num) _
-  have hpn : (0:ℚ) < (10:ℚ) ^ n.exponent_ := zpow_pos (by norm_num) _
-  have hle' : (M : ℚ) * (10:ℚ) ^ n.exponent_ ≤ (mg : ℚ) * (10:ℚ) ^ g.mOffset := by
-    rw [← hnval, ← hgval]; exact hle
-  have hsplit : (10:ℚ) ^ (n.exponent_ + 3) = (10:ℚ) ^ n.exponent_ * 1000 := by
-    rw [zpow_add₀ (by norm_num : (10:ℚ) ≠ 0)]; norm_num
-  rcases lt_trichotomy (n.exponent_ + 3) g.mOffset with he | he | he
-  · -- the bound sits a whole decade band above: separation on the mantissa ranges
-    have hkle : (k : ℚ) ≤ 10 ^ 16 := by
-      have : k ≤ 10 ^ 16 := by rcases hk with h | h <;> omega
-      exact_mod_cast this
-    have hstep : (10:ℚ) ^ (16:ℤ) * (10:ℚ) ^ (n.exponent_ + 3) ≤ (10:ℚ) ^ (15:ℤ) * 10 ^ g.mOffset := by
-      rw [← zpow_add₀ (by norm_num : (10:ℚ) ≠ 0), ← zpow_add₀ (by norm_num : (10:ℚ) ≠ 0)]
-      exact zpow_le_zpow_right₀ (by norm_num) (by omega)
-    have h16 : ((10:ℚ) ^ (16:ℤ)) = (10:ℚ) ^ 16 := by norm_num
-    have h15 : ((10:ℚ) ^ (15:ℤ)) = (10:ℚ) ^ 15 := by norm_num
-    have hmgq : ((10:ℚ) ^ 15) ≤ (mg : ℚ) := by exact_mod_cast hmg_lo
-    calc (k : ℚ) * (10:ℚ) ^ (n.exponent_ + 3)
-        ≤ (10:ℚ) ^ 16 * (10:ℚ) ^ (n.exponent_ + 3) :=
-          mul_le_mul_of_nonneg_right hkle (le_of_lt hpe)
-      _ ≤ (10:ℚ) ^ 15 * (10:ℚ) ^ g.mOffset := by rw [← h16, ← h15]; exact hstep
-      _ ≤ (mg : ℚ) * (10:ℚ) ^ g.mOffset := mul_le_mul_of_nonneg_right hmgq (le_of_lt hpg)
-  · -- same band: compare mantissas, with the carry case excluded by the half-ULP bound
-    rw [← he]
-    rw [← he] at hle'
-    have hMle : (M : ℚ) ≤ 1000 * (mg : ℚ) := by
-      rw [hsplit] at hle'
-      nlinarith [hle', hpn]
-    have hMleN : M ≤ 1000 * mg := by exact_mod_cast hMle
-    have hkmg : k ≤ mg := by
-      rcases hk with h | h
-      · omega
-      · by_contra hcon
-        push Not at hcon
-        have hMd : M / 1000 = mg := by omega
-        have hmod : M % 1000 = 0 := by omega
-        -- the source is exactly on the 16-digit grid, so `to_nearest` cannot carry
-        have hhalf := normalizeToRange_16_within_half_ulp n mant exp hlo19 hhi19 (by omega)
-          (by omega) hnorm
-        rw [hkval, hnval] at hhalf
-        have hMexact : (M : ℚ) * (10:ℚ) ^ n.exponent_
-            = ((M / 1000 : ℕ) : ℚ) * (10:ℚ) ^ (n.exponent_ + 3) := by
-          rw [hsplit]
-          have : (M : ℚ) = ((M / 1000 : ℕ) : ℚ) * 1000 := by
-            have : M = (M / 1000) * 1000 := by omega
-            exact_mod_cast congrArg (Nat.cast : ℕ → ℚ) this
-          rw [this]; ring
-        rw [hMexact, ← sub_mul, abs_mul, abs_of_pos hpe] at hhalf
-        have : |(k : ℚ) - ((M / 1000 : ℕ) : ℚ)| ≤ 1/2 := by
-          nlinarith [hhalf, hpe, abs_nonneg ((k : ℚ) - ((M / 1000 : ℕ) : ℚ))]
-        rw [h] at this
-        push_cast at this
-        rw [show ((M / 1000 : ℕ) : ℚ) + 1 - ((M / 1000 : ℕ) : ℚ) = 1 from by ring] at this
-        norm_num at this
-    have hkmgq : (k : ℚ) ≤ (mg : ℚ) := by exact_mod_cast hkmg
-    exact mul_le_mul_of_nonneg_right hkmgq (le_of_lt hpe)
-  · -- the bound sits a band BELOW the source: impossible, since `n ≤ g`
-    exfalso
-    have hmgq : (mg : ℚ) < (10:ℚ) ^ 16 := by exact_mod_cast hmg_hi
-    have hMq : ((10:ℚ) ^ 18) ≤ (M : ℚ) := by exact_mod_cast hlo19
-    have hstep : (10:ℚ) ^ (16:ℤ) * (10:ℚ) ^ g.mOffset ≤ (10:ℚ) ^ (18:ℤ) * 10 ^ n.exponent_ := by
-      rw [← zpow_add₀ (by norm_num : (10:ℚ) ≠ 0), ← zpow_add₀ (by norm_num : (10:ℚ) ≠ 0)]
-      exact zpow_le_zpow_right₀ (by norm_num) (by omega)
-    have h16 : ((10:ℚ) ^ (16:ℤ)) = (10:ℚ) ^ 16 := by norm_num
-    have h18 : ((10:ℚ) ^ (18:ℤ)) = (10:ℚ) ^ 18 := by norm_num
-    have hglt : (mg : ℚ) * (10:ℚ) ^ g.mOffset < (10:ℚ) ^ 16 * (10:ℚ) ^ g.mOffset :=
-      mul_lt_mul_of_pos_right hmgq hpg
-    have : (10:ℚ) ^ 16 * (10:ℚ) ^ g.mOffset ≤ (M : ℚ) * (10:ℚ) ^ n.exponent_ := by
-      rw [← h16] at *
-      calc (10:ℚ) ^ (16:ℤ) * (10:ℚ) ^ g.mOffset
-          ≤ (10:ℚ) ^ (18:ℤ) * (10:ℚ) ^ n.exponent_ := hstep
-        _ ≤ (M : ℚ) * (10:ℚ) ^ n.exponent_ := by
-            rw [h18]; exact mul_le_mul_of_nonneg_right hMq (le_of_lt hpn)
-    linarith
+/-- An integral amount of a negative value is at most zero: the sign survives the conversion. -/
+lemma STAmount.ofNumber_integral_negative_nonpos (nt : NumericType) (n : Number) (mode : rounding_mode)
+    (result : STAmount) (hnt : nt.isIntegral = true) (hneg : n.negative_ = true)
+    (hok : STAmount.ofNumber nt n mode = .ok result) : result.toRat ≤ 0 := by
+  unfold STAmount.ofNumber at hok
+  simp only [Number.signum_neg_decide, hneg, if_true, if_pos hnt] at hok
+  have hwneg : n.operator_neg.negative_ = false := by
+    unfold Number.operator_neg
+    split
+    · rfl
+    · simp [hneg]
+  cases hr : n.operator_neg.to_rep mode with
+  | error e => rw [hr] at hok; exact absurd hok (by simp)
+  | ok iv =>
+    rw [hr] at hok
+    simp only [] at hok
+    obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range _ mode iv hwneg hr
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
+    have hexact := STAmount.canonicalize_integral_toRat (STAmount.unchecked nt iv.toUInt64 0 true) result mode
+      (show (STAmount.unchecked nt iv.toUInt64 0 true).integral = true from hnt) rfl
+      (toUInt64_toNat_le_maxRep iv hnn hle) hok
+    rw [hexact, STAmount.toRat_signed]
+    show (if true = true then (-1 : ℚ) else 1) * _ * _ ≤ 0
+    simp only [if_true, neg_mul, one_mul, Left.neg_nonpos_iff]
+    positivity
 
-/-- The integral `canonicalize` on an offset-`0` amount within `maxRep`
-reproduces the type, keeps offset `0`, stays within `maxRep`, and preserves
-the value. Structural strengthening of `canonicalize_integral_toRat`. -/
+/-- Canonicalizing an offset-`0` integral amount within `maxRep` keeps its type, offset, bound and value. -/
 lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : rounding_mode)
     (hint : s.integral = true) (hoff : s.mOffset = 0)
     (hval_le : s.mValue.toNat ≤ maxRep.toNat)
@@ -283,7 +150,7 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
             exact_mod_cast h1)
         rw [h2]
         rcases s.mIsNegative <;> simp
-      by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
+      by_cases hrng : r.magnitude > s.mNumericType.maxValue
       · rw [if_pos hrng] at hok; exact absurd hok (by simp)
       rw [if_neg hrng] at hok
       have hres := Except.ok.inj hok
@@ -298,11 +165,8 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
       rw [UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hlt), hnatAbs]
       exact hval_le
 
-/-- **`.downward` `ofNumber` floors within one ULP.** For a normalized sign-cleared
-`Number` `n` whose conversion into `nt` lands on a nonzero record, the result never
-exceeds `n`, sits within `10 ^ result.exponent` below it, and is non-negative. Both
-the integral (`to_rep` floor, exponent `0`) and fractional (16-digit downward snap)
-paths obey this. -/
+/-- A `.downward` conversion of a nonnegative `Number` never exceeds it, is nonnegative, and falls short by at
+most one unit of the result's exponent. -/
 lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (result : STAmount)
     (hn : n.isNormalized) (hneg : n.negative_ = false)
     (hok : STAmount.ofNumber nt n .downward = .ok result) (hres : result.mValue ≠ 0) :
@@ -322,6 +186,8 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
       have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
         toUInt64_toNat_le_maxRep intValue hnn hle
       have hres_val : result.toRat = (intValue.toInt : ℚ) := by
+        obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
         have hexact := STAmount.canonicalize_integral_toRat
           (STAmount.unchecked nt intValue.toUInt64 0 false) result .downward
           (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hint) rfl
@@ -330,6 +196,8 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
         show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
         rw [toUInt64_toNat_of_nonneg intValue hnn]
       have hres_exp : result.exponent = 0 := by
+        obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
         obtain ⟨_, hoff, _⟩ := STAmount.canonicalize_integral_facts
           (STAmount.unchecked nt intValue.toUInt64 0 false) result .downward
           (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hint)
@@ -340,17 +208,11 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
       rw [hres_val, hres_exp, zpow_zero]
       linarith [hfl_lt]
   · -- fractional: the 16-digit downward snap is within one 16-digit ULP below
-    have hnt_frac : nt = .fractional := by
-      cases nt with
-      | fractional => rfl
-      | integral mv mo ms msh => simp [NumericType.isIntegral] at hint
+    have hnt_frac : nt = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
     have hn_ne : n.mantissa_ ≠ 0 :=
       STAmount.ofNumber_iou_mantissa_ne_zero nt n .downward result hnt_frac hok hres
     obtain ⟨hlo19, hhi19⟩ := hn.mantissaBounds_nat hn_ne
-    have hexp_lo : minExponent ≤ n.exponent_ := by
-      rcases hn with h0 | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show n.mantissa_ = 0 by rw [h0]; rfl) hn_ne
-      · exact hlo
+    have hexp_lo : minExponent ≤ n.exponent_ := Number.exponent_ge_min n hn hn_ne
     have hok' : STAmount.ofNumber .fractional n .downward = .ok result := by
       rw [← hnt_frac]; exact hok
     have hexp_hi : n.exponent_ + 4 ≤ maxExponent :=
@@ -374,8 +236,7 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
     calc n.toRat - result.toRat ≤ (10 : ℚ) ^ (n.exponent_ + 3) := hgap
       _ ≤ (10 : ℚ) ^ result.exponent := zpow_le_zpow_right₀ (by norm_num) hexp_ge
 
-/-- **Integral `STAmount.ofNumber` output shape.** A successful conversion into
-an integral numeric type yields an offset-`0` amount of that type whose stored
+/-- A successful conversion into an integral numeric type yields an offset-`0` amount of that type whose stored
 magnitude fits `maxRep`. -/
 lemma STAmount.ofNumber_integral_facts (nt : NumericType) (n : Number)
     (mode : rounding_mode) (result : STAmount)
@@ -418,6 +279,8 @@ lemma STAmount.ofNumber_integral_facts (nt : NumericType) (n : Number)
     have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
       toUInt64_toNat_le_maxRep intValue hnn hle
     have hint' : (STAmount.unchecked nt intValue.toUInt64 0 neg).integral = true := hnt
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     obtain ⟨h1, h2, h3, _⟩ := STAmount.canonicalize_integral_facts
       (STAmount.unchecked nt intValue.toUInt64 0 neg) result mode hint' rfl hval hok
     exact ⟨h1, h2, h3⟩

@@ -1,25 +1,22 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
--- Operand-generic no-inbetween frames over the (zm, ze, f, g) doRoundUp state.
 import XRPL.Properties.Protocol.Number.Common.Rounding.DoRoundUp
 import XRPL.Properties.Protocol.Number.Common.Closest.Gap
 
 
 namespace XRPL.Model.Protocol
 
-/-! # No-inbetween frames
+/-! # No normalized Number between the result and the exact value
 
-Each `operator`'s discrete-rounding proof reduces to the same statement about
-the pre-`doRoundUp` state `(zm, ze', f, g)`: no normalized Number sits strictly
-between the rounded result and the exact value `±(zm + f)·10^ze'`. These frames
-prove that once and for all, parameterized over the operand-specific pieces:
+Each operation's rounding proof reaches the same state before `doRoundUp`: mantissa `zm`, exponent `ze'`, dropped
+fraction `f` and guard `g`. These lemmas show that no normalized Number lies between the result and the exact value
+`±(zm + f)·10^ze'`, the exact value included. The operation supplies:
 
-* `truth` — the exact rational value of the operation,
-* `h_truth_abs` — `|truth| = (zm + f)·10^ze'` (from the op's AlgorithmicFacts),
-* `h_res_nn` / `h_res_np` — result-sign transfer (`truth` sign ⟹ result sign),
-* `h_sbit_t` / `h_sbit_f` — guard sign-bit transfer (directed modes only),
-* `loc` — the op's `doRoundUp` error-location string.
-
-Consumers (Mul, Normalize, …) destructure their facts bundle and apply these. -/
+* `truth`: the exact value of the operation,
+* `h_truth_abs`: `|truth| = (zm + f)·10^ze'`,
+* `h_res_nn` / `h_res_np`: the result is not on the other side of zero from `truth`,
+* `h_sbit_t` / `h_sbit_f` (`downward` and `upward` only): the guard sign bit is set for a negative `truth`, clear for
+  a positive one,
+* `loc`: the `Error` that `doRoundUp` returns on overflow. -/
 
 /-- `.towards_zero`, below form: with `result ≤ truth`, nothing normalized lies
 in `(result, truth]`. -/
@@ -53,8 +50,8 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
   intro m h_norm h_lt_m h_m_le_truth
   by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
   swap
-  · -- Cusp range: maxRep < zm ≤ maxRepUp. `.towards_zero` never fires, so the
-    -- fired legs of the cusp value cases are refuted outright.
+  · -- Cusp range: maxRep < zm ≤ maxRepUp. `.towards_zero` never rounds up, so the cusp cases that
+    -- need a round-up are impossible.
     have h_zm_gt_rep : maxRep.toNat < zm.toNat := by omega
     obtain ⟨v, h_val, h_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .towards_zero
       h_zm_gt_rep hzm_le loc res_pos h_rup_pos hres_pos_mant_ne
@@ -71,7 +68,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
     · -- v = maxRep (truncate clamp).
       rw [hv] at h_result_abs
       rcases lt_or_ge truth 0 with h_truth_neg | h_truth_nn
-      · -- the clamp sits strictly above truth — h_le refuted.
+      · -- the clamp sits strictly above truth, refuting h_le.
         have h_result_neg : result.toRat < 0 := lt_of_le_of_lt h_le h_truth_neg
         rw [abs_of_neg h_truth_neg] at h_truth_abs
         rw [abs_of_neg h_result_neg] at h_result_abs
@@ -93,10 +90,10 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
           have h_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < (maxRepCuspTarget : ℚ) * 10 ^ ze' :=
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
-    · -- v = maxRepUp: only the kept/dead legs survive (`.towards_zero` cannot fire).
+    · -- v = maxRepUp: `.towards_zero` never rounds up, so only the `zm = maxRepUp` case is left.
       rcases hsub with ⟨_, _⟩ | ⟨_, hb_true⟩
       swap
-      · rw [roundUp_bool_towards_zero_false (g.pushOverflow zm .towards_zero) zm] at hb_true
+      · rw [roundUp_bool_towards_zero_false (g.pushOverflowSpec zm .towards_zero) zm] at hb_true
         exact absurd hb_true Bool.false_ne_true
       have hv' : v = (maxRepCuspTarget : ℚ) := by rw [hv]; norm_num
       rw [hv'] at h_result_abs
@@ -125,7 +122,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
               < ((9223372036854775810 : ℚ) + 1) * 10 ^ ze' :=
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
-    · -- v = maxRepNat+13 requires a fired decision — impossible for `.towards_zero`.
+    · -- v = maxRepNat+13 requires a fired decision, impossible for `.towards_zero`.
       rw [roundUp_bool_towards_zero_false g zm] at hb_true
       exact absurd hb_true Bool.false_ne_true
   -- In-range: `.towards_zero` truncates, result value = zm · 10^ze'.
@@ -133,7 +130,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
     loc res_pos h_rup_pos hres_pos_mant_ne
   rw [h_val] at h_result_abs
   rcases lt_or_ge truth 0 with h_truth_neg | h_truth_nn
-  · -- Negative truth: truncation lands above it; h_le forces exactness, interval empty.
+  · -- Negative truth: truncation lands above it, so h_le forces exactness, interval empty.
     have h_result_neg : result.toRat < 0 := lt_of_le_of_lt h_le h_truth_neg
     rw [abs_of_neg h_truth_neg] at h_truth_abs
     rw [abs_of_neg h_result_neg] at h_result_abs
@@ -194,7 +191,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
   intro m h_norm h_m_lt h_truth_le_m
   by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
   swap
-  · -- Cusp range, mirrored.
+  · -- Cusp range: maxRep < zm ≤ maxRepUp, as in the below form.
     have h_zm_gt_rep : maxRep.toNat < zm.toNat := by omega
     obtain ⟨v, h_val, h_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .towards_zero
       h_zm_gt_rep hzm_le loc res_pos h_rup_pos hres_pos_mant_ne
@@ -225,7 +222,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
         · rw [h_maxR_q]; linarith
-      · -- positive truth: truncation cannot exceed it strictly enough — h_ge refuted.
+      · -- positive truth: the clamp `maxRep` sits strictly below truth, refuting h_ge.
         have h_truth_pos : 0 < truth := lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
         rw [abs_of_nonneg h_truth_nn] at h_truth_abs
         have h_result_nn : (0 : ℚ) ≤ result.toRat := le_trans (le_of_lt h_truth_pos) h_ge
@@ -233,10 +230,10 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
         have h_lt : (maxRepNat : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
           mul_lt_mul_of_pos_right (by linarith) h10ze_pos
         linarith
-    · -- v = maxRepUp: only the kept/dead legs survive.
+    · -- v = maxRepUp: as in the below form, only the `zm = maxRepUp` case is left.
       rcases hsub with ⟨_, _⟩ | ⟨_, hb_true⟩
       swap
-      · rw [roundUp_bool_towards_zero_false (g.pushOverflow zm .towards_zero) zm] at hb_true
+      · rw [roundUp_bool_towards_zero_false (g.pushOverflowSpec zm .towards_zero) zm] at hb_true
         exact absurd hb_true Bool.false_ne_true
       have hv' : v = (maxRepCuspTarget : ℚ) := by rw [hv]; norm_num
       rw [hv'] at h_result_abs
@@ -266,7 +263,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
         · linarith
-    · -- v = maxRepNat+13 requires a fired decision — impossible for `.towards_zero`.
+    · -- v = maxRepNat+13 requires a fired decision, impossible for `.towards_zero`.
       rw [roundUp_bool_towards_zero_false g zm] at hb_true
       exact absurd hb_true Bool.false_ne_true
   -- In-range: truncate.
@@ -359,7 +356,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
       rw [abs_of_neg h_truth_neg] at h_truth_abs
       rw [abs_of_neg h_result_neg] at h_result_abs
       rcases h_cases with ⟨hv, _, _⟩ | ⟨hv, _⟩ | ⟨hv, hzm_eq_up, hb_true⟩
-      · -- v = maxRep: the truncate clamp sits strictly above truth — h_le refuted.
+      · -- v = maxRep: the truncate clamp sits strictly above truth, refuting h_le.
         rw [hv] at h_result_abs
         have h_lt : (maxRepNat : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
           mul_lt_mul_of_pos_right (by linarith) h10ze_pos
@@ -421,7 +418,7 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
               < ((9223372036854775810 : ℚ) + 1) * 10 ^ ze' :=
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
-      · -- v = maxRepNat+13: result sits strictly above truth — h_le refuted.
+      · -- v = maxRepNat+13: result sits strictly above truth, refuting h_le.
         have hv' : v = (twoPow63Add12 : ℚ) := by rw [hv]; norm_num
         rw [hv'] at h_result_abs
         have h_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < (twoPow63Add12 : ℚ) * 10 ^ ze' :=
@@ -472,42 +469,23 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
         have h_zm_eq : zm = maxRep := by
           have h_eq_nat : zm.toNat = maxRep.toNat := by omega
           exact UInt64.toNat.inj h_eq_nat
-        rcases h_ru with h_round1 | h_tie
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
-            h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
-          have h_fze_pos : (0 : ℚ) < f * 10 ^ ze' := mul_pos h_f_pos h10ze_pos
-          have h_contr : (maxRep.toNat : ℚ) * 10 ^ ze' + f * 10 ^ ze' ≤ (maxRep.toNat : ℚ) * 10 ^ ze' := by
-            have h1 : -result.toRat = (maxRep.toNat : ℚ) * 10 ^ ze' := h_result_abs
-            have h2 : -truth = ((zm.toNat : ℚ) + f) * 10 ^ ze' := h_truth_abs
-            have h3 : -truth ≤ -result.toRat := by linarith
-            calc (maxRep.toNat : ℚ) * 10 ^ ze' + f * 10 ^ ze'
-                = ((maxRep.toNat : ℚ) + f) * 10 ^ ze' := by ring
-              _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by rw [h_zm_eq_q]
-              _ = -truth := h2.symm
-              _ ≤ -result.toRat := h3
-              _ = (maxRep.toNat : ℚ) * 10 ^ ze' := h1
-          linarith
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          have h_neg_m_lo : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < m.toRat := by
-            have h_result_eq : result.toRat = -((maxRepCuspTarget : ℚ) * 10 ^ ze') := by
-              linarith [h_result_abs]
-            rw [h_result_eq] at h_lt_m; exact h_lt_m
-          have h_neg_m_hi : m.toRat < -((maxRep.toNat : ℚ) * 10 ^ ze') := by
-            have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
-            calc m.toRat ≤ truth := h_m_le_truth
-              _ = -(((zm.toNat : ℚ) + f) * 10 ^ ze') := by linarith [h_truth_abs]
-              _ < -((maxRep.toNat : ℚ) * 10 ^ ze') := by
-                  rw [h_zm_eq_q]
-                  have h_compare : (maxRep.toNat : ℚ) < (maxRep.toNat : ℚ) + f := by linarith
-                  have h_compare_mul : (maxRep.toNat : ℚ) * 10 ^ ze' < ((maxRep.toNat : ℚ) + f) * 10 ^ ze' :=
-                    mul_lt_mul_of_pos_right h_compare h10ze_pos
-                  linarith
-          exact no_normalized_in_cusp_gap_neg ze' m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
+        have h_val := doRoundUp_value_to_nearest_maxRep g zm ze' h_zm_eq loc res_pos h_rup_pos
+          hres_pos_mant_ne
+        try simp only at h_val
+        rw [h_val] at h_result_abs
+        have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
+        have h_fze_pos : (0 : ℚ) < f * 10 ^ ze' := mul_pos h_f_pos h10ze_pos
+        have h_contr : (maxRep.toNat : ℚ) * 10 ^ ze' + f * 10 ^ ze' ≤ (maxRep.toNat : ℚ) * 10 ^ ze' := by
+          have h1 : -result.toRat = (maxRep.toNat : ℚ) * 10 ^ ze' := h_result_abs
+          have h2 : -truth = ((zm.toNat : ℚ) + f) * 10 ^ ze' := h_truth_abs
+          have h3 : -truth ≤ -result.toRat := by linarith
+          calc (maxRep.toNat : ℚ) * 10 ^ ze' + f * 10 ^ ze'
+              = ((maxRep.toNat : ℚ) + f) * 10 ^ ze' := by ring
+            _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by rw [h_zm_eq_q]
+            _ = -truth := h2.symm
+            _ ≤ -result.toRat := h3
+            _ = (maxRep.toNat : ℚ) * 10 ^ ze' := h1
+        linarith
     · -- Empty interval: (zm+f)*10^ze' ≤ -m < zm*10^ze' is impossible since f ≥ 0.
       exfalso
       have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
@@ -545,35 +523,24 @@ theorem no_inbetween_below_to_nearest_frame (result : Number) (truth : ℚ)
       · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
         have h_m_pos : 0 < m.toRat := lt_of_le_of_lt h_result_nn h_lt_m
-        rcases h_ru with h_round1 | h_tie
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
-            h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          have h_m_lo : (maxRep.toNat : ℚ) * 10 ^ ze' < m.toRat := by
-            rw [← h_result_abs]; exact h_lt_m
-          have h_m_hi : m.toRat < (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
-            have h_f_lt1 : f < 1 := hf_lt
-            have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
-            have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
-            calc m.toRat ≤ truth := h_m_le_truth
-              _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' := h_truth_abs
-              _ < ((maxRep.toNat : ℚ) + 1) * 10 ^ ze' := by
-                  apply mul_lt_mul_of_pos_right _ h10ze_pos; rw [← h_zm_eq_q]; linarith
-              _ ≤ (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
-                  apply mul_le_mul_of_nonneg_right _ (le_of_lt h10ze_pos)
-                  rw [h_maxR_v]; norm_num
-          exact no_normalized_in_cusp_gap_pos ze' m h_norm h_m_pos h_m_lo h_m_hi
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
+        have h_val := doRoundUp_value_to_nearest_maxRep g zm ze' h_zm_eq loc res_pos h_rup_pos
+          hres_pos_mant_ne
+        try simp only at h_val
+        rw [h_val] at h_result_abs
+        have h_m_lo : (maxRep.toNat : ℚ) * 10 ^ ze' < m.toRat := by
+          rw [← h_result_abs]; exact h_lt_m
+        have h_m_hi : m.toRat < (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
+          have h_f_lt1 : f < 1 := hf_lt
           have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
           have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
-          have h_le_810 : (zm.toNat : ℚ) + 1 ≤ maxRepCuspTarget := by
-            rw [show zm.toNat = maxRep.toNat from by rw [h_zm_eq], h_maxR_v]; norm_num
-          have h_compare_mul : ((zm.toNat : ℚ) + f) * 10 ^ ze' < ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
-            mul_lt_mul_of_pos_right (by linarith) h10ze_pos
-          linarith [mul_le_mul_of_nonneg_right h_le_810 (le_of_lt h10ze_pos), h_result_abs]
+          calc m.toRat ≤ truth := h_m_le_truth
+            _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' := h_truth_abs
+            _ < ((maxRep.toNat : ℚ) + 1) * 10 ^ ze' := by
+                apply mul_lt_mul_of_pos_right _ h10ze_pos; rw [← h_zm_eq_q]; linarith
+            _ ≤ (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
+                apply mul_le_mul_of_nonneg_right _ (le_of_lt h10ze_pos)
+                rw [h_maxR_v]; norm_num
+        exact no_normalized_in_cusp_gap_pos ze' m h_norm h_m_pos h_m_lo h_m_hi
     · have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
       try simp only at h_val
       rw [h_val] at h_result_abs
@@ -627,7 +594,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
   intro m h_norm h_m_lt h_truth_le_m
   by_cases h_zm_le_rep : zm.toNat ≤ maxRep.toNat
   swap
-  · -- Cusp range: maxRep < zm ≤ maxRepUp, mirrored.
+  · -- Cusp range: maxRep < zm ≤ maxRepUp, as in the below form.
     have h_zm_gt_rep : maxRep.toNat < zm.toNat := by omega
     obtain ⟨v, h_val, h_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .to_nearest
       h_zm_gt_rep hzm_le loc res_pos h_rup_pos hres_pos_mant_ne
@@ -671,7 +638,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
         · rw [h_k_cast]; linarith
-      · -- v = maxRepNat+13: result sits strictly below truth — h_ge refuted.
+      · -- v = maxRepNat+13: result sits strictly below truth, refuting h_ge.
         have hv' : v = (twoPow63Add12 : ℚ) := by rw [hv]; norm_num
         rw [hv'] at h_result_abs
         have h_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < (twoPow63Add12 : ℚ) * 10 ^ ze' :=
@@ -684,7 +651,7 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
       rw [abs_of_nonneg h_result_nn] at h_result_abs
       have h_m_pos : 0 < m.toRat := lt_of_lt_of_le h_truth_pos h_truth_le_m
       rcases h_cases with ⟨hv, _, _⟩ | ⟨hv, _⟩ | ⟨hv, hzm_eq_up, hb_true⟩
-      · -- v = maxRep: result sits strictly below truth — h_ge refuted.
+      · -- v = maxRep: result sits strictly below truth, refuting h_ge.
         rw [hv] at h_result_abs
         have h_lt : (maxRepNat : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
           mul_lt_mul_of_pos_right (by linarith) h10ze_pos
@@ -742,45 +709,28 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
         linarith
       · push Not at h_cusp
         have h_zm_eq : zm = maxRep := UInt64.toNat.inj (by omega)
-        rcases h_ru with h_round1 | h_tie
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
-            h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
-          have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
-          have h_neg_m_hi : m.toRat < -((maxRep.toNat : ℚ) * 10 ^ ze') := by linarith
-          have h_neg_m_lo : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < m.toRat := by
-            have h_truth_lb : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < truth := by
-              have h_truth_eq : truth = -(((zm.toNat : ℚ) + f) * 10 ^ ze') := by linarith [h_truth_abs]
-              have h_zm_lt_cusp : (zm.toNat : ℚ) + f < (maxRepCuspTarget : ℚ) := by
-                have h_zm_nat : (zm.toNat : ℚ) = (maxRepNat : ℚ) := by rw [h_zm_eq_q, h_maxR_v]; norm_num
-                have h_cusp_nat : (maxRepCuspTarget : ℚ) = (maxRepNat : ℚ) + 3 := by norm_num
-                rw [h_zm_nat, h_cusp_nat]; linarith
-              have h_cusp_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < (maxRepCuspTarget : ℚ) * 10 ^ ze' :=
-                mul_lt_mul_of_pos_right h_zm_lt_cusp h10ze_pos
-              linarith
+        have h_val := doRoundUp_value_to_nearest_maxRep g zm ze' h_zm_eq loc res_pos h_rup_pos
+          hres_pos_mant_ne
+        try simp only at h_val
+        rw [h_val] at h_result_abs
+        have h_zm_eq_q : (zm.toNat : ℚ) = (maxRep.toNat : ℚ) := by rw [h_zm_eq]
+        have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
+        have h_neg_m_hi : m.toRat < -((maxRep.toNat : ℚ) * 10 ^ ze') := by linarith
+        have h_neg_m_lo : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < m.toRat := by
+          have h_truth_lb : -((maxRepCuspTarget : ℚ) * 10 ^ ze') < truth := by
+            have h_truth_eq : truth = -(((zm.toNat : ℚ) + f) * 10 ^ ze') := by linarith [h_truth_abs]
+            have h_zm_lt_cusp : (zm.toNat : ℚ) + f < (maxRepCuspTarget : ℚ) := by
+              have h_zm_nat : (zm.toNat : ℚ) = (maxRepNat : ℚ) := by rw [h_zm_eq_q, h_maxR_v]; norm_num
+              have h_cusp_nat : (maxRepCuspTarget : ℚ) = (maxRepNat : ℚ) + 3 := by norm_num
+              rw [h_zm_nat, h_cusp_nat]; linarith
+            have h_cusp_lt : ((zm.toNat : ℚ) + f) * 10 ^ ze' < (maxRepCuspTarget : ℚ) * 10 ^ ze' :=
+              mul_lt_mul_of_pos_right h_zm_lt_cusp h10ze_pos
             linarith
-          have h_maxR_pos : (0 : ℚ) < (maxRep.toNat : ℚ) * 10 ^ ze' := by
-            rw [← h_zm_eq_q]; exact mul_pos h_zm_pos_q h10ze_pos
-          have h_m_neg : m.toRat < 0 := by linarith
-          exact no_normalized_in_cusp_gap_neg ze' m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          have h_result_ge : ((zm.toNat : ℚ) + 1) * 10 ^ ze' ≤ |result.toRat| := by
-            rw [h_result_abs_eq, h_result_abs, h_val]
-            have h_maxR_v : maxRep.toNat = maxRepNat := maxRep_val
-            have h_le_810 : (zm.toNat : ℚ) + 1 ≤ maxRepCuspTarget := by
-              rw [show zm.toNat = maxRep.toNat from by rw [h_zm_eq], h_maxR_v]; norm_num
-            exact mul_le_mul_of_nonneg_right h_le_810 (le_of_lt h10ze_pos)
-          have h_compare : (zm.toNat : ℚ) + f < (zm.toNat : ℚ) + 1 := by linarith
-          have h_compare_mul : ((zm.toNat : ℚ) + f) * 10 ^ ze' < ((zm.toNat : ℚ) + 1) * 10 ^ ze' :=
-            mul_lt_mul_of_pos_right h_compare h10ze_pos
-          have h_abs_compare : |truth| < |result.toRat| := by
-            rw [h_truth_abs_eq, h_truth_abs]; linarith
-          have h_neg_compare : -truth < -result.toRat := by
-            rw [← h_truth_abs_eq, ← h_result_abs_eq]; exact h_abs_compare
           linarith
+        have h_maxR_pos : (0 : ℚ) < (maxRep.toNat : ℚ) * 10 ^ ze' := by
+          rw [← h_zm_eq_q]; exact mul_pos h_zm_pos_q h10ze_pos
+        have h_m_neg : m.toRat < 0 := by linarith
+        exact no_normalized_in_cusp_gap_neg ze' m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
     · have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
       try simp only at h_val
       rw [h_val] at h_result_abs
@@ -854,18 +804,11 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
             _ = ((zm.toNat : ℚ) + f) * 10 ^ ze' := by rw [h_zm_eq_q]
             _ = truth := by linarith
             _ ≤ m.toRat := h_truth_le_m
-        rcases h_ru with h_round1 | h_tie
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp_round1 g zm ze' h_zm_eq
-            h_round1 loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          linarith
-        · have h_val := doRoundUp_value_to_nearest_roundUp_cusp g zm ze' h_zm_eq h_tie loc res_pos h_rup_pos hres_pos_mant_ne
-          try simp only at h_val
-          rw [h_val] at h_result_abs
-          have h_m_hi : m.toRat < (maxRepCuspTarget : ℚ) * 10 ^ ze' := by
-            rw [← h_result_abs]; exact h_m_lt
-          exact no_normalized_in_cusp_gap_pos ze' m h_norm h_m_pos h_m_lo h_m_hi
+        have h_val := doRoundUp_value_to_nearest_maxRep g zm ze' h_zm_eq loc res_pos h_rup_pos
+          hres_pos_mant_ne
+        try simp only at h_val
+        rw [h_val] at h_result_abs
+        linarith
     · -- No round-up + truth ≤ result forces truth = result, making truth ≤ m < result empty.
       exfalso
       have h_val := doRoundUp_value_no_roundUp g zm ze' h_ru h_zm_le_rep loc res_pos h_rup_pos hres_pos_mant_ne
@@ -879,9 +822,8 @@ theorem no_inbetween_above_to_nearest_frame (result : Number) (truth : ℚ)
       rw [h_eq] at h_m_lt
       linarith
 
-/-- `.downward`, below form: with `result ≤ truth`, nothing normalized lies
-in `(result, truth]`. (`.downward` needs only this side — the direction always
-holds.) -/
+/-- `.downward`, below form: with `result ≤ truth`, nothing normalized lies in `(result, truth]`. This is the only
+side `.downward` needs. -/
 theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
     (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
@@ -933,7 +875,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
     · -- v = maxRep (truncate clamp).
       rw [hv] at h_result_abs
       rcases lt_or_ge truth 0 with h_truth_neg | h_truth_nn
-      · -- the clamp sits strictly above truth — h_le refuted.
+      · -- the clamp sits strictly above truth, refuting h_le.
         have h_result_neg : result.toRat < 0 := lt_of_le_of_lt h_le h_truth_neg
         rw [abs_of_neg h_truth_neg] at h_truth_abs
         rw [abs_of_neg h_result_neg] at h_result_abs
@@ -1006,7 +948,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
         · have h_lt : (maxRepCuspTarget : ℚ) * 10 ^ ze' < ((zm.toNat : ℚ) + f) * 10 ^ ze' :=
             mul_lt_mul_of_pos_right (by rw [hzm_q_eq]; linarith) h10ze_pos
           linarith
-      · -- result sits strictly above truth — h_le refuted.
+      · -- result sits strictly above truth, refuting h_le.
         have h_truth_pos : 0 < truth := lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
         rw [abs_of_nonneg h_truth_nn] at h_truth_abs
         have h_result_nn : (0 : ℚ) ≤ result.toRat := h_res_nn h_truth_pos
@@ -1058,7 +1000,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
             linarith
           linarith
         exact no_normalized_in_cusp_gap_neg ze' m h_norm h_m_neg h_neg_m_lo h_neg_m_hi
-    · -- Dead decision with the sign bit set: the guard is empty — exact result.
+    · -- No round-up with the sign bit set: the guard is empty, so the result is exact.
       obtain ⟨hd, hxb⟩ := content_empty_of_not_shouldRoundUp_downward g h_sbit h_sru
       have hf_zero : f = 0 := h_content_zero hd hxb
       have h_val := doRoundUp_value_downward_truncate g false zm ze'
@@ -1067,7 +1009,7 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
       rw [h_val] at h_result_abs
       rw [hf_zero, add_zero] at h_truth_abs
       linarith
-  · -- Positive truth: sbit = false — pure truncation.
+  · -- Positive truth: sbit = false, so pure truncation.
     have h_truth_pos : 0 < truth := lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
     rw [abs_of_nonneg h_truth_nn] at h_truth_abs
     have h_result_nn : (0 : ℚ) ≤ result.toRat := h_res_nn h_truth_pos
@@ -1090,9 +1032,8 @@ theorem no_inbetween_below_downward_frame (result : Number) (truth : ℚ)
     exact no_normalized_in_open_ulp_gap_pos_zm ze' zm.toNat
       hzm_succ h_zm_lt m h_norm h_m_pos h_m_lo h_m_hi
 
-/-- `.upward`, above form: with `truth ≤ result`, nothing normalized lies
-in `[truth, result)`. (`.upward` needs only this side — the direction always
-holds.) -/
+/-- `.upward`, above form: with `truth ≤ result`, nothing normalized lies in `[truth, result)`. This is the only
+side `.upward` needs. -/
 theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
     (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult) (loc : Error)
     (_hzm_ge : mantissaFloor ≤ zm.toNat)
@@ -1158,7 +1099,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
             mul_lt_mul_of_pos_right (by linarith) h10ze_pos
           linarith
         · rw [h_maxR_q]; linarith
-      · -- the clamp sits strictly below truth — h_ge refuted.
+      · -- the clamp sits strictly below truth, refuting h_ge.
         have h_truth_pos : 0 < truth := lt_of_le_of_ne h_truth_nn (Ne.symm h_truth_ne)
         rw [abs_of_nonneg h_truth_nn] at h_truth_abs
         have h_result_nn : (0 : ℚ) ≤ result.toRat := le_trans (le_of_lt h_truth_pos) h_ge
@@ -1208,7 +1149,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
       have hzm_q_eq : (zm.toNat : ℚ) = maxRepCuspTarget := by
         rw [hzm_eq_up, h_maxRU_v]; norm_num
       rcases lt_or_ge truth 0 with h_truth_neg | h_truth_nn
-      · -- result sits strictly below truth — h_ge refuted.
+      · -- result sits strictly below truth, refuting h_ge.
         have h_result_np : result.toRat ≤ 0 := h_res_np h_truth_neg
         rw [abs_of_neg h_truth_neg] at h_truth_abs
         rw [abs_of_nonpos h_result_np] at h_result_abs
@@ -1227,7 +1168,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
         · linarith
   -- In-range: the round decision is driven by the sign bit.
   rcases lt_or_ge truth 0 with h_truth_neg | h_truth_nn
-  · -- Negative truth: sbit = true — pure truncation.
+  · -- Negative truth: sbit = true, so pure truncation.
     have h_result_np : result.toRat ≤ 0 := h_res_np h_truth_neg
     have h_m_neg : m.toRat < 0 := lt_of_lt_of_le h_m_lt h_result_np
     rw [abs_of_neg h_truth_neg] at h_truth_abs
@@ -1287,7 +1228,7 @@ theorem no_inbetween_above_upward_frame (result : Number) (truth : ℚ)
             linarith
           linarith
         · linarith
-    · -- Dead decision with the sign bit clear: the guard is empty — exact result.
+    · -- No round-up with the sign bit clear: the guard is empty, so the result is exact.
       obtain ⟨hd, hxb⟩ := content_empty_of_not_shouldRoundUp_upward g h_sbit_false h_sru
       have hf_zero : f = 0 := h_content_zero hd hxb
       have h_val := doRoundUp_value_upward_truncate g false zm ze'

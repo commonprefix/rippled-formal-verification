@@ -1,9 +1,10 @@
 import XRPL.Properties.Protocol.Number.Sub.Common.RoundsWithinProofs
 import XRPL.Properties.Approx
 
-/-! # `operator_sub` relative-error bounds (`RoundsWithin`). Subtraction reduces to addition
-via `x - y = x + (-y)`: each theorem delegates to its `Add` counterpart, a diff-sign
-subtraction becoming a same-sign addition. Proofs in `Common.RoundsWithinProofs`. -/
+/-! # Relative error of `operator_sub`
+
+`x - y` is computed as `x + (-y)`, so operands of different signs get the same-sign addition bound. The general
+theorems assume a nonzero result, since a difference too small for a `Number` becomes zero. -/
 
 namespace XRPL.Model.Protocol
 

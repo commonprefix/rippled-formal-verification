@@ -1,18 +1,18 @@
 import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
+import XRPL.Properties.Protocol.STAmount.Common.Checked
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRange
 import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
-
 namespace XRPL.Model.Protocol
 
-/-! # Plumbing for the `roundToExponent` discrete theorem
+/-! # Exact IOU round trip for the `roundToExponent` grid theorem
 
 The IOU pipeline (`STAmount.iou` → `IOUAmount.normalize` → `from_rep` at
 `largeRange` → `normalizeToRange` at the 16-digit range → exponent clamp)
-is the **identity** on canonical 16-digit inputs. This file proves that
+is the identity on canonical 16-digit inputs. This file proves that
 round-trip plus the reference-amount construction. -/
 
 /-- A canonical (post-`canonicalize`) nonzero IOU STAmount. -/
@@ -45,6 +45,21 @@ lemma STAmount.toRat_of_neg (s : STAmount) (h : s.mIsNegative = true) :
   rw [STAmount.toRat_eq_number]
   exact Number.toRat_of_neg _ h
 
+/-- A nonnegative amount with a nonzero mantissa is not negative. -/
+lemma STAmount.mIsNegative_false_of_nonneg (a : STAmount) (h0 : 0 ≤ a.toRat) (hm : a.mValue ≠ 0) :
+    a.mIsNegative = false := by
+  by_contra hc
+  have hn : a.mIsNegative = true := by simpa using hc
+  have hv := STAmount.toRat_of_neg a hn
+  have hm' : (0 : ℚ) < (a.mValue.toNat : ℚ) := by
+    have : 0 < a.mValue.toNat := by
+      rcases Nat.eq_zero_or_pos a.mValue.toNat with h | h
+      · exact absurd (by rw [← UInt64.toNat_inj, h]; rfl) hm
+      · exact h
+    exact_mod_cast this
+  have : 0 < (a.mValue.toNat : ℚ) * 10 ^ a.mOffset := mul_pos hm' (zpow_pos (by norm_num) _)
+  linarith
+
 /-- The `Int64` view of `signedDrops` is exact for 16-digit mantissas. -/
 lemma STAmount.signedDrops_toInt64_toInt (s : STAmount)
     (h_hi : s.mValue.toNat < 10 ^ 16) :
@@ -56,7 +71,7 @@ lemma STAmount.signedDrops_toInt64_toInt (s : STAmount)
     split <;> omega
 
 /-- The full IOU round-trip is the identity on canonical 16-digit inputs:
-`value.iou mode = .ok ⟨signedDrops, mOffset⟩` in **every** mode. -/
+`value.iou mode = .ok ⟨signedDrops, mOffset⟩` in every mode. -/
 theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     (hc : s.IOUCanonical) :
     s.iou mode = .ok ⟨s.signedDrops.toInt64, s.mOffset⟩ := by
@@ -82,7 +97,8 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     rw [hc.is_fractional]
     decide
   unfold STAmount.iou
-  rw [if_neg h_int]
+  rw [if_neg h_int, Int.toInt64Checked_of_bounds (by unfold STAmount.signedDrops; split <;> omega)
+    (by unfold STAmount.signedDrops; split <;> omega), ok_bind, ← hsd_def]
   -- ofMantissaExp → normalize: mantissa ≠ 0.
   unfold IOUAmount.ofMantissaExp IOUAmount.normalize
   have h_sd_ne : ¬ (sd == 0) = true := by
@@ -160,7 +176,6 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
   have h_q3_eq : v.mantissa_ / 10 / 10 / 10 = s.mValue := UInt64.toNat_inj.mp h_q3
   rw [h_q3_eq]
   congr 2
-  -- ⊢ (if neg₀ then -s.mValue.toInt64 else s.mValue.toInt64) = sd
   have h_neg₀_val : neg₀ = s.mIsNegative := by
     rw [hneg₀_def]
     rcases hneg : s.mIsNegative with _ | _
@@ -231,49 +246,25 @@ theorem STAmount.canonicalize_canonical_id (s : STAmount) (mode : rounding_mode)
         omega
       rw [if_pos h_lt]
       norm_num
+  rw [← hsd_def]
+  have h_mag : sd.magnitude = s.mValue := by
+    apply UInt64.toNat_inj.mp
+    rw [Int64.toNat_magnitude, h_sd_signed]
+    rcases hneg : s.mIsNegative with _ | _ <;> simp
+  rw [h_mag]
   rcases hneg : s.mIsNegative with _ | _
-  · -- positive record
-    have h_not_neg : ¬ (IOUAmount.signum ⟨sd, s.mOffset⟩ < 0) := by
+  · have h_not_neg : ¬ (IOUAmount.signum ⟨sd, s.mOffset⟩ < 0) := by
       rw [h_signum_neg, hneg]
       exact Bool.noConfusion
-    rw [if_neg h_not_neg, decide_eq_false h_not_neg]
-    have h_abs_toNat : (sd.toUInt64).toNat = s.mValue.toNat := by
-      have h0 : 0 ≤ sd.toInt := by
-        rw [h_sd_signed, hneg]
-        simp only [Bool.false_eq_true, if_false]
-        positivity
-      have h1 := toUInt64_toNat_of_nonneg sd h0
-      rw [h_sd_signed, hneg] at h1
-      simp only [Bool.false_eq_true, if_false] at h1
-      omega
-    have h_abs_eq : sd.toUInt64 = s.mValue := UInt64.toNat_inj.mp h_abs_toNat
-    rw [h_abs_eq]
+    rw [decide_eq_false h_not_neg]
     obtain ⟨a, v, o, n⟩ := s
     simp only at hneg
     rw [hneg]
-  · -- negative record
-    have h_is_neg : IOUAmount.signum ⟨sd, s.mOffset⟩ < 0 := by
+  · have h_is_neg : IOUAmount.signum ⟨sd, s.mOffset⟩ < 0 := by
       have := h_signum_neg
       rw [hneg] at this
       rw [this]
-    rw [if_pos h_is_neg, decide_eq_true h_is_neg]
-    have h_neg_toInt : (-sd).toInt = (s.mValue.toNat : ℤ) := by
-      have h_lt : sd.toInt = -(s.mValue.toNat : ℤ) := by
-        rw [h_sd_signed, hneg]
-        simp
-      rw [Int64.toInt_neg, h_lt, Int.bmod_eq_iff (by norm_num)]
-      have := hc.mant_hi
-      constructor
-      · push_cast
-        omega
-      · push_cast
-        omega
-    have h_abs_toNat : ((-sd).toUInt64).toNat = s.mValue.toNat := by
-      have h1 := toUInt64_toNat_of_nonneg (-sd) (by rw [h_neg_toInt]; positivity)
-      rw [h_neg_toInt] at h1
-      omega
-    have h_abs_eq : (-sd).toUInt64 = s.mValue := UInt64.toNat_inj.mp h_abs_toNat
-    rw [h_abs_eq]
+    rw [decide_eq_true h_is_neg]
     obtain ⟨a, v, o, n⟩ := s
     simp only at hneg
     rw [hneg]

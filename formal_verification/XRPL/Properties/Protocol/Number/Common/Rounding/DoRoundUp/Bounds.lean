@@ -6,55 +6,10 @@ set_option linter.unreachableTactic false
 
 namespace XRPL.Model.Protocol
 
-/-! ## Mode-generic (any-round) supremum bound -/
-
-/-- Value form of `bringIntoRange` at the live `largeRange.min`: whenever the
-output mantissa is nonzero, the output value equals `m * 10^e` exactly (the
-rescale branch is a pure `×10 / e−1` shift). -/
-lemma bringIntoRange_value_q (zn : Bool) (m : UInt64) (e : Int)
-    (hne : (Guard.bringIntoRange zn m e largeRange.min).mantissa_ ≠ 0) :
-    ((Guard.bringIntoRange zn m e largeRange.min).mantissa_.toNat : ℚ)
-        * 10 ^ (Guard.bringIntoRange zn m e largeRange.min).exponent_
-      = (m.toNat : ℚ) * 10 ^ e := by
-  have hm_ne : m ≠ 0 := by
-    intro h
-    apply hne
-    have hnresc : ¬ (m < largeRange.min ∧ m ≠ 0) := by
-      intro hc
-      exact hc.2 h
-    rw [bringIntoRange_noscale_result hnresc]
-    simp [h]
-  by_cases hresc : m < largeRange.min
-  · rw [bringIntoRange_rescale_result hresc hm_ne] at hne ⊢
-    by_cases h_under : e - 1 < minExponent ∨ m * 10 = 0
-    · rw [if_pos h_under] at hne
-      exact absurd rfl hne
-    · rw [if_neg h_under]
-      have hm_mul_10 : (m * 10).toNat = m.toNat * 10 :=
-        m_mul_ten_no_overflow (UInt64.lt_iff_toNat_lt.mp hresc)
-      change ((m * 10).toNat : ℚ) * 10 ^ (e - 1) = (m.toNat : ℚ) * 10 ^ e
-      rw [hm_mul_10]
-      push_cast
-      rw [show (e - 1 : ℤ) = e + (-1) from by ring,
-          zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_neg_one]
-      field_simp
-  · have hnresc : ¬ (m < largeRange.min ∧ m ≠ 0) := by
-      intro hc
-      exact hresc hc.1
-    rw [bringIntoRange_noscale_result hnresc] at hne ⊢
-    by_cases h_under : e < minExponent ∨ m = 0
-    · rw [if_pos h_under] at hne
-      exact absurd rfl hne
-    · rw [if_neg h_under]
-
 set_option maxHeartbeats 3200000 in
 -- 8-leaf navigation with per-leaf literal arithmetic needs a raised budget.
-/-- Mode-generic (any rounding mode, any round decision) relative bound for
-`doRoundUp` on `mantissaFloor ≤ zm ≤ maxRepUp`: every leaf — truncate, round-up,
-the cusp clamps, and both drop-digit leaves — moves the value by at most `10`
-units at a scale `≥ mantissaFloor`, i.e. relatively by at most
-`10/(2^63 − 8) = 1/mantissaFloor`. The directed-mode `doNormalize128` bounds
-consume this (they cannot relate the round decision to the fraction `f`). -/
+/-- In any rounding mode with `mantissaFloor ≤ zm ≤ maxRepUp`, `doRoundUp` moves the value by at most the relative
+amount `10/(2^63 - 8) = 1/mantissaFloor`. -/
 lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
     (g : Guard) (zm : UInt64) (ze : Int) (f : ℚ) (mode : rounding_mode)
     (hf_rep : represents g f)
@@ -86,9 +41,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
         show ((zm.toNat : ℚ) + f) * 10 ^ ze * (10 / (2 ^ 63 - 8 : ℚ))
           = (((zm.toNat : ℚ) + f) * (10 / (2 ^ 63 - 8 : ℚ))) * 10 ^ ze from by ring]
     exact mul_le_mul_of_nonneg_right hX h10ze_nn
-  unfold Guard.doRoundUp at hok_pos
+  replace hok_pos := Guard.doRoundUp_ok_spec hok_pos
+  unfold Guard.doRoundUpSpec at hok_pos
   dsimp only [Guard.doDropDigit] at hok_pos
-  set gP : Guard := g.pushOverflow zm mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec zm mode with hgP_def
   by_cases hb : ((gP.round mode == 1) || ((gP.round mode == 0) && (zm % 2 == 1))) = true
   · rw [if_pos hb] at hok_pos
     have hlt_max : zm < largeRange.max := by
@@ -98,10 +54,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
     · -- Leaf C: round-up in range, value (zm+1)·10^ze.
       have hC : zm < largeRange.max ∧ zm < maxRep := ⟨hlt_max, hcusp1⟩
       rw [if_pos hC] at hok_pos
-      by_cases h_ovf : (Guard.bringIntoRange false (zm + 1) ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false (zm + 1) ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false (zm + 1) ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false (zm + 1) ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
             = (((zm + 1).toNat : ℚ)) * 10 ^ ze := by
@@ -125,10 +81,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
       by_cases hcuspI : maxRep < zm ∧ zm < maxRepUp
       · -- Leaf D: round-up cusp clamp, value maxRepUp·10^ze.
         rw [if_pos hcuspI] at hok_pos
-        by_cases h_ovf : (Guard.bringIntoRange false maxRepUp ze largeRange.min).exponent_ > maxExponent
+        by_cases h_ovf : (Guard.bringIntoRangeSpec false maxRepUp ze largeRange.min).exponent_ > maxExponent
         · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
         · rw [if_neg h_ovf] at hok_pos
-          have hres_eq : res_pos = Guard.bringIntoRange false maxRepUp ze largeRange.min :=
+          have hres_eq : res_pos = Guard.bringIntoRangeSpec false maxRepUp ze largeRange.min :=
             (Except.ok.inj hok_pos).symm
           have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
               = ((maxRepUp.toNat : ℚ)) * 10 ^ ze := by
@@ -157,15 +113,15 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
           · exact Or.inl (UInt64.toNat_inj.mp h)
           · exact Or.inr (UInt64.toNat_inj.mp h)
         rcases hzm_cases with hzm_eq | hzm_eq
-        · -- Leaf E1: zm = maxRep; drop to (floor, ze+1), round again.
+        · -- Leaf E1: zm = maxRep, drop to (floor, ze+1), round again.
           subst hzm_eq
           by_cases hb' : (((gP.push (maxRep % 10)).round mode == 1)
               || (((gP.push (maxRep % 10)).round mode == 0) && (maxRep / 10 % 2 == 1))) = true
           · rw [if_pos hb'] at hok_pos
-            by_cases h_ovf : (Guard.bringIntoRange false (maxRep / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
+            by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRep / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
             · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
             · rw [if_neg h_ovf] at hok_pos
-              have hres_eq : res_pos = Guard.bringIntoRange false (maxRep / 10 + 1) (ze + 1) largeRange.min :=
+              have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRep / 10 + 1) (ze + 1) largeRange.min :=
                 (Except.ok.inj hok_pos).symm
               have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
                   = (((maxRep / 10 + 1).toNat : ℚ)) * 10 ^ (ze + 1) := by
@@ -184,10 +140,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
                   abs_of_nonneg (by linarith : (0 : ℚ) ≤ 9223372036854775810 - ((9223372036854775807 : ℚ) + f))]
               nlinarith [hf_nn]
           · rw [if_neg hb'] at hok_pos
-            by_cases h_ovf : (Guard.bringIntoRange false (maxRep / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
+            by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRep / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
             · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
             · rw [if_neg h_ovf] at hok_pos
-              have hres_eq : res_pos = Guard.bringIntoRange false (maxRep / 10) (ze + 1) largeRange.min :=
+              have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRep / 10) (ze + 1) largeRange.min :=
                 (Except.ok.inj hok_pos).symm
               have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
                   = (((maxRep / 10).toNat : ℚ)) * 10 ^ (ze + 1) := by
@@ -205,15 +161,15 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
               rw [hmaxRep_q,
                   abs_of_nonpos (by linarith : (9223372036854775800 : ℚ) - ((9223372036854775807 : ℚ) + f) ≤ 0)]
               nlinarith [hf_nn, hf_lt]
-        · -- Leaf E2: zm = maxRepUp; drop to (maxRepUp/10, ze+1), round again.
+        · -- Leaf E2: zm = maxRepUp, drop to (maxRepUp/10, ze+1), round again.
           subst hzm_eq
           by_cases hb' : (((gP.push (maxRepUp % 10)).round mode == 1)
               || (((gP.push (maxRepUp % 10)).round mode == 0) && (maxRepUp / 10 % 2 == 1))) = true
           · rw [if_pos hb'] at hok_pos
-            by_cases h_ovf : (Guard.bringIntoRange false (maxRepUp / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
+            by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRepUp / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
             · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
             · rw [if_neg h_ovf] at hok_pos
-              have hres_eq : res_pos = Guard.bringIntoRange false (maxRepUp / 10 + 1) (ze + 1) largeRange.min :=
+              have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRepUp / 10 + 1) (ze + 1) largeRange.min :=
                 (Except.ok.inj hok_pos).symm
               have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
                   = (((maxRepUp / 10 + 1).toNat : ℚ)) * 10 ^ (ze + 1) := by
@@ -232,10 +188,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
                   abs_of_nonneg (by linarith : (0 : ℚ) ≤ 9223372036854775820 - ((9223372036854775810 : ℚ) + f))]
               nlinarith [hf_nn]
           · rw [if_neg hb'] at hok_pos
-            by_cases h_ovf : (Guard.bringIntoRange false (maxRepUp / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
+            by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRepUp / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
             · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
             · rw [if_neg h_ovf] at hok_pos
-              have hres_eq : res_pos = Guard.bringIntoRange false (maxRepUp / 10) (ze + 1) largeRange.min :=
+              have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRepUp / 10) (ze + 1) largeRange.min :=
                 (Except.ok.inj hok_pos).symm
               have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
                   = (((maxRepUp / 10).toNat : ℚ)) * 10 ^ (ze + 1) := by
@@ -258,10 +214,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
     by_cases hcuspI : maxRep < zm ∧ zm < maxRepUp
     · -- Leaf B: truncate cusp clamp, value maxRep·10^ze.
       rw [if_pos hcuspI] at hok_pos
-      by_cases h_ovf : (Guard.bringIntoRange false maxRep ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false maxRep ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false maxRep ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false maxRep ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
             = ((maxRep.toNat : ℚ)) * 10 ^ ze := by
@@ -277,10 +233,10 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
         nlinarith [hzm_gt, hzm_q_le, hf_nn, hf_lt]
     · -- Leaf A: plain truncate, value zm·10^ze.
       rw [if_neg hcuspI] at hok_pos
-      by_cases h_ovf : (Guard.bringIntoRange false zm ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false zm ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false zm ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false zm ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval : (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_
             = ((zm.toNat : ℚ)) * 10 ^ ze := by
@@ -292,12 +248,11 @@ lemma doRoundUp_rounds_any_supTight_upTo_maxRepUp
             abs_neg, abs_of_nonneg hf_nn]
         nlinarith [hzm_q, hf_nn, hf_lt]
 
-/-- At a cusp-interior mantissa `pushOverflow` pushes a positive digit
-(`(zm − maxRep)·10/3 ∈ {3, 6}`), so the pushed guard has nonzero digit content;
-the sign bit is preserved. -/
+/-- For `maxRep < zm < maxRepUp`, `pushOverflow` pushes a digit 3 or 6, so the guard gets nonzero digits, and it
+keeps the sign bit. -/
 lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : rounding_mode)
     (h_lb : maxRep.toNat < zm.toNat) (h_ub : zm.toNat < maxRepUp.toNat) :
-    (g.pushOverflow zm mode).digits_ > 0 ∧ (g.pushOverflow zm mode).sbit_ = g.sbit_ := by
+    (g.pushOverflowSpec zm mode).digits_ > 0 ∧ (g.pushOverflowSpec zm mode).sbit_ = g.sbit_ := by
   have hmr_u : maxRep < zm := UInt64.lt_iff_toNat_lt.mpr h_lb
   have hlt_u : zm < maxRepUp := UInt64.lt_iff_toNat_lt.mpr h_ub
   have hdiff_bound : zm.toNat = maxRep.toNat + 1 ∨ zm.toNat = maxRep.toNat + 2 := by
@@ -311,12 +266,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
     have := zm.toNat_lt_size
     rw [show maxRepUp.toNat = maxRepUpNat from rfl] at h_ub
     simp only [UInt64.size] at this; omega
-  have hne : zm ≠ maxRep := by rintro rfl; simp [maxRep_val] at h_lb
-  have hne1 : zm + 1 ≠ maxRep := by
-    rintro heq
-    have := congrArg UInt64.toNat heq
-    rw [hzm1_toNat] at this; omega
-  unfold Guard.pushOverflow
+  unfold Guard.pushOverflowSpec
   rw [if_pos ⟨UInt64.le_of_lt hmr_u, hlt_u⟩]
   by_cases h9 : zm % (10 : UInt64) < 9
   · have hzm_val : zm.toNat = maxRep.toNat + 1 := by
@@ -333,8 +283,6 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
     by_cases hbump : (g.round mode == 1 ||
         (g.round mode == 0 && zm == zm)) = true
     · rw [if_pos hbump]
-      simp only [show (zm + 1 == maxRep) = false from beq_eq_false_iff_ne.mpr hne1,
-                 Bool.false_eq_true, ite_false]
       constructor
       · change (0 : UInt64) < (g.push _).digits_
         rw [UInt64.lt_iff_toNat_lt]
@@ -348,8 +296,7 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
         norm_num
       · rfl
     · rw [Bool.not_eq_true] at hbump
-      simp only [hbump, Bool.false_eq_true, ite_false,
-                 show (zm == maxRep) = false from beq_eq_false_iff_ne.mpr hne]
+      simp only [hbump, Bool.false_eq_true, ite_false]
       constructor
       · change (0 : UInt64) < (g.push _).digits_
         rw [UInt64.lt_iff_toNat_lt, toNat_push_digits]
@@ -365,8 +312,6 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
         exact h9 (UInt64.lt_iff_toNat_lt.mpr (by rw [hmod, this]; decide))
       · exact h
     simp only [if_neg h9]
-    simp only [show (zm == maxRep) = false from beq_eq_false_iff_ne.mpr hne,
-               Bool.false_eq_true, ite_false]
     constructor
     · change (0 : UInt64) < (g.push _).digits_
       rw [UInt64.lt_iff_toNat_lt, toNat_push_digits]
@@ -377,17 +322,8 @@ lemma pushOverflow_cusp_interior_facts (g : Guard) (zm : UInt64) (mode : roundin
 
 set_option maxHeartbeats 1600000 in
 -- Cusp-range navigation (6 leaves) with literal arithmetic needs a raised budget.
-/-- Value cases for `doRoundUp` on the cusp range `maxRep < zm ≤ maxRepUp`,
-mode-generic: the output value is `maxRep`, `maxRepUp` (= `maxRepNat + 3`), or —
-only at `zm = maxRepUp` with the round decision fired — `maxRepNat + 13`, each at
-scale `10^ze`. The same-sign directed `BoundProof`s consume this; the
-disjuncts' couplings let them refute or absorb each leaf per mode and sign.
-
-The `+3` disjunct distinguishes its two sources: at `zm = maxRepUp` the value is
-kept either because the first round decision was dead or because the
-dropped-digit re-round was dead (in directed modes either one forces an empty
-guard content for the rounding-away sign, hence an exact result); at
-`zm < maxRepUp` it is the fired cusp-interior clamp. -/
+/-- On the cusp range `maxRep < zm ≤ maxRepUp`, in any mode, `doRoundUp` outputs `maxRepNat`, `maxRepNat + 3` or,
+only at `zm = maxRepUp` after a round-up, `maxRepNat + 13`, each times `10^ze` and paired with its round decision. -/
 lemma doRoundUp_value_cuspRange_cases
     (g : Guard) (zm : UInt64) (ze : Int) (mode : rounding_mode)
     (h_lb : maxRep.toNat < zm.toNat)
@@ -397,22 +333,23 @@ lemma doRoundUp_value_cuspRange_cases
     (hres_ne : res_pos.mantissa_ ≠ 0) :
     ∃ v : ℚ, (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ = v * 10 ^ ze
       ∧ ((v = maxRepNat ∧ zm.toNat < maxRepUp.toNat
-            ∧ (((g.pushOverflow zm mode).round mode == 1)
-               || (((g.pushOverflow zm mode).round mode == 0) && (zm % 2 == 1))) = false)
+            ∧ (((g.pushOverflowSpec zm mode).round mode == 1)
+               || (((g.pushOverflowSpec zm mode).round mode == 0) && (zm % 2 == 1))) = false)
          ∨ (v = maxRepNat + 3 ∧
               ((zm.toNat = maxRepUp.toNat
                   ∧ (((g.round mode == 1) || ((g.round mode == 0) && (zm % 2 == 1))) = false
                      ∨ (((g.push (maxRepUp % 10)).round mode == 1)
                         || (((g.push (maxRepUp % 10)).round mode == 0) && (maxRepUp / 10 % 2 == 1))) = false))
                ∨ (zm.toNat < maxRepUp.toNat
-                  ∧ (((g.pushOverflow zm mode).round mode == 1)
-                     || (((g.pushOverflow zm mode).round mode == 0) && (zm % 2 == 1))) = true)))
+                  ∧ (((g.pushOverflowSpec zm mode).round mode == 1)
+                     || (((g.pushOverflowSpec zm mode).round mode == 0) && (zm % 2 == 1))) = true)))
          ∨ (v = maxRepNat + 13 ∧ zm.toNat = maxRepUp.toNat
             ∧ ((g.round mode == 1) || ((g.round mode == 0) && (zm % 2 == 1))) = true)) := by
   have hmaxRepUp_toNat : maxRepUp.toNat = maxRepUpNat := rfl
-  unfold Guard.doRoundUp at hok_pos
+  replace hok_pos := Guard.doRoundUp_ok_spec hok_pos
+  unfold Guard.doRoundUpSpec at hok_pos
   dsimp only [Guard.doDropDigit] at hok_pos
-  set gP : Guard := g.pushOverflow zm mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec zm mode with hgP_def
   have hncusp1 : ¬ zm < maxRep := by
     rw [UInt64.lt_iff_toNat_lt]
     omega
@@ -422,10 +359,10 @@ lemma doRoundUp_value_cuspRange_cases
     by_cases hcuspI : maxRep < zm ∧ zm < maxRepUp
     · -- cusp-interior round-up → maxRepUp.
       rw [if_pos hcuspI] at hok_pos
-      by_cases h_ovf : (Guard.bringIntoRange false maxRepUp ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false maxRepUp ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false maxRepUp ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false maxRepUp ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval := bringIntoRange_value_q false maxRepUp ze (by rw [← hres_eq]; exact hres_ne)
         refine ⟨maxRepNat + 3, ?_,
@@ -440,7 +377,7 @@ lemma doRoundUp_value_cuspRange_cases
       subst hzm_eq
       have hgP_eq : gP = g := by
         rw [hgP_def]
-        unfold Guard.pushOverflow
+        unfold Guard.pushOverflowSpec
         rw [if_neg]
         intro ⟨_, h⟩
         exact absurd (UInt64.lt_iff_toNat_lt.mp h) (lt_irrefl _)
@@ -448,10 +385,10 @@ lemma doRoundUp_value_cuspRange_cases
       by_cases hb' : (((gP.push (maxRepUp % 10)).round mode == 1)
           || (((gP.push (maxRepUp % 10)).round mode == 0) && (maxRepUp / 10 % 2 == 1))) = true
       · rw [if_pos hb'] at hok_pos
-        by_cases h_ovf : (Guard.bringIntoRange false (maxRepUp / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
+        by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRepUp / 10 + 1) (ze + 1) largeRange.min).exponent_ > maxExponent
         · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
         · rw [if_neg h_ovf] at hok_pos
-          have hres_eq : res_pos = Guard.bringIntoRange false (maxRepUp / 10 + 1) (ze + 1) largeRange.min :=
+          have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRepUp / 10 + 1) (ze + 1) largeRange.min :=
             (Except.ok.inj hok_pos).symm
           have hval := bringIntoRange_value_q false (maxRepUp / 10 + 1) (ze + 1)
             (by rw [← hres_eq]; exact hres_ne)
@@ -464,10 +401,10 @@ lemma doRoundUp_value_cuspRange_cases
               show (maxRepNat : ℚ) + 13 = 9223372036854775820 from by norm_num]
           ring
       · rw [if_neg hb'] at hok_pos
-        by_cases h_ovf : (Guard.bringIntoRange false (maxRepUp / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
+        by_cases h_ovf : (Guard.bringIntoRangeSpec false (maxRepUp / 10) (ze + 1) largeRange.min).exponent_ > maxExponent
         · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
         · rw [if_neg h_ovf] at hok_pos
-          have hres_eq : res_pos = Guard.bringIntoRange false (maxRepUp / 10) (ze + 1) largeRange.min :=
+          have hres_eq : res_pos = Guard.bringIntoRangeSpec false (maxRepUp / 10) (ze + 1) largeRange.min :=
             (Except.ok.inj hok_pos).symm
           have hval := bringIntoRange_value_q false (maxRepUp / 10) (ze + 1)
             (by rw [← hres_eq]; exact hres_ne)
@@ -486,10 +423,10 @@ lemma doRoundUp_value_cuspRange_cases
     by_cases hcuspI : maxRep < zm ∧ zm < maxRepUp
     · -- truncate cusp clamp → maxRep.
       rw [if_pos hcuspI] at hok_pos
-      by_cases h_ovf : (Guard.bringIntoRange false maxRep ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false maxRep ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false maxRep ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false maxRep ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval := bringIntoRange_value_q false maxRep ze (by rw [← hres_eq]; exact hres_ne)
         refine ⟨maxRepNat, ?_,
@@ -502,15 +439,15 @@ lemma doRoundUp_value_cuspRange_cases
         have h2 : ¬ (maxRep.toNat < zm.toNat ∧ zm.toNat < maxRepUp.toNat) := fun ⟨a, b⟩ =>
           hcuspI ⟨UInt64.lt_iff_toNat_lt.mpr a, UInt64.lt_iff_toNat_lt.mpr b⟩
         omega
-      by_cases h_ovf : (Guard.bringIntoRange false zm ze largeRange.min).exponent_ > maxExponent
+      by_cases h_ovf : (Guard.bringIntoRangeSpec false zm ze largeRange.min).exponent_ > maxExponent
       · rw [if_pos h_ovf] at hok_pos; simp at hok_pos
       · rw [if_neg h_ovf] at hok_pos
-        have hres_eq : res_pos = Guard.bringIntoRange false zm ze largeRange.min :=
+        have hres_eq : res_pos = Guard.bringIntoRangeSpec false zm ze largeRange.min :=
           (Except.ok.inj hok_pos).symm
         have hval := bringIntoRange_value_q false zm ze (by rw [← hres_eq]; exact hres_ne)
         have hgP_eq : gP = g := by
           rw [hgP_def]
-          unfold Guard.pushOverflow
+          unfold Guard.pushOverflowSpec
           rw [if_neg]
           intro ⟨_, h⟩
           have hlt := UInt64.lt_iff_toNat_lt.mp h
@@ -520,8 +457,6 @@ lemma doRoundUp_value_cuspRange_cases
         refine ⟨maxRepNat + 3, ?_, Or.inr (Or.inl ⟨rfl, Or.inl ⟨hzm_eq, Or.inl hb_false⟩⟩)⟩
         rw [hres_eq, hval, show ((zm.toNat : ℕ) : ℚ) = maxRepNat + 3 from by
           rw [hzm_eq, hmaxRepUp_toNat]; norm_num]
-
-/-! ## `.downward` mode -/
 
 /-- For `.downward`, round-up fires iff `sbit_ = true` and guard content is nonzero. -/
 def Guard.shouldRoundUp_downward (g : Guard) : Prop :=
@@ -559,7 +494,7 @@ lemma round_downward_eq_one_iff (g : Guard) :
       · rw [h2]; rw [Bool.or_true]
     unfold Guard.round
     by_cases hemp : g.empty
-    · -- g.empty: digits_ = 0 and xbit_ = false; shouldRoundUp_downward requires digits > 0 or xbit = true
+    · -- g.empty: digits_ = 0 and xbit_ = false, while shouldRoundUp_downward requires digits > 0 or xbit = true
       exfalso
       unfold Guard.empty Guard.unrecoverable at hemp
       simp only [Bool.and_eq_true, beq_iff_eq] at hemp
@@ -572,10 +507,7 @@ lemma round_downward_eq_one_iff (g : Guard) :
     · rw [if_neg hemp]
       simp only [hs, if_true, h_bool_true, if_true]
 
--- `round_downward_eq_neg_one_iff` is unused (removed, handled in roundUp_bool_downward_false).
-
-/-- With the sign bit set, a dead `.downward` round decision forces empty guard
-content: no packed digits and a clear sticky bit. -/
+/-- With the sign bit set, if `.downward` does not round up then the guard has no digits and a clear `xbit_`. -/
 lemma content_empty_of_not_shouldRoundUp_downward (g : Guard)
     (h_sbit : g.sbit_ = true) (h_nsru : ¬ g.shouldRoundUp_downward) :
     g.digits_ = 0 ∧ g.xbit_ = false := by
@@ -631,26 +563,27 @@ theorem doRoundUp_value_downward_truncate
     (hok : g.doRoundUp zn zm ze' largeRange.min largeRange.max .downward loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (zm.toNat : ℚ) * 10 ^ ze' := by
-  have h_pof : g.pushOverflow zm .downward = g :=
-    pushOverflow_noop_of_le_maxRep_of_round_ne_one h_zm_le g .downward
+  have h_pof : (g.pushOverflowSpec zm .downward).round .downward = g.round .downward :=
+    pushOverflow_round_of_le_maxRep_of_round_ne_one h_zm_le g .downward (by decide)
       (fun hr => absurd ((round_downward_eq_one_iff g).mp hr) h_no_roundUp)
   have h_no_cusp : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_ru_false :
       ((g.round .downward == 1) || ((g.round .downward == 0) && (zm % 2 == 1))) = false :=
     roundUp_bool_downward_false g zm h_no_roundUp
-  have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn zm ze' largeRange.min := by
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec at hok
     dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
     rw [if_neg h_no_cusp] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn zm ze' largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   -- zm ≠ 0 since bringIntoRange with zm = 0 gives mantissa_ = 0 which contradicts hne'
   have hzm_ne : zm ≠ 0 := by
     intro h
@@ -687,27 +620,27 @@ theorem doRoundUp_value_downward_roundUp_noCusp
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := by
   have h_m_lt_maxRep : zm.toNat < maxRep.toNat := by rw [maxRep_val] at h_no_cusp ⊢; omega
-  have h_pof : g.pushOverflow zm .downward = g := pushOverflow_noop_of_lt_maxRep h_m_lt_maxRep g .downward
+  have h_pof : g.pushOverflowSpec zm .downward = g := pushOverflow_noop_of_lt_maxRep h_m_lt_maxRep g .downward
   have h_ru_true :
       ((g.round .downward == 1) || ((g.round .downward == 0) && (zm % 2 == 1))) = true :=
     roundUp_bool_downward_true g zm h_roundUp
-  -- noncusp branch fires: zm < largeRange.max ∧ zm < maxRep
   have h_noncusp_branch : zm < largeRange.max ∧ zm < maxRep := by
     constructor
     · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
-  have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min := by
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec at hok
     dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
     simp only [if_true] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn (zm + 1) ze' largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn (zm + 1) ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   have h_m_le_maxRep : zm.toNat ≤ maxRep.toNat := by omega
   have hm_add1_toNat : (zm + 1).toNat = zm.toNat + 1 := m_add_one_no_overflow h_m_le_maxRep
   have h_m1_ne : zm + 1 ≠ 0 := by
@@ -748,8 +681,8 @@ theorem doRoundUp_value_downward_roundUp_cusp
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = maxRepCuspTarget * 10 ^ ze' := by
   have h_g_round_one : g.round .downward = 1 := (round_downward_eq_one_iff g).mpr h_roundUp
-  have h_pof_eq : g.pushOverflow zm .downward = g.push 3 := by
-    unfold Guard.pushOverflow
+  have h_pof_eq : g.pushOverflowSpec zm .downward = g.push 3 := by
+    unfold Guard.pushOverflowSpec
     rw [h_zm_eq_maxRep, h_g_round_one]
     rfl
   have h_ru_true :
@@ -759,7 +692,7 @@ theorem doRoundUp_value_downward_roundUp_cusp
     intro ⟨_, h⟩; have := UInt64.lt_iff_toNat_lt.mp h; rw [h_zm_eq_maxRep, maxRep_val] at this; omega
   have h_not_overflow : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; rw [h_zm_eq_maxRep, maxRep_val] at this; omega
-  set gP : Guard := g.pushOverflow zm .downward with hgP_def
+  set gP : Guard := g.pushOverflowSpec zm .downward with hgP_def
   have h_gP_eq3 : gP = g.push 3 := h_pof_eq ▸ rfl
   set g' := gP.push (zm % 10) with hg'_def
   have h_g_sbit : g.sbit_ = true := h_roundUp.1
@@ -797,8 +730,9 @@ theorem doRoundUp_value_downward_roundUp_cusp
     rw [UInt64.toNat_mul]; have h10 : (10 : UInt64).toNat = 10 := uint64_ten_toNat; rw [h10, h_m1_toNat]
   have h_m1_ne : zm / 10 + 1 ≠ 0 := by
     intro h; have := UInt64.toNat_inj.mpr h; rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
-  have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
-    unfold Guard.doRoundUp at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec at hok
     dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .downward == 1) || ((gP.round .downward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
@@ -812,11 +746,11 @@ theorem doRoundUp_value_downward_roundUp_cusp
     have h_m1_lt_max : zm / 10 + 1 < largeRange.max := by
       rw [UInt64.lt_iff_toNat_lt, m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat, largeRange_max_val]; norm_num
     -- After roundUp' = true, m/10+1 is used directly in bringIntoRange
-    by_cases h_ovf : (Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne]
   by_cases h_under : ze' + 1 - 1 < minExponent ∨ (zm / 10 + 1) * 10 = 0
   · exfalso; apply hne'; rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne, if_pos h_under]
@@ -846,10 +780,10 @@ lemma doRoundUp_output_invariants_downward
     rw [hmaxMant_v] at this; rw [hmaxRep_v] at h_ub; omega
   have h_ge_maxMant_false : decide (m ≥ largeRange.max) = false :=
     decide_eq_false h_m_not_ge_maxMant
-  -- Unfold doRoundUp to extract res
-  unfold Guard.doRoundUp Guard.bringIntoRange at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m .downward with hgP_def
+  set gP : Guard := g.pushOverflowSpec m .downward with hgP_def
   by_cases h_ru : (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .downward == 1 || (gP.round .downward == 0 && m % 2 == 1)) = true from h_ru] at hok
     by_cases h_m_eq_maxRep : m = maxRep
@@ -864,8 +798,9 @@ lemma doRoundUp_output_invariants_downward
       have h_g_round_one : g.round .downward = 1 := by
         by_contra h_ne
         have h_r_ne1 : g.round .downward ≠ 1 := h_ne
-        have h_pof_noop : gP = g :=
-          hgP_def ▸ pushOverflow_noop_of_le_maxRep_of_round_ne_one h_ub g .downward h_r_ne1
+        have h_pof_noop : gP.round .downward = g.round .downward := by
+          rw [hgP_def]
+          exact pushOverflow_round_of_le_maxRep_of_round_ne_one h_ub g .downward (by decide) h_r_ne1
         rw [h_pof_noop] at h_ru
         have h_ne0 : g.round .downward ≠ 0 := by
           have hvals : g.round .downward = 1 ∨ g.round .downward = -1 ∨ g.round .downward = -2 := by
@@ -875,7 +810,7 @@ lemma doRoundUp_output_invariants_downward
         simp [beq_iff_eq, h_r_ne1, h_ne0] at h_ru
       have h_gP_eq3 : gP = g.push 3 := by
         rw [hgP_def, h_m_eq_maxRep]
-        unfold Guard.pushOverflow
+        unfold Guard.pushOverflowSpec
         rw [h_g_round_one]
         rfl
       have h_g_sbit : g.sbit_ = true := ((round_downward_eq_one_iff g).mp h_g_round_one).1
@@ -936,7 +871,6 @@ lemma doRoundUp_output_invariants_downward
     · -- non-cusp
       have h_m_lt_maxRep : m.toNat < maxRep.toNat := by
         have : m.toNat ≠ maxRep.toNat := fun heq => h_m_eq_maxRep (UInt64.toNat_inj.mp heq); omega
-      -- noncusp branch fires
       have h_noncusp_d : m < largeRange.max ∧ m < maxRep := by
         constructor
         · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
@@ -1005,14 +939,13 @@ lemma doRoundUp_output_invariants_downward
         simp [this] at h_ru
       · have hm_eq : m = maxRep := UInt64.toNat_inj.mp (by omega)
         have h_gP_eq3 : gP = g.push 3 := by
-          rw [hgP_def, hm_eq]; unfold Guard.pushOverflow
+          rw [hgP_def, hm_eq]; unfold Guard.pushOverflowSpec
           rw [if_pos (by decide)]
           simp only [show maxRep % (10 : UInt64) < 9 from by decide]
           rw [show maxRep + (maxRepUp - maxRep) / 2 = (maxRep + 1 : UInt64) from by decide]
           have hr_eq : (g.round .downward == 1) = true := by rw [beq_iff_eq]; exact hone
           simp only [hr_eq, Bool.true_or, ite_true]
-          have hne'' : ((maxRep + 1 : UInt64) == maxRep) = false := by decide
-          simp only [hne'', ite_false]; rfl
+          rfl
         have h_g_sbit : g.sbit_ = true := ((round_downward_eq_one_iff g).mp hone).1
         have h_gP_sbit : gP.sbit_ = true := by rw [h_gP_eq3]; unfold Guard.push; exact h_g_sbit
         have h_gP_dgt : gP.digits_ > 0 := by
@@ -1024,8 +957,9 @@ lemma doRoundUp_output_invariants_downward
         have h_gP_r1 : gP.round .downward = 1 :=
           (round_downward_eq_one_iff gP).mpr ⟨h_gP_sbit, Or.inl h_gP_dgt⟩
         simp [h_gP_r1] at h_ru
-    have h_pof_noop : gP = g :=
-      hgP_def ▸ pushOverflow_noop_of_le_maxRep_of_round_ne_one h_ub g .downward h_g_round_ne1
+    have h_pof_noop : gP.round .downward = g.round .downward := by
+      rw [hgP_def]
+      exact pushOverflow_round_of_le_maxRep_of_round_ne_one h_ub g .downward (by decide) h_g_round_ne1
     rw [h_pof_noop] at h_ru hok
     rw [show (g.round .downward == 1 || (g.round .downward == 0 && m % 2 == 1)) = false from h_ru] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
@@ -1078,10 +1012,6 @@ lemma doRoundUp_output_invariants_downward
         · change minExponent ≤ e; exact hexp
         · change m.toNat > maxRep.toNat → m.toNat % 10 = 0; intro h_gt; exfalso; omega
 
-/-! ## `.towards_zero` mode
-
-`Guard.round .towards_zero = -1` always, so `roundUp` is always false. -/
-
 /-- `Guard.round g .towards_zero ∈ {-2, -1}`, so `roundUp` is always false. -/
 lemma roundUp_bool_towards_zero_false (g : Guard) (m : UInt64) :
     ((g.round .towards_zero == 1) || ((g.round .towards_zero == 0) && (m % 2 == 1))) = false := by
@@ -1097,26 +1027,27 @@ theorem doRoundUp_value_towards_zero_truncate
     (hok : g.doRoundUp zn zm ze' largeRange.min largeRange.max .towards_zero loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (zm.toNat : ℚ) * 10 ^ ze' := by
-  have h_pof : g.pushOverflow zm .towards_zero = g :=
-    pushOverflow_noop_of_le_maxRep_of_round_ne_one h_zm_le g .towards_zero
+  have h_pof : (g.pushOverflowSpec zm .towards_zero).round .towards_zero = g.round .towards_zero :=
+    pushOverflow_round_of_le_maxRep_of_round_ne_one h_zm_le g .towards_zero (by decide)
       (by unfold Guard.round; split_ifs <;> intro h <;> simp at h)
   have h_no_cusp : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_ru_false :
       ((g.round .towards_zero == 1) || ((g.round .towards_zero == 0) && (zm % 2 == 1))) = false :=
     roundUp_bool_towards_zero_false g zm
-  have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn zm ze' largeRange.min := by
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec at hok
     dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
     rw [if_neg h_no_cusp] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn zm ze' largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   have hzm_ne : zm ≠ 0 := by
     intro h
     apply hne'
@@ -1154,8 +1085,8 @@ lemma doRoundUp_output_invariants_towards_zero
   have hmaxRep_v : maxRep.toNat = maxRepNat := maxRep_val
   have hminMant_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hmaxMant_v : largeRange.max.toNat = 9999999999999999999 := largeRange_max_val
-  have h_pof : g.pushOverflow m .towards_zero = g :=
-    pushOverflow_noop_of_le_maxRep_of_round_ne_one h_ub g .towards_zero
+  have h_pof : (g.pushOverflowSpec m .towards_zero).round .towards_zero = g.round .towards_zero :=
+    pushOverflow_round_of_le_maxRep_of_round_ne_one h_ub g .towards_zero (by decide)
       (by unfold Guard.round; split_ifs <;> intro h <;> simp at h)
   have h_ru_false :
       (g.round .towards_zero == 1 || (g.round .towards_zero == 0 && m % 2 == 1)) = false :=
@@ -1163,7 +1094,8 @@ lemma doRoundUp_output_invariants_towards_zero
   have h_no_overflow_tz : ¬ (maxRep < m ∧ m < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_m_ne : m ≠ 0 := by intro h; rw [h] at h_lb; simp at h_lb
-  unfold Guard.doRoundUp Guard.bringIntoRange at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec at hok
   dsimp only [Guard.doDropDigit] at hok
   rw [h_pof] at hok
   rw [h_ru_false] at hok
@@ -1214,15 +1146,12 @@ lemma doRoundUp_output_invariants_towards_zero
       · change minExponent ≤ e; exact hexp
       · change m.toNat > maxRep.toNat → m.toNat % 10 = 0; intro h_gt; exfalso; omega
 
-/-! ## `.upward` mode -/
-
 /-- For `.upward`, round-up fires iff `sbit_ = false` and guard content is nonzero. -/
 def Guard.shouldRoundUp_upward (g : Guard) : Prop :=
   g.sbit_ = false ∧ (g.digits_ > 0 ∨ g.xbit_ = true)
 
-/-- When `.upward` round-up fires, the represented fraction is strictly positive:
-the guard content is nonzero (`digits_ > 0` gives `decimalValue > 0`, or `xbit_`
-gives a positive hidden tail), so `f > 0`. -/
+/-- When `.upward` round-up fires, the represented fraction `f` is positive, because the guard holds a nonzero
+digit or a set `xbit_`. -/
 lemma represents_pos_of_shouldRoundUp_upward (g : Guard) (f : ℚ)
     (hf_rep : represents g f) (h_sru : g.shouldRoundUp_upward) : 0 < f := by
   obtain ⟨x, hx_nn, _, hf_eq, hxbit_iff, _⟩ := hf_rep
@@ -1239,10 +1168,8 @@ lemma represents_pos_of_shouldRoundUp_upward (g : Guard) (f : ℚ)
   · have hx_pos : x > 0 := hxbit_iff.mp hxb
     rw [hf_eq]; linarith
 
-/-- When `.downward` round-up fires (on a negative result, rounding the magnitude
-up), the represented fraction is strictly positive: the guard content is nonzero
-(`digits_ > 0` gives `decimalValue > 0`, or `xbit_` gives a positive hidden tail),
-so `f > 0`. -/
+/-- When `.downward` round-up fires on a negative result, the represented fraction `f` is positive, because the
+guard holds a nonzero digit or a set `xbit_`. -/
 lemma represents_pos_of_shouldRoundUp_downward (g : Guard) (f : ℚ)
     (hf_rep : represents g f) (h_sru : g.shouldRoundUp_downward) : 0 < f := by
   obtain ⟨x, hx_nn, _, hf_eq, hxbit_iff, _⟩ := hf_rep
@@ -1303,8 +1230,6 @@ lemma round_upward_eq_one_iff (g : Guard) :
     · rw [if_neg hemp]
       simp only [hs, Bool.false_eq_true, if_false, h_bool_true, if_true]
 
--- `round_upward_eq_neg_one_iff` is removed (now handled in roundUp_bool_upward_false).
-
 /-- For `.upward`, the boolean `roundUp` in `doRoundUp` equals `false`
 when `shouldRoundUp_upward` is false. -/
 private lemma roundUp_bool_upward_false (g : Guard) (m : UInt64)
@@ -1324,8 +1249,7 @@ private lemma roundUp_bool_upward_true (g : Guard) (m : UInt64)
   have h1 : g.round .upward = 1 := (round_upward_eq_one_iff g).mpr h_yes
   rw [h1]; rfl
 
-/-- With the sign bit clear, a dead `.upward` round decision forces empty guard
-content: no packed digits and a clear sticky bit. -/
+/-- With the sign bit clear, if `.upward` does not round up then the guard has no digits and a clear `xbit_`. -/
 lemma content_empty_of_not_shouldRoundUp_upward (g : Guard)
     (h_sbit : g.sbit_ = false) (h_nsru : ¬ g.shouldRoundUp_upward) :
     g.digits_ = 0 ∧ g.xbit_ = false := by
@@ -1362,25 +1286,27 @@ theorem doRoundUp_value_upward_truncate
     (hok : g.doRoundUp zn zm ze' largeRange.min largeRange.max .upward loc = .ok res)
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = (zm.toNat : ℚ) * 10 ^ ze' := by
-  have h_pof : g.pushOverflow zm .upward = g :=
-    pushOverflow_noop_of_le_maxRep_of_round_ne_one h_zm_le g .upward
+  have h_pof : (g.pushOverflowSpec zm .upward).round .upward = g.round .upward :=
+    pushOverflow_round_of_le_maxRep_of_round_ne_one h_zm_le g .upward (by decide)
       (fun hr => absurd ((round_upward_eq_one_iff g).mp hr) h_no_roundUp)
   have h_no_cusp : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; omega
   have h_ru_false :
       ((g.round .upward == 1) || ((g.round .upward == 0) && (zm % 2 == 1))) = false :=
     roundUp_bool_upward_false g zm h_no_roundUp
-  have hres_eq : res = Guard.bringIntoRange zn zm ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn zm ze' largeRange.min := by
+    rw [Guard.doRoundUp_eq_spec] at hok
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_false] at hok
     simp only [Bool.false_eq_true, ite_false] at hok
     rw [if_neg h_no_cusp] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn zm ze' largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn zm ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   have hzm_ne : zm ≠ 0 := by
     intro h
     apply hne'
@@ -1413,26 +1339,27 @@ theorem doRoundUp_value_upward_roundUp_noCusp
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = ((zm.toNat : ℚ) + 1) * 10 ^ ze' := by
   have h_m_lt_maxRep : zm.toNat < maxRep.toNat := by rw [maxRep_val] at h_no_cusp ⊢; omega
-  have h_pof : g.pushOverflow zm .upward = g := pushOverflow_noop_of_lt_maxRep h_m_lt_maxRep g .upward
+  have h_pof : g.pushOverflowSpec zm .upward = g := pushOverflow_noop_of_lt_maxRep h_m_lt_maxRep g .upward
   have h_ru_true :
       ((g.round .upward == 1) || ((g.round .upward == 0) && (zm % 2 == 1))) = true :=
     roundUp_bool_upward_true g zm h_roundUp
-  -- noncusp branch fires: zm < largeRange.max ∧ zm < maxRep
   have h_noncusp_branch : zm < largeRange.max ∧ zm < maxRep := by
     constructor
     · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
     · exact UInt64.lt_iff_toNat_lt.mpr h_m_lt_maxRep
-  have hres_eq : res = Guard.bringIntoRange zn (zm + 1) ze' largeRange.min := by
-    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min := by
+    rw [Guard.doRoundUp_eq_spec] at hok
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec at hok; dsimp only [Guard.doDropDigit] at hok
     rw [h_pof] at hok
     rw [h_ru_true] at hok
     rw [if_pos h_noncusp_branch] at hok
     simp only [if_true] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn (zm + 1) ze' largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn (zm + 1) ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn (zm + 1) ze' largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   have h_m_le_maxRep : zm.toNat ≤ maxRep.toNat := by omega
   have hm_add1_toNat : (zm + 1).toNat = zm.toNat + 1 := m_add_one_no_overflow h_m_le_maxRep
   have h_m1_ne : zm + 1 ≠ 0 := by
@@ -1473,15 +1400,15 @@ theorem doRoundUp_value_upward_roundUp_cusp
     (h_mant_ne : res.mantissa_ ≠ 0) :
     (res.mantissa_.toNat : ℚ) * 10 ^ res.exponent_ = maxRepCuspTarget * 10 ^ ze' := by
   have h_g_round_one : g.round .upward = 1 := (round_upward_eq_one_iff g).mpr h_roundUp
-  have h_pof_eq : g.pushOverflow zm .upward = g.push 3 := by
-    unfold Guard.pushOverflow
+  have h_pof_eq : g.pushOverflowSpec zm .upward = g.push 3 := by
+    unfold Guard.pushOverflowSpec
     rw [h_zm_eq_maxRep, h_g_round_one]
     rfl
   have h_not_noncusp : ¬ (zm < largeRange.max ∧ zm < maxRep) := by
     intro ⟨_, h⟩; have := UInt64.lt_iff_toNat_lt.mp h; rw [h_zm_eq_maxRep, maxRep_val] at this; omega
   have h_not_overflow : ¬ (maxRep < zm ∧ zm < maxRepUp) := by
     intro ⟨h, _⟩; have := UInt64.lt_iff_toNat_lt.mp h; rw [h_zm_eq_maxRep, maxRep_val] at this; omega
-  set gP : Guard := g.pushOverflow zm .upward with hgP_def
+  set gP : Guard := g.pushOverflowSpec zm .upward with hgP_def
   have h_gP_eq3 : gP = g.push 3 := h_pof_eq ▸ rfl
   set g' := gP.push (zm % 10) with hg'_def
   have h_g_sbit : g.sbit_ = false := h_roundUp.1
@@ -1519,19 +1446,21 @@ theorem doRoundUp_value_upward_roundUp_cusp
   have h_m1_ne : zm / 10 + 1 ≠ 0 := by
     intro h; have := UInt64.toNat_inj.mpr h
     rw [m_add_one_no_overflow h_m_div10_le_maxRep, h_m_div10_toNat] at this; simp at this
-  have hres_eq : res = Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
-    unfold Guard.doRoundUp at hok; dsimp only [Guard.doDropDigit] at hok
+  have hres_eq : res = Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min := by
+    rw [Guard.doRoundUp_eq_spec] at hok
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec at hok; dsimp only [Guard.doDropDigit] at hok
     have h_gP_ru_true : ((gP.round .upward == 1) || ((gP.round .upward == 0) && (zm % 2 == 1))) = true := by
       rw [h_gP_round]; rfl
     rw [h_gP_ru_true] at hok
     rw [if_neg h_not_noncusp, if_neg h_not_overflow] at hok
     rw [h_ru'_true] at hok
     simp only [if_true] at hok
-    by_cases h_ovf : (Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min).exponent_ > maxExponent
+    by_cases h_ovf : (Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min).exponent_ > maxExponent
     · rw [if_pos h_ovf] at hok; simp at hok
     · rw [if_neg h_ovf] at hok; exact (Except.ok.inj hok).symm
   rw [hres_eq]
-  have hne' : (Guard.bringIntoRange zn (zm / 10 + 1) (ze' + 1) largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
+  have hne' : (Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze' + 1) largeRange.min).mantissa_ ≠ 0 := hres_eq ▸ h_mant_ne
   rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne]
   by_cases h_under : ze' + 1 - 1 < minExponent ∨ (zm / 10 + 1) * 10 = 0
   · exfalso; apply hne'; rw [bringIntoRange_rescale_result h_m1_lt_min h_m1_ne, if_pos h_under]
@@ -1559,9 +1488,10 @@ lemma doRoundUp_output_invariants_upward
   have h_m_not_ge_maxMant : ¬ (m ≥ largeRange.max) := by
     intro h; have := UInt64.le_iff_toNat_le.mp h
     rw [hmaxMant_v] at this; rw [hmaxRep_v] at h_ub; omega
-  unfold Guard.doRoundUp Guard.bringIntoRange at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m .upward with hgP_def
+  set gP : Guard := g.pushOverflowSpec m .upward with hgP_def
   by_cases h_ru : (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true
   · rw [show (gP.round .upward == 1 || (gP.round .upward == 0 && m % 2 == 1)) = true from h_ru] at hok
     by_cases h_m_eq_maxRep : m = maxRep
@@ -1587,13 +1517,14 @@ lemma doRoundUp_output_invariants_upward
           · rw [h_eq_0] at hm2; exact absurd hm2 (by decide)
       have h_g_round_one : g.round .upward = 1 := by
         by_contra h_ne
-        have h_pof_noop : gP = g :=
-          hgP_def ▸ pushOverflow_noop_of_le_maxRep_of_round_ne_one h_ub g .upward h_ne
+        have h_pof_noop : gP.round .upward = g.round .upward := by
+          rw [hgP_def]
+          exact pushOverflow_round_of_le_maxRep_of_round_ne_one h_ub g .upward (by decide) h_ne
         rw [h_pof_noop] at h_gP_round_one
         exact h_ne h_gP_round_one
       have h_gP_eq3 : gP = g.push 3 := by
         rw [hgP_def, h_m_eq_maxRep]
-        unfold Guard.pushOverflow
+        unfold Guard.pushOverflowSpec
         rw [h_g_round_one]
         rfl
       have h_g_sbit : g.sbit_ = false := ((round_upward_eq_one_iff g).mp h_g_round_one).1
@@ -1647,7 +1578,6 @@ lemma doRoundUp_output_invariants_upward
     · -- non-cusp
       have h_m_lt_maxRep : m.toNat < maxRep.toNat := by
         have : m.toNat ≠ maxRep.toNat := fun heq => h_m_eq_maxRep (UInt64.toNat_inj.mp heq); omega
-      -- noncusp branch fires
       have h_noncusp_d : m < largeRange.max ∧ m < maxRep := by
         constructor
         · exact UInt64.lt_iff_toNat_lt.mpr (by rw [largeRange_max_val, maxRep_val] at *; omega)
@@ -1759,8 +1689,6 @@ lemma doRoundUp_output_invariants_upward
         · change minExponent ≤ e; exact hexp
         · change m.toNat > maxRep.toNat → m.toNat % 10 = 0; intro h_gt; exfalso; omega
 
-/-! ## Combined invariants up to `maxRepUp` — directed-mode dispatchers -/
-
 /-- `.downward` invariants for `mantissaFloor ≤ m ≤ maxRepUp`. -/
 lemma doRoundUp_output_invariants_downward_upTo_maxRepUp
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
@@ -1812,9 +1740,8 @@ lemma doRoundUp_output_invariants_upward_upTo_maxRepUp
   · push Not at h_le
     exact doRoundUp_output_invariants_cusp g neg m e .upward h_le h_ub loc res hok hne
 
-/-- Mode-generic combined invariants for `mantissaFloor ≤ m ≤ maxRepUp` — dispatches
-on `mode` to the four directed lemmas above. Lets callers (mul/normalize) skip an
-inline `cases mode`. -/
+/-- In every rounding mode, a nonzero `doRoundUp` output for `mantissaFloor ≤ m ≤ maxRepUp` has its mantissa in
+`largeRange`, its exponent at least `minExponent`, and a multiple of 10 above `maxRep`. -/
 lemma doRoundUp_output_invariants_upTo_maxRepUp_anyMode
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
     (h_lb : mantissaFloor ≤ m.toNat)
@@ -1836,8 +1763,8 @@ lemma doRoundUp_output_invariants_upTo_maxRepUp_anyMode
   | upward =>
     exact doRoundUp_output_invariants_upward_upTo_maxRepUp g neg m e h_lb h_ub loc res hok hne
 
-/-- Mode-generic combined invariants for the non-cusp range `mantissaFloor ≤ m ≤ maxRep`
-— dispatches on `mode` to the four directed lemmas. -/
+/-- In every rounding mode, a nonzero `doRoundUp` output for `mantissaFloor ≤ m ≤ maxRep` has its mantissa in
+`largeRange`, its exponent at least `minExponent`, and a multiple of 10 above `maxRep`. -/
 lemma doRoundUp_output_invariants_anyMode
     (g : Guard) (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
     (h_lb : mantissaFloor ≤ m.toNat)
@@ -1861,11 +1788,8 @@ lemma doRoundUp_output_invariants_anyMode
 
 set_option maxHeartbeats 1600000 in
 -- 8-leaf navigation with per-leaf flush analysis.
-/-- A flush (zero output mantissa) in `doRoundUp` forces the input frame to sit
-at the representable floor: `(zm+1)·10^ze ≤ 10^18·10^minExponent`. Mode-generic;
-the underflow branches of the discrete-rounding theorems consume this (the
-exact value is `< (zm+1)·10^ze`, hence strictly below the smallest positive
-representable). -/
+/-- In any mode, a `doRoundUp` flush (zero output mantissa) implies `(zm + 1) · 10^ze ≤ 10^18 · 10^minExponent`,
+the value of the smallest positive Number. -/
 lemma doRoundUp_flush_value_small
     (g : Guard) (zn : Bool) (zm : UInt64) (ze : Int) (mode : rounding_mode)
     (h_zm_ge : (mantissaFloor : ℕ) ≤ zm.toNat)
@@ -1875,7 +1799,6 @@ lemma doRoundUp_flush_value_small
     (hres0 : res.mantissa_ = 0) :
     ((zm.toNat : ℚ) + 1) * 10 ^ ze ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
   have hmaxRepUp_toNat : maxRepUp.toNat = maxRepUpNat := rfl
-  -- The two closing shapes.
   have h_close_small : zm.toNat + 1 ≤ 10 ^ 18 → ze ≤ minExponent →
       ((zm.toNat : ℚ) + 1) * 10 ^ ze
         ≤ (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
@@ -1917,7 +1840,7 @@ lemma doRoundUp_flush_value_small
   -- pins the exponent (and, on the rescale path, the mantissa) to the floor.
   have h_leaf : ∀ (m' : UInt64) (e' : Int),
       m' ≠ 0 →
-      (Guard.bringIntoRange zn m' e' largeRange.min).mantissa_ = 0 →
+      (Guard.bringIntoRangeSpec zn m' e' largeRange.min).mantissa_ = 0 →
       (m'.toNat < 10 ^ 18 ∧ e' - 1 < minExponent) ∨ (10 ^ 18 ≤ m'.toNat ∧ e' < minExponent) := by
     intro m' e' hm_ne h0
     have hmin_v : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
@@ -1961,15 +1884,14 @@ lemma doRoundUp_flush_value_small
       · rw [if_neg h_under] at h0
         have h0' : m' = 0 := h0
         exact absurd h0' hm_ne
-  -- Navigate the doRoundUp leaves.
-  unfold Guard.doRoundUp at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow zm mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec zm mode with hgP_def
   have h_zm_ne : zm ≠ 0 := by
     intro h
     have : zm.toNat = 0 := by rw [h]; rfl
     omega
-  -- Extract `res` from the overflow check.
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' := by
@@ -1994,7 +1916,7 @@ lemma doRoundUp_flush_value_small
           rw [Nat.mod_eq_of_lt (by simpa using this)]
           rfl
         omega
-      have h0 : (Guard.bringIntoRange zn (zm + 1) ze largeRange.min).mantissa_ = 0 := by
+      have h0 : (Guard.bringIntoRangeSpec zn (zm + 1) ze largeRange.min).mantissa_ = 0 := by
         rw [← hres_eq]; exact hres0
       have h_zm1_toNat : (zm + 1).toNat = zm.toNat + 1 := by
         rw [UInt64.toNat_add]
@@ -2010,7 +1932,7 @@ lemma doRoundUp_flush_value_small
       · -- round-up, cusp interior: m' = maxRepUp ≥ 10^18, noscale.
         rw [if_pos hC2] at hok
         have hres_eq := h_extract _ hok
-        have h0 : (Guard.bringIntoRange zn maxRepUp ze largeRange.min).mantissa_ = 0 := by
+        have h0 : (Guard.bringIntoRangeSpec zn maxRepUp ze largeRange.min).mantissa_ = 0 := by
           rw [← hres_eq]; exact hres0
         rcases h_leaf maxRepUp ze (by decide) h0 with ⟨hm_lt, _⟩ | ⟨_, he⟩
         · exact absurd hm_lt (by decide)
@@ -2032,7 +1954,7 @@ lemma doRoundUp_flush_value_small
               rw [Nat.mod_eq_of_lt (by simpa using (by omega : zm.toNat / 10 + 1 < 2 ^ 64))]
               rfl
             omega
-          have h0 : (Guard.bringIntoRange zn (zm / 10 + 1) (ze + 1) largeRange.min).mantissa_
+          have h0 : (Guard.bringIntoRangeSpec zn (zm / 10 + 1) (ze + 1) largeRange.min).mantissa_
               = 0 := by
             rw [← hres_eq]; exact hres0
           have h_toNat : (zm / 10 + 1).toNat = zm.toNat / 10 + 1 := by
@@ -2049,7 +1971,7 @@ lemma doRoundUp_flush_value_small
             have h1 : (zm / 10).toNat = 0 := by rw [h]; rfl
             rw [h_div_toNat] at h1
             omega
-          have h0 : (Guard.bringIntoRange zn (zm / 10) (ze + 1) largeRange.min).mantissa_
+          have h0 : (Guard.bringIntoRangeSpec zn (zm / 10) (ze + 1) largeRange.min).mantissa_
               = 0 := by
             rw [← hres_eq]; exact hres0
           rcases h_leaf (zm / 10) (ze + 1) h_ne h0 with ⟨_, he⟩ | ⟨hm_ge, _⟩
@@ -2062,7 +1984,7 @@ lemma doRoundUp_flush_value_small
     · -- truncate, cusp interior: m' = maxRep ≥ 10^18, noscale.
       rw [if_pos hC2] at hok
       have hres_eq := h_extract _ hok
-      have h0 : (Guard.bringIntoRange zn maxRep ze largeRange.min).mantissa_ = 0 := by
+      have h0 : (Guard.bringIntoRangeSpec zn maxRep ze largeRange.min).mantissa_ = 0 := by
         rw [← hres_eq]; exact hres0
       rcases h_leaf maxRep ze (by decide) h0 with ⟨hm_lt, _⟩ | ⟨_, he⟩
       · exact absurd hm_lt (by decide)
@@ -2070,7 +1992,7 @@ lemma doRoundUp_flush_value_small
     · -- truncate: m' = zm.
       rw [if_neg hC2] at hok
       have hres_eq := h_extract _ hok
-      have h0 : (Guard.bringIntoRange zn zm ze largeRange.min).mantissa_ = 0 := by
+      have h0 : (Guard.bringIntoRangeSpec zn zm ze largeRange.min).mantissa_ = 0 := by
         rw [← hres_eq]; exact hres0
       rcases h_leaf zm ze h_zm_ne h0 with ⟨hm_lt, he⟩ | ⟨_, he⟩
       · exact h_close_small (by omega) (by omega)

@@ -9,204 +9,91 @@ import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.Dif
 import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
-namespace XRPL.Model.Protocol
-
-/-- Subtracting a `Number` from itself always succeeds: the different-sign add
-takes its exact-cancellation guard. Reachable states have `assetsAvailable = assetsTotal`,
-so this discharges `RawVault.WF.assetsTotal_sub_ok` there. -/
-theorem Number.operator_sub_self_ok (x : Number) (mode : rounding_mode) :
-    ∃ d, x.operator_sub x mode = .ok d := by
-  unfold Number.operator_sub
-  by_cases hx : x.mantissa_ = 0
-  · refine ⟨x, ?_⟩
-    have hneg : x.operator_neg = Number.zero := by
-      unfold Number.operator_neg; rw [if_pos (by rw [hx]; rfl)]
-    rw [hneg]; unfold Number.operator_add
-    rw [if_pos (show Number.zero.operator_eq Number.zero = true by decide)]; rfl
-  · refine ⟨Number.zero, ?_⟩
-    have hnegm : x.operator_neg.mantissa_ ≠ 0 := by
-      rw [Number.operator_neg_mantissa_of_ne x hx]; exact hx
-    have hguard3 : x.operator_eq x.operator_neg.operator_neg = true := by
-      rw [neg_neg_of_mant_ne hx]; unfold Number.operator_eq; simp
-    unfold Number.operator_add
-    rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hnegm),
-        if_neg (Number.not_operator_eq_zero_of_mantissa_ne hx), if_pos hguard3]; rfl
-
-end XRPL.Model.Protocol
-
 /-! # Equivalence of the operator and exact-rational vault invariants -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-! ## Clause 8 (`lossUnrealized_le`) grid helpers -/
+/-- For a nonnegative `Number`, the mantissa test of `RawVault.Valid.assetsAvailable_onGrid` reads a whole number
+of `10^s` units. -/
+lemma Number.mod_grid_iff (x : Number) (s : ℤ) (hneg : x.negative_ = false) :
+    x.mantissa_.toNat % 10 ^ (s - x.exponent_).toNat = 0 ↔ ∃ k : ℤ, x.toRat = k * 10 ^ s := by
+  have hval := Number.toRat_of_nonneg x hneg
+  set m := x.mantissa_.toNat
+  set e := x.exponent_
+  set d := (s - e).toNat with hd
+  constructor
+  · intro hmod
+    obtain ⟨q, hq⟩ := Nat.dvd_of_mod_eq_zero hmod
+    refine ⟨(q : ℤ) * 10 ^ (e - s).toNat, ?_⟩
+    have hde : (d : ℤ) + e = ((e - s).toNat : ℤ) + s := by omega
+    rw [hval, hq]
+    push_cast
+    rw [← zpow_natCast (10 : ℚ) d, ← zpow_natCast (10 : ℚ) (e - s).toNat]
+    calc (10 : ℚ) ^ (d : ℤ) * q * 10 ^ e = q * 10 ^ ((d : ℤ) + e) := by rw [zpow_add₀ (by norm_num)]; ring
+      _ = q * 10 ^ (((e - s).toNat : ℤ) + s) := by rw [hde]
+      _ = q * 10 ^ ((e - s).toNat : ℤ) * 10 ^ s := by rw [zpow_add₀ (by norm_num)]; ring
+  · rintro ⟨k, hk⟩
+    rw [hval] at hk
+    by_cases hes : s ≤ e
+    · rw [show d = 0 by omega, pow_zero, Nat.mod_one]
+    push Not at hes
+    have hdz : (d : ℤ) = s - e := by omega
+    have hm : (m : ℚ) = k * 10 ^ (d : ℤ) := by
+      have he : (0 : ℚ) < 10 ^ e := zpow_pos (by norm_num) _
+      rw [hdz, zpow_sub₀ (by norm_num), eq_comm, mul_div_assoc', div_eq_iff he.ne', ← hk]
+    have hmi : (m : ℤ) = k * 10 ^ d := by
+      have : (m : ℚ) = ((k * 10 ^ d : ℤ) : ℚ) := by rw [hm]; push_cast; rw [zpow_natCast]
+      exact_mod_cast this
+    have hdvd : ((10 ^ d : ℕ) : ℤ) ∣ (m : ℤ) := ⟨k, by rw [hmi]; push_cast; ring⟩
+    exact Nat.mod_eq_zero_of_dvd (Int.natCast_dvd_natCast.mp hdvd)
 
-/-- **Flush corner of the downward difference.** When `x - y` (both normalized
-nonnegative) rounds down to a zero-mantissa result, the result is the canonical
-zero and the exact difference sits strictly below the smallest positive grid
-magnitude. Reduces to the different-sign add facts (`x - y = x + (-y)`). -/
-private lemma sub_downward_mantissa_zero (x y d : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hxneg : x.negative_ = false) (hyneg : y.negative_ = false)
-    (hok : x.operator_sub y .downward = .ok d) (h0 : d.mantissa_ = 0) :
-    d = Number.zero ∧
-      |x.toRat - y.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
-  have hspr_pos : (0 : ℚ) < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by positivity
-  rw [Number.operator_sub] at hok
-  set ny := y.operator_neg with hny_def
-  have hnynorm : ny.isNormalized := Number.operator_neg_isNormalized y hy
-  by_cases hyg : ny.operator_eq Number.zero = true
-  · -- `-y = 0`: the add returns `x`, and `y` is zero.
-    have hres : d = x := by
-      rw [Number.operator_add] at hok; rw [if_pos hyg] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok d from hok)).symm
-    have hxz : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx (hres ▸ h0)
-    have hnym0 : ny.mantissa_ = 0 := Number.mantissa_eq_zero_of_operator_eq_zero hyg
-    have hym : y.mantissa_ = 0 := by
-      by_contra hne
-      have h1 : ny.mantissa_ = y.mantissa_ := by
-        rw [hny_def]; exact Number.operator_neg_mantissa_of_ne y hne
-      rw [h1] at hnym0; exact hne hnym0
-    have hyz : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hym
-    exact ⟨hres.trans hxz, by rw [hxz, hyz, Number.toRat_zero, sub_self, abs_zero]; exact hspr_pos⟩
-  by_cases hxg : x.operator_eq Number.zero = true
-  · -- `x = 0`: the add returns `-y`, which is zero, so `y` is zero.
-    have hres : d = ny := by
-      rw [Number.operator_add] at hok; rw [if_neg hyg, if_pos hxg] at hok
-      exact (Except.ok.inj (show (Except.ok ny : Except Error Number) = .ok d from hok)).symm
-    have hxtr : x.toRat = 0 :=
-      Number.toRat_eq_zero_of_mantissa_zero x (Number.mantissa_eq_zero_of_operator_eq_zero hxg)
-    have hnym0 : ny.mantissa_ = 0 := hres ▸ h0
-    have hnyz : ny = Number.zero := Number.eq_zero_of_mantissa_zero ny hnynorm hnym0
-    have hym : y.mantissa_ = 0 := by
-      by_contra hne
-      have h1 : ny.mantissa_ = y.mantissa_ := by
-        rw [hny_def]; exact Number.operator_neg_mantissa_of_ne y hne
-      rw [h1] at hnym0; exact hne hnym0
-    have hytr : y.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero y hym
-    exact ⟨hres.trans hnyz, by rw [hxtr, hytr, sub_self, abs_zero]; exact hspr_pos⟩
-  by_cases heqg : x.operator_eq ny.operator_neg = true
-  · -- exact cancellation: the add returns zero and `x.toRat = y.toRat`.
-    have hres : d = Number.zero := by
-      rw [Number.operator_add] at hok; rw [if_neg hyg, if_neg hxg, if_pos heqg] at hok
-      exact (Except.ok.inj (show (Except.ok Number.zero : Except Error Number) = .ok d from hok)).symm
-    have hxeq : x.toRat = ny.operator_neg.toRat :=
-      (operator_eq_iff x ny.operator_neg hx (Number.operator_neg_isNormalized ny hnynorm)).mp heqg
-    rw [Number.toRat_neg, hny_def, Number.toRat_neg, neg_neg] at hxeq
-    exact ⟨hres, by rw [hxeq, sub_self, abs_zero]; exact hspr_pos⟩
-  · -- generic different-sign body.
-    have hxm : x.mantissa_ ≠ 0 := fun h =>
-      hxg (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
-    have hym : y.mantissa_ ≠ 0 := by
-      intro h
-      exact hyg (by rw [hny_def, Number.operator_neg, if_pos (by simp [h])]; decide)
-    have hnym : ny.mantissa_ ≠ 0 := by
-      rw [hny_def, Number.operator_neg_mantissa_of_ne y hym]; exact hym
-    have hdiff : x.negative_ ≠ ny.negative_ := by
-      rw [hxneg, hny_def, Number.operator_neg_negative_of_ne y hym, hyneg]; decide
-    obtain ⟨M, ze', δ, zn, sticky, _, _, _, _, _, _, _, hok128, _⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x ny d .downward hx hnynorm hxm hnym
-        hdiff heqg hok
-    have hny_tr : ny.toRat = -y.toRat := by rw [hny_def, Number.toRat_neg]
-    have hsmall := operator_add_underflow_truth_small x ny d .downward hx hnynorm hxm hnym
-      hdiff heqg hok h0
-    rw [hny_tr] at hsmall
-    exact ⟨doNormalize128_zero_shape_sz zn M ze' sticky .downward d hok128 h0,
-      by rw [← sub_eq_add_neg] at hsmall; exact hsmall⟩
-
-/-- **Downward-subtraction grid maximality.** When `x.operator_sub y .downward = .ok d`,
-any normalized `w` with `w.toRat ≤ x.toRat - y.toRat` is `≤ d.toRat`, provided the
-result `d` is nonzero (the on-grid case). -/
-private lemma sub_downward_grid_max_ne (x y d w : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized) (hw : w.isNormalized)
-    (hok : x.operator_sub y .downward = .ok d) (hd : d.mantissa_ ≠ 0)
-    (hwle : w.toRat ≤ x.toRat - y.toRat) : w.toRat ≤ d.toRat := by
-  obtain ⟨n, hlo, hval⟩ := operator_sub_rounded_downward x y d hx hy hok hd
-  rw [hval]
-  exact Number.lower_tight (x.toRat - y.toRat) n hlo w hw hwle
-
-/-- The downward-subtraction result is normalized in the nonzero (on-grid) case. -/
-private lemma sub_downward_result_norm (x y d : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hok : x.operator_sub y .downward = .ok d) (hd : d.mantissa_ ≠ 0) : d.isNormalized := by
-  unfold Number.operator_sub at hok
-  exact operator_add_isNormalized x y.operator_neg d .downward hx
-    (Number.operator_neg_isNormalized y hy) hok hd
-
-/-- If `loss.operator_le d = true` and `d` has zero mantissa (`d.toRat = 0`), then
-`loss.toRat ≤ 0`. Read directly off the `operator_lt` Bool definition, so no
-normalization of `d` is needed. -/
-private lemma le_zero_of_operator_le_mantissa_zero (loss d : Number)
-    (hle : loss.operator_le d = true) (hd : d.mantissa_ = 0) : loss.toRat ≤ 0 := by
-  have hlt : Number.operator_lt d loss = false := by
-    unfold Number.operator_le at hle; simpa using hle
-  by_cases hln : loss.negative_ = true
-  · exact Number.toRat_nonpos_of_negative loss hln
-  · have hln' : loss.negative_ = false := by simpa using hln
-    by_cases hdn : d.negative_ = true
-    · -- d negative, loss nonneg ⇒ `d < loss`, contradicting `d ≮ loss`
-      have heval : Number.operator_lt d loss = true := by
-        simp [Number.operator_lt, hdn, hln']
-      rw [heval] at hlt; exact absurd hlt (by simp)
-    · have hdn' : d.negative_ = false := by simpa using hdn
-      have heval : Number.operator_lt d loss = decide (loss.mantissa_ > 0) := by
-        simp [Number.operator_lt, hdn', hln', hd]
-      rw [heval] at hlt
-      have hm0 : loss.mantissa_ = 0 := by
-        by_contra hne
-        exact absurd hlt (by simp [UInt64.pos_iff_ne_zero.mpr hne])
-      rw [Number.toRat_eq_zero_of_mantissa_zero loss hm0]
-
-/-- The forward `.ok` half of the eighth clause: from the operator bound on the
-rounded difference, recover the exact bound. -/
-private lemma lossUnrealized_le_forward_ok (aT aA loss d : Number)
-    (hT : aT.isNormalized) (hA : aA.isNormalized) (hL : loss.isNormalized)
-    (hAle : aA.toRat ≤ aT.toRat)
-    (hok : aT.operator_sub aA .downward = .ok d)
-    (hclause : loss.operator_le d = true) :
-    loss.toRat ≤ aT.toRat - aA.toRat := by
-  by_cases hd : d.mantissa_ = 0
-  · -- `d.toRat = 0`; the operator bound gives `loss ≤ 0 ≤ aT - aA`.
-    have := le_zero_of_operator_le_mantissa_zero loss d hclause hd
-    linarith
-  · have hdn : d.isNormalized := sub_downward_result_norm aT aA d hT hA hok hd
-    have h1 : loss.toRat ≤ d.toRat := (operator_le_iff loss d hL hdn).mp hclause
-    obtain ⟨n, hlo, hval⟩ := operator_sub_rounded_downward aT aA d hT hA hok hd
-    have h2 : d.toRat ≤ aT.toRat - aA.toRat := by rw [hval]; exact Number.lower_le _ n hlo
-    linarith
-
-/-- For a well-formed representation, the operator invariant (`RawVault.Valid`) and
-the exact-rational invariant coincide. `WF` is required because `operator_le` is
-faithful to `≤` only on normalized `Number`s, and its `assetsTotal_sub_ok` clause
-keeps the `lossUnrealized_le` subtraction from erroring. -/
+/-- On a well-formed representation the operator invariant `RawVault.Valid` and the exact-rational
+invariant coincide. `WF` is needed because the operators read only normalized `Number`s exactly. -/
 theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
     rv.Valid ↔ rv.toExact.Valid := by
   constructor
-  · -- FORWARD: rv.Valid → rv.toExact.Valid
-    intro hv
-    refine
-      { assetsTotal_nonneg := ?_
-        assetsAvailable_nonneg := ?_
-        assetsAvailable_le := ?_
-        assetsMaximum_pos := ?_
-        empty_shares := ?_
-        cap := ?_
-        lossUnrealized_nonneg := ?_
-        lossUnrealized_le := ?_
-        withdraw_nav_nonneg := ?_ }
-    · -- 0 ≤ assetsTotal
-      have := (operator_le_iff _ _ Number.zero_isNormalized
-          hwf.assetsTotal_norm).mp hv.assetsTotal_nonneg
-      rwa [Number.toRat_zero] at this
-    · -- 0 ≤ assetsAvailable
+  · intro hv
+    have hAA : 0 ≤ rv.assetsAvailable.toRat := by
       have := (operator_le_iff _ _ Number.zero_isNormalized
           hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
       rwa [Number.toRat_zero] at this
-    · -- assetsAvailable ≤ assetsTotal
-      exact (operator_le_iff _ _ hwf.assetsAvailable_norm hwf.assetsTotal_norm).mp hv.assetsAvailable_le
-    · -- assetsMaximum positive
-      intro m hm
+    have hAD : 0 ≤ rv.assetsDeployed.toRat := by
+      have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.assetsDeployed_norm).mp hv.assetsDeployed_nonneg
+      rwa [Number.toRat_zero] at this
+    refine
+      { assetsAvailable_nonneg := ?_
+        assetsDeployed_nonneg := hAD
+        assetsReserved_nonneg := ?_
+        lossUnrealized_nonneg := ?_
+        yieldUnrealized_nonneg := ?_
+        assetsMaximum_pos := ?_
+        empty_shares := ?_
+        lossUnrealized_le := ?_
+        assetsDeployed_representable := ?_
+        assetsReserved_le := ?_
+        sharesTotal_representable := ?_
+        depositBlocked_owner := hv.depositBlocked_owner
+        schedule_gap := hv.schedule_gap
+        earlyExitFeeRate_closedEnded := ?_
+        earlyExitFeeRate_le := ?_
+        assetsAvailable_representable := ?_
+        assetsAvailable_onGrid := ?_ }
+    · have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
+      rwa [Number.toRat_zero] at this
+    · have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.assetsReserved_norm).mp hv.assetsReserved_nonneg
+      rwa [Number.toRat_zero] at this
+    · have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.lossUnrealized_norm).mp hv.lossUnrealized_nonneg
+      rwa [Number.toRat_zero] at this
+    · have := (operator_le_iff _ _ Number.zero_isNormalized
+          hwf.yieldUnrealized_norm).mp hv.yieldUnrealized_nonneg
+      rwa [Number.toRat_zero] at this
+    · intro m hm
       show 0 < m
       obtain ⟨m0, hm0, hval⟩ := Option.mem_map.mp hm
       have hm0norm := hwf.assetsMaximum_norm m0 hm0
@@ -214,128 +101,104 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
           hm0norm).mp (hv.assetsMaximum_pos m0 hm0)
       rw [Number.toRat_zero] at this
       rwa [← hval]
-    · -- empty_shares
-      intro hsh
+    · intro hsh
       have hsh0 : rv.sharesTotal.toRat = 0 := by
         have h := RawVault.WF.toExact_sharesTotal rv hwf
         rw [hsh] at h; simpa using h.symm
       have hszero : rv.sharesTotal = Number.zero :=
         (Number.toRat_eq_zero_iff_eq_zero hwf.sharesTotal_norm).mp hsh0
-      obtain ⟨hT, hA⟩ := hv.empty_shares hszero
-      exact ⟨by show rv.assetsTotal.toRat = 0; rw [hT, Number.toRat_zero],
-             by show rv.assetsAvailable.toRat = 0; rw [hA, Number.toRat_zero]⟩
-    · -- cap
-      intro m hm
-      obtain ⟨m0, hm0, hval⟩ := Option.mem_map.mp hm
-      have hm0norm := hwf.assetsMaximum_norm m0 hm0
-      have := (operator_le_iff _ _ hwf.assetsTotal_norm hm0norm).mp (hv.cap m0 hm0)
-      rwa [← hval]
-    · -- 0 ≤ lossUnrealized
-      have := (operator_le_iff _ _ Number.zero_isNormalized
-          hwf.lossUnrealized_norm).mp hv.lossUnrealized_nonneg
-      rwa [Number.toRat_zero] at this
-    · -- lossUnrealized ≤ assetsTotal - assetsAvailable
-      show rv.lossUnrealized.toRat ≤ rv.assetsTotal.toRat - rv.assetsAvailable.toRat
-      have hAle : rv.assetsAvailable.toRat ≤ rv.assetsTotal.toRat :=
-        (operator_le_iff _ _ hwf.assetsAvailable_norm hwf.assetsTotal_norm).mp hv.assetsAvailable_le
-      cases hsub : rv.assetsTotal.operator_sub rv.assetsAvailable .downward with
-      | ok d =>
-        exact lossUnrealized_le_forward_ok rv.assetsTotal rv.assetsAvailable rv.lossUnrealized d
-          hwf.assetsTotal_norm hwf.assetsAvailable_norm hwf.lossUnrealized_norm hAle hsub
-          (hv.lossUnrealized_le d hsub)
-      | error e =>
-        -- Impossible: `WF.assetsTotal_sub_ok` says the subtraction succeeds.
-        exfalso
-        obtain ⟨d, hd⟩ := hwf.assetsTotal_sub_ok
-        rw [hsub] at hd
-        simp at hd
-    · -- 0 ≤ assetsTotal - lossUnrealized
-      have := (operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsTotal_norm).mp hv.withdraw_nav_nonneg
-      show (0 : ℚ) ≤ rv.assetsTotal.toRat - rv.lossUnrealized.toRat
-      linarith
-  · -- BACKWARD: rv.toExact.Valid → rv.Valid
-    intro he
+      obtain ⟨hA, hD⟩ := hv.empty_shares hszero
+      exact ⟨by show rv.assetsAvailable.toRat = 0; rw [hA, Number.toRat_zero],
+             by show rv.assetsDeployed.toRat = 0; rw [hD, Number.toRat_zero]⟩
+    · exact (operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mp hv.lossUnrealized_le
+    · -- assetsDeployed is an amount of the asset
+      exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsDeployed_norm hAD).mp
+        hv.assetsDeployed_representable
+    · exact (operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mp hv.assetsReserved_le
+    · -- sharesTotal fits an MPT amount
+      have hcast := RawVault.WF.toExact_sharesTotal rv hwf
+      rcases (STAmount.isRounded_eq_false_iff _ _ hwf.sharesTotal_norm hwf.sharesTotal_nonneg).mp
+          hv.sharesTotal_representable with h0 | ⟨-, k, -, hk, hval⟩
+      · have : rv.toExact.sharesTotal = 0 := by exact_mod_cast hcast.trans h0
+        omega
+      · have : rv.toExact.sharesTotal = k := by exact_mod_cast hcast.trans hval
+        omega
+    · -- a fee only on a closed-ended vault
+      intro h
+      exact hv.earlyExitFeeRate_closedEnded (by simpa [RawVault.toExact] using h)
+    · -- the fee is at most 100%
+      intro r hr
+      obtain ⟨r0, hr0, rfl⟩ := Option.mem_map.mp hr
+      exact UInt32.le_iff_toNat_le.mp (hv.earlyExitFeeRate_le r0 hr0)
+    · exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsAvailable_norm hAA).mp hv.assetsAvailable_representable
+    · rcases hv.assetsAvailable_onGrid with h0 | hmod
+      · exact ⟨0, by show rv.assetsAvailable.toRat = _; rw [h0, Number.toRat_zero]; simp⟩
+      · exact (Number.mod_grid_iff _ _ (Number.negative_false_of_nonneg _ hwf.assetsAvailable_norm hAA)).mp hmod
+  · intro he
     refine
-      { assetsTotal_nonneg := ?_
-        assetsAvailable_nonneg := ?_
-        assetsAvailable_le := ?_
+      { assetsAvailable_nonneg := ?_
+        assetsDeployed_nonneg := ?_
+        assetsReserved_nonneg := ?_
+        lossUnrealized_nonneg := ?_
+        yieldUnrealized_nonneg := ?_
         assetsMaximum_pos := ?_
         empty_shares := ?_
-        cap := ?_
-        lossUnrealized_nonneg := ?_
         lossUnrealized_le := ?_
-        withdraw_nav_nonneg := ?_ }
-    · -- 0 ≤ assetsTotal
-      rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsTotal_norm, Number.toRat_zero]
-      exact he.assetsTotal_nonneg
+        assetsDeployed_representable := ?_
+        assetsReserved_le := ?_
+        sharesTotal_representable := ?_
+        depositBlocked_owner := he.depositBlocked_owner
+        schedule_gap := he.schedule_gap
+        earlyExitFeeRate_closedEnded := ?_
+        earlyExitFeeRate_le := ?_
+        assetsAvailable_representable := ?_
+        assetsAvailable_onGrid := ?_ }
     · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsAvailable_norm, Number.toRat_zero]
       exact he.assetsAvailable_nonneg
-    · rw [operator_le_iff _ _ hwf.assetsAvailable_norm hwf.assetsTotal_norm]
-      exact he.assetsAvailable_le
-    · -- assetsMaximum positive
-      intro m hm
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsDeployed_norm, Number.toRat_zero]
+      exact he.assetsDeployed_nonneg
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsReserved_norm, Number.toRat_zero]
+      exact he.assetsReserved_nonneg
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.lossUnrealized_norm, Number.toRat_zero]
+      exact he.lossUnrealized_nonneg
+    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.yieldUnrealized_norm, Number.toRat_zero]
+      exact he.yieldUnrealized_nonneg
+    · intro m hm
       rw [operator_lt_iff _ _ Number.zero_isNormalized
           (hwf.assetsMaximum_norm m hm), Number.toRat_zero]
       exact he.assetsMaximum_pos m.toRat (Option.mem_map_of_mem _ hm)
-    · -- empty_shares
-      intro hsz
+    · intro hsz
       have hsh : rv.toExact.sharesTotal = 0 := by
         show rv.sharesTotal.toRat.num.toNat = 0
         rw [hsz, Number.toRat_zero]; rfl
-      obtain ⟨hT, hA⟩ := he.empty_shares hsh
-      exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.assetsTotal_norm).mp hT,
-             (Number.toRat_eq_zero_iff_eq_zero hwf.assetsAvailable_norm).mp hA⟩
-    · -- cap
-      intro m hm
-      rw [operator_le_iff _ _ hwf.assetsTotal_norm (hwf.assetsMaximum_norm m hm)]
-      exact he.cap m.toRat (Option.mem_map_of_mem _ hm)
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.lossUnrealized_norm, Number.toRat_zero]
-      exact he.lossUnrealized_nonneg
-    · -- lossUnrealized_le (backward): ∀ d, sub = .ok d → loss.operator_le d
-      intro d hsub
-      have hLnn : 0 ≤ rv.lossUnrealized.toRat := he.lossUnrealized_nonneg
-      have hLle : rv.lossUnrealized.toRat ≤ rv.assetsTotal.toRat - rv.assetsAvailable.toRat := by
-        have h := he.lossUnrealized_le
-        change rv.lossUnrealized.toRat ≤ rv.assetsTotal.toRat - rv.assetsAvailable.toRat at h
-        exact h
-      have hAle : rv.assetsAvailable.toRat ≤ rv.assetsTotal.toRat := he.assetsAvailable_le
-      by_cases hd : d.mantissa_ = 0
-      · -- flush corner: the exact difference is sub-grid, so `loss` and `d` are both zero
-        have hTneg : rv.assetsTotal.negative_ = false :=
-          Number.negative_false_of_nonneg _ hwf.assetsTotal_norm he.assetsTotal_nonneg
-        have hAneg : rv.assetsAvailable.negative_ = false :=
-          Number.negative_false_of_nonneg _ hwf.assetsAvailable_norm he.assetsAvailable_nonneg
-        obtain ⟨hdz, hsmall⟩ := sub_downward_mantissa_zero rv.assetsTotal rv.assetsAvailable d
-          hwf.assetsTotal_norm hwf.assetsAvailable_norm hTneg hAneg hsub hd
-        have hlt_spr : rv.assetsTotal.toRat - rv.assetsAvailable.toRat
-            < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
-          rwa [abs_of_nonneg (by linarith : (0:ℚ) ≤ rv.assetsTotal.toRat - rv.assetsAvailable.toRat)]
-            at hsmall
-        have hlossz : rv.lossUnrealized.toRat = 0 := by
-          by_contra hne
-          have hge := Number.abs_toRat_ge_spr rv.lossUnrealized hwf.lossUnrealized_norm
-            (fun h => hne (Number.toRat_eq_zero_of_mantissa_zero _ h))
-          rw [abs_of_nonneg hLnn] at hge
-          linarith
-        rw [(Number.toRat_eq_zero_iff_eq_zero hwf.lossUnrealized_norm).mp hlossz, hdz]; decide
-      · have hdn := sub_downward_result_norm rv.assetsTotal rv.assetsAvailable d
-          hwf.assetsTotal_norm hwf.assetsAvailable_norm hsub hd
-        rw [operator_le_iff _ _ hwf.lossUnrealized_norm hdn]
-        exact sub_downward_grid_max_ne rv.assetsTotal rv.assetsAvailable d rv.lossUnrealized
-          hwf.assetsTotal_norm hwf.assetsAvailable_norm hwf.lossUnrealized_norm hsub hd hLle
-    · rw [operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsTotal_norm]
-      have h := he.withdraw_nav_nonneg
-      change (0 : ℚ) ≤ rv.assetsTotal.toRat - rv.lossUnrealized.toRat at h
-      linarith
+      obtain ⟨hA, hD⟩ := he.empty_shares hsh
+      exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.assetsAvailable_norm).mp hA,
+             (Number.toRat_eq_zero_iff_eq_zero hwf.assetsDeployed_norm).mp hD⟩
+    · exact (operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mpr he.lossUnrealized_le
+    · exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsDeployed_norm he.assetsDeployed_nonneg).mpr
+        he.assetsDeployed_representable
+    · exact (operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mpr he.assetsReserved_le
+    · -- sharesTotal fits an MPT amount
+      rw [STAmount.isRounded_eq_false_iff _ _ hwf.sharesTotal_norm hwf.sharesTotal_nonneg]
+      have hcap := he.sharesTotal_representable
+      exact Or.inr ⟨by decide, rv.toExact.sharesTotal, le_of_le_of_eq hcap (by decide), hcap,
+        (RawVault.WF.toExact_sharesTotal rv hwf).symm⟩
+    · intro h
+      exact he.earlyExitFeeRate_closedEnded (by simpa [RawVault.toExact] using h)
+    · intro r hr
+      exact UInt32.le_iff_toNat_le.mpr (he.earlyExitFeeRate_le r.toNat (Option.mem_map_of_mem _ hr))
+    · exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsAvailable_norm he.assetsAvailable_nonneg).mpr
+        he.assetsAvailable_representable
+    · exact Or.inr ((Number.mod_grid_iff _ _ (Number.negative_false_of_nonneg _ hwf.assetsAvailable_norm
+        he.assetsAvailable_nonneg)).mpr he.assetsAvailable_onGrid)
 
 /-- The exact-rational invariant of a lawful vault, derived from its operator
 proof and well-formedness. -/
 theorem Vault.exact (v : Vault) : v.toExact.Valid :=
   (RawVault.valid_iff_exact v.toRawVault v.wf).mp v.valid
 
-/-- Bridge: when the ops' in-op re-validation succeeds (`to_lawful = .ok v`), the
-packaged vault is the raw state it validated, and that state is well-formed and
-valid. -/
+/-- When `to_lawful` accepts a raw state, the returned vault is that state, and the state is
+well-formed and valid. -/
 theorem RawVault.to_lawful_ok {rv : RawVault} {v : Vault}
     (h : rv.to_lawful = .ok v) : v.toRawVault = rv ∧ rv.WF ∧ rv.Valid := by
   unfold RawVault.to_lawful at h
@@ -343,8 +206,7 @@ theorem RawVault.to_lawful_ok {rv : RawVault} {v : Vault}
   · rename_i hcond; injection h with h'; exact ⟨by rw [← h'], hcond.1, hcond.2⟩
   · exact absurd h (by simp)
 
-/-- Bridge: a well-formed, valid raw state re-validates. Shows the ops' `to_lawful`
-re-check fires the `.ok` branch (never `throw .notLawful`). -/
+/-- A well-formed, valid raw state passes `to_lawful` unchanged. -/
 theorem RawVault.to_lawful_ok_of {rv : RawVault} (hwf : rv.WF) (hvalid : rv.Valid) :
     ∃ v, rv.to_lawful = .ok v ∧ v.toRawVault = rv := by
   refine ⟨⟨rv, hwf, hvalid⟩, ?_, rfl⟩

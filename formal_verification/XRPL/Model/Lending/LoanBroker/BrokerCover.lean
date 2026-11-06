@@ -47,7 +47,7 @@ def LoanBroker.checkCoverOpenLimit {α : Type} [AssetPool α] (lb : LoanBroker) 
 
   return .tesSUCCESS
 
--- the cover movement actually applied: sub-scale dust is rejected rather than truncated
+-- the cover movement actually applied: sub-scale dust is truncated, and a movement that rounds to zero is rejected
 def LoanBroker.roundedCoverAmount {α : Type} [AssetPool α] (lb : LoanBroker) (pool : α) (amount : STAmount)
     : TerExcept STAmount := do
   let baseExponent := AssetPool.baseExponent pool
