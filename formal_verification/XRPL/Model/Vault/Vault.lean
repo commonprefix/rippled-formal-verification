@@ -72,6 +72,7 @@ structure RawVault.Valid (rv : RawVault) : Prop where
   lossUnrealized_nonneg : Number.zero.operator_le rv.lossUnrealized = true
   yieldUnrealized_nonneg : Number.zero.operator_le rv.yieldUnrealized = true
   assetsMaximum_pos : ∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true
+  assetsMaximum_representable : ∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false
   empty_shares : rv.sharesTotal = Number.zero →
     rv.assetsAvailable = Number.zero ∧ rv.assetsDeployed = Number.zero
   lossUnrealized_le : rv.lossUnrealized.operator_le rv.assetsDeployed = true
@@ -103,6 +104,7 @@ instance (rv : RawVault) : Decidable rv.Valid :=
       Number.zero.operator_le rv.lossUnrealized = true ∧
       Number.zero.operator_le rv.yieldUnrealized = true ∧
       (∀ m ∈ rv.assetsMaximum, Number.zero.operator_lt m = true) ∧
+      (∀ m ∈ rv.assetsMaximum, STAmount.isRounded rv.numericType m = false) ∧
       (rv.sharesTotal = Number.zero →
         rv.assetsAvailable = Number.zero ∧ rv.assetsDeployed = Number.zero) ∧
       rv.lossUnrealized.operator_le rv.assetsDeployed = true ∧
@@ -113,8 +115,8 @@ instance (rv : RawVault) : Decidable rv.Valid :=
       (∀ s ∈ rv.schedule, s.hasValidGap = true) ∧
       (rv.earlyExitFeeRate.isSome = true → rv.schedule.isSome = true) ∧
       (∀ r ∈ rv.earlyExitFeeRate, r ≤ maxEarlyExitFeeRate))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o⟩⟩
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p⟩⟩
 
 /-- A `Vault` extends `RawVault` with proofs that the representation is
 well-formed (`wf`) and satisfies the invariant (`valid`, in Number operators). -/

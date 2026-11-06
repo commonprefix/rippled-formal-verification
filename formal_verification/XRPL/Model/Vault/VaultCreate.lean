@@ -28,8 +28,6 @@ def Vault.create (scale : Option UInt8) (assetsMaximum : Option Number) (schedul
     (earlyExitFeeRate : Option TenthBips32) (ownerCanBlockDeposit : Bool) (nt : NumericType) : Except Error Vault :=
   let scale' : UInt8 := if nt.isIntegral then 0 else scale.getD vaultDefaultIOUScale
   let assetsMaximum' := assetsMaximum.filter (·.operator_ne Number.zero)
-  -- only a closed-ended vault stores the rate
-  let earlyExitFeeRate' := if schedule.isSome then earlyExitFeeRate else none
 
   let rawVault : RawVault := {
     assetsAvailable := Number.zero
@@ -42,7 +40,7 @@ def Vault.create (scale : Option UInt8) (assetsMaximum : Option Number) (schedul
     lossUnrealized := Number.zero
     yieldUnrealized := Number.zero
     schedule
-    earlyExitFeeRate := earlyExitFeeRate'
+    earlyExitFeeRate
     ownerCanBlockDeposit
     depositBlocked := false }
 

@@ -63,6 +63,9 @@ def Vault.clawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealized
   if dustCheck != .tesSUCCESS then
     throw dustCheck
 
+  if ← holderShares.operator_lt amounts.shares then
+    throw .tecINSUFFICIENT_FUNDS
+
   let rawVault' ← v.adjustAssetsAndShares amounts.assets.operator_neg amounts.shares.operator_neg
   let v' ← rawVault'.to_lawful
   return { amounts with vault' := v' }

@@ -1011,11 +1011,9 @@ class LeanVaultClawback_test : public LeanSuite
         testCoarseClawAllSweep(env, ious);
         testShareOverflowSweep(env, all);
 
-        // Open discrepancy, disabled until the model is fixed: clawing back more than a non-sole
-        // holder's shares are worth burns more shares than it holds. C++ refuses
-        // (tecINSUFFICIENT_FUNDS at the share transfer), the model succeeds (it bounds the shares
-        // by the holder's balance only for amount 0). Every case past the cusp, on every vault.
-        // testHolderValueSweep(env, all);
+        // Clawing back more than a non-sole holder's shares are worth is tecINSUFFICIENT_FUNDS
+        // on both sides (C++ at the share transfer).
+        testHolderValueSweep(env, all);
     }
 };
 

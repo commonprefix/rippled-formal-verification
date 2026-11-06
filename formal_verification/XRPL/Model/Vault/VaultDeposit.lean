@@ -111,6 +111,10 @@ def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (pa
   if assetsMaximum.operator_ne Number.zero && assetsTotal'.operator_gt assetsMaximum then
     throw .tecLIMIT_EXCEEDED
 
+  -- the share send fails past the MPT maximum (2^63 - 1 outstanding)
+  if v.sharesTotal.toRat + amounts.shares.toRat > (maxRep.toNat : Rat) then
+    throw .tecPATH_DRY
+
   let v' ← rawVault'.to_lawful
   return { amounts with vault' := v' }
 

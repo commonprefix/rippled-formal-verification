@@ -975,10 +975,7 @@ class LeanVaultDeposit_test : public LeanSuite
         testShareOverflowSweep(env, ious);
         testClampToZeroSweep(env, ious);
 
-        // Open discrepancy: C++ is tecPATH_DRY once shares total + shares > 2^63 - 1; the model
-        // mints up to exactly 2^63 (tesSUCCESS) and rejects a pre-state shares total >= 2^63 - 1151
-        // as not lawful.
-        // testShareMintCapSweep(env, all);
+        testShareMintCapSweep(env, all);
     }
 };
 

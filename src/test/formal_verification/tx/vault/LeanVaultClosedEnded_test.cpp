@@ -337,13 +337,14 @@ class LeanVaultClosedEnded_test : public LeanSuite
             staged,
             jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}));
         bool const byShares = amount.asset() != Asset{env.le(vault)->at(sfAsset)};
-        Number const holderShares{*staged.holderShares};
+        STAmount const holderShares{
+            MPTIssue{env.le(vault)->at(sfShareMPTID)}, *staged.holderShares};
         LeanVaultResult const lean = leanVaultWithdraw(
             cpp.pre,
             amount,
             byShares,
             parentCloseTime(env),
-            holderShares == Number{staged.sharesTotal},
+            *staged.holderShares == staged.sharesTotal,
             holderShares);
         std::string const at = sampleText(staged, amount);
         TER const ter = expectAgree(at, cpp, lean);

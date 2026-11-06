@@ -482,6 +482,25 @@ class LeanVaultCreate_test : public LeanSuite
             {.earlyExitFeeRate = 100'001},
             ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000},
             temMALFORMED);
+        // An early-exit fee, even zero, needs a closed-ended vault.
+        runVaultCreate(
+            env,
+            owner,
+            assets,
+            "open-ended vault with an early-exit fee",
+            AssetKind::iou,
+            {.earlyExitFeeRate = 5'000},
+            std::nullopt,
+            temMALFORMED);
+        runVaultCreate(
+            env,
+            owner,
+            assets,
+            "open-ended vault with a zero early-exit fee",
+            AssetKind::iou,
+            {.earlyExitFeeRate = 0},
+            std::nullopt,
+            temMALFORMED);
 
         SweepAssets const all{assets.xrp, assets.iou, assets.mpt};
         testScheduleSweep(env, owner, all);
@@ -489,11 +508,7 @@ class LeanVaultCreate_test : public LeanSuite
         testScaleSweep(env, owner, assets.iou);
         testMaximumSignSweep(env, owner, all);
         testMaximumGridSweep(env, owner, assets.iou);
-
-        // Open discrepancy, disabled until the model is fixed.
-        // clang-format off
-        // testXrpMaximumSweep(env, owner, assets.xrp);  // XRP maximum > 1e17: C++ temMALFORMED, model canCreate tecPRECISION_LOSS but create builds a lawful vault
-        // clang-format on
+        testXrpMaximumSweep(env, owner, assets.xrp);
     }
 };
 

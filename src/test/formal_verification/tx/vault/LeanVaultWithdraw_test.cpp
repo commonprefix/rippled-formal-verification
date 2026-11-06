@@ -62,7 +62,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             byShares,
             parentCloseTime(env),
             waiveUnrealizedLoss,
-            Number{fetchHolderShares(env, vaultKeylet, withdrawer)});
+            fetchHolderShares(env, vaultKeylet, withdrawer));
         expectLawful(withdraw);
 
         env(jtx::Vault::withdraw(
@@ -147,7 +147,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             byShares,
             parentCloseTime(env),
             held != 0 && held == staged.sharesTotal,
-            Number{static_cast<std::int64_t>(held)});
+            STAmount{shareIssue(env, vault), held});
         std::string const at = sampleText(staged, amount);
         BEAST_EXPECTS(
             lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
@@ -665,7 +665,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             true,
             parentCloseTime(env),
             holderOwnsAllShares(env, vaultKeylet, holder),
-            Number{fetchHolderShares(env, vaultKeylet, holder)});
+            fetchHolderShares(env, vaultKeylet, holder));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean withdraw error");
 
@@ -739,7 +739,7 @@ class LeanVaultWithdraw_test : public LeanSuite
             true,
             parentCloseTime(env),
             holderOwnsAllShares(env, vaultKeylet, holder),
-            Number{fetchHolderShares(env, vaultKeylet, holder)});
+            fetchHolderShares(env, vaultKeylet, holder));
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean withdraw failed");
 

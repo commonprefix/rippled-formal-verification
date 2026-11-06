@@ -176,6 +176,21 @@ class LeanVault_test : public LeanSuite
         }
         {
             auto s = baseline();
+            s.assetsMaximum = Number{12'345'678'901'234'567LL};
+            runLawful(s, false, "assetsMaximum not representable (IOU)");
+        }
+        // XRP holds at most 1e17 drops.
+        {
+            auto s = baseline();
+            s.numericType = 0;
+            s.scale = 0;
+            s.assetsMaximum = Number{100'000'000'000'000'001LL};
+            runLawful(s, false, "assetsMaximum not representable (XRP)");
+            s.assetsMaximum = Number{100'000'000'000'000'000LL};
+            runLawful(s, true, "assetsMaximum at the XRP maximum");
+        }
+        {
+            auto s = baseline();
             s.depositBlocked = true;
             runLawful(s, false, "deposits blocked by an owner not allowed to");
         }

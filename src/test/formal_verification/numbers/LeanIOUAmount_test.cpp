@@ -961,9 +961,7 @@ private:
     void
     runTests() override
     {
-        // Lean models only the post-switchover (Number-mediated)
-        // TODO: add back this line when fixes merged
-        // NumberSO const so{true};
+        // IOUAmount normalizes through Number on both sides (C++ retired the switchover in #5962).
         test_fuzz_construction();
         test_fuzz_conversion();
         test_fuzz_comparison();

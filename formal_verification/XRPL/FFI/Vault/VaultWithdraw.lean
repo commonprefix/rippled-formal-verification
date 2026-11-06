@@ -17,7 +17,7 @@ def lean_mk_withdraw_amount (amount : STAmount) (byShares : UInt8) : WithdrawAmo
 @[export lean_vault_withdraw]
 -- `.error .badInput`: the amount would have failed preflight (`sfAmount > 0`).
 def lean_vault_withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : UInt8)
-    (parentCloseTime : UInt32) (holderShares : Option Number) : Except Error (Except TER VaultWithAmounts) :=
+    (parentCloseTime : UInt32) (holderShares : Option STAmount) : Except Error (Except TER VaultWithAmounts) :=
   if h : 0 < amount.amount.toRat then
     (v.withdraw amount (waiveUnrealizedLoss != 0) parentCloseTime h holderShares).run
   else .error .badInput
