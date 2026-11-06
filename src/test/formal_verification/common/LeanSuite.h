@@ -1,8 +1,10 @@
 #pragma once
 
+#include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 
 #include <xrpl/beast/unit_test.h>
+#include <xrpl/protocol/TER.h>
 
 #include <lean/lean.h>
 
@@ -10,6 +12,8 @@
 #include <functional>
 #include <mutex>
 #include <random>
+#include <set>
+#include <string>
 #include <string_view>
 
 extern "C" void
@@ -89,6 +93,30 @@ protected:
     {
         BEAST_EXPECTS(
             r.leanError != LeanError::notLawful, "model rejected the staged state as not lawful");
+    }
+
+    // Runs every case of every row through `check` (which returns the C++ verdict); unless
+    // `crosses` is false, the verdicts of each row's cases must differ, or the row missed its cusp.
+    // `describe(row)` labels the row in the failure message.
+    template <class Row, class Check>
+    void
+    runAroundCusp(std::vector<AroundCusp<Row>> const& rows, Check check, bool crosses = true)
+    {
+        for (auto const& [cusp, cases] : rows)
+        {
+            std::set<TER> seen;
+            for (Row const& c : cases)
+            {
+                seen.insert(check(c));
+            }
+            if (crosses)
+            {
+                BEAST_EXPECTS(
+                    seen.size() > 1,
+                    describe(cusp) + ": the row never crossed its cusp, always " +
+                        (seen.empty() ? std::string{"nothing run"} : transToken(*seen.begin())));
+            }
+        }
     }
 
 public:

@@ -1,6 +1,8 @@
 #include <test/formal_verification/common/LeanSuite.h>
 #include <test/formal_verification/ffi/vault/VaultClawbackFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
+#include <test/formal_verification/tx/vault/ClawbackSweepCases.h>
+#include <test/formal_verification/tx/vault/DepositSweepCases.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -22,15 +24,148 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace xrpl::test::formal_verification {
 
+using namespace clawback_sweep;
+
 class LeanVaultClawback_test : public LeanSuite
 {
+    // The accounts of the shared staging ledger built in runTests: the vault owner, the issuer of
+    // both clawback-enabled assets, and the one holder every staged state is about.
+    jtx::Account const owner_{"owner"};
+    jtx::Account const issuer_{"issuer"};
+    jtx::Account const holder_{"holder"};
+
     static MPTIssue
     shareIssue(jtx::Env& env, Keylet const& vaultKeylet)
     {
         return MPTIssue{env.le(vaultKeylet)->at(sfShareMPTID)};
+    }
+
+    // `n` of the vault's asset, as a Number (not on the vault grid).
+    static STAmount
+    assetAmount(jtx::Env& env, Keylet const& vault, Number const& n)
+    {
+        return STAmount{Asset{env.le(vault)->at(sfAsset)}, n};
+    }
+
+    // The values of one sample, prefixed to every failure message.
+    static std::string
+    sampleText(StagedVault const& s, STAmount const& amount)
+    {
+        return "amount " + amount.getText() + ", available " + s.available.getText() +
+            ", deployed " + s.deployed.getText() + ", loss " + s.loss.getText() + ", sharesTotal " +
+            std::to_string(s.sharesTotal) + ", holder shares " +
+            std::to_string(s.holderShares.value_or(0)) + ": ";
+    }
+
+    void
+    expectSameVault(std::string const& at, Vault const& lean, Vault const& cpp)
+    {
+        auto const same = [&](char const* field, Number const& l, Number const& c) {
+            BEAST_EXPECTS(l == c, at + field + " lean=" + to_string(l) + " cpp=" + to_string(c));
+        };
+        same("assetsTotal", lean.assetsTotal, cpp.assetsTotal);
+        same("assetsAvailable", lean.assetsAvailable, cpp.assetsAvailable);
+        same("sharesTotal", lean.sharesTotal, cpp.sharesTotal);
+        same("lossUnrealized", lean.lossUnrealized, cpp.lossUnrealized);
+    }
+
+    struct StagedClawback
+    {
+        AppliedVaultTx cpp;
+        LeanVaultResult lean;
+    };
+
+    // One issuer clawback from holder_: C++ on a throwaway view and the model on the same staged
+    // vault must agree on the verdict and, when both succeed, on the post-state and the recovery.
+    // The holder owns every share unless `staged` says otherwise.
+    StagedClawback
+    checkClawback(
+        jtx::Env& env,
+        Keylet const& vault,
+        StagedVault staged,
+        STAmount const& amount,
+        bool omitAmount = false)
+    {
+        if (!staged.holderShares)
+            staged.holderShares = staged.sharesTotal;
+        jtx::Vault::ClawbackArgs args{.issuer = issuer_, .id = vault.key, .holder = holder_};
+        if (!omitAmount)
+            args.amount = amount;
+        AppliedVaultTx const cpp =
+            applyStaged(env, vault, holder_, staged, jtx::Vault::clawback(args));
+        std::uint64_t const held = *staged.holderShares;
+        LeanVaultResult const lean = leanVaultClawback(
+            cpp.pre,
+            amount,
+            STAmount{shareIssue(env, vault), held},
+            staged.sharesTotal != 0 && held == staged.sharesTotal);
+        std::string const at = sampleText(staged, amount);
+        BEAST_EXPECTS(
+            lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
+        TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+        BEAST_EXPECTS(
+            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
+        if (cpp.ter == tesSUCCESS && leanTer == tesSUCCESS)
+        {
+            expectSameVault(at, lean.vault, cpp.post);
+            Number const recovered = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
+            BEAST_EXPECTS(
+                Number{lean.assets} == recovered,
+                at + "recovered lean=" + to_string(Number{lean.assets}) +
+                    " cpp=" + to_string(recovered));
+        }
+        return {.cpp = cpp, .lean = lean};
+    }
+
+    void
+    expectStagedClawback(
+        jtx::Env& env,
+        Keylet const& vault,
+        StagedVault const& staged,
+        STAmount const& amount,
+        TER expected,
+        bool omitAmount = false)
+    {
+        TER const ter = checkClawback(env, vault, staged, amount, omitAmount).cpp.ter;
+        BEAST_EXPECTS(
+            ter == expected,
+            std::string("cpp=") + transToken(ter) + " expected " + transToken(expected));
+    }
+
+    // One owner burn of holder_'s shares (`amount` in shares, 0 for all), checked like
+    // checkClawback: the model runs canBurnShares, then burnShares on the holder's balance.
+    TER
+    checkBurn(jtx::Env& env, Keylet const& vault, StagedVault const& staged, std::int64_t amount)
+    {
+        MPTIssue const shares = shareIssue(env, vault);
+        STAmount const requested{shares, amount};
+        STAmount const held{shares, staged.holderShares.value_or(0)};
+        AppliedVaultTx const cpp = applyStaged(
+            env,
+            vault,
+            holder_,
+            staged,
+            jtx::Vault::clawback(
+                {.issuer = owner_, .id = vault.key, .holder = holder_, .amount = requested}));
+        std::string const at = sampleText(staged, requested);
+        LeanAmountResult const can = leanCanBurnShares(cpp.pre, requested, held);
+        BEAST_EXPECTS(can.leanError != LeanError::notLawful, at + "model: staged state not lawful");
+        TER leanTer = can.leanError ? TER{tefEXCEPTION} : can.error.value_or(tesSUCCESS);
+        LeanBurnResult burn;
+        if (leanTer == tesSUCCESS)
+        {
+            burn = leanBurnShares(cpp.pre, held);
+            leanTer = burn.leanError ? TER{tefEXCEPTION} : burn.error.value_or(tesSUCCESS);
+        }
+        BEAST_EXPECTS(
+            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
+        if (cpp.ter == tesSUCCESS && leanTer == tesSUCCESS)
+            expectSameVault(at, burn.vault, cpp.post);
+        return cpp.ter;
     }
 
     void
@@ -41,7 +176,8 @@ class LeanVaultClawback_test : public LeanSuite
         jtx::Account const& holder,
         Asset const& asset,
         STAmount const& amount,
-        TER expected)
+        TER expected,
+        bool omitAmount = false)
     {
         using namespace jtx;
         Vault const state = readVaultState(env, vaultKeylet, asset);
@@ -51,8 +187,12 @@ class LeanVaultClawback_test : public LeanSuite
             leanVaultClawback(state, amount, holderShares, waiveUnrealizedLoss);
         expectLawful(clawback);
 
+        // An omitted amount is a zero asset amount for the model.
         env(jtx::Vault::clawback(
-                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = amount}),
+                {.issuer = issuer,
+                 .id = vaultKeylet.key,
+                 .holder = holder,
+                 .amount = omitAmount ? std::nullopt : std::optional<STAmount>{amount}}),
             jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
         // Read before closing: a close discards state staged on the open ledger.
@@ -94,83 +234,74 @@ class LeanVaultClawback_test : public LeanSuite
                 " cpp=" + to_string(cppLossUnrealized));
     }
 
+    // Claw everything from a holder beside the owner's own shares: the holder is not the sole
+    // shareholder, so the loss is not waived and the holder's balance bounds the recovery.
     void
-    testClawbackAsset(std::int64_t seed, std::int64_t amount, TER expected)
+    testClawbackAllNotSole(jtx::Env& env, Keylet const& vault, bool omitAmount)
     {
-        using namespace jtx;
+        testcase(
+            std::string("clawback all from one of two holders, amount ") +
+            (omitAmount ? "omitted" : "zero"));
+        // The holder deposited 1'000 and the owner 500.
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 1'500),
+            .sharesTotal = 1'500,
+            .holderShares = 1'000,
+            .pseudoHolding = true};
+        expectStagedClawback(env, vault, staged, gridUnits(env, vault, 0), tesSUCCESS, omitAmount);
+    }
+
+    // A coarsened IOU vault whose deployed assets round away against the total: clawing every
+    // share would leave the deployed assets without shares. Covered by testCoarseClawAllSweep.
+    void
+    testClawbackAllWhileDeployed(jtx::Env& env, Keylet const& vault)
+    {
+        testcase("clawback all shares while assets are deployed");
+        StagedVault const staged{
+            .available = assetAmount(env, vault, Number{99'999'999'999'999'990LL}),
+            .deployed = assetAmount(env, vault, Number{4}),
+            .loss = assetAmount(env, vault, Number{4}),
+            .sharesTotal = 1'000,
+            .pseudoHolding = true};
+        expectStagedClawback(
+            env, vault, staged, assetAmount(env, vault, Number{0}), tecHAS_OBLIGATIONS);
+    }
+
+    void
+    testClawbackAsset(
+        jtx::Env& env,
+        Keylet const& vault,
+        std::int64_t seed,
+        std::int64_t amount,
+        TER expected)
+    {
         testcase("clawback MPT asset " + std::to_string(amount) + " from " + std::to_string(seed));
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer | tfMPTCanClawback});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        env(pay(issuer, holder, asset(seed)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(seed)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        compareClawbackAsset(
-            env, vaultKeylet, issuer, holder, asset.raw(), asset(amount), expected);
+        StagedVault const staged{
+            .available = gridUnits(env, vault, seed),
+            .sharesTotal = static_cast<std::uint64_t>(seed),
+            .pseudoHolding = true};
+        expectStagedClawback(env, vault, staged, gridUnits(env, vault, amount), expected);
     }
 
     // MPT vault where the owner donates assets without shares, drifting NAV off 1:1 so the
     // clawback conversions round. The issuer then claws `clawAmount` from the holder.
     void
     testClawbackDrifted(
+        jtx::Env& env,
+        Keylet const& vault,
         std::int64_t deposit,
         std::int64_t donation,
         std::int64_t clawAmount,
         TER expected)
     {
-        using namespace jtx;
         testcase(
             "clawback drifted MPT claw " + std::to_string(clawAmount) + " (deposit=" +
             std::to_string(deposit) + ", donation=" + std::to_string(donation) + ")");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer | tfMPTCanClawback});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        mptt.authorize({.account = owner});
-        env.close();
-        env(pay(issuer, holder, asset(deposit)));
-        env(pay(issuer, owner, asset(donation)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(deposit)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        env(jtx::Vault::deposit(
-                {.depositor = owner,
-                 .id = vaultKeylet.key,
-                 .amount = asset(donation),
-                 .flags = tfVaultDonate}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        compareClawbackAsset(
-            env, vaultKeylet, issuer, holder, asset.raw(), asset(clawAmount), expected);
+        StagedVault const staged{
+            .available = gridUnits(env, vault, deposit + donation),
+            .sharesTotal = static_cast<std::uint64_t>(deposit),
+            .pseudoHolding = true};
+        expectStagedClawback(env, vault, staged, gridUnits(env, vault, clawAmount), expected);
     }
 
     // Force an extreme vault state a real clawback cannot reach, then clawback the asset.
@@ -214,32 +345,28 @@ class LeanVaultClawback_test : public LeanSuite
             env, vaultKeylet, issuer, holder, asset.raw(), asset(clawAmount), expected);
     }
 
-    // canBurnShares preclaim
+    // canBurnShares preclaim, on `staged`. Without a share amount C++ continues past the preclaim
+    // check, so only its tecNO_PERMISSION is compared.
     void
     compareCanBurnShares(
         jtx::Env& env,
-        Keylet const& vaultKeylet,
-        jtx::Account const& owner,
-        jtx::Account const& holder,
-        Asset const& asset,
+        Keylet const& vault,
+        StagedVault const& staged,
         TER expected,
         std::optional<std::int64_t> shareAmount = std::nullopt)
     {
-        using namespace jtx;
-        Vault const state = readVaultState(env, vaultKeylet, asset);
-        STAmount const amount{shareIssue(env, vaultKeylet), shareAmount.value_or(0)};
-        LeanAmountResult const lean =
-            leanCanBurnShares(state, amount, fetchHolderShares(env, vaultKeylet, holder));
+        STAmount const amount{shareIssue(env, vault), shareAmount.value_or(0)};
+        jtx::Vault::ClawbackArgs args{.issuer = owner_, .id = vault.key, .holder = holder_};
+        if (shareAmount)
+            args.amount = amount;
+        AppliedVaultTx const cpp =
+            applyStaged(env, vault, holder_, staged, jtx::Vault::clawback(args));
+        LeanAmountResult const lean = leanCanBurnShares(
+            cpp.pre, amount, STAmount{shareIssue(env, vault), staged.holderShares.value_or(0)});
         expectLawful(lean);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean canBurnShares error");
 
-        jtx::Vault::ClawbackArgs args{.issuer = owner, .id = vaultKeylet.key, .holder = holder};
-        if (shareAmount)
-            args.amount = amount;
-        env(jtx::Vault::clawback(args), jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        env.close();
-
+        TER const cppTer = cpp.ter;
         std::optional<TER> const expectedError =
             expected == tesSUCCESS ? std::nullopt : std::optional<TER>{expected};
         if (shareAmount)
@@ -256,205 +383,123 @@ class LeanVaultClawback_test : public LeanSuite
                 " expected " + (expectedError ? transToken(*expectedError) : "none"));
     }
 
-    // An owner burn with an explicit share amount must name the holder's whole balance.
+    // An owner burn with an explicit share amount must name the holder's whole balance. Covered by
+    // testBurnSweep.
     void
-    testBurnSharesPartialAmount()
+    testBurnSharesPartialAmount(jtx::Env& env, Keylet const& vault)
     {
-        using namespace jtx;
         testcase("canBurnShares with a partial share amount");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(holder, asset(1'000'000)));
-        env.close();
-        env(pay(issuer, holder, asset(1'000)));
-        env.close();
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        // Insolvent: no assets, shares outstanding.
-        std::uint64_t const outstanding =
-            env.le(keylet::mptokenIssuance(env.le(vaultKeylet)->at(sfShareMPTID)))
-                ->at(sfOutstandingAmount);
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, Number{0}, Number{0}, outstanding));
-        compareCanBurnShares(env, vaultKeylet, owner, holder, asset.raw(), tecLIMIT_EXCEEDED, 5);
+        // Insolvent: no assets, the 1'000 deposited (1e9 shares at scale 6) still outstanding.
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 0),
+            .sharesTotal = 1'000'000'000,
+            .holderShares = 1'000'000'000};
+        compareCanBurnShares(env, vault, staged, tecLIMIT_EXCEEDED, 5);
     }
 
     void
     testCanBurnShares(
+        jtx::Env& env,
+        Keylet const& vault,
         Number const& assetsTotal,
         Number const& assetsAvailable,
         std::uint64_t sharesTotal,
         TER expected)
     {
-        using namespace jtx;
         testcase(
             "canBurnShares total=" + to_string(assetsTotal) +
             " avail=" + to_string(assetsAvailable) + " shares=" + std::to_string(sharesTotal));
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsAvailable, sharesTotal));
-        compareCanBurnShares(env, vaultKeylet, owner, holder, asset.raw(), expected);
+        // The holder owns no shares.
+        StagedVault const staged{
+            .available = assetAmount(env, vault, assetsAvailable),
+            .deployed = assetAmount(env, vault, assetsTotal - assetsAvailable),
+            .sharesTotal = sharesTotal,
+            .holderShares = 0};
+        compareCanBurnShares(env, vault, staged, expected);
     }
 
     // Vault.burnShares models the owner burning a holder's shares
     void
-    testBurnShares(std::int64_t deposit, std::uint64_t stagedOutstanding)
+    testBurnShares(
+        jtx::Env& env,
+        Keylet const& vault,
+        std::int64_t deposit,
+        std::uint64_t stagedOutstanding)
     {
-        using namespace jtx;
         testcase(
             "burnShares held=" + std::to_string(deposit) +
             " outstanding=" + std::to_string(stagedOutstanding));
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        env(pay(issuer, holder, asset(deposit)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(deposit)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        // Empty the vault of assets (staged) so the owner may burn the remaining shares.
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, Number{0}, Number{0}, stagedOutstanding));
-
+        // An emptied vault, so the owner may burn the holder's remaining shares.
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 0),
+            .sharesTotal = stagedOutstanding,
+            .holderShares = static_cast<std::uint64_t>(deposit)};
         // The holder's actual share balance is what C++ burns and what the model is given.
-        auto const shareMptId = env.le(vaultKeylet)->at(sfShareMPTID);
-        auto const holderToken = env.le(keylet::mptoken(shareMptId, holder));
-        if (!BEAST_EXPECTS(holderToken, "holder has no vault shares"))
-            return;
-        std::int64_t const held = static_cast<std::int64_t>(holderToken->at(sfMPTAmount));
-        Vault const state = readVaultState(env, vaultKeylet, asset.raw());
+        AppliedVaultTx const cpp = applyStaged(
+            env,
+            vault,
+            holder_,
+            staged,
+            jtx::Vault::clawback({.issuer = owner_, .id = vault.key, .holder = holder_}));
         LeanBurnResult const burn =
-            leanBurnShares(state, STAmount{shareIssue(env, vaultKeylet), held});
+            leanBurnShares(cpp.pre, STAmount{shareIssue(env, vault), deposit});
         expectLawful(burn);
 
-        env(jtx::Vault::clawback({.issuer = owner, .id = vaultKeylet.key, .holder = holder}),
-            jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        auto const newVaultSle = env.le(vaultKeylet);
-        Number const cppAssetsTotal = getAssetsTotal(newVaultSle);
-        Number const cppAssetsAvailable = newVaultSle->at(sfAssetsAvailable);
-        Number const cppSharesTotal{static_cast<std::int64_t>(
-            env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount))};
-        env.close();
-
-        BEAST_EXPECTS(cppTer == tesSUCCESS, std::string("cpp=") + transToken(cppTer));
+        BEAST_EXPECTS(cpp.ter == tesSUCCESS, std::string("cpp=") + transToken(cpp.ter));
         BEAST_EXPECTS(!burn.leanError.has_value(), "lean burnShares error");
         BEAST_EXPECTS(
-            burn.vault.sharesTotal == cppSharesTotal,
+            burn.vault.sharesTotal == cpp.post.sharesTotal,
             "sharesTotal lean=" + to_string(burn.vault.sharesTotal) +
-                " cpp=" + to_string(cppSharesTotal));
-        BEAST_EXPECT(burn.vault.assetsTotal == cppAssetsTotal);
-        BEAST_EXPECT(burn.vault.assetsAvailable == cppAssetsAvailable);
+                " cpp=" + to_string(cpp.post.sharesTotal));
+        BEAST_EXPECT(burn.vault.assetsTotal == cpp.post.assetsTotal);
+        BEAST_EXPECT(burn.vault.assetsAvailable == cpp.post.assetsAvailable);
     }
 
     // FV_M2_3 (regression): on a 5:3 NAV-drifted vault, clawing 2 assets burns 1 share worth
     // 1.667. C++ used to recover round(1.667) = 2; both sides now recover 1 (the payout rounds
     // down).
     void
-    testClawbackOvervaluedShares()
+    testClawbackOvervaluedShares(jtx::Env& env, Keylet const& vault)
     {
-        testClawbackDrifted(3, 2, 2, tesSUCCESS);
+        testClawbackDrifted(env, vault, 3, 2, 2, tesSUCCESS);
     }
 
     // FV_M2_12 (regression): a clawback too small to debit assetsTotal (the debit rounds back to
     // the old value) used to burn shares for nothing; both sides now reject it with
     // tecPRECISION_LOSS. A ~1e10 total is past the open limit (9e9 at scale 6), so it is staged.
     void
-    testClawbackPrecisionLossStaged(Number const& assetsTotal)
+    testClawbackPrecisionLossStaged(jtx::Env& env, Keylet const& vault, Number const& assetsTotal)
     {
-        using namespace jtx;
         testcase("STAGED clawback 1e-6 from total " + to_string(assetsTotal));
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-        env(fset(issuer, asfAllowTrustLineClawback));
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(holder, asset(20'000'000'000)));
-        env.close();
-        env(pay(issuer, holder, asset(11'000'000'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        // A deposit stops at the 9e9 open limit, so seed small and stage the ~1e10 total.
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1'000})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        BEAST_EXPECT(updateVaultState(
-            env, vaultKeylet, assetsTotal, assetsTotal, 10'000'000'000'000'009ULL));
-        compareClawbackAsset(
-            env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{1, -6}), tecPRECISION_LOSS);
+        // The holder deposited 1'000 (1e9 shares at scale 6).
+        StagedVault const staged{
+            .available = assetAmount(env, vault, assetsTotal),
+            .sharesTotal = 10'000'000'000'000'009ULL,
+            .holderShares = 1'000'000'000,
+            .pseudoHolding = true};
+        expectStagedClawback(
+            env, vault, staged, assetAmount(env, vault, Number{1, -6}), tecPRECISION_LOSS);
     }
 
     // Finding (FV_M2_12, regression): a clawback too small to change the stored assetsTotal
     // used to burn a share (c++ -> tecINVARIANT_FAILED). Both sides now return tecPRECISION_LOSS.
     void
-    testClawbackDustDebit(Number const& assetsTotal, std::uint64_t sharesTotal)
+    testClawbackDustDebit(
+        jtx::Env& env,
+        Keylet const& vault,
+        Number const& assetsTotal,
+        std::uint64_t sharesTotal)
     {
-        using namespace jtx;
         testcase("clawback one dust share (total " + to_string(assetsTotal) + ")");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-        env(fset(issuer, asfAllowTrustLineClawback));
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(holder, asset(Number{1, 15})));
-        env.close();
-        env(pay(issuer, holder, asset(Number{1, 12})));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(Number{1, 6})}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
-        // Stage so one share is worth less than the assetsTotal precision step
-        BEAST_EXPECT(updateVaultState(env, vaultKeylet, assetsTotal, assetsTotal, sharesTotal));
-        compareClawbackAsset(
-            env, vaultKeylet, issuer, holder, asset.raw(), asset(Number{2, -6}), tecPRECISION_LOSS);
+        // One share is worth less than the assets total precision step; the holder deposited 1
+        // (1e6 shares at scale 6).
+        StagedVault const staged{
+            .available = assetAmount(env, vault, assetsTotal),
+            .sharesTotal = sharesTotal,
+            .holderShares = 1'000'000,
+            .pseudoHolding = true};
+        expectStagedClawback(
+            env, vault, staged, assetAmount(env, vault, Number{2, -6}), tecPRECISION_LOSS);
     }
 
     // Finding (FV_M2_17/18, c++): a final clawback (amount 0) leaves a nonzero sfAssetsTotal with 0
@@ -536,105 +581,37 @@ class LeanVaultClawback_test : public LeanSuite
     // the holder's full balance, but this branch does not.
     // C++-only: the model treats amount 0 literally (tecPRECISION_LOSS), so there is no Lean bug.
     void
-    testClawbackZeroAmountFullBalance()
+    testClawbackZeroAmountFullBalance(jtx::Env& env, Keylet const& vault)
     {
-        using namespace jtx;
         testcase("issuer clawback with amount 0 claws the full balance");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-
-        MPTTester mptt{env, issuer, kMptInitNoFund};
-        mptt.create({.flags = tfMPTCanTransfer | tfMPTCanClawback});
-        PrettyAsset const asset = mptt.issuanceID();
-        mptt.authorize({.account = holder});
-        env.close();
-        env(pay(issuer, holder, asset(1'000)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-        env(jtx::Vault::deposit(
-                {.depositor = holder, .id = vaultKeylet.key, .amount = asset(1'000)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 1'000), .sharesTotal = 1'000, .pseudoHolding = true};
         // Amount 0 should mean "claw the holder's entire balance"
-        env(jtx::Vault::clawback(
-                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = asset(0)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        auto const shareMptId = env.le(vaultKeylet)->at(sfShareMPTID);
-        BEAST_EXPECT(env.le(keylet::mptokenIssuance(shareMptId))->at(sfOutstandingAmount) == 0);
+        StagedClawback const r = checkClawback(env, vault, staged, gridUnits(env, vault, 0));
+        BEAST_EXPECTS(r.cpp.ter == tesSUCCESS, std::string("cpp=") + transToken(r.cpp.ter));
+        BEAST_EXPECT(r.cpp.post.sharesTotal == Number{0});
     }
 
     // FV_M2_11 (regression): an issuer clawback used to recover more than requested because the
     // share count rounded up (on a 7-asset / 5-share vault, clawing 4 burned 3 shares worth 4.2).
     // The share count now truncates on both sides, so the recovery does not exceed the request.
     void
-    testClawbackOverRecover()
+    testClawbackOverRecover(jtx::Env& env, Keylet const& vault)
     {
-        using namespace jtx;
         testcase("issuer clawback recovers more than requested");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        env.fund(XRP(1'000'000), owner, issuer, holder);
-        env.close();
-        env(fset(issuer, asfAllowTrustLineClawback));
-        env.close();
-
-        PrettyAsset const asset = issuer["USD"];
-        env(trust(holder, asset(1'000)));
-        env(trust(owner, asset(1'000)));
-        env.close();
-        env(pay(issuer, holder, asset(5)));
-        env(pay(issuer, owner, asset(2)));
-        env.close();
-
-        // Scale 0: 1 share == 1 asset. Holder deposits 5 (5 shares), owner donates 2, so the vault
-        // holds 7 assets against 5 shares.
-        jtx::Vault vault{env};
-        auto [createTx, vaultKeylet] = vault.create({.owner = owner, .asset = asset.raw()});
-        createTx[sfScale] = 0;
-        env(createTx);
-        env.close();
-        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = asset(5)}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        env(jtx::Vault::deposit(
-                {.depositor = owner,
-                 .id = vaultKeylet.key,
-                 .amount = asset(2),
-                 .flags = tfVaultDonate}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-
+        // Scale 0: the holder deposited 5 (5 shares) and the owner donated 2, so the vault holds 7
+        // assets against 5 shares.
+        StagedVault const staged{
+            .available = gridUnits(env, vault, 7), .sharesTotal = 5, .pseudoHolding = true};
         // Claw 4: both burn 3 shares (5*4/7 = 2.857 rounds up) and recover 7*3/5 = 4.2 > 4.
-        Vault const before = readVaultState(env, vaultKeylet, asset.raw());
-        STAmount const request = asset(4);
-        STAmount const holderShares = fetchHolderShares(env, vaultKeylet, holder);
-        LeanVaultResult const lean = leanVaultClawback(
-            before, request, holderShares, holderOwnsAllShares(env, vaultKeylet, holder));
-        expectLawful(lean);
-        BEAST_EXPECTS(!lean.leanError.has_value(), "lean clawback error");
-
-        env(jtx::Vault::clawback(
-                {.issuer = issuer, .id = vaultKeylet.key, .holder = holder, .amount = request}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        Vault const after = readVaultState(env, vaultKeylet, asset.raw());
-
+        StagedClawback const r = checkClawback(env, vault, staged, gridUnits(env, vault, 4));
+        BEAST_EXPECTS(r.cpp.ter == tesSUCCESS, std::string("cpp=") + transToken(r.cpp.ter));
+        BEAST_EXPECTS(!r.lean.leanError.has_value(), "lean clawback error");
         BEAST_EXPECTS(
-            before.assetsTotal - after.assetsTotal <= Number{4},
+            r.cpp.pre.assetsTotal - r.cpp.post.assetsTotal <= Number{4},
             "C++ clawback recovered more than requested");
         BEAST_EXPECTS(
-            static_cast<Number>(lean.assets) <= Number{4},
+            static_cast<Number>(r.lean.assets) <= Number{4},
             "model clawback recovered more than requested");
     }
 
@@ -739,47 +716,268 @@ class LeanVaultClawback_test : public LeanSuite
                 to_string(Number{recoveryRounded}));
     }
 
+    // ---- Sweeps -------------------------------------------------------------------------------
+
+    // The vaults a sweep runs on; holder_ holds their shares.
+    using SweepVaults = std::vector<Keylet>;
+
+    // A sole holder of price row `c` (assets total, shares total) claws back its amount.
+    TER
+    checkPriceCase(jtx::Env& env, Keylet const& vault, PriceCusp const& c)
+    {
+        StagedVault const staged{
+            .available = gridUnits(env, vault, c.total),
+            .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
+            .pseudoHolding = true};
+        return checkClawback(env, vault, staged, gridUnits(env, vault, c.amount)).cpp.ter;
+    }
+
+    void
+    testHolderValueSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepHolderValue(env, vault);
+        }
+    }
+
+    // Holder value: a clawback from one of several holders burns trunc(shares total * amount /
+    // assets total) shares; C++ refuses (tecINSUFFICIENT_FUNDS) once that exceeds the holder's
+    // shares. At price 1 the cusp is amount == the holder's shares.
+    void
+    sweepHolderValue(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " holder value-Sweep").c_str());
+        runAroundCusp(kHolderValueCases, [&](HolderValueCusp const& c) {
+            StagedVault const staged{
+                .available = gridUnits(env, vault, c.sharesTotal),
+                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
+                .holderShares = static_cast<std::uint64_t>(c.holderShares),
+                .pseudoHolding = true};
+            return checkClawback(env, vault, staged, gridUnits(env, vault, c.amount)).cpp.ter;
+        });
+    }
+
+    void
+    testBurnSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepBurn(env, vault);
+        }
+    }
+
+    // Owner burn: the owner may burn a holder's shares only in an insolvent vault (shares, no
+    // assets; else tecNO_PERMISSION), only all of them (amount equal to the holder's shares or 0;
+    // else tecLIMIT_EXCEEDED), and not when the holder has none (tecPRECISION_LOSS).
+    void
+    sweepBurn(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " owner burn-Sweep").c_str());
+        auto const check = [&](BurnCusp const& c) {
+            StagedVault const staged{
+                .available = gridUnits(env, vault, c.available),
+                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
+                .holderShares = static_cast<std::uint64_t>(c.holderShares),
+                .pseudoHolding = true};
+            return checkBurn(env, vault, staged, c.amount);
+        };
+        runAroundCusp(kBurnCases, check);
+        runAroundCusp(kBurnNoSharesCases, check);
+    }
+
+    void
+    testZeroSharesSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepZeroShares(env, vault);
+        }
+    }
+
+    // Zero shares: a clawback burning trunc(shares total * amount / assets total) = 0 shares is
+    // refused (tecPRECISION_LOSS). Each row of kZeroSharesCases burns exactly one share.
+    void
+    sweepZeroShares(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " zero shares-Sweep").c_str());
+        runAroundCusp(
+            kZeroSharesCases, [&](PriceCusp const& c) { return checkPriceCase(env, vault, c); });
+    }
+
+    void
+    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepClampToZero(env, vault);
+        }
+    }
+
+    // Clamp to zero: a recovery that floors to zero on the vault grid is refused
+    // (tecPRECISION_LOSS). Each row of kClampToZeroCases recovers exactly one unit; one share
+    // more or less recovers less than a unit.
+    void
+    sweepClampToZero(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
+        runAroundCusp(
+            kClampToZeroCases, [&](PriceCusp const& c) { return checkPriceCase(env, vault, c); });
+    }
+
+    void
+    testClampToAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepClampToAvailable(env, vault);
+        }
+    }
+
+    // Clamp to available: with assets deployed, a sole holder's clawback above the available
+    // assets is reduced to them and the shares re-derived. Both sides succeed on every case; the
+    // post-states and recoveries are compared.
+    void
+    sweepClampToAvailable(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " clamp to available-Sweep").c_str());
+        runAroundCusp(
+            kAvailableCases,
+            [&](AvailableCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.available),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed),
+                    .pseudoHolding = true};
+                return checkClawback(env, vault, staged, gridUnits(env, vault, c.amount)).cpp.ter;
+            },
+            false);
+    }
+
+    void
+    testCoarseClawAllSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepCoarseClawAll(env, vault);
+        }
+    }
+
+    // Coarse claw-all: a sole holder's claw-all on coarse available assets converts available +
+    // deployed to 16 digits. When the deployed assets round away (below half a mantissa ULP, or
+    // the tie on an even mantissa) every share would be burned with assets still deployed:
+    // tecHAS_OBLIGATIONS. Otherwise the recovery clamps to the available assets and succeeds.
+    void
+    sweepCoarseClawAll(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " coarse claw-all-Sweep").c_str());
+        Asset const asset = env.le(vault)->at(sfAsset);
+        int const base = -static_cast<int>(env.le(vault)->at(sfScale));
+        runAroundCusp(kCoarseClawAllCases, [&](CoarseClawAllCusp const& c) {
+            StagedVault const staged{
+                .available =
+                    STAmount{asset, static_cast<std::uint64_t>(c.mantissa), base + c.exponent},
+                .deployed = gridUnits(env, vault, c.deployed),
+                .sharesTotal = kCoarseShares,
+                .pseudoHolding = true};
+            return checkClawback(env, vault, staged, gridUnits(env, vault, 0)).cpp.ter;
+        });
+    }
+
+    void
+    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (Keylet const& vault : vaults)
+        {
+            sweepShareOverflow(env, vault);
+        }
+    }
+
+    // Share overflow: a clawback whose share count trunc(shares total * amount / assets total)
+    // reaches 2^63 is tecPATH_DRY. Each row is the largest share count that still fits.
+    void
+    sweepShareOverflow(jtx::Env& env, Keylet const& vault)
+    {
+        beginCase(("clawback " + vaultName(env, vault) + " share overflow-Sweep").c_str());
+        runAroundCusp(clawback_sweep::kShareOverflowCases, [&](PriceCusp const& c) {
+            return checkPriceCase(env, vault, c);
+        });
+    }
+
     void
     runTests() override
     {
         using namespace jtx;
 
+        // One ledger holding a vault per clawback-enabled asset; every staged clawback (old tests
+        // and sweeps) runs on a throwaway view of it. holder_ is not the issuer.
+        Env env{*this};
+        env.fund(XRP(1'000'000), owner_, issuer_, holder_);
+        env.close();
+        env(fset(issuer_, asfAllowTrustLineClawback));
+        env.close();
+        PrettyAsset const iou = issuer_["USD"];
+        env(trust(holder_, iou(1'000'000)));
+        env(pay(issuer_, holder_, iou(1'000)));
+        MPTTester mptt{env, issuer_, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer | tfMPTCanClawback});
+        mptt.authorize({.account = holder_});
+        PrettyAsset const mpt = mptt.issuanceID();
+        // Outstanding MPT covers any staged holding the issuer claws back.
+        env(pay(issuer_, holder_, mpt(9'200'000'000'000'000)));
+        env.close();
+
+        Keylet const mptVault = createSweepVault(env, owner_, holder_, mpt);
+        // IOU at the smallest, the default and the largest vault scale.
+        Keylet const iouScale0Vault = createSweepVault(env, owner_, holder_, iou, 0);
+        Keylet const iouScale6Vault = createSweepVault(env, owner_, holder_, iou, 6);
+        Keylet const iouScale10Vault = createSweepVault(env, owner_, holder_, iou, 10);
+        SweepVaults const all{mptVault, iouScale0Vault, iouScale6Vault, iouScale10Vault};
+        SweepVaults const ious{iouScale0Vault, iouScale6Vault, iouScale10Vault};
+
         Number const iouMax{9'999'999'999'999'999LL, 80};
 
         // Asset clawback by the issuer: partial, full, and over-seed (clamped to available).
-        testClawbackAsset(1'000, 400, tesSUCCESS);
-        testClawbackAsset(1'000, 1'000, tesSUCCESS);
-        testClawbackAsset(1'000, 1'001, tesSUCCESS);
+        testClawbackAsset(env, mptVault, 1'000, 400, tesSUCCESS);
+        testClawbackAsset(env, mptVault, 1'000, 1'000, tesSUCCESS);
+        testClawbackAsset(
+            env, mptVault, 1'000, 1'001, tesSUCCESS);  // covered by testClampToAvailableSweep
 
         // canBurnShares over VALID (assetsTotal, assetsAvailable, sharesTotal) states
-        testCanBurnShares(Number{0}, Number{0}, 0, tecNO_PERMISSION);
-        testCanBurnShares(Number{0}, Number{0}, 1'000, tesSUCCESS);
-        testCanBurnShares(Number{1'000}, Number{0}, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(Number{1'000}, Number{1'000}, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(Number{0}, Number{0}, kMaxMpTokenAmount, tesSUCCESS);
+        // Covered by testBurnSweep.
+        testCanBurnShares(env, iouScale6Vault, Number{0}, Number{0}, 0, tecNO_PERMISSION);
+        testCanBurnShares(env, iouScale6Vault, Number{0}, Number{0}, 1'000, tesSUCCESS);
+        testCanBurnShares(env, iouScale6Vault, Number{1'000}, Number{0}, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(
+            env, iouScale6Vault, Number{1'000}, Number{1'000}, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(env, iouScale6Vault, Number{0}, Number{0}, kMaxMpTokenAmount, tesSUCCESS);
         // Per-field extremes: huge assets deny
-        testCanBurnShares(iouMax, iouMax, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(iouMax, Number{0}, 1'000, tecNO_PERMISSION);
-        testBurnSharesPartialAmount();
+        testCanBurnShares(env, iouScale6Vault, iouMax, iouMax, 1'000, tecNO_PERMISSION);
+        testCanBurnShares(env, iouScale6Vault, iouMax, Number{0}, 1'000, tecNO_PERMISSION);
+        testBurnSharesPartialAmount(env, iouScale6Vault);
 
-        // Vault.burnShares
-        testBurnShares(1'000'000'000, 1'000'000'000);
-        testBurnShares(1'000'000'000, 2'000'000'000);
-        testBurnShares(kOpenLimitUnits, kOpenLimitUnits);
-        testBurnShares(1, kMaxMpTokenAmount);
-        testBurnShares(1, 1);
+        // Vault.burnShares. Covered by testBurnSweep.
+        testBurnShares(env, mptVault, 1'000'000'000, 1'000'000'000);
+        testBurnShares(env, mptVault, 1'000'000'000, 2'000'000'000);
+        testBurnShares(env, mptVault, kOpenLimitUnits, kOpenLimitUnits);
+        testBurnShares(env, mptVault, 1, kMaxMpTokenAmount);
+        testBurnShares(env, mptVault, 1, 1);
 
-        testClawbackAsset(kOpenLimitUnits, kOpenLimitUnits, tesSUCCESS);
-        testClawbackAsset(kOpenLimitUnits, kOpenLimitUnits / 2, tesSUCCESS);
-        testClawbackAsset(kOpenLimitUnits, 1, tesSUCCESS);
-        testClawbackAsset(1, 1, tesSUCCESS);
+        testClawbackAsset(env, mptVault, kOpenLimitUnits, kOpenLimitUnits, tesSUCCESS);
+        testClawbackAsset(env, mptVault, kOpenLimitUnits, kOpenLimitUnits / 2, tesSUCCESS);
+        testClawbackAsset(env, mptVault, kOpenLimitUnits, 1, tesSUCCESS);
+        testClawbackAsset(env, mptVault, 1, 1, tesSUCCESS);
 
-        testClawbackAsset(1'000, 0, tesSUCCESS);
+        testClawbackAsset(env, mptVault, 1'000, 0, tesSUCCESS);
+        testClawbackAllNotSole(env, mptVault, false);
+        testClawbackAllNotSole(env, mptVault, true);
+        testClawbackAllWhileDeployed(env, iouScale6Vault);
 
         // NAV-drifted vault (owner donation)
-        testClawbackDrifted(3, 2, 3, tesSUCCESS);
-        testClawbackDrifted(7, 5, 4, tesSUCCESS);
+        testClawbackDrifted(env, mptVault, 3, 2, 3, tesSUCCESS);
+        testClawbackDrifted(env, mptVault, 7, 5, 4, tesSUCCESS);
 
+        // Own ledgers: these stage values an MPT amount cannot hold.
         testUpdatedStateClawback(iouMax, iouMax, 1'000, 1, tecPRECISION_LOSS);
         testUpdatedStateClawback(iouMax, iouMax, kMaxMpTokenAmount, 1, tecPRECISION_LOSS);
         testUpdatedStateClawback(Number{1'000}, Number{0}, 1'000, 400, tecPRECISION_LOSS);
@@ -789,22 +987,35 @@ class LeanVaultClawback_test : public LeanSuite
         // testClawbackAllLeavesAssets(Number{3'141'592'653'589'793'238LL, -18}, Number{0}, 7'000'025, tecPRECISION_LOSS);  // FV_M2_18 (>16 digit dust)
 
         // Properties both sides now satisfy, kept as regression tests.
-        testClawbackOvervaluedShares();  // FV_M2_3: a one-share recovery rounds down
+        testClawbackOvervaluedShares(env, mptVault);  // FV_M2_3: a one-share recovery rounds down
         testClawbackDilution();          // FV_M2_8: the share price does not fall
-        testClawbackOverRecover();       // FV_M2_11: the recovery does not exceed the request
+        testClawbackOverRecover(env, iouScale0Vault);  // FV_M2_11: the recovery does not exceed the request
         testClawbackAppliedDelta();      // total moves by exactly the recovery
 
         // Fixed discrepancies, kept as regression tests.
         // FV_M2_17: a sole holder's shares are now priced at full value, so the recovery clamps to
         // sfAssetsAvailable instead of burning every share against a smaller payout.
         testClawbackAllLeavesAssets(Number{1'000'000}, Number{1'000}, 1'000'000, tesSUCCESS);
-        testClawbackZeroAmountFullBalance();  // FV_M2_10: amount 0 claws the full balance
-        testClawbackDustDebit(Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
-        testClawbackDustDebit(Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
+        testClawbackZeroAmountFullBalance(env, mptVault);  // FV_M2_10: amount 0 claws the full balance
+        testClawbackDustDebit(env, iouScale6Vault, Number{2, 12}, 1'000'000'000'000'000'000ULL);   // FV_M2_12 (2e12)
+        testClawbackDustDebit(env, iouScale6Vault, Number{15, 12}, 9'200'000'000'000'000'000ULL);  // FV_M2_12 (1.5e13)
         // FV_M2_12: a 1e-6 clawback below the 1e-5 ULP of a staged ~1e10 total.
-        testClawbackPrecisionLossStaged(Number{1'000'000'000'000'001LL, -5});
-        testClawbackPrecisionLossStaged(Number{1'000'000'000'000'000LL, -5});
+        testClawbackPrecisionLossStaged(env, iouScale6Vault, Number{1'000'000'000'000'001LL, -5});
+        testClawbackPrecisionLossStaged(env, iouScale6Vault, Number{1'000'000'000'000'000LL, -5});
         // clang-format on
+
+        testBurnSweep(env, all);
+        testZeroSharesSweep(env, all);
+        testClampToZeroSweep(env, ious);
+        testClampToAvailableSweep(env, all);
+        testCoarseClawAllSweep(env, ious);
+        testShareOverflowSweep(env, all);
+
+        // Open discrepancy, disabled until the model is fixed: clawing back more than a non-sole
+        // holder's shares are worth burns more shares than it holds. C++ refuses
+        // (tecINSUFFICIENT_FUNDS at the share transfer), the model succeeds (it bounds the shares
+        // by the holder's balance only for amount 0). Every case past the cusp, on every vault.
+        // testHolderValueSweep(env, all);
     }
 };
 

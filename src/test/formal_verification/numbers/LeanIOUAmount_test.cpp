@@ -4,6 +4,7 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -52,6 +53,7 @@ lean_iou_mul_ratio(lean_object*, uint32_t, uint32_t, uint8_t, uint8_t);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 class LeanIOUAmount_test : public LeanSuite
 {
@@ -882,6 +884,79 @@ public:
         // the same normalize(raw mantissa, exp).
     }
 
+    // ---- Cusp sweeps ----
+
+    void
+    testRangeSweep()
+    {
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        for (auto const mode : kRoundingModes)
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            sweepRange(mode);
+            sweepSumOverflow(mode);
+            sweepDifferenceUnderflow(mode);
+            sweepMulRatioOverflow(mode, false);
+            sweepMulRatioOverflow(mode, true);
+        }
+    }
+
+    // Normalizing (mantissa, exponent): past 16 digits at exponent 80 overflows, below 16 digits
+    // at exponent -96 is zero.
+    void
+    sweepRange(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.range " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kIouRangeCases, [&](Scaled const& c) {
+            checkOfMantissaExp(c.mantissa, c.exponent, mode);
+            return cppVerdict(
+                [&] { return IOUAmount{c.mantissa, static_cast<int>(c.exponent)}.signum() == 0; });
+        });
+    }
+
+    // Add at exponent 80: a mantissa sum up to 16 digits fits, one more overflows.
+    void
+    sweepSumOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.add overflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kIouSumOverflowCases, [&](MantissaPair const& c) {
+            auto const a = makeIOUAmountPair(c.a, c.exponent);
+            auto const b = makeIOUAmountPair(c.b, c.exponent);
+            checkAdd(a, b, mode);
+            return cppVerdict([&] { return (a.cppIou + b.cppIou).signum() == 0; });
+        });
+    }
+
+    // Sub at exponent -96: a difference down to the smallest mantissa is a value, below it zero.
+    void
+    sweepDifferenceUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.sub underflow " + modeName(mode) + "-Sweep").c_str());
+        runAroundCusp(kIouDifferenceUnderflowCases, [&](MantissaPair const& c) {
+            auto const a = makeIOUAmountPair(c.a, c.exponent);
+            auto const b = makeIOUAmountPair(c.b, c.exponent);
+            checkSub(a, b, mode);
+            return cppVerdict([&] { return (a.cppIou - b.cppIou).signum() == 0; });
+        });
+    }
+
+    // mulRatio at exponent 80: value * num / den up to the largest mantissa fits, above it
+    // overflows.
+    void
+    sweepMulRatioOverflow(Number::RoundingMode mode, bool roundUp)
+    {
+        beginCase(("LeanIOUAmount.mulRatio overflow " + modeName(mode) +
+                   (roundUp ? " up" : " down") + "-Sweep")
+                      .c_str());
+        runAroundCusp(kIouMulRatioCases, [&](Ratio const& c) {
+            auto const v = makeIOUAmountPair(c.value, kIouMaxExponent);
+            auto const num = static_cast<std::uint32_t>(c.num);
+            auto const den = static_cast<std::uint32_t>(c.den);
+            checkMulRatio(v, num, den, roundUp, mode);
+            return cppVerdict([&] { return mulRatio(v.cppIou, num, den, roundUp).signum() == 0; });
+        });
+    }
+
 private:
     void
     runTests() override
@@ -898,6 +973,7 @@ private:
         test_known_comparison();
         test_known_arithmetic();
         test_extreme_values();
+        testRangeSweep();
     }
 };
 

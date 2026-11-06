@@ -5,11 +5,14 @@
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
+#include <test/formal_verification/tx/vault/ClosedEndedSweepCases.h>
+#include <test/formal_verification/tx/vault/DepositSweepCases.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
 #include <test/jtx/flags.h>
+#include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
 #include <test/jtx/ter.h>
 #include <test/jtx/trust.h>
@@ -30,6 +33,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace xrpl::test::formal_verification {
 
@@ -39,34 +43,23 @@ namespace xrpl::test::formal_verification {
 // have no phase logic; one closed-ended case each checks that both sides agree on that.
 class LeanVaultClosedEnded_test : public LeanSuite
 {
-    // The parent close time of the transaction's ledger relative to the schedule. Subscription
-    // ends strictly after the subscription date, Redemption starts at the redemption date.
-    enum class Phase : std::uint8_t {
-        None,
-        Subscription,
-        SubscriptionDate,  // exactly at the subscription date: still Subscription
-        Investment,
-        RedemptionDate,  // exactly at the redemption date: already Redemption
-        Redemption
-    };
+    // `onDate` puts the parent close time exactly on the date bounding the phase: the subscription
+    // date is the last instant of Subscription, the redemption date the first of Redemption.
+    static constexpr bool kOnDate = true;
 
     static std::string
-    phaseName(Phase phase)
+    phaseName(VaultPhase phase, bool onDate)
     {
         switch (phase)
         {
-            case Phase::None:
+            case VaultPhase::NoPhase:
                 return "open-ended";
-            case Phase::Subscription:
-                return "subscription";
-            case Phase::SubscriptionDate:
-                return "at the subscription date";
-            case Phase::Investment:
+            case VaultPhase::Subscription:
+                return onDate ? "at the subscription date" : "subscription";
+            case VaultPhase::Investment:
                 return "investment";
-            case Phase::RedemptionDate:
-                return "at the redemption date";
-            case Phase::Redemption:
-                return "redemption";
+            case VaultPhase::Redemption:
+                return onDate ? "at the redemption date" : "redemption";
         }
         return "?";
     }
@@ -79,7 +72,7 @@ class LeanVaultClosedEnded_test : public LeanSuite
         return "fee " + std::to_string(*earlyExitFeeRate) + " tenth-bips";
     }
 
-    // Long enough for the creation and seed-deposit ledgers (5 s each) to stay in Subscription.
+    // Long enough for the creation and initial-deposit ledgers (5 s each) to stay in Subscription.
     static constexpr auto kSubscriptionOffset = std::chrono::seconds{600};
     static constexpr auto kInvestmentWindow = std::chrono::seconds{1'000'000};
 
@@ -104,17 +97,18 @@ class LeanVaultClosedEnded_test : public LeanSuite
         BEAST_EXPECTS(closeExactlyAt(env, at), "the parent close time missed the schedule date");
     }
 
-    // Fund the accounts, create the vault (closed-ended unless `phase` is None, with the given
-    // early-exit fee rate), let the holder seed it during Subscription, then advance into `phase`.
-    // The schedule dates are multiples of the close-time resolution, so the boundary phases can be
-    // reached exactly.
+    // Fund the accounts, create the vault (closed-ended unless `phase` is NoPhase, with the given
+    // early-exit fee rate), let the holder make the initial deposit during Subscription, then
+    // advance into `phase`. The schedule dates are multiples of the close-time resolution, so the
+    // dates can be reached exactly.
     Fixture
     setUp(
         jtx::Env& env,
-        Phase phase,
+        VaultPhase phase,
         std::optional<std::uint32_t> earlyExitFeeRate,
-        Number const& seed,
-        bool xrp = false)
+        Number const& initialDeposit,
+        bool xrp = false,
+        bool onDate = false)
     {
         using namespace jtx;
         using namespace std::chrono_literals;
@@ -145,7 +139,7 @@ class LeanVaultClosedEnded_test : public LeanSuite
 
         jtx::Vault vault{env};
         jtx::Vault::CreateArgs createArgs{.owner = owner, .asset = asset.raw()};
-        if (phase != Phase::None)
+        if (phase != VaultPhase::NoPhase)
         {
             createArgs.vaultKind = std::to_underlying(VaultKind::ClosedEnded);
             createArgs.subscriptionDate = timeCount(subscriptionDate);
@@ -156,31 +150,35 @@ class LeanVaultClosedEnded_test : public LeanSuite
         env(createTx);
         env.close();
 
-        if (seed != Number{0})
+        if (initialDeposit != Number{0})
         {
             env(jtx::Vault::deposit(
-                    {.depositor = holder, .id = vaultKeylet.key, .amount = asset(seed)}),
+                    {.depositor = holder, .id = vaultKeylet.key, .amount = asset(initialDeposit)}),
                 jtx::Ter(tesSUCCESS));
             env.close();
         }
 
         switch (phase)
         {
-            case Phase::SubscriptionDate:
-                closeOn(env, subscriptionDate);
+            case VaultPhase::Subscription:
+                if (onDate)
+                    closeOn(env, subscriptionDate);
                 break;
-            case Phase::Investment:
+            case VaultPhase::Investment:
                 env.close(subscriptionDate + 1s);
                 break;
-            case Phase::RedemptionDate:
-                closeOn(env, redemptionDate);
-                break;
-            case Phase::Redemption:
-                env.close(redemptionDate + 1s);
+            case VaultPhase::Redemption:
+                if (onDate)
+                    closeOn(env, redemptionDate);
+                else
+                    env.close(redemptionDate + 1s);
                 break;
             default:
                 break;
         }
+        BEAST_EXPECTS(
+            getVaultPhase(*env.current(), env.le(vaultKeylet)) == phase,
+            "the vault is not in the " + phaseName(phase, onDate) + " phase");
         return {owner, issuer, holder, asset, vaultKeylet};
     }
 
@@ -196,11 +194,10 @@ class LeanVaultClosedEnded_test : public LeanSuite
     }
 
     void
-    expectSameVault(Vault const& lean, Vault const& cpp)
+    expectSameVault(Vault const& lean, Vault const& cpp, std::string const& at = "")
     {
         auto const check = [&](char const* name, Number const& l, Number const& c) {
-            BEAST_EXPECTS(
-                l == c, std::string(name) + " lean=" + to_string(l) + " cpp=" + to_string(c));
+            BEAST_EXPECTS(l == c, at + name + " lean=" + to_string(l) + " cpp=" + to_string(c));
         };
         check("assetsTotal", lean.assetsTotal, cpp.assetsTotal);
         check("assetsAvailable", lean.assetsAvailable, cpp.assetsAvailable);
@@ -211,273 +208,364 @@ class LeanVaultClosedEnded_test : public LeanSuite
         check("yieldUnrealized", lean.yieldUnrealized, cpp.yieldUnrealized);
     }
 
-    void
-    compareDeposit(
-        jtx::Env& env,
-        Fixture const& f,
-        jtx::Account const& depositor,
-        STAmount const& amount,
-        bool isDonation,
-        TER expected)
+    // ---- Staged samples ------------------------------------------------------------------------
+
+    // The vaults a sweep runs on, each with the account that deposits into and withdraws from it.
+    using SweepVaults = std::vector<std::pair<Keylet, jtx::Account>>;
+
+    // 1000 IOU at scale 6, or 1000 XRP in drops: the old tests' initial deposit, in grid units and
+    // in shares (price 1).
+    static constexpr std::int64_t kInitialDepositUnits = 1'000'000'000;
+
+    // The schedule dates that put the parent close time P in `phase` (on the bounding date when
+    // `onDate`), the staged counterpart of setUp's ledger closes.
+    static void
+    stagePhase(
+        StagedVault& s,
+        std::uint32_t p,
+        VaultPhase phase,
+        std::optional<std::uint32_t> earlyExitFeeRate,
+        bool onDate = false)
     {
-        using namespace jtx;
-        Vault const before = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        LeanVaultResult const lean =
-            leanVaultDeposit(before, amount, isDonation, parentCloseTime(env));
-        expectLawful(lean);
-
-        jtx::Vault::DepositArgs args{
-            .depositor = depositor, .id = f.vaultKeylet.key, .amount = amount};
-        if (isDonation)
-            args.flags = tfVaultDonate;
-        env(jtx::Vault::deposit(args), jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        // Read before closing: a close discards state staged on the open ledger.
-        Vault const cpp = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        env.close();
-
-        BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
-        expectTer(lean.error.value_or(tesSUCCESS), cppTer, expected);
-        if (cppTer == tesSUCCESS && !lean.leanError && !lean.error)
-            expectSameVault(lean.vault, cpp);
+        auto const offset = static_cast<std::uint32_t>(kSubscriptionOffset.count());
+        auto const window = static_cast<std::uint32_t>(kInvestmentWindow.count());
+        switch (phase)
+        {
+            case VaultPhase::NoPhase:
+                return;
+            case VaultPhase::Subscription:
+                s.subscriptionDate = onDate ? p : p + offset;
+                break;
+            case VaultPhase::Investment:
+                s.subscriptionDate = p - 1;
+                break;
+            case VaultPhase::Redemption:
+                s.subscriptionDate = (onDate ? p : p - 1) - window;
+                break;
+        }
+        s.redemptionDate = *s.subscriptionDate + window;
+        s.earlyExitFeeRate = earlyExitFeeRate;
     }
 
-    // The holder withdraws `amount` (assets or shares). On success the vault states must match and
-    // the model payout must be what left the vault: an early-exit fee stays behind.
+    // A vault at price 1 holding `units` grid units, every share owned by the holder.
+    static StagedVault
+    depositedVault(jtx::Env& env, Keylet const& vault, std::int64_t units)
+    {
+        return {
+            .available = gridUnits(env, vault, units),
+            .sharesTotal = static_cast<std::uint64_t>(units),
+            .holderShares = static_cast<std::uint64_t>(units),
+            .pseudoHolding = true};
+    }
+
+    static STAmount
+    shareAmount(jtx::Env& env, Keylet const& vault, std::int64_t shares)
+    {
+        return STAmount{MPTIssue{env.le(vault)->at(sfShareMPTID)}, shares};
+    }
+
+    static std::string
+    sampleText(StagedVault const& s, STAmount const& amount)
+    {
+        std::string t = "amount " + amount.getText() + ", available " + s.available.getText() +
+            ", deployed " + s.deployed.getText() + ", sharesTotal " + std::to_string(s.sharesTotal);
+        if (s.subscriptionDate)
+            t += ", subscription " + std::to_string(*s.subscriptionDate) + ", redemption " +
+                std::to_string(*s.redemptionDate);
+        if (s.earlyExitFeeRate)
+            t += ", fee " + std::to_string(*s.earlyExitFeeRate);
+        return t + ": ";
+    }
+
+    // Both sides agree on the verdict and, on success, on the vault. Returns the C++ verdict.
+    TER
+    expectAgree(std::string const& at, AppliedVaultTx const& cpp, LeanVaultResult const& lean)
+    {
+        BEAST_EXPECTS(
+            lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
+        TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+        BEAST_EXPECTS(
+            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
+        if (cpp.ter == tesSUCCESS && leanTer == tesSUCCESS)
+            expectSameVault(lean.vault, cpp.post, at);
+        return cpp.ter;
+    }
+
     void
-    compareWithdraw(
+    expectVerdict(TER cpp, TER expected)
+    {
+        BEAST_EXPECTS(
+            cpp == expected,
+            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
+    }
+
+    // A deposit (or donation) on a throwaway view of `staged`, and the model on the same state.
+    TER
+    checkDeposit(
         jtx::Env& env,
-        Fixture const& f,
+        Keylet const& vault,
+        jtx::Account const& depositor,
+        StagedVault const& staged,
         STAmount const& amount,
-        TER expected,
+        bool donate = false)
+    {
+        jtx::Vault::DepositArgs args{.depositor = depositor, .id = vault.key, .amount = amount};
+        if (donate)
+            args.flags = tfVaultDonate;
+        AppliedVaultTx const cpp =
+            applyStaged(env, vault, depositor, staged, jtx::Vault::deposit(args));
+        LeanVaultResult const lean =
+            leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
+        return expectAgree(sampleText(staged, amount), cpp, lean);
+    }
+
+    // A withdrawal (by assets, or by shares when `amount` is in shares) on a throwaway view; on
+    // success the payout is what left the vault on both sides (an early-exit fee stays behind).
+    TER
+    checkWithdraw(
+        jtx::Env& env,
+        Keylet const& vault,
+        jtx::Account const& holder,
+        StagedVault const& staged,
+        STAmount const& amount,
         std::optional<Number> const& expectedPayout = std::nullopt)
     {
-        using namespace jtx;
-        Vault const before = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        bool const byShares = amount.asset() != f.asset.raw();
-        bool const waiveUnrealizedLoss = holderOwnsAllShares(env, f.vaultKeylet, f.holder);
+        AppliedVaultTx const cpp = applyStaged(
+            env,
+            vault,
+            holder,
+            staged,
+            jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}));
+        bool const byShares = amount.asset() != Asset{env.le(vault)->at(sfAsset)};
+        Number const holderShares{*staged.holderShares};
         LeanVaultResult const lean = leanVaultWithdraw(
-            before,
+            cpp.pre,
             amount,
             byShares,
             parentCloseTime(env),
-            waiveUnrealizedLoss,
-            Number{fetchHolderShares(env, f.vaultKeylet, f.holder)});
-        expectLawful(lean);
-
-        env(jtx::Vault::withdraw(
-                {.depositor = f.holder, .id = f.vaultKeylet.key, .amount = amount}),
-            jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        // Read before closing: a close discards state staged on the open ledger.
-        Vault const cpp = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        env.close();
-
-        BEAST_EXPECTS(!lean.leanError.has_value(), "lean withdraw error");
-        expectTer(lean.error.value_or(tesSUCCESS), cppTer, expected);
-        if (cppTer != tesSUCCESS || lean.leanError || lean.error)
-            return;
-
-        expectSameVault(lean.vault, cpp);
-        Number const cppPayout = before.assetsAvailable - cpp.assetsAvailable;
+            holderShares == Number{staged.sharesTotal},
+            holderShares);
+        std::string const at = sampleText(staged, amount);
+        TER const ter = expectAgree(at, cpp, lean);
+        if (ter != tesSUCCESS || lean.leanError || lean.error)
+            return ter;
+        Number const cppPayout = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
         BEAST_EXPECTS(
             Number{lean.assets} == cppPayout,
-            "payout lean=" + to_string(Number{lean.assets}) + " cpp=" + to_string(cppPayout));
+            at + "payout lean=" + to_string(Number{lean.assets}) + " cpp=" + to_string(cppPayout));
         if (expectedPayout)
         {
             BEAST_EXPECTS(
                 cppPayout == *expectedPayout,
-                "payout " + to_string(cppPayout) + " expected " + to_string(*expectedPayout));
+                at + "payout " + to_string(cppPayout) + " expected " + to_string(*expectedPayout));
         }
+        return ter;
     }
+
+    // ---- Phase and fee matrix (staged on the shared ledger) ------------------------------------
 
     // Deposit matrix: a plain deposit is rejected once the vault is past Subscription, a donation
-    // never is.
+    // never is. Covered at the subscription date by testDepositSubscriptionSweep.
     void
-    testDeposit(Phase phase, bool isDonation, TER expected)
+    testDeposit(
+        jtx::Env& env,
+        Fixture const& f,
+        VaultPhase phase,
+        bool isDonation,
+        TER expected,
+        bool onDate = false)
     {
-        using namespace jtx;
-        testcase((isDonation ? "donate " : "deposit ") + phaseName(phase));
-
-        Env env(*this);
-        auto const f = setUp(env, phase, std::nullopt, Number{1'000});
-        compareDeposit(env, f, isDonation ? f.owner : f.holder, f.asset(100), isDonation, expected);
+        testcase((isDonation ? "donate " : "deposit ") + phaseName(phase, onDate));
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), phase, std::nullopt, onDate);
+        // The donor (the owner) holds no shares.
+        if (isDonation)
+            staged.holderShares.reset();
+        expectVerdict(
+            checkDeposit(
+                env,
+                f.vaultKeylet,
+                isDonation ? f.owner : f.holder,
+                staged,
+                f.asset(100),
+                isDonation),
+            expected);
     }
 
-    // Withdraw matrix: a withdrawal by assets of 400 from a 1000 seed. Only the Investment phase
-    // of a vault with an early-exit fee rate (even zero) charges the fee or, without the field,
-    // rejects the withdrawal.
+    // Withdraw matrix: a withdrawal by assets of 400 from a 1000 initial deposit. Only the
+    // Investment phase of a vault with an early-exit fee rate (even zero) charges the fee or,
+    // without the field, rejects the withdrawal. Covered at the dates by the withdraw phase sweeps.
     void
     testWithdraw(
-        Phase phase,
+        jtx::Env& env,
+        Fixture const& f,
+        VaultPhase phase,
         std::optional<std::uint32_t> earlyExitFeeRate,
         TER expected,
-        std::optional<Number> const& expectedPayout = std::nullopt)
+        std::optional<Number> const& expectedPayout = std::nullopt,
+        bool onDate = false)
     {
-        using namespace jtx;
-        testcase("withdraw " + phaseName(phase) + ", " + feeName(earlyExitFeeRate));
-
-        Env env(*this);
-        auto const f = setUp(env, phase, earlyExitFeeRate, Number{1'000});
-        compareWithdraw(env, f, f.asset(400), expected, expectedPayout);
+        testcase("withdraw " + phaseName(phase, onDate) + ", " + feeName(earlyExitFeeRate));
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), phase, earlyExitFeeRate, onDate);
+        expectVerdict(
+            checkWithdraw(env, f.vaultKeylet, f.holder, staged, f.asset(400), expectedPayout),
+            expected);
     }
 
     // By shares: 400 of the 1000 shares (scale 6: 4e8) at a 5% fee pay 380.
     void
-    testWithdrawBySharesInInvestment()
+    testWithdrawBySharesInInvestment(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("withdraw by shares in investment at a 5% fee");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee5Pct, Number{1'000});
-        STAmount const shares{fetchHolderShares(env, f.vaultKeylet, f.holder).asset(), 400'000'000};
-        compareWithdraw(env, f, shares, tesSUCCESS, Number{380});
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee5Pct);
+        expectVerdict(
+            checkWithdraw(
+                env,
+                f.vaultKeylet,
+                f.holder,
+                staged,
+                shareAmount(env, f.vaultKeylet, 400'000'000),
+                Number{380}),
+            tesSUCCESS);
     }
 
     // A final withdrawal (all outstanding shares) skips the fee even during Investment.
     void
-    testWithdrawAllSharesInInvestment()
+    testWithdrawAllSharesInInvestment(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("withdraw all shares in investment with a fee");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee5Pct, Number{1'000});
-        STAmount const allShares = fetchHolderShares(env, f.vaultKeylet, f.holder);
-        compareWithdraw(env, f, allShares, tesSUCCESS, Number{1'000});
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee5Pct);
+        expectVerdict(
+            checkWithdraw(
+                env,
+                f.vaultKeylet,
+                f.holder,
+                staged,
+                shareAmount(env, f.vaultKeylet, kInitialDepositUnits),
+                Number{1'000}),
+            tesSUCCESS);
     }
 
     // Availability is checked against the gross amount without a fee and against the net payout
-    // with one: 610 of the 1000 are deployed (staged), so withdrawing 400 fails at a zero rate and
-    // pays 380 at 5%.
+    // with one: 610 of the 1000 are deployed, so withdrawing 400 fails at a zero rate and pays 380
+    // at 5%.
     void
     testWithdrawGrossOverAvailable(
+        jtx::Env& env,
+        Fixture const& f,
         std::uint32_t earlyExitFeeRate,
         TER expected,
         Number const& available = Number{390})
     {
-        using namespace jtx;
         testcase(
             "withdraw 400 with " + to_string(available) + " available at " +
             feeName(earlyExitFeeRate));
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, earlyExitFeeRate, Number{1'000});
-        BEAST_EXPECT(
-            updateVaultState(env, f.vaultKeylet, Number{1'000}, available, 1'000'000'000ULL));
-        compareWithdraw(
-            env,
-            f,
-            f.asset(400),
-            expected,
-            expected == tesSUCCESS ? std::optional<Number>{Number{380}} : std::nullopt);
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        staged.available = f.asset(available);
+        staged.deployed = f.asset(Number{1'000} - available);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, earlyExitFeeRate);
+        expectVerdict(
+            checkWithdraw(
+                env,
+                f.vaultKeylet,
+                f.holder,
+                staged,
+                f.asset(400),
+                expected == tesSUCCESS ? std::optional<Number>{Number{380}} : std::nullopt),
+            expected);
     }
 
     // A 16-digit amount at a 3.333% rate: the fee needs more digits than Number keeps, so the
     // upward fee and downward subtraction must round the same way on both sides.
     void
-    testWithdrawInexactFee()
+    testWithdrawInexactFee(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("withdraw a 16-digit amount at an inexact fee rate");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, 3'333, Number{2, 9});
-        compareWithdraw(env, f, f.asset(Number{1'234'567'891'234'567LL, -6}), tesSUCCESS);
+        // An initial deposit of 2e9 at scale 6.
+        StagedVault staged = depositedVault(env, f.vaultKeylet, 2'000'000'000'000'000);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, 3'333);
+        expectVerdict(
+            checkWithdraw(
+                env, f.vaultKeylet, f.holder, staged, f.asset(Number{1'234'567'891'234'567LL, -6})),
+            tesSUCCESS);
     }
 
     // XRP: a 50% fee on one drop leaves half a drop, which is zero in drops.
     void
-    testWithdrawFeeConsumesPayout()
+    testWithdrawFeeConsumesPayout(jtx::Env& env, Fixture const& xrp)
     {
-        using namespace jtx;
         testcase("withdraw one drop in investment at a 50% fee");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee50Pct, Number{1'000}, true);
-        compareWithdraw(env, f, drops(1), tecPRECISION_LOSS);
+        StagedVault staged = depositedVault(env, xrp.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee50Pct);
+        expectVerdict(
+            checkWithdraw(env, xrp.vaultKeylet, xrp.holder, staged, jtx::drops(1)),
+            tecPRECISION_LOSS);
     }
 
     // IOU: a 50% fee on one grid unit (1e-6) leaves 5e-7, representable but below the vault grid.
     void
-    testWithdrawFeeLeavesSubGridPayout()
+    testWithdrawFeeLeavesSubGridPayout(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("withdraw one grid unit in investment at a 50% fee");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee50Pct, Number{1'000});
-        compareWithdraw(env, f, f.asset(Number{1, -6}), tecPRECISION_LOSS);
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee50Pct);
+        expectVerdict(
+            checkWithdraw(env, f.vaultKeylet, f.holder, staged, f.asset(Number{1, -6})),
+            tecPRECISION_LOSS);
     }
 
     // Clawback has no phase or fee logic: the issuer recovers the full amount during Investment.
     void
-    testClawbackInInvestment()
+    testClawbackInInvestment(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("clawback in investment with a fee");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee5Pct, Number{1'000});
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee5Pct);
         STAmount const amount = f.asset(400);
-
-        Vault const before = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        LeanVaultResult const lean = leanVaultClawback(
-            before,
-            amount,
-            fetchHolderShares(env, f.vaultKeylet, f.holder),
-            holderOwnsAllShares(env, f.vaultKeylet, f.holder));
-        expectLawful(lean);
-
-        env(jtx::Vault::clawback(
+        AppliedVaultTx const cpp = applyStaged(
+            env,
+            f.vaultKeylet,
+            f.holder,
+            staged,
+            jtx::Vault::clawback(
                 {.issuer = f.issuer,
                  .id = f.vaultKeylet.key,
                  .holder = f.holder,
-                 .amount = amount}),
-            jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        Vault const cpp = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        env.close();
-
-        BEAST_EXPECTS(!lean.leanError.has_value(), "lean clawback error");
-        expectTer(lean.error.value_or(tesSUCCESS), cppTer, tesSUCCESS);
-        if (cppTer != tesSUCCESS || lean.leanError || lean.error)
-            return;
-        expectSameVault(lean.vault, cpp);
-        Number const recovered = before.assetsAvailable - cpp.assetsAvailable;
+                 .amount = amount}));
+        LeanVaultResult const lean = leanVaultClawback(
+            cpp.pre,
+            amount,
+            shareAmount(env, f.vaultKeylet, *staged.holderShares),
+            *staged.holderShares == staged.sharesTotal);
+        expectVerdict(expectAgree(sampleText(staged, amount), cpp, lean), tesSUCCESS);
+        Number const recovered = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
         BEAST_EXPECTS(recovered == Number{400}, "recovered " + to_string(recovered));
     }
 
     // VaultSet has no phase logic: the owner caps a closed-ended vault during Investment.
     void
-    testSetInInvestment()
+    testSetInInvestment(jtx::Env& env, Fixture const& f)
     {
-        using namespace jtx;
         testcase("set assets maximum in investment");
-
-        Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee5Pct, Number{1'000});
+        StagedVault staged = depositedVault(env, f.vaultKeylet, kInitialDepositUnits);
+        stagePhase(staged, parentCloseTime(env), VaultPhase::Investment, kFee5Pct);
         Number const cap{5'000};
-
-        Vault const state = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        auto const lean = leanCanVaultUpdate(state, cap);
-        expectLawful(lean);
-        LeanUpdateResult const updated = leanVaultUpdate(state, cap);
-
         auto tx = jtx::Vault::set({.owner = f.owner, .id = f.vaultKeylet.key});
         tx[sfAssetsMaximum] = cap;
-        env(tx, jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        Vault const cpp = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        env.close();
+        AppliedVaultTx const cpp = applyStaged(env, f.vaultKeylet, f.holder, staged, tx);
 
+        auto const lean = leanCanVaultUpdate(cpp.pre, cap);
+        expectLawful(lean);
+        LeanUpdateResult const updated = leanVaultUpdate(cpp.pre, cap);
         BEAST_EXPECTS(!lean.leanError.has_value(), "lean canVaultUpdate error");
-        expectTer(lean.ter, cppTer, tesSUCCESS);
+        expectTer(lean.ter, cpp.ter, tesSUCCESS);
         BEAST_EXPECTS(!updated.leanError.has_value(), "lean update error");
         BEAST_EXPECTS(
-            updated.vault.assetsMaximum == cpp.assetsMaximum && cpp.assetsMaximum == cap,
-            "stored cap " + (cpp.assetsMaximum ? to_string(*cpp.assetsMaximum) : "none"));
+            updated.vault.assetsMaximum == cpp.post.assetsMaximum && cpp.post.assetsMaximum == cap,
+            "stored cap " + (cpp.post.assetsMaximum ? to_string(*cpp.post.assetsMaximum) : "none"));
     }
 
     // VaultDelete has no phase logic: an empty closed-ended vault is deleted during Investment.
@@ -488,7 +576,7 @@ class LeanVaultClosedEnded_test : public LeanSuite
         testcase("delete an empty closed-ended vault in investment");
 
         Env env(*this);
-        auto const f = setUp(env, Phase::Investment, kFee5Pct, Number{0});
+        auto const f = setUp(env, VaultPhase::Investment, kFee5Pct, Number{0});
 
         Vault const state = readVaultState(env, f.vaultKeylet, f.asset.raw());
         auto const lean = leanCanVaultDelete(state);
@@ -503,56 +591,257 @@ class LeanVaultClosedEnded_test : public LeanSuite
         BEAST_EXPECT(!env.le(f.vaultKeylet));
     }
 
+    // ---- Phase date sweeps ---------------------------------------------------------------------
+
+    // Dates of a closed-ended vault whose subscription date is P + offset (P the parent close
+    // time).
+    template <class Row>
+    static StagedVault&
+    subscriptionAt(StagedVault& s, std::uint32_t p, Row const& c)
+    {
+        s.subscriptionDate = static_cast<std::uint32_t>(p + c.offset);
+        s.redemptionDate = static_cast<std::uint32_t>(p + c.offset + c.gap);
+        return s;
+    }
+
+    // Dates of a closed-ended vault whose redemption date is P + offset.
+    template <class Row>
+    static StagedVault&
+    redemptionAt(StagedVault& s, std::uint32_t p, Row const& c)
+    {
+        s.subscriptionDate = static_cast<std::uint32_t>(p + c.offset - c.gap);
+        s.redemptionDate = static_cast<std::uint32_t>(p + c.offset);
+        return s;
+    }
+
+    // A vault at price 1 with 2e9 grid units, the holder owning all but one share (no final
+    // withdrawal, no loss waiver).
+    static StagedVault
+    withdrawVault(jtx::Env& env, Keylet const& vault)
+    {
+        StagedVault s = depositedVault(env, vault, 2 * kOrdinaryUnits);
+        s.holderShares = 2 * kOrdinaryUnits - 1;
+        return s;
+    }
+
+    void
+    testDepositSubscriptionSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, holder] : vaults)
+        {
+            sweepDepositSubscription(env, vault, holder);
+        }
+    }
+
+    // Subscription date: a plain deposit of one unit is accepted while P <= subscription date and
+    // tecEXPIRED after it. Rows put the subscription date at P + offset.
+    void
+    sweepDepositSubscription(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    {
+        beginCase(("deposit " + vaultName(env, vault) + " subscription date-Sweep").c_str());
+        std::uint32_t const p = parentCloseTime(env);
+        runAroundCusp(closed_ended_sweep::kPhaseDateCases, [&](auto const& c) {
+            StagedVault staged{
+                .available = gridUnits(env, vault, kOrdinaryUnits),
+                .sharesTotal = static_cast<std::uint64_t>(kOrdinaryUnits)};
+            return checkDeposit(
+                env, vault, depositor, subscriptionAt(staged, p, c), gridUnits(env, vault, 1));
+        });
+    }
+
+    void
+    testWithdrawSubscriptionEndSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, holder] : vaults)
+        {
+            sweepWithdrawSubscriptionEnd(env, vault, holder);
+        }
+    }
+
+    // End of Subscription, no early-exit fee field: withdrawing one unit is accepted while
+    // P <= subscription date and tecTOO_SOON in Investment. Subscription date at P + offset.
+    void
+    sweepWithdrawSubscriptionEnd(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
+    {
+        beginCase(("withdraw " + vaultName(env, vault) + " subscription end-Sweep").c_str());
+        std::uint32_t const p = parentCloseTime(env);
+        runAroundCusp(closed_ended_sweep::kPhaseDateCases, [&](auto const& c) {
+            StagedVault staged = withdrawVault(env, vault);
+            return checkWithdraw(
+                env, vault, holder, subscriptionAt(staged, p, c), gridUnits(env, vault, 1));
+        });
+    }
+
+    void
+    testWithdrawRedemptionStartSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, holder] : vaults)
+        {
+            sweepWithdrawRedemptionStart(env, vault, holder);
+        }
+    }
+
+    // Start of Redemption, no early-exit fee field: tecTOO_SOON up to the last second of
+    // Investment (P = redemption date - 1), accepted from P = redemption date. Redemption date at
+    // P + offset.
+    void
+    sweepWithdrawRedemptionStart(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
+    {
+        beginCase(("withdraw " + vaultName(env, vault) + " redemption start-Sweep").c_str());
+        std::uint32_t const p = parentCloseTime(env);
+        runAroundCusp(closed_ended_sweep::kPhaseDateCases, [&](auto const& c) {
+            StagedVault staged = withdrawVault(env, vault);
+            return checkWithdraw(
+                env, vault, holder, redemptionAt(staged, p, c), gridUnits(env, vault, 1));
+        });
+    }
+
+    void
+    testWithdrawFeePhaseSweep(jtx::Env& env, SweepVaults const& vaults)
+    {
+        for (auto const& [vault, holder] : vaults)
+        {
+            sweepWithdrawFeePhase(env, vault, holder);
+        }
+    }
+
+    // With an early-exit fee rate the vault never refuses a withdrawal; the fee is charged only in
+    // Investment, so the payout changes at both dates (no verdict change: payouts compared).
+    void
+    sweepWithdrawFeePhase(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
+    {
+        beginCase(("withdraw " + vaultName(env, vault) + " fee phase-Sweep").c_str());
+        std::uint32_t const p = parentCloseTime(env);
+        STAmount const amount = gridUnits(env, vault, kOrdinaryUnits);
+        auto const check = [&](bool atRedemption) {
+            return [&, atRedemption](closed_ended_sweep::FeePhaseCusp const& c) {
+                StagedVault staged = withdrawVault(env, vault);
+                staged.earlyExitFeeRate = c.rate;
+                return checkWithdraw(
+                    env,
+                    vault,
+                    holder,
+                    atRedemption ? redemptionAt(staged, p, c) : subscriptionAt(staged, p, c),
+                    amount);
+            };
+        };
+        runAroundCusp(closed_ended_sweep::kFeePhaseCases, check(false), false);
+        runAroundCusp(closed_ended_sweep::kFeePhaseCases, check(true), false);
+    }
+
     void
     runTests() override
     {
+        using namespace jtx;
+        using namespace std::chrono_literals;
+
+        // One ledger holding a vault per asset; every staged sample (old tests and sweeps) runs on
+        // a throwaway view of it.
+        Env env{*this};
+        Account const owner{"owner"};
+        Account const issuer{"issuer"};
+        Account const holder{"holder"};
+        Account const depositor{"depositor"};
+        env.fund(XRP(1'000'000), owner, issuer, holder);
+        env.fund(XRP(9'500'000'000), depositor);
+        env.close();
+        // Clawback must be enabled while the issuer has no trust line yet.
+        env(fset(issuer, asfAllowTrustLineClawback));
+        env.close();
+        // Staged dates reach a 30-year gap before the parent close time, which starts near 0.
+        env.close(env.now() + 1'000'000'000s);
+
+        PrettyAsset const xrp{xrpIssue(), 1'000'000};
+        PrettyAsset const iou = issuer["USD"];
+        // An IOU holder and an owner that are not the issuer, as in the old Env-based setUp.
+        env(trust(owner, iou(Number{1, 10})));
+        env(trust(holder, iou(Number{1, 10})));
+        env.close();
+        env(pay(issuer, owner, iou(10'000)));
+        env(pay(issuer, holder, iou(1'000'000'000)));
+        MPTTester mptt{env, issuer, kMptInitNoFund};
+        mptt.create({.flags = tfMPTCanTransfer});
+        mptt.authorize({.account = depositor});
+        PrettyAsset const mpt = mptt.issuanceID();
+        env(pay(issuer, depositor, mpt(9'200'000'000'000'000)));
+        env.close();
+
+        Keylet const xrpVault = createSweepVault(env, owner, depositor, xrp);
+        Keylet const mptVault = createSweepVault(env, owner, depositor, mpt);
+        Keylet const iouScale0Vault = createSweepVault(env, owner, issuer, iou, 0);
+        Keylet const iouScale6Vault = createSweepVault(env, owner, issuer, iou, 6);
+        Keylet const iouScale10Vault = createSweepVault(env, owner, issuer, iou, 10);
+        // The old tests' holder needs its own share MPToken in the IOU vault.
+        env(jtx::Vault::deposit(
+            {.depositor = holder,
+             .id = iouScale6Vault.key,
+             .amount = gridUnits(env, iouScale6Vault, 1)}));
+        env.close();
+
+        Fixture const f{owner, issuer, holder, iou, iouScale6Vault};
+        Fixture const x{owner, issuer, depositor, xrp, xrpVault};
+
         // Deposits
-        testDeposit(Phase::None, false, tesSUCCESS);
-        testDeposit(Phase::Subscription, false, tesSUCCESS);
-        testDeposit(Phase::SubscriptionDate, false, tesSUCCESS);
-        testDeposit(Phase::Investment, false, tecEXPIRED);
-        testDeposit(Phase::RedemptionDate, false, tecEXPIRED);
-        testDeposit(Phase::Redemption, false, tecEXPIRED);
+        testDeposit(env, f, VaultPhase::NoPhase, false, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::Subscription, false, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::Subscription, false, tesSUCCESS, kOnDate);
+        testDeposit(env, f, VaultPhase::Investment, false, tecEXPIRED);
+        testDeposit(env, f, VaultPhase::Redemption, false, tecEXPIRED, kOnDate);
+        testDeposit(env, f, VaultPhase::Redemption, false, tecEXPIRED);
         // Donations are not subject to the phase check.
-        testDeposit(Phase::None, true, tesSUCCESS);
-        testDeposit(Phase::Subscription, true, tesSUCCESS);
-        testDeposit(Phase::Investment, true, tesSUCCESS);
-        testDeposit(Phase::Redemption, true, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::NoPhase, true, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::Subscription, true, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::Investment, true, tesSUCCESS);
+        testDeposit(env, f, VaultPhase::Redemption, true, tesSUCCESS);
 
         // Withdrawals without an early-exit fee field: only Investment is closed.
-        testWithdraw(Phase::None, std::nullopt, tesSUCCESS, Number{400});
-        testWithdraw(Phase::Subscription, std::nullopt, tesSUCCESS, Number{400});
-        testWithdraw(Phase::SubscriptionDate, std::nullopt, tesSUCCESS, Number{400});
-        testWithdraw(Phase::Investment, std::nullopt, tecTOO_SOON);
-        testWithdraw(Phase::RedemptionDate, std::nullopt, tesSUCCESS, Number{400});
-        testWithdraw(Phase::Redemption, std::nullopt, tesSUCCESS, Number{400});
+        testWithdraw(env, f, VaultPhase::NoPhase, std::nullopt, tesSUCCESS, Number{400});
+        testWithdraw(env, f, VaultPhase::Subscription, std::nullopt, tesSUCCESS, Number{400});
+        testWithdraw(
+            env, f, VaultPhase::Subscription, std::nullopt, tesSUCCESS, Number{400}, kOnDate);
+        testWithdraw(env, f, VaultPhase::Investment, std::nullopt, tecTOO_SOON);
+        testWithdraw(
+            env, f, VaultPhase::Redemption, std::nullopt, tesSUCCESS, Number{400}, kOnDate);
+        testWithdraw(env, f, VaultPhase::Redemption, std::nullopt, tesSUCCESS, Number{400});
 
         // A zero fee rate opens Investment without charging anything.
-        testWithdraw(Phase::Investment, 0, tesSUCCESS, Number{400});
+        testWithdraw(env, f, VaultPhase::Investment, 0, tesSUCCESS, Number{400});
 
         // A 5% fee applies in Investment only: 400 - 20 = 380.
-        testWithdraw(Phase::Subscription, kFee5Pct, tesSUCCESS, Number{400});
-        testWithdraw(Phase::SubscriptionDate, kFee5Pct, tesSUCCESS, Number{400});
-        testWithdraw(Phase::Investment, kFee5Pct, tesSUCCESS, Number{380});
-        testWithdraw(Phase::RedemptionDate, kFee5Pct, tesSUCCESS, Number{400});
-        testWithdraw(Phase::Redemption, kFee5Pct, tesSUCCESS, Number{400});
+        testWithdraw(env, f, VaultPhase::Subscription, kFee5Pct, tesSUCCESS, Number{400});
+        testWithdraw(env, f, VaultPhase::Subscription, kFee5Pct, tesSUCCESS, Number{400}, kOnDate);
+        testWithdraw(env, f, VaultPhase::Investment, kFee5Pct, tesSUCCESS, Number{380});
+        testWithdraw(env, f, VaultPhase::Redemption, kFee5Pct, tesSUCCESS, Number{400}, kOnDate);
+        testWithdraw(env, f, VaultPhase::Redemption, kFee5Pct, tesSUCCESS, Number{400});
 
         // A 100% fee burns the shares and pays nothing.
-        testWithdraw(Phase::Investment, kFee100Pct, tesSUCCESS, Number{0});
+        testWithdraw(env, f, VaultPhase::Investment, kFee100Pct, tesSUCCESS, Number{0});
 
-        testWithdrawBySharesInInvestment();
-        testWithdrawAllSharesInInvestment();
-        testWithdrawGrossOverAvailable(0, tecINSUFFICIENT_FUNDS);
-        testWithdrawGrossOverAvailable(kFee5Pct, tesSUCCESS);
+        testWithdrawBySharesInInvestment(env, f);
+        testWithdrawAllSharesInInvestment(env, f);
+        testWithdrawGrossOverAvailable(env, f, 0, tecINSUFFICIENT_FUNDS);
+        testWithdrawGrossOverAvailable(env, f, kFee5Pct, tesSUCCESS);
         // The net payout (380) itself exceeds what is available.
-        testWithdrawGrossOverAvailable(kFee5Pct, tecINSUFFICIENT_FUNDS, Number{300});
-        testWithdrawInexactFee();
-        testWithdrawFeeConsumesPayout();
-        testWithdrawFeeLeavesSubGridPayout();
+        testWithdrawGrossOverAvailable(env, f, kFee5Pct, tecINSUFFICIENT_FUNDS, Number{300});
+        testWithdrawInexactFee(env, f);
+        testWithdrawFeeConsumesPayout(env, x);
+        testWithdrawFeeLeavesSubGridPayout(env, f);
 
-        testClawbackInInvestment();
-        testSetInInvestment();
+        testClawbackInInvestment(env, f);
+        testSetInInvestment(env, f);
+        // Needs an empty vault with no other share holders: its own Env.
         testDeleteInInvestment();
+
+        SweepVaults const all{
+            {xrpVault, depositor},
+            {mptVault, depositor},
+            {iouScale0Vault, issuer},
+            {iouScale6Vault, issuer},
+            {iouScale10Vault, issuer}};
+        testDepositSubscriptionSweep(env, all);
+        testWithdrawSubscriptionEndSweep(env, all);
+        testWithdrawRedemptionStartSweep(env, all);
+        testWithdrawFeePhaseSweep(env, all);
     }
 };
 

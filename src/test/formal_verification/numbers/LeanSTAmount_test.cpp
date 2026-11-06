@@ -7,6 +7,7 @@
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -90,6 +91,7 @@ lean_stamount_are_comparable(lean_object*, lean_object*);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 namespace {
 
@@ -1945,6 +1947,42 @@ public:
         oneCase("xrp mul .4 Down", false, m62, two, kNative, M::Downward, -13);
     }
 
+    // ---- Cusp sweeps ----
+
+    void
+    testCheckedRangeSweep()
+    {
+        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
+        for (auto const mode : kRoundingModes)
+        {
+            SaveNumberRoundMode save{Number::setround(mode)};
+            sweepChecked("XRP", kNative, kXrpCheckedCases, mode);
+            sweepChecked("MPT", kIntegral, kMptCheckedCases, mode);
+            sweepChecked("IOU", kFractional, kIouRangeCases, mode);
+        }
+    }
+
+    // The checked constructor: XRP above 1e17 drops and MPT above int64 max throw; an IOU past
+    // 16 digits at exponent 80 throws, below 16 digits at exponent -96 is zero.
+    void
+    sweepChecked(
+        char const* asset,
+        uint8_t nt,
+        std::vector<AroundCusp<Scaled>> const& cases,
+        Number::RoundingMode mode)
+    {
+        beginCase((std::string("LeanSTAmount.checked ") + asset + " " + modeName(mode) + "-Sweep")
+                      .c_str());
+        runAroundCusp(cases, [&](Scaled const& c) {
+            auto const m = static_cast<uint64_t>(c.mantissa);
+            checkChecked(makeSTAmountPair(nt, m, c.exponent, 0), mode);
+            return cppVerdict([&] {
+                return STAmount{assetForNumericType(nt), m, static_cast<int>(c.exponent), false}
+                           .signum() == 0;
+            });
+        });
+    }
+
 private:
     void
     runTests() override
@@ -1982,6 +2020,7 @@ private:
         test_known_get_rate();
         test_extreme_values();
         test_integral_int64_wrap();
+        testCheckedRangeSweep();
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
