@@ -145,7 +145,7 @@ def manageActionOf : UInt8 → LoanManageAction
 
 @[export lean_can_loan_manage]
 def lean_can_loan_manage (loan : Loan) (action : UInt8) (now : UInt32) : Except Error Int32 :=
-  pure (loan.canManage (manageActionOf action) now).code
+  return (← loan.canManage (manageActionOf action) now).code
 
 @[export lean_loan_manage]
 def lean_loan_manage (loan : Loan) (pool : Vault) (action : UInt8) (now : UInt32)
