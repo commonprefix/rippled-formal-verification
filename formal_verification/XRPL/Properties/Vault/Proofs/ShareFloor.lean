@@ -58,6 +58,18 @@ lemma shares_floor_of_gap (I k eLo eUp : ℚ) (hLo : eLo ≤ sharesε) (hUp0 : 0
   have hle := shares_le_ideal_of_gap I k eUp h.1 h.2.1 hUp0 hUp h.2.2.2 hgap
   ⟨h.1, h.2.1, ideal_sub_one_lt_of_gap I k eLo h.1 (le_trans h.2.1 hle) hLo h.2.2.1 hgap, hle⟩
 
+/-- A whole count at most the ideal and less than one below it is the ideal rounded down. -/
+lemma shares_eq_floor (I k : ℚ) (hk : k.den = 1) (hlo : I - 1 < k) (hup : k ≤ I) : k = ⌊I⌋ := by
+  have hkn : k = (k.num : ℚ) := (Rat.coe_int_num_of_den_eq_one hk).symm
+  rw [hkn] at hlo hup ⊢
+  have h1 : k.num ≤ ⌊I⌋ := Int.le_floor.mpr hup
+  have h2 : ⌊I⌋ < k.num + 1 := by
+    rw [Int.floor_lt]
+    push_cast
+    linarith
+  have : k.num = ⌊I⌋ := by omega
+  rw [this]
+
 lemma sharesOverε_nonneg : 0 ≤ sharesOverε := by unfold sharesOverε; norm_num
 
 lemma sharesOverε_le : sharesOverε ≤ sharesε := by unfold sharesOverε sharesε; norm_num
@@ -65,25 +77,5 @@ lemma sharesOverε_le : sharesOverε ≤ sharesε := by unfold sharesOverε shar
 lemma sharesShortε_le : sharesShortε ≤ sharesε := by unfold sharesShortε sharesε; norm_num
 
 lemma sharesε_nonneg : 0 ≤ sharesε := by unfold sharesε; norm_num
-
-/-- The ideal share amount of a nonnegative deposit is nonnegative. -/
-lemma Vault.idealSharesDeposit_nonneg (v : Vault) (a : ℚ) (ha : 0 ≤ a) : 0 ≤ v.idealSharesDeposit a := by
-  have h1 := v.exact.assetsAvailable_nonneg
-  have h2 := v.exact.assetsDeployed_nonneg
-  unfold RawVault.idealSharesDeposit RawVault.depositNav RawVault.Exact.assetsTotal
-  split_ifs
-  · positivity
-  · exact div_nonneg (mul_nonneg (Nat.cast_nonneg _) ha) (by linarith)
-
-/-- A successful deposit rounds the requested amount to a positive amount. -/
-lemma Vault.deposit_rounded_pos (v : Vault) (amountDeposit roundedAmount : STAmount) (t : UInt32)
-    (hpos : 0 < amountDeposit.toRat) (hcanon : amountDeposit.Canonical)
-    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount))
-    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r)) :
-    0 < roundedAmount.toRat := by
-  obtain ⟨ra, -, -, hra, -, hrp, -⟩ := DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
-  rw [hrounded] at hra
-  obtain rfl := Except.ok.inj (Except.ok.inj hra)
-  exact hrp
 
 end XRPL.Model.SingleAssetVault

@@ -20,7 +20,7 @@ lemma tenthBipsOfValue_zero (rate : TenthBips32) :
   obtain ⟨r, hok, hval, hnorm⟩ := Number.from_rep_exact (100000 : Int64) 0 .to_nearest
     (by decide) (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have hunit : kTenthBipsPerUnity.toNumber = r := by
-    unfold kTenthBipsPerUnity TenthBips32.toNumber Number.ofInt64
+    unfold kTenthBipsPerUnity TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
     rw [show ((⟨100000⟩ : UInt32).toUInt64.toInt64) = (100000 : Int64) from by decide, hok]; rfl
   have hu : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false := by
     rw [hunit, Bool.eq_false_iff]
@@ -50,7 +50,7 @@ lemma TenthBips32.toNumber_facts (rate : TenthBips32) :
   obtain ⟨r, hok, hv, hnorm⟩ := Number.from_rep_exact rate.toUInt64.toInt64 0 .to_nearest hne
     (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have h : rate.toNumber = r := by
-    unfold TenthBips32.toNumber Number.ofInt64
+    unfold TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
     rw [hok]
     rfl
   rw [h]
@@ -81,7 +81,8 @@ lemma tenthBipsOfValue_zero_rate (x : Number) (hx : x.isNormalized) (mode : roun
     rw [← h0]; rfl
   rw [heq]
   have hm : x.operator_mul Number.zero mode = .ok Number.zero := by
-    unfold Number.operator_mul
+    rw [Number.operator_mul_eq_spec]
+    unfold Number.operator_mulSpec
     by_cases hxz : x.operator_eq Number.zero = true
     · rw [if_pos hxz]
       rw [Number.eq_zero_of_mantissa_zero x hx (Number.mantissa_eq_zero_of_operator_eq_zero hxz)]

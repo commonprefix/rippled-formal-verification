@@ -99,8 +99,8 @@ private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
     (hf_gt : f > 1 / 2 → g.round .to_nearest = 1)
     (hf_eq : f = 1 / 2 → g.round .to_nearest = 0)
     (hlo : maxRep.toNat < zm.toNat) (hhi : zm.toNat < maxRepUp.toNat)
-    (hdec : ((g.pushOverflow zm .to_nearest).round .to_nearest == 1
-       || ((g.pushOverflow zm .to_nearest).round .to_nearest == 0 && zm % 2 == 1)) = false) :
+    (hdec : ((g.pushOverflowSpec zm .to_nearest).round .to_nearest == 1
+       || ((g.pushOverflowSpec zm .to_nearest).round .to_nearest == 0 && zm % 2 == 1)) = false) :
     zm.toNat = maxRep.toNat + 1 ∧ f < 1 / 2 := by
   have hmaxR : maxRep.toNat = maxRepNat := maxRep_val
   have hmaxRU : maxRepUp.toNat = maxRepUpNat := rfl
@@ -108,9 +108,9 @@ private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
   rcases hcase with hz1 | hz2
   · have hzeq : zm = 9223372036854775808 := UInt64.toNat_inj.mp (by rw [hz1]; decide)
     have hpo_bump : (g.round .to_nearest == 1 || g.round .to_nearest == 0) = true →
-        g.pushOverflow zm .to_nearest = g.push 6 := by
+        g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       intro hr
-      rw [hzeq]; unfold Guard.pushOverflow
+      rw [hzeq]; unfold Guard.pushOverflowSpec
       rw [if_pos (by decide : maxRep ≤ (9223372036854775808 : UInt64) ∧
         (9223372036854775808 : UInt64) < maxRepUp)]
       simp only [show ((9223372036854775808 : UInt64) % 10 < 9) = true from by decide, if_true,
@@ -133,9 +133,9 @@ private lemma cusp_interior_down_forces (g : Guard) (zm : UInt64) (f : ℚ)
     exact ⟨by omega, hflt⟩
   · exfalso
     have hzeq : zm = 9223372036854775809 := UInt64.toNat_inj.mp (by rw [hz2]; decide)
-    have hpo : g.pushOverflow zm .to_nearest = g.push 6 := by
+    have hpo : g.pushOverflowSpec zm .to_nearest = g.push 6 := by
       rw [hzeq]
-      unfold Guard.pushOverflow
+      unfold Guard.pushOverflowSpec
       rw [if_pos (by decide : maxRep ≤ (9223372036854775809 : UInt64) ∧
         (9223372036854775809 : UInt64) < maxRepUp)]
       simp only [show ((9223372036854775809 : UInt64) % 10 < 9) = false from by decide,

@@ -39,6 +39,8 @@ private lemma computeLoanProperties_first (principal : Number) (ir : TenthBips32
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨sp, hsp, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, hc, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   obtain ⟨np, hnp, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨fp, hfp, h⟩ := bind_ok_peel _ _ _ h
   simp only [pure, Except.pure, Except.ok.injEq] at h
@@ -119,7 +121,7 @@ private lemma STAmount.representable_ge (nt : NumericType) (x : Number) (hx : x.
 payment factor. -/
 private lemma loanPrincipalFromPeriodicPayment_div (pp rate f tpo : Number) (k : UInt32) (hk : k ≠ 0)
     (hz : rate.operator_eq Number.zero = false)
-    (hf : computePaymentFactor rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok f)
+    (hf : computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f)
     (h : loanPrincipalFromPeriodicPayment pp rate k = .ok tpo) : pp.operator_div f .to_nearest = .ok tpo := by
   unfold loanPrincipalFromPeriodicPayment at h
   dsimp only at h
@@ -187,14 +189,14 @@ lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v 
     rw [hNn] at this
     simp at this
   have hrN := loanPeriodicRate_isNormalized _ _ rate₁ hrate₁
-  have hNn' := Number.ofInt64_isNormalized n.toUInt64.toInt64
-  have hNN' := Number.ofInt64_isNormalized (n + 1).toUInt64.toInt64
+  have hNn' := Number.ofInt64_isNormalized n.toInt64
+  have hNN' := Number.ofInt64_isNormalized (n + 1).toInt64
   rcases loanPeriodicPayment_cases _ _ _ _ hpay₁ (hne _ hpos₁) with ⟨hz, hd₁⟩ | ⟨hz, f, hf, hm₁⟩ <;>
     rcases loanPeriodicPayment_cases _ _ _ _ hpay₂ (hne _ hpos₂) with ⟨hz', hd₂⟩ | ⟨hz', f', hf', hm₂⟩
   · -- no interest: the principal over the count
     have hcn := Number.ofInt64_count n
     have hcN := Number.ofInt64_count (n + 1)
-    have hnpos : (0 : ℚ) < (Number.ofInt64 n.toUInt64.toInt64).toRat := by
+    have hnpos : (0 : ℚ) < (Number.ofInt64 n.toInt64).toRat := by
       rw [hcn]; have : n.toNat ≠ 0 := fun h => hn0 (UInt32.toNat_inj.mp (by simpa using h)); positivity
     exact operator_div_den_antitone _ _ _ _ _ hp hNn' hNN' hd₁ hd₂ (hm _ hpos₁) (hm _ hpos₂) hpos hnpos
       (by rw [hcn, hcN, hNn]; push_cast; linarith)

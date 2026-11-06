@@ -2,6 +2,7 @@ import XRPL.Properties.Protocol.Number.Common.Notation
 import XRPL.Properties.Protocol.Number.Common.ProofTactics
 import XRPL.Model.Protocol.Number
 import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
+import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
 
 
 namespace XRPL.Model.Protocol
@@ -12,7 +13,10 @@ lemma operator_add_to_nearest_witness :
         ⟨false, 4223372036854775815, 0⟩
         .to_nearest =
       .ok ⟨false, 9223372036854775820, 0⟩ := by
-  unfold Number.operator_add
+  rw [Number.operator_add_eq_spec]
+  case hx => decide
+  case hy => decide
+  unfold Number.operator_addSpec
   have hy_ne : (⟨false, 4223372036854775815, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hx_ne : (⟨false, 5000000000000000000, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hxy_neg_ne : (⟨false, 5000000000000000000, 0⟩ : Number).operator_eq
@@ -28,10 +32,10 @@ lemma operator_add_to_nearest_witness :
   rw [show (decide ((9223372036854775815 : UInt128) > toUInt128 largeRange.max) ||
            decide ((9223372036854775815 : UInt128) > toUInt128 maxRepUp)) = true from by decide]
   simp only [if_true]
-  have hdrop : Guard.new.doDropDigit128 (9223372036854775815 : UInt128) 0
+  have hdrop : Guard.new.doDropDigit128Spec (9223372036854775815 : UInt128) 0
       = ({ digits_ := 5764607523034234880, xbit_ := false, sbit_ := false },
          (mantissaFloorSucc : UInt128), (1 : Int)) := by
-    unfold Guard.doDropDigit128 Guard.new Guard.push; rfl
+    unfold Guard.doDropDigit128Spec Guard.new Guard.push; rfl
   rw [hdrop]
   simp only
   have htoUInt64 : toUInt64 (mantissaFloorSucc : UInt128) = (mantissaFloorSucc : UInt64) := by decide
@@ -40,16 +44,21 @@ lemma operator_add_to_nearest_witness :
       false (mantissaFloorSucc : UInt64) (1 : Int) largeRange.min largeRange.max .to_nearest
       .overflow =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 0 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
+    rw [Guard.doRoundUp_eq_spec]
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit
     rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize doNormalize
+  unfold Number.normalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show (((9223372036854775820 : UInt64) : UInt64) == 0) = false from rfl]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUp largeRange.min (9223372036854775820 : UInt64) 0
+  rw [show doNormalize_scaleUpSpec largeRange.min (9223372036854775820 : UInt64) 0
         = ((9223372036854775820 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUp; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (9223372036854775820 : UInt64) (0 : Int) Guard.new
         = .ok ((9223372036854775820 : UInt64), (0 : Int), Guard.new) by
         unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
@@ -66,7 +75,8 @@ lemma operator_add_to_nearest_witness :
   have h_rup2 : Guard.new.doRoundUp false (922337203685477582 : UInt64) (1 : Int)
       largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 0 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]
   simp only [RoundResult.toNumber]
 

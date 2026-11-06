@@ -2,8 +2,7 @@ import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
 
 /-! # Witnesses for the deposit theorems
 
-On a reachable broker, a deposit of `1.999999999999999` base units is credited one, the worst rounding a deposit can
-do. Two deposits of `1.5` base units are credited one each, while one deposit of `3` is credited whole. -/
+Two deposits of `1.5` base units are credited one each, while one deposit of `3` is credited whole. -/
 
 set_option linter.style.nativeDecide false
 
@@ -11,24 +10,6 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
-
-/-- The credit of `waNines` on the empty broker. -/
-private def wrNines : STAmount :=
-  match (wbEmpty.roundedCoverAmount wvBase6 waNines).run with
-  | .ok (.ok r) => r
-  | _ => waOne
-
-/-- Proof body of `roundedCoverAmount_bounds_attained`. -/
-lemma LoanBroker.roundedCoverAmount_bounds_witness :
-    ∃ (lb : LoanBroker) (base : Int) (v : Vault) (amount r : STAmount),
-      lb.Reachable base ∧
-      v.baseExponent = base ∧ v.numericType = lb.numericType ∧
-      amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
-      lb.canCoverDeposit v amount = .ok .tesSUCCESS ∧ (lb.roundedCoverAmount v amount).run = .ok (.ok r) ∧
-      amount.toRat - r.toRat = (1 - 1 / 10 ^ 15) * 10 ^ base :=
-  ⟨wbEmpty, -6, wvBase6, waNines, wrNines, wbEmpty_reachable,
-    by native_decide, by native_decide, STAmount.canonical_of_canonicalB _ (by native_decide),
-    by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 /-- `waHalves` deposited into `wbHeld`, then again, and `waThree` at once. -/
 private def wrDep1 : LoanBrokerCoverResult := wResultOf (wbHeld.coverDeposit wvBase6 waHalves)

@@ -91,20 +91,23 @@ lemma Number.add_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalize
   by_cases hym : y.mantissa_ = 0
   · have hy0 : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hym
     have hres : r = x := by
-      unfold Number.operator_add at h
+      replace h := Number.operator_add_ok_spec h
+      unfold Number.operator_addSpec at h
       rw [if_pos (by rw [hy0]; decide)] at h
       exact (Except.ok.inj h).symm
     exact Number.Near.of_eq (by rw [hres, hy0, Number.toRat_zero, add_zero])
   by_cases hxm : x.mantissa_ = 0
   · have hx0 : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxm
     have hres : r = y := by
-      unfold Number.operator_add at h
+      replace h := Number.operator_add_ok_spec h
+      unfold Number.operator_addSpec at h
       rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hym), if_pos (by rw [hx0]; decide)] at h
       exact (Except.ok.inj h).symm
     exact Number.Near.of_eq (by rw [hres, hx0, Number.toRat_zero, zero_add])
   by_cases hc : x.operator_eq y.operator_neg = true
   · have hres : r = Number.zero := by
-      unfold Number.operator_add at h
+      replace h := Number.operator_add_ok_spec h
+      unfold Number.operator_addSpec at h
       rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hym),
         if_neg (Number.not_operator_eq_zero_of_mantissa_ne hxm), if_pos hc] at h
       exact (Except.ok.inj h).symm

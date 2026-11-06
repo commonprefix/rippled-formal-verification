@@ -1,6 +1,7 @@
 import XRPL.Model.Lending.Loan.LoanPay
 import XRPL.Properties.Lending.Common.PoolBalances
 import XRPL.Properties.Lending.Loan.LoanValid
+import XRPL.Properties.Protocol.Common.FixedWidth
 
 /-! # LoanPay read in two stages
 
@@ -25,6 +26,27 @@ def Loan.pay {α : Type} [AssetPool α] (loan : Loan) (pool : α) (paymentType :
   | .late => loan.latePayment pool amount now
   | .full => loan.fullPayment pool amount now
   | .overpayment => loan.overpayment pool amount now
+
+/-- An instalment other than the last that passed had a payment left, and its next due date fits the ledger
+clock. -/
+lemma Loan.doPayment_ok_checks (l : Loan) (pc : PaymentComponents) (r : Loan) (hf : pc.isFinal = false)
+    (h : Loan.doPayment l pc = .ok r) :
+    1 ≤ l.paymentRemaining ∧ l.nextPaymentDueDate.toNat + l.schedule.paymentInterval.toNat < 2 ^ 32 := by
+  unfold Loan.doPayment at h
+  simp only [hf, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i c1 hc1
+  split at h
+  · cases h
+  rename_i c2 hc2
+  exact ⟨(UInt32.subChecked_eq_ok.mp hc1).1, (UInt32.addChecked_eq_ok.mp hc2).1⟩
 
 /-- One instalment before it is settled, late, full or a single scheduled one: the amount check, then the loan
 advanced by the instalment. -/

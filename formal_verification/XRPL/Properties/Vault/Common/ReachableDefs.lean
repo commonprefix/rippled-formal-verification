@@ -92,53 +92,51 @@ inductive Vault.Reachable : Vault → UInt32 → Prop where
       v.update assetsMaximum blockDeposit unblockDeposit = .ok v' →
       Vault.Reachable v' t'
 
-/-- `u` results from `w` by `n` successful transactions, the last at parent close time `t`. `D` adds one base unit per
-IOU deposit over the share total after it. With `whole`, exits and integral deposits move a whole base-unit worth. -/
-inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → ℕ → ℚ → Prop where
-  | refl (w : Vault) (t : UInt32) : Vault.ReachableFromIn whole w t w 0 0
-  | deposit (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (amount : STAmount) (isDonation : Bool)
+/-- `u` results from `w` by `n` successful transactions, the last at parent close time `t`. With `whole`, deposits and
+exits move a whole base-unit worth. -/
+inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → ℕ → Prop where
+  | refl (w : Vault) (t : UInt32) : Vault.ReachableFromIn whole w t w 0
+  | deposit (w u : Vault) (t t' : UInt32) (n : ℕ) (amount : STAmount) (isDonation : Bool)
       (r : VaultWithAmounts) :
-      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      Vault.ReachableFromIn whole w t u n → t ≤ t' →
       amount.Canonical → amount.mNumericType = u.numericType →
       (hpos : 0 < amount.toRat) → (u.deposit amount isDonation t' hpos).run = .ok (.ok r) →
       (u.toExact.sharesTotal : ℚ) + r.shares.toRat ≤ 2 ^ 63 - 1 → -- the MPT maximum
-      (whole = true → u.numericType.isIntegral = true →
-        ∃ k : ℤ, u.idealChargeDeposit r.shares.toRat = k * 10 ^ u.baseExponent) →
+      (whole = true → ∃ k : ℤ, u.idealChargeDeposit r.shares.toRat = k * 10 ^ u.baseExponent) →
       Vault.ReachableFromIn whole w t' r.vault' (n + 1)
-        (D + if u.numericType.isIntegral then 0 else (10 : ℚ) ^ u.baseExponent / (r.vault'.toExact.sharesTotal : ℚ))
-  | withdraw (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (amount : WithdrawAmount)
+  | withdraw (w u : Vault) (t t' : UInt32) (n : ℕ) (amount : WithdrawAmount)
       (holderShares : STAmount) (waive : Bool) (r : VaultWithAmounts) :
-      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      Vault.ReachableFromIn whole w t u n → t ≤ t' →
       amount.amount.Canonical → amount.InAsset u.numericType → holderShares.ShareBalance →
       (waive = true ↔ u.IsSoleShareholder holderShares) →
       (hpos : 0 < amount.amount.toRat) → (u.withdraw amount waive t' hpos).run = .ok (.ok r) →
       r.shares.toRat ≤ holderShares.toRat →
       r.shares.toRat < (u.toExact.sharesTotal : ℚ) → -- shares remain
       (whole = true → ∃ k : ℤ, u.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ u.baseExponent) →
-      Vault.ReachableFromIn whole w t' r.vault' (n + 1) D
-  | clawback (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (assets holderShares : STAmount) (waive : Bool)
+      Vault.ReachableFromIn whole w t' r.vault' (n + 1)
+  | clawback (w u : Vault) (t t' : UInt32) (n : ℕ) (assets holderShares : STAmount) (waive : Bool)
       (r : VaultWithAmounts) :
-      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      Vault.ReachableFromIn whole w t u n → t ≤ t' →
       assets.CanonicalOrZero → assets.mNumericType = u.numericType → holderShares.ShareBalance →
       (waive = true ↔ u.IsSoleShareholder holderShares) →
       (hnn : 0 ≤ assets.toRat) → (u.clawback assets holderShares waive hnn).run = .ok (.ok r) →
       r.shares.toRat ≤ holderShares.toRat →
       r.shares.toRat < (u.toExact.sharesTotal : ℚ) → -- shares remain
       (whole = true → ∃ k : ℤ, u.idealAssetsWithdraw waive r.shares.toRat = k * 10 ^ u.baseExponent) →
-      Vault.ReachableFromIn whole w t' r.vault' (n + 1) D
-  | burnShares (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ)
+      Vault.ReachableFromIn whole w t' r.vault' (n + 1)
+  | burnShares (w u : Vault) (t t' : UInt32) (n : ℕ)
       (amount holderShares sharesTotalAmount : STAmount) (u' : Vault) :
-      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      Vault.ReachableFromIn whole w t u n → t ≤ t' →
       holderShares.ShareBalance →
       (u.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
       (u.burnShares holderShares).run = .ok (.ok u') →
-      Vault.ReachableFromIn whole w t' u' (n + 1) D
-  | update (w u : Vault) (t t' : UInt32) (n : ℕ) (D : ℚ) (assetsMaximum : Option Number)
+      Vault.ReachableFromIn whole w t' u' (n + 1)
+  | update (w u : Vault) (t t' : UInt32) (n : ℕ) (assetsMaximum : Option Number)
       (blockDeposit unblockDeposit : Bool) (u' : Vault) :
-      Vault.ReachableFromIn whole w t u n D → t ≤ t' →
+      Vault.ReachableFromIn whole w t u n → t ≤ t' →
       u.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
       u.update assetsMaximum blockDeposit unblockDeposit = .ok u' →
-      Vault.ReachableFromIn whole w t' u' (n + 1) D
+      Vault.ReachableFromIn whole w t' u' (n + 1)
 
 /-- Withdrawals from time `t` on that drain the vault to zero shares. `done`: no shares are left.
 `step`: one successful non-loss-waiving withdrawal at a time `t'` no earlier than `t`, then the rest. -/

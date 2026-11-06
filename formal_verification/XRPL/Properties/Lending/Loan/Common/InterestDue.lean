@@ -238,6 +238,8 @@ lemma Loan.scheduledComponents_tracked (l : Loan) (pc : PaymentComponents) (hlo 
   right
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨cs, hcs, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, hpr1, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hpr1
   obtain ⟨ts, hts, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨tpo, htpo, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨ti, hti, h⟩ := bind_ok_peel _ _ _ h
@@ -400,7 +402,7 @@ private lemma Loan.doPayment_interestDue (l l' : Loan) (pc : PaymentComponents) 
     simp only [Loan.doPayment, hf, Bool.false_eq_true, ↓reduceIte] at h
     unfold_ter at h
     walk_ok
-    rename_i _ tv htv _ pv hpv _ mv hmv hlaw
+    rename_i _ tv htv _ pv hpv _ mv hmv _ _ hlaw
     have h1 := (RawLoan.to_lawful_ok hlaw).1
     have hi0 : 0 ≤ l.totalValueOutstanding.toRat - l.principalOutstanding.toRat - l.managementFeeOutstanding.toRat :=
       hi

@@ -63,8 +63,8 @@ theorem LoanBroker.coverWithdraw_exits (pool : α) (amount : STAmount) :
   ⟨LoanBroker.coverWithdraw_negative_cover_proof lb pool amount, LoanBroker.coverWithdraw_success_proof lb pool amount⟩
 
 /-- A withdrawal never returns a transaction error code. -/
-theorem LoanBroker.coverWithdraw_never_rejects (pool : α) (amount : STAmount) (ter : TER) :
+theorem LoanBroker.coverWithdraw_error_codes (pool : α) (amount : STAmount) (ter : TER) :
     (lb.coverWithdraw pool amount).run ≠ .ok (.error ter) :=
-  LoanBroker.coverWithdraw_never_rejects_proof lb pool amount ter
+  LoanBroker.coverWithdraw_error_codes_proof lb pool amount ter
 
 end XRPL.Model.Lending

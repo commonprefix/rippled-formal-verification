@@ -42,6 +42,8 @@ lemma LendingLedger.applyLoanSet_inv (l : LendingLedger) (u : LoanEffect) (i : N
   unfold LendingLedger.applyLoanSet at h
   dsimp only at h
   split at h
+  · simp [ExceptT.run, ExceptT.mk] at h
+  split at h
   · cases h
   generalize hb : l.broker? i = ob at h
   cases ob with
@@ -82,13 +84,14 @@ lemma LendingLedger.applyLoan_delete_inv (l : LendingLedger) (u : LoanEffect) (i
 lemma LendingLedger.applyLoan_manage_inv (l : LendingLedger) (u : LoanEffect) (i : Nat) (action : LoanManageAction)
     (h : (l.applyLoan (.loanManage i action)).run = .ok (.ok u)) :
     ∃ e broker loan r, l.loan? i = some e ∧ l.broker? e.brokerIndex = some broker ∧
-      e.loan.withBroker broker = .ok loan ∧ loan.canManage action l.now = .tesSUCCESS ∧
+      e.loan.withBroker broker = .ok loan ∧ loan.canManage action l.now = .ok .tesSUCCESS ∧
       (loan.manage action l.vault l.now).run = .ok (.ok r) ∧ u = LoanEffect.ofLoan i e r.loan' r.pool' := by
   simp only [LendingLedger.applyLoan] at h
   unfold_ter at h
   walk_ok
   simp only [Bool.not_eq_eq_eq_not, Bool.not_true] at *
   simp only [Bool.not_eq_false, TER.isTesSuccess_iff] at *
+  subst_vars
   exact ⟨_, _, _, _, ‹_›, ‹_›, ‹_›, ‹_›, ‹_›, rfl⟩
 
 /-- A successful LoanPay ran on a stored loan with its broker refreshed. -/

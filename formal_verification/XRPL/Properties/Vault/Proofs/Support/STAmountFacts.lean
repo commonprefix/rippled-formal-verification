@@ -70,7 +70,8 @@ lemma STAmount.toNumber_zero_eq (s : STAmount) (mode : rounding_mode) (n : Numbe
     rw [if_pos hint] at hok
     have hsd : s.signedDrops = 0 := by unfold STAmount.signedDrops; simp [hz]
     simp only [hsd, IntAmount.toNumber, Number.from_rep,
-      show ((0 : Int).toInt64).toInt.natAbs.toUInt64 = 0 from by decide,
+      show Int.toInt64Checked 0 = .ok 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
+      show (Int64.toInt 0).natAbs.toUInt64 = 0 from by decide,
       Number.normalized_zero_mantissa] at hok
     exact (Except.ok.inj hok).symm
   · have hfr : s.integral = false := by simpa using hint
@@ -94,9 +95,7 @@ lemma STAmount.canonicalize_signtrue_nonpos (s result : STAmount) (mode : roundi
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
-    unfold STAmount.iou; rw [if_neg hint]
-  rw [hiou] at hok
+  rw [STAmount.iou_of_lt mode hint hfit] at hok
   have hsd_np : s.signedDrops.toInt64.toInt ≤ 0 := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -111,11 +110,8 @@ lemma STAmount.canonicalize_signtrue_nonpos (s result : STAmount) (mode : roundi
     by_cases hz : i.mantissa_ = 0
     · have hmv : result.mValue = 0 := by
         rw [← heq]
-        show (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64 = 0
-        rw [hz]
-        by_cases hs : i.signum < 0
-        · rw [if_pos hs]; decide
-        · rw [if_neg hs]; decide
+        show i.mantissa_.magnitude = 0
+        rw [hz]; decide
       rw [STAmount.toRat_signed, hmv]; simp
     · have hlt : i.mantissa_.toInt < 0 := by
         rcases lt_or_eq_of_le hi_np with h | h
@@ -144,6 +140,8 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
     obtain ⟨mant, exp⟩ := me
     rw [hnr] at hok
     simp only [] at hok
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     unfold STAmount.checked STAmount.canonicalize at hok
     rw [if_neg (show ¬ (STAmount.unchecked .fractional mant.toUInt64 exp
       (decide (n.signum < 0))).integral = true by
@@ -154,20 +152,13 @@ lemma STAmount.ofNumber_frac_exp_range (nt : NumericType) (n : Number) (mode : r
     | ok i =>
       rw [hi] at hok
       simp only [] at hok
-      have hiou : (STAmount.unchecked .fractional mant.toUInt64 exp
-          (decide (n.signum < 0))).iou mode
-          = IOUAmount.ofMantissaExp (STAmount.unchecked .fractional mant.toUInt64 exp
-              (decide (n.signum < 0))).signedDrops.toInt64 exp mode := by
-        unfold STAmount.iou
-        rw [if_neg (show ¬ (STAmount.unchecked .fractional mant.toUInt64 exp
+      replace hi := STAmount.iou_ok_peel (show ¬ (STAmount.unchecked .fractional mant.toUInt64 exp
           (decide (n.signum < 0))).integral = true by
-            show ¬ NumericType.fractional.isIntegral = true; decide)]
-        rfl
-      rw [hiou] at hi
+            show ¬ NumericType.fractional.isIntegral = true; decide) hi
       have hexp : result.exponent = i.exponent_ := by rw [← Except.ok.inj hok]; rfl
       have hmv : result.mValue
           = (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64 := by
-        rw [← Except.ok.inj hok]
+        rw [IOUAmount.absMant_toUInt64, ← Except.ok.inj hok]
       have hiff : result.mValue = 0 ↔ i.mantissa_ = 0 := by
         rw [hmv, Int64.toUInt64_eq_zero_iff]
         by_cases hs : i.signum < 0
@@ -275,6 +266,8 @@ lemma STAmount.ofNumber_fractional_zero_below_min (nt : NumericType) (n : Number
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hexp_zero : exp < cMinOffset :=
       STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp false mode hmtu_lo hmtu_hi
         (by omega) hexp_le result hok hz
@@ -392,7 +385,8 @@ lemma STAmount.toNumber_zero_ok (s : STAmount) (mode : rounding_mode) (hz : s.mV
     rw [if_pos hint]
     have hsd : s.signedDrops = 0 := by unfold STAmount.signedDrops; simp [hz]
     simp only [hsd, IntAmount.toNumber, Number.from_rep,
-      show ((0 : Int).toInt64).toInt.natAbs.toUInt64 = 0 from by decide,
+      show Int.toInt64Checked 0 = .ok 0 from by decide, ok_bind, pure_eq, Int64.magnitude_eq,
+      show (Int64.toInt 0).natAbs.toUInt64 = 0 from by decide,
       Number.normalized_zero_mantissa]
   · exact STAmount.toNumber_zero_fractional s mode (by simpa using hint) hz
 

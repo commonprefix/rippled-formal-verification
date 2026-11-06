@@ -11,10 +11,10 @@ namespace XRPL.Model.Protocol
 
 /-- `bringIntoRange` output: the canonical zero record, or nonzero mantissa. -/
 lemma Guard.bringIntoRange_cases_sz (neg : Bool) (m : UInt64) (e : Int) (minM : UInt64) :
-    Guard.bringIntoRange neg m e minM
+    Guard.bringIntoRangeSpec neg m e minM
       = ({ negative_ := false, mantissa_ := 0, exponent_ := -2147483648 } : RoundResult) ∨
-    (Guard.bringIntoRange neg m e minM).mantissa_ ≠ 0 := by
-  unfold Guard.bringIntoRange
+    (Guard.bringIntoRangeSpec neg m e minM).mantissa_ ≠ 0 := by
+  unfold Guard.bringIntoRangeSpec
   rcases hp : (if m < minM ∧ m ≠ 0 then (m * 10, e - 1) else (m, e)) with ⟨m', e'⟩
   dsimp only
   by_cases hz : e' < minExponent ∨ m' = 0
@@ -29,8 +29,9 @@ lemma Guard.doRoundUp_zero_shape_sz (g : Guard) (neg : Bool) (m : UInt64) (e : I
     (hok : g.doRoundUp neg m e minM maxM mode loc = .ok res)
     (h0 : res.mantissa_ = 0) : res.toNumber = Number.zero := by
   have key : ∃ (n' : Bool) (m' : UInt64) (e' : Int),
-      res = Guard.bringIntoRange n' m' e' minM := by
-    unfold Guard.doRoundUp Guard.doDropDigit at hok
+      res = Guard.bringIntoRangeSpec n' m' e' minM := by
+    replace hok := Guard.doRoundUp_ok_spec hok
+    unfold Guard.doRoundUpSpec Guard.doDropDigit at hok
     dsimp only at hok
     repeat' split at hok
     all_goals
@@ -48,19 +49,20 @@ lemma doNormalize128_zero_shape_sz (zn : Bool) (M : UInt128) (e : Int) (sticky :
     (mode : rounding_mode) (result : Number)
     (hok : doNormalize128 zn M e largeRange.min largeRange.max mode sticky = .ok result)
     (h0 : result.mantissa_ = 0) : result = Number.zero := by
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   by_cases hM : (M == 0) = true
   · rw [if_pos hM] at hok
     exact (Except.ok.inj hok).symm
   · rw [if_neg hM] at hok
     simp only [] at hok
-    rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+    rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
     rw [hsu] at hok
     simp only [] at hok
     set g₀ : Guard := (if sticky = true
         then (if zn then Guard.new.set_negative else Guard.new).set_sticky
         else (if zn then Guard.new.set_negative else Guard.new)) with hg₀_def
-    cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+    cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
     | error err => rw [hsd] at hok; simp at hok
     | ok sd =>
       obtain ⟨m₂, e₂, g₂⟩ := sd
@@ -97,20 +99,23 @@ lemma Number.operator_add_zero_shape_sz (x y result : Number)
     (h0 : result.mantissa_ = 0) : result = Number.zero := by
   by_cases hy_guard : y.operator_eq Number.zero = true
   · have h_result : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hx h0
   by_cases hx_guard : x.operator_eq Number.zero = true
   · have h_result : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     subst h_result
     exact Number.eq_zero_of_mantissa_zero result hy h0
   by_cases heq_guard : x.operator_eq y.operator_neg = true
-  · unfold Number.operator_add at hok
+  · replace hok := Number.operator_add_ok_spec hok
+    unfold Number.operator_addSpec at hok
     rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
     exact (Except.ok.inj
       (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
@@ -163,23 +168,25 @@ lemma operator_sub_isNormalized_to_nearest_sz (x y result : Number)
 
 /-- `divQuotient128` on a zero numerator yields a zero quotient (no remainder). -/
 lemma divQuotient128_zero_sz (ym : UInt64) (xe ye : Int) :
-    divQuotient128 0 ym xe ye = (0, xe - ye - 17, false) := by
+    divQuotient128 0 ym xe ye = .ok (0, xe - ye - 17, false) := by
   have hnum : toUInt128 (0 : UInt64) * (100000000000000000 : UInt128) = 0 := by decide
+  have hfit : (toUInt128 (0 : UInt64)).toNat * (100000000000000000 : UInt128).toNat < 2 ^ 128 := by decide
   have hmod : (0 : UInt128) % toUInt128 ym = 0 := by
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_umod]; simp
   have hdiv : (0 : UInt128) / toUInt128 ym = 0 := by
     apply BitVec.eq_of_toNat_eq; rw [BitVec.toNat_udiv]; simp
   unfold divQuotient128
   dsimp only
-  rw [hnum, hmod, hdiv]
-  norm_num
+  rw [BitVec.mulChecked_of_lt hfit, ok_bind, hnum, hmod, hdiv, if_neg (by decide)]
+  rfl
 
 /-- `doNormalize128` on a zero mantissa is the literal `Number.zero`, returned by the leading
 `if mantissa == 0` check before the loop. -/
 lemma doNormalize128_zero_num_sz (zn : Bool) (e : Int) (minM maxM : UInt64)
     (mode : rounding_mode) (s : Bool) :
     doNormalize128 zn 0 e minM maxM mode s = .ok Number.zero := by
-  unfold doNormalize128
+  rw [doNormalize128_eq_spec]
+  unfold doNormalize128Spec
   rw [if_pos (by decide : ((0 : UInt128) == 0) = true)]
 
 /-- A nonzero `operator_div` result forces a nonzero numerator, since a zero numerator is either returned as
@@ -198,7 +205,7 @@ lemma operator_div_numerator_ne_zero_sz (x y result : Number) (mode : rounding_m
       Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)
     rw [← hxr]; exact hxz
   · rw [if_neg hxe] at hok
-    rw [hxz, divQuotient128_zero_sz] at hok
+    rw [hxz, divQuotient128_zero_sz, ok_bind] at hok
     simp only [] at hok
     rw [doNormalize128_zero_num_sz] at hok
     have : Number.zero = result :=

@@ -97,8 +97,10 @@ lemma STAmount.ofNumber_fractional_of_trailing_zeros_neg (n : Number) (mode : ro
   rw [show n.operator_neg.normalizeToRange kMinValue kMaxValue mode =
     n.operator_neg.normalizeToRange cMinValue cMaxValue mode from rfl, hnorm]
   simp only
-  rw [show (n.mantissa_ / 10 / 10 / 10).toInt64.toUInt64 = n.mantissa_ / 10 / 10 / 10 from
-    UInt64.toUInt64_toInt64 _]
+  have hnn : 0 ≤ (n.mantissa_ / 10 / 10 / 10).toInt64 :=
+    Int64.le_iff_toInt_le.mpr (by rw [UInt64.toInt64_toInt_of_lt _ (by rw [hm3]; omega)]; simp; omega)
+  rw [Int64.toUInt64Checked_of_nonneg hnn, ok_bind,
+    show (n.mantissa_ / 10 / 10 / 10).toInt64.toUInt64 = n.mantissa_ / 10 / 10 / 10 from UInt64.toUInt64_toInt64 _]
   -- the 16-digit record is already canonical, so `checked` keeps it
   exact STAmount.canonicalize_canonical_id _ mode
     ⟨rfl, by show 10 ^ 15 ≤ (n.mantissa_ / 10 / 10 / 10).toNat; omega,
@@ -153,6 +155,8 @@ lemma STAmount.ofNumber_frac_offset (r : Number) (mode : rounding_mode) (result 
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     obtain ⟨hexp_lo80, hexp_hi80, hres_eq⟩ :=
       STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
         hmtu_lo hmtu_hi (by omega) hexp_le result hok hresult
@@ -401,82 +405,6 @@ lemma floor_units_bounds (x : ℚ) (b : Int) :
   rw [le_div_iff₀ hp] at h1
   rw [div_lt_iff₀ hp] at h2
   constructor <;> nlinarith
-
-/-- A whole number of `10^(b - 15)` floors onto the grid of `10^b` losing at most `1 - 10^-15` units. -/
-private lemma floor_units_error_le (x : ℚ) (b : Int) (n : ℤ) (hx : x = (n : ℚ) * 10 ^ (b - 15)) :
-    x - (⌊x / 10 ^ b⌋ : ℚ) * 10 ^ b ≤ (1 - 1 / 10 ^ 15) * 10 ^ b := by
-  have hp : (0 : ℚ) < 10 ^ b := zpow_pos (by norm_num) _
-  have hx' : x = (n : ℚ) / 10 ^ 15 * 10 ^ b := by
-    rw [hx, zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0), show (10 : ℚ) ^ (15 : ℤ) = 10 ^ (15 : ℕ) from by norm_num]
-    ring
-  have hdiv : x / 10 ^ b = (n : ℚ) / 10 ^ 15 := by
-    rw [hx', mul_div_assoc, div_self hp.ne', mul_one]
-  obtain ⟨f, hf⟩ : ∃ f, ⌊x / 10 ^ b⌋ = f := ⟨_, rfl⟩
-  have h2 := Int.lt_floor_add_one (x / 10 ^ b)
-  rw [hf, hdiv, div_lt_iff₀ (by norm_num : (0 : ℚ) < 10 ^ 15)] at h2
-  have h3 : n < (f + 1) * 10 ^ 15 := by exact_mod_cast h2
-  have h4 : n ≤ f * 10 ^ 15 + (10 ^ 15 - 1) := by linarith
-  have h5 : (n : ℚ) ≤ (f : ℚ) * 10 ^ 15 + (10 ^ 15 - 1) := by exact_mod_cast h4
-  rw [hf, hx']
-  have h6 : (n : ℚ) / 10 ^ 15 - f ≤ 1 - 1 / 10 ^ 15 := by
-    rw [div_sub' (by norm_num), div_le_iff₀ (by norm_num)]
-    linarith
-  nlinarith
-
-/-- A canonical amount of at least `10^b` is a whole number of `10^(b - 15)`: its 16 digits reach at most
-15 places below `10^b`. -/
-private lemma canonical_toRat_fine_units (a : STAmount) (hc : a.Canonical) (b : Int) (hb : b ≤ 0)
-    (hge : (10 : ℚ) ^ b ≤ a.toRat) : ∃ n : ℤ, a.toRat = (n : ℚ) * 10 ^ (b - 15) := by
-  have hp : (0 : ℚ) < 10 ^ b := zpow_pos (by norm_num) _
-  have hpos : 0 < a.toRat := lt_of_lt_of_le hp hge
-  have habs := STAmount.abs_toRat a
-  rw [abs_of_pos hpos] at habs
-  cases hi : a.integral with
-  | true =>
-    have hoff := (hc.1 hi).1.offset_zero
-    rw [hoff, zpow_zero, mul_one] at habs
-    refine ⟨(a.mValue.toNat : ℤ) * 10 ^ (15 - b).toNat, ?_⟩
-    rw [habs]
-    push_cast
-    rw [mul_assoc, ← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), Int.toNat_of_nonneg (by omega)]
-    simp
-  | false =>
-    have hiou := hc.2 hi
-    have hq : b - 15 ≤ a.mOffset := by
-      have hlt : (10 : ℚ) ^ b < 10 ^ (16 + a.mOffset) := by
-        calc (10 : ℚ) ^ b ≤ a.toRat := hge
-          _ = (a.mValue.toNat : ℚ) * 10 ^ a.mOffset := habs
-          _ < (10 : ℚ) ^ 16 * 10 ^ a.mOffset := by
-            apply mul_lt_mul_of_pos_right _ (zpow_pos (by norm_num) _)
-            exact_mod_cast hiou.mant_hi
-          _ = 10 ^ (16 + a.mOffset) := by
-            rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-            norm_cast
-      have := (zpow_lt_zpow_iff_right₀ (by norm_num : (1 : ℚ) < 10)).mp hlt
-      omega
-    refine ⟨(a.mValue.toNat : ℤ) * 10 ^ (a.mOffset - (b - 15)).toNat, ?_⟩
-    rw [habs]
-    push_cast
-    rw [mul_assoc, ← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), Int.toNat_of_nonneg (by omega)]
-    congr 2
-    ring
-
-/-- Flooring a canonical amount onto the grid of `10^b` loses at most `1 - 10^-15` units when the result is
-positive: the amount is then at least `10^b`, so its 16 digits reach at most 15 places below `10^b`. -/
-lemma floor_units_error_le_of_canonical (a : STAmount) (hc : a.Canonical) (b : Int) (hb : b ≤ 0)
-    (hpos : 0 < (⌊a.toRat / 10 ^ b⌋ : ℚ) * 10 ^ b) :
-    a.toRat - (⌊a.toRat / 10 ^ b⌋ : ℚ) * 10 ^ b ≤ (1 - 1 / 10 ^ 15) * 10 ^ b := by
-  have hp : (0 : ℚ) < 10 ^ b := zpow_pos (by norm_num) _
-  have hf : (0 : ℚ) < ⌊a.toRat / 10 ^ b⌋ := (mul_pos_iff_of_pos_right hp).mp hpos
-  have hf1 : (1 : ℚ) ≤ ⌊a.toRat / 10 ^ b⌋ := by
-    have : 0 < ⌊a.toRat / 10 ^ b⌋ := by exact_mod_cast hf
-    exact_mod_cast this
-  have hle := Int.floor_le (a.toRat / 10 ^ b)
-  have hge : (10 : ℚ) ^ b ≤ a.toRat := by
-    rw [le_div_iff₀ hp] at hle
-    nlinarith
-  obtain ⟨n, hn⟩ := canonical_toRat_fine_units a hc b hb hge
-  exact floor_units_error_le a.toRat b n hn
 
 /-- A value floored onto the grid is not negative when the value is not. -/
 lemma floor_units_nonneg (x : ℚ) (b : Int) (hx : 0 ≤ x) : 0 ≤ (⌊x / 10 ^ b⌋ : ℚ) * 10 ^ b := by

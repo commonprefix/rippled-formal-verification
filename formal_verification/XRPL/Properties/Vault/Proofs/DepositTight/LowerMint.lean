@@ -185,7 +185,7 @@ open XRPL.Model.SingleAssetVault.DepTight
 
 /-- Sharp shortfall of the share count under the mint cap. With the issued shares fitting the `maxRep`
 cap, they fall short of the ideal by less than one share plus `4879·10⁻²²` relatively. -/
-lemma Vault.deposit_sharesIssued_lower_mint_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+lemma Vault.deposit_sharesCreated_lower_mint_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
     (t : UInt32) (hcanon : amountDeposit.Canonical) (hposA : 0 < amountDeposit.toRat)
     (navN : Number) (hat : v.assetsTotal = .ok navN)
     (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount))

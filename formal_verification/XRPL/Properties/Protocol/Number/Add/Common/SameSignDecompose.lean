@@ -43,9 +43,9 @@ private theorem operator_add_post_alignment_anyMode
     (hok : (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a
             let p : UInt64 × Int × Guard :=
               if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-                (toUInt64 (g_aln.doDropDigit128 zm128 e_common).2.1,
-                 (g_aln.doDropDigit128 zm128 e_common).2.2,
-                 (g_aln.doDropDigit128 zm128 e_common).1)
+                (toUInt64 (g_aln.doDropDigit128Spec zm128 e_common).2.1,
+                 (g_aln.doDropDigit128Spec zm128 e_common).2.2,
+                 (g_aln.doDropDigit128Spec zm128 e_common).1)
               else (toUInt64 zm128, e_common, g_aln)
             match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max
                   mode .overflow with
@@ -190,8 +190,8 @@ private theorem operator_add_post_alignment_anyMode
                 = .ok result := by
       have h := hok
       simp only [h_cond_true, if_true] at h
-      have hddd : g_aln.doDropDigit128 zm128 e_common = (g_new, zm128 / 10, e_common + 1) := by
-        unfold Guard.doDropDigit128
+      have hddd : g_aln.doDropDigit128Spec zm128 e_common = (g_new, zm128 / 10, e_common + 1) := by
+        unfold Guard.doDropDigit128Spec
         rw [← hd_def, hg_new_def]
       rw [hddd] at h
       simp only at h
@@ -424,7 +424,8 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
     have hh : y.mantissa_.toNat = 0 := by rw [hmeq]; rfl
     have : (10 : ℕ) ^ 18 ≤ 0 := hh ▸ hy_min
     norm_num at this
-  unfold Number.operator_add at hok
+  replace hok := Number.operator_add_ok_spec hok
+  unfold Number.operator_addSpec at hok
   simp only [hy_ne_zero, hx_ne_zero, h_not_zero, Bool.false_eq_true, if_false] at hok
   have h_xneqyn : (x.negative_ == y.negative_) = true := by
     rw [beq_iff_eq]; exact h_same_sign
@@ -481,9 +482,9 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
     have hok_post : (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 y.mantissa_
                      let p : UInt64 × Int × Guard :=
                        if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-                         (toUInt64 (g_aln.doDropDigit128 zm128 e_common).2.1,
-                          (g_aln.doDropDigit128 zm128 e_common).2.2,
-                          (g_aln.doDropDigit128 zm128 e_common).1)
+                         (toUInt64 (g_aln.doDropDigit128Spec zm128 e_common).2.1,
+                          (g_aln.doDropDigit128Spec zm128 e_common).2.2,
+                          (g_aln.doDropDigit128Spec zm128 e_common).1)
                        else (toUInt64 zm128, e_common, g_aln)
                      match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                            mode .overflow with
@@ -555,9 +556,9 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       have hok_post : (let zm128 : UInt128 := toUInt128 x.mantissa_ + toUInt128 ym_a
                        let p : UInt64 × Int × Guard :=
                          if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-                           (toUInt64 (g_aln.doDropDigit128 zm128 e_common).2.1,
-                            (g_aln.doDropDigit128 zm128 e_common).2.2,
-                            (g_aln.doDropDigit128 zm128 e_common).1)
+                           (toUInt64 (g_aln.doDropDigit128Spec zm128 e_common).2.1,
+                            (g_aln.doDropDigit128Spec zm128 e_common).2.2,
+                            (g_aln.doDropDigit128Spec zm128 e_common).1)
                          else (toUInt64 zm128, e_common, g_aln)
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                              mode .overflow with
@@ -603,9 +604,9 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       have hok_post : (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a
                        let p : UInt64 × Int × Guard :=
                          if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
-                           (toUInt64 (g_aln.doDropDigit128 zm128 e_common).2.1,
-                            (g_aln.doDropDigit128 zm128 e_common).2.2,
-                            (g_aln.doDropDigit128 zm128 e_common).1)
+                           (toUInt64 (g_aln.doDropDigit128Spec zm128 e_common).2.1,
+                            (g_aln.doDropDigit128Spec zm128 e_common).2.2,
+                            (g_aln.doDropDigit128Spec zm128 e_common).1)
                          else (toUInt64 zm128, e_common, g_aln)
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                              mode .overflow with

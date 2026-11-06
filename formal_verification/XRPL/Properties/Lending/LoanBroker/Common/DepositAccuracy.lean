@@ -91,30 +91,22 @@ lemma LoanBroker.coverDeposit_credit_le_amount_proof (lb : LoanBroker) (base : I
   obtain ⟨-, -, -, hle, hcov⟩ := LoanBroker.coverDeposit_exact lb v amount res hz hnt hc hpos hcan hok
   rw [hcov]; linarith
 
-/-- Proof body of the bounds line of `LoanBroker.roundedCoverAmount_bounds`. -/
+/-- Proof body of the floor line of `LoanBroker.roundedCoverAmount_bounds`. -/
 lemma LoanBroker.roundedCoverAmount_bounds_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
     (amount : STAmount) (hc : amount.Canonical) (hat : amount.mNumericType = lb.numericType)
     (hpos : 0 < amount.toRat) (hcan : lb.canCoverDeposit v amount = .ok .tesSUCCESS)
     (r : STAmount) (hok : (lb.roundedCoverAmount v amount).run = .ok (.ok r)) :
-    r.toRat ≤ amount.toRat ∧ amount.toRat - r.toRat < 10 ^ base := by
+    r.toRat = (⌊amount.toRat / 10 ^ base⌋ : ℚ) * 10 ^ base := by
   have hz : lb.OpenZone v.baseExponent := hvb ▸ LoanBroker.Reachable.openZone_proof lb base hr hmax
-  obtain ⟨-, -, -, hsig⟩ := LoanBroker.roundedCoverAmount_ok lb v amount r hok
-  have hrpos := (STAmount.signum_pos_iff_toRat_pos r).mp hsig
   obtain ⟨r', res, hr', hres, hamt⟩ :=
     LoanBroker.coverDeposit_total_proof lb v amount hc hpos.le v.baseExponent_range hcan
   rw [hok, Except.ok.injEq, Except.ok.injEq] at hr'
   subst hr'
   have hfl := LoanBroker.coverDeposit_floor lb v amount res hz hnt hc hat hpos hcan hres
   rw [hamt] at hfl
-  rw [hfl] at hrpos
-  rw [hfl, ← hvb]
-  have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have hlt : (1 - 1 / 10 ^ 15 : ℚ) * 10 ^ v.baseExponent < 1 * 10 ^ v.baseExponent :=
-    mul_lt_mul_of_pos_right (by norm_num) hp
-  exact ⟨(floor_units_bounds amount.toRat v.baseExponent).1, by
-    linarith [floor_units_error_le_of_canonical amount hc v.baseExponent v.baseExponent_bounds.2.1 hrpos]⟩
+  rw [hfl, hvb]
 
 /-- Proof body of the integral line of `LoanBroker.coverDeposit_credit`. -/
 lemma LoanBroker.coverDeposit_credit_integral_proof (lb : LoanBroker) (pool : α) (amount : STAmount)

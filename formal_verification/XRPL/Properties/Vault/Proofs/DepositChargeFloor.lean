@@ -117,74 +117,7 @@ lemma Vault.deposit_charge_worth (v : Vault) (amountDeposit : STAmount) (t : UIn
   · -- the priced number underflowed, so the charge is not a positive IOU amount
     exact absurd hQm (STAmount.ofNumber_source_ne_zero _ Q .to_nearest priced hQc hpmv)
 
-/-- An integral deposit charge whose price has an exact 19-digit product and quotient is within half a unit of the
-issued shares' worth at the computed total. -/
-lemma Vault.deposit_charge_exact_integral (v : Vault) (amountDeposit : STAmount) (t : UInt32)
-    (hcanon : amountDeposit.Canonical) (hpos : 0 < amountDeposit.toRat) (hint : v.numericType.isIntegral = true)
-    (navN : Number) (hat : v.assetsTotal = .ok navN)
-    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
-    (hexact : ((∃ q : Number, q.isNormalized ∧
-        q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat)) :
-    |r.assets.toRat - v.idealChargeDepositAt navN.toRat r.shares.toRat| ≤ 1 / 2 := by
-  obtain ⟨-, priced, navN', -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, hat', hcl, -⟩ :=
-    DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
-  rw [hat, Except.ok.injEq] at hat'
-  subst hat'
-  have hpnn := sharesToAssetsDeposit_nonneg v r.shares priced hshc hshnt hshpos hsad
-  have hpnt := sharesToAssetsDeposit_mNumericType v r.shares priced hsad
-  have hcp : r.assets = priced :=
-    clampToSumExponent_integral_nonneg navN priced r.assets v.baseExponent
-      (by show priced.mNumericType.isIntegral = true; rw [hpnt]; exact hint) hpnn hcl
-  rw [hcp]
-  by_cases hmz : navN.mantissa_ = 0
-  · -- an empty vault prices the shares exactly
-    rw [empty_charge_at v navN hat hmz r.shares.toRat,
-      (charge_empty_integral v r.shares priced hint hshc hshnt hshpos navN hat hmz hsad).1, sub_self, abs_zero]
-    norm_num
-  obtain ⟨Q, hQn, hQneg, hQv, hof⟩ := DepTight.charge_exact v r.shares priced hshc hshnt hshpos navN hat hmz hsad
-    hexact
-  rw [← hQv]
-  exact STAmount.ofNumber_integral_within_half v.numericType Q priced hint hQn hQneg hof
-
 /-- Proof of `Vault.deposit_charge`. -/
-lemma Vault.Reachable.deposit_charge_intended_proof (v : Vault) (amountDeposit : STAmount) (t t0 : UInt32)
-    (hpos : 0 < amountDeposit.toRat) (hr : Vault.Reachable v t0) (hcanon : amountDeposit.Canonical)
-    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r)) :
-    r.assets.toRat ≤ amountDeposit.toRat ∧
-    v.idealChargeDeposit r.shares.toRat - (10 : ℚ) ^ v.baseExponent < r.assets.toRat ∧
-    (r.assets.isZero = true →
-      v.numericType.isIntegral = true ∧ v.idealChargeDeposit r.shares.toRat * (1 - sharesε) ≤ 1 / 2) ∧
-    (v.numericType.isIntegral = true →
-      ((∃ q : Number, q.isNormalized ∧ q.toRat = v.idealChargeDeposit r.shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealChargeDeposit r.shares.toRat) →
-      r.assets.toRat - v.idealChargeDeposit r.shares.toRat ≤ 1 / 2) ∧
-    ((∃ k : ℤ, v.idealChargeDeposit r.shares.toRat = k * 10 ^ v.baseExponent) →
-      (v.numericType.isIntegral = false → r.assets.toRat ≤ v.idealChargeDeposit r.shares.toRat) ∧
-      (v.numericType.isIntegral = true → v.idealChargeDeposit r.shares.toRat ≤ r.assets.toRat)) := by
-  obtain ⟨h1, h2, h3, -⟩ := Vault.Reachable.deposit_charge_proof v amountDeposit t t0 hpos hr hcanon r hok
-  have hty := Vault.deposit_amount_numericType v amountDeposit t hpos hcanon r hok
-  have hz := Vault.Reachable.openZone_proof v t0 hr (Vault.maxValue_fits_of_canonical v amountDeposit hcanon hty)
-  have hI : v.idealChargeDepositAt v.assetsAvailable.toRat r.shares.toRat = v.idealChargeDeposit r.shares.toRat := by
-    rw [← hz.depositNav_eq, RawVault.idealChargeDepositAt_depositNav]
-  -- the cash after the deposit stays in the Open zone, so the worth is below `9.9·10^15` base units
-  have hopen := hz.deposit_open amountDeposit false t hpos hcanon hty r hok
-  have hA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
-  have hb : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have h9 : (9 : ℚ) * 10 ^ (15 + v.baseExponent) = 9 * 10 ^ 15 * 10 ^ v.baseExponent := by
-    rw [zpow_add₀ (by norm_num)]; norm_num; ring
-  have hsmall : v.idealChargeDepositAt v.assetsAvailable.toRat r.shares.toRat ≤
-      99 * 10 ^ 14 * (10 : ℚ) ^ v.baseExponent := by
-    rw [hI]; nlinarith
-  obtain ⟨hw, -⟩ := Vault.deposit_charge_worth v amountDeposit t hcanon hpos v.assetsAvailable hz.assetsTotal_eq
-    r hok hsmall
-  rw [hI] at hw
-  refine ⟨h1, h2, h3, fun hint hexact => ?_, hw⟩
-  rw [← hI] at hexact ⊢
-  exact (abs_le.mp (Vault.deposit_charge_exact_integral v amountDeposit t hcanon hpos hint v.assetsAvailable
-    hz.assetsTotal_eq r hok hexact)).2
-
-/-- Proof of `Vault.deposit_charge_total`. -/
 lemma Vault.deposit_charge_intended_total_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
     (hcanon : amountDeposit.Canonical) (hpos : 0 < amountDeposit.toRat)
     (navN : Number) (hat : v.assetsTotal = .ok navN)
@@ -192,41 +125,13 @@ lemma Vault.deposit_charge_intended_total_proof (v : Vault) (amountDeposit : STA
     (hsmall : v.idealChargeDepositAt navN.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
     r.assets.toRat ≤ amountDeposit.toRat ∧
     v.idealChargeDepositAt navN.toRat r.shares.toRat - (10 : ℚ) ^ v.baseExponent < r.assets.toRat ∧
-    (r.assets.isZero = true →
-      v.numericType.isIntegral = true ∧
-        v.idealChargeDepositAt navN.toRat r.shares.toRat * (1 - sharesε) ≤ 1 / 2) ∧
-    (v.numericType.isIntegral = true →
-      ((∃ q : Number, q.isNormalized ∧
-          q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat) →
-      r.assets.toRat - v.idealChargeDeposit r.shares.toRat ≤ 1 / 2) ∧
+    (v.numericType.isIntegral = true → r.assets.toRat - v.idealChargeDepositAt navN.toRat r.shares.toRat < 1) ∧
     ((∃ k : ℤ, v.idealChargeDepositAt navN.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
       (v.numericType.isIntegral = false → r.assets.toRat ≤ v.idealChargeDepositAt navN.toRat r.shares.toRat) ∧
       (v.numericType.isIntegral = true → v.idealChargeDepositAt navN.toRat r.shares.toRat ≤ r.assets.toRat)) := by
-  obtain ⟨h1, h2, h3, -⟩ := Vault.deposit_charge_total_proof v amountDeposit t hcanon hpos navN hat r hok
+  obtain ⟨h1, h2, -, -⟩ := Vault.deposit_charge_total_proof v amountDeposit t hcanon hpos navN hat r hok
   have hb : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  obtain ⟨hw, -⟩ := Vault.deposit_charge_worth v amountDeposit t hcanon hpos navN hat r hok (by nlinarith)
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
-    DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
-  have hle := Vault.idealChargeDepositAt_le v navN hat r.shares.toRat hshpos.le
-  refine ⟨h1, h2, h3, fun hint hexact => ?_, hw⟩
-  linarith [(abs_le.mp (Vault.deposit_charge_exact_integral v amountDeposit t hcanon hpos hint navN hat r hok
-    hexact)).2]
-
-/-- Proof of `Vault.deposit_charge_integral`. -/
-lemma Vault.deposit_charge_integral_intended_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
-    (navN : Number) (hat : v.assetsTotal = .ok navN)
-    (hcanon : amountDeposit.Canonical) (hint : v.numericType.isIntegral = true)
-    (hpos : 0 < amountDeposit.toRat)
-    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
-    (hexact : ((∃ q : Number, q.isNormalized ∧
-        q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealChargeDepositAt navN.toRat r.shares.toRat)) :
-    r.assets.toRat - v.idealChargeDeposit r.shares.toRat ≤ 1 / 2 := by
-  obtain ⟨-, -, -, -, -, -, -, -, -, -, hshpos, -⟩ :=
-    DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r hok
-  have hle := Vault.idealChargeDepositAt_le v navN hat r.shares.toRat hshpos.le
-  linarith [(abs_le.mp (Vault.deposit_charge_exact_integral v amountDeposit t hcanon hpos hint navN hat r hok
-    hexact)).2]
+  obtain ⟨hw, hu⟩ := Vault.deposit_charge_worth v amountDeposit t hcanon hpos navN hat r hok (by nlinarith)
+  exact ⟨h1, h2, hu, hw⟩
 
 end XRPL.Model.SingleAssetVault

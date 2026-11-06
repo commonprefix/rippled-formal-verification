@@ -20,10 +20,15 @@ private lemma normalizeToRange_towards_zero_exp (n : Number) (mant : Int64) (exp
   have hm3 : (n.mantissa_ / 10 / 10 / 10).toNat = n.mantissa_.toNat / 1000 := m_div_thousand_toNat n.mantissa_
   have hcMax : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
   have hcMin : cMinValue.toNat = 10 ^ 15 := by decide
-  unfold Number.normalizeToRange at hok
-  rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .towards_zero .normalize2
-    (round_bool_towards_zero g _) (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega) (by omega)
-    (by omega)] at hok
+  have hnr : n.normalizeToRange cMinValue cMaxValue .towards_zero
+      = .ok (if n.negative_ then -(n.mantissa_ / 10 / 10 / 10).toInt64 else (n.mantissa_ / 10 / 10 / 10).toInt64,
+        n.exponent_ + 3) := by
+    unfold Number.normalizeToRange
+    rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .towards_zero .normalize2
+      (round_bool_towards_zero g _) (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega) (by omega)
+      (by omega)]
+    exact Number.normalizeToRange_tail (by dsimp only [RoundResult.toNumber]; rw [hm3]; omega)
+  rw [hnr] at hok
   simp only [Except.ok.injEq, Prod.mk.injEq] at hok
   exact hok.2.symm
 
@@ -78,13 +83,13 @@ private lemma STAmount.ofNumber_fractional_towards_zero_ok (r : Number) (hn : r.
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_of_lt .towards_zero h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .towards_zero hmtu_lo hmtu_hi
       (by omega) (by omega)
-  rw [STAmount.checked]
+  rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
+    STAmount.checked]
   unfold STAmount.canonicalize
   rw [if_neg h_int, hiou, if_neg (by omega)]
   split_ifs <;> exact ⟨_, rfl⟩

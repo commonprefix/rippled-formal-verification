@@ -1,7 +1,11 @@
 import XRPL.Properties.Vault.Proofs.ExitOrderPayout
 import XRPL.Properties.Vault.Proofs.WithdrawExits
 import XRPL.Properties.Vault.Proofs.MaxValueFits
-import XRPL.Properties.Vault.Proofs.PriceExact
+import XRPL.Properties.Vault.Proofs.WithdrawPricing.Core
+import XRPL.Properties.Vault.Proofs.DepositTight.Price
+import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable
+import XRPL.Properties.Protocol.Number.Div.RoundsToRepresentable
+import XRPL.Properties.Protocol.Number.Common.NumberBridge
 
 /-! # A withdrawal price against the shares' worth
 
@@ -142,44 +146,7 @@ lemma Vault.OpenZone.priced_le_worth {v : Vault} (hz : v.OpenZone)
   have hg : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
   exact le_of_grid_lt _ k _ _ heb _ _ hpv hk (by linarith)
 
-/-- Proof of the reachable line of `Vault.sharesToAssetsWithdraw_bounds`. -/
-lemma Vault.Reachable.sharesToAssetsWithdraw_intended_proof (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
-    (shares p : STAmount) (w : Bool) (hnn : 0 ≤ shares.toRat) (hsc : shares.Canonical)
-    (hle : shares.toRat ≤ v.toExact.sharesTotal) (hpr : v.sharesToAssetsWithdraw shares w = .ok p) :
-    0 ≤ p.toRat ∧
-    ((∃ k : ℤ, v.idealAssetsWithdraw w shares.toRat = k * 10 ^ v.baseExponent) →
-      p.toRat ≤ v.idealAssetsWithdraw w shares.toRat) ∧
-    (p.isZero = false →
-      ((∃ q : Number, q.isNormalized ∧ q.toRat = v.idealAssetsWithdraw w shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealAssetsWithdraw w shares.toRat) →
-      v.idealAssetsWithdraw w shares.toRat - p.toRat ≤ 1 / 2 * (10 : ℚ) ^ p.exponent) := by
-  -- the computed net asset value is the cash, and the worth at it is the exact worth
-  have hnav := Vault.assetsTotalForWithdrawal_of_noLending v (Vault.Reachable.noLending_proof v t0 hr).1 w
-  have hI : v.idealAssetsWithdrawAt v.assetsAvailable.toRat shares.toRat = v.idealAssetsWithdraw w shares.toRat := by
-    rw [Vault.Reachable.idealAssetsWithdraw_eq v t0 hr w]; rfl
-  rcases Vault.Reachable.maxValue_fits_or_no_shares v t0 hr with hmax | hS0
-  · obtain ⟨hp0, -, -⟩ := Vault.sharesToAssetsWithdraw_bounds_proof v shares p w hnn hsc
-      (Vault.Reachable.withdrawNavExact_proof v t0 hr w) hpr
-    have hpc := Vault.Reachable.sharesToAssetsWithdraw_le_cash v t0 hr hmax shares p w hnn hsc hle hpr
-    have hz := Vault.Reachable.openZone_proof v t0 hr hmax
-    refine ⟨hp0, hz.priced_le_worth hmax shares p w hnn hsc hpr hpc, fun hnz hexact => ?_⟩
-    rw [← hI] at hexact ⊢
-    linarith [(abs_le.mp (WdPrice.price_exact_half v shares p w v.assetsAvailable hnav hnn hsc hpr hnz hexact)).1]
-  -- no shares: the vault holds no cash, so every price is zero
-  have hS : v.toExact.sharesTotal = 0 := by exact_mod_cast hS0
-  have hA : v.assetsAvailable.toRat = 0 := (v.exact.empty_shares hS).1
-  have hAD := (Vault.Reachable.noLending_proof v t0 hr).1
-  have hp := Vault.sharesToAssetsWithdraw_zero_nav_proof v shares w v.assetsAvailable
-    (Vault.assetsTotalForWithdrawal_of_noLending v hAD w) (Number.toRat_eq_zero_iff.mp hA)
-  rw [hp, Except.ok.injEq] at hpr
-  subst hpr
-  have hI : v.idealAssetsWithdraw w shares.toRat = 0 := by
-    rw [Vault.Reachable.idealAssetsWithdraw_eq v t0 hr w, hA, zero_mul, zero_div]
-  refine ⟨by rw [STAmount.zero_toRat], fun _ => by rw [STAmount.zero_toRat, hI], fun h _ => ?_⟩
-  have hm : (STAmount.zero v.numericType).mValue ≠ 0 := ne_of_beq_false (show (_ == 0) = false from h)
-  exact absurd (STAmount.zero_toRat _) (STAmount.toRat_ne_zero _ hm)
-
-/-- The facts of one nonzero withdrawal price on any valid vault, for a worth at the computed net asset value
+/-- The facts of one nonzero withdrawal price on any lawful vault, for a worth at the computed net asset value
 within the Open limit: the same as `priced_grid`. -/
 lemma Vault.priced_grid_total (v : Vault)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
@@ -238,7 +205,7 @@ lemma Vault.priced_grid_total (v : Vault)
   rw [hε] at hpu hrel
   nlinarith
 
-/-- On any valid vault a withdrawal price never exceeds the worth at the computed net asset value when that worth
+/-- On any lawful vault a withdrawal price never exceeds the worth at the computed net asset value when that worth
 is a whole number of base units within the Open limit. -/
 lemma Vault.priced_le_worth_total (v : Vault)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
@@ -260,7 +227,7 @@ lemma Vault.priced_le_worth_total (v : Vault)
   have hg : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
   exact le_of_grid_lt _ k _ _ heb _ _ hpv hk (by linarith)
 
-/-- Proof of the valid-vault line of `Vault.sharesToAssetsWithdraw_bounds`. -/
+/-- Proof of `Vault.sharesToAssetsWithdraw_bounds`. -/
 lemma Vault.sharesToAssetsWithdraw_intended_total_proof (v : Vault)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (shares p : STAmount) (w : Bool) (nav : Number) (hnav : v.assetsTotalForWithdrawal w = .ok nav)
@@ -269,13 +236,13 @@ lemma Vault.sharesToAssetsWithdraw_intended_total_proof (v : Vault)
     0 ≤ p.toRat ∧
     ((∃ k : ℤ, v.idealAssetsWithdrawAt nav.toRat shares.toRat = k * 10 ^ v.baseExponent) →
       p.toRat ≤ v.idealAssetsWithdrawAt nav.toRat shares.toRat) ∧
-    (p.isZero = false →
-      ((∃ q : Number, q.isNormalized ∧
-          q.toRat = v.idealAssetsWithdrawAt nav.toRat shares.toRat * (v.toExact.sharesTotal : ℚ)) ∧
-        ∃ q : Number, q.isNormalized ∧ q.toRat = v.idealAssetsWithdrawAt nav.toRat shares.toRat) →
-      v.idealAssetsWithdrawAt nav.toRat shares.toRat - p.toRat ≤ 1 / 2 * (10 : ℚ) ^ p.exponent) := by
+    (p.isZero = false → v.idealAssetsWithdrawAt nav.toRat shares.toRat - p.toRat < (10 : ℚ) ^ p.exponent) := by
   obtain ⟨hp0, -, -⟩ := Vault.sharesToAssetsWithdraw_total_proof v shares p w nav hnav hnn hsc hpr
-  refine ⟨hp0, Vault.priced_le_worth_total v hmax shares p w nav hnav hnn hsc hpr hsmall, fun hnz hexact => ?_⟩
-  linarith [(abs_le.mp (WdPrice.price_exact_half v shares p w nav hnav hnn hsc hpr hnz hexact)).1]
+  refine ⟨hp0, Vault.priced_le_worth_total v hmax shares p w nav hnav hnn hsc hpr hsmall, fun hnz => ?_⟩
+  have hpm : p.mValue ≠ 0 := by simpa [STAmount.isZero] using hnz
+  obtain ⟨-, -, -, hlo, hrel⟩ := Vault.priced_grid_total v hmax shares p w nav hnav hnn hsc hpr hsmall
+    (STAmount.toRat_ne_zero p hpm)
+  have hg : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
+  linarith
 
 end XRPL.Model.SingleAssetVault

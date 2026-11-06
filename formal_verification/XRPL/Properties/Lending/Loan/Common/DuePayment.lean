@@ -88,7 +88,8 @@ lemma RawLoan.to_lawful_cases (rl : RawLoan) : (∃ l, rl.to_lawful = .ok l) ∨
 /-- An instalment that never fails the loan re-check computes while the loan's amounts and the instalment's
 deltas are below `10^180`. -/
 lemma Loan.doPayment_ok_of_below (l : Loan) (pc : PaymentComponents) (hne : Loan.doPayment l pc ≠ .error .notLawful)
-    (h1 : pc.totalValueDelta.Below 180) (h2 : pc.principalDelta.Below 180) (h3 : pc.managementFeeDelta.Below 180)
+    (h2r : pc.isFinal = false → 2 ≤ l.paymentRemaining.toNat) (h1 : pc.totalValueDelta.Below 180)
+    (h2 : pc.principalDelta.Below 180) (h3 : pc.managementFeeDelta.Below 180)
     (hT : l.totalValueOutstanding.Below 180) (hP : l.principalOutstanding.Below 180)
     (hM : l.managementFeeOutstanding.Below 180) : ∃ l', Loan.doPayment l pc = .ok l' := by
   cases hf : pc.isFinal
@@ -99,9 +100,11 @@ lemma Loan.doPayment_ok_of_below (l : Loan) (pc : PaymentComponents) (hne : Loan
         totalValueOutstanding := a, principalOutstanding := b, managementFeeOutstanding := c,
         paymentRemaining := l.paymentRemaining - 1, previousPaymentDueDate := l.nextPaymentDueDate,
         nextPaymentDueDate := l.nextPaymentDueDate + l.schedule.paymentInterval } := by
+      have hp1 : 1 ≤ l.paymentRemaining := by
+        rw [UInt32.le_iff_toNat_le, UInt32.toNat_one]; have := h2r hf; omega
       unfold Loan.doPayment
-      simp only [hf, Bool.false_eq_true, ↓reduceIte, ha, hb, hc, bind, Except.bind]
-      rfl
+      simp only [hf, Bool.false_eq_true, ↓reduceIte, ha, hb, hc, bind, Except.bind, pure, Except.pure,
+        UInt32.subChecked_of_le hp1, UInt32.addChecked_of_lt (l.nextDue_lt (h2r hf))]
     rw [heq] at hne ⊢
     rcases RawLoan.to_lawful_cases _ with h | h
     · exact h
@@ -251,7 +254,10 @@ lemma Loan.latePayInstalments_due {loan : Loan} {t : UInt32} (hre : loan.Reachab
   obtain ⟨v1, hu⟩ := Loan.unimpairIfImpaired_ok loan v hunimpair
   have hne := Loan.doPayment_late_ne_notLawful loan.unimpaired hshape.unimpaired now pc
     (by rw [Loan.lateComponents_unimpaired]; exact hpc') hrem
-  obtain ⟨l', hl'⟩ := Loan.doPayment_ok_of_below loan.unimpaired pc hne (b1.mono (by norm_num))
+  obtain ⟨l', hl'⟩ := Loan.doPayment_ok_of_below loan.unimpaired pc hne (fun hf => by
+      obtain ⟨pc0, hpc0, hfin⟩ := Loan.lateComponents_final _ _ _
+        (show Loan.lateComponents loan.unimpaired now = .ok pc by rw [Loan.lateComponents_unimpaired]; exact hpc')
+      exact Loan.scheduledComponents_two_le _ _ hpc0 hrem (hfin ▸ hf)) (b1.mono (by norm_num))
     (b2.mono (by norm_num)) (b3.mono (by norm_num)) (bT.mono (by norm_num)) (bP.mono (by norm_num))
     (bM.mono (by norm_num))
   obtain ⟨i, hi⟩ := Loan.interestDue_ok loan

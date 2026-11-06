@@ -209,6 +209,8 @@ lemma Loan.scheduledComponents_delta_lt (l : Loan) (pc : PaymentComponents) (hlo
   rename_i hnf
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨cs, hcs, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, hpr1, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hpr1
   obtain ⟨ts, hts, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨tpo, htpo, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨ti, hti, h⟩ := bind_ok_peel _ _ _ h
@@ -535,6 +537,8 @@ lemma Loan.doPayment_ne_notLawful (l : Loan) (pc : PaymentComponents)
     walk_ok
     all_goals first
       | exact Number.operator_sub_ne_notLawful _ _ _ ‹_›
+      | exact UInt32.subChecked_ne_notLawful _ _ ‹_›
+      | exact UInt32.addChecked_ne_notLawful _ _ ‹_›
       | skip
     rename_i hw
     obtain ⟨l', hl'⟩ := Loan.doPayment_tracked_lawful l pc ht hlt hr0 hr1 _ _ _ ‹_› ‹_› ‹_›

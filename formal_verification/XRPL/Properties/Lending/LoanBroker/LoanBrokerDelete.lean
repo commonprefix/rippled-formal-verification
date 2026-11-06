@@ -1,5 +1,4 @@
 import XRPL.Properties.Lending.LoanBroker.Common.DeleteAccuracy
-import XRPL.Properties.Lending.LoanBroker.Common.DeleteWitness
 import XRPL.Properties.Lending.LoanBroker.Common.MaxValueFits
 
 /-! # `LoanBroker.roundedCoverAvailable`
@@ -13,25 +12,13 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- On a reachable broker the returned amount `s` = CoverAvailable. -/
-theorem LoanBroker.Reachable.roundedCoverAvailable_exact (base : Int) (hr : lb.Reachable base)
-    (s : STAmount) (hok : lb.roundedCoverAvailable = .ok s) :
-    s.toRat = lb.toExact.coverAvailable :=
-  LoanBroker.Reachable.roundedCoverAvailable_exact_proof lb base hr s hok
-
-/-- When the returned amount `s` ≠ 0 -> |s − CoverAvailable| ≤ half a unit in the last digit of `s` (half a
-whole unit for XRP and MPT). On a reachable broker nothing rounds here. -/
-theorem LoanBroker.roundedCoverAvailable_bounds (s : STAmount)
-    (hok : lb.roundedCoverAvailable = .ok s)
-    (hnz : s.mValue ≠ 0) :
-    |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent :=
-  LoanBroker.roundedCoverAvailable_bounds_proof lb s hok hnz
-
-/-- Witness: a run where the error reaches the bound. A cover of `1000000000000000.5` needs 17
-digits, so the IOU amount returned is half a unit away. -/
-theorem LoanBroker.roundedCoverAvailable_bounds_attained :
-    ∃ (lb : LoanBroker) (s : STAmount), lb.roundedCoverAvailable = .ok s ∧ s.mValue ≠ 0 ∧
-      |s.toRat - lb.toExact.coverAvailable| = (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent :=
-  LoanBroker.roundedCoverAvailable_bounds_witness
+/-- Loan broker delete -> the amount `s` sent to the owner is CoverAvailable. On any lawful broker, with `s` ≠ 0 -> `s`
+is CoverAvailable rounded to nearest at the precision of `s`. -/
+theorem LoanBroker.roundedCoverAvailable_bounds (s : STAmount) (hok : lb.roundedCoverAvailable = .ok s) :
+    (∀ base : Int, lb.Reachable base → s.toRat = lb.toExact.coverAvailable) ∧
+    (s.mValue ≠ 0 → |s.toRat - lb.toExact.coverAvailable| ≤ (1 / 2 : ℚ) * (10 : ℚ) ^ s.exponent) :=
+  ⟨fun base hr =>
+      LoanBroker.roundedCoverAvailable_of_exact lb s (LoanBroker.Reachable.openZone lb base hr).coverExact hok,
+    fun hnz => LoanBroker.roundedCoverAvailable_bounds_proof lb s hok hnz⟩
 
 end XRPL.Model.Lending

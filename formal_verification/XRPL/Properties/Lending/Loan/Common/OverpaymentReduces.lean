@@ -58,6 +58,7 @@ private lemma computeLoanPropertiesFromPeriodicRate_pp (p rate : Number) (n : UI
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   exact hpp
@@ -134,7 +135,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
   have hpp : 0 < l.periodicPayment.toRat := by
     have := (operator_lt_iff _ _ Number.zero_isNormalized hppN).mp l.valid.periodicPayment_pos
     rwa [Number.toRat_zero] at this
-  have hN := Number.ofInt64_isNormalized l.paymentRemaining.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized l.paymentRemaining.toInt64
   have hNv := Number.ofInt64_count l.paymentRemaining
   have hn0 : (0 : ℚ) < l.paymentRemaining.toNat := by
     have : l.paymentRemaining.toNat ≠ 0 := fun h0 => hn (UInt32.toNat_inj.mp (by simpa using h0))
@@ -339,6 +340,10 @@ private lemma Loan.doPayment_periodicPayment (l l' : Loan) (pc : PaymentComponen
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, hc1, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc1
+    obtain ⟨_, hc2, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.addChecked_eq_ok.mp hc2
     exact (congrArg RawLoan.periodicPayment (RawLoan.to_lawful_ok h).1 :)
 
 /-- The instalment loop keeps PeriodicPayment. -/

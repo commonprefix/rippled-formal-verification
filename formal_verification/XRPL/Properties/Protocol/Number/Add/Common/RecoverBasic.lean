@@ -11,38 +11,38 @@ namespace XRPL.Model.Protocol
 
 /-- No-op case: `recover` with no fuel returns its inputs. -/
 lemma recover_noop_zero (upperLimit m : UInt128) (e : Int) (g : Guard) :
-    Number.operator_add.recover upperLimit m e g 0 = (m, e, g) := by
-  rw [Number.operator_add.recover.eq_def]
+    recoverSpec upperLimit m e g 0 = (m, e, g) := by
+  rw [recoverSpec.eq_def]
 
 /-- No-op case: when the exit condition holds, `recover` returns its inputs
 regardless of remaining fuel. -/
 lemma recover_noop_exit {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
     (h : ¬ (m < upperLimit ∧ ¬ g.empty)) :
-    Number.operator_add.recover upperLimit m e g (fuel + 1) = (m, e, g) := by
-  rw [Number.operator_add.recover.eq_def]
+    recoverSpec upperLimit m e g (fuel + 1) = (m, e, g) := by
+  rw [recoverSpec.eq_def]
   simp only [if_neg h]
 
 /-- Step case: when fuel > 0 and the loop condition holds, `recover` unrolls
 one `Guard.pop` step. -/
 lemma recover_step {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
     (h1 : m < upperLimit) (h2 : ¬ g.empty) :
-    Number.operator_add.recover upperLimit m e g (fuel + 1)
-      = Number.operator_add.recover upperLimit (m * 10 - toUInt128 g.pop.2) (e - 1) g.pop.1 fuel := by
-  rw [Number.operator_add.recover.eq_def]
+    recoverSpec upperLimit m e g (fuel + 1)
+      = recoverSpec upperLimit (m * 10 - toUInt128 g.pop.2) (e - 1) g.pop.1 fuel := by
+  rw [recoverSpec.eq_def]
   simp only [if_pos (And.intro h1 h2)]
 
 /-- Once the exit condition holds at the entry, `recover` is a no-op for any fuel. -/
 lemma recover_exit_idemp {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
     (h : ¬ (m < upperLimit ∧ ¬ g.empty)) :
-    Number.operator_add.recover upperLimit m e g fuel = (m, e, g) := by
+    recoverSpec upperLimit m e g fuel = (m, e, g) := by
   cases fuel with
   | zero => exact recover_noop_zero upperLimit m e g
   | succ n => exact recover_noop_exit h
 
 /-- `recover` keeps the guard's sticky bit `xbit_`, since `Guard.pop` does not change it. -/
 theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    (Number.operator_add.recover upperLimit m e g fuel).2.2.xbit_ = g.xbit_ := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    (recoverSpec upperLimit m e g fuel).2.2.xbit_ = g.xbit_ := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond
@@ -100,8 +100,8 @@ lemma recover_step_mantissa_nat128 {upperLimit m : UInt128} {d : UInt64}
 
 /-- Output exponent is at most the input exponent: each step decrements `e`. -/
 theorem recover_exponent_le (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    (Number.operator_add.recover upperLimit m e g fuel).2.1 ≤ e := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    (recoverSpec upperLimit m e g fuel).2.1 ≤ e := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond
@@ -112,8 +112,8 @@ theorem recover_exponent_le (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel
 
 /-- Output exponent is at least `e - fuel`: at most `fuel` steps execute. -/
 theorem recover_exponent_ge (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    e - fuel ≤ (Number.operator_add.recover upperLimit m e g fuel).2.1 := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    e - fuel ≤ (recoverSpec upperLimit m e g fuel).2.1 := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]; simp
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond
@@ -127,8 +127,8 @@ theorem recover_exponent_ge (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel
 /-- The output exponent is exactly `e - k` for some `0 ≤ k ≤ fuel`. -/
 theorem recover_exponent_eq (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
     ∃ k : ℕ, k ≤ fuel ∧
-      (Number.operator_add.recover upperLimit m e g fuel).2.1 = e - k := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+      (recoverSpec upperLimit m e g fuel).2.1 = e - k := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g =>
     refine ⟨0, le_refl _, ?_⟩
     rw [recover_noop_zero]; simp
@@ -146,10 +146,10 @@ theorem recover_exponent_eq (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel
 exactly `fuel`. -/
 theorem recover_output_exits_or_fuel_exhausted
     (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    let r := Number.operator_add.recover upperLimit m e g fuel
+    let r := recoverSpec upperLimit m e g fuel
     (¬ (r.1 < upperLimit ∧ ¬ r.2.2.empty))
     ∨ r.2.1 = e - fuel := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]; right; simp
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond
@@ -163,12 +163,12 @@ theorem recover_output_exits_or_fuel_exhausted
 
 /-- Once the output satisfies the exit condition, additional fuel is a no-op. -/
 theorem recover_fuel_add_of_exits {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
-    (hexit : let r := Number.operator_add.recover upperLimit m e g fuel
+    (hexit : let r := recoverSpec upperLimit m e g fuel
              ¬ (r.1 < upperLimit ∧ ¬ r.2.2.empty))
     (extra : ℕ) :
-    Number.operator_add.recover upperLimit m e g (fuel + extra)
-      = Number.operator_add.recover upperLimit m e g fuel := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    recoverSpec upperLimit m e g (fuel + extra)
+      = recoverSpec upperLimit m e g fuel := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g =>
     rw [recover_noop_zero] at hexit
     simp only at hexit

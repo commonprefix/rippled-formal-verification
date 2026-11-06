@@ -68,36 +68,22 @@ lemma Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit rounded
     (hcanon : amountDeposit.integral = false → amountDeposit.IOUCanonical)
     (hpos : 0 < amountDeposit.toRat)
     (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount)) :
-    (∃ s : ℤ, RoundsToRepresentableAt roundedAmount amountDeposit.toRat s .downward ∧
-      (10 : ℚ) ^ s ≤ |roundedAmount.toRat|) ∧
+    (amountDeposit.integral = false → ∃ e : ℤ, v.depositExponent amountDeposit = .ok e ∧ v.baseExponent ≤ e ∧
+      RoundsToRepresentableAt roundedAmount amountDeposit.toRat e .downward) ∧
     roundedAmount.isZero = false := by
-  obtain ⟨assetsTotal, -, hcl, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
-  refine ⟨?_, hnz⟩
+  obtain ⟨assetsTotal, hat, hcl, hnz⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  refine ⟨fun hfr => ?_, hnz⟩
   have hmv : roundedAmount.mValue ≠ 0 := (STAmount.isZero_eq_false_iff _).mp hnz
-  by_cases hint : amountDeposit.integral = true
-  · -- the clamp hands an integral amount straight back, which sits on its own grid
-    have heq := clampToSumExponent_integral_nonneg assetsTotal amountDeposit roundedAmount v.baseExponent hint
-      hpos.le hcl
-    subst heq
-    exact ⟨roundedAmount.exponent, STAmount.self_grid roundedAmount,
-      STAmount.ulp_le_abs_toRat roundedAmount hmv⟩
-  have hfr : amountDeposit.integral = false := by simpa using hint
   have hc := hcanon hfr
-  obtain ⟨-, e, -, -, -, hval⟩ := clampToSumExponent_frac_floor assetsTotal amountDeposit roundedAmount
-    v.baseExponent ⟨hc.is_fractional, Or.inl hc⟩ v.baseExponent_range.1 v.baseExponent_range.2 hmv hcl
+  obtain ⟨amountNumber, e, hnum, hps, hge, hval⟩ := clampToSumExponent_frac_floor assetsTotal amountDeposit
+    roundedAmount v.baseExponent ⟨hc.is_fractional, Or.inl hc⟩ v.baseExponent_range.1 v.baseExponent_range.2 hmv hcl
   rw [abs_of_pos hpos] at hval
-  refine ⟨e, hval, ?_⟩
-  -- a nonzero floor keeps at least one grid step
-  have hpow : (0 : ℚ) < 10 ^ e := zpow_pos (by norm_num) _
-  have hk1 : 1 ≤ ⌊amountDeposit.toRat / 10 ^ e⌋ := by
-    have hnn : 0 ≤ ⌊amountDeposit.toRat / 10 ^ e⌋ := Int.floor_nonneg.mpr (div_pos hpos hpow).le
-    have hne : ⌊amountDeposit.toRat / 10 ^ e⌋ ≠ 0 := by
-      intro h0
-      rw [h0, Int.cast_zero, zero_mul] at hval
-      exact STAmount.toRat_ne_zero roundedAmount hmv hval
-    omega
-  have hk1q : (1 : ℚ) ≤ (⌊amountDeposit.toRat / 10 ^ e⌋ : ℚ) := by exact_mod_cast hk1
-  rw [hval, abs_of_nonneg (by positivity)]
-  nlinarith
+  refine ⟨e, ?_, hge, hval⟩
+  unfold Vault.depositExponent
+  rw [hat]
+  show (amountDeposit.toNumber .to_nearest >>= fun amountNumber =>
+    postSumExponent assetsTotal amountNumber v.baseExponent amountDeposit.numericType) = .ok e
+  rw [hnum]
+  exact hps
 
 end XRPL.Model.SingleAssetVault

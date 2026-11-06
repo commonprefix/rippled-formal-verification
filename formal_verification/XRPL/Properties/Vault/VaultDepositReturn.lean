@@ -12,12 +12,6 @@ open XRPL.Model.Protocol
 
 variable (v : Vault)
 
-/-- `tecPRECISION_LOSS` is the only rejection `roundedDepositAmount` can return. -/
-theorem Vault.roundedDepositAmount_rejected_code (amountDeposit : STAmount) (ter : TER)
-    (hok : (v.roundedDepositAmount amountDeposit).run = .ok (.error ter)) :
-    ter = .tecPRECISION_LOSS :=
-  Vault.roundedDepositAmount_rejected_code_proof v amountDeposit ter hok
-
 /-- The exits of `deposit`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : UInt32)
     (hpos : 0 < amountDeposit.toRat) :
@@ -34,10 +28,31 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
       clampToSumExponent assetsTotal amountDeposit v.baseExponent = .ok roundedAmount →
       roundedAmount.isZero = true →
       (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecPRECISION_LOSS)) ∧
-    (∀ (roundedAmount : STAmount) (ter : TER), v.DepositOpen isDonation t →
+    (∀ roundedAmount shares : STAmount, v.DepositOpen false t →
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
-      (computeDeposit v roundedAmount isDonation).run = .ok (.error ter) →
-      (v.deposit amountDeposit isDonation t hpos).run = .ok (.error ter)) ∧
+      assetsToSharesDeposit v roundedAmount = .ok shares → shares.isZero = true →
+      (v.deposit amountDeposit false t hpos).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ roundedAmount shares assets : STAmount, v.DepositOpen false t →
+      (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
+      assetsToSharesDeposit v roundedAmount = .ok shares → shares.isZero = false →
+      sharesToAssetsDeposit v shares = .ok assets → assets.operator_gt roundedAmount = .ok true →
+      (v.deposit amountDeposit false t hpos).run = .ok (.error .tecINTERNAL)) ∧
+    (∀ (roundedAmount shares assets charge : STAmount) (assetsTotal : Number), v.DepositOpen false t →
+      (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
+      assetsToSharesDeposit v roundedAmount = .ok shares → shares.isZero = false →
+      sharesToAssetsDeposit v shares = .ok assets → assets.operator_gt roundedAmount = .ok false →
+      v.assetsTotal = .ok assetsTotal → clampToSumExponent assetsTotal assets v.baseExponent = .ok charge →
+      charge.isFractionalNonPositive = .ok true →
+      (v.deposit amountDeposit false t hpos).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ (roundedAmount charge : STAmount) (assetsTotal : Number), v.DepositOpen true t →
+      (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
+      v.assetsTotal = .ok assetsTotal → clampToSumExponent assetsTotal roundedAmount v.baseExponent = .ok charge →
+      charge.isFractionalNonPositive = .ok true →
+      (v.deposit amountDeposit true t hpos).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ roundedAmount : STAmount, v.DepositOpen isDonation t →
+      (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
+      (computeDeposit v roundedAmount isDonation).run = .ok (.error .tecPATH_DRY) →
+      (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecPATH_DRY)) ∧
     (∀ (roundedAmount : STAmount) (amounts : VaultAmounts) (ter : TER), v.DepositOpen isDonation t →
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
       (computeDeposit v roundedAmount isDonation).run = .ok (.ok amounts) →
@@ -71,7 +86,10 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
     Vault.deposit_insolvent_proof v amountDeposit t hpos,
     Vault.deposit_blocked_proof v amountDeposit isDonation t hpos,
     Vault.deposit_rounded_zero_proof v amountDeposit isDonation t hpos,
-    Vault.deposit_compute_rejected_proof v amountDeposit isDonation t hpos,
+    Vault.deposit_zero_shares_proof v amountDeposit t hpos, Vault.deposit_overpriced_proof v amountDeposit t hpos,
+    Vault.deposit_zero_charge_proof v amountDeposit t hpos, Vault.deposit_zero_donation_proof v amountDeposit t hpos,
+    fun roundedAmount hopen hrounded => Vault.deposit_compute_rejected_proof v amountDeposit isDonation t hpos
+      roundedAmount _ hopen hrounded,
     Vault.deposit_inflow_rejected_proof v amountDeposit isDonation t hpos,
     Vault.deposit_maximum_exceeded_proof v amountDeposit isDonation t hpos,
     fun roundedAmount amounts raw assetsTotal' hc hty =>

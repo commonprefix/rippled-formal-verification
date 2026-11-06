@@ -43,9 +43,9 @@ lemma loanPrincipalFromPeriodicPayment_pred_le (pp rate : Number) (k : UInt32) (
   have hk32 : (k.toNat : ℚ) ≤ 2 ^ 32 := by exact_mod_cast k.toNat_lt.le
   have hkq : ((k - 1).toNat : ℚ) = k.toNat - 1 := by
     rw [hkp]; push_cast [show 1 ≤ k.toNat by omega]; ring
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
-  have hN' := Number.ofInt64_isNormalized (k - 1).toUInt64.toInt64
+  have hN' := Number.ofInt64_isNormalized (k - 1).toInt64
   have hNv' := Number.ofInt64_count (k - 1)
   have hppm : pp.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_iff.mpr h0] at hppL; norm_num at hppL
@@ -116,7 +116,7 @@ lemma loanPrincipalFromPeriodicPayment_reamortized_le (x rate : Number) (n : UIn
     exact hx0
   have hppN := loanPeriodicPayment_isNormalized _ _ _ _ hx hrate hpp
   have hpp0 := loanPeriodicPayment_nonneg _ _ _ _ hx hx0 hrate hr0 hpp
-  have hN' := Number.ofInt64_isNormalized (n - 1).toUInt64.toInt64
+  have hN' := Number.ofInt64_isNormalized (n - 1).toInt64
   have hNv' := Number.ofInt64_count (n - 1)
   unfold loanPrincipalFromPeriodicPayment at h
   dsimp only at h
@@ -149,7 +149,7 @@ lemma loanPrincipalFromPeriodicPayment_reamortized_le (x rate : Number) (n : UIn
     rw [hnp]; push_cast [show 1 ≤ n.toNat by omega]; ring
   have hn2q : (2 : ℚ) ≤ n.toNat := by exact_mod_cast hn2
   have hnpos : (0 : ℚ) < n.toNat := by linarith
-  have hN := Number.ofInt64_isNormalized n.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized n.toInt64
   have hNv := Number.ofInt64_count n
   obtain ⟨_, -, hpp⟩ := bind_ok_peel _ _ _ hpp
   split at hpp

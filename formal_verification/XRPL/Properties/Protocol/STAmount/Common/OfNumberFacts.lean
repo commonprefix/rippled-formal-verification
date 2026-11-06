@@ -93,10 +93,7 @@ lemma STAmount.canonicalize_fractional_offset (s result : STAmount) (mode : roun
     unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
-    unfold STAmount.iou; rw [if_neg hint]
-  rw [hiou] at hok
-  cases hone : IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode with
+  cases hone : s.iou mode with
   | error e => rw [hone] at hok; exact absurd hok (by simp)
   | ok i =>
     rw [hone] at hok
@@ -104,6 +101,9 @@ lemma STAmount.canonicalize_fractional_offset (s result : STAmount) (mode : roun
     have heq := Except.ok.inj hok
     have hres : result.mOffset = i.exponent_ := by rw [← heq]
     rw [hres]
+    unfold STAmount.iou at hone
+    rw [if_neg hint] at hone
+    obtain ⟨m, -, hone⟩ := bind_ok_peel _ _ _ hone
     exact IOUAmount.ofMantissaExp_exponent_cases _ _ mode i hone
 
 /-- `STAmount.ofNumber` on a fractional asset: the output offset is `-100` (zero)
@@ -122,6 +122,7 @@ lemma STAmount.ofNumber_fractional_offset (nt : NumericType) (n : Number) (mode 
     obtain ⟨m', e'⟩ := me
     rw [hnr] at hok
     simp only [] at hok
+    obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
     rw [STAmount.checked] at hok
     exact STAmount.canonicalize_fractional_offset _ a mode rfl hok
 
@@ -153,12 +154,12 @@ lemma STAmount.canonicalize_integral_canonical (s result : STAmount) (mode : rou
     | ok r =>
       rw [hr] at hok
       simp only [] at hok
-      by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
+      by_cases hrng : r.magnitude > s.mNumericType.maxValue
       · rw [if_pos hrng] at hok; exact absurd hok (by simp)
       rw [if_neg hrng] at hok
       rw [← Except.ok.inj hok]
       refine ⟨⟨hint, rfl, ?_⟩, rfl⟩
-      show r.toInt.natAbs.toUInt64.toNat ≤ s.mNumericType.maxValue.toNat
+      show r.magnitude.toNat ≤ s.mNumericType.maxValue.toNat
       by_contra hcon
       exact hrng (UInt64.lt_iff_toNat_lt.mpr (by omega))
 
@@ -176,9 +177,9 @@ lemma STAmount.ofNumber_integral_canonical (nt : NumericType) (n : Number)
   | ok intValue =>
     rw [hrep] at hok
     simp only [] at hok
+    obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
     rw [STAmount.checked] at hok
     exact STAmount.canonicalize_integral_canonical _ a mode
-      (show (STAmount.unchecked nt intValue.toUInt64 0 (decide (n.signum < 0))).integral = true
-        from hnt) hok
+      (show (STAmount.unchecked nt v 0 (decide (n.signum < 0))).integral = true from hnt) hok
 
 end XRPL.Model.Protocol

@@ -77,6 +77,8 @@ private lemma LendingLedger.applyLoanSet_keepsSettings (l : LendingLedger) (u : 
   unfold LendingLedger.applyLoanSet at h
   dsimp only at h
   split at h
+  · simp [ExceptT.run, ExceptT.mk] at h
+  split at h
   · cases h
   generalize l.broker? i = ob at h
   cases ob with

@@ -29,13 +29,6 @@ lemma Loan.withBroker_ok (loan : Loan) (b : LoanBroker) (hnt : b.numericType = l
   obtain ⟨l', hl', -⟩ := RawLoan.to_lawful_ok_of hwf hvalid
   exact ⟨l', hl'⟩
 
-/-- A stored loan counts for its broker. -/
-lemma LendingLedger.loansOf_pos {l : LendingLedger} {i : Nat} {e : LoanEntry} (he : l.loan? i = some e) :
-    0 < l.loansOf e.brokerIndex := by
-  obtain ⟨hi, hei⟩ := LendingLedger.loan?_getElem he
-  unfold LendingLedger.loansOf
-  exact List.countP_pos_iff.mpr ⟨l.loans[i], List.getElem_mem hi, by rw [hei]; simp⟩
-
 /-- A stored loan's broker is stored. -/
 lemma LendingLedger.LoanCountInv.broker_of_loan {l : LendingLedger} (hinv : l.LoanCountInv) {i : Nat}
     {e : LoanEntry} (he : l.loan? i = some e) : ∃ b, l.broker? e.brokerIndex = some b := by
@@ -56,7 +49,8 @@ lemma LendingLedger.closed_loan_deletable (l : LendingLedger) (hr : l.Reachable)
   have hpr : loan.paymentRemaining = 0 := by
     rw [show loan.paymentRemaining = loan.toRawLoan.paymentRemaining from rfl, hraw]; exact hpaid
   have hc : loan.canDelete = .tesSUCCESS := by unfold Loan.canDelete; simp [hp', hpr]
-  obtain ⟨b', hb', -⟩ := Loan.deleteActive_ok loan.broker
+  have hlb : loan.broker = b := by rw [show loan.broker = loan.toRawLoan.broker from rfl, hraw]
+  obtain ⟨b', hb', -⟩ := Loan.deleteActive_ok loan.broker (by rw [hlb]; exact hr.loanCountInv.loanCount_ne_zero he hb)
   have hdel := Loan.delete_active_reduce loan l.vault hp'
   rw [hb'] at hdel
   let u : LoanEffect := { vault := l.vault, brokerIndex := e.brokerIndex, broker := b', loanIndex := i, loan := none }

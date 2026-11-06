@@ -28,7 +28,7 @@ lemma LendingLedger.ScaleInv.broker_asset {l : LendingLedger} (hscale : l.ScaleI
 /-- A management action that passed its check keeps a loan reachable. -/
 lemma Loan.Reachable.manage {loan : Loan} {t t' : UInt32} (hr : loan.Reachable t) (hle : t ≤ t')
     (action : LoanManageAction) (v : Vault) (r : LoanWithPool Vault)
-    (hc : loan.canManage action t' = .tesSUCCESS) (h : (loan.manage action v t').run = .ok (.ok r)) :
+    (hc : loan.canManage action t' = .ok .tesSUCCESS) (h : (loan.manage action v t').run = .ok (.ok r)) :
     r.loan'.Reachable t' := by
   obtain ⟨start, t₀, hcr, hr⟩ := hr
   refine ⟨start, t₀, hcr, ?_⟩

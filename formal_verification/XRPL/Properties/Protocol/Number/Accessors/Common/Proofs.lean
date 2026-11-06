@@ -75,8 +75,8 @@ theorem mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNormalized) 
       rw [hneg, if_pos (by decide), Number.toRat_of_neg n hneg]
       push_cast; ring
 
-theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
-    (n.mantissa).toInt.natAbs ≤ maxRep.toNat := by
+/-- The public mantissa of any `Number`, normalized or not, fits the signed rep. -/
+lemma Number.mantissa_natAbs_le (n : Number) : n.mantissa.toInt.natAbs ≤ maxRep.toNat := by
   rw [Number.mantissa_toInt n, Int.natAbs_mul]
   have hsign : (if n.negative_ then (-1 : ℤ) else 1).natAbs = 1 := by
     cases n.negative_ <;> decide
@@ -87,5 +87,9 @@ theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
     rw [maxRep_val]; omega
   · rw [if_neg hcusp, Int.natAbs_natCast]
     exact le_of_not_gt (fun hc => hcusp (UInt64.lt_iff_toNat_lt.mpr hc))
+
+theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
+    (n.mantissa).toInt.natAbs ≤ maxRep.toNat :=
+  Number.mantissa_natAbs_le n
 
 end XRPL.Model.Protocol

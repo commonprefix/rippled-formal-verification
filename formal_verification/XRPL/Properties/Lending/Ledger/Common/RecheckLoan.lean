@@ -164,17 +164,27 @@ private lemma sumRoundAndSubtract_zero_zero (b : Int) (nt : NumericType) (st : S
       rfl
   · have hfr : nt = .fractional := by cases nt <;> simp_all [NumericType.isIntegral]
     subst hfr
-    simp only [bind, Except.bind, pure, Except.pure, postSumExponent, numberExponent,
-      Number.operator_add_zero_right] at h
-    rw [if_pos (by decide)] at h
-    have h2 : (⟨.fractional, 0, -100, false⟩ : STAmount).toNumber .downward = .ok Number.zero := rfl
-    have h3 : STAmount.roundToNumericType .fractional Number.zero .downward (some b) = .ok Number.zero := by
+    dsimp only at h
+    rw [pure_bind] at h
+    obtain ⟨e, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨sum, hsum, h⟩ := bind_ok_peel _ _ _ h
+    rw [Number.operator_add_zero_right, Except.ok.injEq] at hsum
+    subst hsum
+    obtain ⟨sum', hsum', h⟩ := bind_ok_peel _ _ _ h
+    have h3 : STAmount.roundToNumericType .fractional Number.zero .downward (some e) = .ok Number.zero := by
+      have h2 : (⟨.fractional, 0, -100, false⟩ : STAmount).toNumber .downward = .ok Number.zero :=
+        STAmount.toNumber_zero_fractional _ _ rfl rfl
       simp [STAmount.roundToNumericType, STAmount.ofNumber_fractional_zero, STAmount.roundToExponent,
         STAmount.integral, STAmount.isZero, NumericType.isIntegral, h2]
-    have h4 : Number.zero.operator_sub Number.zero .downward = .ok Number.zero := rfl
-    simp only [h3, h4, STAmount.ofNumber_fractional_zero, Except.ok.injEq] at h
-    subst h
-    rfl
+    rw [h3, Except.ok.injEq] at hsum'
+    subst hsum'
+    obtain ⟨d, hd, h⟩ := bind_ok_peel _ _ _ h
+    rw [Number.operator_sub_zero, Except.ok.injEq] at hd
+    subst hd
+    rw [STAmount.ofNumber_fractional_zero, Except.ok.injEq] at h
+    rw [← h]
+    unfold STAmount.toRat
+    rw [if_pos rfl]
 
 /-- The cover a default of a loan without principal pays an empty vault is zero. -/
 private lemma Loan.defaultCover_zero (loan : Loan) (v : Vault) (dc : Number) (h : loan.defaultCover v = .ok dc)
@@ -357,6 +367,13 @@ lemma LendingLedger.Reachable.deployed_sub_representable {l : LendingLedger} (hr
   · rw [hwv]; have := hr.lossInv.deployed; linarith
   · rw [hwv]; linarith
 
+/-- The management checks never raise `notLawful`. -/
+lemma Loan.canManage_ne_notLawful (loan : Loan) (action : LoanManageAction) (now : UInt32) :
+    loan.canManage action now ≠ .error .notLawful := by
+  unfold Loan.canManage
+  simp only [bind, Except.bind, pure, Except.pure, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt]
+  split_ifs <;> exact nofun
+
 /-- A LoanManage on a reachable ledger never fails its lawfulness re-check. -/
 lemma LendingLedger.loanManage_ne_notLawful (l : LendingLedger) (hr : l.Reachable) (i : Nat)
     (action : LoanManageAction) : (l.apply (.loanManage i action)).run ≠ .error .notLawful := by
@@ -366,14 +383,16 @@ lemma LendingLedger.loanManage_ne_notLawful (l : LendingLedger) (hr : l.Reachabl
   unfold_ter at h
   walk_ok'
   · exact hr.withBroker_ne_notLawful ‹_› ‹_› ‹_›
-  rename_i e he _ b hb _ _ loan hw _ hc _ hm
+  · exact Loan.canManage_ne_notLawful _ _ _ ‹_›
+  rename_i _ e he _ b hb _ _ loan hw _ _ _ ter hct _ hc _ hm
   have hat : l.LoanAt i loan := ⟨e, b, he, hb, hw⟩
   have haa : STAmount.isRounded l.vault.numericType l.vault.assetsAvailable = false := hr.availableStored
   cases action with
   | impair => exact Loan.manageImpair_ne_notLawful loan l.vault l.now haa hm
   | unimpair => exact Loan.manageUnimpair_ne_notLawful loan l.vault haa hm
   | default =>
-    have hp := Loan.canManage_not_pending loan .default l.now ((TER.isTesSuccess_iff _).mp (by simpa using hc))
+    have hter : ter = .tesSUCCESS := (TER.isTesSuccess_iff ter).mp (by simpa using hc)
+    have hp := Loan.canManage_not_pending loan .default l.now (by rw [hct, hter])
     have hraw := Loan.withBroker_eq hw
     have hpo : loan.principalOutstanding = e.loan.principalOutstanding :=
       (congrArg RawLoan.principalOutstanding hraw :)
@@ -416,12 +435,13 @@ lemma Loan.delete_ne_notLawful (loan : Loan) (v : Vault)
       STAmount.Representable v.numericType (v.assetsDeployed.toRat - loan.principalOutstanding.toRat))
     (hdt : loan.isPending = true → loan.principalOutstanding.toRat ≤ loan.broker.debtTotal.toRat)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (hpg : loan.isPending = true → Number.OnGrid v.baseExponent loan.principalOutstanding) :
+    (hpg : loan.isPending = true → Number.OnGrid v.baseExponent loan.principalOutstanding)
+    (hc0 : loan.broker.loanCount ≠ 0) :
     (loan.delete v).run ≠ .error .notLawful := by
   intro h
   cases hp : loan.isPending
   · rw [Loan.delete_active_reduce loan v hp] at h
-    obtain ⟨b, hb, -⟩ := Loan.deleteActive_ok loan.broker
+    obtain ⟨b, hb, -⟩ := Loan.deleteActive_ok loan.broker hc0
     rw [hb] at h
     cases h
   · cases hround : STAmount.roundToNumericType loan.broker.numericType loan.principalOutstanding .to_nearest with
@@ -450,7 +470,7 @@ lemma Loan.delete_ne_notLawful (loan : Loan) (v : Vault)
       split at h
       · rename_i e he; cases h; exact Number.operator_sub_ne_notLawful _ _ _ he
       rename_i d hd
-      obtain ⟨b, hb⟩ := Loan.delete_broker_lawful loan d hd (Or.inr (hdt hp))
+      obtain ⟨b, hb⟩ := Loan.delete_broker_lawful loan d hd hc0 (Or.inr (hdt hp))
       rw [hb] at h
       cases h
 
@@ -471,7 +491,9 @@ lemma LendingLedger.loanDelete_ne_notLawful (l : LendingLedger) (hr : l.Reachabl
   obtain ⟨-, -, -, -, hdt⟩ := hr.loanAt_principal hat
   have hnt := (hr.loanAt_scale hat).2
   refine Loan.delete_ne_notLawful loan l.vault (fun hp => ?_) (fun _ => hr.deployed_sub_representable hat)
-    (fun _ => hdt) hr.holdsAsset.maxValue_le (fun _ => (hr.loanAt_scale hat).1 ▸ (Loan.principal_onGrid loan).1) hd
+    (fun _ => hdt) hr.holdsAsset.maxValue_le (fun _ => (hr.loanAt_scale hat).1 ▸ (Loan.principal_onGrid loan).1)
+    (by rw [show loan.broker = b from (congrArg RawLoan.broker hraw :)]; exact hr.loanCountInv.loanCount_ne_zero he hb)
+    hd
   have hp' : e.loan.isPending = true := by
     rw [← hp, show loan.isPending = loan.toRawLoan.isPending from rfl, hraw]
   rw [hnt]

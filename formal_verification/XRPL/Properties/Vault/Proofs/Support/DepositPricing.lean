@@ -328,27 +328,9 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
       have hQneg : Q.negative_ = false := Number.negative_false_of_pos Q hQpos
       exact STAmount.ofNumber_nonneg v.numericType Q .to_nearest c hQnorm hQneg hc
 
-/-- Priced at the vault's exact total, the ideal share count is the deposit ideal. -/
-lemma RawVault.idealSharesDepositAt_depositNav (rv : RawVault) (amount : ℚ) :
-    rv.idealSharesDepositAt rv.depositNav amount = rv.idealSharesDeposit amount := rfl
-
 /-- Priced at the vault's exact total, the ideal charge is the deposit ideal. -/
 lemma RawVault.idealChargeDepositAt_depositNav (rv : RawVault) (shares : ℚ) :
     rv.idealChargeDepositAt rv.depositNav shares = rv.idealChargeDeposit shares := rfl
-
-/-- Pricing at the computed total never buys fewer shares. The computed total sits at or below
-the exact one, so a nonnegative amount buys at least the exact ideal share count. -/
-lemma Vault.idealSharesDeposit_le_at (v : Vault) (navN : Number) (hat : v.assetsTotal = .ok navN)
-    (amount : ℚ) (ha : 0 ≤ amount) :
-    v.idealSharesDeposit amount ≤ v.idealSharesDepositAt navN.toRat amount := by
-  unfold RawVault.idealSharesDeposit RawVault.idealSharesDepositAt RawVault.depositNav
-  by_cases hm : navN.mantissa_ = 0
-  · rw [if_pos ((Vault.assetsTotal_eq_zero_iff v navN hat).mp hm),
-      if_pos (Number.toRat_eq_zero_of_mantissa_zero navN hm)]
-  have hN := (Vault.assetsTotal_pos v navN hat hm).2
-  have hle := Vault.assetsTotal_le_exact v navN hat
-  rw [if_neg (ne_of_gt (lt_of_lt_of_le hN hle)), if_neg (ne_of_gt hN)]
-  exact div_le_div_of_nonneg_left (mul_nonneg (by positivity) ha) hN hle
 
 /-- Pricing at the computed total never charges more. The computed total sits at or below the
 exact one, so a nonnegative share count costs at most the exact ideal charge. -/

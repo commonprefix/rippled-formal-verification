@@ -59,7 +59,8 @@ lemma doNormalize_iou_exp_hi (neg : Bool) (M : UInt64) (e : Int) (mode : roundin
     rw [this] at hM_lo; simp at hM_lo
   set g0 : Guard := if neg then Guard.new.set_negative else Guard.new with hg0_def
   have herr := doNormalize_scaleDown_errors_of_ge M e g0 hM_lo hM_hi hge
-  rw [doNormalize] at hok
+  replace hok := doNormalize_ok_spec hok
+  rw [doNormalizeSpec] at hok
   rw [show (M == 0) = false from Bool.eq_false_iff.mpr (fun h => hM_ne h)] at hok
   simp only [Bool.false_eq_true, if_false] at hok
   rw [doNormalize_scaleUp_id cMinValue M e
@@ -125,7 +126,9 @@ lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : roundin
           · rw [if_neg he, hh]; left; rfl
         rcases this with h | h <;> rw [h] at hb <;> simp at hb
       exact round_bool_upward_pos (g.push 9) 999999999999999 (hpush_sbit.trans hsb) hpush_ne
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep (by rw [maxRep_val, cMaxValue_val]; omega) g mode, hb]
   simp only [if_true]
@@ -137,7 +140,7 @@ lemma doRoundUp_small_cusp_eq (g : Guard) (neg : Bool) (e : Int) (mode : roundin
   rw [h9, hdiv]
   simp only []
   rw [if_pos hroundUp', hdivsucc,
-      show Guard.bringIntoRange neg cMinValue (e + 1) cMinValue
+      show Guard.bringIntoRangeSpec neg cMinValue (e + 1) cMinValue
           = { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } from by
         rw [bringIntoRange_noscale_result
               (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
@@ -198,7 +201,7 @@ lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
                    (n.exponent_ + 3) + 1) := by
           unfold Number.normalizeToRange
           rw [h_red, hcusp, hcusp_eq, if_neg hovf]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         refine ⟨⟨?_, ?_⟩, ⟨by omega, by omega⟩, hsign cMinValue (by rw [hcMin]; omega) hmant⟩
@@ -219,7 +222,7 @@ lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
         unfold Number.normalizeToRange
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
           .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨⟨?_, ?_⟩, ⟨by omega, by omega⟩, hsign _ (by rw [hadd]; omega) hmant⟩
@@ -235,7 +238,7 @@ lemma normalizeToRange_iou_ok_facts (n : Number) (mode : rounding_mode)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
         .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
         (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     refine ⟨⟨?_, ?_⟩, ⟨by omega, by omega⟩, hsign _ (by rw [hm3]; omega) hmant⟩
@@ -316,6 +319,8 @@ lemma STAmount.ofNumber_iou_ok_facts (r : Number) (mode : rounding_mode) (result
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     obtain ⟨hexp_lo80, hexp_hi80, hres_eq⟩ :=
       STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
         hmtu_lo hmtu_hi (by omega) hexp_le result hok hresult
@@ -347,19 +352,9 @@ lemma STAmount.ofNumber_iou_canonical_or_zero (r : Number) (mode : rounding_mode
   · exact Or.inr hz
   · exact Or.inl (STAmount.ofNumber_iou_ok_facts r mode result hr_lo hr_hi hre_lo hok hz).1
 
-/-- `pushOverflow` never touches the sign bit. -/
-lemma Guard.pushOverflow_sbit (g : Guard) (m : UInt64) (mode : rounding_mode) :
-    (g.pushOverflow m mode).sbit_ = g.sbit_ := by
-  unfold Guard.pushOverflow
-  by_cases h : maxRep ≤ m ∧ m < maxRepUp
-  · rw [if_pos h]
-    rfl
-  · rw [if_neg h]
-
 /-- `to_rep.shift` never touches the sign bit (it only `push`es digits). -/
 lemma Number.to_rep_shift_sbit (D : Int64) (off : Int) (g : Guard) :
-    (Number.to_rep.shift D off g).2.sbit_ = g.sbit_ := by
-  simp only [shift_eq_spec]
+    (shiftSpec D off g).2.sbit_ = g.sbit_ := by
   induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
     rw [shiftSpec, if_pos hneg, ih, Guard.push_sbit]
@@ -379,7 +374,8 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
   by_cases hexp0 : 0 ≤ n.exponent
   · rw [to_rep_exact_of_exponent_nonneg n .downward r hn hexp0 hok]
   · push Not at hexp0
-    unfold Number.to_rep at hok
+    rw [Number.to_rep_eq_spec] at hok
+    unfold Number.to_repSpec at hok
     simp only at hok
     by_cases hz : (n.mantissa == 0) = true
     · rw [if_pos hz] at hok
@@ -394,7 +390,7 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
       simp only at hok
-      set sp := Number.to_rep.shift n.mantissa n.exponent Guard.new with hspdef
+      set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
       set k : ℕ := (-n.exponent).toNat with hkdef
       have hk_cast : (k : ℤ) = -n.exponent := by rw [hkdef]; omega
       have hsp2_sbit : sp.2.sbit_ = false := by
@@ -407,8 +403,8 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
         calc n.mantissa.toInt / 10 ^ k ≤ n.mantissa.toInt := Int.ediv_le_self _ hmag_nn
           _ ≤ (maxRep.toNat : ℤ) := by omega
       -- the `.downward` round decision never bumps (guard sign bit is clear)
-      set pof : Guard := sp.2.pushOverflow sp.1.toUInt64 .downward with hpof_def
-      have hpof_sbit : pof.sbit_ = false := by rw [hpof_def, Guard.pushOverflow_sbit, hsp2_sbit]
+      set pof : Guard := sp.2 with hpof_def
+      have hpof_sbit : pof.sbit_ = false := hsp2_sbit
       have hround_val : pof.round .downward = -1 ∨ pof.round .downward = -2 := by
         unfold Guard.round
         by_cases he : pof.empty = true
@@ -419,10 +415,6 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
         rcases hround_val with h | h <;> rw [h] <;> simp
       rw [hb] at hok
       simp only [Bool.false_eq_true, if_false] at hok
-      rw [if_neg (show ¬ (maxRep.toInt64 < sp.1 ∧ sp.1 < maxRepUp.toInt64) from fun hc => by
-        have hlt := (Int64.lt_iff_toInt_lt).mp hc.1
-        rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at hlt
-        omega)] at hok
       have hr : r = sp.1 := by injection hok with h; exact h.symm
       rw [hr]
       -- floor bound: `sp.1 = ⌊n.mantissa / 10^k⌋ ≤ n.toRat`
@@ -460,9 +452,8 @@ private lemma int_emod_pow10_succ (x : ℤ) (m : ℕ) :
 places turns a guard representing `f` into one representing `f / 10^k + (D mod 10^k) / 10^k`. -/
 lemma Number.to_rep_shift_represents (D : Int64) (off : Int) (g : Guard) :
     0 ≤ D.toInt → ∀ f : ℚ, represents g f →
-    represents (Number.to_rep.shift D off g).2
+    represents (shiftSpec D off g).2
       (f / 10 ^ (-off).toNat + ((D.toInt % 10 ^ (-off).toNat : ℤ) : ℚ) / 10 ^ (-off).toNat) := by
-  simp only [shift_eq_spec]
   induction D, off, g using shiftSpec.induct with
   | case1 drops offset gg hneg ih =>
     intro h0 f hg
@@ -518,7 +509,8 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
   · rw [to_rep_exact_of_exponent_nonneg n .to_nearest r hn hexp0 hok, sub_self, abs_zero]
     norm_num
   · push Not at hexp0
-    unfold Number.to_rep at hok
+    rw [Number.to_rep_eq_spec] at hok
+    unfold Number.to_repSpec at hok
     simp only at hok
     by_cases hz : (n.mantissa == 0) = true
     · rw [if_pos hz] at hok
@@ -533,7 +525,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
       simp only at hok
-      set sp := Number.to_rep.shift n.mantissa n.exponent Guard.new with hspdef
+      set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
       set k : ℕ := (-n.exponent).toNat with hkdef
       have hk_pos : 1 ≤ k := by rw [hkdef]; omega
       have hk_cast : (k : ℤ) = -n.exponent := by rw [hkdef]; omega
@@ -565,38 +557,12 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
       have hfrac_lt : frac < 1 := by
         rw [hfrac_def, div_lt_one h10k_pos]
         exact_mod_cast Int.emod_lt_of_pos _ (by positivity)
-      -- the guard represents `frac`, and `pushOverflow` is a no-op (`sp.1 < maxRep`)
+      -- the guard represents `frac`
       have hrep : represents sp.2 frac := by
         have :=
           Number.to_rep_shift_represents n.mantissa n.exponent Guard.new hmag_nn 0 represents_new
         rw [← hspdef, ← hkdef] at this
         simpa [hfrac_def] using this
-      have hsp_lt : sp.1.toUInt64.toNat < maxRep.toNat := by
-        have h2 : n.mantissa.toInt ≤ (maxRep.toNat : ℤ) := by omega
-        have hsp_lt_int : sp.1.toInt < (maxRep.toNat : ℤ) := by
-          by_contra hcon
-          push Not at hcon
-          have hmul_le : sp.1.toInt * 10 ^ k ≤ n.mantissa.toInt := by
-            rw [hDf]; exact Int.ediv_mul_le _ (by positivity)
-          have h10k_ge : (10 : ℤ) ≤ 10 ^ k := by
-            calc (10 : ℤ) = 10 ^ 1 := by norm_num
-              _ ≤ 10 ^ k := pow_le_pow_right₀ (by norm_num) hk_pos
-          have hmr : (1 : ℤ) ≤ maxRep.toNat := by decide
-          nlinarith [hmul_le, h2, hcon, h10k_ge, hmr,
-            mul_le_mul_of_nonneg_right hcon (show (0 : ℤ) ≤ 10 ^ k from by positivity),
-            mul_le_mul_of_nonneg_left h10k_ge
-              (show (0 : ℤ) ≤ (maxRep.toNat : ℤ) from by positivity)]
-        have hnat : (sp.1.toUInt64.toNat : ℤ) = sp.1.toInt := toUInt64_toNat_of_nonneg sp.1 hsp_nn
-        omega
-      have hpof : sp.2.pushOverflow sp.1.toUInt64 .to_nearest = sp.2 :=
-        pushOverflow_noop_of_lt_maxRep hsp_lt sp.2 .to_nearest
-      rw [hpof] at hok
-      -- cusp clamp never fires, and the round decision drives the ±1/2 bound
-      have hno_cusp : ¬ (maxRep.toInt64 < sp.1 ∧ sp.1 < maxRepUp.toInt64) := fun hc => by
-        have hlt := (Int64.lt_iff_toInt_lt).mp hc.1
-        rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at hlt
-        have hnat : (sp.1.toUInt64.toNat : ℤ) = sp.1.toInt := toUInt64_toNat_of_nonneg sp.1 hsp_nn
-        omega
       by_cases hb :
           (sp.2.round .to_nearest == 1 || (sp.2.round .to_nearest == 0 && sp.1 % 2 == 1)) = true
       · -- round up: fraction ≥ 1/2, so `1 - frac ≤ 1/2`
@@ -621,7 +587,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
           rw [hr, hadd, hval_frac]
           push_cast
           rw [abs_le]
-          clear hovf hno_cusp hb hok hrep
+          clear hovf hb hok hrep
           constructor <;> linarith
       · -- no round up: fraction ≤ 1/2
         have hfrac_le : frac ≤ (1 / 2 : ℚ) := by
@@ -630,11 +596,10 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
           have : sp.2.round .to_nearest = 1 := represents_f_gt_half hrep hcon
           rw [this] at hb; simp at hb
         rw [if_neg hb] at hok
-        rw [if_neg hno_cusp] at hok
         have hr : r = sp.1 := by injection hok with h; exact h.symm
         rw [hr, hval_frac]
         rw [abs_le]
-        clear hno_cusp hb hok hrep
+        clear hb hok hrep
         constructor <;> linarith
 
 /-- `.upward` `to_rep` on a sign-cleared `Number` is the integer ceiling: `n.toRat ≤ r < n.toRat + 1`. A
@@ -650,7 +615,8 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
   by_cases hexp0 : 0 ≤ n.exponent
   · rw [to_rep_exact_of_exponent_nonneg n .upward r hn hexp0 hok]
   · push Not at hexp0
-    unfold Number.to_rep at hok
+    rw [Number.to_rep_eq_spec] at hok
+    unfold Number.to_repSpec at hok
     simp only at hok
     by_cases hz : (n.mantissa == 0) = true
     · rw [if_pos hz] at hok
@@ -665,7 +631,7 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
       simp only at hok
-      set sp := Number.to_rep.shift n.mantissa n.exponent Guard.new with hspdef
+      set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
       set k : ℕ := (-n.exponent).toNat with hkdef
       have hk_pos : 1 ≤ k := by rw [hkdef]; omega
       have hsbit : sp.2.sbit_ = false := by
@@ -693,37 +659,12 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
       have hfrac_lt : frac < 1 := by
         rw [hfrac_def, div_lt_one h10k_pos]
         exact_mod_cast Int.emod_lt_of_pos _ (by positivity)
-      -- the guard represents `frac`, and `pushOverflow` is a no-op (`sp.1 < maxRep`)
+      -- the guard represents `frac`
       have hrep : represents sp.2 frac := by
         have := Number.to_rep_shift_represents n.mantissa n.exponent Guard.new hmag_nn 0
           represents_new
         rw [← hspdef, ← hkdef] at this
         simpa [hfrac_def] using this
-      have hsp_lt : sp.1.toUInt64.toNat < maxRep.toNat := by
-        have h2 : n.mantissa.toInt ≤ (maxRep.toNat : ℤ) := by omega
-        have hsp_lt_int : sp.1.toInt < (maxRep.toNat : ℤ) := by
-          by_contra hcon
-          push Not at hcon
-          have hmul_le : sp.1.toInt * 10 ^ k ≤ n.mantissa.toInt := by
-            rw [hDf]; exact Int.ediv_mul_le _ (by positivity)
-          have h10k_ge : (10 : ℤ) ≤ 10 ^ k := by
-            calc (10 : ℤ) = 10 ^ 1 := by norm_num
-              _ ≤ 10 ^ k := pow_le_pow_right₀ (by norm_num) hk_pos
-          have hmr : (1 : ℤ) ≤ maxRep.toNat := by decide
-          nlinarith [hmul_le, h2, hcon, h10k_ge, hmr,
-            mul_le_mul_of_nonneg_right hcon (show (0 : ℤ) ≤ 10 ^ k from by positivity),
-            mul_le_mul_of_nonneg_left h10k_ge
-              (show (0 : ℤ) ≤ (maxRep.toNat : ℤ) from by positivity)]
-        have hnat : (sp.1.toUInt64.toNat : ℤ) = sp.1.toInt := toUInt64_toNat_of_nonneg sp.1 hsp_nn
-        omega
-      have hpof : sp.2.pushOverflow sp.1.toUInt64 .upward = sp.2 :=
-        pushOverflow_noop_of_lt_maxRep hsp_lt sp.2 .upward
-      rw [hpof] at hok
-      have hno_cusp : ¬ (maxRep.toInt64 < sp.1 ∧ sp.1 < maxRepUp.toInt64) := fun hc => by
-        have hlt := (Int64.lt_iff_toInt_lt).mp hc.1
-        rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at hlt
-        have hnat : (sp.1.toUInt64.toNat : ℤ) = sp.1.toInt := toUInt64_toNat_of_nonneg sp.1 hsp_nn
-        omega
       by_cases hb : (sp.2.round .upward == 1 || (sp.2.round .upward == 0 && sp.1 % 2 == 1)) = true
       · -- round up: the result is one above the floor, at or above the value
         rw [if_pos hb] at hok
@@ -739,7 +680,7 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
           have hr : r = sp.1 + 1 := by injection hok with h; exact h.symm
           rw [hr, hadd, hval_frac]
           push_cast
-          clear hovf hno_cusp hb hok hrep
+          clear hovf hb hok hrep
           linarith
       · -- no round up: the dropped fraction is zero
         have hfrac0 : frac = 0 := by
@@ -769,7 +710,6 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
           rw [hround]
           rfl
         rw [if_neg hb] at hok
-        rw [if_neg hno_cusp] at hok
         have hr : r = sp.1 := by injection hok with h; exact h.symm
         rw [hr, hval_frac, hfrac0, add_zero]
 

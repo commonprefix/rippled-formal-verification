@@ -88,8 +88,8 @@ lemma LoanBroker.coverWithdraw_success_proof (lb : LoanBroker) (pool : α) (amou
   unfold_ter
   simp [hcl, hnum, hsub, htl]
 
-/-- Proof body of `coverWithdraw_never_rejects`. -/
-lemma LoanBroker.coverWithdraw_never_rejects_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
+/-- Proof body of `coverWithdraw_error_codes`. -/
+lemma LoanBroker.coverWithdraw_error_codes_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (ter : TER) : (lb.coverWithdraw pool amount).run ≠ .ok (.error ter) := by
   intro hok
   unfold LoanBroker.coverWithdraw at hok

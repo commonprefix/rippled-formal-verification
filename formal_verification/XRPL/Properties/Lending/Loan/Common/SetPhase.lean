@@ -37,6 +37,10 @@ lemma Loan.canCreate_canFundLoan (broker : LoanBroker) (v : Vault) (p : Number) 
     canFundLoan v schedule t broker.numericType = .ok .tesSUCCESS := by
   unfold Loan.canCreate at h
   generalize schedule.checkTimeAvailability = st at h
+  obtain ⟨st, rfl⟩ : ∃ t, st = .ok t := by
+    cases st with
+    | error e => simp [bind, Except.bind] at h
+    | ok t => exact ⟨t, rfl⟩
   cases hf : canFundLoan v schedule t broker.numericType with
   | error e =>
     rw [hf] at h

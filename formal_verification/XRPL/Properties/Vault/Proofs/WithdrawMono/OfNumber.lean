@@ -39,6 +39,8 @@ lemma frac_pack (n : Number) (r : STAmount) (hn : n.isNormalized)
     have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
       have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
     have hexp_lo3 : minExponent + 3 ≤ exp := by rcases hexp with ⟨h, _⟩ | ⟨h, _⟩ <;> omega
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     obtain ⟨hlo96, hhi80, hres⟩ := STAmount.checked_iou_cases .fractional mant.toUInt64 exp false
       .to_nearest rfl (by rw [← hmant_natAbs]; exact hmlo) (by rw [← hmant_natAbs]; exact hmhi)
       hexp_lo3 hexp_le r hok hr
@@ -81,6 +83,8 @@ lemma int_pack (nt : NumericType) (hint : nt.isIntegral = true) (n : Number) (r 
     obtain ⟨hnn', hle⟩ := Number.to_rep_nonneg_range n .to_nearest iv hneg hr
     have hval : iv.toUInt64.toNat ≤ maxRep.toNat := toUInt64_toNat_le_maxRep iv hnn' hle
     have hint' : (STAmount.unchecked nt iv.toUInt64 0 false).integral = true := hint
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     obtain ⟨_, _, _, htr⟩ := STAmount.canonicalize_integral_facts
       (STAmount.unchecked nt iv.toUInt64 0 false) r .to_nearest hint' rfl hval hok
     refine ⟨iv.toInt, ?_, hnn', Number.to_rep_to_nearest_within_half n iv hn hneg hr, hoff,

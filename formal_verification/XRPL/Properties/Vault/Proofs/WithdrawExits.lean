@@ -43,6 +43,16 @@ lemma Vault.withdraw_compute_rejected_proof (v : Vault) (amount : WithdrawAmount
   simp only [ExceptT.run] at hcomp
   simp [hsoon, hcomp]
 
+lemma Vault.withdraw_zero_shares_proof (v : Vault) (assets shares : STAmount) (waive : Bool) (t : UInt32)
+    (hpos : 0 < (WithdrawAmount.vaultAssets assets).amount.toRat)
+    (hsoon : (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false)
+    (hs : assetsToSharesWithdraw v assets true waive = .ok shares) (hz : shares.isZero = true) :
+    (v.withdraw (.vaultAssets assets) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
+  refine Vault.withdraw_compute_rejected_proof v _ waive t hpos _ hsoon ?_
+  simp only [computeWithdraw]
+  unfold_ter
+  simp [hs, hz]
+
 lemma Vault.withdraw_has_obligations_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
     (t : UInt32) (hpos : 0 < amount.amount.toRat) (amounts : VaultAmounts) (sharesTotalAmount : STAmount)
     (hsoon : (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false)
@@ -168,28 +178,6 @@ lemma Vault.withdraw_final_insufficient_funds_proof (v : Vault) (amount : Withdr
   simp only [Vault.withdraw]
   unfold_ter
   simp [hsoon, hcomp, hst, hfinal, hobl, haN, hlt]
-
-lemma Vault.withdraw_never_internal_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
-    (t : UInt32) (hpos : 0 < amount.amount.toRat) :
-    (v.withdraw amount waive t hpos).run ≠ .ok (.error .tefINTERNAL) := by
-  have hloss := Vault.loss_ne_zero_false v
-  intro hok
-  simp only [Vault.withdraw] at hok
-  unfold_ter at hok
-  walk_ok
-  all_goals try (simp only [Bool.not_eq_true', Bool.not_eq_true, Bool.and_eq_true] at *)
-  all_goals try (simp_all; done)
-  all_goals try
-    have hd : TER.tefINTERNAL = .tesSUCCESS ∨ TER.tefINTERNAL = .tecPRECISION_LOSS ∨
-        TER.tefINTERNAL = .tecPATH_DRY := Vault.checkDebitNotDust_codes _ _ _ ‹_›
-    simp at hd
-  all_goals try
-    have hc : TER.tefINTERNAL = .tecPRECISION_LOSS ∨ TER.tefINTERNAL = .tecPATH_DRY :=
-      computeWithdraw_codes v amount waive _ ‹_›
-    simp at hc
-  all_goals
-    have h : TER.tefINTERNAL = .tefBAD_LEDGER := Vault.adjustAssetsAndShares_rejected_bad_ledger v _ _ _ ‹_›
-    simp at h
 
 set_option maxHeartbeats 400000 in
 -- the walk splits every path of the withdrawal, about twice the default budget

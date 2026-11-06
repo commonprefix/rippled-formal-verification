@@ -30,21 +30,21 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol DilWit
 
-/-- History budget: two withdrawals that each overpay by half a unit lower per-share value with a zero budget. -/
+/-- Two withdrawals that each overpay by half a unit lower per-share value. -/
 lemma Vault.ReachableFromIn.dilution_witness :
-    ∃ (v : Vault) (t0 t : UInt32) (n : ℕ) (D : ℚ) (w : Vault),
-      Vault.Reachable v t0 ∧ Vault.ReachableFromIn false v t w n D ∧ 1 < n ∧
-      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) - D := by
-  have s1 := Vault.ReachableFromIn.withdraw (whole := false) vH vH 0 0 0 0 (burn 2) (int64Amount 2) false r1
+    ∃ (v : Vault) (t0 t : UInt32) (n : ℕ) (w : Vault),
+      Vault.Reachable v t0 ∧ Vault.ReachableFromIn false v t w n ∧ 1 < n ∧
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
+  have s1 := Vault.ReachableFromIn.withdraw (whole := false) vH vH 0 0 0 (burn 2) (int64Amount 2) false r1
     (Vault.ReachableFromIn.refl (whole := false) vH 0) (by decide)
     (STAmount.canonical_of_canonicalB _ (by native_decide)) rfl
     (shareBalance 2 (by native_decide)) (by unfold Vault.IsSoleShareholder; native_decide) burn2_pos
     (by native_decide) (by native_decide) (by native_decide) (fun h => absurd h (by decide))
-  have s2 := Vault.ReachableFromIn.withdraw (whole := false) vH r1.vault' 0 0 _ _ (burn 1) (int64Amount 1) false r2 s1
+  have s2 := Vault.ReachableFromIn.withdraw (whole := false) vH r1.vault' 0 0 _ (burn 1) (int64Amount 1) false r2 s1
     (by decide)
     (STAmount.canonical_of_canonicalB _ (by native_decide)) rfl
     (shareBalance 1 (by native_decide)) (by unfold Vault.IsSoleShareholder; native_decide) burn1_pos
     (by native_decide) (by native_decide) (by native_decide) (fun h => absurd h (by decide))
-  exact ⟨vH, 0, 0, _, _, _, vH_reach, s2, by decide, by native_decide⟩
+  exact ⟨vH, 0, 0, _, _, vH_reach, s2, by decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

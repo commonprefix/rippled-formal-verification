@@ -23,9 +23,9 @@ def Loan.nextPaymentType (loan : Loan) (now : UInt32) : LoanPaymentType :=
 private lemma loanPeriodicRate_computes (ir : TenthBips32) (interval : UInt32) :
     ∃ rate, loanPeriodicRate ir interval = .ok rate := by
   have heq : loanPeriodicRate ir interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toUInt64.toInt64) ir .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) ir .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
-  have hin := Number.ofInt64_isNormalized interval.toUInt64.toInt64
+  have hin := Number.ofInt64_isNormalized interval.toInt64
   have hiv := Number.ofInt64_count interval
   have hI : (interval.toNat : ℚ) < 2 ^ 32 := by exact_mod_cast interval.toNat_lt
   obtain ⟨t, ht, htN, htl⟩ := tenthBipsOfValue_ok_of_abs _ ir hin
@@ -101,7 +101,8 @@ private lemma loanLatePaymentInterest_computes (l : Loan) (now : UInt32) :
     rw [abs_of_nonneg hr0]; linarith [show (10 : ℚ) ^ 30 < 10 ^ 200 by norm_num]
   obtain ⟨li, hli⟩ := Number.operator_mul_ok_of_abs l.principalOutstanding rate .to_nearest hPO hrN
     (by rw [abs_of_nonneg hP0]; exact hPl) hrl'
-  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, bind, Except.bind, hrate, hli]
+  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, bind, Except.bind, pure, Except.pure, hrate, hli,
+    UInt32.subChecked_of_le (UInt32.le_of_lt (UInt32.not_le.mp h3))]
   exact ⟨_, rfl⟩
 
 /-- On a `LoopRoom` loan with payments left, the next payment computes its instalment and amount due, while an XRP

@@ -492,6 +492,7 @@ enum class LeanError : uint8_t {
     cannotConvert,
     notLawful,
     badInput,
+    wrap,
 };
 
 // An `Except Error W` unpacked: the wrapped value on ok, the error kind on error.

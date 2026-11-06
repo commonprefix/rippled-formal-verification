@@ -1,6 +1,7 @@
 import XRPL.Model.Lending.Loan.LoanSet
 import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Properties.Lending.Common.Reduction
+import XRPL.Properties.Protocol.Common.FixedWidth
 import XRPL.Properties.Lending.Loan.LoanValid
 
 /-! # LoanSet checks read in plain terms
@@ -9,6 +10,8 @@ The schedule check in whole seconds, the vault check as a phase condition, and t
 check over PrincipalRequested and the fees. -/
 
 namespace XRPL.Model.Lending
+
+attribute [simp] UInt32.addChecked_ne_notLawful UInt32.subChecked_ne_notLawful Nat.toInt64Checked_ne_notLawful
 
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault VaultSchedule)
@@ -22,6 +25,17 @@ structure LoanSchedule.Fits (schedule : LoanSchedule) : Prop where
   paymentInterval_pos : 0 < schedule.paymentInterval
   ends_in_time : schedule.startDate.toNat + schedule.gracePeriod.toNat +
     schedule.paymentTotal.toNat * schedule.paymentInterval.toNat ≤ maxTime.toNat
+
+/-- A schedule that fits has its first due date within the ledger clock. -/
+lemma LoanSchedule.Fits.firstDue_lt {s : LoanSchedule} (h : s.Fits) :
+    s.startDate.toNat + s.paymentInterval.toNat < 2 ^ 32 := by
+  have hn := h.paymentTotal_pos
+  have hl := h.ends_in_time
+  rw [UInt32.lt_iff_toNat_lt] at hn
+  simp only [UInt32.toNat_zero] at hn
+  have : s.paymentInterval.toNat ≤ s.paymentTotal.toNat * s.paymentInterval.toNat := Nat.le_mul_of_pos_left _ hn
+  have hM : maxTime.toNat = 4294967295 := rfl
+  omega
 
 /-- The vault lends for this schedule at close time `t`: it has no phase, or it is in the investment
 phase and the last payment is due at least 60 seconds before RedemptionDate. -/
@@ -39,25 +53,43 @@ lemma LoanSchedule.checkTimeAvailability_eq (s : LoanSchedule) :
           s.paymentTotal.toNat > maxTime.toNat - s.startDate.toNat ∨
           (maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat) / s.paymentInterval.toNat <
             s.paymentTotal.toNat
-      then .tecKILLED else .tesSUCCESS := by
+      then .ok .tecKILLED else .ok .tesSUCCESS := by
   have hS : s.startDate ≤ maxTime := by
     rw [UInt32.le_iff_toNat_le]; have := s.startDate.toNat_lt; simp [maxTime]; omega
-  have hT : (maxTime - s.startDate).toNat = maxTime.toNat - s.startDate.toNat := UInt32.toNat_sub_of_le _ _ hS
   unfold LoanSchedule.checkTimeAvailability
-  by_cases hg : s.gracePeriod.toNat > maxTime.toNat - s.startDate.toNat
-  · simp [UInt32.lt_iff_toNat_lt, hT, hg]
-  · have hle : s.gracePeriod ≤ maxTime - s.startDate := by
-      rw [UInt32.le_iff_toNat_le, hT]; omega
-    have hT2 : (maxTime - s.startDate - s.gracePeriod).toNat =
-        maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat := by
-      rw [UInt32.toNat_sub_of_le _ _ hle, hT]
-    simp [UInt32.lt_iff_toNat_lt, hT, hg, UInt32.toNat_div, hT2, or_assoc]
+  simp only [bind, Except.bind, pure, Except.pure]
+  split
+  · rename_i he; rw [UInt32.subChecked_of_le hS] at he; cases he
+  rename_i ta hta
+  obtain ⟨-, hta⟩ := UInt32.subChecked_eq_ok.mp hta
+  have hT : ta.toNat = maxTime.toNat - s.startDate.toNat := by rw [← hta]; exact UInt32.toNat_sub_of_le _ _ hS
+  by_cases h1 : (decide (s.gracePeriod > ta) || decide (s.paymentInterval > ta) || decide (s.paymentTotal > ta)) = true
+  · rw [if_pos h1]
+    simp only [Bool.or_eq_true, decide_eq_true_eq, gt_iff_lt, UInt32.lt_iff_toNat_lt, hT] at h1
+    rw [if_pos (by omega)]
+  · rw [if_neg h1]
+    simp only [Bool.or_eq_true, decide_eq_true_eq, gt_iff_lt, UInt32.lt_iff_toNat_lt, hT, not_or, not_lt] at h1
+    have hle : s.gracePeriod ≤ ta := by rw [UInt32.le_iff_toNat_le, hT]; omega
+    split
+    · rename_i he; rw [UInt32.subChecked_of_le hle] at he; cases he
+    rename_i tl htl
+    obtain ⟨-, htl⟩ := UInt32.subChecked_eq_ok.mp htl
+    have hT2 : tl.toNat = maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat := by
+      rw [← htl, UInt32.toNat_sub_of_le _ _ hle, hT]
+    have h2 : tl / s.paymentInterval < s.paymentTotal ↔
+        (maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat) / s.paymentInterval.toNat <
+          s.paymentTotal.toNat := by
+      rw [UInt32.lt_iff_toNat_lt, UInt32.toNat_div, hT2]
+    by_cases h3 : (maxTime.toNat - s.startDate.toNat - s.gracePeriod.toNat) / s.paymentInterval.toNat <
+        s.paymentTotal.toNat
+    · rw [if_pos (h2.mpr h3), if_pos (by omega)]
+    · rw [if_neg (mt h2.mp h3), if_neg (by omega)]
 
 /-- A schedule whose last grace period ends after the largest ledger time is killed. -/
 lemma LoanSchedule.checkTimeAvailability_killed (s : LoanSchedule)
     (h : maxTime.toNat <
       s.startDate.toNat + s.gracePeriod.toNat + s.paymentTotal.toNat * s.paymentInterval.toNat) :
-    s.checkTimeAvailability = .tecKILLED := by
+    s.checkTimeAvailability = .ok .tecKILLED := by
   rw [LoanSchedule.checkTimeAvailability_eq, if_pos]
   by_cases hg : s.gracePeriod.toNat > maxTime.toNat - s.startDate.toNat
   · exact Or.inl hg
@@ -71,7 +103,7 @@ lemma LoanSchedule.checkTimeAvailability_killed (s : LoanSchedule)
 
 /-- A schedule that fits passes the schedule check. -/
 lemma LoanSchedule.checkTimeAvailability_success (s : LoanSchedule) (hfits : s.Fits) :
-    s.checkTimeAvailability = .tesSUCCESS := by
+    s.checkTimeAvailability = .ok .tesSUCCESS := by
   have hn := hfits.paymentTotal_pos
   have hi := hfits.paymentInterval_pos
   have h := hfits.ends_in_time
@@ -91,7 +123,7 @@ lemma LoanSchedule.checkTimeAvailability_success (s : LoanSchedule) (hfits : s.F
 /-- With a positive PaymentTotal and PaymentInterval, the schedule check passes exactly when the schedule fits. -/
 lemma LoanSchedule.checkTimeAvailability_success_iff (s : LoanSchedule)
     (hn : 0 < s.paymentTotal) (hi : 0 < s.paymentInterval) :
-    s.checkTimeAvailability = .tesSUCCESS ↔ s.Fits := by
+    s.checkTimeAvailability = .ok .tesSUCCESS ↔ s.Fits := by
   constructor
   · intro h
     refine ⟨hn, hi, ?_⟩

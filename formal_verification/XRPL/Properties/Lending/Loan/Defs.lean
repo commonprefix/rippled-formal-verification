@@ -77,7 +77,8 @@ structure RawLoan.Exact.Valid (s : RawLoan.Exact) : Prop where
   paymentRemaining_le_total : s.paymentRemaining ≤ s.paymentTotal
   dueDate_schedule : s.paymentRemaining ≠ 0 → s.nextPaymentDueDate.toNat = s.startDate.toNat +
     (s.paymentTotal.toNat - s.paymentRemaining.toNat + 1) * s.paymentInterval.toNat
-  schedule_in_time : s.startDate.toNat + s.paymentTotal.toNat * s.paymentInterval.toNat ≤ maxTime.toNat
+  schedule_in_time : s.startDate.toNat + s.gracePeriod.toNat + s.paymentTotal.toNat * s.paymentInterval.toNat ≤
+    maxTime.toNat
   interestRate_cap : s.interestRate ≤ maxLoanRate.toNat
   lateInterestRate_cap : s.lateInterestRate ≤ maxLoanRate.toNat
   closeInterestRate_cap : s.closeInterestRate ≤ maxLoanRate.toNat

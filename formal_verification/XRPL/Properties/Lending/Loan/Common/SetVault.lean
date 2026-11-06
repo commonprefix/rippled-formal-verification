@@ -50,7 +50,8 @@ lemma Loan.create_pool_sums (broker : LoanBroker) (v : Vault) (principal : Numbe
         assetsReserved := ar'
         lossUnrealized := lu'
         yieldUnrealized := yu' } ∧
-      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending ∧
+      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+        (schedule.startDate + schedule.paymentInterval) ∧
       broker'.toRawLoanBroker =
         { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 } := by
   obtain ⟨props, loanState, debtTotal', principal', broker', hchecks, hround, hpool, hbroker, hloan⟩ :=

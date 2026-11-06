@@ -42,10 +42,11 @@ theorem doNormalize128_algorithmic_facts_round
     intro h
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos; simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
@@ -129,7 +130,7 @@ theorem doNormalize128_algorithmic_facts_round
     rw [hg0_dv, Nat.zero_mul]; exact dvd_zero _
   have hvsize0 : M₁.toNat * 10 ^ 0 < 10 ^ 23 := by rw [pow_zero, Nat.mul_one]; exact hM₁_lt
   have hvcouple0 : δ₁ * 10 ^ 20 ≤ (M₁.toNat : ℚ) * 10 ^ 0 := by rw [pow_zero, mul_one]; exact hδ₁M
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err => except_clash hsd hok
   | ok sd =>
     rw [hsd] at hok

@@ -33,6 +33,11 @@ elab "walk_step'" : tactic => do
         if lhs.isAppOfArity ``Except.ok 3 then
           let h2 := mkIdent (← mkFreshUserName `hw)
           evalTactic (← `(tactic| (injection $hId:ident with $h2:ident; try cases $h2:ident)))
+        else if let (some lem, true) := (XRPL.Model.SingleAssetVault.checkedEqOk? lhs, rhsOk) then
+          -- a checked operation that succeeded gives the raw result
+          let h2 := mkIdent (← mkFreshUserName `hw)
+          evalTactic (← `(tactic|
+            (obtain ⟨-, $h2:ident⟩ := ($(mkIdent lem)).mp $hId:ident; clear $hId:ident; try subst $h2:ident)))
         else if lhs.isAppOfArity ``ite 5 then
           let h2 := mkIdent (← mkFreshUserName `hw)
           let hc := mkIdent (← mkFreshUserName `hc)

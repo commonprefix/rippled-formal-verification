@@ -35,12 +35,12 @@ theorem operator_add_post_subtract
     (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E)
     (result : Number)
     (hok : doNormalize128 zn
-        (if (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
-          then (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
-          else (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
-        (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
+        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
+          then (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
+          else (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
+        (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
         largeRange.min largeRange.max mode
-        (!(Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
+        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
         = .ok result) :
     ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (sticky : Bool),
       (0 ≤ δ) ∧ δ ≤ 1 ∧
@@ -56,7 +56,7 @@ theorem operator_add_post_subtract
     obtain ⟨_, _, _, _, _, h⟩ := hrep; exact h
   have hf_nn : 0 ≤ f_aln := represents_nonneg hrep
   have hf_lt : f_aln < 1 := represents_lt_one hrep
-  set R := Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40
+  set R := recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40
     with hR_def
   have hzm_pos_q : (1 : ℚ) ≤ (zm_pre.toNat : ℚ) := by exact_mod_cast hzm_pos
   have h10E_pos : (0 : ℚ) < (10 : ℚ) ^ E := zpow_pos (by norm_num) _
@@ -262,7 +262,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
   have h_xneqyn : (x.negative_ == y.negative_) = false := by
     rw [beq_eq_false_iff_ne]; exact h_diff_sign
   have h_abs_add := abs_add_eq_of_diff_sign h_diff_sign
-  unfold Number.operator_add at hok
+  replace hok := Number.operator_add_ok_spec hok
+  unfold Number.operator_addSpec at hok
   simp only [hy_ne_zero, hx_ne_zero, h_not_zero, Bool.false_eq_true, if_false] at hok
   rw [h_xneqyn] at hok
   simp only [Bool.false_eq_true, if_false] at hok

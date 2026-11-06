@@ -63,20 +63,20 @@ lemma toRat_mul_ne_zero_of_normalized (x y : Number)
   · rw [hx0] at habsx; simp at habsx
   · rw [hy0] at habsy; simp at habsy
 
-/-- `scaleDown128` keeps the guard's sign bit. -/
+/-- `scaleDown128Spec` keeps the guard's sign bit. -/
 lemma scaleDown128_sbit_preserved (M : UInt128) (e : Int) (g0 : Guard) :
-    (scaleDown128 M e g0).2.2.sbit_ = g0.sbit_ := by
-  induction M, e, g0 using scaleDown128.induct with
+    (scaleDown128Spec M e g0).2.2.sbit_ = g0.sbit_ := by
+  induction M, e, g0 using scaleDown128Spec.induct with
   | case1 M e g0 hcond _d IH =>
-    have hunfold : scaleDown128 M e g0
-        = scaleDown128 (M / 10) (e + 1) (g0.push (toUInt64 (M % 10))) := by
-      conv_lhs => rw [scaleDown128]
+    have hunfold : scaleDown128Spec M e g0
+        = scaleDown128Spec (M / 10) (e + 1) (g0.push (toUInt64 (M % 10))) := by
+      conv_lhs => rw [scaleDown128Spec]
       simp [hcond]
     rw [hunfold]
     have h_push_sbit : (g0.push (toUInt64 (M % 10))).sbit_ = g0.sbit_ := rfl
     rw [IH, h_push_sbit]
   | case2 M e g0 hcond =>
-    unfold scaleDown128
+    unfold scaleDown128Spec
     simp [hcond]
 
 end XRPL.Model.Protocol

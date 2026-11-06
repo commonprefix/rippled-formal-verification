@@ -36,7 +36,7 @@ private lemma Vault.units_number (v : Vault) (k : ℤ) (hk : 0 ≤ k ∧ k < 2 ^
 private lemma LendingLedger.default_step {l l' : LendingLedger} {i : Nat}
     (h : (l.apply (.loanManage i .default)).run = .ok (.ok l')) :
     ∃ e loan r, l.loan? i = some e ∧ l.broker? e.brokerIndex = some loan.broker ∧
-      e.loan.withBroker loan.broker = .ok loan ∧ loan.canManage .default l.now = .tesSUCCESS ∧
+      e.loan.withBroker loan.broker = .ok loan ∧ loan.canManage .default l.now = .ok .tesSUCCESS ∧
       (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       l' = l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool') := by
   obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan rfl h

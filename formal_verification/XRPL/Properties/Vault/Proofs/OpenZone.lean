@@ -156,7 +156,7 @@ lemma Vault.adjustAssetsAndShares_units (v : Vault) (assets shares : STAmount) (
   exact ⟨hsv, hsr⟩
 
 /-- A charge the inflow check accepts keeps the total below the Open-zone limit plus one base step,
-on any valid vault. The capacity it compares never rounds below the computed total plus the charge. -/
+on any lawful vault. The capacity it compares never rounds below the computed total plus the charge. -/
 lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.CanonicalOrZero)
     (hc0 : 0 ≤ charge.toRat) (navN : Number) (hat : v.assetsTotal = .ok navN)
     (hin : v.checkOpenLimit charge = .ok .tesSUCCESS) :

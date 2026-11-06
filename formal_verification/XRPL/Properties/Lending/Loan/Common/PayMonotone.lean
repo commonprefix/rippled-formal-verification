@@ -334,6 +334,28 @@ lemma Loan.scheduledComponents_not_last (l : Loan) (pc : PaymentComponents)
     apply hnf
     simp [h1]
 
+/-- A scheduled instalment that isn't the last comes from a loan with two or more payments left. -/
+lemma Loan.scheduledComponents_two_le (l : Loan) (pc : PaymentComponents) (h : Loan.scheduledComponents l = .ok pc)
+    (hr : l.paymentRemaining ≠ 0) (hf : pc.isFinal = false) : 2 ≤ l.paymentRemaining.toNat := by
+  have h1 := Loan.scheduledComponents_not_last l pc h hf
+  have a := UInt32.toNat_inj.not.mpr hr
+  have b := UInt32.toNat_inj.not.mpr h1
+  simp at a b
+  omega
+
+/-- A late instalment is final exactly when the scheduled one is. -/
+lemma Loan.lateComponents_final (l : Loan) (now : UInt32) (pc : PaymentComponents)
+    (h : Loan.lateComponents l now = .ok pc) :
+    ∃ pc0, Loan.scheduledComponents l = .ok pc0 ∧ pc.isFinal = pc0.isFinal := by
+  unfold Loan.lateComponents at h
+  dsimp only at h
+  obtain ⟨pc0, hpc0, h1⟩ := bind_ok_peel _ _ _ h
+  clear h
+  refine ⟨pc0, hpc0, ?_⟩
+  simp only [bind, Except.bind, pure, Except.pure] at h1
+  repeat' (split at h1)
+  all_goals (cases h1 <;> rfl)
+
 /-- The late instalment takes the same amounts off the loan as the next scheduled one. -/
 private lemma Loan.lateComponents_scheduled (l : Loan) (now : UInt32) (pc : PaymentComponents)
     (h : Loan.lateComponents l now = .ok pc) :

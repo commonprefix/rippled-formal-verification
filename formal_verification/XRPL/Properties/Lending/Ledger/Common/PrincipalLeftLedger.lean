@@ -38,9 +38,9 @@ lemma FactorGap.of_zero_rate (rate : Number) (hrate : rate.isNormalized) (h0 : r
     rw [hkp] at this
     simp at this; omega
   have hone := Number.ofInt64_isNormalized 1
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
-  have hN' := Number.ofInt64_isNormalized (k - 1).toUInt64.toInt64
+  have hN' := Number.ofInt64_isNormalized (k - 1).toInt64
   have hNv' := Number.ofInt64_count (k - 1)
   have hkq : ((k - 1).toNat : ℚ) = k.toNat - 1 := by
     rw [hkp]; push_cast [show 1 ≤ k.toNat by omega]; ring
@@ -59,7 +59,7 @@ lemma FactorGap.of_zero_rate (rate : Number) (hrate : rate.isNormalized) (h0 : r
   rw [Number.ofInt64_one_toRat, hNv] at hle
   have hm1 : (Number.ofInt64 1).mantissa_ ≠ 0 := fun h' => by
     have := Number.toRat_eq_zero_iff.mpr h'; rw [Number.ofInt64_one_toRat] at this; norm_num at this
-  have hmN' : (Number.ofInt64 (k - 1).toUInt64.toInt64).mantissa_ ≠ 0 := fun h' => by
+  have hmN' : (Number.ofInt64 (k - 1).toInt64).mantissa_ ≠ 0 := fun h' => by
     have := Number.toRat_eq_zero_iff.mpr h'; rw [hNv', hkq] at this; linarith
   have hkm1 : (1 : ℚ) ≤ k.toNat - 1 := by linarith
   have hf'ne : f'.toRat ≠ 0 := by

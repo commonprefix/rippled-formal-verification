@@ -644,12 +644,8 @@ lemma Number.toRat_nonneg_of_not_signum_neg (n : Number) (hn : n.isNormalized) (
   (Number.signum_nonneg_iff_toRat hn).mp (by omega)
 
 /-- A `UInt32` keeps its value through `UInt64` and `Int64`. -/
-private lemma UInt32.toUInt64_toInt64_toInt (n : UInt32) : n.toUInt64.toInt64.toInt = (n.toNat : ℤ) := by
-  have h := n.toNat_lt
-  show n.toUInt64.toInt64.toBitVec.toInt = _
-  rw [BitVec.toInt_eq_toNat_of_lt]
-  · simp
-  · simp; omega
+private lemma UInt32.toUInt64_toInt64_toInt (n : UInt32) : n.toInt64.toInt = (n.toNat : ℤ) :=
+  UInt32.toInt_toInt64 n
 
 /-- An `Int64` other than the smallest converts to a `Number` of the same value. -/
 lemma Number.ofInt64_toRat_of_ne (m : Int64) (hm : m ≠ Int64.minValue) :
@@ -662,8 +658,8 @@ lemma Number.ofInt64_toRat_of_ne (m : Int64) (hm : m ≠ Int64.minValue) :
   rw [hv, zpow_zero, mul_one]
 
 /-- A count converts to a `Number` of the same value. -/
-lemma Number.ofInt64_count (n : UInt32) : (Number.ofInt64 n.toUInt64.toInt64).toRat = (n.toNat : ℚ) := by
-  have hne : n.toUInt64.toInt64 ≠ Int64.minValue := by
+lemma Number.ofInt64_count (n : UInt32) : (Number.ofInt64 n.toInt64).toRat = (n.toNat : ℚ) := by
+  have hne : n.toInt64 ≠ Int64.minValue := by
     intro h
     have h1 := congrArg Int64.toInt h
     rw [UInt32.toUInt64_toInt64_toInt, show Int64.minValue.toInt = -2 ^ 63 from by decide] at h1
@@ -932,7 +928,7 @@ lemma computeLoanProperties_inv (principal : Number) (ir : TenthBips32) (interva
     ∃ rate amount amountSt ti,
       loanPeriodicRate ir interval = .ok rate ∧
       loanPeriodicPayment principal rate n = .ok props.periodicPayment ∧
-      props.periodicPayment.operator_mul (Number.ofInt64 n.toUInt64.toInt64) (valueMode rate) = .ok amount ∧
+      props.periodicPayment.operator_mul (Number.ofInt64 n.toInt64) (valueMode rate) = .ok amount ∧
       STAmount.ofNumber nt amount (valueMode rate) = .ok amountSt ∧
       props.loanScale = max minScale amountSt.exponent ∧
       STAmount.roundToNumericType nt amount (valueMode rate) (some props.loanScale) =
@@ -952,6 +948,7 @@ lemma computeLoanProperties_inv (principal : Number) (ir : TenthBips32) (interva
   obtain ⟨rp, hrp, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨ti, hti, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨mfo, hmfo, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
@@ -1020,19 +1017,19 @@ rounds a positive value to nearest, well above the smallest `Number`. -/
 private lemma loanPeriodicRate_pos (ir : TenthBips32) (interval : UInt32) (rate : Number) (hir : ir ≠ 0)
     (hint : interval ≠ 0) (h : loanPeriodicRate ir interval = .ok rate) : 0 < rate.toRat := by
   have heq : loanPeriodicRate ir interval =
-      ((Number.ofInt64 interval.toUInt64.toInt64).operator_mul ir.toNumber .to_nearest >>=
+      ((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest >>=
         (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨p, hp, ht⟩ := bind_ok_peel _ _ _ ht
-  have hI := Number.ofInt64_isNormalized interval.toUInt64.toInt64
-  have hB := Number.ofInt64_isNormalized ir.toUInt64.toInt64
-  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toUInt64.toInt64
+  have hI := Number.ofInt64_isNormalized interval.toInt64
+  have hB := Number.ofInt64_isNormalized ir.toInt64
+  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
   have hY := Number.ofInt64_isNormalized (31536000 : Int64)
   have hIv := Number.ofInt64_count interval
-  have hBv : (Number.ofInt64 ir.toUInt64.toInt64).toRat = (ir.toNat : ℚ) := Number.ofInt64_count ir
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toUInt64.toInt64).toRat = 100000 := by
+  have hBv : (Number.ofInt64 ir.toInt64).toRat = (ir.toNat : ℚ) := Number.ofInt64_count ir
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
   have hYv : (Number.ofInt64 31536000).toRat = 31536000 := by
     rw [Number.ofInt64_toRat_of_ne _ (by decide)]; rfl
@@ -1086,7 +1083,8 @@ lemma Loan.create_loan_eq (broker : LoanBroker) (v : Vault) (principal : Number)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ props loanState debtTotal' broker',
       Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal' ∧
-      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending ∧
+      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+        (schedule.startDate + schedule.paymentInterval) ∧
       broker'.toRawLoanBroker =
         { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 } := by
   obtain ⟨props, loanState, debtTotal', _, broker', hchecks, -, -, hbroker, hloan⟩ :=
@@ -1142,7 +1140,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
     have := hex.periodicPayment_pos; simp only [RawLoan.toExact] at this; rwa [hPP] at this
   obtain ⟨-, -, -, -, -, -, htv0, -⟩ := LoanProperties.checkGuards_ok_inv _ _ _ _ _ hchecks.guards
   have htv0' : 0 < props.totalValueOutstanding.toRat := (Number.signum_pos_iff_toRat htvN).mp htv0
-  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toInt64
   have hNv := Number.ofInt64_count schedule.paymentTotal
   have hamtN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamt
   have hamt0 : amount.mantissa_ ≠ 0 := by
@@ -1152,7 +1150,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
     rw [← htvo, Number.toRat_zero] at htv0'
     exact lt_irrefl _ htv0'
   have hR := operator_mul_rounded_upward _ _ amount hppN hN hamt hamt0
-  set t := props.periodicPayment.toRat * (Number.ofInt64 schedule.paymentTotal.toUInt64.toInt64).toRat with ht
+  set t := props.periodicPayment.toRat * (Number.ofInt64 schedule.paymentTotal.toInt64).toRat with ht
   have ht0 : 0 ≤ t := by rw [ht, hNv]; positivity
   have hta : t ≤ amount.toRat := by obtain ⟨n', hn', hv⟩ := hR; rw [hv]; exact Number.le_upper _ _ hn'
   -- the scale is the LoanScale, between `-10` and `80`
@@ -1322,17 +1320,17 @@ lemma Loan.create_covers_principal_proof (broker : LoanBroker) (v : Vault) (prin
 private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loanPeriodicRate 0 interval = .ok rate) :
     rate = Number.zero := by
   have heq : loanPeriodicRate 0 interval =
-      ((Number.ofInt64 interval.toUInt64.toInt64).operator_mul (0 : TenthBips32).toNumber .to_nearest >>=
+      ((Number.ofInt64 interval.toInt64).operator_mul (0 : TenthBips32).toNumber .to_nearest >>=
         (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨p, hp, ht⟩ := bind_ok_peel _ _ _ ht
-  have hI := Number.ofInt64_isNormalized interval.toUInt64.toInt64
-  have hB := Number.ofInt64_isNormalized (0 : TenthBips32).toUInt64.toInt64
-  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toUInt64.toInt64
+  have hI := Number.ofInt64_isNormalized interval.toInt64
+  have hB := Number.ofInt64_isNormalized (0 : TenthBips32).toInt64
+  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
   have hY := Number.ofInt64_isNormalized (31536000 : Int64)
-  have hBv : (Number.ofInt64 (0 : TenthBips32).toUInt64.toInt64).toRat = 0 := by
+  have hBv : (Number.ofInt64 (0 : TenthBips32).toInt64).toRat = 0 := by
     rw [Number.ofInt64_count]; rfl
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
@@ -1355,7 +1353,7 @@ private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loa
 private lemma loanPeriodicPayment_zero_rate (principal : Number) (n : UInt32) (pp : Number)
     (hp : principal.isNormalized) (hp0 : principal.toRat ≠ 0) (hn : n ≠ 0)
     (h : loanPeriodicPayment principal Number.zero n = .ok pp) :
-    principal.operator_div (Number.ofInt64 n.toUInt64.toInt64) .to_nearest = .ok pp := by
+    principal.operator_div (Number.ofInt64 n.toInt64) .to_nearest = .ok pp := by
   have hpe : principal.operator_eq Number.zero = false := by
     cases hq : principal.operator_eq Number.zero
     · rfl
@@ -1390,7 +1388,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
       _ ≤ (j : ℚ) * 10 ^ props.loanScale := mul_le_mul_of_nonneg_right (by exact_mod_cast hj1) hp10.le
   have hn' : n ≠ 0 := by intro h0; rw [h0] at hn; exact absurd hn (by decide)
   have hdiv := loanPeriodicPayment_zero_rate _ _ _ hp hP0.ne' hn' hpp
-  have hN := Number.ofInt64_isNormalized n.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized n.toInt64
   have hNv := Number.ofInt64_count n
   have hn0 : (0 : ℚ) < n.toNat := by
     rw [UInt32.lt_iff_toNat_lt] at hn; exact_mod_cast hn
@@ -1595,12 +1593,12 @@ lemma Loan.create_zero_rate_proof (broker : LoanBroker) (v : Vault) (principal :
     have := hex.periodicPayment_pos; simp only [RawLoan.toExact] at this; rwa [hPP] at this
   have hppne : props.periodicPayment ≠ Number.zero := fun h => by
     rw [h, Number.toRat_zero] at hpp0; exact lt_irrefl _ hpp0
-  have hdiv : principal.operator_div (Number.ofInt64 schedule.paymentTotal.toUInt64.toInt64) .to_nearest =
+  have hdiv : principal.operator_div (Number.ofInt64 schedule.paymentTotal.toInt64) .to_nearest =
       .ok props.periodicPayment := by
     rcases loanPeriodicPayment_cases _ _ _ _ hpp hppne with ⟨-, hd⟩ | ⟨hz, -⟩
     · exact hd
     · rw [hr0] at hz; exact absurd hz (by decide)
-  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toInt64
   have hNv := Number.ofInt64_count schedule.paymentTotal
   have hn0 : (0 : ℚ) < schedule.paymentTotal.toNat := by
     have h := hex.paymentTotal_pos
@@ -1706,13 +1704,13 @@ lemma computeManagementFee_bounds (nt : NumericType) (ti mfo : Number) (K : ℕ)
   rw [heq] at h
   obtain ⟨raw, hraw, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨y, hy, hraw⟩ := bind_ok_peel _ _ _ hraw
-  have hRB := Number.ofInt64_isNormalized mgmt.toTenthBips32.toUInt64.toInt64
-  have hRBv : (Number.ofInt64 mgmt.toTenthBips32.toUInt64.toInt64).toRat = (R : ℚ) := by
+  have hRB := Number.ofInt64_isNormalized mgmt.toTenthBips32.toInt64
+  have hRBv : (Number.ofInt64 mgmt.toTenthBips32.toInt64).toRat = (R : ℚ) := by
     rw [Number.ofInt64_count]
     show ((mgmt.toUInt32.toNat : ℕ) : ℚ) = _
     rw [UInt16.toNat_toUInt32]
-  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toUInt64.toInt64
-  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toUInt64.toInt64).toRat = 100000 := by
+  have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
+  have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
   have hyN := Number.operator_mul_isNormalized _ _ y _ htiN hRB hy
   have hrawN := Number.operator_div_isNormalized _ _ raw _ hyN hU hraw

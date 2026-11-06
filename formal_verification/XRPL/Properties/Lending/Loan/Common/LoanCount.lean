@@ -55,6 +55,11 @@ lemma Loan.manageDefault_loanCount (loan : Loan) (v : Vault) (r : LoanWithAmount
 private lemma LoanBroker.releaseLoan_loanCount (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.loanCount = lb.loanCount - 1 := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   exact (congrArg RawLoanBroker.loanCount (RawLoanBroker.to_lawful_ok h).1 :)
 
 /-- A delete takes one off the broker's LoanCount. -/

@@ -79,6 +79,55 @@ lemma Vault.deposit_compute_rejected_proof (v : Vault) (amountDeposit : STAmount
   simp only [ExceptT.run] at hcomp hrounded
   simp [hopen.phase, hopen.donation, hopen.insolvent, hopen.blocked, hrounded, hcomp]
 
+lemma Vault.deposit_zero_shares_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (ra shares : STAmount) (hopen : v.DepositOpen false t)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra))
+    (hs : assetsToSharesDeposit v ra = .ok shares) (hz : shares.isZero = true) :
+    (v.deposit amountDeposit false t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
+  refine Vault.deposit_compute_rejected_proof v amountDeposit false t hpos ra _ hopen hrounded ?_
+  simp only [computeDeposit]
+  unfold_ter
+  simp [hs, hz]
+
+lemma Vault.deposit_overpriced_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (ra shares assets : STAmount) (hopen : v.DepositOpen false t)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra))
+    (hs : assetsToSharesDeposit v ra = .ok shares) (hz : shares.isZero = false)
+    (ha : sharesToAssetsDeposit v shares = .ok assets) (hgt : assets.operator_gt ra = .ok true) :
+    (v.deposit amountDeposit false t hpos).run = .ok (.error .tecINTERNAL) := by
+  refine Vault.deposit_compute_rejected_proof v amountDeposit false t hpos ra _ hopen hrounded ?_
+  simp only [computeDeposit]
+  unfold_ter
+  simp [hs, hz, ha, hgt]
+
+lemma Vault.deposit_zero_charge_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (ra shares assets charge : STAmount) (assetsTotal : Number)
+    (hopen : v.DepositOpen false t)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra))
+    (hs : assetsToSharesDeposit v ra = .ok shares) (hz : shares.isZero = false)
+    (ha : sharesToAssetsDeposit v shares = .ok assets) (hgt : assets.operator_gt ra = .ok false)
+    (hat : v.assetsTotal = .ok assetsTotal)
+    (hcl : clampToSumExponent assetsTotal assets v.baseExponent = .ok charge)
+    (hnp : charge.isFractionalNonPositive = .ok true) :
+    (v.deposit amountDeposit false t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
+  refine Vault.deposit_compute_rejected_proof v amountDeposit false t hpos ra _ hopen hrounded ?_
+  simp only [computeDeposit]
+  unfold_ter
+  simp [hs, hz, ha, hgt, hat, hcl, hnp]
+
+lemma Vault.deposit_zero_donation_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (ra charge : STAmount) (assetsTotal : Number)
+    (hopen : v.DepositOpen true t)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra))
+    (hat : v.assetsTotal = .ok assetsTotal)
+    (hcl : clampToSumExponent assetsTotal ra v.baseExponent = .ok charge)
+    (hnp : charge.isFractionalNonPositive = .ok true) :
+    (v.deposit amountDeposit true t hpos).run = .ok (.error .tecPRECISION_LOSS) := by
+  refine Vault.deposit_compute_rejected_proof v amountDeposit true t hpos ra _ hopen hrounded ?_
+  simp only [computeDeposit]
+  unfold_ter
+  simp [hat, hcl, hnp]
+
 lemma Vault.deposit_inflow_rejected_proof (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (t : UInt32)
     (hpos : 0 < amountDeposit.toRat) (ra : STAmount) (amounts : VaultAmounts) (ter : TER)
     (hopen : v.DepositOpen isDonation t)

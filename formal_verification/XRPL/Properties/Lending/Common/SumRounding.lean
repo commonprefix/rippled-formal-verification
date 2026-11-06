@@ -4,6 +4,7 @@ import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
 import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
+import XRPL.Properties.Protocol.Number.Add.Common.NormalizedSum
 import XRPL.Properties.Vault.Proofs.Support.IntegralFacts
 import XRPL.Properties.Vault.Proofs.Support.NumberFacts
 import XRPL.Properties.Vault.Proofs.Support.ClampFacts
@@ -18,54 +19,6 @@ import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 never exceeds the amount, and on a balance of whole base units it is the amount floored to whole base units. -/
 
 namespace XRPL.Model.Protocol
-
-/-- A mantissa-zero sum of normalized operands is the literal zero, in every rounding mode. -/
-private lemma Number.operator_add_zero_shape_any (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hok : Number.operator_add x y mode = .ok result)
-    (h0 : result.mantissa_ = 0) : result = Number.zero := by
-  by_cases hy_guard : y.operator_eq Number.zero = true
-  · have h_result : result = x := by
-      unfold Number.operator_add at hok
-      rw [if_pos hy_guard] at hok
-      exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
-    subst h_result
-    exact Number.eq_zero_of_mantissa_zero result hx h0
-  by_cases hx_guard : x.operator_eq Number.zero = true
-  · have h_result : result = y := by
-      unfold Number.operator_add at hok
-      rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
-    subst h_result
-    exact Number.eq_zero_of_mantissa_zero result hy h0
-  by_cases heq_guard : x.operator_eq y.operator_neg = true
-  · unfold Number.operator_add at hok
-    rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
-    exact (Except.ok.inj (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
-  have hx_mant_ne : x.mantissa_ ≠ 0 := fun h => hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
-  have hy_mant_ne : y.mantissa_ ≠ 0 := fun h => hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
-  by_cases h_sign_eq : x.negative_ = y.negative_
-  · obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
-      hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
-    exact absurd h0 hspec.result_mant_ne
-  · obtain ⟨M, ze', δ, zn, sticky, _, _, _, _, _, _, _, hok128, _, _, _⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
-        hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
-    exact doNormalize128_zero_shape_sz zn M ze' sticky mode result hok128 h0
-
-/-- A sum of normalized operands is normalized, in every rounding mode. -/
-lemma Number.operator_add_isNormalized_any (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized) (hok : Number.operator_add x y mode = .ok result) :
-    result.isNormalized := by
-  by_cases h0 : result.mantissa_ = 0
-  · rw [Number.operator_add_zero_shape_any x y result mode hx hy hok h0]; exact Or.inl rfl
-  · exact operator_add_isNormalized x y result mode hx hy hok h0
-
-/-- A difference of normalized operands is normalized, in every rounding mode. -/
-lemma Number.operator_sub_isNormalized_any (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized) (hok : Number.operator_sub x y mode = .ok result) :
-    result.isNormalized :=
-  Number.operator_add_isNormalized_any x y.operator_neg result mode hx (Number.operator_neg_isNormalized y hy) hok
 
 /-- A fractional amount that is canonical or zero converts to a `Number` of the same value. -/
 lemma STAmount.FracCanonZero.toNumber_val {s : STAmount} (h : s.FracCanonZero) (mode : rounding_mode)
@@ -294,7 +247,8 @@ private lemma sub_exact (x y r w : Number) (mode : rounding_mode) (hx : x.isNorm
   by_cases hxm : x.mantissa_ = 0
   · have hx' : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxm
     have hr : r = y.operator_neg := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hnm), hx', if_pos (by decide)] at hok
       exact (Except.ok.inj hok).symm
     rw [hr, Number.toRat_neg, hx', Number.toRat_zero]
@@ -621,23 +575,21 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
         = (if exp > cMaxOffset then .error .overflow
            else if exp < cMinOffset then .ok IOUAmount.zero
            else .ok ⟨-mant.toUInt64.toInt64, exp⟩) := by
-      unfold STAmount.iou
-      rw [if_neg h_int]
+      rw [STAmount.iou_of_lt .downward h_int h_fit]
       unfold IOUAmount.ofMantissaExp
       rw [h_sd]
       have := IOUAmount.normalize_canonical16 mant.toUInt64 exp true .downward hmtu_lo hmtu_hi
         (by rw [hEeq, hwe]; omega) (by rw [hEeq, hwe]; omega)
       simpa using this
+    obtain ⟨vpeel, hvpeel, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     rw [STAmount.checked] at h
     unfold STAmount.canonicalize at h
     rw [if_neg h_int, hiou] at h
     have hd0 : d.toRat ≤ 0 := by rw [hdw]; linarith [Number.toRat_nonneg_of_nonnegative w hwneg]
     split_ifs at h with h1 h2
     · obtain rfl := (Except.ok.inj h).symm
-      have hz : (if IOUAmount.zero.signum < 0 then -IOUAmount.zero.mantissa_ else IOUAmount.zero.mantissa_).toUInt64
-          = 0 := by decide
       rw [STAmount.toRat_signed]
-      simp only [hz]
       simpa using hd0
     · obtain rfl := (Except.ok.inj h).symm
       have hpos : 0 < mant.toUInt64.toNat := by omega
@@ -647,7 +599,8 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
         unfold IOUAmount.signum; exact if_pos hxneg
       have hlt : IOUAmount.signum ⟨-mant.toUInt64.toInt64, exp⟩ < 0 := by rw [hsig']; decide
       rw [STAmount.toRat_signed]
-      simp only [hlt, decide_true, if_true, Int64.neg_neg]
+      simp only [hlt, decide_true, if_true]
+      rw [← Int64.neg_toUInt64_eq_magnitude hxneg, Int64.neg_neg]
       show d.toRat ≤ -1 * ((mant.toUInt64.toInt64.toUInt64.toNat : ℕ) : ℚ) * 10 ^ exp
       rw [show mant.toUInt64.toInt64.toUInt64 = mant.toUInt64 from rfl, hdw]
       linarith

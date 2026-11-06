@@ -57,6 +57,10 @@ private lemma Loan.doPayment_keepsDefault (loan : Loan) (pc : PaymentComponents)
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, hc1, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc1
+    obtain ⟨_, hc2, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.addChecked_eq_ok.mp hc2
     exact Loan.KeepsDefault.of_lawful h rfl
 
 private lemma Loan.settlePayment_keepsDefault {α : Type} [AssetPool α] (loan : Loan) (pool : α)
@@ -210,12 +214,12 @@ private lemma Loan.canPay_remaining (loan : Loan) (pt : LoanPaymentType) (h : lo
 
 /-- A loan that passes the impair or unimpair checks is not defaulted. -/
 private lemma Loan.canManage_not_default (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (h : loan.canManage action now = .tesSUCCESS) : loan.isDefault = false := by
+    (h : loan.canManage action now = .ok .tesSUCCESS) : loan.isDefault = false := by
   unfold Loan.canManage at h
   cases hd : loan.isDefault
   · rfl
   · simp only [hd, if_true] at h
-    split_ifs at h
+    split_ifs at h <;> simp [pure, Except.pure] at h
 
 /-- A defaulted loan reachable from create has no payment left. -/
 lemma Loan.ReachableFrom.default_paidOff {start loan : Loan} {t₀ t : UInt32} (hs : start.isDefault = false)

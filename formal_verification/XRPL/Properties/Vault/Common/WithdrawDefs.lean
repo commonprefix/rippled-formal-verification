@@ -47,12 +47,6 @@ def RawVault.idealAssetsWithdraw (rv : RawVault) (waiveUnrealizedLoss : Bool) (s
   (if waiveUnrealizedLoss then rv.depositNav else rv.withdrawNav) *
     shares / rv.toExact.sharesTotal
 
-/-- The exact share amount for withdrawing `assets`, before rounding (XLS-0065): `sharesTotal * assets / nav`, with
-the same `nav` as `idealAssetsWithdraw`. -/
-def RawVault.idealSharesWithdraw (rv : RawVault) (waiveUnrealizedLoss : Bool) (assets : ℚ) : ℚ :=
-  rv.toExact.sharesTotal * assets /
-    (if waiveUnrealizedLoss then rv.depositNav else rv.withdrawNav)
-
 /-- The exact `assets'` for redeeming `shares` priced at `nav` instead of the exact net asset value. The model
 prices at its computed value, which can sit just off the exact one when assets are deployed. -/
 def RawVault.idealAssetsWithdrawAt (rv : RawVault) (nav shares : ℚ) : ℚ :=

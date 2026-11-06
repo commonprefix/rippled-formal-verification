@@ -83,12 +83,6 @@ lemma Vault.Reachable.asset_parity_proof (v : Vault) (t : UInt32) (hr : Vault.Re
     v.assetsTotal = .ok v.assetsAvailable :=
   Vault.assetsTotal_of_noLending v (Vault.Reachable.noLending_proof v t hr).1
 
-lemma Vault.Reachable.depositNavExact_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) :
-    v.DepositNavExact := by
-  refine ⟨v.assetsAvailable, Vault.Reachable.asset_parity_proof v t hr, ?_⟩
-  show v.assetsAvailable.toRat = v.assetsAvailable.toRat + v.assetsDeployed.toRat
-  rw [(Vault.Reachable.noLending_proof v t hr).1, Number.toRat_zero, add_zero]
-
 lemma Vault.Reachable.withdrawNavExact_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) (w : Bool) :
     v.WithdrawNavExact w :=
   Vault.withdrawNavExact_of_noLending v (Vault.Reachable.noLending_proof v t hr).1 w

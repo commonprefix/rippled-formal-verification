@@ -107,7 +107,7 @@ lemma Vault.Reachable.deposit_charge_proof (v : Vault) (amountDeposit : STAmount
   rw [hI] at h3 h4 h5
   exact ⟨h1, h5, h3, h4⟩
 
-/-- The charge of a deposit into any valid vault. The sides a lower price can only help keep the exact ideal.
+/-- The charge of a deposit into any lawful vault. The sides a lower price can only help keep the exact ideal.
 The shortfall sides are measured against the charge at the computed total. -/
 lemma Vault.deposit_charge_total_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
     (hcanon : amountDeposit.Canonical) (hpos : 0 < amountDeposit.toRat)

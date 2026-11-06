@@ -19,20 +19,10 @@ theorem STAmount.operator_gt_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful l
     STAmount.operator_gt lhs rhs = .ok (decide (rhs.toRat < lhs.toRat)) :=
   STAmount.operator_gt_eq_proof lhs rhs h
 
-/-- Correctness of `operator_ge`. -/
-theorem STAmount.operator_ge_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ge lhs rhs = .ok (decide (rhs.toRat ≤ lhs.toRat)) :=
-  STAmount.operator_ge_eq_proof lhs rhs h
-
 /-- Correctness of `operator_eq`. On comparable operands, field equality decides
 rational equality (the shared numericType is part of `CmpFaithful`). -/
 theorem STAmount.operator_eq_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) :=
   STAmount.operator_eq_eq_proof lhs rhs h
-
-/-- Correctness of `operator_ne`. -/
-theorem STAmount.operator_ne_eq (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ne lhs rhs = decide (lhs.toRat ≠ rhs.toRat) :=
-  STAmount.operator_ne_eq_proof lhs rhs h
 
 end XRPL.Model.Protocol

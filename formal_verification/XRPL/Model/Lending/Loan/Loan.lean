@@ -82,15 +82,16 @@ def LoanSchedule.build (paymentInterval paymentTotal gracePeriod : Option UInt32
     -- C++ getStartDate: two-step keeps the provided StartDate, one-step uses ledgerCloseTime
     startDate := if twoStep then startDate else ledgerCloseTime }
 
-def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
-  let timeAvailable := maxTime - schedule.startDate
+def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : Except Error TER := do
+  let timeAvailable ← maxTime.subChecked schedule.startDate
   if schedule.gracePeriod > timeAvailable
       || schedule.paymentInterval > timeAvailable
-      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds?
-      || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
-    .tecKILLED
+      || schedule.paymentTotal > timeAvailable then  -- double check as paymentTotal is count, not seconds?
+    return .tecKILLED
   else
-    .tesSUCCESS
+    let timeLastPayment ← timeAvailable.subChecked schedule.gracePeriod
+    if timeLastPayment / schedule.paymentInterval < schedule.paymentTotal then return .tecKILLED
+    else return .tesSUCCESS
 
 def RawLoan.interestDue (rl : RawLoan) : Except Error Number := do
   let totalValueOutstanding' ← rl.totalValueOutstanding.operator_sub rl.principalOutstanding .to_nearest
@@ -138,8 +139,8 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   paymentRemaining_le_total : rl.paymentRemaining ≤ rl.schedule.paymentTotal
   dueDate_schedule : rl.paymentRemaining ≠ 0 → rl.nextPaymentDueDate.toNat = rl.schedule.startDate.toNat +
     (rl.schedule.paymentTotal.toNat - rl.paymentRemaining.toNat + 1) * rl.schedule.paymentInterval.toNat
-  schedule_in_time :
-    rl.schedule.startDate.toNat + rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤ maxTime.toNat
+  schedule_in_time : rl.schedule.startDate.toNat + rl.schedule.gracePeriod.toNat +
+    rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤ maxTime.toNat
   -- field ranges
   interestRate_cap : rl.rates.interestRate ≤ maxLoanRate
   lateInterestRate_cap : rl.rates.lateInterestRate ≤ maxLoanRate
@@ -183,8 +184,8 @@ instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
       rl.paymentRemaining ≤ rl.schedule.paymentTotal ∧
       (rl.paymentRemaining ≠ 0 → rl.nextPaymentDueDate.toNat = rl.schedule.startDate.toNat +
         (rl.schedule.paymentTotal.toNat - rl.paymentRemaining.toNat + 1) * rl.schedule.paymentInterval.toNat) ∧
-      rl.schedule.startDate.toNat + rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤
-        maxTime.toNat ∧
+      rl.schedule.startDate.toNat + rl.schedule.gracePeriod.toNat +
+        rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤ maxTime.toNat ∧
       rl.rates.interestRate ≤ maxLoanRate ∧ rl.rates.lateInterestRate ≤ maxLoanRate ∧
       rl.rates.closeInterestRate ≤ maxLoanRate ∧ rl.rates.overpaymentInterestRate ≤ maxLoanRate ∧
       rl.rates.overpaymentFee ≤ maxLoanRate ∧ Number.zero.operator_le rl.fees.originationFee = true ∧

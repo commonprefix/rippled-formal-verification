@@ -72,7 +72,7 @@ lemma LendingLedger.loanPay_ok {l l' : LendingLedger} {i : Nat} {paymentType : L
 holds the vault and the loan of `r`, and the broker of `r` in the loan's broker slot. -/
 lemma LendingLedger.loanManage_ok {l l' : LendingLedger} {i : Nat} {action : LoanManageAction}
     (h : (l.apply (.loanManage i action)).run = .ok (.ok l')) :
-    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage action l.now = .tesSUCCESS ∧
+    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage action l.now = .ok .tesSUCCESS ∧
       (loan.manage action l.vault l.now).run = .ok (.ok r) ∧
       l' = l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool') ∧
       l'.vault = r.pool' ∧ l'.LoanAt i r.loan' ∧ l'.now = l.now ∧
@@ -85,7 +85,7 @@ lemma LendingLedger.loanManage_ok {l l' : LendingLedger} {i : Nat} {action : Loa
 /-- A successful default ran `Loan.manageDefault`, whose loan and vault the ledger holds after. -/
 lemma LendingLedger.loanDefault_ok {l l' : LendingLedger} {i : Nat}
     (h : (l.apply (.loanManage i .default)).run = .ok (.ok l')) :
-    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .default l.now = .tesSUCCESS ∧
+    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .default l.now = .ok .tesSUCCESS ∧
       (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       l' = l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool') ∧
       l'.vault = r.pool' ∧ l'.LoanAt i r.loan' ∧ l'.now = l.now ∧
@@ -100,7 +100,7 @@ lemma LendingLedger.loanDefault_ok {l l' : LendingLedger} {i : Nat}
 /-- A successful impairment ran `Loan.manageImpair`, whose loan and vault the ledger holds after. -/
 lemma LendingLedger.loanImpair_ok {l l' : LendingLedger} {i : Nat}
     (h : (l.apply (.loanManage i .impair)).run = .ok (.ok l')) :
-    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .impair l.now = .tesSUCCESS ∧
+    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .impair l.now = .ok .tesSUCCESS ∧
       (loan.manageImpair l.vault l.now).run = .ok (.ok r) ∧
       l' = l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool') ∧
       l'.vault = r.pool' ∧ l'.LoanAt i r.loan' ∧ l'.now = l.now ∧
@@ -110,7 +110,7 @@ lemma LendingLedger.loanImpair_ok {l l' : LendingLedger} {i : Nat}
 /-- A successful unimpairment ran `Loan.manageUnimpair`, whose loan and vault the ledger holds after. -/
 lemma LendingLedger.loanUnimpair_ok {l l' : LendingLedger} {i : Nat}
     (h : (l.apply (.loanManage i .unimpair)).run = .ok (.ok l')) :
-    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .unimpair l.now = .tesSUCCESS ∧
+    ∃ e loan r, l.loan? i = some e ∧ l.LoanAt i loan ∧ loan.canManage .unimpair l.now = .ok .tesSUCCESS ∧
       (loan.manageUnimpair l.vault).run = .ok (.ok r) ∧
       l' = l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool') ∧
       l'.vault = r.pool' ∧ l'.LoanAt i r.loan' ∧ l'.now = l.now ∧
@@ -162,7 +162,7 @@ lemma LendingLedger.loanSet_ok {l l' : LendingLedger} {j : Nat} {principal : Num
       (LendingTx.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
         allowsOverpayment).preflight l = .tesSUCCESS ∧
       (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now twoStep).checkTimeAvailability =
-        .tesSUCCESS ∧
+        .ok .tesSUCCESS ∧
       Loan.canCreate broker l.vault principal fees
         (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now twoStep) l.now twoStep =
         .ok .tesSUCCESS ∧
@@ -175,14 +175,18 @@ lemma LendingLedger.loanSet_ok {l l' : LendingLedger} {j : Nat} {principal : Num
   have hpre := LendingLedger.apply_preflight h
   obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_loan rfl h
   have hsched : (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now
-      twoStep).checkTimeAvailability = .tesSUCCESS := by
+      twoStep).checkTimeAvailability = .ok .tesSUCCESS := by
     simp only [LendingLedger.applyLoan, LendingLedger.applyLoanSet] at hu
     generalize (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now
       twoStep).checkTimeAvailability = t at hu ⊢
-    cases ht : t.isTesSuccess
-    · rw [ht, if_pos (by decide)] at hu
-      cases hu
-    · exact (TER.isTesSuccess_iff t).mp ht
+    cases t with
+    | error e => simp [ExceptT.run, ExceptT.mk] at hu
+    | ok t =>
+      dsimp only at hu
+      cases ht : t.isTesSuccess
+      · rw [ht, if_pos (by decide)] at hu
+        cases hu
+      · exact congrArg Except.ok ((TER.isTesSuccess_iff t).mp ht)
   obtain ⟨broker, r, hb, hc, hcr, rfl⟩ := l.applyLoanSet_inv u j principal rates fees _ twoStep allowsOverpayment hu
   refine ⟨broker, r, hb, hpre, hsched, hc, hcr, rfl, rfl, ?_, rfl, ?_⟩
   · refine ⟨{ brokerIndex := j, loan := r.loan' }, r.loan'.broker, ?_, ?_, Loan.withBroker_self r.loan'⟩

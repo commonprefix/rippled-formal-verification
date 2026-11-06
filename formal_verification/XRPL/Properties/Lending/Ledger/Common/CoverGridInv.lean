@@ -171,6 +171,11 @@ structure LendingLedger.CoverGridInv (l : LendingLedger) : Prop where
 lemma LoanBroker.releaseLoan_cover (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.coverAvailable = lb.coverAvailable := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   exact (congrArg RawLoanBroker.coverAvailable (RawLoanBroker.to_lawful_ok h).1 :)
 
 /-- The broker a loan transaction writes keeps its cover on the grid. -/

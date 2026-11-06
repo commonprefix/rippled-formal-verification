@@ -10,8 +10,8 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-/-- A coarser vault scale, a higher DebtTotal or a higher CoverRateMinimum never lowers the minCover when it
-is ≠ 0. -/
+/-- When minCover ≠ 0 before and after -> a coarser vault scale, a higher DebtTotal or a higher CoverRateMinimum
+never lowers it. -/
 theorem minimumBrokerCover_monotone (nt : NumericType) :
     -- `e'` is the coarser vault scale, both scales are in the IOU exponent range
     (∀ (debtTotal : Number) (coverRateMinimum : TenthBips32) (e e' : Int) (m m' : Number), e ≤ e' → -96 ≤ e →

@@ -61,7 +61,7 @@ private lemma Loan.doPayment_owed_le (l l' : Loan) (pc : PaymentComponents) (hi 
     simp only [Loan.doPayment, hf, Bool.false_eq_true, ↓reduceIte] at h
     unfold_ter at h
     walk_ok
-    rename_i _ tv htv _ pv hpv _ mv hmv' hlaw
+    rename_i _ tv htv _ pv hpv _ mv hmv' _ _ hlaw
     have h1 := (RawLoan.to_lawful_ok hlaw).1
     have e1 := (congrArg RawLoan.totalValueOutstanding h1 :)
     have e3 := (congrArg RawLoan.managementFeeOutstanding h1 :)

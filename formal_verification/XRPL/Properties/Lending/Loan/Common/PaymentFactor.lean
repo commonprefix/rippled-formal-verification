@@ -129,7 +129,11 @@ private lemma powerMinusOneLoop_le (rate : Number) (hrate : rate.isNormalized) (
     split at h
     · rename_i hlt
       obtain ⟨c1, h1, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c2, h2, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c3, h3, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨ns, h4, h⟩ := bind_ok_peel _ _ _ h
       have hk1 := Number.ofInt64_nat (pr - index) (by omega)
@@ -204,11 +208,11 @@ private lemma powerMinusOneLoop_le (rate : Number) (hrate : rate.isNormalized) (
 loses at most `12·n·ε` to rounding, which is small next to `n·rate` at or above `10^-9`. -/
 private lemma computePowerMinusOneHybrid_le (rate : Number) (pr : UInt32) (pm : Number)
     (hrate : rate.isNormalized) (hr0 : 0 ≤ rate.toRat) (hsmall : (pr.toNat : ℚ) * rate.toRat ≤ 1 / 2)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toUInt64.toInt64) pr = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64) pr = .ok pm) :
     pm.toRat ≤ 64 * pr.toNat * rate.toRat := by
   have he := eps_pos
   have he' := eps_le
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hone := Number.ofInt64_isNormalized 1
   have hpr32 : pr.toNat < 2 ^ 32 := pr.toNat_lt
@@ -372,13 +376,13 @@ private lemma Number.zero_div_eq {x y r : Number} (hy : y ≠ Number.zero) (hx :
 /-- A nonzero payment factor of a positive rate is at least the rate, and at least `1 / (64·n)` while `n` times the
 rate is at most one half, each less three roundings. -/
 private lemma computePaymentFactor_ge (rate : Number) (pr : UInt32) (f : Number) (hrate : rate.isNormalized)
-    (hr0 : 0 < rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toUInt64.toInt64) pr = .ok f)
+    (hr0 : 0 < rate.toRat) (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f)
     (hf : f.toRat ≠ 0) :
     rate.toRat * (1 - ε) ^ 3 ≤ f.toRat ∧
       ((pr.toNat : ℚ) * rate.toRat ≤ 1 / 2 → (1 - ε) ^ 3 / (64 * pr.toNat) ≤ f.toRat) := by
   have he := eps_pos
   have he' := eps_le
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hone := Number.ofInt64_isNormalized 1
   unfold computePaymentFactor at h
@@ -447,7 +451,7 @@ lemma loanPrincipalFromPeriodicPayment_le_payments (pp rate : Number) (pr : UInt
     0 ≤ tpo.toRat ∧ tpo.toRat ≤ 70 * pr.toNat * pp.toRat ∧ tpo.toRat * rate.toRat ≤ 2 * pp.toRat := by
   have he := eps_pos
   have he' := eps_le
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hN0 : (0 : ℚ) ≤ pr.toNat := by positivity
   have h1e : 0 < 1 - ε := by linarith

@@ -83,6 +83,8 @@ lemma STAmount.ofNumber_signtrue_nonpos (nt : NumericType) (n : Number) (mode : 
         have := toUInt64_toNat_of_nonneg mant hmant_nn; omega
       have hcm : cMaxValue.toNat = 10 ^ 16 - 1 := by decide
       omega
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     exact STAmount.canonicalize_signtrue_nonpos
       (STAmount.unchecked .fractional mant.toUInt64 exp true) result mode rfl rfl hfit hok
 
@@ -103,6 +105,8 @@ lemma STAmount.ofNumber_integral_negative_nonpos (nt : NumericType) (n : Number)
     rw [hr] at hok
     simp only [] at hok
     obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range _ mode iv hwneg hr
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     have hexact := STAmount.canonicalize_integral_toRat (STAmount.unchecked nt iv.toUInt64 0 true) result mode
       (show (STAmount.unchecked nt iv.toUInt64 0 true).integral = true from hnt) rfl
       (toUInt64_toNat_le_maxRep iv hnn hle) hok
@@ -146,7 +150,7 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
             exact_mod_cast h1)
         rw [h2]
         rcases s.mIsNegative <;> simp
-      by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
+      by_cases hrng : r.magnitude > s.mNumericType.maxValue
       · rw [if_pos hrng] at hok; exact absurd hok (by simp)
       rw [if_neg hrng] at hok
       have hres := Except.ok.inj hok
@@ -182,6 +186,8 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
       have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
         toUInt64_toNat_le_maxRep intValue hnn hle
       have hres_val : result.toRat = (intValue.toInt : ℚ) := by
+        obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
         have hexact := STAmount.canonicalize_integral_toRat
           (STAmount.unchecked nt intValue.toUInt64 0 false) result .downward
           (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hint) rfl
@@ -190,6 +196,8 @@ lemma STAmount.ofNumber_downward_floor_bounds (nt : NumericType) (n : Number) (r
         show ((intValue.toUInt64.toNat : ℤ) : ℚ) = (intValue.toInt : ℚ)
         rw [toUInt64_toNat_of_nonneg intValue hnn]
       have hres_exp : result.exponent = 0 := by
+        obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+        obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
         obtain ⟨_, hoff, _⟩ := STAmount.canonicalize_integral_facts
           (STAmount.unchecked nt intValue.toUInt64 0 false) result .downward
           (show (STAmount.unchecked nt intValue.toUInt64 0 false).integral = true from hint)
@@ -271,6 +279,8 @@ lemma STAmount.ofNumber_integral_facts (nt : NumericType) (n : Number)
     have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
       toUInt64_toNat_le_maxRep intValue hnn hle
     have hint' : (STAmount.unchecked nt intValue.toUInt64 0 neg).integral = true := hnt
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     obtain ⟨h1, h2, h3, _⟩ := STAmount.canonicalize_integral_facts
       (STAmount.unchecked nt intValue.toUInt64 0 neg) result mode hint' rfl hval hok
     exact ⟨h1, h2, h3⟩

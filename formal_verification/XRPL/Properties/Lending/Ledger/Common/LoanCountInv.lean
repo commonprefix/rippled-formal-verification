@@ -274,6 +274,24 @@ lemma LendingLedger.Genesis.loanCountInv {g : LendingLedger} (hg : g.Genesis) : 
   rw [hg.no_brokers] at hb
   cases hb
 
+/-- A stored loan counts for its broker. -/
+lemma LendingLedger.loansOf_pos {l : LendingLedger} {i : Nat} {e : LoanEntry} (he : l.loan? i = some e) :
+    0 < l.loansOf e.brokerIndex := by
+  obtain ⟨hi, hei⟩ := LendingLedger.loan?_getElem he
+  unfold LendingLedger.loansOf
+  exact List.countP_pos_iff.mpr ⟨l.loans[i], List.getElem_mem hi, by rw [hei]; simp⟩
+
+/-- The broker of a stored loan counts it, so its LoanCount is not zero. -/
+lemma LendingLedger.LoanCountInv.loanCount_ne_zero {l : LendingLedger} (hinv : l.LoanCountInv) {i : Nat}
+    {e : LoanEntry} {b : LoanBroker} (he : l.loan? i = some e) (hb : l.broker? e.brokerIndex = some b) :
+    b.loanCount ≠ 0 := by
+  have hc' := hinv.counted _ b hb
+  have hpos := LendingLedger.loansOf_pos he
+  intro h0
+  rw [h0] at hc'
+  simp at hc'
+  omega
+
 /-- Every reachable ledger satisfies the invariant. -/
 lemma LendingLedger.Reachable.loanCountInv {l : LendingLedger} (hr : l.Reachable) : l.LoanCountInv :=
   LendingLedger.Reachable.invariant (fun _ hg => hg.loanCountInv) (fun _ _ _ hi ha => hi.step ha) hr

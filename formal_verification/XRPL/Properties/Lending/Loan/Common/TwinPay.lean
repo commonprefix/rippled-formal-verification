@@ -72,6 +72,7 @@ private lemma Loan.doPayment_twin_ok {l l' r : Loan} (h : Loan.Twin l l') (pc : 
     exact ⟨r', hr', Loan.doPayment_twin h pc hr hr'⟩
   simp only [Bool.not_eq_true] at hf
   have hr0 := hr
+  obtain ⟨hc1, hc2⟩ := Loan.doPayment_ok_checks l pc r hf hr
   obtain ⟨hraw, hnt, hm⟩ := h
   generalize hb : l'.toRawLoan.broker = b at hraw
   have hnt' : b.numericType = l.broker.numericType := by rw [← hb]; exact hnt
@@ -79,14 +80,13 @@ private lemma Loan.doPayment_twin_ok {l l' r : Loan} (h : Loan.Twin l l') (pc : 
   simp only [Loan.doPayment, hf, Bool.false_eq_true, ↓reduceIte] at hr
   unfold_ter at hr
   walk_ok
-  rename_i _ t ht _ p hp _ m hmf hlaw
+  rename_i _ t ht _ p hp _ m hmf _ _ hlaw
   obtain ⟨r', h1, -⟩ := RawLoan.to_lawful_twin hlaw b hnt' hm'
   have hd : Loan.doPayment l' pc = .ok r' := by
     unfold Loan.doPayment
     simp only [hf, Bool.false_eq_true, ↓reduceIte]
     rw [hraw]
-    simp only [bind, Except.bind, *]
-    rfl
+    simp only [bind, Except.bind, pure, Except.pure, *, UInt32.subChecked_of_le hc1, UInt32.addChecked_of_lt hc2]
   exact ⟨r', hd, Loan.doPayment_twin ⟨by rw [hraw], hnt, hm⟩ pc hr0 hd⟩
 
 /-- Twins pay the same instalments in the loop, and the loans they leave are twins. The pools ride along. -/

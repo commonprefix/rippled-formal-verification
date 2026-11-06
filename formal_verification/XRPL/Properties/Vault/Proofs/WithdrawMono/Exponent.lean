@@ -116,7 +116,7 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
                    (n.exponent_ + 3) + 1) := by
           unfold Number.normalizeToRange
           rw [h_red, hcusp, hcusp_eq, if_neg hovf]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         refine ⟨Or.inr ⟨by omega, by omega⟩, ⟨?_, ?_⟩, hsign cMinValue (by rw [hcMin]; omega) hmant,
@@ -137,7 +137,7 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
         unfold Number.normalizeToRange
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) .to_nearest
           .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [hcMax, hm3] at hlt
@@ -157,7 +157,7 @@ lemma ntr_tn_exp (n : Number) (mant : Int64) (exp : Int)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .to_nearest
         .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
         (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     refine ⟨Or.inl ⟨by omega, by omega⟩, ⟨?_, ?_⟩, hsign _ (by rw [hm3]; omega) hmant, by omega⟩
@@ -194,7 +194,7 @@ lemma checked_frac_zero (mant : UInt64) (exp : Int) (neg : Bool) (mode : roundin
     unfold STAmount.iou
     rw [if_neg h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
+    rw [STAmount.signedDrops_toInt64Checked _ h_fit, ok_bind, h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · exfalso
@@ -260,6 +260,8 @@ lemma ofNumber_frac_tn_exp (n : Number) (r : STAmount) (hn : n.isNormalized)
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by rw [← hmant_natAbs]; exact hmhi
     have hexp_lo3 : minExponent + 3 ≤ exp := by rcases hexp with ⟨h, _⟩ | ⟨h, _⟩ <;> omega
     refine ⟨exp, hexp, ?_⟩
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     by_cases hz : r.mValue = 0
     · obtain ⟨hlt, hoff⟩ := checked_frac_zero mant.toUInt64 exp false .to_nearest hmtu_lo hmtu_hi
         hexp_lo3 hexp_le r hok hz

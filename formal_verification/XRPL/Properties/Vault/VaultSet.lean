@@ -35,26 +35,15 @@ theorem Vault.canVaultUpdate_error_codes (assetsMaximum : Option Number) (blockD
       ter = .tecLIMIT_EXCEEDED :=
   Vault.canVaultUpdate_error_codes_proof v assetsMaximum blockDeposit unblockDeposit ter hok
 
-/-- A vault update setting a new maximum on the asset's grid, with permitted deposit flags, passes exactly
-when the maximum is zero or at least the total the check computes (cash plus deployed, rounded down). -/
+/-- A vault update setting a new maximum passes exactly when the maximum is on the asset's grid, the deposit flags are
+permitted, and the maximum is zero or at least the total the check computes (cash plus deployed, rounded down). -/
 theorem Vault.canVaultUpdate_lawful_iff (m assetsTotal : Number) (blockDeposit unblockDeposit : Bool)
     (hnorm : m.isNormalized) -- the transaction's maximum, a normalized `Number`
-    (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
-    (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false)
     (hat : v.assetsTotal = .ok assetsTotal) :
     v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS ↔
-      m.toRat = 0 ∨ assetsTotal.toRat ≤ m.toRat :=
-  Vault.canVaultUpdate_lawful_iff_proof v m assetsTotal blockDeposit unblockDeposit hnorm hgrid hperm hat
-
-/-- On a reachable vault, an update setting a new maximum on the asset's grid, with permitted deposit
-flags, passes exactly when the maximum is zero or at least the vault's exact total. -/
-theorem Vault.Reachable.canVaultUpdate_iff (t : UInt32) (hr : Vault.Reachable v t) (m : Number)
-    (blockDeposit unblockDeposit : Bool)
-    (hnorm : m.isNormalized) -- the transaction's maximum, a normalized `Number`
-    (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
-    (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false) :
-    v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS ↔
-      m.toRat = 0 ∨ v.toExact.assetsTotal ≤ m.toRat :=
-  Vault.Reachable.canVaultUpdate_iff_proof v t hr m blockDeposit unblockDeposit hnorm hgrid hperm
+      m.isOnExponentGrid v.baseExponent v.numericType = .ok true ∧
+      (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false ∧
+      (m.toRat = 0 ∨ assetsTotal.toRat ≤ m.toRat) :=
+  Vault.canVaultUpdate_lawful_iff_proof v m assetsTotal blockDeposit unblockDeposit hnorm hat
 
 end XRPL.Model.SingleAssetVault

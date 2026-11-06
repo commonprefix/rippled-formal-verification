@@ -85,7 +85,7 @@ lemma Vault.Reachable.withdraw_shares_step (v : Vault) (t t0 : UInt32) (hr : Vau
   rw [Vault.withdraw_waive v (Vault.Reachable.noLending_proof v t0 hr).2.1 (.vaultShares shares) w t hpos] at hok
   exact Vault.Reachable.withdraw v t0 t (.vaultShares shares) shares false r hr ht hs.canonical hs.int64 hs
     (iff_of_false (by decide) (fun h => absurd h.2 (ne_of_lt hlt))) hpos hok
-    (le_of_eq (congrArg STAmount.toRat (Vault.withdraw_sharesBurned_exact_proof v shares false t hpos r hok)))
+    (le_of_eq (congrArg STAmount.toRat (Vault.withdraw_sharesRedeemed_exact_proof v shares false t hpos r hok)))
 
 /-- A withdrawal by shares priced at zero succeeds only at a zero net asset value: otherwise
 the precision-loss check refuses it. -/
@@ -166,7 +166,7 @@ lemma Vault.Reachable.redemptionPayout (v : Vault) (t t0 : UInt32) (hr : Vault.R
       (v.numericType.isIntegral = false → p.toRat ≠ 0 → 10 ^ 15 * (10 : ℚ) ^ e ≤ p.toRat) := by
   set I : ℚ := v.assetsAvailable.toRat * shares.toRat / v.toExact.sharesTotal with hI
   have hsc : shares.Canonical := hs.canonical
-  have hshares : r.shares = shares := Vault.withdraw_sharesBurned_exact_proof v shares false t hpos r hok
+  have hshares : r.shares = shares := Vault.withdraw_sharesRedeemed_exact_proof v shares false t hpos r hok
   have hlt' : r.shares.toRat < v.toExact.sharesTotal := by rw [hshares]; exact hlt
   obtain ⟨p, hpr, hfl⟩ := Vault.Reachable.withdraw_payout_floor_proof v (.vaultShares shares) false t t0 hpos hr
     hsc hs.int64 hmax r hok hlt'

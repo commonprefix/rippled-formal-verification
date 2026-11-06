@@ -40,13 +40,13 @@ inductive Loan.ReachableFrom (start : Loan) (t₀ : UInt32) : Loan → UInt32 �
       Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canPay .overpayment = .tesSUCCESS →
       (loan.overpayment v amount t').run = .ok (.ok r) → Loan.ReachableFrom start t₀ r.loan' t'
   | impair (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) :
-      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .impair t' = .tesSUCCESS →
+      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .impair t' = .ok .tesSUCCESS →
       (loan.manageImpair v t').run = .ok (.ok r) → Loan.ReachableFrom start t₀ r.loan' t'
   | unimpair (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) :
-      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .unimpair t' = .tesSUCCESS →
+      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .unimpair t' = .ok .tesSUCCESS →
       (loan.manageUnimpair v).run = .ok (.ok r) → Loan.ReachableFrom start t₀ r.loan' t'
   | default (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithAmounts Vault) :
-      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .default t' = .tesSUCCESS →
+      Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canManage .default t' = .ok .tesSUCCESS →
       (loan.manageDefault v).run = .ok (.ok r) → Loan.ReachableFrom start t₀ r.loan' t'
 
 /-- The loan a LoanSet at close time `t₀` creates: the schedule is built from the transaction

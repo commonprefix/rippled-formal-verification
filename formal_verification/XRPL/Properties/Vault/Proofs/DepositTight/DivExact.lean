@@ -68,10 +68,11 @@ lemma doNormalize128_to_nearest_stages
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   obtain ⟨hval_su, -, hM₁_lt, -, hM₁_size⟩ :
@@ -140,7 +141,7 @@ lemma doNormalize128_to_nearest_stages
     by_cases hst : sticky = true
     · rw [hft₀_def, if_pos hst] at h; norm_num at h
     · exact hδ₁_zero (by simpa using hst)
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>

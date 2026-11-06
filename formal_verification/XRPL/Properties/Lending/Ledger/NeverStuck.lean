@@ -100,7 +100,7 @@ theorem Lending.loan_ops_total (l : LendingLedger) (hr : l.Reachable) (hnd : l.v
       -- the model does not run C++ LoanInvariant, which rejects a late payment that takes nothing off the loan
       -- (FV_M4_35)
       ∃ l', (l.apply (.loanPay i pt amount)).run = .ok (.ok l')) ∧
-    (e.loan.canManage .impair l.now = .tesSUCCESS → -- LoanManage preclaim
+    (e.loan.canManage .impair l.now = .ok .tesSUCCESS → -- LoanManage preclaim
       e.loan.nextPaymentDueDate < l.now → -- an impair needs a late loan
       ∃ l', (l.apply (.loanManage i .impair)).run = .ok (.ok l')) ∧
     (e.loan.canAccept l.vault l.now = .ok .tesSUCCESS → -- LoanAccept preclaim
@@ -111,7 +111,7 @@ theorem Lending.loan_ops_total (l : LendingLedger) (hr : l.Reachable) (hnd : l.v
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent →
       -- the broker holds its cover as an amount of the asset, a balance the model does not track
       b.coverAvailable.toRat < 10 ^ 96 →
-      (∀ action, loan.canManage action l.now = .tesSUCCESS →
+      (∀ action, loan.canManage action l.now = .ok .tesSUCCESS →
         ∃ l', (l.apply (.loanManage i action)).run = .ok (.ok l')) ∧
       (loan.canDelete = .tesSUCCESS → ∃ l', (l.apply (.loanDelete i)).run = .ok (.ok l'))) :=
   ⟨fun b loan pt pc td amount hb hw hc hlate hfull hpc htd hamt hover hpre htotal hparts hcredit hxrp hca hfit hfee =>

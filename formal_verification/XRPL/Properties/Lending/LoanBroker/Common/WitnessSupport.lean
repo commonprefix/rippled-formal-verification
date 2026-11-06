@@ -65,17 +65,11 @@ private def wrHeld : LoanBrokerCoverResult := wResultOf (wbEmpty.coverDeposit wv
 /-- The broker holding `12.345678` of cover. -/
 def wbHeld : LoanBroker := wrHeld.loanBroker'
 
-/-- `1.999999999999999` base units, just under two. -/
-def waNines : STAmount := wAmount 1999999999999999 (-21)
-
 /-- `1.5` base units. -/
 def waHalves : STAmount := wAmount 1500000000000000 (-21)
 
 /-- `3` base units, the sum of two `waHalves`. -/
 def waThree : STAmount := wAmount 3000000000000000 (-21)
-
-/-- One base unit. -/
-def waOne : STAmount := wAmount 1000000000000000 (-21)
 
 /-- An IOU broker with no debt and CoverAvailable `1000000000000000.6`, off the integer grid. -/
 def wbOffGrid : LoanBroker :=
@@ -92,10 +86,6 @@ def wbOffGridDebt : LoanBroker :=
    , debtMaximum := ⟨false, 1000000000000000000, -16⟩
    , coverAvailable := ⟨false, 1000000000000001600, -3⟩, loanCount := 1 },
    by native_decide, by native_decide⟩
-
-/-- A new broker is reachable. -/
-lemma wbEmpty_reachable : wbEmpty.Reachable (-6) :=
-  ⟨wvBase6, wtxCreate, wbEmpty, by native_decide, by native_decide, by native_decide, .refl⟩
 
 /-- The broker after the deposit is reachable. -/
 lemma wbHeld_reachable : wbHeld.Reachable (-6) :=

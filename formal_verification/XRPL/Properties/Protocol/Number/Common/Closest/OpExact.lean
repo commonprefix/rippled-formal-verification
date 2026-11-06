@@ -295,7 +295,8 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
     have h_guard_eq : (x.operator_eq y.operator_neg) = true := by
       rw [h_x_eq]
       exact operator_eq_refl _
-    unfold Number.operator_add at hok
+    replace hok := Number.operator_add_ok_spec hok
+    unfold Number.operator_addSpec at hok
     rw [h_guard_y, h_guard_x, h_guard_eq] at hok
     simp only [Bool.false_eq_true, if_false, if_true] at hok
     have h_result : result = Number.zero :=

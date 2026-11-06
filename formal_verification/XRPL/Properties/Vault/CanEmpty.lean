@@ -17,14 +17,14 @@ theorem Vault.Reachable.canEmpty (v : Vault) (t : UInt32) (hr : Vault.Reachable 
 
 /-- When withdrawals are open, a withdrawal of every share from a reachable vault succeeds, pays out
 all the cash, and leaves no cash and no shares. -/
-theorem Vault.Reachable.withdraw_all (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
+theorem Vault.withdraw_all (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
     (hopen : v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment)
     (shares : STAmount) (hc : shares.Canonical) (hty : shares.mNumericType = .int64)
     (hall : shares.toRat = v.toExact.sharesTotal) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) :
     ∃ r : VaultWithAmounts, (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok r) ∧
       r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
       r.vault'.sharesTotal = Number.zero :=
-  Vault.Reachable.withdraw_all_proof v t0 t hr waive
+  Vault.withdraw_all_proof v t0 t hr waive
     (by rcases hopen with h | h <;> cases hf : v.earlyExitFeeRate <;> simp_all) shares hc hty hall hpos
 
 /-- Every lawful vault with nothing lent out can be emptied by redeeming all its shares once withdrawals are

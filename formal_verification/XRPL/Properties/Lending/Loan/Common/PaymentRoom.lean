@@ -119,6 +119,10 @@ private lemma Loan.doPayment_room {T0 : ℚ} (l l' : Loan) (pc : PaymentComponen
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, hc1, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc1
+    obtain ⟨_, hc2, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.addChecked_eq_ok.mp hc2
     obtain ⟨he, -, -⟩ := RawLoan.to_lawful_ok h
     have hn : l'.paymentRemaining = l.paymentRemaining - 1 := by
       rw [show l'.paymentRemaining = l'.toRawLoan.paymentRemaining from rfl, he]

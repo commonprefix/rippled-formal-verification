@@ -130,7 +130,7 @@ theorem Loan.create_exits :
       roundedPayment.operator_eq Number.zero = false →
       properties.totalValueOutstanding.operator_div roundedPayment .upward = .ok ratio →
       ratio.to_rep .upward = .ok computedPayments →
-      computedPayments ≠ schedule.paymentTotal.toUInt64.toInt64 →
+      computedPayments ≠ schedule.paymentTotal.toInt64 →
       (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
         .ok (.error .tecPRECISION_LOSS)) ∧
     -- `loanState` - the state of the new loan, its interestDue is `loanState.interestDue`
@@ -177,7 +177,11 @@ theorem Loan.create_exits :
       raw.to_lawful = .ok v' →
       ({ broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
         : RawLoanBroker).to_lawful = .ok broker' →
-      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending).to_lawful = .ok loan →
+      -- LoanCount and the first due date fit a UInt32. C++ LoanSequence stops a broker before `2^32` loans, and the
+      -- LoanSet schedule check keeps the due date in time
+      broker.loanCount.toNat + 1 < 2 ^ 32 → schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32 →
+      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
+        (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok loan →
       (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
         .ok (.ok { loan' := loan, pool' := v' })) :=
   ⟨Loan.create_insufficient_funds_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
@@ -202,6 +206,9 @@ theorem Loan.create_not_lawful :
       raw.to_lawful = .ok v' →
       ({ broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
         : RawLoanBroker).to_lawful = .ok broker' →
+      -- LoanCount and the first due date fit a UInt32. C++ LoanSequence stops a broker before `2^32` loans, and the
+      -- LoanSet schedule check keeps the due date in time
+      broker.loanCount.toNat + 1 < 2 ^ 32 → schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32 →
       (maxLoanRate < rates.interestRate ∨ maxLoanRate < rates.lateInterestRate ∨
           maxLoanRate < rates.closeInterestRate ∨ maxLoanRate < rates.overpaymentInterestRate →
         (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
@@ -218,18 +225,18 @@ theorem Loan.create_not_lawful :
       (schedule.gracePeriod < defaultGracePeriod ∨ schedule.paymentInterval < schedule.gracePeriod →
         (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
           .error .notLawful) :=
-  fun properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker =>
+  fun properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue =>
     ⟨Loan.create_rate_out_of_range_proof broker v principalRequested rates fees schedule allowsOverpayment pending
-        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker,
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
       Loan.create_overpaymentFee_out_of_range_proof broker v principalRequested rates fees schedule
         allowsOverpayment pending properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv'
-        hbroker,
+        hbroker hcount hdue,
       Loan.create_fee_negative_proof broker v principalRequested rates fees schedule allowsOverpayment pending
-        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker,
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
       Loan.create_interval_too_short_proof broker v principalRequested rates fees schedule allowsOverpayment pending
-        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker,
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
       Loan.create_grace_out_of_range_proof broker v principalRequested rates fees schedule allowsOverpayment pending
-        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker⟩
+        properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue⟩
 
 /-- The only create rejections on a reachable ledger are tecINSUFFICIENT_FUNDS, tecPRECISION_LOSS or
 tecLIMIT_EXCEEDED. The guards never reject with tecINTERNAL, and the vault update never with tefBAD_LEDGER. -/

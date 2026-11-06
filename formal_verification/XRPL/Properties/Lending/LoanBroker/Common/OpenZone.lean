@@ -340,11 +340,4 @@ lemma LoanBroker.OpenZone.not_assetsRounded (lb : LoanBroker) (base : Int) (hz :
     hz.coverExact]
   simp
 
-/-- `associateAsset` changes nothing on a reachable broker whose asset maximum fits an `int64` amount. -/
-lemma LoanBroker.Reachable.associateAsset_noop_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
-    (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) :
-    ¬ lb.assetsRounded :=
-  LoanBroker.OpenZone.not_assetsRounded lb base (LoanBroker.Reachable.openZone_proof lb base hr hmax)
-    (LoanBroker.Reachable.debtTotal_zero_proof lb base hr)
-
 end XRPL.Model.Lending

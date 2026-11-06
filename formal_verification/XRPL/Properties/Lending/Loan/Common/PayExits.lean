@@ -33,7 +33,8 @@ private lemma Vault.assetsAvailable_le_assetsTotal (v : Vault) (assetsTotal : Nu
   · -- no cash
     rw [Number.toRat_eq_zero_of_mantissa_zero _ ha]
     have h' := h
-    unfold Number.operator_add at h'
+    replace h' := Number.operator_add_ok_spec h'
+    unfold Number.operator_addSpec at h'
     rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, if_neg Bool.false_ne_true,
       Number.eq_zero_of_mantissa_zero _ hAA ha, if_pos (by decide)] at h'
     obtain rfl := Except.ok.inj h'

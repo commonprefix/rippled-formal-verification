@@ -123,7 +123,8 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
   -- Zero operands: the model short-circuits to the canonical zero.
   by_cases hxz : x.mantissa_ = 0
   · have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
-    unfold Number.operator_mul at hok
+    rw [Number.operator_mul_eq_spec] at hok
+    unfold Number.operator_mulSpec at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
@@ -141,7 +142,8 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact hxz hmeq
     have hy_zero : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hyz
-    unfold Number.operator_mul at hok
+    rw [Number.operator_mul_eq_spec] at hok
+    unfold Number.operator_mulSpec at hok
     rw [if_neg hx_guard,
         if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
     have h_result : result = y :=

@@ -53,8 +53,8 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
     have hzm_q_gt : (maxRepNat : ℚ) < (zm.toNat : ℚ) := by
       have : (maxRepNat : ℕ) < zm.toNat := by rw [← maxRep_val]; exact h_zm_gt_rep
       exact_mod_cast this
-    have hgP_sbit : (g.pushOverflow zm .upward).sbit_ = g.sbit_ := by
-      simp only [Guard.pushOverflow, Guard.push]
+    have hgP_sbit : (g.pushOverflowSpec zm .upward).sbit_ = g.sbit_ := by
+      simp only [Guard.pushOverflowSpec, Guard.push]
       split_ifs <;> rfl
     have h_truth_abs_pos : (0 : ℚ) < ((zm.toNat : ℚ) + f) * 10 ^ ze' := by
       apply mul_pos _ h10ze'_pos
@@ -120,7 +120,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
         have hzm_eq : zm.toNat = maxRepUp.toNat := by
           rcases hcoup with ⟨h, _⟩ | ⟨_, h⟩
           · exact h
-          · rw [h_bool_false (g.pushOverflow zm .upward) (by rw [hgP_sbit]; exact h_g_sbit_true)] at h
+          · rw [h_bool_false (g.pushOverflowSpec zm .upward) (by rw [hgP_sbit]; exact h_g_sbit_true)] at h
             exact absurd h Bool.noConfusion
         have hzm_q_eq : (zm.toNat : ℚ) = maxRepNat + 3 := by
           rw [hzm_eq, show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num
@@ -162,7 +162,7 @@ theorem operator_mul_rounding_bound_upward (x y result : Number)
       · -- v = maxRepNat: impossible for positives (the pushed-guard decision fires).
         exfalso
         obtain ⟨hdig_pos, hsb⟩ := pushOverflow_cusp_interior_facts g zm .upward h_zm_gt_rep hzm_lt_up
-        have h1 : (g.pushOverflow zm .upward).round .upward = 1 :=
+        have h1 : (g.pushOverflowSpec zm .upward).round .upward = 1 :=
           (round_upward_eq_one_iff _).mpr ⟨by rw [hsb]; exact h_g_sbit_false, Or.inl hdig_pos⟩
         rw [h1, show ((1 : Int) == 1) = true from rfl, Bool.true_or] at hbool
         exact Bool.noConfusion hbool

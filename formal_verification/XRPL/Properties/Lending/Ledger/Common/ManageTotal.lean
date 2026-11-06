@@ -18,15 +18,15 @@ open XRPL.Model.SingleAssetVault (Vault)
 private lemma LendingLedger.apply_manage_ok (l : LendingLedger) (hnd : l.vaultDeleted = false) (i : Nat) (e : LoanEntry)
     (b : LoanBroker) (loan : Loan) (action : LoanManageAction) (r : LoanWithPool Vault)
     (he : l.loan? i = some e) (hb : l.broker? e.brokerIndex = some b) (hw : e.loan.withBroker b = .ok loan)
-    (hc : loan.canManage action l.now = .tesSUCCESS) (hr : (loan.manage action l.vault l.now).run = .ok (.ok r)) :
+    (hc : loan.canManage action l.now = .ok .tesSUCCESS) (hr : (loan.manage action l.vault l.now).run = .ok (.ok r)) :
     (l.apply (.loanManage i action)).run = .ok (.ok (l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool'))) := by
   rw [LendingLedger.apply_of_preflight rfl]
   simp only [LendingLedger.applyChecked, hnd, LendingTx.isVault, LendingTx.isBroker, Bool.false_eq_true,
     ↓reduceIte, LendingLedger.applyLoan, he, hb, hw]
   unfold_ter
   simp only [ExceptT.run] at hr
-  rw [hc, show TER.tesSUCCESS.isTesSuccess = true from rfl]
-  simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte, hr]
+  rw [hc]
+  simp only [show TER.tesSUCCESS.isTesSuccess = true from rfl, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hr]
   rfl
 
 /-- The management checks read the loan only, never its broker. -/
@@ -76,7 +76,7 @@ private lemma LendingLedger.impair_total_of_deployed (l : LendingLedger) (hr : l
     (hnd : l.vaultDeleted = false)
     (hmax : l.vault.numericType.isIntegral = true → l.vault.numericType.maxValue.toNat ≤ maxRep.toNat)
     (hdeployed : l.principalSum (fun _ => true) ≤ l.vault.assetsDeployed.toRat) (i : Nat) (e : LoanEntry)
-    (he : l.loan? i = some e) (hc : e.loan.canManage .impair l.now = .tesSUCCESS)
+    (he : l.loan? i = some e) (hc : e.loan.canManage .impair l.now = .ok .tesSUCCESS)
     (hlate : e.loan.nextPaymentDueDate < l.now) :
     ∃ l', (l.apply (.loanManage i .impair)).run = .ok (.ok l') := by
   obtain ⟨b, loan, hb, hw, hraw⟩ := hr.loan_withBroker he
@@ -109,7 +109,7 @@ private lemma Loan.manage_default_ok {loan : Loan} {v : Vault} {now : UInt32} {r
 YieldUnrealized hold what the loan takes out. -/
 private lemma LendingLedger.default_total_of_grid (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)
     (hasset : Vault.HoldsAsset l.vault) (i : Nat) (e : LoanEntry) (b : LoanBroker) (he : l.loan? i = some e)
-    (hb : l.broker? e.brokerIndex = some b) (hc : e.loan.canManage .default l.now = .tesSUCCESS)
+    (hb : l.broker? e.brokerIndex = some b) (hc : e.loan.canManage .default l.now = .ok .tesSUCCESS)
     (haa : Number.AtExponent l.vault.assetsAvailable.toRat l.vault.baseExponent (10 ^ 16))
     (hroom : l.vault.assetsAvailable.toRat + e.loan.principalOutstanding.toRat <
       10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
@@ -192,7 +192,7 @@ private lemma LendingLedger.default_total_of_grid (l : LendingLedger) (hr : l.Re
 /-- Proof body of the impair line of `Lending.loan_ops_total`. -/
 lemma LendingLedger.impair_total_proof (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)
     (hmax : l.vault.numericType.isIntegral = true → l.vault.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (i : Nat) (e : LoanEntry) (he : l.loan? i = some e) (hc : e.loan.canManage .impair l.now = .tesSUCCESS)
+    (i : Nat) (e : LoanEntry) (he : l.loan? i = some e) (hc : e.loan.canManage .impair l.now = .ok .tesSUCCESS)
     (hlate : e.loan.nextPaymentDueDate < l.now) :
     ∃ l', (l.apply (.loanManage i .impair)).run = .ok (.ok l') :=
   LendingLedger.impair_total_of_deployed l hr hnd hmax (le_of_eq hr.debtInv.deployed.symm) i e he hc hlate
@@ -201,7 +201,7 @@ lemma LendingLedger.impair_total_proof (l : LendingLedger) (hr : l.Reachable) (h
 the cover can be negative, which the model pays and C++ rejects with tecINTERNAL. -/
 private lemma LendingLedger.default_possible_of_cover (l : LendingLedger) (hr : l.Reachable)
     (hnd : l.vaultDeleted = false) (hasset : Vault.HoldsAsset l.vault) (i : Nat) (e : LoanEntry)
-    (he : l.loan? i = some e) (hc : e.loan.canManage .default l.now = .tesSUCCESS)
+    (he : l.loan? i = some e) (hc : e.loan.canManage .default l.now = .ok .tesSUCCESS)
     (htotal : l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat <
       10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
     (haa : ∃ n : ℕ, l.vault.assetsAvailable.toRat = (n : ℚ) * 10 ^ l.vault.baseExponent)
@@ -243,9 +243,9 @@ NextPaymentDueDate + GracePeriod as the ledger adds the times. -/
 private lemma Loan.canManage_default_ok (loan : Loan) (now : UInt32) (hp : loan.isPending = false)
     (hd : loan.isDefault = false) (hrem : loan.paymentRemaining ≠ 0)
     (hlate : loan.nextPaymentDueDate + loan.schedule.gracePeriod < now) :
-    loan.canManage .default now = .tesSUCCESS := by
+    loan.canManage .default now = .ok .tesSUCCESS := by
   unfold Loan.canManage
-  simp [hp, hd, hrem, hlate]
+  simp [hp, hd, hrem, hlate, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt, bind, Except.bind]
 
 /-- Proof body of the default line of `Lending.Reachable.loan_resolvable`. -/
 lemma LendingLedger.default_possible_proof (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)

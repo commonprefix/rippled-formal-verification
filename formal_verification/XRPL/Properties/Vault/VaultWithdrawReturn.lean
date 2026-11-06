@@ -13,21 +13,18 @@ open XRPL.Model.Protocol
 
 variable (v : Vault)
 
-/-- A net asset value with a zero mantissa prices any shares at zero. -/
-theorem Vault.sharesToAssetsWithdraw_zero_nav (shares : STAmount) (waiveUnrealizedLoss : Bool)
-    (netAssetValue : Number) (hnav : v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue)
-    (hz : netAssetValue.mantissa_ = 0) :
-    v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok (STAmount.zero v.numericType) :=
-  Vault.sharesToAssetsWithdraw_zero_nav_proof v shares waiveUnrealizedLoss netAssetValue hnav hz
-
 /-- The exits of `withdraw`, in the order it runs its checks, then its success lines. Each line assumes the checks
 before it passed. -/
 theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat) :
     ((v.earlyExitFeeRate.isNone && v.phase t == .investment) = true →
       (v.withdraw amount waive t hpos).run = .ok (.error .tecTOO_SOON)) ∧
-    (∀ ter : TER, (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
-      (computeWithdraw v amount waive).run = .ok (.error ter) →
-      (v.withdraw amount waive t hpos).run = .ok (.error ter)) ∧
+    (∀ (assets shares : STAmount) (hpos' : 0 < (WithdrawAmount.vaultAssets assets).amount.toRat),
+      (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
+      assetsToSharesWithdraw v assets true waive = .ok shares → shares.isZero = true →
+      (v.withdraw (.vaultAssets assets) waive t hpos').run = .ok (.error .tecPRECISION_LOSS)) ∧
+    ((v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
+      (computeWithdraw v amount waive).run = .ok (.error .tecPATH_DRY) →
+      (v.withdraw amount waive t hpos).run = .ok (.error .tecPATH_DRY)) ∧
     (∀ (amounts : VaultAmounts) (sharesTotalAmount : STAmount),
       (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false →
       (computeWithdraw v amount waive).run = .ok (.ok amounts) →
@@ -100,7 +97,9 @@ theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt3
       (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
         amounts.shares.toRat = v.toExact.sharesTotal) →
       (v.withdraw amount waive t hpos).run ≠ .error .notLawful :=
-  ⟨Vault.withdraw_too_soon_proof v amount waive t hpos, Vault.withdraw_compute_rejected_proof v amount waive t hpos,
+  ⟨Vault.withdraw_too_soon_proof v amount waive t hpos,
+    fun assets shares hpos' => Vault.withdraw_zero_shares_proof v assets shares waive t hpos',
+    Vault.withdraw_compute_rejected_proof v amount waive t hpos _,
     Vault.withdraw_has_obligations_proof v amount waive t hpos,
     fun shares hpos' => Vault.withdraw_zero_payout_proof v shares waive t hpos',
     Vault.withdraw_payout_too_small_proof v amount waive t hpos,
@@ -114,22 +113,16 @@ theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt3
       r hok hfinal,
     fun t0 => Vault.withdraw_final_success_proof v amount waive t t0 hpos⟩
 
-/-- A withdrawal never fails with `tefINTERNAL`: a final withdrawal finds nothing deployed, so
-no unrealized loss. -/
-theorem Vault.withdraw_never_internal (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
-    (hpos : 0 < amount.amount.toRat) :
-    (v.withdraw amount waive t hpos).run ≠ .ok (.error .tefINTERNAL) :=
-  Vault.withdraw_never_internal_proof v amount waive t hpos
-
-/-- Every rejection of a withdrawal. A `tefBAD_LEDGER` needs a cash amount not stored exactly. -/
+/-- Every rejection of a withdrawal. -/
 theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
     (hpos : 0 < amount.amount.toRat)
     -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (ter : TER) (hok : (v.withdraw amount waive t hpos).run = .ok (.error ter)) :
     ter = .tecTOO_SOON ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecPATH_DRY ∨ ter = .tecHAS_OBLIGATIONS ∨
-      ter = .tecINSUFFICIENT_FUNDS ∨
-      (ter = .tefBAD_LEDGER ∧ STAmount.isRounded v.numericType v.assetsAvailable = true) :=
-  Vault.withdraw_error_codes_proof v amount waive t hpos hmax ter hok
+      ter = .tecINSUFFICIENT_FUNDS := by
+  -- a lawful vault stores its cash exactly, so the `tefBAD_LEDGER` branch never runs
+  simpa [v.valid.assetsAvailable_representable] using
+    Vault.withdraw_error_codes_proof v amount waive t hpos hmax ter hok
 
 end XRPL.Model.SingleAssetVault

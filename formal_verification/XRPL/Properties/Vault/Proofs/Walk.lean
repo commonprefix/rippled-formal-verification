@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.VaultValid
+import XRPL.Properties.Protocol.Common.FixedWidth
 
 /-! # Walking an operation's do-block
 
@@ -14,6 +15,12 @@ open Lean Meta Elab Tactic
 lemma ite_eq_cases {α : Sort _} {c : Prop} [Decidable c] {a b x : α}
     (h : (if c then a else b) = x) : (c ∧ a = x) ∨ (¬c ∧ b = x) :=
   ite_eq_iff.mp h
+
+/-- The `_eq_ok` lemma of a checked fixed-width operation `X.opChecked`, when `e` is a call of one. -/
+def checkedEqOk? (e : Expr) : Option Name :=
+  match e.getAppFn.constName? with
+  | some n@(.str _ s) => if s.endsWith "Checked" then some (n.appendAfter "_eq_ok") else none
+  | _ => none
 
 /-- One step of `walk_ok` on the main goal. It fails when no hypothesis can be split. -/
 elab "walk_step" : tactic => do
@@ -39,6 +46,11 @@ elab "walk_step" : tactic => do
         if lhs.isAppOfArity ``Except.ok 3 then
           let h2 := mkIdent (← mkFreshUserName `hw)
           evalTactic (← `(tactic| (injection $hId:ident with $h2:ident; try cases $h2:ident)))
+        else if let (some lem, true) := (checkedEqOk? lhs, rhsOk) then
+          -- a checked operation that succeeded gives the raw result
+          let h2 := mkIdent (← mkFreshUserName `hw)
+          evalTactic (← `(tactic|
+            (obtain ⟨-, $h2:ident⟩ := ($(mkIdent lem)).mp $hId:ident; clear $hId:ident; try subst $h2:ident)))
         else if lhs.isAppOfArity ``ite 5 then
           -- take the branch with a lemma: `split` simps the whole term, too slow on a large block
           -- a branch whose condition is a false literal (`false = true`) is closed on the spot

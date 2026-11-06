@@ -49,6 +49,11 @@ lemma Loan.manageDefault_debtStep (loan : Loan) (v : Vault) (r : LoanWithAmounts
 private lemma LoanBroker.releaseLoan_debtTotal (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.debtTotal = if lb.loanCount - 1 == 0 then Number.zero else d := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   exact (congrArg RawLoanBroker.debtTotal (RawLoanBroker.to_lawful_ok h).1 :)
 
 /-- A delete's DebtTotal and AssetsDeployed. A pending loan takes PrincipalOutstanding off both, an active

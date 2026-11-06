@@ -28,6 +28,8 @@ lemma STAmount.ofNumber_integral_toRat (nt : NumericType) (n : Number)
     rw [hr] at hok
     simp only [] at hok
     obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range n mode intValue hneg hr
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hval : intValue.toUInt64.toNat ≤ maxRep.toNat :=
       toUInt64_toNat_le_maxRep intValue hnn hle
     refine ⟨intValue, rfl, ?_⟩
@@ -88,6 +90,7 @@ lemma STAmount.ofNumber_integral_source_ne_zero (nt : NumericType) (n : Number)
   unfold STAmount.ofNumber at hok
   rw [if_pos hnt, ← hw, hrep] at hok
   simp only [] at hok
+  rw [Int64.toUInt64Checked_of_nonneg (by decide), ok_bind] at hok
   rw [show ((0 : rep).toUInt64) = (0 : UInt64) from by decide] at hok
   rw [STAmount.checked, STAmount.canonicalize,
     if_pos (show (STAmount.unchecked nt 0 0 (decide (n.signum < 0))).integral = true from hnt),
@@ -147,6 +150,8 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
   | ok intValue =>
     rw [hrep] at hok
     simp only [] at hok
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     rw [STAmount.checked] at hok
     have hwden : w.toRat.den = 1 := by
       rw [hw_val]
@@ -248,6 +253,10 @@ lemma STAmount.ofNumber_fractional_of_trailing_zeros (n : Number) (mode : roundi
   rw [show n.normalizeToRange kMinValue kMaxValue mode =
     n.normalizeToRange cMinValue cMaxValue mode from rfl, hnorm]
   simp only
+  rw [Int64.toUInt64Checked_of_nonneg (by
+      rw [Int64.le_iff_toInt_le, UInt64.toInt64_toInt_of_lt _ (UInt64.div_thousand_toNat_lt _)]
+      simp only [Int64.reduceToInt]; positivity),
+    ok_bind]
   rw [show (n.mantissa_ / 10 / 10 / 10).toInt64.toUInt64 = n.mantissa_ / 10 / 10 / 10 from
     UInt64.toUInt64_toInt64 _]
   -- the 16-digit record is already canonical, so `checked` keeps it
@@ -674,6 +683,8 @@ lemma STAmount.ofNumber_iou_ne_zero_of_exponent (n : Number) (mode : rounding_mo
       rw [← hmant_natAbs]; have := hmhi
       rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
       omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hlt := STAmount.checked_iou_zero_exp_lt mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
       (by rw [hw_exp] at hexp_lo3; omega) hexp_le result hok hr0
     rw [hw_exp] at hexp_lo3

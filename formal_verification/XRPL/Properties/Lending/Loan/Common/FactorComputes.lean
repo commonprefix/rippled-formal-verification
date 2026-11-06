@@ -193,7 +193,8 @@ private lemma powerMinusOneLoop_computes (rate : Number) (hrate : rate.isNormali
             _ = ct.toRat / 10 ^ 9 := by ring
         linarith
       have u4 := (Number.add_near _ _ _ hs hc3 h4).le (add_nonneg hs0 hc30)
-      rw [h1, ok_bind, h2, ok_bind, h3, ok_bind, h4, ok_bind]
+      rw [h1, ok_bind, Nat.toInt64Checked_of_lt (n := pr - index) (by omega), ok_bind, h2, ok_bind,
+        Nat.toInt64Checked_of_lt (n := index + 1) (by omega), ok_bind, h3, ok_bind, h4, ok_bind]
       split
       · exact ⟨rs, rfl, le_rfl, hrs2⟩
       · obtain ⟨d', rfl⟩ : ∃ d', d = d' + 1 := ⟨d - 1, by omega⟩
@@ -226,11 +227,11 @@ private lemma zero_checks (rate : Number) (k : UInt32) (hrate : rate.isNormalize
 at least `10^-12` and below `10^70`. -/
 private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hk0 : k ≠ 0) (hkr : (k.toNat : ℚ) * rate.toRat ≤ 137) :
-    ∃ pm, computePowerMinusOneHybrid rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm ∧
+    ∃ pm, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm ∧
       pm.isNormalized ∧ 1 / 10 ^ 12 ≤ pm.toRat ∧ pm.toRat < 10 ^ 70 := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   have hone := Number.ofInt64_isNormalized 1
   have hk32 : (k.toNat : ℚ) < 2 ^ 32 := by exact_mod_cast k.toNat_lt
@@ -349,7 +350,7 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
       rw [hcond, if_neg (by decide)]
       dsimp only
       rw [pure_bind, hnr, ok_bind, hloop]
-    · have h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm := by
+    · have h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm := by
         unfold computePowerMinusOneHybrid
         rw [hcond, if_neg (by decide)]
         dsimp only
@@ -364,7 +365,7 @@ private lemma computePowerMinusOneHybrid_computes (rate : Number) (k : UInt32) (
 least `10^-82`. -/
 private lemma computePaymentFactor_computes (rate : Number) (k : UInt32) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hk0 : k ≠ 0) (hkr : (k.toNat : ℚ) * rate.toRat ≤ 137) :
-    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok f ∧ f.isNormalized ∧
+    ∃ f, computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f ∧ f.isNormalized ∧
       1 / 10 ^ 82 ≤ f.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
@@ -444,7 +445,7 @@ lemma loanPrincipalFromPeriodicPayment_computes (pp rate : Number) (ir : TenthBi
   have hrN := loanPeriodicRate_isNormalized ir interval rate hrate
   have hr0 := loanPeriodicRate_nonneg ir interval rate hrate
   obtain ⟨hup, -⟩ := loanPeriodicRate_bounds ir interval rate hrate
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   have hk32 : (k.toNat : ℚ) < 2 ^ 32 := by exact_mod_cast k.toNat_lt
   by_cases hk0 : k = 0

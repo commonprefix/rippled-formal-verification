@@ -229,7 +229,7 @@ lemma Vault.adjustAssetsAndShares_burn_all_ok (v : Vault) (assets shares : STAmo
 
 /-- On a reachable vault one withdrawal of every share succeeds at a time withdrawals are open. It
 pays out all the cash and leaves no cash and no shares. -/
-lemma Vault.Reachable.withdraw_all_proof (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
+lemma Vault.withdraw_all_proof (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
     (hopen : (v.earlyExitFeeRate.isNone && v.phase t == .investment) = false)
     (shares : STAmount) (hc : shares.Canonical) (hty : shares.mNumericType = .int64)
     (hall : shares.toRat = v.toExact.sharesTotal) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) :
@@ -341,7 +341,7 @@ lemma Vault.Reachable.canEmpty_proof (v : Vault) (t : UInt32) (hr : Vault.Reacha
   -- redeem every share once withdrawals are open
   have hopen : (v.earlyExitFeeRate.isNone && v.phase (v.redemptionOpenAt t) == .investment) = false := by
     simp [Vault.phase_redemptionOpenAt v t]
-  obtain ⟨r, hrun, -, -, hST⟩ := Vault.Reachable.withdraw_all_proof v t (v.redemptionOpenAt t) hr false hopen S
+  obtain ⟨r, hrun, -, -, hST⟩ := Vault.withdraw_all_proof v t (v.redemptionOpenAt t) hr false hopen S
     (hsic.canonical (by rw [hty]; decide)) hty hall hpos
   refine CanEmpty.step v t _ _ r (Vault.le_redemptionOpenAt v t) hpos hrun (CanEmpty.done _ _ ?_)
   show r.vault'.sharesTotal.toRat.num.toNat = 0

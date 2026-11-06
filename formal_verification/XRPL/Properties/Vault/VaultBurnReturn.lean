@@ -10,10 +10,10 @@ variable (v : Vault)
 
 /-- `tecNO_PERMISSION` and `tecLIMIT_EXCEEDED` are the only rejections `canBurnShares` can
 return. -/
-theorem Vault.canBurnShares_rejected_code (amount holderShares : STAmount) (ter : TER)
+theorem Vault.canBurnShares_error_codes (amount holderShares : STAmount) (ter : TER)
     (hok : (v.canBurnShares amount holderShares).run = .ok (.error ter)) :
     ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED :=
-  Vault.canBurnShares_rejected_code_proof v amount holderShares ter hok
+  Vault.canBurnShares_error_codes_proof v amount holderShares ter hok
 
 /-- The exits of `canBurnShares`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Vault.canBurnShares_exits (amount holderShares : STAmount) :

@@ -65,7 +65,7 @@ lemma LoanProperties.amortizationGuards_room (props : LoanProperties) (principal
       split at h
       · exact absurd h (by decide)
       rename_i hne
-      have hcpn : cp = n.toUInt64.toInt64 := by simpa using hne
+      have hcpn : cp = n.toInt64 := by simpa using hne
       have hratioN := Number.operator_div_isNormalized _ _ _ _ htv hrpN hratio
       have hwithin := to_rep_within_one ratio .upward cp hratioN hcp
       rw [hcpn, UInt32.toUInt64_toInt64_toInt] at hwithin

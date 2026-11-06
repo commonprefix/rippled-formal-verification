@@ -224,62 +224,18 @@ lemma LoanBroker.coverDeposit_increase_possible_proof (lb : LoanBroker) (base : 
     LoanBroker.Reachable.coverDeposit_facts lb _ hr hmax v rfl hnt st hcs hty hspos hcap hcan res hres
   exact ⟨st, res, hcs, hty, hspos, hcan, hres, by rw [hcov]; linarith⟩
 
-/-- Proof body of `coverDeposit_empty`. -/
-lemma LoanBroker.coverDeposit_empty_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
-    (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hzero : lb.coverAvailable = Number.zero)
-    (amount : STAmount) (hc : amount.Canonical) (hat : amount.mNumericType = lb.numericType)
-    (hpos : 0 < amount.toRat)
-    (hcan : lb.canCoverDeposit v amount = .ok .tesSUCCESS)
-    (res : LoanBrokerCoverResult) (hok : (lb.coverDeposit v amount).run = .ok (.ok res)) :
-    res.loanBroker'.toExact.coverAvailable = (⌊amount.toRat / 10 ^ base⌋ : ℚ) * 10 ^ base := by
-  have h0 : lb.toExact.coverAvailable = 0 := by
-    show lb.coverAvailable.toRat = 0
-    rw [hzero, Number.toRat_zero]
-  -- an empty cover plus a canonical XRP or MPT amount is within the asset's maximum
-  have hcap : lb.numericType.isIntegral = true →
-      lb.toExact.coverAvailable + amount.toRat ≤ lb.numericType.maxValue.toNat := by
-    intro hi
-    have hic := (hc.1 (by unfold STAmount.integral; rw [hat]; exact hi)).1
-    have habs := STAmount.abs_toRat amount
-    rw [hic.offset_zero, zpow_zero, mul_one, abs_of_pos hpos] at habs
-    rw [h0, zero_add, habs, ← hat]
-    exact_mod_cast hic.in_range
-  obtain ⟨-, -, -, -, -, -, hfl, hcov⟩ :=
-    LoanBroker.Reachable.coverDeposit_facts lb base hr hmax v hvb hnt amount hc hat hpos hcap hcan res hok
-  rw [hcov, h0, zero_add, hfl]
-
-/-- Proof body of `coverWithdraw_decrease_possible`. -/
-lemma LoanBroker.coverWithdraw_decrease_possible_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
-    (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hpos : 0 < lb.toExact.coverAvailable) :
-    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
-      amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
-        lb.canCoverWithdraw v amount = .ok .tesSUCCESS ∧ (lb.coverWithdraw v amount).run = .ok (.ok res) ∧
-        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable := by
-  subst hvb
-  obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  -- withdraw the whole cover
-  obtain ⟨s, hcs, hst, hv, hspos, k, hk0, hk⟩ := LoanBroker.Reachable.exists_cover_amount lb _ hr hmax v rfl hpos
-  have hcan := LoanBroker.canCoverWithdraw_of_units lb v s _ hz hcs ⟨k, hk0, hk⟩ hm
-    (by rw [Number.toRat_zero, zero_add, hv])
-  obtain ⟨-, res, -, hres, -⟩ := LoanBroker.coverWithdraw_total_proof lb v s hcan
-  obtain ⟨-, -, -, -, hpos', -, -, hcov⟩ :=
-    LoanBroker.Reachable.coverWithdraw_facts lb _ hr hmax v rfl hnt s hcs hst hspos hcan res hres
-  exact ⟨s, res, hcs, hst, hspos, hcan, hres, by rw [hcov]; linarith⟩
-
 /-- Proof body of `coverWithdraw_all`. -/
 lemma LoanBroker.coverWithdraw_all_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (s : STAmount)
-    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s) (hnz : s.mValue ≠ 0) :
-    lb.canCoverWithdraw v s = .ok .tesSUCCESS ∧
-      ∃ res, (lb.coverWithdraw v s).run = .ok (.ok res) ∧ res.loanBroker'.toExact.coverAvailable = 0 := by
+    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
+    (hpos : 0 < lb.toExact.coverAvailable) :
+    ∃ (s : STAmount) (res : LoanBrokerCoverResult),
+      s.Canonical ∧ s.mNumericType = lb.numericType ∧ s.toRat = lb.toExact.coverAvailable ∧
+        lb.canCoverWithdraw v s = .ok .tesSUCCESS ∧ (lb.coverWithdraw v s).run = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable = 0 := by
   subst hvb
   obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  obtain ⟨hcs, hst, hv, hspos, k, hk0, hk⟩ := LoanBroker.Reachable.cover_amount lb _ hr hmax v rfl s hs hnz
+  obtain ⟨s, hcs, hst, hv, hspos, k, hk0, hk⟩ := LoanBroker.Reachable.exists_cover_amount lb _ hr hmax v rfl hpos
   have hcan := LoanBroker.canCoverWithdraw_of_units lb v s _ hz hcs ⟨k, hk0, hk⟩ hm
     (by rw [Number.toRat_zero, zero_add, hv])
   obtain ⟨-, res, -, hres, -⟩ := LoanBroker.coverWithdraw_total_proof lb v s hcan
@@ -287,54 +243,50 @@ lemma LoanBroker.coverWithdraw_all_proof (lb : LoanBroker) (base : Int) (hr : lb
   obtain ⟨-, -, -, -, -, -, hfl, hcov⟩ :=
     LoanBroker.Reachable.coverWithdraw_facts lb _ hr hmax v rfl hnt s hcs hst hspos hcan res hres
   rw [floor_units_self _ _ (k : ℤ) (by rw [hk]; norm_cast)] at hfl
-  exact ⟨hcan, res, hres, by rw [hcov, hfl, hv, sub_self]⟩
-
-/-- Proof body of `coverClawback_decrease_possible`. -/
-lemma LoanBroker.coverClawback_decrease_possible_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
-    (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hxrp : lb.numericType ≠ .native)
-    (hpos : 0 < lb.toExact.coverAvailable) :
-    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
-      amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
-        lb.canCoverClawback v (some amount) = .ok .tesSUCCESS ∧
-        (lb.coverClawback v (some amount)).run = .ok (.ok res) ∧
-        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable := by
-  subst hvb
-  obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  -- claw back the whole cover
-  obtain ⟨s, hcs, hst, -, hspos, k, -, hk⟩ := LoanBroker.Reachable.exists_cover_amount lb _ hr hmax v rfl hpos
-  have hreq : ∀ a ∈ some s, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat := by
-    intro a ha
-    cases ha
-    exact ⟨Or.inl hcs, hst, hspos.le⟩
-  have hcan := LoanBroker.canCoverClawback_of_units lb v (some s) _ hz hnt hxrp hmax hreq
-    (fun a ha => by cases ha; exact ⟨k, hk⟩) hm (by rw [Number.toRat_zero]; exact hpos)
-  obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v (some s) hz hnt hmax hreq hcan
-  obtain ⟨-, -, hpos', -, hcov⟩ := LoanBroker.coverClawback_exact lb v (some s) res hz hmax hres
-  exact ⟨s, res, hcs, hst, hspos, hcan, hres, by rw [hcov]; linarith⟩
+  exact ⟨s, res, hcs, hst, hv, hcan, hres, by rw [hcov, hfl, hv, sub_self]⟩
 
 /-- Proof body of `coverClawback_all`. -/
 lemma LoanBroker.coverClawback_all_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hxrp : lb.numericType ≠ .native) (s : STAmount)
-    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s) (hnz : s.mValue ≠ 0) :
-    lb.canCoverClawback v none = .ok .tesSUCCESS ∧
-      ∃ res, (lb.coverClawback v none).run = .ok (.ok res) ∧ res.loanBroker'.toExact.coverAvailable = 0 := by
+    (hxrp : lb.numericType ≠ .native) (hpos : 0 < lb.toExact.coverAvailable) :
+    (lb.canCoverClawback v none = .ok .tesSUCCESS ∧
+      ∃ res, (lb.coverClawback v none).run = .ok (.ok res) ∧ res.loanBroker'.toExact.coverAvailable = 0) ∧
+    ∃ (s : STAmount) (res : LoanBrokerCoverResult),
+      s.Canonical ∧ s.mNumericType = lb.numericType ∧ s.toRat = lb.toExact.coverAvailable ∧
+        lb.canCoverClawback v (some s) = .ok .tesSUCCESS ∧ (lb.coverClawback v (some s)).run = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable = 0 := by
   subst hvb
   obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  obtain ⟨-, -, hv, hspos, -⟩ := LoanBroker.Reachable.cover_amount lb _ hr hmax v rfl s hs hnz
-  have hreq : ∀ a ∈ (none : Option STAmount),
-      a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat := by
-    intro a ha
-    cases ha
-  have hcan := LoanBroker.canCoverClawback_of_units lb v none _ hz hnt hxrp hmax hreq (fun a ha => by cases ha) hm
-    (by rw [Number.toRat_zero, ← hv]; exact hspos)
-  obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v none hz hnt hmax hreq hcan
-  -- clawing back with no amount takes all the cover above the minimum, which is zero
-  refine ⟨hcan, res, hres, ?_⟩
-  rw [LoanBroker.coverClawback_all_leaves_minimum_proof lb v none res _ hz hnt hmax hreq (Or.inl rfl) hm hres,
-    Number.toRat_zero]
+  obtain ⟨s, hcs, hst, hv, hspos, k, -, hk⟩ := LoanBroker.Reachable.exists_cover_amount lb _ hr hmax v rfl hpos
+  have hroom : Number.zero.toRat < lb.toExact.coverAvailable := by rw [Number.toRat_zero]; exact hpos
+  refine ⟨?_, ?_⟩
+  · have hreq : ∀ a ∈ (none : Option STAmount),
+        a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat := by
+      intro a ha
+      cases ha
+    have hcan := LoanBroker.canCoverClawback_of_units lb v none _ hz hnt hxrp hmax hreq (fun a ha => by cases ha) hm
+      hroom
+    obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v none hz hnt hmax hreq hcan
+    -- clawing back with no amount takes all the cover above the minimum, which is zero
+    refine ⟨hcan, res, hres, ?_⟩
+    rw [LoanBroker.coverClawback_all_leaves_minimum_proof lb v none res _ hz hnt hmax hreq (Or.inl rfl) hm hres,
+      Number.toRat_zero]
+  · have hreq : ∀ a ∈ some s, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat := by
+      intro a ha
+      cases ha
+      exact ⟨Or.inl hcs, hst, hspos.le⟩
+    have hcan := LoanBroker.canCoverClawback_of_units lb v (some s) _ hz hnt hxrp hmax hreq
+      (fun a ha => by cases ha; exact ⟨k, hk⟩) hm hroom
+    obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v (some s) hz hnt hmax hreq hcan
+    obtain ⟨-, -, -, -, hcov⟩ := LoanBroker.coverClawback_exact lb v (some s) res hz hmax hres
+    have hmv : s.mValue ≠ 0 := fun h0 => by
+      rw [STAmount.toRat_eq_zero_of_mValue_zero s h0] at hspos
+      exact lt_irrefl _ hspos
+    -- the request is the whole cover, already whole base units
+    have hfl := LoanBroker.roundedCoverClawback_capped_proof lb v s res _ hz hnt hmax ⟨Or.inl hcs, hst, hspos.le⟩
+      (by simp [STAmount.isZero, hmv]) hm hres
+    rw [Number.toRat_zero, sub_zero, ← hv, min_self, floor_units_self _ _ (k : ℤ) (by rw [hk]; norm_cast)] at hfl
+    exact ⟨s, res, hcs, hst, hv, hcan, hres, by rw [hcov, hfl, hv, sub_self]⟩
 
 end XRPL.Model.Lending

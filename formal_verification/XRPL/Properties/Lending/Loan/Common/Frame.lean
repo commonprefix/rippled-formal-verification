@@ -101,6 +101,8 @@ lemma Loan.doPayment_keepsTerms (loan : Loan) (pc : PaymentComponents) (loan' : 
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     exact Loan.KeepsTerms.of_lawful h rfl rfl rfl rfl rfl
 /-- The post-payment check returns the result it checked. -/
 lemma validatePostPayment_eq {α : Type} [AssetPool α] (pool : α) (result r : LoanWithAmounts α)

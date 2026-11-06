@@ -102,9 +102,9 @@ private lemma LoanState.buildTheoretical_below (pp rate : Number) (ir : TenthBip
   set B := (k.toNat : ℚ) * pp.toRat with hBdef
   have hB0 : 0 ≤ B := by positivity
   have hppB : pp.toRat ≤ B := by nlinarith
-  have hcN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hcN := Number.ofInt64_isNormalized k.toInt64
   have hcv := Number.ofInt64_count k
-  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toUInt64.toInt64) .to_nearest hpp hcN
+  obtain ⟨vo, hvo⟩ := Number.operator_mul_ok_of_abs pp (Number.ofInt64 k.toInt64) .to_nearest hpp hcN
     (by rw [abs_of_nonneg hpp0]; linarith [show (10 : ℚ) ^ 18 < 10 ^ 200 by norm_num])
     (by rw [hcv, abs_of_nonneg (by positivity)]; linarith [show (2 : ℚ) ^ 32 < 10 ^ 200 by norm_num])
   have hvoN := Number.operator_mul_isNormalized _ _ _ _ hpp hcN hvo
@@ -298,7 +298,8 @@ lemma Loan.scheduledComponents_computes (l : Loan) (hlo : -81 ≤ l.loanScale) (
       LoanStateDeltas).nonNegative.managementFee rff) l.managementFeeOutstanding).Below 23 :=
     Number.Below.min' (Number.Below.min' (Number.Below.floorZero (bdm.mono (by norm_num))) brff)
       (bM.mono (by norm_num))
-  simp only [hstate, hts, htpo', hti', htm', hdp, hdi, hdm, hroom, hppi, hrff, pure, Except.pure]
+  simp only [UInt32.subChecked_of_le (UInt32.one_le_of_ne_zero hpr), hstate, hts, htpo', hti', htm', hdp, hdi,
+    hdm, hroom, hppi, hrff, pure, Except.pure]
   set D1 : LoanStateDeltas :=
     { principal := Number.min ({ principal := dp, interest := di, managementFee := dm } :
         LoanStateDeltas).nonNegative.principal l.principalOutstanding

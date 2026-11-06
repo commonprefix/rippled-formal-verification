@@ -303,15 +303,6 @@ theorem STAmount.operator_le_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
   rw [← decide_not]
   exact congrArg Except.ok (decide_eq_decide.mpr not_lt)
 
-/-- Correctness of `operator_ge`. -/
-theorem STAmount.operator_ge_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ge lhs rhs = .ok (decide (rhs.toRat ≤ lhs.toRat)) := by
-  unfold STAmount.operator_ge
-  rw [STAmount.operator_lt_eq_proof lhs rhs h]
-  show Except.ok (!decide (lhs.toRat < rhs.toRat)) = Except.ok (decide (rhs.toRat ≤ lhs.toRat))
-  rw [← decide_not]
-  exact congrArg Except.ok (decide_eq_decide.mpr not_lt)
-
 /-- Correctness of `operator_eq`. On well-formed comparable operands, field equality decides rational
 equality, because each value has exactly one canonical representation. -/
 theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
@@ -356,12 +347,6 @@ theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
       rw [← UInt64.toNat_inj]
       exact_mod_cast mul_right_cancel₀ hpow hmul
     exact ⟨⟨hsigneq, hoffeq⟩, hvaleq⟩
-
-/-- Correctness of `operator_ne`. -/
-theorem STAmount.operator_ne_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ne lhs rhs = decide (lhs.toRat ≠ rhs.toRat) := by
-  unfold STAmount.operator_ne
-  rw [STAmount.operator_eq_eq_proof lhs rhs h, ← decide_not]
 
 /-- Two canonical IOU amounts of comparable assets satisfy `CmpFaithful`: both are 16-digit normalized
 (`Banded`), and their nonzero mantissas make the zero clauses vacuous. -/

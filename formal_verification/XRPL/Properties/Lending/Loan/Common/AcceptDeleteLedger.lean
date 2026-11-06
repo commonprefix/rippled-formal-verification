@@ -93,7 +93,7 @@ private lemma LendingLedger.apply_loanSet_of_create {l : LendingLedger} (hnd : l
     {twoStep ao : Bool} {schedule : LoanSchedule} {broker : LoanBroker} {r : LoanWithPool Vault}
     (hs : LoanSchedule.build pi pt gp sd l.now twoStep = schedule)
     (hpre : (LendingTx.loanSet j principal rates fees pi pt gp sd twoStep ao).preflight l = .tesSUCCESS)
-    (hsched : schedule.checkTimeAvailability = .tesSUCCESS) (hb : l.broker? j = some broker)
+    (hsched : schedule.checkTimeAvailability = .ok .tesSUCCESS) (hb : l.broker? j = some broker)
     (hc : Loan.canCreate broker l.vault principal fees schedule l.now twoStep = .ok .tesSUCCESS)
     (hcr : (Loan.create broker l.vault principal rates fees schedule ao twoStep).run = .ok (.ok r)) :
     (l.apply (.loanSet j principal rates fees pi pt gp sd twoStep ao)).run =
@@ -104,7 +104,9 @@ private lemma LendingLedger.apply_loanSet_of_create {l : LendingLedger} (hnd : l
     ↓reduceIte, LendingLedger.applyLoan]
   -- rewrite the checks to their result before reducing, so the kernel never unfolds them
   unfold LendingLedger.applyLoanSet
-  rw [if_neg (by rw [hsched]; decide)]
+  rw [hsched]
+  dsimp only
+  rw [if_neg (by decide)]
   simp only [hb]
   rw [hc]
   unfold LendingLedger.loanSetChecked
@@ -173,10 +175,7 @@ lemma LendingLedger.deleteActive_keeps_vault_proof {l l' : LendingLedger} {i : N
     (hp : loan.isPending = false) : l'.vault = l.vault := by
   obtain ⟨-, loan₀, r, -, hat₀, -, hok, -, hv, -⟩ := LendingLedger.loanDelete_ok h
   obtain rfl := hat.eq hat₀
-  obtain ⟨b, hb⟩ := Loan.deleteActive_keeps_vault_proof loan l.vault hp
-  rw [hb] at hok
-  simp only [Except.ok.injEq] at hok
-  rw [hv, ← hok]
+  rw [hv, (Loan.delete_active_ok_inv loan l.vault r hp hok).2]
 
 /-- Proof body of `createPending_deletePending_restores`. -/
 lemma LendingLedger.createPending_deletePending_restores_proof {l l₁ l₂ : LendingLedger} (hr : l.Reachable)

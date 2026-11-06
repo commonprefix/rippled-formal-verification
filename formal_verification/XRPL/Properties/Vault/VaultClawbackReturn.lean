@@ -19,9 +19,19 @@ before it passed. -/
 theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hnn : 0 ≤ assets.toRat) :
     (v.numericType = NumericType.native →
       (v.clawback assets holderShares waive hnn).run = .ok (.error .tecNO_PERMISSION)) ∧
-    (∀ ter : TER, v.numericType ≠ NumericType.native →
-      (computeClawback v assets holderShares waive).run = .ok (.error ter) →
-      (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) ∧
+    (v.numericType ≠ NumericType.native →
+      (computeClawback v assets holderShares waive).run = .ok (.error .tecPATH_DRY) →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPATH_DRY)) ∧
+    (∀ (shares recovered capped shares' recovered' : STAmount) (recoveredNumber recoveredNumber' : Number),
+      v.numericType ≠ NumericType.native →
+      assetsToSharesClawback v assets holderShares waive = .ok shares →
+      v.sharesToAssetsWithdraw shares waive = .ok recovered →
+      recovered.toNumber .to_nearest = .ok recoveredNumber → recoveredNumber.operator_gt v.assetsAvailable = true →
+      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok capped →
+      assetsToSharesWithdraw v capped true waive = .ok shares' →
+      v.sharesToAssetsWithdraw shares' waive = .ok recovered' →
+      recovered'.toNumber .to_nearest = .ok recoveredNumber' → recoveredNumber'.operator_gt v.assetsAvailable = true →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecINTERNAL)) ∧
     (∀ shares recovered sharesTotalAmount : STAmount, v.numericType ≠ NumericType.native →
       v.ClawbackPriced assets holderShares waive shares recovered →
       STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
@@ -62,7 +72,10 @@ theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hn
         amounts.shares.toRat = v.toExact.sharesTotal) →
       (v.clawback assets holderShares waive hnn).run ≠ .error .notLawful :=
   ⟨Vault.clawback_no_permission_proof v assets holderShares waive hnn,
-    fun ter hxrp => Vault.clawback_compute_rejected_proof v assets holderShares waive hnn hxrp ter,
+    fun hxrp => Vault.clawback_compute_rejected_proof v assets holderShares waive hnn hxrp _,
+    fun shares recovered capped shares' recovered' recoveredNumber recoveredNumber' hxrp =>
+      Vault.clawback_capped_internal_proof v assets holderShares waive hnn hxrp shares recovered capped shares'
+        recovered' recoveredNumber recoveredNumber',
     fun shares recovered sharesTotalAmount hxrp =>
       Vault.clawback_has_obligations_proof v assets holderShares waive hnn hxrp shares recovered sharesTotalAmount,
     fun shares recovered sharesTotalAmount clamped hxrp =>

@@ -5,14 +5,15 @@ import XRPL.Properties.Vault.Proofs.Reachable
 /-! # The maximum check of `Vault.canVaultUpdate`
 
 The check compares the new maximum with the total it computes, the cash plus the deployed assets
-rounded down to 19 digits. On a reachable vault nothing is deployed, so that total is exact. -/
+rounded down to 19 digits. -/
 
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- Proof of `Vault.canVaultUpdate_lawful_iff`. -/
-lemma Vault.canVaultUpdate_lawful_iff_proof (v : Vault) (m assetsTotal : Number) (blockDeposit unblockDeposit : Bool)
+/-- With the maximum on the grid and permitted flags, the update passes exactly when the maximum is zero or at least the
+computed total. -/
+private lemma canVaultUpdate_on_grid_iff (v : Vault) (m assetsTotal : Number) (blockDeposit unblockDeposit : Bool)
     (hnorm : m.isNormalized)
     (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
     (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false)
@@ -44,15 +45,35 @@ lemma Vault.canVaultUpdate_lawful_iff_proof (v : Vault) (m assetsTotal : Number)
     · exact Or.inl (hb1.mp h1)
     · exact Or.inr (hb2.mp h2)
 
-/-- Proof of `Vault.Reachable.canVaultUpdate_iff`. -/
-lemma Vault.Reachable.canVaultUpdate_iff_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) (m : Number)
-    (blockDeposit unblockDeposit : Bool) (hnorm : m.isNormalized)
-    (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
-    (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false) :
+/-- Proof of `Vault.canVaultUpdate_lawful_iff`. -/
+lemma Vault.canVaultUpdate_lawful_iff_proof (v : Vault) (m assetsTotal : Number) (blockDeposit unblockDeposit : Bool)
+    (hnorm : m.isNormalized) (hat : v.assetsTotal = .ok assetsTotal) :
     v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS ↔
-      m.toRat = 0 ∨ v.toExact.assetsTotal ≤ m.toRat := by
-  obtain ⟨n, hat, hn⟩ := Vault.Reachable.depositNavExact_proof v t hr
-  rw [show v.toExact.assetsTotal = n.toRat from hn.symm]
-  exact Vault.canVaultUpdate_lawful_iff_proof v m n blockDeposit unblockDeposit hnorm hgrid hperm hat
+      m.isOnExponentGrid v.baseExponent v.numericType = .ok true ∧
+      (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false ∧
+      (m.toRat = 0 ∨ assetsTotal.toRat ≤ m.toRat) := by
+  constructor
+  · intro hok
+    have hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true := by
+      cases hg : m.isOnExponentGrid v.baseExponent v.numericType with
+      | error e => simp [Vault.canVaultUpdate, hg, bind, Except.bind] at hok
+      | ok b =>
+        cases b with
+        | true => rfl
+        | false =>
+          rw [Vault.canVaultUpdate_off_grid_proof v m blockDeposit unblockDeposit hg] at hok
+          simp at hok
+    have hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false := by
+      cases hb : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) with
+      | false => rfl
+      | true =>
+        rw [Bool.and_eq_true, Bool.not_eq_true'] at hb
+        rw [Vault.canVaultUpdate_no_permission_proof v (some m) blockDeposit unblockDeposit
+          (fun m' hm' => by cases hm'; exact hgrid) hb.1 hb.2] at hok
+        simp at hok
+    exact ⟨hgrid, hperm, (canVaultUpdate_on_grid_iff v m assetsTotal blockDeposit unblockDeposit hnorm hgrid hperm
+      hat).mp hok⟩
+  · rintro ⟨hgrid, hperm, h⟩
+    exact (canVaultUpdate_on_grid_iff v m assetsTotal blockDeposit unblockDeposit hnorm hgrid hperm hat).mpr h
 
 end XRPL.Model.SingleAssetVault

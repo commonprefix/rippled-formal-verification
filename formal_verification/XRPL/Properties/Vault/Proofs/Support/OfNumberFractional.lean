@@ -27,18 +27,18 @@ lemma normalizeToRange_16_ok (n : Number) (mode : rounding_mode)
     · -- the carry at the top of the range moves up one exponent
       rw [hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) mode
         .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-      exact ⟨_, rfl⟩
+      exact ⟨_, by ntr_tail⟩
     · have hlt : n.mantissa_.toNat / 1000 < cMaxValue.toNat := by
         have hne : (n.mantissa_ / 10 / 10 / 10).toNat ≠ cMaxValue.toNat :=
           fun h => hcusp (UInt64.toNat_inj.mp h)
         rw [hcMax, hm3] at hne; rw [hcMax]; omega
       rw [doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
         .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hm3]; exact hlt) (by omega) (by omega)]
-      exact ⟨_, rfl⟩
+      exact ⟨_, by ntr_tail⟩
   · rw [doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
       .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
       (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-    exact ⟨_, rfl⟩
+    exact ⟨_, by ntr_tail⟩
 
 /-- A fractional `ofNumber` of a nonzero 19-digit value never throws while the rounded exponent
 stays at or below the IOU ceiling `cMaxOffset`. -/
@@ -93,6 +93,7 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
   unfold STAmount.ofNumber
   rw [if_neg (by decide), ← hneg_def, ← hw_def, hnorm']
   simp only []
+  rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind]
   have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp neg).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
   have h_fit : mant.toUInt64.toNat < 2 ^ 63 := by omega
@@ -112,7 +113,7 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
     unfold STAmount.iou
     rw [if_neg h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
+    rw [STAmount.signedDrops_toInt64Checked _ h_fit, ok_bind, h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
       (by rw [hw_exp] at hexp_lo3; omega) (by omega)
   rw [STAmount.checked]

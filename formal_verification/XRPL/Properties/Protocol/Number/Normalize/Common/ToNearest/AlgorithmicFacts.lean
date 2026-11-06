@@ -50,18 +50,18 @@ lemma doNormalize_capAtMaxRep_sbit_preserved
     have hg' : g = g' := (Prod.mk.inj (Prod.mk.inj (Except.ok.inj h)).2).2
     rw [← hg']
 
-/-- `doNormalize_scaleUp` preserves the exact value `m.toNat * 10^e`. The bound `minMantissa.toNat ≤ 10^18`
+/-- `doNormalize_scaleUpSpec` preserves the exact value `m.toNat * 10^e`. The bound `minMantissa.toNat ≤ 10^18`
 rules out `UInt64` overflow when the loop multiplies by 10. -/
 theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
     (hminMant : minMant.toNat ≤ 10 ^ 18) :
-    let (m', e') := doNormalize_scaleUp minMant m e
+    let (m', e') := doNormalize_scaleUpSpec minMant m e
     (m'.toNat : ℚ) * 10 ^ e' = (m.toNat : ℚ) * 10 ^ e := by
-  induction m, e using doNormalize_scaleUp.induct (minMantissa := minMant) with
+  induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
     obtain ⟨hlt, hexp⟩ := hcond
-    have hunfold : doNormalize_scaleUp minMant m e
-        = doNormalize_scaleUp minMant (m * 10) (e - 1) := by
-      conv_lhs => rw [doNormalize_scaleUp]
+    have hunfold : doNormalize_scaleUpSpec minMant m e
+        = doNormalize_scaleUpSpec minMant (m * 10) (e - 1) := by
+      conv_lhs => rw [doNormalize_scaleUpSpec]
       rw [if_pos ⟨hlt, hexp⟩]
     simp only [hunfold] at *
     -- m < minMant ≤ 10^18, so m.toNat < 10^18, hence m.toNat * 10 < 10^19 < 2^64
@@ -83,8 +83,8 @@ theorem doNormalize_scaleUp_value (minMant m : UInt64) (e : Int)
     rw [he]
     ring
   | case2 m e hcond =>
-    have hunfold : doNormalize_scaleUp minMant m e = (m, e) := by
-      rw [doNormalize_scaleUp]; rw [if_neg hcond]
+    have hunfold : doNormalize_scaleUpSpec minMant m e = (m, e) := by
+      rw [doNormalize_scaleUpSpec]; rw [if_neg hcond]
     rw [hunfold]
 
 /-- When `doNormalize_scaleDown` returns `.ok (m', e', g')`, `m' ≤ maxMantissa` and the value `(m + f0) * 10^e`
@@ -248,10 +248,12 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
       g.sbit_ = n.negative_ ∧
       mantissaFloorSucc ≤ zm.toNat := by
   have habs_n : |n.toRat| = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := abs_toRat_eq n
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hn_mant_ne] at hok
   simp only [Bool.false_eq_true, if_false] at hok
-  set su := doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_ with hsu_def
+  set su := doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_ with hsu_def
   set m1 : UInt64 := su.1 with hm1_def
   set e1 : Int := su.2 with he1_def
   set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0_def
@@ -295,8 +297,8 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
     have hsu_val := doNormalize_scaleUp_value largeRange.min n.mantissa_ n.exponent_
       (by rw [largeRange_min_val]; norm_num)
     have hsu_val' : (m1.toNat : ℚ) * 10 ^ e1 = (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ := by
-      have : (doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_).1 = m1 := rfl
-      have h2 : (doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_).2 = e1 := rfl
+      have : (doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_).1 = m1 := rfl
+      have h2 : (doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_).2 = e1 := rfl
       simpa [this, h2] using hsu_val
     obtain ⟨k2, f2, he2_eq, hm2_le_maxMant, hval2, hrep2⟩ :=
       doNormalize_scaleDown_correct largeRange.max m1 e1 g0 0 hg0_rep m2 e2 g2 hsd

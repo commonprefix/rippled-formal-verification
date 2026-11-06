@@ -37,8 +37,9 @@ lemma STAmount.ofNumber_integral_maxOffset_nonneg (nt : NumericType) (n : Number
   | ok intValue =>
     rw [hrep] at hok
     simp only [] at hok
+    obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
     rw [STAmount.checked, STAmount.canonicalize,
-      if_pos (show (STAmount.unchecked nt intValue.toUInt64 0 (decide (n.signum < 0))).integral = true
+      if_pos (show (STAmount.unchecked nt v 0 (decide (n.signum < 0))).integral = true
         from hnt)] at hok
     simp only [STAmount.unchecked] at hok
     split at hok

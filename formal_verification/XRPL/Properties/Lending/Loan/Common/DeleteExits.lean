@@ -17,13 +17,15 @@ open private Vault.adjustBalances_codes Number.zero_le_of_signum Number.toRat_no
 
 /-- Releasing a loan from a broker passes the re-check when the new DebtTotal is a normalized
 amount between zero and DebtMaximum, or the broker has no loan left. -/
-private lemma LoanBroker.releaseLoan_ok (lb : LoanBroker) (d : Number) (hn : d.isNormalized)
+private lemma LoanBroker.releaseLoan_ok (lb : LoanBroker) (d : Number) (hc0 : lb.loanCount ≠ 0) (hn : d.isNormalized)
     (h0 : lb.loanCount - 1 ≠ 0 → 0 ≤ d.toRat)
     (hle : lb.loanCount - 1 ≠ 0 → lb.debtMaximum ≠ Number.zero → d.toRat ≤ lb.debtMaximum.toRat) :
     ∃ lb', lb.releaseLoan d = .ok lb' ∧ lb'.toRawLoanBroker = { lb.toRawLoanBroker with
       loanCount := lb.loanCount - 1
       debtTotal := if lb.loanCount - 1 == 0 then Number.zero else d } := by
   unfold LoanBroker.releaseLoan
+  rw [UInt32.subChecked_of_le (UInt32.one_le_of_ne_zero hc0)]
+  simp only [bind, Except.bind]
   apply RawLoanBroker.to_lawful_ok_of
   · refine { lb.wf with debtTotal_norm := ?_ }
     dsimp only
@@ -90,14 +92,42 @@ lemma Loan.delete_active_reduce (loan : Loan) (v : Vault) (hp : loan.isPending =
 
 /-- Releasing a closed loan always passes the broker's re-check: DebtTotal keeps its value, or drops
 to zero with the last loan. -/
-lemma Loan.deleteActive_ok (broker : LoanBroker) :
+lemma Loan.deleteActive_ok (broker : LoanBroker) (hc0 : broker.loanCount ≠ 0) :
     ∃ broker', Loan.deleteActive broker = .ok broker' ∧ broker'.toRawLoanBroker = { broker.toRawLoanBroker with
       loanCount := broker.loanCount - 1
       debtTotal := if broker.loanCount - 1 == 0 then Number.zero else broker.debtTotal } :=
-  LoanBroker.releaseLoan_ok broker broker.debtTotal broker.wf.debtTotal_norm
+  LoanBroker.releaseLoan_ok broker broker.debtTotal hc0 broker.wf.debtTotal_norm
     (fun _ => (show 0 ≤ broker.debtTotal.toRat from broker.exact.debtTotal_nonneg))
     (fun _ hm => (operator_le_iff _ _ broker.wf.debtTotal_norm broker.wf.debtMaximum_norm).mp
       (broker.valid.debt_within_cap hm))
+
+/-- A release that passed: the broker with one loan less, and DebtTotal kept or dropped to zero with the last
+loan. -/
+lemma Loan.deleteActive_raw (broker broker' : LoanBroker) (h : Loan.deleteActive broker = .ok broker') :
+    broker'.toRawLoanBroker = { broker.toRawLoanBroker with
+      loanCount := broker.loanCount - 1
+      debtTotal := if broker.loanCount - 1 == 0 then Number.zero else broker.debtTotal } := by
+  unfold Loan.deleteActive LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  · rename_i c hc
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
+    exact (RawLoanBroker.to_lawful_ok h).1
+
+/-- A successful delete of a closed loan released it from the broker and left the vault as it was. -/
+lemma Loan.delete_active_ok_inv (loan : Loan) (v : Vault) (r : LoanBrokerWithPool Vault)
+    (hp : loan.isPending = false) (hok : (loan.delete v).run = .ok (.ok r)) :
+    Loan.deleteActive loan.broker = .ok r.broker' ∧ r.pool' = v := by
+  rw [Loan.delete_active_reduce loan v hp] at hok
+  cases hb : Loan.deleteActive loan.broker with
+  | error e => rw [hb] at hok; cases hok
+  | ok b =>
+    rw [hb] at hok
+    injection hok with hok
+    injection hok with hok
+    subst hok
+    exact ⟨rfl, rfl⟩
 
 /-- A successful pending delete rounded the principal, ran a successful vault update, and released
 the loan from the broker. -/
@@ -136,13 +166,14 @@ lemma Loan.delete_pending_ok_inv (loan : Loan) (v : Vault) (r : LoanBrokerWithPo
 DebtTotal, or when it is the broker's last loan. -/
 lemma Loan.delete_broker_lawful (loan : Loan) (debtTotal' : Number)
     (hdebt : loan.broker.debtTotal.operator_sub loan.principalOutstanding .to_nearest = .ok debtTotal')
+    (hc0 : loan.broker.loanCount ≠ 0)
     (h : loan.broker.loanCount = 1 ∨ loan.principalOutstanding.toRat ≤ loan.broker.debtTotal.toRat) :
     ∃ broker', loan.broker.releaseLoan debtTotal' = .ok broker' := by
   have hdn := loan.broker.wf.debtTotal_norm
   have hpn := loan.wf.principalOutstanding_norm
   have hn : debtTotal'.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hdn hpn hdebt
   rcases h with h1 | hle
-  · obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hn
+  · obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hc0 hn
       (fun hc => absurd (by rw [h1]; rfl) hc) (fun hc => absurd (by rw [h1]; rfl) hc)
     exact ⟨b, hb⟩
   · -- the new DebtTotal is the rounded difference, between zero and the old DebtTotal
@@ -154,7 +185,7 @@ lemma Loan.delete_broker_lawful (loan : Loan) (debtTotal' : Number)
     have hup : debtTotal'.toRat ≤ loan.broker.debtTotal.toRat :=
       Number.operator_sub_toRat_le _ _ _ hdn hpn
         (show 0 ≤ loan.principalOutstanding.toRat from loan.exact.principalOutstanding_nonneg) hdebt
-    obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hn (fun _ => h0)
+    obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hc0 hn (fun _ => h0)
       (fun _ hm => hup.trans ((operator_le_iff _ _ hdn loan.broker.wf.debtMaximum_norm).mp
         (loan.broker.valid.debt_within_cap hm)))
     exact ⟨b, hb⟩

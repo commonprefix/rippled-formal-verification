@@ -149,7 +149,7 @@ lemma LoanBroker.canCoverClawback_error_codes_proof (lb : LoanBroker) (pool : α
     | error t =>
       rw [LoanBroker.canCoverClawback_rejected_proof lb pool amount hxrp t h] at hok
       cases hok
-      exact Or.inr (Or.inr (LoanBroker.roundedCoverClawback_error_codes lb pool amount _ h))
+      exact Or.inr (Or.inr (LoanBroker.roundedCoverClawback_error_codes_proof lb pool amount _ h))
     | ok c =>
       rw [LoanBroker.canCoverClawback_success_proof lb pool amount hxrp c h] at hok
       cases hok

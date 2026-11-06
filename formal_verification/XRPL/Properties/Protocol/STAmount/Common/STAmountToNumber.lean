@@ -69,7 +69,9 @@ lemma STAmount.toNumber_offset_zero_exact (s : STAmount) (mode : rounding_mode)
     split <;> omega
   have hroute : s.toNumber mode = IntAmount.toNumber ⟨s.signedDrops.toInt64⟩ mode := by
     unfold STAmount.toNumber STAmount.intAmount
-    rw [if_pos hint', if_pos hint']
+    rw [if_pos hint', if_pos hint', Int.toInt64Checked_of_bounds (by rw [hmin] at hsd_lo; omega)
+      (by rw [hmax'] at hsd_hi; omega), ok_bind]
+    rfl
   obtain ⟨xn, hokn, hvaln, hnorm⟩ :=
     IntAmount.toNumber_exact ⟨s.signedDrops.toInt64⟩ mode h_ne_min
   have hsd_val : s.toRat = (s.signedDrops : ℚ) := STAmount.toRat_of_offset_zero s hoff

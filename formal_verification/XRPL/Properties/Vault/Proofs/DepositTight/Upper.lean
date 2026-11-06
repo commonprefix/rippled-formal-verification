@@ -77,7 +77,7 @@ open XRPL.Model.SingleAssetVault.DepTight
 
 /-- Sharp share count bound. The issued shares are within `sharesOverε` relatively
 of the ideal above, and less one whole share below. -/
-lemma Vault.deposit_sharesIssued_upper_sharp_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+lemma Vault.deposit_sharesCreated_upper_sharp_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
     (t : UInt32) (hcanon : amountDeposit.Canonical) (hposA : 0 < amountDeposit.toRat)
     (navN : Number) (hat : v.assetsTotal = .ok navN)
     (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount))

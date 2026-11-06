@@ -58,6 +58,10 @@ lemma Loan.canCreate_exact (broker : LoanBroker) (v : Vault) (p : Number) (fees 
   have hfund := Loan.canCreate_canFundLoan broker v p fees schedule t twoStep h
   unfold Loan.canCreate at h
   generalize schedule.checkTimeAvailability = st at h
+  obtain ⟨st, rfl⟩ : ∃ t, st = .ok t := by
+    cases st with
+    | error e => simp [bind, Except.bind] at h
+    | ok t => exact ⟨t, rfl⟩
   rw [hfund] at h
   generalize hc : checkPrecisionFields p fees
     (fun value => pure !(STAmount.isRounded broker.numericType value)) = c at h
@@ -92,7 +96,8 @@ lemma Loan.create_ok_inv (broker : LoanBroker) (v : Vault) (principal : Number) 
         .ok (.ok r.pool') ∧
       ({ broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
         : RawLoanBroker).to_lawful = .ok broker' ∧
-      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending).to_lawful = .ok r.loan' := by
+      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
+        (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok r.loan' := by
   simp only [Loan.create] at hok
   unfold_ter at hok
   walk_ok
@@ -116,6 +121,25 @@ lemma Loan.create_ok_inv (broker : LoanBroker) (v : Vault) (principal : Number) 
       checkPrecisionFields_success_inv _ _ _ hprec⟩, hguards, hstate, hopen, hdebt, hlimits⟩, hround, ?_, hbroker,
       hloan⟩
     simp [Loan.createChange, *] at hpool ⊢
+
+/-- A successful create counted one more loan and set the first due date without wrapping. -/
+lemma Loan.create_ok_fits (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
+    broker.loanCount.toNat + 1 < 2 ^ 32 ∧ schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32 := by
+  simp only [Loan.create] at hok
+  unfold_ter at hok
+  constructor
+  · by_contra hc
+    have hbad : broker.loanCount.addChecked 1 = .error .wrap := by
+      unfold UInt32.addChecked; rw [if_neg (by simpa using hc)]
+    simp only [hbad] at hok
+    walk_ok
+  · by_contra hc
+    have hbad : schedule.startDate.addChecked schedule.paymentInterval = .error .wrap := by
+      unfold UInt32.addChecked; rw [if_neg (by simpa using hc)]
+    simp only [hbad] at hok
+    walk_ok
 
 /-- The new loan sits on the broker with the new debt, and that broker is the old one with DebtTotal
 and LoanCount updated. -/

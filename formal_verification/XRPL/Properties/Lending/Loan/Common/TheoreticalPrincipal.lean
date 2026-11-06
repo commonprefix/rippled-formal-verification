@@ -23,13 +23,13 @@ lemma loanPeriodicRate_le (ir : TenthBips32) (interval : UInt32) (rate : Number)
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have heq : loanPeriodicRate ir interval =
-      (((Number.ofInt64 interval.toUInt64.toInt64).operator_mul ir.toNumber .to_nearest) >>=
+      (((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest) >>=
         (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨p, hp, ht⟩ := bind_ok_peel _ _ _ ht
-  have hI := Number.ofInt64_isNormalized interval.toUInt64.toInt64
+  have hI := Number.ofInt64_isNormalized interval.toInt64
   have hIv := Number.ofInt64_count interval
   obtain ⟨hB, hBv⟩ := TenthBips32.toNumber_facts ir
   obtain ⟨hU, hUv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
@@ -100,7 +100,11 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
     split at h
     · rename_i hlt
       obtain ⟨c1, h1, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c2, h2, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c3, h3, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨ns, h4, h⟩ := bind_ok_peel _ _ _ h
       have hc1 := Number.operator_mul_isNormalized _ _ c1 _ hc hrate h1
@@ -122,13 +126,13 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
 The closed form rounds `1 + rate` and its powers, the series starts at `n·rate`. -/
 private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hpm : pm.toRat ≠ 0)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toUInt64.toInt64) pr = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 pr.toInt64) pr = .ok pm) :
     rate.toRat / 3 ≤ pm.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have hr0 : 0 < rate.toRat := lt_of_lt_of_le (by norm_num) hlow
   have hone := Number.ofInt64_isNormalized 1
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   unfold computePowerMinusOneHybrid at h
   dsimp only at h
@@ -181,11 +185,11 @@ private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : 
 a third of the rate, so `rate·(1 + m)/m` is at most `rate + 3`, plus three roundings. -/
 private lemma computePaymentFactor_le (rate : Number) (pr : UInt32) (f : Number) (hrate : rate.isNormalized)
     (hlow : 1 / 10 ^ 12 ≤ rate.toRat) (hhigh : rate.toRat ≤ 200)
-    (h : computePaymentFactor rate (Number.ofInt64 pr.toUInt64.toInt64) pr = .ok f) : f.toRat ≤ 210 := by
+    (h : computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f) : f.toRat ≤ 210 := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have hr0 : 0 < rate.toRat := lt_of_lt_of_le (by norm_num) hlow
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hone := Number.ofInt64_isNormalized 1
   unfold computePaymentFactor at h
@@ -237,7 +241,7 @@ lemma loanPeriodicPayment_ge (principal rate : Number) (pr : UInt32) (pp : Numbe
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have h1e : 0 ≤ 1 - ε := by linarith
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hn32 : (pr.toNat : ℚ) ≤ 2 ^ 32 := by exact_mod_cast pr.toNat_lt.le
   have hP0 : 0 ≤ principal.toRat := le_trans hB hP
@@ -302,14 +306,14 @@ lemma loanPrincipalFromPeriodicPayment_ge (pp rate : Number) (pr : UInt32) (tpo 
     (h : loanPrincipalFromPeriodicPayment pp rate pr = .ok tpo) : 1 / 10 ^ 43 ≤ tpo.toRat := by
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized pr.toInt64
   have hNv := Number.ofInt64_count pr
   have hN1 : (1 : ℚ) ≤ pr.toNat := by
     have : pr.toNat ≠ 0 := fun h0 => hpr (UInt32.toNat_inj.mp (by simpa using h0))
     exact_mod_cast Nat.one_le_iff_ne_zero.mpr this
   have hppm : pp.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_iff.mpr h0] at hppL; norm_num at hppL
-  have hNm : (Number.ofInt64 pr.toUInt64.toInt64).mantissa_ ≠ 0 := fun h0 => by
+  have hNm : (Number.ofInt64 pr.toInt64).mantissa_ ≠ 0 := fun h0 => by
     rw [← Number.toRat_eq_zero_iff, hNv] at h0; linarith
   have hu := Number.underflow_lt
   unfold loanPrincipalFromPeriodicPayment at h

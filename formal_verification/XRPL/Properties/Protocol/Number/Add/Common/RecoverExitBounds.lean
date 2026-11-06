@@ -29,9 +29,9 @@ theorem recover_40_exits
     (m : UInt128) (e : Int) (g : Guard)
     (hm_pos : 1 ≤ m.toNat)
     (hall : allNibblesAtMost9 g.digits_) :
-    ¬ (((Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40).1
+    ¬ (((recoverSpec (toUInt128 largeRange.min * 1000) m e g 40).1
           < toUInt128 largeRange.min * 1000)
-        ∧ ¬ (Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40).2.2.empty) := by
+        ∧ ¬ (recoverSpec (toUInt128 largeRange.min * 1000) m e g 40).2.2.empty) := by
   have h1000n : (1000 : UInt64).toNat = 1000 := rfl
   have hUL_val : (toUInt128 largeRange.min * 1000).toNat = 10 ^ 21 := by
     rw [show (1000 : UInt128) = toUInt128 (1000 : UInt64) from rfl,
@@ -49,7 +49,7 @@ theorem recover_40_exits
     obtain ⟨x_after, k, hk_le, hk_eq, hxa_nn, _hxa_lt, _hxa_pos, _hall_after, heq⟩ :=
       recover_value_preserved_tight (toUInt128 largeRange.min * 1000) m hUL e g 40 hm_pos hall
         0 (1 / 10 ^ 16) hB_pos (le_refl 0) hB_pos
-    set r := Number.operator_add.recover (toUInt128 largeRange.min * 1000) m e g 40 with hr_def
+    set r := recoverSpec (toUInt128 largeRange.min * 1000) m e g 40 with hr_def
     have hk_40 : k = 40 := by
       have heq2 : (e - (k : ℤ) : ℤ) = e - (40 : ℤ) := by
         rw [← hk_eq]; exact hfuel
@@ -125,8 +125,8 @@ lemma recover_mantissa_lt
     (hm_pos : 1 ≤ m.toNat)
     (hall : allNibblesAtMost9 g.digits_)
     (hm_lt : m.toNat < upperLimit.toNat * 10) :
-    (Number.operator_add.recover upperLimit m e g fuel).1.toNat < upperLimit.toNat * 10 := by
-  induction m, e, g, fuel using Number.operator_add.recover.induct (upperLimit := upperLimit) with
+    (recoverSpec upperLimit m e g fuel).1.toNat < upperLimit.toNat * 10 := by
+  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
   | case1 m e g => rw [recover_noop_zero]; exact hm_lt
   | case2 m e g fuel hcond g' d hpop IH =>
     obtain ⟨h1, h2⟩ := hcond

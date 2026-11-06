@@ -16,18 +16,18 @@ final `doRoundUp`, that the result is normalized, the mantissa cap at the top ex
 /-- If the 128-bit scale-up exits below the minimum mantissa, it exhausted the
 exponent range. -/
 lemma doNormalize128_scaleUp_exit_exp (minMant : UInt64) (m : UInt128) (e : Int) :
-    (doNormalize128.scaleUp minMant m e).1 < toUInt128 minMant →
-    (doNormalize128.scaleUp minMant m e).2 ≤ minExponent := by
-  induction m, e using doNormalize128.scaleUp.induct (minMantissa := minMant) with
+    (doNormalize128_scaleUpSpec minMant m e).1 < toUInt128 minMant →
+    (doNormalize128_scaleUpSpec minMant m e).2 ≤ minExponent := by
+  induction m, e using doNormalize128_scaleUpSpec.induct (minMantissa := minMant) with
   | case1 m e hcond IH =>
-    rw [show doNormalize128.scaleUp minMant m e
-        = doNormalize128.scaleUp minMant (m * 10) (e - 1) from by
-      rw [doNormalize128.scaleUp.eq_def]
+    rw [show doNormalize128_scaleUpSpec minMant m e
+        = doNormalize128_scaleUpSpec minMant (m * 10) (e - 1) from by
+      rw [doNormalize128_scaleUpSpec.eq_def]
       simp only [if_pos hcond]]
     exact IH
   | case2 m e hcond =>
-    rw [show doNormalize128.scaleUp minMant m e = (m, e) from by
-      rw [doNormalize128.scaleUp.eq_def]
+    rw [show doNormalize128_scaleUpSpec minMant m e = (m, e) from by
+      rw [doNormalize128_scaleUpSpec.eq_def]
       simp only [if_neg hcond]]
     intro hlt
     by_contra hgt
@@ -39,27 +39,27 @@ lemma doNormalize128_scaleUp_exit_exp (minMant : UInt64) (m : UInt128) (e : Int)
 lemma doNormalize_scaleDown128_fired_output_ge
     (m : UInt128) (e : Int) (g : Guard) (out : UInt128 × Int × Guard)
     (hgt : m > toUInt128 largeRange.max)
-    (h : doNormalize_scaleDown128 largeRange.max m e g = .ok out) :
+    (h : doNormalize_scaleDown128Spec largeRange.max m e g = .ok out) :
     1000000000000000000 ≤ out.1.toNat := by
-  induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := largeRange.max)
+  induction m, e, g using doNormalize_scaleDown128Spec.induct (maxMantissa := largeRange.max)
     generalizing out with
   | case1 m e g hgt' hmax =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g = .error .normalize1 from by
-      rw [doNormalize_scaleDown128.eq_def]
+    rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .error .normalize1 from by
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt', if_pos hmax]] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hnge ih =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g
-        = doNormalize_scaleDown128 largeRange.max (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
+    rw [show doNormalize_scaleDown128Spec largeRange.max m e g
+        = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
         from by
-      rw [doNormalize_scaleDown128.eq_def]
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt', if_neg hnge]] at h
     by_cases hgt2 : m / 10 > toUInt128 largeRange.max
     · exact ih out hgt2 h
-    · rw [show doNormalize_scaleDown128 largeRange.max (m / 10) (e + 1)
+    · rw [show doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1)
             (g.push (toUInt64 (m % 10)))
           = .ok (m / 10, e + 1, g.push (toUInt64 (m % 10))) from by
-        rw [doNormalize_scaleDown128.eq_def]
+        rw [doNormalize_scaleDown128Spec.eq_def]
         rw [dif_neg hgt2]] at h
       obtain rfl := (Except.ok.inj h).symm
       have h10 : ((10 : UInt128)).toNat = 10 := by decide
@@ -76,26 +76,26 @@ lemma doNormalize_scaleDown128_fired_output_ge
 /-- A successful 128-bit scale-down never exits above `maxMantissa`. -/
 lemma doNormalize_scaleDown128_output_le
     (m : UInt128) (e : Int) (g : Guard) (out : UInt128 × Int × Guard)
-    (h : doNormalize_scaleDown128 largeRange.max m e g = .ok out) :
+    (h : doNormalize_scaleDown128Spec largeRange.max m e g = .ok out) :
     out.1.toNat ≤ 9999999999999999999 := by
-  induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := largeRange.max)
+  induction m, e, g using doNormalize_scaleDown128Spec.induct (maxMantissa := largeRange.max)
     generalizing out with
   | case1 m e g hgt' hmax =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g
+    rw [show doNormalize_scaleDown128Spec largeRange.max m e g
         = .error .normalize1 from by
-      rw [doNormalize_scaleDown128.eq_def]
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt', if_pos hmax]] at h
     exact absurd h (by intro hh; cases hh)
   | case2 m e g hgt' hnge ih =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g
-        = doNormalize_scaleDown128 largeRange.max (m / 10) (e + 1)
+    rw [show doNormalize_scaleDown128Spec largeRange.max m e g
+        = doNormalize_scaleDown128Spec largeRange.max (m / 10) (e + 1)
             (g.push (toUInt64 (m % 10))) from by
-      rw [doNormalize_scaleDown128.eq_def]
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt', if_neg hnge]] at h
     exact ih out h
   | case3 m e g hgt' =>
-    rw [show doNormalize_scaleDown128 largeRange.max m e g = .ok (m, e, g) from by
-      rw [doNormalize_scaleDown128.eq_def]
+    rw [show doNormalize_scaleDown128Spec largeRange.max m e g = .ok (m, e, g) from by
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_neg hgt']] at h
     obtain rfl := (Except.ok.inj h).symm
     have hle : m.toNat ≤ (toUInt128 largeRange.max).toNat := by
@@ -129,16 +129,17 @@ theorem doNormalize128_doRoundUp_stage
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   set g₀ : Guard := (if sticky = true
       then (if zn then Guard.new.set_negative else Guard.new).set_sticky
       else (if zn then Guard.new.set_negative else Guard.new)) with hg₀_def
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -332,10 +333,11 @@ theorem doNormalize128_algorithmic_facts
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
@@ -407,7 +409,7 @@ theorem doNormalize128_algorithmic_facts
       · rw [if_neg hz]
         rw [Bool.not_eq_true] at hz
         rw [hz]; rfl
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -548,10 +550,11 @@ theorem doNormalize128_underflow_value_small
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   obtain ⟨hval_su, hM₁_pos, hM₁_lt, he₁_le, hM₁_size⟩ :
@@ -606,7 +609,7 @@ theorem doNormalize128_underflow_value_small
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
       exact g0_represents_zero zn
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -663,8 +666,8 @@ theorem doNormalize128_underflow_value_small
           · exfalso
             have hge := doNormalize_scaleDown128_fired_output_ge M₁ e₁ g₀ sd hM₁_gt hsd
             omega
-          · rw [show doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ = .ok (M₁, e₁, g₀) from by
-              rw [doNormalize_scaleDown128.eq_def]
+          · rw [show doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ = .ok (M₁, e₁, g₀) from by
+              rw [doNormalize_scaleDown128Spec.eq_def]
               rw [dif_neg hM₁_gt]] at hsd
             have hpair := Except.ok.inj hsd
             exact ⟨((Prod.mk.inj hpair).1).symm,

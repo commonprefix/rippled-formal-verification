@@ -144,6 +144,8 @@ lemma Loan.scheduledComponents_value_le (l : Loan) (pc : PaymentComponents) (pp'
   rename_i hnf'
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨cs, hcs, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, hpr1, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hpr1
   obtain ⟨ts, hts, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨tpo, htpo, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨ti, hti, h⟩ := bind_ok_peel _ _ _ h

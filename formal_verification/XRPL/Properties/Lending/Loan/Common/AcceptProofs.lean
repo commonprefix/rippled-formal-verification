@@ -41,11 +41,12 @@ private lemma STAmount.roundToNumericType_scale_exact (nt : NumericType) (x y : 
     · have hx' : x = Number.zero := (Number.toRat_eq_zero_iff_eq_zero hx).mp hz
       subst hx'
       have h : STAmount.roundToNumericType .fractional Number.zero .to_nearest (some s) = .ok Number.zero := by
+        have hint : (⟨.fractional, 0, -100, false⟩ : STAmount).integral = false := rfl
         unfold STAmount.roundToNumericType
         rw [STAmount.ofNumber_fractional_zero]
-        simp only []
-        rw [STAmount.roundToExponent_eq_self _ s _ (Or.inr (Or.inl rfl))]
-        exact STAmount.toNumber_zero_fractional ⟨.fractional, 0, -100, false⟩ .to_nearest rfl rfl
+        dsimp only
+        rw [if_neg (by rw [hint]; decide), STAmount.roundToExponent_eq_self _ s _ (Or.inr (Or.inl rfl))]
+        exact STAmount.toNumber_zero_fractional _ .to_nearest hint rfl
       rw [h, Except.ok.injEq] at hy
       rw [← hy]
     have hneg := Number.negative_false_of_nonneg x hx hx0
@@ -259,7 +260,8 @@ private lemma Loan.create_interestDue (principal : Number) (rates : LoanRates) (
     (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault) (props : LoanProperties)
     (loanState : LoanState) (broker' : LoanBroker)
     (hstate : LoanState.build props.totalValueOutstanding principal props.managementFeeOutstanding = .ok loanState)
-    (hloan : (RawLoan.build props rates fees schedule broker' allowsOverpayment pending).to_lawful = .ok r.loan')
+    (hloan : (RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+      (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok r.loan')
     (hpo : r.loan'.principalOutstanding = principal) :
     r.loan'.interestDue = .ok loanState.interestDue := by
   have hl := (RawLoan.to_lawful_ok hloan).1
@@ -367,10 +369,12 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithPool Vault)
     rw [hrawAeq, hpf]
   rw [hrawI] at hvA
   have hl := (RawLoan.to_lawful_ok hloan).1
-  have hbuild : RawLoan.build props rates fees schedule broker' allowsOverpayment false =
+  have hbuild : RawLoan.build props rates fees schedule broker' allowsOverpayment false
+    (schedule.startDate + schedule.paymentInterval) =
       { r.loan'.toRawLoan with isPending := false } := by
     rw [hl]; rfl
   rw [Loan.create_run_of_checks broker v principal' rates fees schedule allowsOverpayment false props loanState
-    debtTotal' principal' _ rA.pool' broker' hchecks hround hadjI hvA hbroker, hbuild, hlA]
+    debtTotal' principal' _ rA.pool' broker' hchecks hround hadjI hvA hbroker
+    (Loan.create_ok_fits _ _ _ _ _ _ _ _ _ hcreate).1 (Loan.create_ok_fits _ _ _ _ _ _ _ _ _ hcreate).2, hbuild, hlA]
 
 end XRPL.Model.Lending

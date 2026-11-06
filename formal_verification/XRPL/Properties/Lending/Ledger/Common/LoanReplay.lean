@@ -136,7 +136,7 @@ lemma LendingLedger.delete_replay {l L lb : LendingLedger} (hR : L.Reachable) {j
 
 /-- What a default's checks need: an active loan with payments left, past its grace period. -/
 private lemma Loan.canManage_default_facts (loan : Loan) (now : UInt32)
-    (h : loan.canManage .default now = .tesSUCCESS) :
+    (h : loan.canManage .default now = .ok .tesSUCCESS) :
     loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
       loan.nextPaymentDueDate + loan.schedule.gracePeriod < now := by
   unfold Loan.canManage at h
@@ -149,7 +149,7 @@ private lemma Loan.canManage_default_facts (loan : Loan) (now : UInt32)
   simp only [Bool.not_eq_true] at h1 h2
   refine ⟨h1, h2, h3, ?_⟩
   by_contra h4
-  simp [h1, h2, h3, h4] at h
+  simp [h1, h2, h3, h4, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt, bind, Except.bind] at h
 
 /-- An unimpair of the stored impaired loan succeeds on a reachable ledger. LossUnrealized holds the loan's
 principal and gives it back. -/
@@ -202,10 +202,10 @@ lemma LendingLedger.Reachable.manageUnimpair_ok {L : LendingLedger} (hR : L.Reac
 
 /-- An unimpair of a stored impaired loan that passes its checks succeeds on a reachable ledger. -/
 private lemma LendingLedger.unimpair_total (L : LendingLedger) (hR : L.Reachable) (hnd : L.vaultDeleted = false)
-    (j : Nat) (e : LoanEntry) (he : L.loan? j = some e) (hc : e.loan.canManage .unimpair L.now = .tesSUCCESS) :
+    (j : Nat) (e : LoanEntry) (he : L.loan? j = some e) (hc : e.loan.canManage .unimpair L.now = .ok .tesSUCCESS) :
     ∃ L', (L.apply (.loanManage j .unimpair)).run = .ok (.ok L') := by
   obtain ⟨b, loan, hb, hw, -⟩ := LendingLedger.Reachable.loan_withBroker hR he
-  have hc' : loan.canManage .unimpair L.now = .tesSUCCESS := by rw [Loan.canManage_withBroker hw]; exact hc
+  have hc' : loan.canManage .unimpair L.now = .ok .tesSUCCESS := by rw [Loan.canManage_withBroker hw]; exact hc
   obtain ⟨r, hok⟩ := hR.manageUnimpair_ok ⟨e, b, he, hb, hw⟩ (Loan.canManage_unimpair_impaired loan L.now hc')
   exact ⟨_, LendingLedger.apply_manage_ok L hnd j e b loan .unimpair r he hb hw hc' hok⟩
 
@@ -222,7 +222,7 @@ lemma LendingLedger.manage_replay {l L lb : LendingLedger} (hR : L.Reachable) {j
   obtain ⟨e0, b, loan, r, he0, -, hw, hc, hok, -⟩ := LendingLedger.applyLoan_manage_inv l u j action hu
   rw [he] at he0
   obtain rfl := Option.some.inj he0
-  have hc' : e.loan.canManage action L.now = .tesSUCCESS := by
+  have hc' : e.loan.canManage action L.now = .ok .tesSUCCESS := by
     rw [hk.now, ← Loan.canManage_withBroker hw]; exact hc
   have hraw := Loan.withBroker_eq hw
   cases action with

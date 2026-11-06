@@ -32,7 +32,8 @@ private lemma tenthBipsOfValue_zero_rate' (rate : TenthBips32) :
         (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest) := rfl
   rw [heq]
   have hm : Number.zero.operator_mul rate.toNumber .to_nearest = .ok Number.zero := by
-    unfold Number.operator_mul
+    rw [Number.operator_mul_eq_spec]
+    unfold Number.operator_mulSpec
     rw [if_pos (by decide)]
     rfl
   rw [hm]
@@ -134,7 +135,7 @@ private lemma Loan.instalment_interestPaid (l l' : Loan) (pc0 pc : PaymentCompon
     simp only [Loan.doPayment, hpcf, Bool.false_eq_true, ↓reduceIte] at hdo
     unfold_ter at hdo
     walk_ok
-    rename_i _ tv htv _ pv hpv _ mv hmv hlaw
+    rename_i _ tv htv _ pv hpv _ mv hmv _ _ hlaw
     have hr := (RawLoan.to_lawful_ok hlaw).1
     have r1 := (congrArg RawLoan.totalValueOutstanding hr :)
     have r2 := (congrArg RawLoan.principalOutstanding hr :)

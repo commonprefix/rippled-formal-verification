@@ -35,7 +35,9 @@ private lemma normalizeToRange_16_downward_eq (n : Number) (h_lo : 10 ^ 18 ≤ n
   unfold Number.normalizeToRange
   rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .downward .normalize2 hb
     (by rw [cMinValue_val, hm3]; omega) (by rw [cMaxValue_val, hm3]; omega) (by omega) (by omega)]
-  simp [RoundResult.toNumber, hneg]
+  refine (Number.normalizeToRange_tail ?_).trans ?_
+  · dsimp only [RoundResult.toNumber]; exact UInt64.div_thousand_toNat_lt _
+  · simp [RoundResult.toNumber, hneg]
 
 /-- A nonzero nonnegative normalized `Number` sits below `10 ^ (exponent + 19)`. -/
 private lemma Number.toRat_lt_pow_exponent_add (n : Number) (hn : n.isNormalized) (hnz : n.mantissa_ ≠ 0)
@@ -73,6 +75,8 @@ private lemma STAmount.ofNumber_frac_downward_exp (n : Number) (r : STAmount) (h
     subst hmant hexp
     have hm3 : (n.mantissa_ / 10 / 10 / 10).toNat = n.mantissa_.toNat / 1000 :=
       m_div_thousand_toNat n.mantissa_
+    obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
     have hmu : (n.mantissa_ / 10 / 10 / 10).toInt64.toUInt64 = n.mantissa_ / 10 / 10 / 10 := rfl
     rw [hmu] at hok
     have hlo15 : 10 ^ 15 ≤ (n.mantissa_ / 10 / 10 / 10).toNat := by rw [hm3]; omega

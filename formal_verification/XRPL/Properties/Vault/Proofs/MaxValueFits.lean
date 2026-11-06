@@ -311,17 +311,6 @@ lemma Vault.clawback_final_success_proof (v : Vault) (assets holderShares : STAm
     rw [hS] at h0
     exact (STAmount.isZero_eq_false_iff _).mp hnz ((STAmount.toRat_eq_zero_iff _).mp h0)
 
-/-- The dilution budget `ReachableFromIn` accumulates is never negative. -/
-lemma Vault.ReachableFromIn.budget_nonneg (whole : Bool) (v : Vault) (t : UInt32) (w : Vault) (n : ℕ) (D : ℚ)
-    (h : Vault.ReachableFromIn whole v t w n D) : 0 ≤ D := by
-  induction h with
-  | refl => exact le_rfl
-  | deposit => exact add_nonneg ‹_› (by split_ifs <;> positivity)
-  | withdraw => assumption
-  | clawback => assumption
-  | burnShares => assumption
-  | update => assumption
-
 /-- Per-share value is never negative: the net asset value and the share count are nonnegative. -/
 lemma Vault.perShareValue_nonneg (v : Vault) : 0 ≤ v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
   refine div_nonneg ?_ (Nat.cast_nonneg _)
@@ -331,15 +320,10 @@ lemma Vault.perShareValue_nonneg (v : Vault) : 0 ≤ v.withdrawNav / (v.toExact.
   unfold RawVault.Exact.assetsTotal
   linarith
 
-/-- `ReachableFromIn.no_dilution` from a vault without shares: its per-share value is `0` and the
-budget is never negative, so there is nothing to lose. -/
-lemma Vault.ReachableFromIn.no_dilution_of_no_shares (whole : Bool) (v : Vault)
-    (hS : (v.toExact.sharesTotal : ℚ) = 0) (t : UInt32) (n : ℕ) (D : ℚ) (w : Vault)
-    (h : Vault.ReachableFromIn whole v t w n D) :
-    w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) - D := by
-  rw [hS, div_zero, zero_sub]
-  have := Vault.ReachableFromIn.budget_nonneg whole v t w n D h
-  have := Vault.perShareValue_nonneg w
-  linarith
+/-- `ReachableFromIn.no_dilution` from a vault without shares: its per-share value is `0`, so nothing can be lost. -/
+lemma Vault.ReachableFromIn.no_dilution_of_no_shares (v : Vault) (hS : (v.toExact.sharesTotal : ℚ) = 0) (w : Vault) :
+    w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
+  rw [hS, div_zero]
+  exact Vault.perShareValue_nonneg w
 
 end XRPL.Model.SingleAssetVault

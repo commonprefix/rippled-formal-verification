@@ -34,6 +34,22 @@ lemma Vault.clawback_compute_rejected_proof (v : Vault) (assets holderShares : S
   unfold_ter
   simp [hxrp, hcomp]
 
+lemma Vault.clawback_capped_internal_proof (v : Vault) (assets holderShares : STAmount) (waive : Bool)
+    (hnn : 0 ≤ assets.toRat) (hxrp : v.numericType ≠ NumericType.native)
+    (shares recovered capped shares' recovered' : STAmount) (n n' : Number)
+    (hs : assetsToSharesClawback v assets holderShares waive = .ok shares)
+    (ha : v.sharesToAssetsWithdraw shares waive = .ok recovered)
+    (hn : recovered.toNumber .to_nearest = .ok n) (hgt : n.operator_gt v.assetsAvailable = true)
+    (hcash : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok capped)
+    (hs' : assetsToSharesWithdraw v capped true waive = .ok shares')
+    (ha' : v.sharesToAssetsWithdraw shares' waive = .ok recovered')
+    (hn' : recovered'.toNumber .to_nearest = .ok n') (hgt' : n'.operator_gt v.assetsAvailable = true) :
+    (v.clawback assets holderShares waive hnn).run = .ok (.error .tecINTERNAL) := by
+  refine Vault.clawback_compute_rejected_proof v assets holderShares waive hnn hxrp _ ?_
+  simp only [computeClawback]
+  unfold_ter
+  simp [hs, ha, hn, hgt, hcash, hs', ha', hn', hgt']
+
 private lemma computeClawback_has_obligations (v : Vault) (assets holderShares : STAmount) (waive : Bool)
     (shares recovered sharesTotalAmount : STAmount)
     (hpr : v.ClawbackPriced assets holderShares waive shares recovered)

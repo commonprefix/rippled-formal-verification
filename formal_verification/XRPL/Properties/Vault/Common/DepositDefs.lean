@@ -36,23 +36,12 @@ Unrealized loss is not subtracted when depositing. -/
 def RawVault.depositNav (rv : RawVault) : ℚ :=
   rv.toExact.assetsTotal
 
-/-- The computed total that prices a deposit is exact: the `Number` sum of the cash and the
-deployed assets loses no digit. It holds on every reachable vault, where nothing is deployed. -/
-def RawVault.DepositNavExact (rv : RawVault) : Prop :=
-  ∃ assetsTotal : Number, rv.assetsTotal = .ok assetsTotal ∧ assetsTotal.toRat = rv.depositNav
-
 /-- The exponent of the grid a deposit amount is rounded onto: the post-sum exponent of the vault
 total plus the amount, never finer than the vault's base exponent. -/
 def Vault.depositExponent (v : Vault) (amountDeposit : STAmount) : Except Error Int := do
   let assetsTotal ← v.assetsTotal
   let amountNumber ← amountDeposit.toNumber .to_nearest
   postSumExponent assetsTotal amountNumber v.baseExponent amountDeposit.numericType
-
-/-- The exact share amount for a deposit, before rounding (XLS-0065): an empty vault issues `amount * 10 ^ scale`
-shares, otherwise `sharesTotal * amount / nav`. -/
-def RawVault.idealSharesDeposit (rv : RawVault) (amount : ℚ) : ℚ :=
-  if rv.toExact.assetsTotal = 0 then amount * (10 : ℚ) ^ rv.scale.toNat
-  else rv.toExact.sharesTotal * amount / rv.depositNav
 
 /-- The exact `amountDeposit'` for issuing `shares`, before rounding (XLS-0065): an empty vault takes
 `shares / 10 ^ scale`, otherwise `nav * shares / sharesTotal`. -/

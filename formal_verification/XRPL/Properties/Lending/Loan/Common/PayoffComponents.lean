@@ -16,8 +16,8 @@ open private Loan.fullComponents roundAndSplitInterest from XRPL.Model.Lending.L
 
 /-- A count of seconds is a normalized `Number` of that value, below `2^32`. -/
 private lemma Number.ofInt64_seconds (n : UInt32) :
-    (Number.ofInt64 n.toUInt64.toInt64).isNormalized ∧ |(Number.ofInt64 n.toUInt64.toInt64).toRat| < 2 ^ 32 ∧
-      (n ≠ 0 → 1 ≤ |(Number.ofInt64 n.toUInt64.toInt64).toRat|) := by
+    (Number.ofInt64 n.toInt64).isNormalized ∧ |(Number.ofInt64 n.toInt64).toRat| < 2 ^ 32 ∧
+      (n ≠ 0 → 1 ≤ |(Number.ofInt64 n.toInt64).toRat|) := by
   refine ⟨Number.ofInt64_isNormalized _, ?_, fun hn => ?_⟩
   · rw [Number.ofInt64_count, abs_of_nonneg (by positivity)]
     exact_mod_cast n.toNat_lt
@@ -68,11 +68,11 @@ private lemma loanAccruedInterest_ok (tpo rate : Number) (now start prev interva
     (le_trans (by norm_num) (hil hint'))
   have hqn := Number.operator_div_isNormalized _ _ _ _ hm2n hin hq
   refine ⟨q, ?_, hqn, ?_⟩
-  · simp only [hm1, ok_bind, hm2, hq]
+  · simp only [UInt32.subChecked_of_le (UInt32.le_of_lt (UInt32.not_le.mp h3)), ok_bind, hm1, hm2, hq]
   · have := (Number.div_near _ _ _ hm2n hin hq).abs_le
     rw [abs_div] at this
     have h1 := hil hint'
-    calc |q.toRat| ≤ |m2.toRat| / |(Number.ofInt64 interval.toUInt64.toInt64).toRat| * (1 + Number.nearestError) :=
+    calc |q.toRat| ≤ |m2.toRat| / |(Number.ofInt64 interval.toInt64).toRat| * (1 + Number.nearestError) :=
           this
       _ ≤ |m2.toRat| / 1 * (1 + Number.nearestError) := by gcongr
       _ ≤ 10 ^ 182 * 2 := by rw [div_one]; gcongr; linarith

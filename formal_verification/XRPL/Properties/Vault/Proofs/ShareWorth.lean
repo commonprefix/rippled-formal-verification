@@ -323,16 +323,4 @@ lemma Vault.Reachable.deposit_mint_fits_proof (v : Vault) (t0 : UInt32) (hr : Va
       nlinarith [mul_lt_mul_of_pos_right h hbpos]
     linarith
 
-/-- `deposit_mint_fits_proof` in the form the share-count bounds take. -/
-lemma Vault.Reachable.deposit_mint_fits_maxRep (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
-    (amount : STAmount) (t : UInt32) (hpos : 0 < amount.toRat) (hc : amount.Canonical)
-    (r : VaultWithAmounts) (hok : (v.deposit amount false t hpos).run = .ok (.ok r)) :
-    v.sharesTotal.toRat + r.shares.toRat ≤ maxRep.toNat := by
-  have h := Vault.Reachable.deposit_mint_fits_proof v t0 hr amount false t hpos hc
-    (Vault.deposit_amount_numericType v amount t hpos hc r hok) r hok
-  rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf] at h
-  have hm : (maxRep.toNat : ℚ) = 2 ^ 63 - 1 := by rw [maxRep_val]; norm_num
-  rw [hm]
-  exact h
-
 end XRPL.Model.SingleAssetVault

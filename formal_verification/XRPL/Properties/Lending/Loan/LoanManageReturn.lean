@@ -14,20 +14,20 @@ variable (loan : Loan) (action : LoanManageAction) (now : UInt32)
 
 /-- The exits of `canManage`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem Loan.canManage_exits :
-    (loan.isPending = true → loan.canManage action now = .tecNO_PERMISSION) ∧
-    (loan.isDefault = true → loan.canManage action now = .tecNO_PERMISSION) ∧
-    (loan.isImpaired = true → loan.canManage .impair now = .tecNO_PERMISSION) ∧
-    (loan.isImpaired = false → loan.canManage .unimpair now = .tecNO_PERMISSION) ∧
-    (loan.paymentRemaining = 0 → loan.canManage action now = .tecNO_PERMISSION) ∧
+    (loan.isPending = true → loan.canManage action now = .ok .tecNO_PERMISSION) ∧
+    (loan.isDefault = true → loan.canManage action now = .ok .tecNO_PERMISSION) ∧
+    (loan.isImpaired = true → loan.canManage .impair now = .ok .tecNO_PERMISSION) ∧
+    (loan.isImpaired = false → loan.canManage .unimpair now = .ok .tecNO_PERMISSION) ∧
+    (loan.paymentRemaining = 0 → loan.canManage action now = .ok .tecNO_PERMISSION) ∧
     (loan.isPending = false → loan.isDefault = false → loan.paymentRemaining ≠ 0 →
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat →
       now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat →
-      loan.canManage .default now = .tecTOO_SOON) ∧
+      loan.canManage .default now = .ok .tecTOO_SOON) ∧
     (loan.isPending = false → loan.isDefault = false → loan.paymentRemaining ≠ 0 →
       (action = .impair → loan.isImpaired = false) → (action = .unimpair → loan.isImpaired = true) →
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat →
       (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) →
-      loan.canManage action now = .tesSUCCESS) :=
+      loan.canManage action now = .ok .tesSUCCESS) :=
   ⟨Loan.canManage_pending_proof loan action now, Loan.canManage_defaulted_proof loan action now,
     Loan.canManage_already_impaired_proof loan now, Loan.canManage_not_impaired_proof loan now,
     Loan.canManage_paid_off_proof loan action now, Loan.canManage_default_too_soon_proof loan now,
@@ -35,15 +35,15 @@ theorem Loan.canManage_exits :
 
 /-- Error codes: success, tecNO_PERMISSION or tecTOO_SOON. -/
 theorem Loan.canManage_error_codes :
-    loan.canManage action now = .tesSUCCESS ∨ loan.canManage action now = .tecNO_PERMISSION ∨
-      loan.canManage action now = .tecTOO_SOON :=
+    loan.canManage action now = .ok .tesSUCCESS ∨ loan.canManage action now = .ok .tecNO_PERMISSION ∨
+      loan.canManage action now = .ok .tecTOO_SOON :=
   Loan.canManage_error_codes_proof loan action now
 
 /-- Success ⟺ the loan is active and not paid off, an impair needs a loan that isn't impaired, an unimpair an
 impaired one, and a default now > NextPaymentDueDate + GracePeriod. -/
 theorem Loan.canManage_lawful_iff
     (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat) :
-    loan.canManage action now = .tesSUCCESS ↔
+    loan.canManage action now = .ok .tesSUCCESS ↔
       loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
         (action = .impair → loan.isImpaired = false) ∧ (action = .unimpair → loan.isImpaired = true) ∧
         (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) :=

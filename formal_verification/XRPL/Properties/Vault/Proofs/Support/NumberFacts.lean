@@ -221,7 +221,8 @@ lemma Number.operator_add_downward_nonneg_le (x y result : Number)
     (hok : Number.operator_add x y .downward = .ok result) :
     result.toRat ≤ x.toRat + y.toRat ∧ 0 ≤ result.toRat := by
   have hok0 := hok
-  unfold Number.operator_add at hok
+  replace hok := Number.operator_add_ok_spec hok
+  unfold Number.operator_addSpec at hok
   by_cases hy0 : y.operator_eq Number.zero = true
   · rw [if_pos hy0] at hok
     have hym : y.mantissa_ = 0 := by
@@ -284,7 +285,8 @@ lemma operator_add_nonneg_rounds (x y result : Number)
   by_cases hym : y.mantissa_ = 0
   · have hy0 : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hym
     have hres : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos (by rw [hy0]; decide)] at hok
       exact (Except.ok.inj hok).symm
     refine RoundsWithin_mono result _ 0 _ _ (RoundsWithin_of_eq result _ _ ?_) hε
@@ -293,7 +295,8 @@ lemma operator_add_nonneg_rounds (x y result : Number)
   by_cases hxm : x.mantissa_ = 0
   · have hx0 : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxm
     have hres : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hym),
           if_pos (by rw [hx0]; decide)] at hok
       exact (Except.ok.inj hok).symm

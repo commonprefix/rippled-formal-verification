@@ -46,12 +46,12 @@ theorem LoanBroker.roundedCoverClawback_zero_eq_none (pool : α) (a : STAmount)
     lb.roundedCoverClawback pool (some a) = lb.roundedCoverClawback pool none :=
   LoanBroker.roundedCoverClawback_zero_eq_none_proof lb pool a hzero
 
-/-- The only roundedAmount rejections are tecINSUFFICIENT_FUNDS and tecPRECISION_LOSS. -/
-theorem LoanBroker.roundedCoverClawback_rejected_code (pool : α)
+/-- The only clawAmount rejections are tecINSUFFICIENT_FUNDS or tecPRECISION_LOSS. -/
+theorem LoanBroker.roundedCoverClawback_error_codes (pool : α)
     (amount : Option STAmount) (ter : TER)
     (hok : (lb.roundedCoverClawback pool amount).run = .ok (.error ter)) :
     ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS :=
-  LoanBroker.roundedCoverClawback_error_codes lb pool amount ter hok
+  LoanBroker.roundedCoverClawback_error_codes_proof lb pool amount ter hok
 
 /-- The exits of `canCoverClawback`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.canCoverClawback_exits (pool : α) (amount : Option STAmount) :

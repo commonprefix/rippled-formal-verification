@@ -75,13 +75,13 @@ lemma STAmount.ofNumber_fractional_downward_ok (r : Number) (hn : r.isNormalized
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_of_lt .downward h_int h_fit]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .downward hmtu_lo hmtu_hi
       (by omega) (by omega)
-  rw [STAmount.checked]
+  rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
+    STAmount.checked]
   unfold STAmount.canonicalize
   rw [if_neg h_int, hiou, if_neg (by omega)]
   split_ifs <;> exact ⟨_, rfl⟩

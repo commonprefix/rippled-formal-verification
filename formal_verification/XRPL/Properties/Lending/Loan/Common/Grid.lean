@@ -193,6 +193,8 @@ private lemma STAmount.ofNumber_integral_small (nt : NumericType) (x : Number) (
   | ok iv =>
     rw [hrep] at hof
     simp only at hof
+    obtain ⟨v, hv, hof⟩ := bind_ok_peel _ _ _ hof
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     obtain ⟨hnn, hle⟩ := Number.to_rep_nonneg_range _ mode iv hwneg hrep
     have hval := toUInt64_toNat_le_maxRep iv hnn hle
     have hexact := STAmount.canonicalize_integral_toRat

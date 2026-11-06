@@ -3,11 +3,10 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.DirectedSupport
 import XRPL.Properties.Protocol.Number.Mul.RoundsWithin
 import XRPL.Properties.Protocol.Number.Mul.Common.Decompose
 
-/-! # Directed-mode support for the IOU `multiply` `RoundsWithin` headlines
+/-! # Directed-mode IOU re-rounding
 
-Directed-mode versions for IOU multiplication, mostly for non-negative operands, which avoids the sign
-flip of `STAmount.ofNumber` rounding `|r|`. The `Number` multiply bound `10/(2⁶³+2)` composes with the re-round
-`10⁻¹⁵`. -/
+Directed-mode bounds of `STAmount.ofNumber` on IOU amounts, mostly for non-negative operands, which avoids the
+sign flip of rounding `|r|`. Also the sign of a `Number` product. -/
 
 namespace XRPL.Model.Protocol
 
@@ -102,6 +101,8 @@ lemma STAmount.ofNumber_iou_rounds_within (nt : NumericType) (r : Number) (mode 
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
@@ -240,6 +241,8 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg .towards_zero rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
@@ -277,289 +280,5 @@ theorem operator_mul_negative_eq (x y result : Number) (mode : rounding_mode)
       .overflow res d.rounds hres_mant_ne
   rw [hres_eq, show res.toNumber.negative_ = res.negative_ from rfl, hres_neg]
   exact d.neg_eq
-
-/-- The `Number` multiplication relative-error bound in every mode, at the looser directed value `10/(2⁶³+2)`.
-The smaller `to_nearest` bound implies it. -/
-lemma operator_mul_RoundsWithin_anyMode (n1 n2 r : Number) (mode : rounding_mode)
-    (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized) (hr_ne : r.mantissa_ ≠ 0)
-    (hmul : Number.operator_mul n1 n2 mode = .ok r) :
-    RoundsWithin r (n1.toRat * n2.toRat) mode (10 / (2 ^ 63 + 2 : ℚ)) := by
-  cases mode with
-  | to_nearest =>
-    exact RoundsWithin_mono r (n1.toRat * n2.toRat) (5 / (2 ^ 63 + 7 : ℚ)) (10 / (2 ^ 63 + 2 : ℚ))
-      .to_nearest (operator_mul_rounds_to_nearest n1 n2 r hn1_norm hn2_norm hmul hr_ne) (by norm_num)
-  | downward => exact operator_mul_rounds_downward n1 n2 r hn1_norm hn2_norm hmul hr_ne
-  | upward => exact operator_mul_rounds_upward n1 n2 r hn1_norm hn2_norm hmul hr_ne
-  | towards_zero => exact operator_mul_rounds_towards_zero n1 n2 r hn1_norm hn2_norm hmul hr_ne
-
-/-- Magnitude form of the `Number`-multiply directed bound, every mode, any operand signs. Under
-`towards_zero` the product `r` has the sign of `n1·n2`, so `|r − n1·n2| = |n1·n2| − |r|`. -/
-lemma operator_mul_abs_diff_le_anyMode (n1 n2 r : Number) (mode : rounding_mode)
-    (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized)
-    (hn1_ne : n1.mantissa_ ≠ 0) (hn2_ne : n2.mantissa_ ≠ 0) (hr_ne : r.mantissa_ ≠ 0)
-    (hmul : Number.operator_mul n1 n2 mode = .ok r) :
-    |r.toRat - n1.toRat * n2.toRat| ≤ |n1.toRat * n2.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
-  have hrw := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-  unfold RoundsWithin at hrw
-  cases mode with
-  | to_nearest => exact hrw
-  | downward =>
-    obtain ⟨hle, hm⟩ := hrw
-    rw [show RatValued.toRat r = r.toRat from rfl] at hle hm
-    rw [abs_of_nonpos (by linarith), neg_sub]; exact hm
-  | upward =>
-    obtain ⟨hge, hm⟩ := hrw
-    rw [show RatValued.toRat r = r.toRat from rfl] at hge hm
-    rw [abs_of_nonneg (by linarith)]; exact hm
-  | towards_zero =>
-    obtain ⟨hle_abs, hm_abs⟩ := hrw
-    rw [show RatValued.toRat r = r.toRat from rfl] at hle_abs hm_abs
-    have hrneg : r.negative_ = (n1.negative_ != n2.negative_) :=
-      operator_mul_negative_eq n1 n2 r .towards_zero hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
-    rw [abs_diff_eq_abs_sub_abs_of_sign_aligned r (n1.toRat * n2.toRat)
-      (fun hneg => (toRat_mul_sign n1 n2).2 (by rw [hrneg] at hneg; exact bne_iff_ne.mp hneg))
-      (fun hpos => (toRat_mul_sign n1 n2).1 (by
-        rw [hrneg] at hpos
-        cases h1 : n1.negative_ <;> cases h2 : n2.negative_ <;> simp_all))]
-    rw [abs_of_nonpos (by linarith), neg_sub]; exact hm_abs
-
-lemma operator_mul_exponent_hi_anyMode (n1 n2 r : Number) (E : Int) (mode : rounding_mode)
-    (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized)
-    (hn1_ne : n1.mantissa_ ≠ 0) (hn2_ne : n2.mantissa_ ≠ 0) (hr_ne : r.mantissa_ ≠ 0)
-    (hn1e : n1.exponent_ ≤ E) (hn2e : n2.exponent_ ≤ E) (hE : 2 * E + 24 ≤ maxExponent)
-    (hmul : Number.operator_mul n1 n2 mode = .ok r) :
-    r.exponent_ + 4 ≤ maxExponent := by
-  by_contra hcon
-  push Not at hcon
-  have hr_norm : r.isNormalized := operator_mul_result_isNormalized n1 n2 r mode
-    hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
-  have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-  -- lower bound: 10^(maxExponent+15) ≤ |r.toRat|.
-  have hlower : (10 : ℚ) ^ (maxExponent + 15) ≤ |r.toRat| := by
-    rw [abs_toRat_eq r]
-    have h1018 : (10 : ℚ) ^ (18 : ℤ) ≤ (r.mantissa_.toNat : ℚ) := by
-      have : ((10 ^ 18 : ℕ) : ℚ) ≤ (r.mantissa_.toNat : ℚ) := by exact_mod_cast hr_mant.1
-      rwa [show ((10 ^ 18 : ℕ) : ℚ) = (10 : ℚ) ^ (18 : ℤ) by push_cast; norm_num] at this
-    calc (10 : ℚ) ^ (maxExponent + 15)
-        ≤ (10 : ℚ) ^ (r.exponent_ + 18) := zpow_le_zpow_right₀ (by norm_num) (by omega)
-      _ = (10 : ℚ) ^ (18 : ℤ) * (10 : ℚ) ^ r.exponent_ := by
-          rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
-      _ ≤ (r.mantissa_.toNat : ℚ) * (10 : ℚ) ^ r.exponent_ := by gcongr
-  -- upper bound: |r.toRat| < 10^(maxExponent+15).
-  have hmb := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-  have hr2 : |r.toRat| ≤ |n1.toRat * n2.toRat| * 2 := by
-    have := RoundsWithin_abs_le_two r (n1.toRat * n2.toRat) (10 / (2 ^ 63 + 2 : ℚ)) mode hmb (by norm_num)
-    rwa [show RatValued.toRat r = r.toRat from rfl] at this
-  have hbound_n : ∀ (n : Number), n.mantissa_.toNat < 10 ^ 19 → n.exponent_ ≤ E →
-      |n.toRat| < (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E := by
-    intro n hn_hi hne
-    rw [abs_toRat_eq n]
-    have hmant : (n.mantissa_.toNat : ℚ) < (10 : ℚ) ^ (19 : ℤ) := by
-      have : (n.mantissa_.toNat : ℚ) < ((10 ^ 19 : ℕ) : ℚ) := by exact_mod_cast hn_hi
-      rwa [show ((10 ^ 19 : ℕ) : ℚ) = (10 : ℚ) ^ (19 : ℤ) by push_cast; norm_num] at this
-    have hexp : (10 : ℚ) ^ n.exponent_ ≤ (10 : ℚ) ^ E := zpow_le_zpow_right₀ (by norm_num) hne
-    calc (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_
-        < (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ n.exponent_ :=
-          mul_lt_mul_of_pos_right hmant (zpow_pos (by norm_num) _)
-      _ ≤ (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E := mul_le_mul_of_nonneg_left hexp (by positivity)
-  have hn1b := hbound_n n1 (hn1_norm.mantissaBounds_nat hn1_ne).2 hn1e
-  have hn2b := hbound_n n2 (hn2_norm.mantissaBounds_nat hn2_ne).2 hn2e
-  have hupper : |r.toRat| < (10 : ℚ) ^ (maxExponent + 15) := by
-    have hprod : |n1.toRat * n2.toRat| < (10 : ℚ) ^ (2 * E + 38) := by
-      rw [abs_mul]
-      have hbig : |n1.toRat| * |n2.toRat|
-          < ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) * ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) :=
-        mul_lt_mul'' hn1b hn2b (abs_nonneg _) (abs_nonneg _)
-      have hpoweq : ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) * ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E)
-          = (10 : ℚ) ^ (2 * E + 38) := by
-        rw [mul_mul_mul_comm, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0),
-            ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-        congr 1; ring
-      rw [hpoweq] at hbig; exact hbig
-    have hpos38 : (0 : ℚ) < (10 : ℚ) ^ (2 * E + 38) := zpow_pos (by norm_num) _
-    have hfin : (10 : ℚ) ^ (2 * E + 38) * 2 ≤ (10 : ℚ) ^ (maxExponent + 15) := by
-      have h39 : (10 : ℚ) ^ (2 * E + 38) * 2 ≤ (10 : ℚ) ^ (2 * E + 38) * 10 := by nlinarith [hpos38]
-      have heq : (10 : ℚ) ^ (2 * E + 38) * 10 = (10 : ℚ) ^ (2 * E + 39) := by
-        rw [show (2 * E + 39 : ℤ) = (2 * E + 38) + 1 from by ring,
-            zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0) (2 * E + 38) 1, zpow_one]
-      rw [heq] at h39
-      exact le_trans h39 (zpow_le_zpow_right₀ (by norm_num) (by omega))
-    calc |r.toRat| ≤ |n1.toRat * n2.toRat| * 2 := hr2
-      _ < (10 : ℚ) ^ (2 * E + 38) * 2 := by nlinarith [hprod, hpos38]
-      _ ≤ (10 : ℚ) ^ (maxExponent + 15) := hfin
-  linarith [hlower, hupper]
-
-/-- STAmount IOU multiplication of non-negative operands rounds within the directed relative-error bound in
-every mode: `10/(2⁶³+2)` for the `Number` multiply, composed with `10⁻¹⁵` for the 16-digit re-round. -/
-theorem STAmount.operator_mul_iou_rounds_directed (v1 v2 result : STAmount) (nt : NumericType)
-    (mode : rounding_mode)
-    (hnt : nt = .fractional)
-    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
-    (hok : STAmount.multiply v1 v2 nt mode = .ok result)
-    (hresult : result.mValue ≠ 0) :
-    RoundsWithin result (v1.toRat * v2.toRat) mode
-      (10 / (2 ^ 63 + 2 : ℚ) + (10 : ℚ) ^ (-15 : ℤ)
-        + 10 / (2 ^ 63 + 2 : ℚ) * (10 : ℚ) ^ (-15 : ℤ)) := by
-  subst hnt
-  have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  unfold STAmount.multiply at hok
-  rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
-        rw [hint1]; simp),
-      STAmount.toNumber_iou_canonical v1 mode hc1,
-      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
-  simp only at hok
-  set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
-  set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
-  cases hmul : Number.operator_mul n1 n2 mode with
-  | error e => rw [hmul] at hok; simp at hok
-  | ok r =>
-    rw [hmul] at hok
-    simp only at hok
-    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
-    have hn1_norm : n1.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
-    have hn2_norm : n2.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
-    have hn1_ne : n1.mantissa_ ≠ 0 := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
-    have hn2_ne : n2.mantissa_ ≠ 0 := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
-    have hn1_val : n1.toRat = v1.toRat := STAmount.toNumber_iou_canonical_toRat v1 hc1
-    have hn2_val : n2.toRat = v2.toRat := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne : r.mantissa_ ≠ 0 :=
-      STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl hofn hresult
-    have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
-    have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-    have hr_exp_lo : minExponent ≤ r.exponent_ := by
-      rcases hr_norm with hz | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show r.mantissa_ = 0 by rw [hz]; rfl) hr_ne
-      · exact hlo
-    have hr_exp_hi : r.exponent_ + 4 ≤ maxExponent :=
-      operator_mul_exponent_hi_anyMode n1 n2 r 77 mode hn1_norm hn2_norm hn1_ne hn2_ne hr_ne
-        (by show v1.mOffset - 3 ≤ 77; have := hc1.exp_hi; omega)
-        (by show v2.mOffset - 3 ≤ 77; have := hc2.exp_hi; omega) (by unfold maxExponent; omega) hmul
-    have hr_neg : r.negative_ = false := by
-      rw [operator_mul_negative_eq n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne]
-      show (v1.mIsNegative != v2.mIsNegative) = false
-      rw [hn1, hn2]; rfl
-    have hmb := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-    have hre := STAmount.ofNumber_iou_rounds_within .fractional r mode result rfl hr_neg
-      hr_mant.1 hr_mant.2 hr_exp_lo hr_exp_hi hofn hresult
-    have htrans := RoundsWithin_trans result r (n1.toRat * n2.toRat) (10 / (2 ^ 63 + 2 : ℚ))
-      ((10 : ℚ) ^ (-15 : ℤ)) mode hmb
-      (by rw [show RatValued.toRat r = r.toRat from rfl]; exact hre) (by positivity) (by positivity)
-    rw [hn1_val, hn2_val] at htrans
-    exact htrans
-
-/-- IOU multiply pipeline decomposition (any mode, non-negative operands). Exposes the 19-digit `Number`
-product `r`, its range and sign, and the mode-generic `Number`-multiply `RoundsWithin` bound. -/
-lemma STAmount.operator_mul_iou_decompose_anyMode (v1 v2 result : STAmount) (nt : NumericType)
-    (mode : rounding_mode)
-    (hnt : nt = .fractional)
-    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hn1 : v1.mIsNegative = false) (hn2 : v2.mIsNegative = false)
-    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    ∃ r : Number, STAmount.ofNumber nt r mode = .ok result ∧
-      10 ^ 18 ≤ r.mantissa_.toNat ∧ r.mantissa_.toNat < 10 ^ 19 ∧
-      minExponent ≤ r.exponent_ ∧ r.exponent_ + 4 ≤ maxExponent ∧ r.negative_ = false ∧
-      RoundsWithin r (v1.toRat * v2.toRat) mode (10 / (2 ^ 63 + 2 : ℚ)) := by
-  subst hnt
-  have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  unfold STAmount.multiply at hok
-  rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
-        rw [hint1]; simp),
-      STAmount.toNumber_iou_canonical v1 mode hc1,
-      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
-  simp only at hok
-  set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
-  set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
-  cases hmul : Number.operator_mul n1 n2 mode with
-  | error e => rw [hmul] at hok; simp at hok
-  | ok r =>
-    rw [hmul] at hok; simp only at hok
-    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
-    have hn1_norm := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
-    have hn2_norm := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
-    have hn1_ne := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
-    have hn2_ne := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
-    have hn1_val := STAmount.toNumber_iou_canonical_toRat v1 hc1
-    have hn2_val := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl
-      hofn hresult
-    have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne
-      hmul hr_ne
-    have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-    have hr_exp_lo : minExponent ≤ r.exponent_ := by
-      rcases hr_norm with hz | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show r.mantissa_ = 0 by rw [hz]; rfl) hr_ne
-      · exact hlo
-    have hr_exp_hi := operator_mul_exponent_hi_anyMode n1 n2 r 77 mode hn1_norm hn2_norm hn1_ne
-      hn2_ne hr_ne (by show v1.mOffset - 3 ≤ 77; have := hc1.exp_hi; omega)
-      (by show v2.mOffset - 3 ≤ 77; have := hc2.exp_hi; omega) (by unfold maxExponent; omega) hmul
-    have hr_neg : r.negative_ = false := by
-      rw [operator_mul_negative_eq n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne]
-      show (v1.mIsNegative != v2.mIsNegative) = false
-      rw [hn1, hn2]; rfl
-    have hmb := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-    rw [hn1_val, hn2_val] at hmb
-    exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hr_neg, hmb⟩
-
-/-- Sign-agnostic IOU multiply pipeline decomposition (any mode, any operand signs). Exposes the 19-digit
-`Number` product `r`, its range, and the *magnitude* relative-error bound. -/
-lemma STAmount.operator_mul_iou_decompose_mag (v1 v2 result : STAmount) (nt : NumericType)
-    (mode : rounding_mode)
-    (hnt : nt = .fractional)
-    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 nt mode = .ok result) (hresult : result.mValue ≠ 0) :
-    ∃ r : Number, STAmount.ofNumber nt r mode = .ok result ∧
-      10 ^ 18 ≤ r.mantissa_.toNat ∧ r.mantissa_.toNat < 10 ^ 19 ∧
-      minExponent ≤ r.exponent_ ∧ r.exponent_ + 4 ≤ maxExponent ∧
-      |r.toRat - v1.toRat * v2.toRat| ≤ |v1.toRat * v2.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) ∧
-      RoundsWithin r (v1.toRat * v2.toRat) mode (10 / (2 ^ 63 + 2 : ℚ)) := by
-  subst hnt
-  have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  unfold STAmount.multiply at hok
-  rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
-        rw [hint1]; simp),
-      STAmount.toNumber_iou_canonical v1 mode hc1,
-      STAmount.toNumber_iou_canonical v2 mode hc2] at hok
-  simp only at hok
-  set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
-  set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
-  cases hmul : Number.operator_mul n1 n2 mode with
-  | error e => rw [hmul] at hok; simp at hok
-  | ok r =>
-    rw [hmul] at hok; simp only at hok
-    have hofn : STAmount.ofNumber .fractional r mode = .ok result := hok
-    have hn1_norm := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
-    have hn2_norm := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
-    have hn1_ne := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
-    have hn2_ne := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
-    have hn1_val := STAmount.toNumber_iou_canonical_toRat v1 hc1
-    have hn2_val := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero .fractional r mode result rfl
-      hofn hresult
-    have hr_norm := operator_mul_result_isNormalized n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne
-      hmul hr_ne
-    have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-    have hr_exp_lo : minExponent ≤ r.exponent_ := by
-      rcases hr_norm with hz | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show r.mantissa_ = 0 by rw [hz]; rfl) hr_ne
-      · exact hlo
-    have hr_exp_hi := operator_mul_exponent_hi_anyMode n1 n2 r 77 mode hn1_norm hn2_norm hn1_ne
-      hn2_ne hr_ne (by show v1.mOffset - 3 ≤ 77; have := hc1.exp_hi; omega)
-      (by show v2.mOffset - 3 ≤ 77; have := hc2.exp_hi; omega) (by unfold maxExponent; omega) hmul
-    have hmag := operator_mul_abs_diff_le_anyMode n1 n2 r mode hn1_norm hn2_norm hn1_ne hn2_ne
-      hr_ne hmul
-    rw [hn1_val, hn2_val] at hmag
-    have hmb := operator_mul_RoundsWithin_anyMode n1 n2 r mode hn1_norm hn2_norm hr_ne hmul
-    rw [hn1_val, hn2_val] at hmb
-    exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hmag, hmb⟩
 
 end XRPL.Model.Protocol

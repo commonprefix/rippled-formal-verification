@@ -96,11 +96,11 @@ private lemma loanPeriodicRate_le_cap (ir : TenthBips32) (interval : UInt32) (ra
   have he := Number.nearestError_pos
   have he' := Number.nearestError_le
   have heq : loanPeriodicRate ir interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toUInt64.toInt64) ir .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) ir .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨tb, htb, h⟩ := bind_ok_peel _ _ _ h
-  have hin := Number.ofInt64_isNormalized interval.toUInt64.toInt64
+  have hin := Number.ofInt64_isNormalized interval.toInt64
   have hiv := Number.ofInt64_count interval
   obtain ⟨htbN, htb0, htble⟩ := tenthBipsOfValue_le_share _ _ _ hin (by rw [hiv]; positivity) htb
   obtain ⟨hyn, hyv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
@@ -146,7 +146,8 @@ private lemma loanLatePaymentInterest_le (l : Loan) (now : UInt32) (li : Number)
   · simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, Except.ok.injEq, bind,
       Except.bind] at h
     exact hzero h.symm
-  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, bind, Except.bind] at h
+  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, bind, Except.bind,
+    UInt32.subChecked_of_le (UInt32.le_of_lt (UInt32.not_le.mp h3))] at h
   split at h
   · cases h
   rename_i rate hrate

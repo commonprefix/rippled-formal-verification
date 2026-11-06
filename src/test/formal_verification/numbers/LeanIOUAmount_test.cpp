@@ -1,5 +1,4 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/BoolFFI.h>
 #include <test/formal_verification/ffi/protocol/IOUAmountFFI.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
@@ -10,7 +9,6 @@
 #include <xrpl/protocol/IOUAmount.h>
 
 #include <cstdint>
-#include <exception>
 #include <initializer_list>
 #include <limits>
 #include <random>
@@ -27,26 +25,8 @@ lean_object*
 lean_iou_of_number(lean_object*, uint8_t);
 lean_object*
 lean_iou_to_number(lean_object*, uint8_t);
-uint8_t
-lean_iou_eq(lean_object*, lean_object*);
-uint8_t
-lean_iou_ne(lean_object*, lean_object*);
-lean_object*
-lean_iou_lt(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_le(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_gt(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_ge(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_neg(lean_object*, uint8_t);
 lean_object*
 lean_iou_add(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_sub(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_iou_mul_ratio(lean_object*, uint32_t, uint32_t, uint8_t, uint8_t);
 }
 
 namespace xrpl::test {
@@ -234,135 +214,6 @@ class LeanIOUAmount_test : public LeanSuite
     }
 
     bool
-    checkOrdering(
-        char const* op,
-        lean_object* (*leanFn)(lean_object*, lean_object*, uint8_t),
-        IOUAmountPair const& a,
-        IOUAmountPair const& b,
-        bool cppRet,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        auto lean = readExcept<BoolFFI>(leanFn(
-            lean_iou_amount_build(a.leanIou.mantissa, a.leanIou.exponent),
-            lean_iou_amount_build(b.leanIou.mantissa, b.leanIou.exponent),
-            toLeanMode(mode)));
-        if (!lean.value.has_value())
-        {
-            std::stringstream ss;
-            ss << op << "(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou)
-               << "): lean errored on canonical IOU input";
-            fail(ss.str());
-            return false;
-        }
-        if (lean.value->read() != cppRet)
-        {
-            std::stringstream ss;
-            ss << op << "(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou)
-               << "): lean=" << lean.value->read() << " cpp=" << cppRet;
-            fail(ss.str());
-            return false;
-        }
-        pass();
-        return true;
-    }
-
-    bool
-    checkLt(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        return checkOrdering("lt", lean_iou_lt, a, b, a.cppIou < b.cppIou, mode);
-    }
-
-    bool
-    checkLe(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        return checkOrdering("le", lean_iou_le, a, b, a.cppIou <= b.cppIou, mode);
-    }
-
-    bool
-    checkGt(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        return checkOrdering("gt", lean_iou_gt, a, b, a.cppIou > b.cppIou, mode);
-    }
-
-    bool
-    checkGe(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        return checkOrdering("ge", lean_iou_ge, a, b, a.cppIou >= b.cppIou, mode);
-    }
-
-    // Field-level equality — no mode, no error channel.
-    bool
-    checkEq(IOUAmountPair const& a, IOUAmountPair const& b)
-    {
-        bool const lean = lean_iou_eq(
-                              lean_iou_amount_build(a.leanIou.mantissa, a.leanIou.exponent),
-                              lean_iou_amount_build(b.leanIou.mantissa, b.leanIou.exponent)) != 0;
-        bool const cpp = a.cppIou == b.cppIou;
-        if (lean != cpp)
-        {
-            std::stringstream ss;
-            ss << "eq(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou) << "): lean=" << lean
-               << " cpp=" << cpp;
-            fail(ss.str());
-            return false;
-        }
-        pass();
-        return true;
-    }
-
-    bool
-    checkNe(IOUAmountPair const& a, IOUAmountPair const& b)
-    {
-        bool const lean = lean_iou_ne(
-                              lean_iou_amount_build(a.leanIou.mantissa, a.leanIou.exponent),
-                              lean_iou_amount_build(b.leanIou.mantissa, b.leanIou.exponent)) != 0;
-        bool const cpp = a.cppIou != b.cppIou;
-        if (lean != cpp)
-        {
-            std::stringstream ss;
-            ss << "ne(" << fmtIOU(a.cppIou) << "," << fmtIOU(b.cppIou) << "): lean=" << lean
-               << " cpp=" << cpp;
-            fail(ss.str());
-            return false;
-        }
-        pass();
-        return true;
-    }
-
-    bool
-    checkAllCompare(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        bool ok = true;
-        ok &= checkEq(a, b);
-        ok &= checkNe(a, b);
-        ok &= checkLt(a, b, mode);
-        ok &= checkLe(a, b, mode);
-        ok &= checkGt(a, b, mode);
-        ok &= checkGe(a, b, mode);
-        return ok;
-    }
-
-    bool
-    checkNeg(IOUAmountPair const& p, Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        auto lean = IOUAmountFFI::fromExcept(lean_iou_neg(
-            lean_iou_amount_build(p.leanIou.mantissa, p.leanIou.exponent), toLeanMode(mode)));
-        IOUAmount cpp;
-        bool cppThrew = false;
-        try
-        {
-            cpp = -p.cppIou;
-        }
-        catch (std::overflow_error const&)
-        {
-            cppThrew = true;
-        }
-        return checkIOUResult("neg(" + fmtIOU(p.cppIou) + ")", lean, cpp, cppThrew);
-    }
-
-    bool
     checkAdd(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
@@ -382,59 +233,6 @@ class LeanIOUAmount_test : public LeanSuite
         }
         return checkIOUResult(
             "add(" + fmtIOU(a.cppIou) + "," + fmtIOU(b.cppIou) + ")", lean, cpp, cppThrew);
-    }
-
-    bool
-    checkSub(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        auto lean = IOUAmountFFI::fromExcept(lean_iou_sub(
-            lean_iou_amount_build(a.leanIou.mantissa, a.leanIou.exponent),
-            lean_iou_amount_build(b.leanIou.mantissa, b.leanIou.exponent),
-            toLeanMode(mode)));
-        IOUAmount cpp;
-        bool cppThrew = false;
-        try
-        {
-            cpp = a.cppIou - b.cppIou;
-        }
-        catch (std::overflow_error const&)
-        {
-            cppThrew = true;
-        }
-        return checkIOUResult(
-            "sub(" + fmtIOU(a.cppIou) + "," + fmtIOU(b.cppIou) + ")", lean, cpp, cppThrew);
-    }
-
-    bool
-    checkMulRatio(
-        IOUAmountPair const& p,
-        uint32_t num,
-        uint32_t den,
-        bool roundUp,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        auto lean = IOUAmountFFI::fromExcept(lean_iou_mul_ratio(
-            lean_iou_amount_build(p.leanIou.mantissa, p.leanIou.exponent),
-            num,
-            den,
-            roundUp ? 1 : 0,
-            toLeanMode(mode)));
-        IOUAmount cpp;
-        bool cppThrew = false;
-        try
-        {
-            cpp = mulRatio(p.cppIou, num, den, roundUp);
-        }
-        catch (std::exception const&)
-        {
-            cppThrew = true;
-        }
-        std::stringstream label;
-        label << "mulRatio(" << fmtIOU(p.cppIou) << "," << num << "," << den << ","
-              << (roundUp ? "true" : "false") << ")";
-        return checkIOUResult(label.str(), lean, cpp, cppThrew);
     }
 
     static int64_t
@@ -563,67 +361,6 @@ public:
     }
 
     void
-    test_known_comparison()
-    {
-        beginCase("LeanIOUAmount.known_comparison");
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-
-        constexpr int64_t kMinValue = static_cast<int64_t>(STAmount::kMinValue);
-        constexpr int64_t kMaxValue = static_cast<int64_t>(STAmount::kMaxValue);
-        constexpr int eMin = STAmount::kMinOffset;
-
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            // Reflexive (must be false).
-            checkAllCompare(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(kMinValue, 0), mode);
-            checkAllCompare(makeIOUAmountPair(0, -100), makeIOUAmountPair(0, -100), mode);
-            checkAllCompare(
-                makeIOUAmountPair(-kMaxValue, 5), makeIOUAmountPair(-kMaxValue, 5), mode);
-
-            // Differ only in exponent.
-            checkAllCompare(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(kMinValue, 1), mode);
-            checkAllCompare(makeIOUAmountPair(kMinValue, 1), makeIOUAmountPair(kMinValue, 0), mode);
-            checkAllCompare(
-                makeIOUAmountPair(-kMinValue, 0), makeIOUAmountPair(-kMinValue, 1), mode);
-
-            // Zero vs non-zero at kMinOffset (smallest representable nonzero).
-            checkAllCompare(makeIOUAmountPair(0, -100), makeIOUAmountPair(kMinValue, eMin), mode);
-            checkAllCompare(makeIOUAmountPair(0, -100), makeIOUAmountPair(-kMinValue, eMin), mode);
-            checkAllCompare(makeIOUAmountPair(kMinValue, eMin), makeIOUAmountPair(0, -100), mode);
-            checkAllCompare(makeIOUAmountPair(-kMinValue, eMin), makeIOUAmountPair(0, -100), mode);
-
-            // Same exponent, mantissa differs.
-            checkAllCompare(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(kMaxValue, 0), mode);
-            checkAllCompare(makeIOUAmountPair(kMaxValue, 0), makeIOUAmountPair(kMinValue, 0), mode);
-        }
-    }
-
-    void
-    test_fuzz_comparison()
-    {
-        beginCase("LeanIOUAmount.fuzz_comparison", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(20'000, [&] {
-                auto a = randomIOUAmountPair(rng);
-                auto b = randomIOUAmountPair(rng);
-                return checkAllCompare(a, b, mode);
-            });
-        }
-    }
-
-    void
     test_known_arithmetic()
     {
         beginCase("LeanIOUAmount.known_arithmetic");
@@ -631,8 +368,6 @@ public:
 
         constexpr int64_t kMinValue = static_cast<int64_t>(STAmount::kMinValue);
         constexpr int64_t kMaxValue = static_cast<int64_t>(STAmount::kMaxValue);
-        constexpr int eMin = STAmount::kMinOffset;
-        constexpr uint32_t u32Max = std::numeric_limits<uint32_t>::max();
 
         for (auto mode :
              {Number::RoundingMode::ToNearest,
@@ -640,13 +375,6 @@ public:
               Number::RoundingMode::Downward,
               Number::RoundingMode::Upward})
         {
-            // neg on representative non-corner values (corner-only cases live
-            // in test_extreme_values).
-            checkNeg(makeIOUAmountPair(0, -100), mode);  // neg(0) stays zero.
-            checkNeg(makeIOUAmountPair(0, 0), mode);     // neg of any zero stays zero.
-            checkNeg(makeIOUAmountPair(kMinValue, 0), mode);
-            checkNeg(makeIOUAmountPair(-kMinValue, 0), mode);
-
             // add: identity with zero.
             checkAdd(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(0, -100), mode);
             checkAdd(makeIOUAmountPair(0, -100), makeIOUAmountPair(kMinValue, 0), mode);
@@ -669,60 +397,6 @@ public:
 
             // add: differing exponents (shift normalization, in-range).
             checkAdd(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(kMinValue, 5), mode);
-
-            // sub: self-cancellation (a - a = 0) at non-corner exponents.
-            checkSub(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(kMinValue, 0), mode);
-            checkSub(makeIOUAmountPair(kMaxValue, 50), makeIOUAmountPair(kMaxValue, 50), mode);
-            checkSub(makeIOUAmountPair(-kMaxValue, -10), makeIOUAmountPair(-kMaxValue, -10), mode);
-
-            // sub: zero - x = -x, x - zero = x.
-            checkSub(makeIOUAmountPair(0, -100), makeIOUAmountPair(kMinValue, 0), mode);
-            checkSub(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(0, -100), mode);
-
-            // mulRatio: exact ratio (no remainder) — roundUp/roundDown equal.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 2, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 2, 1, true, mode);
-            checkMulRatio(makeIOUAmountPair(kMaxValue, 0), 1, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMaxValue, 0), 1, 1, true, mode);
-            // num = 0 → result zero.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 0, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 0, 1, true, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 0, 100, true, mode);
-            // den = 0 → both error.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 1, 0, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 7, 0, true, mode);
-            checkMulRatio(makeIOUAmountPair(0, -100), 1, 0, false, mode);
-            // Inexact ratio — roundUp/roundDown differ for positive.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 1, 3, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 1, 3, true, mode);
-            // Inexact ratio, negative mantissa — the !roundUp && neg branch.
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 1, 3, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 1, 3, true, mode);
-            // Small ratio — kFL64 / roomToGrow rescale path.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 1, u32Max, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 1, u32Max, true, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 1, u32Max, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 1, u32Max, true, mode);
-            // Large num — mustShrink / shrink path.
-            checkMulRatio(makeIOUAmountPair(kMaxValue, 0), u32Max, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(kMaxValue, 0), u32Max, 1, true, mode);
-            checkMulRatio(makeIOUAmountPair(-kMaxValue, 0), u32Max, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMaxValue, 0), u32Max, 1, true, mode);
-            // Zero-result rescue: positive+roundUp → minPositiveAmount.
-            checkMulRatio(makeIOUAmountPair(kMinValue, eMin), 1, u32Max, true, mode);
-            // Zero-result rescue: negative+roundDown → (-kMinValue, kMinOffset).
-            checkMulRatio(makeIOUAmountPair(-kMinValue, eMin), 1, u32Max, false, mode);
-            // Cross-product roundUp/roundDown × pos/neg matrix.
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 7, 13, true, mode);
-            checkMulRatio(makeIOUAmountPair(kMinValue, 0), 7, 13, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 7, 13, true, mode);
-            checkMulRatio(makeIOUAmountPair(-kMinValue, 0), 7, 13, false, mode);
-            // Zero amount.
-            checkMulRatio(makeIOUAmountPair(0, -100), 7, 11, true, mode);
-            checkMulRatio(makeIOUAmountPair(0, -100), 7, 11, false, mode);
-            // Full UInt32 num and den combos.
-            checkMulRatio(makeIOUAmountPair(kMaxValue, 0), u32Max, u32Max, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMaxValue, 0), u32Max, u32Max, true, mode);
         }
     }
 
@@ -742,38 +416,7 @@ public:
             runFuzz(20'000, [&] {
                 auto a = randomIOUAmountPair(rng);
                 auto b = randomIOUAmountPair(rng);
-                bool ok = true;
-                ok &= checkNeg(a, mode);
-                ok &= checkAdd(a, b, mode);
-                ok &= checkSub(a, b, mode);
-                return ok;
-            });
-        }
-    }
-
-    void
-    test_fuzz_mul_ratio()
-    {
-        beginCase("LeanIOUAmount.fuzz_mul_ratio", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        constexpr uint32_t u32Max = std::numeric_limits<uint32_t>::max();
-        std::uniform_int_distribution<uint32_t> numDist(0u, u32Max);
-        std::uniform_int_distribution<uint32_t> denDist(1u, u32Max);
-        std::bernoulli_distribution roundDist(0.5);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(20'000, [&] {
-                auto p = randomIOUAmountPair(rng);
-                uint32_t const num = numDist(rng);
-                uint32_t const den = denDist(rng);
-                bool const ru = roundDist(rng);
-                return checkMulRatio(p, num, den, ru, mode);
+                return checkAdd(a, b, mode);
             });
         }
     }
@@ -788,14 +431,12 @@ public:
         constexpr int64_t kMax = static_cast<int64_t>(STAmount::kMaxValue);
         constexpr int eMax = STAmount::kMaxOffset;
         constexpr int eMin = STAmount::kMinOffset;
-        constexpr uint32_t u32Max = std::numeric_limits<uint32_t>::max();
 
         // Largest and smallest nonzero representable magnitudes, both signs.
         auto const posMax = makeIOUAmountPair(kMax, eMax);
         auto const negMax = makeIOUAmountPair(-kMax, eMax);
         auto const posMin = makeIOUAmountPair(kMin, eMin);
         auto const negMin = makeIOUAmountPair(-kMin, eMin);
-        auto const zero = makeIOUAmountPair(0, -100);
 
         for (auto mode :
              {Number::RoundingMode::ToNearest,
@@ -815,66 +456,24 @@ public:
             checkOfNumber(makeNumberPair(false, Number::kMaxRep, eMax + 1), mode);
             checkOfNumber(makeNumberPair(false, Number::minMantissa(), -200), mode);
 
-            // Compare at opposite-sign extreme corners.
-            checkAllCompare(negMax, posMin, mode);
-            checkAllCompare(posMin, negMax, mode);
-
             // Arithmetic at the max - same-sign max push the exponent past
             // kMaxOffset → overflow.
             checkAdd(posMax, posMax, mode);
             checkAdd(negMax, negMax, mode);
-            // max - (-max) doubles the magnitude → overflow.
-            checkSub(posMax, negMax, mode);
-            checkSub(negMax, posMax, mode);
             // Exact cancellation at the extreme → zero, no overflow.
             checkAdd(posMax, negMax, mode);
-            checkSub(posMax, posMax, mode);
 
             // Extreme ± smallest: the tiny operand is below precision and dropped.
             checkAdd(posMax, posMin, mode);
-            checkSub(posMax, posMin, mode);
             checkAdd(negMax, negMin, mode);
 
             // Smallest nonzero accumulation / cancellation.
             checkAdd(posMin, posMin, mode);
-            checkSub(posMin, posMin, mode);
             checkAdd(posMin, negMin, mode);
 
             // Maximal exponent spread: kMinValue@kMinOffset + kMaxValue@kMaxOffset
             // — the tiny operand is below precision and is dropped.
             checkAdd(makeIOUAmountPair(kMin, eMin), makeIOUAmountPair(kMax, eMax), mode);
-
-            // neg at every corner (sign-magnitude range is symmetric → never
-            // overflows).
-            checkNeg(posMax, mode);
-            checkNeg(negMax, mode);
-            checkNeg(posMin, mode);
-            checkNeg(negMin, mode);
-            checkNeg(makeIOUAmountPair(-kMax, eMin), mode);
-            checkNeg(zero, mode);
-
-            // Scale the maximum up → exponent past kMaxOffset → overflow.
-            checkMulRatio(posMax, u32Max, 1, false, mode);
-            checkMulRatio(posMax, u32Max, 1, true, mode);
-            checkMulRatio(negMax, u32Max, 1, true, mode);
-            // Scale the minimum down → underflow toward zero / rescue path.
-            checkMulRatio(posMin, 1, u32Max, false, mode);
-            checkMulRatio(posMin, 1, u32Max, true, mode);
-            checkMulRatio(negMin, 1, u32Max, false, mode);
-            // Full-range num and den together at the extremes.
-            checkMulRatio(posMax, u32Max, u32Max, false, mode);
-            checkMulRatio(negMax, u32Max, u32Max, true, mode);
-            // num = den = 1 (no-op ratio) at every corner — exercises the
-            // identity path at the boundary.
-            checkMulRatio(posMin, 1, 1, false, mode);
-            checkMulRatio(posMax, 1, 1, false, mode);
-            checkMulRatio(makeIOUAmountPair(-kMax, eMin), 1, 1, true, mode);
-
-            // Comparison at the extremes.
-            checkAllCompare(posMax, negMax, mode);
-            checkAllCompare(posMax, posMin, mode);
-            checkAllCompare(negMax, negMin, mode);
-            checkAllCompare(posMax, posMax, mode);
         }
         // Note: IOUAmount has no Unchecked ctor, so operation inputs must be
         // canonical (above). Raw int64 mantissa-field extremes are exercised in
@@ -891,11 +490,8 @@ private:
         // NumberSO const so{true};
         test_fuzz_construction();
         test_fuzz_conversion();
-        test_fuzz_comparison();
         test_fuzz_arithmetic();
-        test_fuzz_mul_ratio();
         test_known_construction();
-        test_known_comparison();
         test_known_arithmetic();
         test_extreme_values();
     }

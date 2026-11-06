@@ -1,6 +1,5 @@
 import XRPL.Properties.Lending.LoanBroker.Common.DepositAccuracy
 import XRPL.Properties.Lending.LoanBroker.Common.CoverPossible
-import XRPL.Properties.Lending.LoanBroker.Common.DepositWitness
 import XRPL.Properties.Lending.LoanBroker.Common.MaxValueFits
 
 /-! # `LoanBroker.roundedCoverAmount` and `LoanBroker.coverDeposit`
@@ -17,13 +16,13 @@ variable {α : Type} [AssetPool α]
 
 variable (lb : LoanBroker)
 
-/-- On a reachable broker, when the deposit check passes -> 0 ≤ amount − roundedAmount < 1 base unit of the vault.
-On any broker of an integral type -> roundedAmount = amount. -/
+/-- Cover deposit -> roundedAmount = ⌊amount⌋ in whole base units. For XRP or MPT, on any lawful broker ->
+roundedAmount = amount. -/
 theorem LoanBroker.roundedCoverAmount_bounds :
     (∀ (base : Int) (v : Vault) (amount r : STAmount), lb.Reachable base → v.baseExponent = base →
       v.numericType = lb.numericType → amount.Canonical → amount.mNumericType = lb.numericType → 0 < amount.toRat →
       lb.canCoverDeposit v amount = .ok .tesSUCCESS → (lb.roundedCoverAmount v amount).run = .ok (.ok r) →
-      r.toRat ≤ amount.toRat ∧ amount.toRat - r.toRat < 10 ^ base) ∧
+      r.toRat = (⌊amount.toRat / 10 ^ base⌋ : ℚ) * 10 ^ base) ∧
     ∀ {α : Type} [AssetPool α] (pool : α) (amount r : STAmount), lb.numericType.isIntegral = true →
       amount.Canonical → amount.mNumericType = lb.numericType →
       (lb.roundedCoverAmount pool amount).run = .ok (.ok r) → r.toRat = amount.toRat :=
@@ -32,18 +31,8 @@ theorem LoanBroker.roundedCoverAmount_bounds :
         v hvb hnt amount hc hat hpos hcan r hok,
     fun pool amount r hint hc hat hok => LoanBroker.roundedCoverAmount_integral_proof lb pool amount r hint hc hat hok⟩
 
-/-- Witness: on a reachable broker the error is just under 1 base unit, 1 − 10⁻¹⁵ base units. A deposit of
-`1.999999999999999` base units is credited one. -/
-theorem LoanBroker.roundedCoverAmount_bounds_attained :
-    ∃ (lb : LoanBroker) (base : Int) (v : Vault) (amount r : STAmount),
-      lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
-      amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
-      lb.canCoverDeposit v amount = .ok .tesSUCCESS ∧ (lb.roundedCoverAmount v amount).run = .ok (.ok r) ∧
-      amount.toRat - r.toRat = (1 - 1 / 10 ^ 15) * 10 ^ base :=
-  LoanBroker.roundedCoverAmount_bounds_witness
-
-/-- On a reachable broker -> CoverAvailable' − CoverAvailable = roundedAmount ≤ amount, it converts back to
-roundedAmount and rounds to itself. On any broker a whole XRP or MPT deposit on a whole cover is credited exactly. -/
+/-- Cover deposit -> CoverAvailable' − CoverAvailable = roundedAmount ≤ amount, it converts back to roundedAmount and
+rounds to itself. On any lawful broker a whole XRP or MPT deposit on a whole cover is credited exactly. -/
 theorem LoanBroker.coverDeposit_credit :
     (∀ (base : Int) (v : Vault) (amount : STAmount) (res : LoanBrokerCoverResult), lb.Reachable base →
       v.baseExponent = base → v.numericType = lb.numericType → amount.Canonical → 0 < amount.toRat →
@@ -84,7 +73,8 @@ theorem LoanBroker.coverDeposit_credit :
     fun pool amount res hok hint hsz hat hcint hbound =>
       LoanBroker.coverDeposit_credit_integral_proof lb pool amount res hok hint hsz hat hcint hbound⟩
 
-/-- Cover deposit only raises CoverAvailable, so a broker at or above minCover before a deposit stays there after. -/
+/-- Cover deposit on any lawful broker -> CoverAvailable' ≥ CoverAvailable, so a broker at or above minCover stays
+there. -/
 theorem LoanBroker.coverDeposit_increases_cover (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : (lb.coverDeposit pool amount).run = .ok (.ok res))
     (hc : amount.Canonical) -- a transaction amount is a canonical amount
@@ -96,8 +86,7 @@ theorem LoanBroker.coverDeposit_increases_cover (pool : α) (amount : STAmount)
   ⟨LoanBroker.coverDeposit_increases_cover_proof lb pool amount res hok hc hnn hb,
     fun e hmin => LoanBroker.coverDeposit_keeps_minimum_proof lb pool amount res e hok hc hnn hb hmin⟩
 
-/-- When the deposit check passes -> the deposit succeeds with roundedAmount and never throws, not
-even notLawful. -/
+/-- Cover deposit on any lawful broker that passes its checks -> it succeeds with roundedAmount. -/
 theorem LoanBroker.coverDeposit_total (pool : α) (amount : STAmount)
     (hc : amount.Canonical) -- a transaction amount is a canonical amount
     (hnn : 0 ≤ amount.toRat)
@@ -125,18 +114,5 @@ theorem LoanBroker.coverDeposit_increase_possible (base : Int) (hr : lb.Reachabl
         lb.canCoverDeposit v amount = .ok .tesSUCCESS ∧ (lb.coverDeposit v amount).run = .ok (.ok res) ∧
         lb.toExact.coverAvailable < res.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_increase_possible_proof lb base hr hmax v hvb hnt hroom hone hmaxoff
-
-/-- On a reachable broker, a deposit into an empty cover sets CoverAvailable' to the amount floored to
-whole base units of the vault. -/
-theorem LoanBroker.coverDeposit_empty (base : Int) (hr : lb.Reachable base)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hzero : lb.coverAvailable = Number.zero)
-    (amount : STAmount) (hc : amount.Canonical) (hat : amount.mNumericType = lb.numericType)
-    (hpos : 0 < amount.toRat)
-    (hcan : lb.canCoverDeposit v amount = .ok .tesSUCCESS)
-    (res : LoanBrokerCoverResult) (hok : (lb.coverDeposit v amount).run = .ok (.ok res)) :
-    res.loanBroker'.toExact.coverAvailable = (⌊amount.toRat / 10 ^ base⌋ : ℚ) * 10 ^ base :=
-  have hmax := LoanBroker.maxValue_fits_of_canonical lb amount hc hat
-  LoanBroker.coverDeposit_empty_proof lb base hr hmax v hvb hnt hzero amount hc hat hpos hcan res hok
 
 end XRPL.Model.Lending

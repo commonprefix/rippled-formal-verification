@@ -527,7 +527,7 @@ private lemma Vault.roundtrip_payout_le_charge (v : Vault) (amountDeposit : STAm
   obtain ⟨-, priced₁, navN, -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, -, hcl, -⟩ :=
     DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r₁ hok₁
   have hshc' : r₁.shares.Canonical := hshc.canonical (by rw [hshnt]; decide)
-  have hrs := Vault.withdraw_sharesBurned_exact_proof r₁.vault' r₁.shares waive t hpos₂ r₂ hok₂
+  have hrs := Vault.withdraw_sharesRedeemed_exact_proof r₁.vault' r₁.shares waive t hpos₂ r₂ hok₂
   have hwc : (WithdrawAmount.vaultShares r₁.shares).amount.Canonical := hshc'
   have hwt : (WithdrawAmount.vaultShares r₁.shares).InAsset r₁.vault'.numericType := hshnt
   have hu : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
@@ -644,7 +644,7 @@ lemma Vault.deposit_withdraw_roundtrip_proof (v : Vault) (amountDeposit : STAmou
   obtain ⟨-, priced₁, navN, -, -, -, -, -, hshc, hshnt, hshpos, hsad, -, -, hcl, -⟩ :=
     DepAcc.Vault.deposit_success_reduces v amountDeposit t hpos hcanon r₁ hok₁
   have hshc' : r₁.shares.Canonical := hshc.canonical (by rw [hshnt]; decide)
-  have hrs := Vault.withdraw_sharesBurned_exact_proof r₁.vault' r₁.shares waive t hpos₂ r₂ hok₂
+  have hrs := Vault.withdraw_sharesRedeemed_exact_proof r₁.vault' r₁.shares waive t hpos₂ r₂ hok₂
   have hwc : (WithdrawAmount.vaultShares r₁.shares).amount.Canonical := hshc'
   have hwt : (WithdrawAmount.vaultShares r₁.shares).InAsset r₁.vault'.numericType := hshnt
   have hu : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _

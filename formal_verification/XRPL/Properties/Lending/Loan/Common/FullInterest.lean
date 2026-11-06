@@ -15,7 +15,7 @@ open private rn_nonneg from XRPL.Properties.Lending.Loan.Common.SetLawful
 local notation "ε" => Number.nearestError
 
 /-- A count of seconds converts to a `Number` of the same value. -/
-private lemma Number.ofInt64_seconds (n : UInt32) : (Number.ofInt64 n.toUInt64.toInt64).toRat = n.toNat :=
+private lemma Number.ofInt64_seconds (n : UInt32) : (Number.ofInt64 n.toInt64).toRat = n.toNat :=
   Number.ofInt64_count n
 
 /-- The interest accrued since the last payment is at most one period of interest plus three roundings up,
@@ -41,6 +41,8 @@ lemma loanAccruedInterest_le_period (tpo rate : Number) (now start prev interval
   · cases h; exact ⟨Number.zero_isNormalized, by rw [Number.toRat_zero], by rw [Number.toRat_zero]; exact hbound⟩
   rename_i hlate
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨_, hsc, h⟩ := bind_ok_peel _ _ _ h
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hsc
   obtain ⟨ipi, hipi, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨num, hnum, h⟩ := bind_ok_peel _ _ _ h
   have hlt : last < now := by
@@ -58,9 +60,9 @@ lemma loanAccruedInterest_le_period (tpo rate : Number) (now start prev interval
     rw [hsecs]
     have : (now.toNat : ℚ) ≤ last.toNat + interval.toNat := by exact_mod_cast hdue
     linarith
-  have hS := Number.ofInt64_isNormalized (now - last).toUInt64.toInt64
+  have hS := Number.ofInt64_isNormalized (now - last).toInt64
   have hSv := Number.ofInt64_seconds (now - last)
-  have hIN := Number.ofInt64_isNormalized interval.toUInt64.toInt64
+  have hIN := Number.ofInt64_isNormalized interval.toInt64
   have hIv := Number.ofInt64_seconds interval
   have hipiN := Number.operator_mul_isNormalized _ _ ipi _ htpo hrate hipi
   have hipi0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ htpo hrate hipi) (mul_nonneg htpo0 hr0)

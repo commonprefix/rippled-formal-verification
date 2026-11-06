@@ -95,13 +95,13 @@ lemma Loan.create_periodicPayment_principal_monotone_proof (broker : LoanBroker)
   have hm : ∀ n : Number, 0 < n.toRat → n.mantissa_ ≠ 0 := fun n hn h => by
     rw [Number.toRat_eq_zero_iff.mpr h] at hn; exact lt_irrefl _ hn
   have hpos₂' : 0 < principal₂.toRat := lt_of_lt_of_le hpos hle
-  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toInt64
   rcases loanPeriodicPayment_cases _ _ _ _ hpay₁ (hne _ hpos₁) with ⟨hz, hd₁⟩ | ⟨hz, f, hf, hm₁⟩ <;>
     rcases loanPeriodicPayment_cases _ _ _ _ hpay₂ (hne _ hpos₂) with ⟨hz', hd₂⟩ | ⟨hz', f', hf', hm₂⟩
   · -- a zero rate: the principal over the count
     have ht := Number.pos_of_roundsToRepresentable _ _
       (operator_div_rounded_to_nearest _ _ _ hp₁ hN hd₁) hpos₁
-    have hNpos : 0 < (Number.ofInt64 schedule.paymentTotal.toUInt64.toInt64).toRat := by
+    have hNpos : 0 < (Number.ofInt64 schedule.paymentTotal.toInt64).toRat := by
       by_contra hc
       push Not at hc
       exact absurd ht (not_lt.mpr (div_nonpos_of_nonneg_of_nonpos hpos.le hc))

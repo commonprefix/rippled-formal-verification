@@ -4,7 +4,7 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 
 /-! # Shared definitions for the `IOUAmount` proof tree
 
-The comparison precondition `ToNumberExact` and the add/sub error budgets. The canonical form `InRange16`
+The exactness precondition `ToNumberExact` and the add/sub error budgets. The canonical form `InRange16`
 lives in the STAmount tree. -/
 
 namespace XRPL.Model.Protocol
@@ -20,8 +20,8 @@ abbrev IOUAmount.εToNearest : ℚ :=
   6 / (2 ^ 63 - 3 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
     + 6 / (2 ^ 63 - 3 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))
 
-/-- Precondition for an exact `IOUAmount.toNumber` and correct ordering operators: the mantissa is not
-`Int64.minValue` and the exponent leaves room for the `largeRange` scale-up. Far weaker than `InRange16`. -/
+/-- Precondition for an exact `IOUAmount.toNumber`: the mantissa is not `Int64.minValue` and the exponent
+leaves room for the `largeRange` scale-up. Far weaker than `InRange16`. -/
 structure IOUAmount.ToNumberExact (a : IOUAmount) : Prop where
   mant_ne_min : a.mantissa_ ≠ Int64.minValue
   exp_lo : minExponent + 18 ≤ a.exponent_

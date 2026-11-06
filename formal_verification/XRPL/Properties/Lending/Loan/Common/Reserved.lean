@@ -28,7 +28,8 @@ lemma Loan.create_checkedInterest_nonneg (broker : LoanBroker) (v : Vault) (prin
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hchecks : Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal')
-    (hl : r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending)
+    (hl : r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+      (schedule.startDate + schedule.paymentInterval))
     (hb : broker'.toRawLoanBroker =
       { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }) :
     loanState.interestDue.isNormalized ∧ 0 ≤ loanState.interestDue.toRat := by
@@ -290,6 +291,10 @@ private lemma Loan.doPayment_isPending (loan : Loan) (pc : PaymentComponents) (l
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, hc1, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc1
+    obtain ⟨_, hc2, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.addChecked_eq_ok.mp hc2
     rw [(congrArg RawLoan.isPending (RawLoan.to_lawful_ok h).1 :)]
 
 /-- The settlement keeps the pending flag. -/
@@ -405,7 +410,7 @@ lemma Loan.canAccept_pending (loan : Loan) (v : Vault) (t : UInt32)
 
 /-- A management action that passed its check was on an active loan. -/
 lemma Loan.canManage_not_pending (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (h : loan.canManage action now = .tesSUCCESS) : loan.isPending = false := by
+    (h : loan.canManage action now = .ok .tesSUCCESS) : loan.isPending = false := by
   unfold Loan.canManage at h
   cases hp : loan.isPending
   · rfl

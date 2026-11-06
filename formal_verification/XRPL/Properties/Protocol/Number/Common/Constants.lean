@@ -2,6 +2,8 @@ import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.Number.Common.Notation
 import XRPL.Model.Protocol.Number
+import XRPL.Properties.Protocol.Common.FixedWidth
+import XRPL.Properties.Protocol.Number.Common.Rounding.Spec
 
 
 namespace XRPL.Model.Protocol

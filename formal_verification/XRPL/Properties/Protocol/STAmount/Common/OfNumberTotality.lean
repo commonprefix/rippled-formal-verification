@@ -74,29 +74,22 @@ lemma Number.to_rep_of_exponent_zero (n : Number) (mode : rounding_mode)
     (hneg : n.negative_ = false) (hexp : n.exponent = 0) :
     n.to_rep mode = .ok n.mantissa := by
   have hD0_range := Number.mantissa_range_of_nonneg n hneg
-  unfold Number.to_rep
+  rw [Number.to_rep_eq_spec]
+  unfold Number.to_repSpec
   simp only
   by_cases hz : (n.mantissa == 0) = true
   · rw [if_pos hz, beq_iff_eq.mp hz]
   · rw [if_neg hz, hneg]
     simp only [Bool.false_eq_true, if_false]
     rw [if_neg (show ¬ n.exponent < 0 by omega), if_pos (show n.exponent ≥ 0 by omega)]
-    have hgrow0 : Number.to_rep.grow n.mantissa n.exponent = .ok n.mantissa := by
-      rw [Number.to_rep.grow, if_neg (show ¬ n.exponent > 0 from by omega)]
+    have hgrow0 : growSpec n.mantissa n.exponent = .ok n.mantissa := by
+      rw [growSpec, if_neg (show ¬ n.exponent > 0 from by omega)]
     rw [hgrow0]
     simp only
-    have h_u64 : n.mantissa.toUInt64.toNat ≤ maxRep.toNat :=
-      toUInt64_toNat_le_maxRep n.mantissa hD0_range.1 hD0_range.2
-    rw [pushOverflow_noop_of_le_maxRep_of_empty h_u64 Guard.new mode (by decide)]
     rw [show Guard.new.round mode = -2 from by
       have := start_guard_round mode false; simpa using this]
     rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && n.mantissa % 2 == 1) = true
       from by simp)]
-    rw [if_neg (show ¬ (maxRep.toInt64 < n.mantissa ∧ n.mantissa < maxRepUp.toInt64) from
-      fun hc => by
-        have := Int64.lt_iff_toInt_lt.mp hc.1
-        rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
-        omega)]
 
 /-- `Number.to_rep` succeeds on a nonnegative operand with nonpositive `Number.exponent`. The
 floor-divide lands below `maxRep`, so the round-up bump never overflows. -/
@@ -106,7 +99,8 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
   by_cases hexp0 : n.exponent = 0
   · exact ⟨_, Number.to_rep_of_exponent_zero n mode hneg hexp0⟩
   have hexplt : n.exponent < 0 := by omega
-  unfold Number.to_rep
+  rw [Number.to_rep_eq_spec]
+  unfold Number.to_repSpec
   simp only
   by_cases hz : (n.mantissa == 0) = true
   · exact ⟨0, by rw [if_pos hz]⟩
@@ -117,7 +111,7 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
     have hge : ¬ n.exponent ≥ 0 := by omega
     rw [if_pos hexplt, if_neg hge]
     simp only
-    set sp := Number.to_rep.shift n.mantissa n.exponent Guard.new with hspdef
+    set sp := shiftSpec n.mantissa n.exponent Guard.new with hspdef
     have hDf : sp.1.toInt = n.mantissa.toInt / 10 ^ (-n.exponent).toNat := by
       have := shift_fst_eq n.mantissa n.exponent Guard.new hD0_range.1
       rwa [← hspdef] at this
@@ -135,20 +129,13 @@ lemma Number.to_rep_ok_of_nonneg_exp_nonpos (n : Number) (mode : rounding_mode)
       have hle := hD0_range.2
       rw [maxRep_val] at hle ⊢
       omega
-    have hsp_lt_u64 : sp.1.toUInt64.toNat < maxRep.toNat := by
-      have hnat := toUInt64_toNat_of_nonneg sp.1 hsp_nn; omega
-    rw [pushOverflow_noop_of_lt_maxRep hsp_lt_u64 sp.2 mode]
     by_cases hb : (sp.2.round mode == 1 || sp.2.round mode == 0 && sp.1 % 2 == 1) = true
     · rw [if_pos hb, if_neg (show ¬ sp.1 ≥ maxRep.toInt64 from fun hc => by
         have := Int64.le_iff_toInt_le.mp hc
         rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
         omega)]
       exact ⟨_, rfl⟩
-    · rw [if_neg hb, if_neg (show ¬ (maxRep.toInt64 < sp.1 ∧ sp.1 < maxRepUp.toInt64) from
-        fun hc => by
-          have := Int64.lt_iff_toInt_lt.mp hc.1
-          rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide] at this
-          omega)]
+    · rw [if_neg hb]
       exact ⟨_, rfl⟩
 
 /-- The integral `STAmount.canonicalize` succeeds within the type's own bound. An offset-`0`,
@@ -182,7 +169,8 @@ lemma STAmount.canonicalize_integral_ok_of_le (s : STAmount) (mode : rounding_mo
       unfold Number.mantissa
       rw [if_neg hnotgt, if_neg (by rw [hun]; decide), hum]
       exact UInt64.toInt64_toInt_of_lt _ (by rw [maxRep_val] at hv; omega)
-    rw [if_neg (show ¬ u.mantissa.toInt.natAbs.toUInt64 > s.mNumericType.maxValue from by
+    rw [if_neg (show ¬ u.mantissa.magnitude > s.mNumericType.maxValue from by
+      rw [Int64.magnitude_eq]
       rw [gt_iff_lt, UInt64.lt_iff_toNat_lt, hm, Int.natAbs_natCast]
       have hlt64 : s.mValue.toNat < 2 ^ 64 := by
         have := UInt64.toNat_lt_size s.mValue
@@ -216,7 +204,7 @@ private lemma STAmount.ofNumber_integral_reduce (nt : NumericType) (n : Number)
   have hwn : working = n := by rw [hw_def, hnegf]; simp only [Bool.false_eq_true, if_false]
   rw [hwn, hr]
   simp only []
-  rw [hnegf]
+  rw [hnegf, Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hrrng.1)), ok_bind]
 
 /-- The integral `STAmount.ofNumber` succeeds. A normalized nonnegative `Number` within
 `2 ^ 63 - 1` converts into any integral type whose `maxValue` covers `maxRep` and `maxOffset` is nonnegative. -/

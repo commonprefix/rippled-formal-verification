@@ -157,9 +157,9 @@ private lemma canCreate_reduce (broker : LoanBroker) (v : Vault) (p : Number) (f
         show TER.tecPRECISION_LOSS.isTesSuccess = false from rfl, Bool.not_true, Bool.not_false]
 
 private lemma canCreate_killed (broker : LoanBroker) (v : Vault) (p : Number) (fees : LoanFees)
-    (schedule : LoanSchedule) (t : UInt32) (twoStep : Bool) (hk : schedule.checkTimeAvailability = .tecKILLED) :
+    (schedule : LoanSchedule) (t : UInt32) (twoStep : Bool) (hk : schedule.checkTimeAvailability = .ok .tecKILLED) :
     Loan.canCreate broker v p fees schedule t twoStep = .ok .tecKILLED := by
-  simp only [Loan.canCreate, hk]
+  simp only [Loan.canCreate, hk, bind, Except.bind]
   rfl
 
 /-- Proof body of the tecKILLED line of `Loan.canCreate_exits`. -/
@@ -174,7 +174,7 @@ lemma Loan.canCreate_schedule_too_long_proof (broker : LoanBroker) (v : Vault) (
 lemma Loan.canCreate_start_passed_proof (broker : LoanBroker) (v : Vault) (p : Number) (fees : LoanFees)
     (schedule : LoanSchedule) (t : UInt32) (hfits : schedule.Fits) (hpassed : schedule.startDate ≤ t) :
     Loan.canCreate broker v p fees schedule t true = .ok .tecEXPIRED := by
-  simp only [Loan.canCreate, schedule.checkTimeAvailability_success hfits]
+  simp only [Loan.canCreate, schedule.checkTimeAvailability_success hfits, bind, Except.bind]
   simp [hpassed]
   rfl
 
@@ -259,11 +259,11 @@ lemma Loan.canCreate_error_codes_proof (broker : LoanBroker) (v : Vault) (p : Nu
     (hok : Loan.canCreate broker v p fees schedule t twoStep = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecKILLED ∨ ter = .tecTOO_SOON ∨ ter = .tecEXPIRED ∨
       ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS := by
-  have hst : schedule.checkTimeAvailability = .tecKILLED ∨ schedule.checkTimeAvailability = .tesSUCCESS := by
+  have hst : schedule.checkTimeAvailability = .ok .tecKILLED ∨ schedule.checkTimeAvailability = .ok .tesSUCCESS := by
     rw [LoanSchedule.checkTimeAvailability_eq]; split <;> simp
   unfold Loan.canCreate at hok
   rcases hst with h | h <;> rw [h] at hok
-  · simp only [pure, Except.pure, show TER.tecKILLED.isTesSuccess = false from rfl,
+  · simp only [bind, Except.bind, pure, Except.pure, show TER.tecKILLED.isTesSuccess = false from rfl,
       Bool.not_false, ↓reduceIte, Except.ok.injEq] at hok
     simp [← hok]
   · simp only [bind, Except.bind, pure, Except.pure, show TER.tesSUCCESS.isTesSuccess = true from rfl,
@@ -300,7 +300,7 @@ lemma Loan.canCreate_lawful_iff_proof (broker : LoanBroker) (v : Vault) (p : Num
   · intro h
     have hfits : schedule.Fits := by
       by_contra hc
-      have hk : schedule.checkTimeAvailability = .tecKILLED := by
+      have hk : schedule.checkTimeAvailability = .ok .tecKILLED := by
         have := LoanSchedule.checkTimeAvailability_eq schedule
         split at this
         · exact this
@@ -529,40 +529,40 @@ lemma Loan.canPay_lawful_iff_proof (loan : Loan) (paymentType : LoanPaymentType)
 /-- A pending, defaulted or paid-off loan can't be managed. -/
 lemma Loan.canManage_closed_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
     (hclosed : loan.isPending = true ∨ loan.isDefault = true ∨ loan.paymentRemaining = 0) :
-    loan.canManage action now = .tecNO_PERMISSION := by
+    loan.canManage action now = .ok .tecNO_PERMISSION := by
   unfold Loan.canManage
   rcases hclosed with h | h | h <;> split_ifs <;> simp_all
 
 /-- An impair of an impaired loan, or an unimpair of a loan that isn't impaired, is not permitted. -/
 lemma Loan.canManage_wrong_flag_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
     (hflag : (loan.isImpaired = true ∧ action = .impair) ∨ (loan.isImpaired = false ∧ action = .unimpair)) :
-    loan.canManage action now = .tecNO_PERMISSION := by
+    loan.canManage action now = .ok .tecNO_PERMISSION := by
   unfold Loan.canManage
   rcases hflag with ⟨h, rfl⟩ | ⟨h, rfl⟩ <;> split_ifs <;> simp_all
 
 /-- Proof body of the pending exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_pending_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (hp : loan.isPending = true) : loan.canManage action now = .tecNO_PERMISSION :=
+    (hp : loan.isPending = true) : loan.canManage action now = .ok .tecNO_PERMISSION :=
   Loan.canManage_closed_proof loan action now (Or.inl hp)
 
 /-- Proof body of the defaulted exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_defaulted_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (hd : loan.isDefault = true) : loan.canManage action now = .tecNO_PERMISSION :=
+    (hd : loan.isDefault = true) : loan.canManage action now = .ok .tecNO_PERMISSION :=
   Loan.canManage_closed_proof loan action now (Or.inr (Or.inl hd))
 
 /-- Proof body of the paid-off exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_paid_off_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (hr : loan.paymentRemaining = 0) : loan.canManage action now = .tecNO_PERMISSION :=
+    (hr : loan.paymentRemaining = 0) : loan.canManage action now = .ok .tecNO_PERMISSION :=
   Loan.canManage_closed_proof loan action now (Or.inr (Or.inr hr))
 
 /-- Proof body of the already-impaired exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_already_impaired_proof (loan : Loan) (now : UInt32) (h : loan.isImpaired = true) :
-    loan.canManage .impair now = .tecNO_PERMISSION :=
+    loan.canManage .impair now = .ok .tecNO_PERMISSION :=
   Loan.canManage_wrong_flag_proof loan .impair now (Or.inl ⟨h, rfl⟩)
 
 /-- Proof body of the not-impaired exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_not_impaired_proof (loan : Loan) (now : UInt32) (h : loan.isImpaired = false) :
-    loan.canManage .unimpair now = .tecNO_PERMISSION :=
+    loan.canManage .unimpair now = .ok .tecNO_PERMISSION :=
   Loan.canManage_wrong_flag_proof loan .unimpair now (Or.inr ⟨h, rfl⟩)
 
 /-- Proof body of the too-soon exit of `Loan.canManage_exits`. -/
@@ -570,13 +570,13 @@ lemma Loan.canManage_default_too_soon_proof (loan : Loan) (now : UInt32)
     (hp : loan.isPending = false) (hd : loan.isDefault = false) (hr : loan.paymentRemaining ≠ 0)
     (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat)
     (hsoon : now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat) :
-    loan.canManage .default now = .tecTOO_SOON := by
+    loan.canManage .default now = .ok .tecTOO_SOON := by
   have hsum : (loan.nextPaymentDueDate + loan.schedule.gracePeriod).toNat =
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat := by
     rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by simp [maxTime] at hfit; omega)
   have hle : ¬ now > loan.nextPaymentDueDate + loan.schedule.gracePeriod := by
     rw [gt_iff_lt, UInt32.lt_iff_toNat_lt, hsum]; omega
-  simp [Loan.canManage, hp, hd, hr, hle]
+  simp [Loan.canManage, hp, hd, hr, hle, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt, bind, Except.bind]
 
 /-- Proof body of the success exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_success_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
@@ -584,7 +584,7 @@ lemma Loan.canManage_success_proof (loan : Loan) (action : LoanManageAction) (no
     (himp : action = .impair → loan.isImpaired = false) (hunimp : action = .unimpair → loan.isImpaired = true)
     (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat)
     (hlate : action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) :
-    loan.canManage action now = .tesSUCCESS := by
+    loan.canManage action now = .ok .tesSUCCESS := by
   have hsum : (loan.nextPaymentDueDate + loan.schedule.gracePeriod).toNat =
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat := by
     rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by simp [maxTime] at hfit; omega)
@@ -594,21 +594,21 @@ lemma Loan.canManage_success_proof (loan : Loan) (action : LoanManageAction) (no
   | default =>
     have hgt : now > loan.nextPaymentDueDate + loan.schedule.gracePeriod := by
       rw [gt_iff_lt, UInt32.lt_iff_toNat_lt, hsum]; exact hlate rfl
-    simp [Loan.canManage, hp, hd, hr, hgt]
+    simp [Loan.canManage, hp, hd, hr, hgt, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt, bind, Except.bind]
 
 /-- Proof body of `canManage_error_codes`. -/
 lemma Loan.canManage_error_codes_proof (loan : Loan) (action : LoanManageAction) (now : UInt32) :
-    loan.canManage action now = .tesSUCCESS ∨ loan.canManage action now = .tecNO_PERMISSION ∨
-      loan.canManage action now = .tecTOO_SOON := by
+    loan.canManage action now = .ok .tesSUCCESS ∨ loan.canManage action now = .ok .tecNO_PERMISSION ∨
+      loan.canManage action now = .ok .tecTOO_SOON := by
   generalize hr : loan.canManage action now = r
   unfold Loan.canManage at hr
-  simp only at hr
+  simp only [bind, Except.bind, pure, Except.pure, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt] at hr
   split_ifs at hr <;> subst hr <;> simp
 
 /-- Proof body of `canManage_lawful_iff`. -/
 lemma Loan.canManage_lawful_iff_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
     (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat) :
-    loan.canManage action now = .tesSUCCESS ↔
+    loan.canManage action now = .ok .tesSUCCESS ↔
       loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
         (action = .impair → loan.isImpaired = false) ∧ (action = .unimpair → loan.isImpaired = true) ∧
         (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) := by

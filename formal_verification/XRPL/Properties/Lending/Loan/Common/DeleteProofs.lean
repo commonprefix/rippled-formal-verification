@@ -18,6 +18,11 @@ once no loan is left. -/
 private lemma LoanBroker.releaseLoan_ok_inv (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.loanCount = lb.loanCount - 1 ∧ lb'.debtTotal = if lb.loanCount - 1 == 0 then Number.zero else d := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   have h' := (RawLoanBroker.to_lawful_ok h).1
   exact ⟨congrArg RawLoanBroker.loanCount h', congrArg RawLoanBroker.debtTotal h'⟩
 
@@ -103,12 +108,6 @@ lemma Loan.deletePending_principal_of_exact (r : LoanBrokerWithPool Vault)
   · show _ - ad'.toRat = _
     rw [hadv]; ring
 
-/-- Proof body of the vault part of `Lending.deleteActive_settled`. -/
-lemma Loan.deleteActive_keeps_vault_proof (hp : loan.isPending = false) :
-    ∃ broker', (loan.delete v).run = .ok (.ok { broker' := broker', pool' := v }) := by
-  obtain ⟨b, hb, -⟩ := Loan.deleteActive_ok loan.broker
-  exact ⟨b, by rw [Loan.delete_active_reduce loan v hp, hb]⟩
-
 /-- Proof body of the last loan part of `Lending.deleteActive_settled`. -/
 lemma Loan.deleteActive_last_proof (r : LoanBrokerWithPool Vault)
     (hp : loan.isPending = false) (hclosed : loan.paymentRemaining = 0) (hlast : loan.broker.loanCount = 1)
@@ -121,11 +120,7 @@ lemma Loan.deleteActive_last_proof (r : LoanBrokerWithPool Vault)
     apply (Number.toRat_eq_zero_iff_eq_zero loan.broker.wf.debtTotal_norm).mp
     rw [hdebt, hP]
   refine ⟨hD, ?_⟩
-  obtain ⟨b, hb, hbv⟩ := Loan.deleteActive_ok loan.broker
-  rw [Loan.delete_active_reduce loan v hp, hb] at hok
-  injection hok with hok
-  injection hok with hok
-  subst hok
+  have hbv := Loan.deleteActive_raw _ _ (Loan.delete_active_ok_inv loan v r hp hok).1
   have h := congrArg RawLoanBroker.debtTotal hbv
   simp only [hlast] at h
   rw [hD]

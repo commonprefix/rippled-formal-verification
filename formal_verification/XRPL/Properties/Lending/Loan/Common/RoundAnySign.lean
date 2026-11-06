@@ -339,16 +339,14 @@ lemma STAmount.roundToNumericType_frac_ok_abs (x : Number) (mode : rounding_mode
 private lemma Number.to_rep_unchecked_zero (neg : Bool) (m : UInt64) (mode : rounding_mode)
     (hm : m.toNat ≤ maxRep.toNat) :
     (Number.unchecked neg m 0).to_rep mode = .ok (if neg then -m.toInt64 else m.toInt64) := by
-  have hmaxlt : m.toNat < 2 ^ 63 := by
-    have h63 : maxRep.toNat = 2 ^ 63 - 1 := by decide
-    omega
   have hnpre : ¬ (maxRep < m) := by rw [UInt64.lt_iff_toNat_lt]; omega
   have hmant : (Number.unchecked neg m 0).mantissa = (if neg then -m.toInt64 else m.toInt64) := by
     simp only [Number.mantissa, Number.unchecked, gt_iff_lt, if_neg hnpre]
   have hexp : (Number.unchecked neg m 0).exponent = 0 := by
     simp only [Number.exponent, Number.unchecked, gt_iff_lt, if_neg hnpre]
   have hneg_ : (Number.unchecked neg m 0).negative_ = neg := rfl
-  unfold Number.to_rep
+  rw [Number.to_rep_eq_spec]
+  unfold Number.to_repSpec
   simp only [hmant, hexp, hneg_]
   by_cases hz : (if neg then -m.toInt64 else m.toInt64) == 0
   · rw [if_pos hz, beq_iff_eq.mp hz]
@@ -358,24 +356,13 @@ private lemma Number.to_rep_unchecked_zero (neg : Bool) (m : UInt64) (mode : rou
       cases neg <;> simp
     rw [hmag]
     simp only [lt_irrefl, if_false, ge_iff_le, le_refl, if_true]
-    have hgrow : Number.to_rep.grow m.toInt64 0 = .ok m.toInt64 := by
-      rw [Number.to_rep.grow]; simp
+    have hgrow : growSpec m.toInt64 0 = .ok m.toInt64 := by
+      rw [growSpec]; simp
     rw [hgrow]
     simp only
-    have hu64 : m.toInt64.toUInt64.toNat ≤ maxRep.toNat := by
-      have : m.toInt64.toUInt64 = m := rfl
-      rw [this]; exact hm
-    have h_g0_empty : (if neg then Guard.new.set_negative else Guard.new).empty = true := by
-      cases neg <;> decide
-    rw [pushOverflow_noop_of_le_maxRep_of_empty hu64 _ mode h_g0_empty, start_guard_round]
+    rw [start_guard_round]
     rw [if_neg (show ¬ ((-2 : Int) == 1 || (-2 : Int) == 0 && m.toInt64 % 2 == 1) = true from by
       simp)]
-    rw [if_neg (show ¬ (maxRep.toInt64 < m.toInt64 ∧ m.toInt64 < maxRepUp.toInt64) from by
-      intro hc
-      have hlt := (Int64.lt_iff_toInt_lt).mp hc.1
-      rw [show maxRep.toInt64.toInt = (maxRep.toNat : ℤ) from by decide,
-          UInt64.toInt64_toInt_of_lt m hmaxlt] at hlt
-      omega)]
 
 /-- A negative whole number of at most the maximum of an integral asset packs into it. -/
 private lemma STAmount.checked_integral_neg_ok (nt : NumericType) (v : UInt64) (mode : rounding_mode)
@@ -398,7 +385,8 @@ private lemma STAmount.checked_integral_neg_ok (nt : NumericType) (v : UInt64) (
   simp only [IntAmount.ofNumber, STAmount.unchecked]
   rw [Number.to_rep_unchecked_zero true v mode hvr]
   simp only [if_true]
-  have habs : (-v.toInt64).toInt.natAbs.toUInt64 = v := by
+  have habs : (-v.toInt64).magnitude = v := by
+    show (-v.toInt64).toInt.natAbs.toUInt64 = v
     have := signed_mantissa_toInt true v hlt
     simp only [if_true] at this
     rw [this]
@@ -459,6 +447,8 @@ lemma STAmount.roundToNumericType_integral_ok_abs (nt : NumericType) (x : Number
         rw [if_pos hint]
         simp only [hsig, if_true]
         rw [← hw_def, hr]
+        dsimp only
+        rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hr0)), ok_bind]
       refine ⟨a, by rw [heq, ha], ?_⟩
       have hca := (STAmount.ofNumber_integral_canonical nt x mode a hint (by rw [heq, ha])).1
       rw [STAmount.abs_toRat, hca.offset_zero, zpow_zero, mul_one]

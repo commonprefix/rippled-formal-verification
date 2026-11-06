@@ -27,13 +27,13 @@ lemma loanPeriodicRate_bounds (ir : TenthBips32) (interval : UInt32) (rate : Num
   have he := Number.nearestError_pos
   have he' := eps_small
   have heq : loanPeriodicRate ir interval =
-      (((Number.ofInt64 interval.toUInt64.toInt64).operator_mul ir.toNumber .to_nearest) >>=
+      (((Number.ofInt64 interval.toInt64).operator_mul ir.toNumber .to_nearest) >>=
         (fun p => p.operator_div kTenthBipsPerUnity.toNumber .to_nearest)) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨p, hp, ht⟩ := bind_ok_peel _ _ _ ht
-  have hI := Number.ofInt64_isNormalized interval.toUInt64.toInt64
+  have hI := Number.ofInt64_isNormalized interval.toInt64
   have hIv := Number.ofInt64_count interval
   obtain ⟨hB, hBv⟩ := TenthBips32.toNumber_facts ir
   obtain ⟨hU, hUv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity

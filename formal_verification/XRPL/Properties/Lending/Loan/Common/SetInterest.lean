@@ -45,8 +45,8 @@ open private checkPrecisionFields canFundLoan from XRPL.Model.Lending.Loan.LoanS
 private lemma loanPeriodicPayment_nonpos (principal rate : Number) (pr : UInt32) (r : Number)
     (hp : principal.isNormalized) (hp0 : principal.toRat ≤ 0) (hrate : rate.isNormalized)
     (hr0 : 0 ≤ rate.toRat) (h : loanPeriodicPayment principal rate pr = .ok r) : r.toRat ≤ 0 := by
-  have hN := Number.ofInt64_isNormalized pr.toUInt64.toInt64
-  have hN0 : 0 ≤ (Number.ofInt64 pr.toUInt64.toInt64).toRat := by rw [Number.ofInt64_count]; positivity
+  have hN := Number.ofInt64_isNormalized pr.toInt64
+  have hN0 : 0 ≤ (Number.ofInt64 pr.toInt64).toRat := by rw [Number.ofInt64_count]; positivity
   unfold loanPeriodicPayment at h
   dsimp only at h
   split at h
@@ -163,11 +163,11 @@ private lemma Loan.canCreate_principal_exact (broker : LoanBroker) (v : Vault) (
     (schedule : LoanSchedule) (t : UInt32) (twoStep : Bool)
     (hok : Loan.canCreate broker v p fees schedule t twoStep = .ok .tesSUCCESS) :
     STAmount.isRounded broker.numericType p = false := by
-  have hst : schedule.checkTimeAvailability = .tecKILLED ∨ schedule.checkTimeAvailability = .tesSUCCESS := by
+  have hst : schedule.checkTimeAvailability = .ok .tecKILLED ∨ schedule.checkTimeAvailability = .ok .tesSUCCESS := by
     rw [LoanSchedule.checkTimeAvailability_eq]; split <;> simp
   unfold Loan.canCreate at hok
   rcases hst with h | h <;> rw [h] at hok
-  · simp only [pure, Except.pure, show TER.tecKILLED.isTesSuccess = false from rfl,
+  · simp only [bind, Except.bind, pure, Except.pure, show TER.tecKILLED.isTesSuccess = false from rfl,
       Bool.not_false, ↓reduceIte, Except.ok.injEq] at hok
     exact absurd hok (by decide)
   · simp only [bind, Except.bind, pure, Except.pure, show TER.tesSUCCESS.isTesSuccess = true from rfl,

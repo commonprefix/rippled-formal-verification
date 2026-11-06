@@ -80,6 +80,8 @@ lemma Loan.canCreate_ne_notLawful (broker : LoanBroker) (v : Vault) (principal :
     all_goals simp_all [Vault.exponent_ne_notLawful]
   have hprec := checkPrecisionFields_ne_notLawful principal fees
     (fun value => pure !(STAmount.isRounded broker.numericType value)) (fun _ => by simp [pure, Except.pure])
+  have hsched : schedule.checkTimeAvailability ≠ .error .notLawful := by
+    rw [LoanSchedule.checkTimeAvailability_eq]; split <;> exact nofun
   intro h
   unfold Loan.canCreate at h
   simp only [bind, Except.bind, pure, Except.pure] at h
@@ -105,7 +107,7 @@ private lemma Loan.create_checks_interest (broker : LoanBroker) (v : Vault) (pri
   obtain ⟨ti', hsub, hgt0, hle0, -, hmf0, htv0, hpp0⟩ := LoanProperties.checkGuards_ok_inv _ _ _ _ _ hchecks.guards
   have hrN := loanPeriodicRate_isNormalized _ _ rate hrt
   have hppN := loanPeriodicPayment_isNormalized _ _ _ _ hp hrN hpp
-  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toInt64
   have hNv := Number.ofInt64_count schedule.paymentTotal
   have hamtN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamt
   have htvN := STAmount.roundToNumericType_isNormalized _ _ _ _ _ htvo
@@ -266,7 +268,7 @@ lemma Loan.create_ne_notLawful (broker : LoanBroker) (v : Vault) (principal : Nu
   walk_ok
   all_goals try (simp_all [computeLoanProperties_ne_notLawful, LoanProperties.checkGuards_ne_notLawful,
     LoanState.build_ne_notLawful, LoanBroker.checkLimits_ne_notLawful, Number.operator_add_ne_notLawful,
-    STAmount.roundToNumericType_ne_notLawful]; done)
+    STAmount.roundToNumericType_ne_notLawful, UInt32.addChecked_ne_notLawful]; done)
   all_goals try (exact checkPrecisionFields_ne_notLawful _ _ _ (fun x => isRounded_ne_notLawful _ _ _) ‹_›)
   all_goals try (exact Vault.exceedsOpenLimit_ne_notLawful _ _ ‹_›)
   -- a re-check is reached only once every check passed, and then the create succeeds
@@ -361,9 +363,6 @@ lemma Loan.canCreate_exponent (broker : LoanBroker) (v : Vault) (principal : Num
     walk_ok
     all_goals first
       | exact absurd ‹(!TER.tesSUCCESS.isTesSuccess) = true› (by decide)
-      | (rename_i hc hw
-         rw [hw] at hc
-         exact absurd hc (by decide))
       | exact canFundLoan_exponent' v schedule now broker.numericType _ ‹_› ‹_›
   unfold AssetPool.exponent at hexp
   obtain ⟨atot, hat, he⟩ := bind_ok_peel _ _ _ hexp
@@ -466,7 +465,11 @@ lemma LendingLedger.applyLoanSet_error (l : LendingLedger) (i : Nat) (principal 
       (l.loanSetChecked i broker principal rates fees schedule twoStep ao
         (Loan.canCreate broker l.vault principal fees schedule l.now twoStep)).run = .error e := by
   unfold LendingLedger.applyLoanSet at h
-  by_cases hs : schedule.checkTimeAvailability.isTesSuccess = true
+  obtain ⟨t, ht⟩ : ∃ t, schedule.checkTimeAvailability = .ok t := by
+    rw [LoanSchedule.checkTimeAvailability_eq]; split <;> exact ⟨_, rfl⟩
+  rw [ht] at h
+  dsimp only at h
+  by_cases hs : t.isTesSuccess = true
   · rw [if_neg (by simp [hs])] at h
     cases hb : l.broker? i with
     | none => rw [hb] at h; cases h
@@ -490,7 +493,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
   have hPmin : (10 : ℚ) ^ (-10 : ℤ) ≤ principal.toRat := le_trans (by norm_num) hP1
   have hn' : n ≠ 0 := by intro h0; rw [h0] at hn; exact absurd hn (by decide)
   have hdiv := loanPeriodicPayment_zero_rate _ _ _ hp hP0.ne' hn' hpp
-  have hN := Number.ofInt64_isNormalized n.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized n.toInt64
   have hNv := Number.ofInt64_count n
   have hn0 : (0 : ℚ) < n.toNat := by
     rw [UInt32.lt_iff_toNat_lt] at hn; exact_mod_cast hn

@@ -18,9 +18,10 @@ lemma doRoundUp_exponent_le_max
     (res : RoundResult)
     (hok : g.doRoundUp neg m e largeRange.min largeRange.max mode loc = .ok res) :
     res.exponent_ ≤ maxExponent := by
-  unfold Guard.doRoundUp at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res.exponent_ ≤ maxExponent := by
@@ -66,7 +67,7 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
   -- Leaf analysis: a `bringIntoRange` result is a flush, a kept mantissa at the
   -- same exponent, or a rescaled small mantissa at the decremented exponent.
   have h_leaf : ∀ (m' : UInt64) (e' : Int),
-      res = Guard.bringIntoRange neg m' e' largeRange.min →
+      res = Guard.bringIntoRangeSpec neg m' e' largeRange.min →
       res.mantissa_.toNat = 0 ∨
       (res.mantissa_.toNat = m'.toNat ∧ res.exponent_ = e') ∨
       (m'.toNat < 10 ^ 18 ∧ res.exponent_ = e' - 1) := by
@@ -101,9 +102,10 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
         subst hres_eq
         right; left
         exact ⟨rfl, rfl⟩
-  unfold Guard.doRoundUp at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' := by
@@ -158,7 +160,7 @@ lemma doRoundUp_mantissa_le_maxRepUp_at_maxExp
           · rw [hgP_def]
             exact pushOverflow_noop_of_le_maxRep_of_empty (by omega) g mode hempty
           · rw [hgP_def]
-            unfold Guard.pushOverflow
+            unfold Guard.pushOverflowSpec
             rw [if_neg]
             intro ⟨_, h2⟩
             have := UInt64.lt_iff_toNat_lt.mp h2; omega
@@ -200,7 +202,7 @@ lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
   have hmaxRep_toNat : maxRep.toNat = 9223372036854775807 := maxRep_val
   -- Extended leaf analysis: the rescale arm also reports the tenfold mantissa.
   have h_leaf : ∀ (m' : UInt64) (e' : Int),
-      res = Guard.bringIntoRange neg m' e' largeRange.min →
+      res = Guard.bringIntoRangeSpec neg m' e' largeRange.min →
       res.mantissa_.toNat = 0 ∨
       (res.mantissa_.toNat = m'.toNat ∧ res.exponent_ = e') ∨
       (res.mantissa_.toNat = m'.toNat * 10 ∧ m'.toNat < 10 ^ 18 ∧ res.exponent_ = e' - 1) := by
@@ -236,9 +238,10 @@ lemma doRoundUp_mantissa_le_cuspTop_at_maxExp
         subst hres_eq
         right; left
         exact ⟨rfl, rfl⟩
-  unfold Guard.doRoundUp at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' := by
@@ -323,7 +326,7 @@ lemma doRoundUp_ok_high_exp_mantissa_small
     rw [← UInt64.toNat_inj, h0]
     rfl
   have h_leaf : ∀ (m' : UInt64) (e' : Int),
-      res = Guard.bringIntoRange neg m' e' largeRange.min →
+      res = Guard.bringIntoRangeSpec neg m' e' largeRange.min →
       res.mantissa_.toNat = 0 ∨
       (res.mantissa_.toNat = m'.toNat ∧ res.exponent_ = e') ∨
       (res.mantissa_.toNat = m'.toNat * 10 ∧ m'.toNat < 10 ^ 18 ∧ res.exponent_ = e' - 1) := by
@@ -359,9 +362,10 @@ lemma doRoundUp_ok_high_exp_mantissa_small
         subst hres_eq
         right; left
         exact ⟨rfl, rfl⟩
-  unfold Guard.doRoundUp at hok
+  replace hok := Guard.doRoundUp_ok_spec hok
+  unfold Guard.doRoundUpSpec at hok
   dsimp only [Guard.doDropDigit] at hok
-  set gP : Guard := g.pushOverflow m mode with hgP_def
+  set gP : Guard := g.pushOverflowSpec m mode with hgP_def
   have h_extract : ∀ r' : RoundResult,
       (if r'.exponent_ > maxExponent then (.error loc : Except Error RoundResult)
        else .ok r') = .ok res → res = r' ∧ ¬ (res.exponent_ > maxExponent) := by
@@ -489,10 +493,12 @@ theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
       m3.toNat ≤ maxRepUp.toNat ∧
       (m3.toNat < 1000000000000000000 → e3 ≤ maxExponent) ∧
       (1844674407370955161 < m3.toNat → g3.empty = true) := by
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hn_mant_ne] at hok
   simp only [Bool.false_eq_true, if_false] at hok
-  set su := doNormalize_scaleUp largeRange.min n.mantissa_ n.exponent_ with hsu_def
+  set su := doNormalize_scaleUpSpec largeRange.min n.mantissa_ n.exponent_ with hsu_def
   set m1 : UInt64 := su.1 with hm1_def
   set e1 : Int := su.2 with he1_def
   set g0 : Guard := if n.negative_ then Guard.new.set_negative else Guard.new with hg0_def
@@ -687,7 +693,9 @@ theorem normalize_operand_ne_zero (n result : Number) (mode : rounding_mode)
     (hresult : result.mantissa_ ≠ 0) :
     n.mantissa_ ≠ 0 := by
   intro hn0
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [if_pos (by rw [beq_iff_eq]; exact hn0)] at hok
   have : Number.zero = result := Except.ok.inj hok
   rw [← this] at hresult

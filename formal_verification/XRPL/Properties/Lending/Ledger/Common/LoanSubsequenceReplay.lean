@@ -75,7 +75,7 @@ lemma LendingLedger.manage_replay_twin {l L lb : LendingLedger} (hR : L.Reachabl
   obtain ⟨e0, b, loan, r, he0, -, hw, hc, hok, -⟩ := LendingLedger.applyLoan_manage_inv l u j action hu
   rw [he] at he0
   obtain rfl := Option.some.inj he0
-  have hc' : e'.loan.canManage action L.now = .tesSUCCESS := by
+  have hc' : e'.loan.canManage action L.now = .ok .tesSUCCESS := by
     rw [hnow, Loan.canManage_of_raw hraw, ← Loan.canManage_withBroker hw]; exact hc
   have hrawl := Loan.withBroker_eq hw
   cases action with

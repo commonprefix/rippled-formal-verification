@@ -189,11 +189,11 @@ inductive Loan.RegularPayoff (fits : Loan → Vault → UInt32 → UnsettledPaym
       Loan.RegularPayoff fits start t₀ r.loan' t' cost toVault toBroker
   | impair (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) (cost toVault toBroker : ℚ) :
       Loan.RegularPayoff fits start t₀ loan t cost toVault toBroker → t ≤ t' →
-      loan.canManage .impair t' = .tesSUCCESS → (loan.manageImpair v t').run = .ok (.ok r) →
+      loan.canManage .impair t' = .ok .tesSUCCESS → (loan.manageImpair v t').run = .ok (.ok r) →
       Loan.RegularPayoff fits start t₀ r.loan' t' cost toVault toBroker
   | unimpair (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) (cost toVault toBroker : ℚ) :
       Loan.RegularPayoff fits start t₀ loan t cost toVault toBroker → t ≤ t' →
-      loan.canManage .unimpair t' = .tesSUCCESS → (loan.manageUnimpair v).run = .ok (.ok r) →
+      loan.canManage .unimpair t' = .ok .tesSUCCESS → (loan.manageUnimpair v).run = .ok (.ok r) →
       Loan.RegularPayoff fits start t₀ r.loan' t' cost toVault toBroker
   | pay (loan : Loan) (t t' : UInt32) (v : Vault) (amount : Number) (p : UnsettledPayment Vault)
       (r : LoanWithAmounts Vault) (cost toVault toBroker : ℚ) :

@@ -30,33 +30,56 @@ abbrev divQuotientTail (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ)
   (N = 17 → r * 10 ^ 5 < ym.toNat)
 
 private lemma divQuotient128_eq_rem_zero (xm ym : UInt64) (xe ye : Int)
+    (hnum : (toUInt128 xm).toNat * (100000000000000000 : UInt128).toNat < 2 ^ 128)
     (hrem : ¬ ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true) :
-    divQuotient128 xm ym xe ye = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false) := by
-  simp only [divQuotient128, if_neg hrem]
+    divQuotient128 xm ym xe ye
+      = .ok (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17, false) := by
+  unfold divQuotient128
+  dsimp only
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_neg hrem]
+  rfl
 
 private lemma divQuotient128_eq_corr_ne (xm ym : UInt64) (xe ye : Int)
+    (hnum : (toUInt128 xm).toNat * (100000000000000000 : UInt128).toNat < 2 ^ 128)
     (hrem : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true)
-    (hcorr : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym) != 0) = true) :
+    (hpn : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym).toNat * (100000 : UInt128).toNat
+      < 2 ^ 128)
+    (hcorr : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym) != 0) = true)
+    (hzm : (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym).toNat * (100000 : UInt128).toNat
+      < 2 ^ 128)
+    (hsum : (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)).toNat
+      + (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128)
+        / toUInt128 ym).toNat < 2 ^ 128) :
     divQuotient128 xm ym xe ye
-      = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
+      = .ok (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym * (100000 : UInt128)
            + toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym,
          xe - ye - 17 - 5,
          toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
-  simp only [divQuotient128, if_pos hrem, if_pos hcorr]
+  unfold divQuotient128
+  dsimp only
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_pos hrem, BitVec.mulChecked_of_lt hpn, ok_bind, if_pos hcorr,
+    BitVec.mulChecked_of_lt hzm, ok_bind, BitVec.addChecked_of_lt hsum, ok_bind]
+  rfl
 
 private lemma divQuotient128_eq_corr_zero (xm ym : UInt64) (xe ye : Int)
+    (hnum : (toUInt128 xm).toNat * (100000000000000000 : UInt128).toNat < 2 ^ 128)
     (hrem : ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym) != 0) = true)
+    (hpn : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym).toNat * (100000 : UInt128).toNat
+      < 2 ^ 128)
     (hcorr : ¬ ((toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) / toUInt128 ym) != 0) = true) :
     divQuotient128 xm ym xe ye
-      = (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17,
+      = .ok (toUInt128 xm * (100000000000000000 : UInt128) / toUInt128 ym, xe - ye - 17,
          toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym * (100000 : UInt128) % toUInt128 ym != 0) := by
-  simp only [divQuotient128, if_pos hrem, if_neg hcorr]
+  unfold divQuotient128
+  dsimp only
+  rw [BitVec.mulChecked_of_lt hnum, ok_bind, if_pos hrem, BitVec.mulChecked_of_lt hpn, ok_bind, if_neg hcorr]
+  rfl
 
 /-- Sample runs of the other two branches. The `Div/Common/*/WitnessTrace.lean` witnesses cover
 `correction ≠ 0`. -/
-example : divQuotient128 10 999999999999999989 0 0 = (1, -17, true) := by decide
+example : divQuotient128 10 999999999999999989 0 0 = .ok (1, -17, true) := by decide
 
-example : divQuotient128 7 100000000000000000 0 0 = (7, -17, false) := by decide
+example : divQuotient128 7 100000000000000000 0 0 = .ok (7, -17, false) := by decide
 
 set_option maxHeartbeats 3200000 in
 -- The UInt128 overflow bounds for both stages need a raised budget.
@@ -69,7 +92,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
     (_hym_le : ym.toNat ≤ largeRange.max.toNat)
     (hym_min : largeRange.min.toNat ≤ ym.toNat) :
     ∃ (zmq : UInt128) (zeq : Int) (dropped : Bool) (N r : ℕ),
-      divQuotient128 xm ym xe ye = (zmq, zeq, dropped) ∧
+      divQuotient128 xm ym xe ye = .ok (zmq, zeq, dropped) ∧
       divQuotientTail zmq zeq dropped N r xm ym xe ye := by
   have hmax_val : largeRange.max.toNat = 10 ^ 19 - 1 := by decide
   have hmin_val : largeRange.min.toNat = 10 ^ 18 := by decide
@@ -79,6 +102,9 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
   have hnum_overflow : xm.toNat * 10 ^ 17 < 2 ^ 128 := by
     calc xm.toNat * 10 ^ 17 ≤ (10 ^ 19 - 1) * 10 ^ 17 := Nat.mul_le_mul_right _ hxm_bound
       _ < 2 ^ 128 := by norm_num
+  have hnum_fit : (toUInt128 xm).toNat * (100000000000000000 : UInt128).toNat < 2 ^ 128 := by
+    rw [toNat_toUInt128, show (100000000000000000 : UInt128).toNat = 10 ^ 17 from by decide]
+    exact hnum_overflow
   have hnum_nat : (toUInt128 xm * (100000000000000000 : UInt128)).toNat
       = xm.toNat * 10 ^ 17 := by
     have hf : ((100000000000000000 : UInt128)).toNat = 10 ^ 17 := by decide
@@ -125,10 +151,11 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
         * (100000 : UInt128) % toUInt128 ym).toNat
         = (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 % ym.toNat := by
       rw [BitVec.toNat_umod, hpn_nat, hym_nat]
+    have hpn_fit : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym).toNat
+        * (100000 : UInt128).toNat < 2 ^ 128 := by rw [hrem_nat, hcf_val]; exact hpn_overflow
     by_cases hcorr : (toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym
         * (100000 : UInt128) / toUInt128 ym != 0) = true
     · ---- Sub-case: correction != 0, N = 22 ----
-      rw [divQuotient128_eq_corr_ne xm ym xe ye hrem hcorr]
       -- The corrected quotient and its components stay below 2^128.
       have hcorr_bound : (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat < 10 ^ 5 := by
         apply Nat.div_lt_of_lt_mul
@@ -163,6 +190,8 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
             + (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat := by
         rw [BitVec.toNat_add, hzm_mul_nat, hcorr_nat]
         exact Nat.mod_eq_of_lt hsum_overflow
+      rw [divQuotient128_eq_corr_ne xm ym xe ye hnum_fit hrem hpn_fit hcorr
+        (by rw [hzm_nat, hcf_val]; exact hzm_mul_overflow) (by rw [hzm_mul_nat, hcorr_nat]; exact hsum_overflow)]
       -- Second Euclidean division: remainder * 10^5 = q2 * ym + r2
       have heuc2 : ym.toNat * ((xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat) +
           (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 % ym.toNat
@@ -193,7 +222,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           rw [← hmod_nat, h0]
           rfl
     · ---- Sub-case: correction = 0, N = 17 with a tiny nonzero residual ----
-      rw [divQuotient128_eq_corr_zero xm ym xe ye hrem hcorr]
+      rw [divQuotient128_eq_corr_zero xm ym xe ye hnum_fit hrem hpn_fit hcorr]
       have hcorr_zero_nat : (xm.toNat * 10 ^ 17) % ym.toNat * 10 ^ 5 / ym.toNat = 0 := by
         have h0 : toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym
             * (100000 : UInt128) / toUInt128 ym = 0 := by
@@ -227,7 +256,7 @@ theorem divQuotient128_correct (xm ym : UInt64) (xe ye : Int)
           omega
         exact ⟨fun _ => hrem_ne_nat, fun _ => hdropped⟩
   · ---- Case: remainder = 0, no refinement, N = 17 ----
-    rw [divQuotient128_eq_rem_zero xm ym xe ye hrem]
+    rw [divQuotient128_eq_rem_zero xm ym xe ye hnum_fit hrem]
     have hrem_nat_zero : (xm.toNat * 10 ^ 17) % ym.toNat = 0 := by
       have h0 : toUInt128 xm * (100000000000000000 : UInt128) % toUInt128 ym = 0 := by
         by_contra hne

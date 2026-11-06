@@ -28,7 +28,8 @@ private lemma Vault.assetsTotal_ge_available (v : Vault) (assetsTotal : Number) 
   by_cases ha : v.assetsAvailable.mantissa_ = 0
   · -- no cash: the total is the deployed amount
     have h' := h
-    unfold Number.operator_add at h'
+    replace h' := Number.operator_add_ok_spec h'
+    unfold Number.operator_addSpec at h'
     rw [Number.operator_eq_zero_false_of_mantissa_ne _ hd, if_neg Bool.false_ne_true,
       Number.eq_zero_of_mantissa_zero _ hAA ha, if_pos (by decide)] at h'
     obtain rfl := Except.ok.inj h'
@@ -222,7 +223,7 @@ lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal :
     have hmode : valueMode rate = .to_nearest ∨ valueMode rate = .upward ∨ valueMode rate = .downward :=
       (valueMode_cases rate).elim Or.inl (fun h => Or.inr (Or.inl h))
     -- `PP × n` is a nonzero nonnegative `Number`, and its 16-digit amount is not zero
-    have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toUInt64.toInt64
+    have hN := Number.ofInt64_isNormalized schedule.paymentTotal.toInt64
     have hNv := Number.ofInt64_count schedule.paymentTotal
     have hamtN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamt
     have hamt_ne : amount.mantissa_ ≠ 0 := by

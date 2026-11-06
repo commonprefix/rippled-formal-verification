@@ -61,7 +61,9 @@ theorem normalize_rounded_upward_proof (n result : Number)
   -- Zero input contradicts `hresult` (the model returns the canonical zero).
   by_cases hnz : n.mantissa_ = 0
   · exfalso
-    unfold Number.normalize doNormalize at hok
+    unfold Number.normalize at hok
+    replace hok := doNormalize_ok_spec hok
+    unfold doNormalizeSpec at hok
     rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr hnz, if_pos rfl] at hok
     have h_result : result = Number.zero := (Except.ok.inj hok).symm
     apply hresult

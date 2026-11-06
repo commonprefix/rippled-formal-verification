@@ -501,12 +501,12 @@ lemma STAmount.ofIOU_mantissa_ne_zero (a : IOUAmount) (mode : rounding_mode) (re
     a.mantissa_ ≠ 0 := by
   intro hm
   apply hres
-  have hti : Int.toInt64 0 = 0 := by decide
-  have htu : Int64.toUInt64 0 = 0 := by decide
+  have htc : Int.toInt64Checked 0 = .ok 0 := by decide
+  have hmag : (0 : Int64).magnitude = 0 := by decide
   have hcompute : STAmount.ofIOUAmount a mode = .ok ⟨.fractional, 0, -100, false⟩ := by
     unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
     simp [hm, STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-      STAmount.signedDrops, IOUAmount.ofMantissaExp, IOUAmount.normalize, hti, htu,
+      STAmount.signedDrops, IOUAmount.ofMantissaExp, IOUAmount.normalize, htc, hmag, ok_bind,
       IOUAmount.signum, IOUAmount.zero]
   rw [hpack] at hcompute
   rw [Except.ok.inj hcompute]

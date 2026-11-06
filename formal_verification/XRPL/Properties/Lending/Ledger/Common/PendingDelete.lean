@@ -197,7 +197,8 @@ lemma LendingLedger.pending_resolvable_proof (l : LendingLedger) (hr : l.Reachab
     nlinarith
   obtain ⟨d, hd⟩ := Number.operator_sub_ok_of_lt loan.broker.debtTotal loan.principalOutstanding .to_nearest
     loan.broker.wf.debtTotal_norm hpN (le_trans hp0 hPOle) hDTlt hp0 (lt_of_le_of_lt hPOle hDTlt)
-  obtain ⟨broker', hbroker⟩ := Loan.delete_broker_lawful loan d hd (Or.inr hPOle)
+  obtain ⟨broker', hbroker⟩ := Loan.delete_broker_lawful loan d hd
+    (by rw [hlb]; exact hr.loanCountInv.loanCount_ne_zero he hb) (Or.inr hPOle)
   have hdel := Loan.delete_success_proof loan l.vault principal' d raw v' broker' hp' hround hadj hv' hd hbroker
   let u : LoanEffect := { vault := v', brokerIndex := e.brokerIndex, broker := broker', loanIndex := i, loan := none }
   refine ⟨l.commitLoan u, ?_⟩

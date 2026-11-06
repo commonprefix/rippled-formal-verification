@@ -112,7 +112,7 @@ lemma Vault.burnShares_sharesTotal_exact_proof (v : Vault) (sharesDestroyed : ST
     rw [hv']; rfl
   rw [hproj, rat_toNat_cast_of_den_one st'.toRat hst_den hst_nn, hst_val, ← hST]
 
-lemma Vault.canBurnShares_rejected_code_proof (v : Vault) (amount holderShares : STAmount) (ter : TER)
+lemma Vault.canBurnShares_error_codes_proof (v : Vault) (amount holderShares : STAmount) (ter : TER)
     (hok : (v.canBurnShares amount holderShares).run = .ok (.error ter)) :
     ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED := by
   simp only [Vault.canBurnShares] at hok

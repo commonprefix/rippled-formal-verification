@@ -109,13 +109,14 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
   have hy_mant_pos := mantissa_toNat_pos_of_bounds hy_bounds
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
-  unfold Number.operator_mul at hok
+  rw [Number.operator_mul_eq_spec] at hok
+  unfold Number.operator_mulSpec at hok
   simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
   set zm128 : UInt128 := toUInt128 x.mantissa_ * toUInt128 y.mantissa_ with hzm128_def
   set ze : Int := x.exponent_ + y.exponent_ with hze_def
   set g0 : Guard := if zn then Guard.new.set_negative else Guard.new with hg0_def
-  set sd_result : UInt64 × Int × Guard := scaleDown128 zm128 ze g0 with hsd_def
+  set sd_result : UInt64 × Int × Guard := scaleDown128Spec zm128 ze g0 with hsd_def
   set zm : UInt64 := sd_result.1 with hzm_def
   set ze' : Int := sd_result.2.1 with hze'_def
   set g : Guard := sd_result.2.2 with hg_def

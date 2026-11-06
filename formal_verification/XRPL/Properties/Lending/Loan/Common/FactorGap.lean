@@ -12,8 +12,8 @@ open XRPL.Model.Protocol
 
 /-- The payment factor of `k` payments, times four roundings, is at most the factor of `k − 1` payments. -/
 def FactorGap (rate : Number) (k : UInt32) : Prop :=
-  ∀ f f' : Number, computePaymentFactor rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok f →
-    computePaymentFactor rate (Number.ofInt64 (k - 1).toUInt64.toInt64) (k - 1) = .ok f' →
+  ∀ f f' : Number, computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f →
+    computePaymentFactor rate (Number.ofInt64 (k - 1).toInt64) (k - 1) = .ok f' →
     f.toRat * (1 + Number.nearestError) ^ 4 ≤ f'.toRat
 
 end XRPL.Model.Lending

@@ -16,13 +16,6 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 
-/-- A count converted to a `Number` is normalized. -/
-lemma Number.ofInt64_isNormalized (m : Int64) : (Number.ofInt64 m).isNormalized := by
-  unfold Number.ofInt64
-  cases h : Number.from_rep m 0 largeRange.min largeRange.max .to_nearest with
-  | error e => exact Number.zero_isNormalized
-  | ok r => exact Number.from_rep_isNormalized m 0 _ r h
-
 /-- A tenth-bips share of a normalized value is normalized. -/
 lemma tenthBipsOfValue_normalized {value r : Number} {bips : TenthBips32} {mode : rounding_mode}
     (hv : value.isNormalized) (h : tenthBipsOfValue value bips mode = .ok r) : r.isNormalized := by
@@ -38,10 +31,10 @@ lemma tenthBipsOfValue_normalized {value r : Number} {bips : TenthBips32} {mode 
 lemma loanPeriodicRate_isNormalized (rate : TenthBips32) (interval : UInt32) (r : Number)
     (h : loanPeriodicRate rate interval = .ok r) : r.isNormalized := by
   have heq : loanPeriodicRate rate interval =
-      (tenthBipsOfValue (Number.ofInt64 interval.toUInt64.toInt64) rate .to_nearest) >>=
+      (tenthBipsOfValue (Number.ofInt64 interval.toInt64) rate .to_nearest) >>=
         (fun t => t.operator_div secondsInYear .to_nearest) := rfl
   rw [heq] at h
-  cases ht : tenthBipsOfValue (Number.ofInt64 interval.toUInt64.toInt64) rate .to_nearest with
+  cases ht : tenthBipsOfValue (Number.ofInt64 interval.toInt64) rate .to_nearest with
   | error e => rw [ht] at h; exact absurd h nofun
   | ok t =>
     rw [ht, ok_bind] at h
@@ -91,7 +84,9 @@ private lemma powerMinusOneLoop_isNormalized (rate : Number) (hrate : rate.isNor
     rw [powerMinusOneLoop] at h
     split at h
     · obtain ⟨c1, h1, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨c2, h2, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨c3, h3, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨ns, h4, h⟩ := bind_ok_peel _ _ _ h
       have hc1 := Number.operator_mul_isNormalized _ _ c1 _ hc hrate h1
@@ -188,9 +183,9 @@ the payment factor otherwise. -/
 lemma loanPeriodicPayment_cases (principal rate : Number) (pr : UInt32) (pp : Number)
     (h : loanPeriodicPayment principal rate pr = .ok pp) (hpp : pp ≠ Number.zero) :
     (rate.operator_eq Number.zero = true ∧
-      principal.operator_div (Number.ofInt64 pr.toUInt64.toInt64) .to_nearest = .ok pp) ∨
+      principal.operator_div (Number.ofInt64 pr.toInt64) .to_nearest = .ok pp) ∨
     (rate.operator_eq Number.zero = false ∧ ∃ f,
-      computePaymentFactor rate (Number.ofInt64 pr.toUInt64.toInt64) pr = .ok f ∧
+      computePaymentFactor rate (Number.ofInt64 pr.toInt64) pr = .ok f ∧
       principal.operator_mul f .to_nearest = .ok pp) := by
   unfold loanPeriodicPayment at h
   dsimp only at h

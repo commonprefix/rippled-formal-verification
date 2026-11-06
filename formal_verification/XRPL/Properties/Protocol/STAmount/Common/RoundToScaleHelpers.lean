@@ -100,6 +100,8 @@ theorem STAmount.ofIOU_canonical (a : IOUAmount)
       exp_lo := hr.exp_lo
       exp_hi := hr.exp_hi }
   unfold STAmount.ofIOUAmount
+  show (STAmount.unchecked .fractional a.mantissa_.toInt.natAbs.toUInt64 a.exponent_ neg).canonicalize mode = _
+  conv_lhs => rw [← h_abs_eq]
   calc (STAmount.unchecked .fractional absMant.toUInt64 a.exponent_ neg).canonicalize mode
       = .ok ⟨.fractional, absMant.toUInt64, a.exponent_, neg⟩ :=
         STAmount.canonicalize_canonical_id _ mode hc
@@ -167,6 +169,7 @@ theorem STAmount.iou_toNumber_canonical (s : STAmount) (mode : rounding_mode)
   have h_mAbs : sd.toInt.natAbs.toUInt64 = s.mValue := UInt64.toNat_inj.mp h_mAbs_toNat
   show Number.from_rep sd s.mOffset largeRange.min largeRange.max mode = _
   unfold Number.from_rep Number.normalized Number.normalize Number.unchecked
+  show doNormalize (decide (sd < 0)) sd.toInt.natAbs.toUInt64 s.mOffset largeRange.min largeRange.max mode = _
   have h_red := doNormalize_large_16digit (decide (sd < 0)) (sd.toInt.natAbs.toUInt64)
     s.mOffset mode
     (by rw [h_mAbs_toNat]; exact hc.mant_lo)

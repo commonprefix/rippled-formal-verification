@@ -287,49 +287,6 @@ lemma Vault.withdraw_payout_proof (v : Vault) (amount : WithdrawAmount) (waive :
   rw [div_lt_iff₀ hbpos, add_mul, one_mul] at h2
   refine ⟨priced, hpr, by rw [hfl, ← hy]; exact h1, by rw [hfl, ← hy]; linarith⟩
 
-/-- Proof of the integral line of `Vault.withdraw_payout`. An integral vault prices a whole amount, so what is left
-after the fee is a whole number of `10⁻⁵` units, and the floor onto whole units drops at most `1 - 10⁻⁵`. -/
-lemma Vault.withdraw_payout_integral_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t t0 : UInt32)
-    (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
-    (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
-    (hint : v.numericType.isIntegral = true)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
-    (hlt : r.shares.toRat < v.toExact.sharesTotal) :
-    ∃ priced : STAmount, v.sharesToAssetsWithdraw r.shares waive = .ok priced ∧
-      priced.toRat * (1 - (v.earlyExitFeeRateAt t).toNat / 100000) - r.assets.toRat ≤ 1 - 1 / 10 ^ 5 := by
-  obtain ⟨priced, hpr, hfl⟩ :=
-    Vault.Reachable.withdraw_payout_floor_proof v amount waive t t0 hpos hr hc hty hmax r hok hlt
-  refine ⟨priced, hpr, ?_⟩
-  -- the priced amount is a whole number
-  have hden : priced.toRat.den = 1 := by
-    obtain ⟨hpc, hnt⟩ := Vault.sharesToAssetsWithdraw_form v _ _ waive hmax hpr
-    rcases hpc with hpc | hz
-    · have hi : priced.integral = true := by simp only [STAmount.integral, hnt, hint]
-      exact STAmount.IntegralCanonical.den_eq_one _ (hpc.1 hi).1
-    · rw [(STAmount.toRat_eq_zero_iff _).mpr (by simpa [STAmount.isZero] using hz)]
-      rfl
-  have hp : priced.toRat = (priced.toRat.num : ℚ) := (Rat.coe_int_num_of_den_eq_one hden).symm
-  rw [hfl, v.baseExponent_bounds.2.2 hint, zpow_zero, div_one, mul_one, hp]
-  -- what is left after the fee is `N / 100000` for a whole `N`
-  set N : ℤ := priced.toRat.num * (100000 - ((v.earlyExitFeeRateAt t).toNat : ℤ)) with hN
-  have hy : (priced.toRat.num : ℚ) * (1 - ((v.earlyExitFeeRateAt t).toNat : ℚ) / 100000) = (N : ℚ) / 100000 := by
-    rw [hN]; push_cast; ring
-  rw [hy]
-  have h2 := Int.lt_floor_add_one ((N : ℚ) / 100000)
-  rw [div_lt_iff₀ (by norm_num)] at h2
-  have h3 : N < 100000 * ⌊(N : ℚ) / 100000⌋ + 100000 := by
-    have : (N : ℚ) < 100000 * (⌊(N : ℚ) / 100000⌋ : ℚ) + 100000 := by linarith
-    exact_mod_cast this
-  have h4i : N - 100000 * ⌊(N : ℚ) / 100000⌋ ≤ 99999 := by omega
-  have h4 : ((N - 100000 * ⌊(N : ℚ) / 100000⌋ : ℤ) : ℚ) ≤ 99999 := by exact_mod_cast h4i
-  push_cast at h4
-  have e : (N : ℚ) / 100000 - (⌊(N : ℚ) / 100000⌋ : ℚ) = ((N : ℚ) - 100000 * ⌊(N : ℚ) / 100000⌋) / 100000 := by
-    field_simp
-  rw [e, div_le_iff₀ (by norm_num)]
-  norm_num
-  linarith
-
 /-- On a reachable vault more shares price at least as high. The vault prices at its cash, well
 clear of underflow, and every step of the pricing rounds monotonically. -/
 lemma Vault.Reachable.sharesToAssetsWithdraw_mono (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)

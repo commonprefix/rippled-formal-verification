@@ -34,10 +34,6 @@ inductive Vault.ClawbackPriced (v : Vault) (assets holderShares : STAmount) (wai
       recoveredNumber.operator_gt v.assetsAvailable = false →
       Vault.ClawbackPriced v assets holderShares waive shares recovered
 
-/-- Same formula as `idealSharesWithdraw`, the clawback prices through the withdrawal pipeline. -/
-abbrev RawVault.idealSharesClawback (rv : RawVault) (waiveUnrealizedLoss : Bool) (assets : ℚ) : ℚ :=
-  rv.idealSharesWithdraw waiveUnrealizedLoss assets
-
 /-- Same formula as `idealAssetsWithdraw`, the clawback prices through the withdrawal pipeline. -/
 abbrev RawVault.idealAssetsClawback (rv : RawVault) (waiveUnrealizedLoss : Bool) (shares : ℚ) : ℚ :=
   rv.idealAssetsWithdraw waiveUnrealizedLoss shares

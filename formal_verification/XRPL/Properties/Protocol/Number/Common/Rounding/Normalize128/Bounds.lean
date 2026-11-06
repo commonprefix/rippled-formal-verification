@@ -26,11 +26,12 @@ theorem doNormalize128_rounds_to_nearest
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   -- After scaleUp the value is unchanged and the tail becomes δ₁ = δ·10^(e−e₁) ≤ 1, since scaleUp either does
@@ -89,7 +90,7 @@ theorem doNormalize128_rounds_to_nearest
     · rw [if_neg hst, if_neg hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -276,11 +277,12 @@ theorem doNormalize128_rounds_any
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   -- After scaleUp the value is unchanged and the tail becomes δ₁ = δ·10^(e−e₁) ≤ 1, since scaleUp either does
@@ -339,7 +341,7 @@ theorem doNormalize128_rounds_any
     · rw [if_neg hst, if_neg hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -524,11 +526,12 @@ theorem doNormalize128_rounds_direction
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
   -- scaleUp stage.
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   -- Unified post-scaleUp facts: the value is exact and the tail rescales to δ₁.
@@ -586,7 +589,7 @@ theorem doNormalize128_rounds_direction
     · rw [if_neg hst, if_neg hst]
       exact g0_represents_zero zn
   -- scaleDown stage.
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>
@@ -702,8 +705,8 @@ theorem doNormalize128_rounds_direction
               rw [hφf hst, hft0]
           have h10cp_pos : (0 : ℚ) < (10 : ℚ) ^ cp.2.1 := zpow_pos (by norm_num) _
           have h10cp_nn : (0 : ℚ) ≤ (10 : ℚ) ^ cp.2.1 := le_of_lt h10cp_pos
-          have hgP_sbit : (cp.2.2.pushOverflow cp.1 mode).sbit_ = cp.2.2.sbit_ := by
-            simp only [Guard.pushOverflow, Guard.push]
+          have hgP_sbit : (cp.2.2.pushOverflowSpec cp.1 mode).sbit_ = cp.2.2.sbit_ := by
+            simp only [Guard.pushOverflowSpec, Guard.push]
             split_ifs <;> rfl
           -- result.toRat in signed form.
           have h_res_eq_pos : zn = false → result.toRat
@@ -773,7 +776,7 @@ theorem doNormalize128_rounds_direction
                     have hzm_eq : cp.1.toNat = maxRepUp.toNat := by
                       rcases hcoup with ⟨h, _⟩ | ⟨_, h⟩
                       · exact h
-                      · rw [h_bool_false (cp.2.2.pushOverflow cp.1 .downward)
+                      · rw [h_bool_false (cp.2.2.pushOverflowSpec cp.1 .downward)
                             (by rw [hgP_sbit]; exact h_sbit_f)] at h
                         exact absurd h Bool.noConfusion
                     have hzm_q_eq : (cp.1.toNat : ℚ) = maxRepNat + 3 := by
@@ -830,7 +833,7 @@ theorem doNormalize128_rounds_direction
                     exfalso
                     obtain ⟨hdig_pos, hsb⟩ := pushOverflow_cusp_interior_facts cp.2.2 cp.1
                       .downward h_zm_le_rep hzm_lt_up
-                    have h1 : (cp.2.2.pushOverflow cp.1 .downward).round .downward = 1 :=
+                    have h1 : (cp.2.2.pushOverflowSpec cp.1 .downward).round .downward = 1 :=
                       (round_downward_eq_one_iff _).mpr
                         ⟨by rw [hsb]; exact h_sbit_t, Or.inl hdig_pos⟩
                     rw [h1, show ((1 : Int) == 1) = true from rfl, Bool.true_or] at hbool
@@ -936,7 +939,7 @@ theorem doNormalize128_rounds_direction
                   · exfalso
                     obtain ⟨hdig_pos, hsb⟩ := pushOverflow_cusp_interior_facts cp.2.2 cp.1
                       .upward h_zm_le_rep hzm_lt_up
-                    have h1 : (cp.2.2.pushOverflow cp.1 .upward).round .upward = 1 :=
+                    have h1 : (cp.2.2.pushOverflowSpec cp.1 .upward).round .upward = 1 :=
                       (round_upward_eq_one_iff _).mpr
                         ⟨by rw [hsb]; exact h_sbit_f, Or.inl hdig_pos⟩
                     rw [h1, show ((1 : Int) == 1) = true from rfl, Bool.true_or] at hbool
@@ -1007,7 +1010,7 @@ theorem doNormalize128_rounds_direction
                     have hzm_eq : cp.1.toNat = maxRepUp.toNat := by
                       rcases hcoup with ⟨h, _⟩ | ⟨_, h⟩
                       · exact h
-                      · rw [h_bool_false (cp.2.2.pushOverflow cp.1 .upward)
+                      · rw [h_bool_false (cp.2.2.pushOverflowSpec cp.1 .upward)
                             (by rw [hgP_sbit]; exact h_sbit_t)] at h
                         exact absurd h Bool.noConfusion
                     have hzm_q_eq : (cp.1.toNat : ℚ) = maxRepNat + 3 := by

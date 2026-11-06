@@ -33,24 +33,23 @@ private def defaultCoveredAmount {α : Type} [AssetPool α] (broker : LoanBroker
   defaultCovered.toNumber .to_nearest
 
 -- LoanManage -> preclaim
-def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : TER :=
-  let gracePeriodEnd := loan.nextPaymentDueDate + loan.schedule.gracePeriod
-  let hasExpired : Bool := now > gracePeriodEnd
-
+def Loan.canManage (loan : Loan) (action : LoanManageAction) (now : UInt32) : Except Error TER := do
   if loan.isPending then
-    .tecNO_PERMISSION
+    return .tecNO_PERMISSION
   else if loan.isDefault then
-    .tecNO_PERMISSION
+    return .tecNO_PERMISSION
   else if loan.isImpaired && action == .impair then
-    .tecNO_PERMISSION
+    return .tecNO_PERMISSION
   else if !(loan.isImpaired || loan.isDefault) && action == .unimpair then
-    .tecNO_PERMISSION
+    return .tecNO_PERMISSION
   else if loan.paymentRemaining == 0 then
-    .tecNO_PERMISSION
-  else if action == .default && !hasExpired then
-    .tecTOO_SOON
+    return .tecNO_PERMISSION
+  else if action == .default then
+    let gracePeriodEnd ← loan.nextPaymentDueDate.addChecked loan.schedule.gracePeriod
+    let hasExpired : Bool := now > gracePeriodEnd
+    if !hasExpired then return .tecTOO_SOON else return .tesSUCCESS
   else
-    .tesSUCCESS
+    return .tesSUCCESS
 
 -- Record the loan's principal as a paper loss when impairing, reverse it when not.
 private def Loan.changeImpairment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (impaired : Bool)

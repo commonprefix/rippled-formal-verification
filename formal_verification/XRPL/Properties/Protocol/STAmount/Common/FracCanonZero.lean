@@ -188,9 +188,7 @@ lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : round
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.ofMantissaExp s.signedDrops.toInt64 s.mOffset mode := by
-    unfold STAmount.iou; rw [if_neg hint]
-  rw [hiou] at hok
+  rw [STAmount.iou_of_lt mode hint hfit] at hok
   have hsd_nn : 0 ≤ s.signedDrops.toInt64.toInt := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -222,18 +220,18 @@ lemma STAmount.canonicalize_fczr (s result : STAmount) (mode : rounding_mode)
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  have hiou : s.iou mode = IOUAmount.normalize ⟨s.signedDrops.toInt64, s.mOffset⟩ mode := by
-    unfold STAmount.iou IOUAmount.ofMantissaExp; rw [if_neg hint]
-  rw [hiou] at hok
-  cases hnorm : IOUAmount.normalize ⟨s.signedDrops.toInt64, s.mOffset⟩ mode with
-  | error e => rw [hnorm] at hok; exact absurd hok (by simp)
+  cases hi : s.iou mode with
+  | error e => rw [hi] at hok; exact absurd hok (by simp)
   | ok i =>
-    rw [hnorm] at hok
+    have hnorm : IOUAmount.normalize ⟨s.signedDrops.toInt64, s.mOffset⟩ mode = .ok i :=
+      STAmount.iou_ok_peel hint hi
+    rw [hi] at hok
     simp only [] at hok
     have hres : result = { s with
         mValue := (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
         mOffset := i.exponent_,
-        mIsNegative := decide (i.signum < 0) } := (Except.ok.inj hok).symm
+        mIsNegative := decide (i.signum < 0) } := by
+      rw [IOUAmount.absMant_toUInt64]; exact (Except.ok.inj hok).symm
     have hnt : result.mNumericType = .fractional := by rw [hres]; exact hfr
     refine ⟨hnt, ?_⟩
     rcases IOUAmount.normalize_InRange16_or_zero _ mode i hnorm with hr | hz
@@ -337,7 +335,8 @@ lemma STAmount.ofNumber_fractional_fczr (n : Number) (mode : rounding_mode) (res
   · exact absurd ‹NumericType.fractional.isIntegral = true› (by decide)
   · split at hok
     · exact absurd hok (by simp)
-    · rw [STAmount.checked] at hok
+    · obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
+      rw [STAmount.checked] at hok
       exact STAmount.canonicalize_fczr _ result mode rfl hok
 
 /-- `roundToExponent` keeps `FracCanonZero`. The early exits return the value, and the general path adds and
@@ -380,20 +379,17 @@ lemma STAmount.toNumber_zero_fractional (s : STAmount) (mode : rounding_mode)
     rw [h0]; rfl
   have hiou : s.iou mode = .ok IOUAmount.zero := by
     unfold STAmount.iou IOUAmount.ofMantissaExp
-    rw [if_neg (by rw [hfr]; decide), hsd]
+    rw [if_neg (by rw [hfr]; decide), STAmount.signedDrops_toInt64Checked s (by rw [hz]; decide), ok_bind, hsd]
     show IOUAmount.normalize ⟨0, s.mOffset⟩ mode = .ok IOUAmount.zero
     unfold IOUAmount.normalize
     rw [if_pos (show (((⟨0, s.mOffset⟩ : IOUAmount)).mantissa_ == 0) = true from rfl)]
   rw [hiou]
   show IOUAmount.toNumber IOUAmount.zero mode = .ok Number.zero
   unfold IOUAmount.toNumber IOUAmount.zero Number.from_rep Number.normalized Number.normalize
-  rw [show doNormalize
-        (Number.unchecked ((0 : Int64) < 0) (0 : Int64).toInt.natAbs.toUInt64 (-100)).negative_
-        (Number.unchecked ((0 : Int64) < 0) (0 : Int64).toInt.natAbs.toUInt64 (-100)).mantissa_
-        (Number.unchecked ((0 : Int64) < 0) (0 : Int64).toInt.natAbs.toUInt64 (-100)).exponent_
-        largeRange.min largeRange.max mode
-      = doNormalize false 0 (-100) largeRange.min largeRange.max mode from rfl]
-  unfold doNormalize
+  show doNormalize false 0 (-100) largeRange.min largeRange.max mode = _
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [if_pos (by decide)]
 
 /-- `canonicalize` preserves the numeric type: every success branch returns the
@@ -414,7 +410,7 @@ lemma STAmount.canonicalize_mNumericType (s result : STAmount) (mode : rounding_
         | error e => rw [hr] at hok; exact absurd hok (by simp)
         | ok r =>
           rw [hr] at hok; simp only [] at hok
-          by_cases hrng : r.toInt.natAbs.toUInt64 > s.mNumericType.maxValue
+          by_cases hrng : r.magnitude > s.mNumericType.maxValue
           · rw [if_pos hrng] at hok; exact absurd hok (by simp)
           · rw [if_neg hrng] at hok; rw [← Except.ok.inj hok]
   · rw [if_neg hint] at hok
@@ -431,11 +427,13 @@ lemma STAmount.ofNumber_mNumericType (nt : NumericType) (n : Number) (mode : rou
   split at hok
   · split at hok
     · exact absurd hok (by simp)
-    · rw [STAmount.checked] at hok
+    · obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
+      rw [STAmount.checked] at hok
       exact STAmount.canonicalize_mNumericType _ result mode hok
   · split at hok
     · exact absurd hok (by simp)
-    · rw [STAmount.checked] at hok
+    · obtain ⟨v, -, hok⟩ := bind_ok_peel _ _ _ hok
+      rw [STAmount.checked] at hok
       exact STAmount.canonicalize_mNumericType _ result mode hok
 
 end XRPL.Model.Protocol

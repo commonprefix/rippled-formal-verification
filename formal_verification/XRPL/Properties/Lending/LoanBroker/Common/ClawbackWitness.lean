@@ -1,5 +1,4 @@
 import XRPL.Properties.Lending.LoanBroker.Common.WitnessSupport
-import XRPL.Properties.Lending.LoanBroker.Common.OpenZone
 
 /-! # Witnesses for the clawback theorems
 
@@ -12,41 +11,6 @@ namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
-
-/-- `wbHeld` is in the Open zone of its vault. -/
-private lemma wbHeld_openZone : wbHeld.OpenZone wvBase6.baseExponent := by
-  have h6 : wvBase6.baseExponent = -6 := by native_decide
-  rw [h6]
-  exact LoanBroker.Reachable.openZone_proof wbHeld (-6) wbHeld_reachable (fun h => absurd h (by native_decide))
-
-/-- `waOne` and `waNines` clawed from `wbHeld`. -/
-private def wrClawOne : LoanBrokerCoverResult := wResultOf (wbHeld.coverClawback wvBase6 (some waOne))
-private def wrClawNines : LoanBrokerCoverResult := wResultOf (wbHeld.coverClawback wvBase6 (some waNines))
-
-/-- Proof body of `roundedCoverClawback_capped_upper_bound_attained`. -/
-lemma LoanBroker.roundedCoverClawback_capped_upper_bound_witness :
-    ∃ (lb : LoanBroker) (v : Vault) (a : STAmount) (res : LoanBrokerCoverResult) (minimumCover : Number),
-      lb.OpenZone v.baseExponent ∧ v.numericType = lb.numericType ∧
-      (a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧ a.isZero = false ∧
-      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok minimumCover ∧
-      (lb.coverClawback v (some a)).run = .ok (.ok res) ∧
-      res.amount'.toRat = min a.toRat (lb.toExact.coverAvailable - minimumCover.toRat) :=
-  ⟨wbHeld, wvBase6, waOne, wrClawOne, Number.zero, wbHeld_openZone, by native_decide,
-    ⟨Or.inl (STAmount.canonical_of_canonicalB _ (by native_decide)), by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide, by native_decide⟩
-
-/-- Proof body of `roundedCoverClawback_capped_lower_bound_attained`. -/
-lemma LoanBroker.roundedCoverClawback_capped_lower_bound_witness :
-    ∃ (lb : LoanBroker) (v : Vault) (a : STAmount) (res : LoanBrokerCoverResult) (minimumCover : Number),
-      lb.OpenZone v.baseExponent ∧ v.numericType = lb.numericType ∧
-      (a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧ a.isZero = false ∧
-      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok minimumCover ∧
-      (lb.coverClawback v (some a)).run = .ok (.ok res) ∧
-      min a.toRat (lb.toExact.coverAvailable - minimumCover.toRat) - res.amount'.toRat =
-        (1 - 1 / 10 ^ 15) * 10 ^ v.baseExponent :=
-  ⟨wbHeld, wvBase6, waNines, wrClawNines, Number.zero, wbHeld_openZone, by native_decide,
-    ⟨Or.inl (STAmount.canonical_of_canonicalB _ (by native_decide)), by native_decide, by native_decide⟩,
-    by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 /-- A full clawback from `wbOffGridDebt`. -/
 private def wrClawDebt : LoanBrokerCoverResult := wResultOf (wbOffGridDebt.coverClawback wvBase0 none)

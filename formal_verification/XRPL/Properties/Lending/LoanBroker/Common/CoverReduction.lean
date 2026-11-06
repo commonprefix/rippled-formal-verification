@@ -107,7 +107,7 @@ lemma LoanBroker.roundedCoverAmount_ok (lb : LoanBroker) (pool : α) (amount r :
         exact ⟨aN, rfl, hr, not_le.mp (by assumption)⟩
 
 /-- `tecPRECISION_LOSS` is the only code a deposit's rounding returns. -/
-lemma LoanBroker.roundedCoverAmount_error_code (lb : LoanBroker) (pool : α) (amount : STAmount)
+lemma LoanBroker.roundedCoverAmount_error_codes_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (ter : TER) (hok : (lb.roundedCoverAmount pool amount).run = .ok (.error ter)) :
     ter = .tecPRECISION_LOSS := by
   unfold LoanBroker.roundedCoverAmount at hok
@@ -145,7 +145,7 @@ lemma LoanBroker.canCoverDeposit_ok (lb : LoanBroker) (pool : α) (amount : STAm
     rw [h] at hok
     cases x with
     | error ter =>
-      have := LoanBroker.roundedCoverAmount_error_code lb pool amount ter h
+      have := LoanBroker.roundedCoverAmount_error_codes_proof lb pool amount ter h
       subst this
       cases hok
     | ok r => exact ⟨r, rfl, hok⟩
@@ -225,7 +225,7 @@ lemma LoanBroker.roundedCoverClawback_ok (lb : LoanBroker) (pool : α) (amount :
     simp_all [LoanBroker.clawRequest]
 
 /-- A clawback's rounding returns only `tecINSUFFICIENT_FUNDS` or `tecPRECISION_LOSS`. -/
-lemma LoanBroker.roundedCoverClawback_error_codes (lb : LoanBroker) (pool : α)
+lemma LoanBroker.roundedCoverClawback_error_codes_proof (lb : LoanBroker) (pool : α)
     (amount : Option STAmount) (ter : TER)
     (hok : (lb.roundedCoverClawback pool amount).run = .ok (.error ter)) :
     ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS := by
@@ -246,7 +246,7 @@ lemma LoanBroker.canCoverClawback_ok_iff (lb : LoanBroker) (pool : α) (amount :
   | ok x =>
     cases x with
     | error ter =>
-      rcases LoanBroker.roundedCoverClawback_error_codes lb pool amount ter h with h' | h' <;>
+      rcases LoanBroker.roundedCoverClawback_error_codes_proof lb pool amount ter h with h' | h' <;>
         subst h' <;> simp [hn]
     | ok c => simp [hn]
 
@@ -324,6 +324,34 @@ lemma LoanBroker.coverClawback_fixed_fields (lb : LoanBroker) (pool : α)
   obtain ⟨c, _, happ⟩ := LoanBroker.coverClawback_ok_inv lb pool amount res hok
   obtain ⟨_, c', _, _, _, hraw⟩ := LoanBroker.applyCoverTransaction_debit_inv lb c res happ
   exact LoanBroker.sameFixedFields_cover lb res.loanBroker' c' hraw
+
+/-- A deposit keeps `debtMaximum`. -/
+lemma LoanBroker.coverDeposit_debtMaximum (lb : LoanBroker) (pool : α) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (hok : (lb.coverDeposit pool amount).run = .ok (.ok res)) :
+    res.loanBroker'.debtMaximum = lb.debtMaximum := by
+  obtain ⟨r, _, happ⟩ := LoanBroker.coverDeposit_ok_inv lb pool amount res hok
+  obtain ⟨_, c', _, _, _, hraw⟩ := LoanBroker.applyCoverTransaction_credit_inv lb r res happ
+  have h := congrArg RawLoanBroker.debtMaximum hraw
+  exact h
+
+/-- A withdrawal keeps `debtMaximum`. -/
+lemma LoanBroker.coverWithdraw_debtMaximum (lb : LoanBroker) (pool : α) (amount : STAmount)
+    (res : LoanBrokerCoverResult) (hok : (lb.coverWithdraw pool amount).run = .ok (.ok res)) :
+    res.loanBroker'.debtMaximum = lb.debtMaximum := by
+  obtain ⟨a, _, happ⟩ := LoanBroker.coverWithdraw_ok_inv lb pool amount res hok
+  obtain ⟨_, c', _, _, _, hraw⟩ := LoanBroker.applyCoverTransaction_debit_inv lb a res happ
+  have h := congrArg RawLoanBroker.debtMaximum hraw
+  exact h
+
+/-- A clawback keeps `debtMaximum`. -/
+lemma LoanBroker.coverClawback_debtMaximum (lb : LoanBroker) (pool : α)
+    (amount : Option STAmount) (res : LoanBrokerCoverResult)
+    (hok : (lb.coverClawback pool amount).run = .ok (.ok res)) :
+    res.loanBroker'.debtMaximum = lb.debtMaximum := by
+  obtain ⟨c, _, happ⟩ := LoanBroker.coverClawback_ok_inv lb pool amount res hok
+  obtain ⟨_, c', _, _, _, hraw⟩ := LoanBroker.applyCoverTransaction_debit_inv lb c res happ
+  have h := congrArg RawLoanBroker.debtMaximum hraw
+  exact h
 
 /-- The new `coverAvailable` after a credit, as a rational. -/
 lemma LoanBroker.applyCoverTransaction_credit_value (lb : LoanBroker) (amount : STAmount)

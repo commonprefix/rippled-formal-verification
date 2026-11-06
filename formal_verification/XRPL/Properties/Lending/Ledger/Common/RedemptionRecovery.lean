@@ -145,11 +145,8 @@ lemma LendingLedger.redemption_recovery_proof (l l' : LendingLedger) (tx : Lendi
       have hlp : loan.isPending = false := by
         rw [show loan.isPending = e.loan.isPending from (congrArg RawLoan.isPending (Loan.withBroker_eq hw) :)]
         simpa using hp
-      obtain ⟨b, hb, -⟩ := Loan.deleteActive_ok loan.broker
-      rw [Loan.delete_active_reduce loan l.vault hlp, hb] at hdel
-      injection hdel with hdel
-      injection hdel with hdel
-      subst hdel
+      obtain ⟨-, hpool⟩ := Loan.delete_active_ok_inv loan l.vault r hlp hdel
+      rw [hpool] at hup
       exact lt_irrefl _ hup
   | loanManage i action =>
     by_cases hact : action = .default

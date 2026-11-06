@@ -26,10 +26,10 @@ theorem LoanBroker.roundedCoverAmount_exits (pool : α) (amount : STAmount) :
     LoanBroker.roundedCoverAmount_rounded_proof lb pool amount⟩
 
 /-- The only rounding rejection is tecPRECISION_LOSS. -/
-theorem LoanBroker.roundedCoverAmount_rejected_code (pool : α) (amount : STAmount) (ter : TER)
+theorem LoanBroker.roundedCoverAmount_error_codes (pool : α) (amount : STAmount) (ter : TER)
     (hok : (lb.roundedCoverAmount pool amount).run = .ok (.error ter)) :
     ter = .tecPRECISION_LOSS :=
-  LoanBroker.roundedCoverAmount_error_code lb pool amount ter hok
+  LoanBroker.roundedCoverAmount_error_codes_proof lb pool amount ter hok
 
 /-- The exits of `canCoverDeposit`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.canCoverDeposit_exits (pool : α) (amount : STAmount) :

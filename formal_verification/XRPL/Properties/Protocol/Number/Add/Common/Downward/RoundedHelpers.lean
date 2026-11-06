@@ -81,7 +81,8 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero y hmeq
     have h_result : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have hx_mant : x.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
@@ -96,7 +97,8 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero x hmeq
     have h_result : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant : y.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
@@ -108,7 +110,8 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · exfalso
     have h_result : result = Number.zero := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm

@@ -104,6 +104,8 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
   | ok rv =>
     rw [hrep] at hok
     simp only [] at hok
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hexact : (rv.toInt : ℚ) = n.toRat :=
       int_cast_eq_of_abs_lt_one rv.toInt n.toRat hden (to_rep_within_one n mode rv hn hrep)
     have h0 : 0 ≤ rv.toInt := by
@@ -150,6 +152,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
       | ok r2 =>
         rw [hr2] at hok
         simp only [] at hok
+        rw [Int64.magnitude_eq] at hok
         have hmaxrep : rv.toUInt64.toNat ≤ maxRep.toNat := by
           rw [maxRep_val]; omega
         have hkey := to_rep_exact_of_exponent_zero false rv.toUInt64 mode r2 hmaxrep hr2

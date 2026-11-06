@@ -216,10 +216,7 @@ private lemma STAmount.checked_frac_sigdigits_exact (M : UInt64) (e : Int) (mode
     show s0.signedDrops = (M.toNat : ℤ)
     simp [hs0, STAmount.signedDrops, STAmount.unchecked]
   have hiou : s0.iou mode = IOUAmount.normalize ⟨M.toInt64, e⟩ mode := by
-    unfold STAmount.iou; rw [if_neg h_int]
-    show IOUAmount.ofMantissaExp s0.signedDrops.toInt64 s0.mOffset mode
-      = IOUAmount.normalize ⟨M.toInt64, e⟩ mode
-    rw [hsd_eq]; rfl
+    rw [STAmount.iou_of_lt mode h_int (show s0.mValue.toNat < 2 ^ 63 from hfit), hsd_eq]; rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok
   rw [if_neg h_int, hiou] at hok
@@ -229,7 +226,8 @@ private lemma STAmount.checked_frac_sigdigits_exact (M : UInt64) (e : Int) (mode
     rw [h_norm] at hok; simp only [] at hok
     have hres_eq : c = ⟨.fractional,
         (if i.signum < 0 then -i.mantissa_ else i.mantissa_).toUInt64,
-        i.exponent_, decide (i.signum < 0)⟩ := (Except.ok.inj hok).symm
+        i.exponent_, decide (i.signum < 0)⟩ := by
+      rw [IOUAmount.absMant_toUInt64]; exact (Except.ok.inj hok).symm
     have hival : i.toRat = (M.toNat : ℚ) * (10 : ℚ) ^ e :=
       IOUAmount.normalize_sigdigits16 M e mode i s t hMform hs hMnz hfit he_lo he_hi h_norm
     have himne : i.mantissa_ ≠ 0 := by

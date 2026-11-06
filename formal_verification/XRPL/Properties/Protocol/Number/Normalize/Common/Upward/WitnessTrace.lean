@@ -9,12 +9,15 @@ lemma normalize_upward_witness :
     Number.normalize ⟨false, 10000000000000000001, 0⟩
         largeRange.min largeRange.max .upward =
       .ok ⟨false, 1000000000000000001, 1⟩ := by
-  unfold Number.normalize doNormalize
+  unfold Number.normalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show (((10000000000000000001 : UInt64) : UInt64) == 0) = false from rfl]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUp largeRange.min (10000000000000000001 : UInt64) 0
+  rw [show doNormalize_scaleUpSpec largeRange.min (10000000000000000001 : UInt64) 0
         = ((10000000000000000001 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUp; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (10000000000000000001 : UInt64) (0 : Int) Guard.new
         = .ok ((1000000000000000000 : UInt64), (1 : Int), Guard.new.push 1) by
         rw [doNormalize_scaleDown, dif_pos (by decide), if_neg (by decide)]
@@ -33,7 +36,9 @@ lemma normalize_upward_witness :
   have h_rup : (Guard.new.push 1).doRoundUp false (1000000000000000000 : UInt64) (1 : Int)
       largeRange.min largeRange.max .upward .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 1 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new
+    rw [Guard.doRoundUp_eq_spec]
+    all_goals try min_fit
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit Guard.push Guard.new
     rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]

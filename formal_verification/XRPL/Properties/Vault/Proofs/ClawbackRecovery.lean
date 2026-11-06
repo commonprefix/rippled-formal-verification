@@ -488,13 +488,6 @@ private lemma clawback_shares_bounds (v : Vault) (X shares : STAmount) (waive : 
   obtain ⟨hden, hspos, hup, hlo⟩ := WdTight.shares_bounds v X shares waive nav hnav hpos hXc hok hnz
   exact ⟨hden, hspos.le, hlo, hup⟩
 
-/-- On a vault whose net asset value is exact, the ideal at the computed value is the clawback ideal. -/
-private lemma idealSharesWithdrawAt_exact (v : Vault) (waive : Bool) (nav : Number)
-    (hexact : nav.toRat = WdPrice.navQ v waive) (X : ℚ) :
-    v.idealSharesWithdrawAt nav.toRat X = v.idealSharesClawback waive X := by
-  unfold RawVault.idealSharesWithdrawAt RawVault.idealSharesClawback RawVault.idealSharesWithdraw
-  rw [hexact]
-
 /-- Proof of the valid-vault line of `Vault.clawback_sharesDestroyed`. -/
 lemma Vault.clawback_sharesDestroyed_total_proof (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered : STAmount) (waive : Bool)
@@ -513,25 +506,6 @@ lemma Vault.clawback_sharesDestroyed_total_proof (v : Vault)
     waive assetsRecoveredNumber hshares hassets hnum hle hznz hnn r hok
   rw [heq] at hsnz ⊢
   exact clawback_shares_bounds v assets sharesDestroyed waive nav hnav (Or.inl hc) hnn hshares hsnz
-
-/-- Proof of `Vault.clawback_sharesDestroyed`. -/
-lemma Vault.clawback_sharesDestroyed_proof (v : Vault)
-    (assets holderShares sharesDestroyed assetsRecovered : STAmount) (waive : Bool)
-    (assetsRecoveredNumber : Number) (t0 : UInt32) (hr : Vault.Reachable v t0)
-    (hc : assets.Canonical)
-    (hshares : assetsToSharesWithdraw v assets true waive = .ok sharesDestroyed)
-    (hassets : v.sharesToAssetsWithdraw sharesDestroyed waive = .ok assetsRecovered)
-    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
-    (hznz : assets.isZero = false) (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
-    (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r)) :
-    r.shares.toRat.den = 1 ∧ 0 ≤ r.shares.toRat ∧
-    v.idealSharesClawback waive assets.toRat * (1 - sharesε) - 1 < r.shares.toRat ∧
-    r.shares.toRat ≤ v.idealSharesClawback waive assets.toRat * (1 + sharesε) := by
-  obtain ⟨nav, hnavN, hexact⟩ := WdPrice.nav_exact_ok v waive (Vault.Reachable.withdrawNavExact_proof v t0 hr waive)
-  have h := Vault.clawback_sharesDestroyed_total_proof v assets holderShares sharesDestroyed assetsRecovered
-    waive assetsRecoveredNumber nav hnavN hc hshares hassets hnum hle hznz hnn r hok
-  rwa [idealSharesWithdrawAt_exact v waive nav hexact] at h
 
 /-- The shares a capped clawback destroys, priced at a net asset value: within `sharesε` of the
 ideal of the cash above, and less than one share plus `sharesε` below. -/
@@ -566,28 +540,6 @@ lemma Vault.clawback_sharesDestroyed_clamped_total_proof (v : Vault)
   obtain ⟨ha2s, hsnz⟩ := Vault.clawback_capped_shares v assets holderShares sharesDestroyed assetsRecovered
     assetsRecovered' waive assetsRecoveredNumber hshares hassets hnum hgt hclamped hznz hnn r hok
   exact clawback_capped_bounds v assetsRecovered' r.shares waive nav hmax hnav hclamped ha2s hsnz
-
-/-- The shares destroyed by a capped clawback from a reachable vault: a whole number within `sharesε` of the
-ideal for the available assets. -/
-lemma Vault.clawback_sharesDestroyed_clamped_proof (v : Vault)
-    (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount) (waive : Bool)
-    (assetsRecoveredNumber : Number) (t0 : UInt32) (hr : Vault.Reachable v t0)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (hshares : assetsToSharesWithdraw v assets true waive = .ok sharesDestroyed)
-    (hassets : v.sharesToAssetsWithdraw sharesDestroyed waive = .ok assetsRecovered)
-    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hgt : assetsRecoveredNumber.operator_gt v.assetsAvailable = true)
-    (hclamped : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered')
-    (hznz : assets.isZero = false) (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
-    (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r)) :
-    r.shares.toRat.den = 1 ∧ 0 ≤ r.shares.toRat ∧
-    v.idealSharesClawback waive assetsRecovered'.toRat * (1 - sharesε) - 1 < r.shares.toRat ∧
-    r.shares.toRat ≤ v.idealSharesClawback waive assetsRecovered'.toRat * (1 + sharesε) := by
-  obtain ⟨nav, hnavN, hexact⟩ := WdPrice.nav_exact_ok v waive (Vault.Reachable.withdrawNavExact_proof v t0 hr waive)
-  have h := Vault.clawback_sharesDestroyed_clamped_total_proof v assets holderShares sharesDestroyed
-    assetsRecovered assetsRecovered' waive assetsRecoveredNumber nav hnavN hmax hshares hassets hnum hgt
-    hclamped hznz hnn r hok
-  rwa [idealSharesWithdrawAt_exact v waive nav hexact] at h
 
 /-- A zero clawback amount names the holder's balance: the sole holder's balance is the share
 total, so the share total the waived pricing names is that balance. -/

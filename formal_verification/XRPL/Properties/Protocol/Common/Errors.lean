@@ -1,5 +1,7 @@
 import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.TenthBips
+import XRPL.Properties.Protocol.Common.FixedWidth
+import XRPL.Properties.Protocol.Number.ToRep.Common.Proofs
 
 /-! # Errors of the Protocol operations
 
@@ -22,6 +24,8 @@ lemma Guard.doRoundUp_ne_notLawful (g : Guard) (negative : Bool) (mantissa : UIn
     (minMantissa maxMantissa : internalrep) (mode : rounding_mode) (location : Error)
     (hloc : location ≠ .notLawful) :
     g.doRoundUp negative mantissa exponent minMantissa maxMantissa mode location ≠ .error .notLawful := by
+  refine (Guard.doRoundUp_refines _ _ _ _ _ _ _ _).ne_error ?_ (by decide)
+  unfold Guard.doRoundUpSpec
   have key : ∀ (c : Prop) [Decidable c] (r : RoundResult),
       (if c then (.error location : Except Error RoundResult) else .ok r) ≠ .error .notLawful := by
     intro c _ r; split <;> simp [hloc]
@@ -33,7 +37,8 @@ lemma doNormalize_scaleDown_ne_notLawful (maxMantissa m : UInt64) (e : Int) (g :
 
 lemma doNormalize_scaleDown128_ne_notLawful (maxMantissa : UInt64) (m : UInt128) (e : Int) (g : Guard) :
     doNormalize_scaleDown128 maxMantissa m e g ≠ .error .notLawful := by
-  fun_induction doNormalize_scaleDown128 maxMantissa m e g <;> simp_all
+  rw [doNormalize_scaleDown128_eq_spec]
+  fun_induction doNormalize_scaleDown128Spec maxMantissa m e g <;> simp_all
 
 lemma doNormalize_capAtMaxRep_ne_notLawful (m : UInt64) (e : Int) (g : Guard) :
     doNormalize_capAtMaxRep m e g ≠ .error .notLawful := by
@@ -45,7 +50,8 @@ lemma doNormalize_capAtMaxRep_ne_notLawful (m : UInt64) (e : Int) (g : Guard) :
 lemma doNormalize_ne_notLawful (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMantissa maxMantissa : UInt64) (mode : rounding_mode) :
     doNormalize negative mantissa exponent minMantissa maxMantissa mode ≠ .error .notLawful := by
-  unfold doNormalize
+  refine (doNormalize_refines _ _ _ _ _ _).ne_error ?_ (by decide)
+  unfold doNormalizeSpec
   split
   · simp
   dsimp only
@@ -55,12 +61,13 @@ lemma doNormalize_ne_notLawful (negative : Bool) (mantissa : UInt64) (exponent :
 lemma doNormalize128_ne_notLawful (negative : Bool) (mantissa : UInt128) (exponent : Int)
     (minMantissa maxMantissa : UInt64) (mode : rounding_mode) (stickyTail : Bool) :
     doNormalize128 negative mantissa exponent minMantissa maxMantissa mode stickyTail ≠ .error .notLawful := by
-  unfold doNormalize128
+  rw [doNormalize128_eq_spec]
+  unfold doNormalize128Spec
   split
   · simp
   dsimp only
-  split_ne_notLawful [doNormalize_scaleDown128_ne_notLawful, doNormalize_capAtMaxRep_ne_notLawful,
-    Guard.doRoundUp_ne_notLawful]
+  split_ne_notLawful [← doNormalize_scaleDown128_eq_spec, doNormalize_scaleDown128_ne_notLawful,
+    doNormalize_capAtMaxRep_ne_notLawful, Guard.doRoundUp_ne_notLawful]
 
 lemma Number.normalize_ne_notLawful (n : Number) (minMant maxMant : UInt64) (mode : rounding_mode) :
     n.normalize minMant maxMant mode ≠ .error .notLawful :=
@@ -69,7 +76,11 @@ lemma Number.normalize_ne_notLawful (n : Number) (minMant maxMant : UInt64) (mod
 lemma Number.normalizeToRange_ne_notLawful (n : Number) (minMant maxMant : UInt64) (mode : rounding_mode) :
     n.normalizeToRange minMant maxMant mode ≠ .error .notLawful := by
   unfold Number.normalizeToRange
-  split_ne_notLawful [doNormalize_ne_notLawful]
+  split
+  · rename_i e he
+    intro h; cases h; exact doNormalize_ne_notLawful _ _ _ _ _ _ he
+  · exact bind_ne_error (UInt64.toInt64Checked_ne_notLawful _) fun _ =>
+      bind_ne_error (ite_ne_error (Int64.negChecked_ne_notLawful _) nofun) fun _ => nofun
 
 lemma Number.normalized_ne_notLawful (negative : Bool) (mantissa : UInt64) (exponent : Int)
     (minMant maxMant : UInt64) (mode : rounding_mode) :
@@ -87,18 +98,56 @@ lemma Number.truncate_ne_notLawful (n : Number) : n.truncate ≠ .error .notLawf
 
 lemma Number.operator_mul_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_mul y mode ≠ .error .notLawful := by
-  unfold Number.operator_mul
+  rw [Number.operator_mul_eq_spec]
+  unfold Number.operator_mulSpec
   dsimp only
   split_ne_notLawful [Number.normalize_ne_notLawful, Guard.doRoundUp_ne_notLawful]
+
+/-- The division quotient fails only on a wrap. The proof rewrites one step at a time, since unfolding its binds
+by definition sends the kernel into deep recursion on the 128-bit literals. -/
+lemma divQuotient128_eq_error {xm ym : UInt64} {xe ye : Int} {e : Error}
+    (h : divQuotient128 xm ym xe ye = .error e) : e = .wrap := by
+  unfold divQuotient128 at h
+  dsimp only at h
+  rcases h1 : BitVec.mulChecked (toUInt128 xm) 100000000000000000 with e1 | num
+  · rw [h1, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h1
+  rw [h1, ok_bind] at h
+  by_cases hr : (num % toUInt128 ym != 0) = true
+  · rw [if_pos hr] at h
+    rcases h2 : BitVec.mulChecked (num % toUInt128 ym) 100000 with e2 | pn
+    · rw [h2, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h2
+    rw [h2, ok_bind] at h
+    by_cases hc : (pn / toUInt128 ym != 0) = true
+    · rw [if_pos hc] at h
+      rcases h3 : BitVec.mulChecked (num / toUInt128 ym) 100000 with e3 | sc
+      · rw [h3, err_bind] at h; cases h; exact BitVec.mulChecked_eq_error h3
+      rw [h3, ok_bind] at h
+      rcases h4 : BitVec.addChecked sc (pn / toUInt128 ym) with e4 | co
+      · rw [h4, err_bind] at h; cases h; exact BitVec.addChecked_eq_error h4
+      rw [h4, ok_bind] at h; cases h
+    · rw [if_neg hc] at h; cases h
+  · rw [if_neg hr] at h; cases h
+
+lemma divQuotient128_ne_notLawful (xm ym : UInt64) (xe ye : Int) :
+    divQuotient128 xm ym xe ye ≠ .error .notLawful :=
+  fun h => nomatch divQuotient128_eq_error h
 
 lemma Number.operator_div_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_div y mode ≠ .error .notLawful := by
   unfold Number.operator_div
-  split_ne_notLawful [doNormalize128_ne_notLawful]
+  split
+  · simp
+  split
+  · exact nofun
+  intro h
+  rcases hq : divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_ with e | ⟨zm, ze, d⟩
+  · rw [hq, err_bind] at h; cases h; exact divQuotient128_ne_notLawful _ _ _ _ hq
+  · rw [hq, ok_bind] at h; exact doNormalize128_ne_notLawful _ _ _ _ _ _ _ h
 
 lemma Number.operator_add_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_add y mode ≠ .error .notLawful := by
-  unfold Number.operator_add
+  refine (Number.operator_add_refines _ _ _).ne_error ?_ (by decide)
+  unfold Number.operator_addSpec
   split_ne_notLawful [Number.normalize_ne_notLawful, Guard.doRoundUp_ne_notLawful,
     doNormalize128_ne_notLawful]
 
@@ -116,18 +165,18 @@ lemma Number.power_ne_notLawful (base : Number) (n : Nat) : base.power n ≠ .er
     · rename_i e he; rw [he] at ih; exact ih
     · split_ne_notLawful [Number.operator_mul_ne_notLawful]
 
-lemma Number.to_rep_grow_ne_notLawful (drops : rep) (offset : Int) :
-    Number.to_rep.grow drops offset ≠ .error .notLawful := by
-  fun_induction Number.to_rep.grow drops offset <;> simp_all
+lemma growSpec_ne_notLawful (drops : rep) (offset : Int) : growSpec drops offset ≠ .error .notLawful := by
+  fun_induction growSpec drops offset <;> simp_all
 
 lemma Number.to_rep_ne_notLawful (n : Number) (mode : rounding_mode) :
     n.to_rep mode ≠ .error .notLawful := by
-  unfold Number.to_rep
+  rw [Number.to_rep_eq_spec]
+  unfold Number.to_repSpec
   dsimp only
   have hgrow : ∀ (c : Prop) [Decidable c] (drops : rep) (offset : Int),
-      (if c then Number.to_rep.grow drops offset else .ok drops) ≠ .error .notLawful := by
+      (if c then growSpec drops offset else .ok drops) ≠ .error .notLawful := by
     intro c _ drops offset; split
-    · exact Number.to_rep_grow_ne_notLawful _ _
+    · exact growSpec_ne_notLawful _ _
     · simp
   split_ne_notLawful [hgrow]
 
@@ -171,10 +220,12 @@ lemma IOUAmount.operator_add_ne_notLawful (x y : IOUAmount) (mode : rounding_mod
 
 lemma STAmount.intAmount_ne_notLawful (s : STAmount) : s.intAmount ≠ .error .notLawful := by
   unfold STAmount.intAmount
+  simp only [bind, Except.bind, pure, Except.pure]
   split_ne_notLawful []
 
 lemma STAmount.iou_ne_notLawful (s : STAmount) (mode : rounding_mode) : s.iou mode ≠ .error .notLawful := by
   unfold STAmount.iou
+  simp only [bind, Except.bind]
   split_ne_notLawful [IOUAmount.ofMantissaExp_ne_notLawful]
 
 lemma STAmount.toNumber_ne_notLawful (s : STAmount) (mode : rounding_mode) :
@@ -199,6 +250,7 @@ lemma STAmount.ofIOUAmount_ne_notLawful (a : IOUAmount) (mode : rounding_mode) :
 lemma STAmount.ofNumber_ne_notLawful (nt : NumericType) (n : Number) (mode : rounding_mode) :
     STAmount.ofNumber nt n mode ≠ .error .notLawful := by
   unfold STAmount.ofNumber
+  simp only [bind, Except.bind]
   split_ne_notLawful [Number.to_rep_ne_notLawful, STAmount.checked_ne_notLawful,
     Number.normalizeToRange_ne_notLawful]
 
@@ -215,6 +267,7 @@ lemma STAmount.operator_le_ne_notLawful (lhs rhs : STAmount) :
 lemma STAmount.operator_add_ne_notLawful (v1 v2 : STAmount) (mode : rounding_mode) :
     v1.operator_add v2 mode ≠ .error .notLawful := by
   unfold STAmount.operator_add
+  simp only [bind, Except.bind]
   split_ne_notLawful [STAmount.checked_ne_notLawful, STAmount.canonicalize_ne_notLawful,
     STAmount.iou_ne_notLawful, IOUAmount.operator_add_ne_notLawful, STAmount.ofIOUAmount_ne_notLawful]
 

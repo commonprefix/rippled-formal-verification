@@ -146,6 +146,11 @@ private lemma LoanBroker.releaseLoan_raw {lb lb' : LoanBroker} {d : Number} (h :
     lb'.toRawLoanBroker = { lb.toRawLoanBroker with
       loanCount := lb.loanCount - 1, debtTotal := if lb.loanCount - 1 == 0 then Number.zero else d } := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   exact (RawLoanBroker.to_lawful_ok h).1
 
 /-- A LoanDelete releases the loan from its broker: a pending loan with its principal off DebtTotal, a closed loan
@@ -158,11 +163,8 @@ private lemma Loan.delete_broker_raw (loan : Loan) (v : Vault) (r : LoanBrokerWi
         loanCount := loan.broker.loanCount - 1
         debtTotal := if loan.broker.loanCount - 1 == 0 then Number.zero else d } := by
   cases hp : loan.isPending
-  · rw [Loan.delete_active_reduce loan v hp] at h
-    obtain ⟨b', hb', -⟩ := Loan.deleteActive_ok loan.broker
-    rw [hb'] at h
-    obtain rfl : b' = r.broker' := by injection h with h; injection h with h; rw [← h]
-    exact ⟨loan.broker.debtTotal, (fun h0 => by cases h0), fun _ => rfl, LoanBroker.releaseLoan_raw hb'⟩
+  · exact ⟨loan.broker.debtTotal, (fun h0 => by cases h0), fun _ => rfl,
+      LoanBroker.releaseLoan_raw (Loan.delete_active_ok_inv loan v r hp h).1⟩
   · obtain ⟨_, _, d, -, -, -, hd, hrel⟩ := Loan.delete_pending_ok_inv loan v r hp h
     exact ⟨d, fun _ => hd, (fun h0 => by cases h0), LoanBroker.releaseLoan_raw hrel⟩
 

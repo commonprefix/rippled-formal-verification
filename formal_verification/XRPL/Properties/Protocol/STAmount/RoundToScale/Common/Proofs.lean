@@ -15,7 +15,9 @@ lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
     IOUAmount.ofNumber n mode = .ok IOUAmount.zero := by
   have hd : doNormalize n.negative_ n.mantissa_ n.exponent_ cMinValue cMaxValue mode
       = .ok Number.zero := by
-    unfold doNormalize
+    rw [doNormalize_eq_spec]
+    all_goals try min_fit
+    unfold doNormalizeSpec
     rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr h, if_pos rfl]
   unfold IOUAmount.ofNumber IOUAmount.fromNumber Number.normalizeToRange
   rw [hd]

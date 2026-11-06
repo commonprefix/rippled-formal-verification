@@ -82,6 +82,11 @@ lemma Loan.manageDefault_debt (loan : Loan) (v : Vault) (r : LoanWithAmounts Vau
 private lemma LoanBroker.releaseLoan_debt (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.debtTotal = d ∨ lb'.debtTotal = Number.zero := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   have hraw := (congrArg RawLoanBroker.debtTotal (RawLoanBroker.to_lawful_ok h).1 :)
   dsimp only at hraw
   rw [show lb'.debtTotal = lb'.toRawLoanBroker.debtTotal from rfl, hraw]

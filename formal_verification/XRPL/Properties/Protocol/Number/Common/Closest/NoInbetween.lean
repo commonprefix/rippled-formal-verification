@@ -93,7 +93,7 @@ theorem no_inbetween_below_towards_zero_frame (result : Number) (truth : ℚ)
     · -- v = maxRepUp: `.towards_zero` never rounds up, so only the `zm = maxRepUp` case is left.
       rcases hsub with ⟨_, _⟩ | ⟨_, hb_true⟩
       swap
-      · rw [roundUp_bool_towards_zero_false (g.pushOverflow zm .towards_zero) zm] at hb_true
+      · rw [roundUp_bool_towards_zero_false (g.pushOverflowSpec zm .towards_zero) zm] at hb_true
         exact absurd hb_true Bool.false_ne_true
       have hv' : v = (maxRepCuspTarget : ℚ) := by rw [hv]; norm_num
       rw [hv'] at h_result_abs
@@ -233,7 +233,7 @@ theorem no_inbetween_above_towards_zero_frame (result : Number) (truth : ℚ)
     · -- v = maxRepUp: as in the below form, only the `zm = maxRepUp` case is left.
       rcases hsub with ⟨_, _⟩ | ⟨_, hb_true⟩
       swap
-      · rw [roundUp_bool_towards_zero_false (g.pushOverflow zm .towards_zero) zm] at hb_true
+      · rw [roundUp_bool_towards_zero_false (g.pushOverflowSpec zm .towards_zero) zm] at hb_true
         exact absurd hb_true Bool.false_ne_true
       have hv' : v = (maxRepCuspTarget : ℚ) := by rw [hv]; norm_num
       rw [hv'] at h_result_abs

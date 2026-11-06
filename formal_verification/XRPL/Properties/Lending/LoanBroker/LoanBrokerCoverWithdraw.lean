@@ -16,8 +16,8 @@ variable {α : Type} [AssetPool α]
 
 variable (lb : LoanBroker)
 
-/-- A withdrawal on a reachable broker -> pays out the amount floored to whole base units, and CoverAvailable drops
-by exactly that, at most the amount. On any broker a whole XRP or MPT withdrawal drops it by exactly the amount. -/
+/-- Cover withdrawal -> roundedAmount = ⌊amount⌋ in whole base units, and CoverAvailable drops by exactly that, at
+most the amount. On any lawful broker a whole XRP or MPT withdrawal drops it by exactly the amount. -/
 theorem LoanBroker.coverWithdraw_debit (amount : STAmount) :
     (∀ (base : Int) (v : Vault) (res : LoanBrokerCoverResult), lb.Reachable base → v.baseExponent = base →
       v.numericType = lb.numericType → amount.Canonical → amount.mNumericType = lb.numericType → 0 < amount.toRat →
@@ -56,7 +56,7 @@ theorem LoanBroker.coverWithdraw_debit (amount : STAmount) :
       LoanBroker.coverWithdraw_applied_delta_proof lb base hr v hvb hnt amount hc hpos hcan res hok,
     fun pool res hok => LoanBroker.coverWithdraw_debit_integral_proof lb pool amount res hok⟩
 
-/-- Cover withdraw only lowers CoverAvailable (monotone down). -/
+/-- Cover withdrawal on any lawful broker -> CoverAvailable' ≤ CoverAvailable. -/
 theorem LoanBroker.coverWithdraw_decreases_cover (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : (lb.coverWithdraw pool amount).run = .ok (.ok res))
     (hc : amount.Canonical) -- a transaction amount is a canonical amount
@@ -65,7 +65,7 @@ theorem LoanBroker.coverWithdraw_decreases_cover (pool : α) (amount : STAmount)
     res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_decreases_cover_proof lb pool amount res hok hc hb
 
-/-- When the checks pass -> CoverAvailable' ≥ minCover. -/
+/-- Cover withdrawal on any lawful broker -> CoverAvailable' ≥ minCover. -/
 theorem LoanBroker.coverWithdraw_keeps_minimum (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult)
     (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS)
@@ -73,33 +73,24 @@ theorem LoanBroker.coverWithdraw_keeps_minimum (pool : α) (amount : STAmount)
     res.loanBroker'.HasMinimumCover (AssetPool.baseExponent pool) :=
   LoanBroker.coverWithdraw_keeps_minimum_proof lb pool amount res hcan hok
 
-/-- When the checks pass -> the withdrawal succeeds with the clamped amount and never throws, not
-even notLawful. -/
+/-- Cover withdrawal on any lawful broker that passes its checks -> it succeeds with roundedAmount. -/
 theorem LoanBroker.coverWithdraw_total (pool : α) (amount : STAmount)
     (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS) :
     ∃ a res, clampToSumExponent lb.coverAvailable amount.operator_neg (AssetPool.baseExponent pool) = .ok a ∧
       (lb.coverWithdraw pool amount).run = .ok (.ok res) ∧ res.amount' = a :=
   LoanBroker.coverWithdraw_total_proof lb pool amount hcan
 
-/-- On a reachable broker with CoverAvailable > 0 -> there is an amount that lowers CoverAvailable. -/
-theorem LoanBroker.coverWithdraw_decrease_possible (base : Int) (hr : lb.Reachable base)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
-    (hpos : 0 < lb.toExact.coverAvailable) :
-    ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
-      amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
-        lb.canCoverWithdraw v amount = .ok .tesSUCCESS ∧ (lb.coverWithdraw v amount).run = .ok (.ok res) ∧
-        res.loanBroker'.toExact.coverAvailable < lb.toExact.coverAvailable :=
-  have hmax := LoanBroker.Reachable.maxValue_fits lb base hr hpos
-  LoanBroker.coverWithdraw_decrease_possible_proof lb base hr hmax v hvb hnt hpos
-
-/-- On a reachable broker -> the whole cover (≠ 0) can be withdrawn. -/
+/-- Reachable broker with CoverAvailable ≠ 0 -> a cover withdrawal of all of it, a legal amount, passes its checks and
+leaves CoverAvailable' = 0. -/
 theorem LoanBroker.coverWithdraw_all (base : Int) (hr : lb.Reachable base)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (s : STAmount)
-    -- `s` is CoverAvailable in the vault asset
-    (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s) (hnz : s.mValue ≠ 0) :
-    lb.canCoverWithdraw v s = .ok .tesSUCCESS ∧
-      ∃ res, (lb.coverWithdraw v s).run = .ok (.ok res) ∧ res.loanBroker'.toExact.coverAvailable = 0 :=
-  have hmax := LoanBroker.Reachable.cover_amount_maxValue_fits lb base hr s hs hnz
-  LoanBroker.coverWithdraw_all_proof lb base hr hmax v hvb hnt s hs hnz
+    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
+    (hnz : lb.toExact.coverAvailable ≠ 0) :
+    ∃ (s : STAmount) (res : LoanBrokerCoverResult),
+      s.Canonical ∧ s.mNumericType = lb.numericType ∧ s.toRat = lb.toExact.coverAvailable ∧
+        lb.canCoverWithdraw v s = .ok .tesSUCCESS ∧ (lb.coverWithdraw v s).run = .ok (.ok res) ∧
+        res.loanBroker'.toExact.coverAvailable = 0 :=
+  have hpos : 0 < lb.toExact.coverAvailable := lt_of_le_of_ne lb.exact.coverAvailable_nonneg (Ne.symm hnz)
+  have hmax := LoanBroker.Reachable.maxValue_fits lb base hr hpos
+  LoanBroker.coverWithdraw_all_proof lb base hr hmax v hvb hnt hpos
 
 end XRPL.Model.Lending

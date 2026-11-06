@@ -129,7 +129,7 @@ lemma powerMinusOneLoop_ne_notLawful (rate : Number) (n i : Nat) (term sum : Num
   | case1 _ _ _ _ ih =>
     simp only [bind, Except.bind, pure, Except.pure]
     split_ne_notLawful [Number.operator_mul_ne_notLawful, Number.operator_div_ne_notLawful,
-      Number.operator_add_ne_notLawful, ih]
+      Number.operator_add_ne_notLawful, Nat.toInt64Checked_ne_notLawful, ih]
   | case2 => simp [pure, Except.pure]
 
 lemma computePowerMinusOne_ne_notLawful (rate n : Number) (pr : UInt32) :
@@ -186,7 +186,7 @@ lemma computeLoanPropertiesFromPeriodicRate_ne_notLawful (principal rate : Numbe
   simp only [bind, Except.bind, pure, Except.pure]
   split_ne_notLawful [loanPeriodicPayment_ne_notLawful, Number.operator_mul_ne_notLawful,
     STAmount.ofNumber_ne_notLawful, STAmount.roundToNumericType_ne_notLawful, Number.operator_sub_ne_notLawful,
-    computeManagementFee_ne_notLawful, loanPrincipalFromPeriodicPayment_ne_notLawful]
+    computeManagementFee_ne_notLawful, loanPrincipalFromPeriodicPayment_ne_notLawful, UInt32.subChecked_ne_notLawful]
 
 lemma LoanState.build_ne_notLawful (a b c : Number) : LoanState.build a b c ≠ .error .notLawful := by
   unfold LoanState.build

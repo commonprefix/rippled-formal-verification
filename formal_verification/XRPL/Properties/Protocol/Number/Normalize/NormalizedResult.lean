@@ -18,12 +18,13 @@ lemma doNormalize_zero_shape (neg : Bool) (m : UInt64) (e : Int) (minM maxM : UI
     (mode : rounding_mode) (result : Number)
     (hok : doNormalize neg m e minM maxM mode = .ok result) (h0 : result.mantissa_ = 0) :
     result = Number.zero := by
-  unfold doNormalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   by_cases hm : (m == 0) = true
   · rw [if_pos hm] at hok; exact (Except.ok.inj hok).symm
   rw [if_neg hm] at hok
   simp only [] at hok
-  rcases hsu : doNormalize_scaleUp minM m e with ⟨m₁, e₁⟩
+  rcases hsu : doNormalize_scaleUpSpec minM m e with ⟨m₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   cases hsd : doNormalize_scaleDown maxM m₁ e₁
@@ -60,7 +61,9 @@ lemma Number.normalize_isNormalized (n result : Number) (mode : rounding_mode)
     exact Number.zero_isNormalized
   · by_cases hn : n.mantissa_ = 0
     · exfalso
-      unfold Number.normalize doNormalize at hok
+      unfold Number.normalize at hok
+      replace hok := doNormalize_ok_spec hok
+      unfold doNormalizeSpec at hok
       rw [if_pos (by simp [hn])] at hok
       exact hr (by rw [← Except.ok.inj hok]; rfl)
     · exact normalize_result_isNormalized n result mode hn hok hr
@@ -72,12 +75,20 @@ lemma Number.from_rep_isNormalized (m : Int64) (e : Int) (mode : rounding_mode)
     result.isNormalized :=
   Number.normalize_isNormalized _ result mode hok
 
+/-- A count converted to a `Number` is normalized. -/
+lemma Number.ofInt64_isNormalized (m : Int64) : (Number.ofInt64 m).isNormalized := by
+  unfold Number.ofInt64
+  cases h : Number.from_rep m 0 largeRange.min largeRange.max .to_nearest with
+  | error e => exact Number.zero_isNormalized
+  | ok r => exact Number.from_rep_isNormalized m 0 _ r h
+
 /-- Every successful `operator_mul` of normalized `Number`s gives a normalized `Number`. A zero operand is
 returned as it is, and every other product goes through `normalize`. -/
 lemma Number.operator_mul_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y mode = .ok result) : result.isNormalized := by
-  unfold Number.operator_mul at hok
+  rw [Number.operator_mul_eq_spec] at hok
+  unfold Number.operator_mulSpec at hok
   split_ifs at hok with hx0 hy0
   · rw [← Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)]
     exact hx
@@ -99,8 +110,9 @@ lemma Number.operator_div_isNormalized (x y result : Number) (mode : rounding_mo
     · rw [← Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)]
       exact hx
     · rcases hq : divQuotient128 x.mantissa_ y.mantissa_ x.exponent_ y.exponent_ with
-        ⟨zm, ze, dr⟩
-      rw [hq] at hok
+        e | ⟨zm, ze, dr⟩
+      · rw [hq, err_bind] at hok; cases hok
+      rw [hq, ok_bind] at hok
       rw [doNormalize128_zero_shape_sz _ _ _ _ mode result hok h0]
       exact Number.zero_isNormalized
   · obtain ⟨hxm, hym⟩ := operator_div_operands_ne_zero hx hy hok h0

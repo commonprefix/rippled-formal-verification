@@ -216,8 +216,8 @@ lemma Vault.redemption_exit_order_core (v : Vault) (t t0 : UInt32) (hr : Vault.R
     rw [hnt]; exact hmax
   obtain ⟨hC', hS'⟩ := Vault.withdraw_vault_updates_exact_proof v (.vaultShares sB) false t t0 hposB hr
     hB.canonical hB.int64 hmax rB2 hB2
-  rw [Vault.withdraw_sharesBurned_exact_proof v sB false t hposB rB2 hB2] at hS'
-  have hsharesA2 : rA2.shares = sA := Vault.withdraw_sharesBurned_exact_proof _ sA false t hposA rA2 hA2
+  rw [Vault.withdraw_sharesRedeemed_exact_proof v sB false t hposB rB2 hB2] at hS'
+  have hsharesA2 : rA2.shares = sA := Vault.withdraw_sharesRedeemed_exact_proof _ sA false t hposA rA2 hA2
   -- the two payouts from the original vault
   obtain ⟨pA, eA, -, hPA, -, -, hfracA⟩ :=
     Vault.Reachable.redemptionPayout v t t0 hr hmax hfee sA hA hposA hltA rA1 hA1

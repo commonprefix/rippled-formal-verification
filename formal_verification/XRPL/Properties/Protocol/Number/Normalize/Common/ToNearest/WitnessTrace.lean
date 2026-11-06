@@ -9,12 +9,15 @@ lemma normalize_to_nearest_witness :
     Number.normalize ⟨false, twoPow63Add7, 0⟩
         largeRange.min largeRange.max .to_nearest =
       .ok ⟨false, twoPow63Add12, 0⟩ := by
-  unfold Number.normalize doNormalize
+  unfold Number.normalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show (((twoPow63Add7 : UInt64) : UInt64) == 0) = false from rfl]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUp largeRange.min (twoPow63Add7 : UInt64) 0
+  rw [show doNormalize_scaleUpSpec largeRange.min (twoPow63Add7 : UInt64) 0
         = ((twoPow63Add7 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUp; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (twoPow63Add7 : UInt64) (0 : Int) Guard.new
         = .ok ((twoPow63Add7 : UInt64), (0 : Int), Guard.new) by
         unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
@@ -31,7 +34,8 @@ lemma normalize_to_nearest_witness :
   have h_rup : (Guard.new.push 5).doRoundUp false (mantissaFloorSucc : UInt64) (1 : Int)
       largeRange.min largeRange.max .to_nearest .normalize2 =
       .ok { negative_ := false, mantissa_ := twoPow63Add12, exponent_ := 0 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit Guard.push Guard.new; rfl
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit Guard.push Guard.new; rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
 

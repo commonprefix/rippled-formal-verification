@@ -21,32 +21,23 @@ private lemma Guard.round_towards_zero_of_sbit (g : Guard) (h : g.sbit_ = false)
     g.round .towards_zero = g.round .downward := by
   unfold Guard.round; simp [h]
 
-/-- The overflow digit is the same towards zero and downward once the sign is clear. -/
-private lemma Guard.pushOverflow_towards_zero_of_sbit (g : Guard) (m : UInt64) (h : g.sbit_ = false) :
-    g.pushOverflow m .towards_zero = g.pushOverflow m .downward := by
-  unfold Guard.pushOverflow; rw [Guard.round_towards_zero_of_sbit g h]
-
-/-- The round decision after the overflow digit is the same towards zero and downward. -/
-private lemma Guard.round_pushOverflow_towards_zero (g : Guard) (h : g.sbit_ = false) (m : UInt64) :
-    (g.pushOverflow m .downward).round .towards_zero = (g.pushOverflow m .downward).round .downward :=
-  Guard.round_towards_zero_of_sbit _ (by rw [Guard.pushOverflow_sbit]; exact h)
-
 /-- On a value that is not negative, `to_rep` towards zero is `to_rep` downward. -/
 lemma Number.to_rep_towards_zero (n : Number) (hneg : n.negative_ = false) :
     n.to_rep .towards_zero = n.to_rep .downward := by
-  unfold Number.to_rep
+  rw [Number.to_rep_eq_spec, Number.to_rep_eq_spec]
+  unfold Number.to_repSpec
   simp only [hneg, Bool.false_eq_true, ↓reduceIte]
   by_cases hz : (n.mantissa == 0) = true
   · simp only [hz, ↓reduceIte]
   simp only [hz, Bool.false_eq_true, ↓reduceIte]
   by_cases hoff : n.exponent < 0
-  · have hsb : (Number.to_rep.shift n.mantissa n.exponent Guard.new).2.sbit_ = false := by
+  · have hsb : (shiftSpec n.mantissa n.exponent Guard.new).2.sbit_ = false := by
       rw [Number.to_rep_shift_sbit]; rfl
     simp only [hoff, ↓reduceIte]
-    simp only [Guard.pushOverflow_towards_zero_of_sbit _ _ hsb, Guard.round_pushOverflow_towards_zero _ hsb]
+    simp only [Guard.round_towards_zero_of_sbit _ hsb]
   · have h0 : Guard.new.sbit_ = false := rfl
     simp only [hoff, ↓reduceIte]
-    simp only [Guard.pushOverflow_towards_zero_of_sbit _ _ h0, Guard.round_pushOverflow_towards_zero _ h0]
+    simp only [Guard.round_towards_zero_of_sbit _ h0]
 
 end XRPL.Model.Protocol
 

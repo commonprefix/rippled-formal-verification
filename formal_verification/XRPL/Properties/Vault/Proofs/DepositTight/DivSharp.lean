@@ -36,10 +36,11 @@ private lemma doNormalize128_rounds_to_nearest_sharp
     have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
     rw [this] at hM_pos
     simp at hM_pos
-  unfold doNormalize128 at hok
+  rw [doNormalize128_eq_spec] at hok
+  unfold doNormalize128Spec at hok
   rw [if_neg hM_ne] at hok
   simp only [] at hok
-  rcases hsu : doNormalize128.scaleUp largeRange.min M e with ⟨M₁, e₁⟩
+  rcases hsu : doNormalize128_scaleUpSpec largeRange.min M e with ⟨M₁, e₁⟩
   rw [hsu] at hok
   simp only [] at hok
   -- Post-scaleUp facts: the value is exact and the tail rescales to δ₁ = δ·10^(e−e₁) ≤ 1, since
@@ -97,7 +98,7 @@ private lemma doNormalize128_rounds_to_nearest_sharp
       exact represents_sticky_initial128 zn
     · rw [if_neg hst, if_neg hst]
       exact g0_represents_zero zn
-  cases hsd : doNormalize_scaleDown128 largeRange.max M₁ e₁ g₀ with
+  cases hsd : doNormalize_scaleDown128Spec largeRange.max M₁ e₁ g₀ with
   | error err =>
     except_clash hsd hok
   | ok sd =>

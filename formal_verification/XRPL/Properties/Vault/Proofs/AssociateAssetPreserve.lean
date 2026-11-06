@@ -56,48 +56,4 @@ lemma Vault.clawback_associateAsset_noop_proof (v : Vault) (assets holderShares 
   obtain ⟨_, raw, -, hadj, hraw, -, -⟩ := Vault.clawback_ok_reduces v assets holderShares waive hnn r hok
   exact Vault.adjustAssetsAndShares_associateAsset v r.vault' _ _ raw hmax hadj hraw
 
-/-- Storing the new cash exactly keeps a vault on the asset's grid when every other amount
-`associateAsset` rounds and the asset are unchanged. -/
-private lemma Vault.assetsRounded_of_cash_exact (v v' : Vault) (hnt : v'.numericType = v.numericType)
-    (hAA : STAmount.isRounded v.numericType v'.assetsAvailable = false)
-    (hAD : v'.assetsDeployed = v.assetsDeployed) (hAR : v'.assetsReserved = v.assetsReserved)
-    (hLU : v'.lossUnrealized = v.lossUnrealized) (hYU : v'.yieldUnrealized = v.yieldUnrealized)
-    (hM : v'.assetsMaximum = v.assetsMaximum) (hv : ¬ v.assetsRounded) : ¬ v'.assetsRounded := by
-  unfold Vault.assetsRounded at hv ⊢
-  rw [hnt, hAD, hAR, hLU, hYU, hM]
-  rintro (h | h)
-  · rw [hAA] at h; exact absurd h (by decide)
-  · exact hv (Or.inr h)
-
-lemma Vault.deposit_assetsRounded_preserved_proof (v : Vault) (amount : STAmount) (isDonation : Bool)
-    (t : UInt32) (hpos : 0 < amount.toRat)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded := by
-  obtain ⟨hAA, hAD, hAR, hLU, hYU, hM⟩ := Vault.deposit_associateAsset_noop_proof v amount isDonation t hpos hmax r hok
-  obtain ⟨_, _, h⟩ := Vault.deposit_frame v amount isDonation t hpos r hok
-  exact Vault.assetsRounded_of_cash_exact v r.vault' ((congrArg RawVault.numericType h).trans rfl) hAA hAD hAR
-    hLU hYU hM hv
-
-lemma Vault.withdraw_assetsRounded_preserved_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
-    (t : UInt32) (hpos : 0 < amount.amount.toRat)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded := by
-  obtain ⟨hAA, hAD, hAR, hLU, hYU, hM⟩ := Vault.withdraw_associateAsset_noop_proof v amount waive t hpos hmax r hok
-  obtain ⟨_, _, h⟩ := Vault.withdraw_frame v amount waive t hpos r hok
-  exact Vault.assetsRounded_of_cash_exact v r.vault' ((congrArg RawVault.numericType h).trans rfl) hAA hAD hAR
-    hLU hYU hM hv
-
-lemma Vault.clawback_assetsRounded_preserved_proof (v : Vault) (assets holderShares : STAmount) (waive : Bool)
-    (hnn : 0 ≤ assets.toRat)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded := by
-  obtain ⟨hAA, hAD, hAR, hLU, hYU, hM⟩ :=
-    Vault.clawback_associateAsset_noop_proof v assets holderShares waive hnn hmax r hok
-  obtain ⟨_, _, h⟩ := Vault.clawback_frame v assets holderShares waive hnn r hok
-  exact Vault.assetsRounded_of_cash_exact v r.vault' ((congrArg RawVault.numericType h).trans rfl) hAA hAD hAR
-    hLU hYU hM hv
-
 end XRPL.Model.SingleAssetVault

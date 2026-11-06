@@ -85,6 +85,8 @@ private lemma Loan.scheduledComponents_theory {l : Loan} {pc : PaymentComponents
     simp at hf
   obtain ⟨_, -, hpc⟩ := bind_ok_peel _ _ _ hpc
   obtain ⟨_, -, hpc⟩ := bind_ok_peel _ _ _ hpc
+  obtain ⟨_, hpr1, hpc⟩ := bind_ok_peel _ _ _ hpc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hpr1
   obtain ⟨th, hth, -⟩ := bind_ok_peel _ _ _ hpc
   exact LoanState.buildTheoretical_principal _ _ _ _ th hth
 
@@ -148,7 +150,7 @@ private lemma computeLoanPropertiesFromPeriodicRate_principal (p rate : Number) 
   obtain ⟨pp, -, h⟩ := bind_ok_peel _ _ _ h
   iterate 6 obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨tpo, htpo, h⟩ := bind_ok_peel _ _ _ h
-  iterate 2 obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+  iterate 3 obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain rfl := (Except.ok.inj h).symm
   exact ⟨tpo, htpo⟩
 

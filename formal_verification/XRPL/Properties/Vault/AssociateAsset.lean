@@ -56,34 +56,4 @@ theorem Vault.clawback_associateAsset_noop (v : Vault) (assets holderShares : ST
       r.vault'.yieldUnrealized = v.yieldUnrealized ∧ r.vault'.assetsMaximum = v.assetsMaximum :=
   Vault.clawback_associateAsset_noop_proof v assets holderShares waive hnn hmax r hok
 
-/-- A deposit into a vault that stores every amount `associateAsset` rounds, other than AssetsTotal, exactly keeps
-them all stored exactly. -/
-theorem Vault.deposit_assetsRounded_preserved (v : Vault) (amount : STAmount) (isDonation : Bool) (t : UInt32)
-    (hpos : 0 < amount.toRat)
-    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.deposit amount isDonation t hpos).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded :=
-  Vault.deposit_assetsRounded_preserved_proof v amount isDonation t hpos hmax r hok hv
-
-/-- A withdrawal from a vault that stores every amount `associateAsset` rounds, other than AssetsTotal, exactly
-keeps them all stored exactly. -/
-theorem Vault.withdraw_assetsRounded_preserved (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
-    (hpos : 0 < amount.amount.toRat)
-    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded :=
-  Vault.withdraw_assetsRounded_preserved_proof v amount waive t hpos hmax r hok hv
-
-/-- A clawback from a vault that stores every amount `associateAsset` rounds, other than AssetsTotal, exactly
-keeps them all stored exactly. -/
-theorem Vault.clawback_assetsRounded_preserved (v : Vault) (assets holderShares : STAmount) (waive : Bool)
-    (hnn : 0 ≤ assets.toRat)
-    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r))
-    (hv : ¬ v.assetsRounded) : ¬ r.vault'.assetsRounded :=
-  Vault.clawback_assetsRounded_preserved_proof v assets holderShares waive hnn hmax r hok hv
-
 end XRPL.Model.SingleAssetVault

@@ -50,8 +50,8 @@ lemma allNibblesAtMost9_push (g : Guard) (d : UInt64) (hd : d.toNat < 10)
     rw [hp15, nibble_push_top, d_eq]; omega
 
 set_option maxHeartbeats 1000000 in
--- Heavy functional-induction over `doNormalize_scaleDown128` with per-step ℚ algebra.
-/-- `doNormalize_scaleDown128` keeps the value exact and the guard invariant: the fraction is the captured digits
+-- Heavy functional-induction over `doNormalize_scaleDown128Spec` with per-step ℚ algebra.
+/-- `doNormalize_scaleDown128Spec` keeps the value exact and the guard invariant: the fraction is the captured digits
 plus a tail `x' < 1/10^p'`, with the digits in the top nibbles and the size and coupling bounds kept. -/
 theorem doNormalize_scaleDown128_valueInv
     (maxMantissa : UInt64) (m : UInt128) (e : Int) (g : Guard)
@@ -65,7 +65,7 @@ theorem doNormalize_scaleDown128_valueInv
     (hsize : m.toNat * 10 ^ p < 10 ^ 23)
     (hcouple : x * 10 ^ 20 ≤ (m.toNat : ℚ) * 10 ^ p)
     (out : UInt128 × Int × Guard)
-    (hok : doNormalize_scaleDown128 maxMantissa m e g = .ok out) :
+    (hok : doNormalize_scaleDown128Spec maxMantissa m e g = .ok out) :
     ∃ (φ' x' : ℚ) (p' : ℕ),
       0 ≤ x' ∧ x' < 1 / 10 ^ p' ∧
       φ' = (decimalValue out.2.2.digits_ : ℚ) / 10 ^ 16 + x' ∧
@@ -75,16 +75,16 @@ theorem doNormalize_scaleDown128_valueInv
       out.1.toNat * 10 ^ p' < 10 ^ 23 ∧
       x' * 10 ^ 20 ≤ (out.1.toNat : ℚ) * 10 ^ p' ∧
       ((m.toNat : ℚ) + φ) * 10 ^ e = ((out.1.toNat : ℚ) + φ') * 10 ^ out.2.1 := by
-  induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := maxMantissa)
+  induction m, e, g using doNormalize_scaleDown128Spec.induct (maxMantissa := maxMantissa)
     generalizing φ x p with
   | case1 m e g hgt hge =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error .normalize1 from by
-      rw [doNormalize_scaleDown128.eq_def, dif_pos hgt, if_pos hge]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .error .normalize1 from by
+      rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_pos hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g
-        = doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
-        from by rw [doNormalize_scaleDown128.eq_def, dif_pos hgt, if_neg hnge]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g
+        = doNormalize_scaleDown128Spec maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
+        from by rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_neg hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by rw [BitVec.toNat_udiv, h10]
     have h_mod : (m % 10 : UInt128).toNat = m.toNat % 10 := by rw [BitVec.toNat_umod, h10]
@@ -178,8 +178,8 @@ theorem doNormalize_scaleDown128_valueInv
     field_simp
     ring
   | case3 m e g hgt =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .ok (m, e, g) from by
-      rw [doNormalize_scaleDown128.eq_def, dif_neg hgt]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .ok (m, e, g) from by
+      rw [doNormalize_scaleDown128Spec.eq_def, dif_neg hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, x, p, hx_nn, hx_lt, hval, hxbit, hall, hdvd, hsize, hcouple, by ring⟩
 

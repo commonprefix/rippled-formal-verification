@@ -187,6 +187,7 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
               rw [show doNormalize v.negative_ v.mantissa_ v.exponent_ cMinValue cMaxValue mode
                     = .ok Number.zero from by
                   unfold doNormalize; rw [if_pos (by simpa using hv0)]]
+              ntr_tail
             have hpair := Except.ok.inj (hnr.symm.trans hnr')
             have hee : ee = Number.zero.exponent_ := congrArg Prod.snd hpair
             apply hlo

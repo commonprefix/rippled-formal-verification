@@ -1,7 +1,7 @@
 import Mathlib.Data.Nat.Bitwise
 import Mathlib.Tactic
 
-import XRPL.Properties.Protocol.Number.Common.Rounding.BitVec
+import XRPL.Properties.Protocol.Number.Common.Rounding.Spec
 
 namespace XRPL.Model.Protocol
 

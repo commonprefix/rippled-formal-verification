@@ -350,13 +350,15 @@ def LendingLedger.loanSetChecked (l : LendingLedger) (i : Nat) (broker : LoanBro
 it reads the broker or the vault. -/
 def LendingLedger.applyLoanSet (l : LendingLedger) (i : Nat) (principal : Number) (rates : LoanRates)
     (fees : LoanFees) (schedule : LoanSchedule) (twoStep allowsOverpayment : Bool) : TerExcept LoanEffect :=
-  let scheduleTer := schedule.checkTimeAvailability
-  if !scheduleTer.isTesSuccess then throw scheduleTer
-  else match l.broker? i with
-    | none => throw .tecNO_ENTRY
-    | some broker =>
-      let checks := Loan.canCreate broker l.vault principal fees schedule l.now twoStep
-      l.loanSetChecked i broker principal rates fees schedule twoStep allowsOverpayment checks
+  match schedule.checkTimeAvailability with
+  | .error e => ExceptT.mk (.error e)
+  | .ok scheduleTer =>
+    if !scheduleTer.isTesSuccess then throw scheduleTer
+    else match l.broker? i with
+      | none => throw .tecNO_ENTRY
+      | some broker =>
+        let checks := Loan.canCreate broker l.vault principal fees schedule l.now twoStep
+        l.loanSetChecked i broker principal rates fees schedule twoStep allowsOverpayment checks
 
 /-- Apply a loan transaction. Every operation on an existing loan first gives it the ledger's
 current copy of its broker. -/
@@ -385,7 +387,7 @@ def LendingLedger.applyLoan (l : LendingLedger) : LendingTx → TerExcept LoanEf
     let some e := l.loan? i | throw .tecNO_ENTRY
     let some broker := l.broker? e.brokerIndex | throw .tecNO_ENTRY
     let loan ← e.loan.withBroker broker
-    let ter := loan.canManage action l.now
+    let ter ← loan.canManage action l.now
     if !ter.isTesSuccess then throw ter
     let r ← loan.manage action l.vault l.now
     return LoanEffect.ofLoan i e r.loan' r.pool'

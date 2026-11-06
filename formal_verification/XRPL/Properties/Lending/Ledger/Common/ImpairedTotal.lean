@@ -24,7 +24,7 @@ lemma LendingLedger.impaired_ops_total_proof (l : LendingLedger) (hr : l.Reachab
       10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
     (hca : b.coverAvailable.toRat < 10 ^ 96) :
     (loan.canAccept l.vault l.now = .ok .tesSUCCESS → ∃ l', (l.apply (.loanAccept i)).run = .ok (.ok l')) ∧
-    (∀ action, loan.canManage action l.now = .tesSUCCESS →
+    (∀ action, loan.canManage action l.now = .ok .tesSUCCESS →
       ∃ l', (l.apply (.loanManage i action)).run = .ok (.ok l')) ∧
     (loan.canDelete = .tesSUCCESS → ∃ l', (l.apply (.loanDelete i)).run = .ok (.ok l')) ∧
     (∀ (pt : LoanPaymentType) (pc : PaymentComponents) (td amount : Number), loan.canPay pt = .tesSUCCESS →
@@ -62,7 +62,7 @@ lemma LendingLedger.impaired_ops_total_proof (l : LendingLedger) (hr : l.Reachab
       exact ⟨_, LendingLedger.apply_manage_ok l hnd i e b loan .unimpair r he hb hw hc hrun⟩
     | default =>
       -- the checks of a default read the loan only
-      have hc' : e.loan.canManage .default l.now = .tesSUCCESS := by
+      have hc' : e.loan.canManage .default l.now = .ok .tesSUCCESS := by
         have : loan.canManage .default l.now = e.loan.canManage .default l.now := by
           unfold Loan.canManage; rw [hraw]
         rw [← this]; exact hc
@@ -73,7 +73,7 @@ lemma LendingLedger.impaired_ops_total_proof (l : LendingLedger) (hr : l.Reachab
           simp [hnp, hd, h0] at hc'
         have hlate : e.loan.nextPaymentDueDate + e.loan.schedule.gracePeriod < l.now := by
           by_contra hn
-          simp [hnp, hd, hrem, hn] at hc'
+          simp [hnp, hd, hrem, hn, UInt32.addChecked_of_lt e.loan.gracePeriodEnd_lt, bind, Except.bind] at hc'
         exact LendingLedger.default_possible_proof l hr hnd hr.holdsAsset i e he hnp hd hrem hlate htotal
           (hr.assetsAvailable_units hr.holdsAsset) hr.yield_lt (hr.interest_le_yield he hnp)
           (fun b' hb' => by rw [hb] at hb'; obtain rfl := Option.some.inj hb'; exact hca)

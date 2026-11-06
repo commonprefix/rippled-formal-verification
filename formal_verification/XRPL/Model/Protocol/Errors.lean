@@ -13,6 +13,7 @@ inductive Error where
   | cannotConvert
   | notLawful
   | badInput
+  | wrap
 deriving DecidableEq, Repr, Inhabited
 
 -- Detect an overflow error triggered by arithmetic operation.

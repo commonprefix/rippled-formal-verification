@@ -50,6 +50,10 @@ private lemma Loan.doPayment_flag (loan : Loan) (pc : PaymentComponents) (loan' 
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨_, hc1, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc1
+    obtain ⟨_, hc2, h⟩ := bind_ok_peel _ _ _ h
+    obtain ⟨-, rfl⟩ := UInt32.addChecked_eq_ok.mp hc2
     rw [(congrArg RawLoan.isImpaired (RawLoan.to_lawful_ok h).1 :)]
 
 /-- The settlement keeps the impaired flag. -/

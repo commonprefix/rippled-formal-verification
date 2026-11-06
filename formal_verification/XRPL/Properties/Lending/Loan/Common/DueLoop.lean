@@ -219,7 +219,8 @@ lemma UnsettledPayment.payInstalments_computes {α : Type} (amount : Number) :
     have hi := hroom.shape.3
     have hTv := hroom.value
     have hb17 : (10 : ℚ) ^ 16 + 1 < 10 ^ 17 := by norm_num
-    obtain ⟨l', hl'⟩ := Loan.doPayment_ok_of_below p.loan _ hne (b1.mono (by norm_num)) (b2.mono (by norm_num))
+    obtain ⟨l', hl'⟩ := Loan.doPayment_ok_of_below p.loan _ hne
+      (fun hf => Loan.scheduledComponents_two_le _ _ hpc hpr hf) (b1.mono (by norm_num)) (b2.mono (by norm_num))
       (b3.mono (by norm_num)) ⟨p.loan.wf.totalValueOutstanding_norm, by rw [abs_of_nonneg hT0]; linarith⟩
       ⟨p.loan.wf.principalOutstanding_norm, by
         have : p.loan.principalOutstanding.toRat ≤ p.loan.totalValueOutstanding.toRat := by
@@ -333,7 +334,9 @@ lemma Loan.regularPayInstalments_due (loan : Loan) (hroom : loan.LoopRoom) (v : 
     ⟨loan.wf.managementFeeOutstanding_norm, by
       show |loan.managementFeeOutstanding.toRat| < _
       rw [abs_of_nonneg hM0]; linarith⟩
-  obtain ⟨l1, hl1⟩ := Loan.doPayment_ok_of_below loan.unimpaired pc hne (b1.mono (by norm_num))
+  obtain ⟨l1, hl1⟩ := Loan.doPayment_ok_of_below loan.unimpaired pc hne
+    (fun hf => Loan.scheduledComponents_two_le _ pc0 (by rw [Loan.scheduledComponents_unimpaired]; exact hpc0) hrem hf)
+    (b1.mono (by norm_num))
     (b2.mono (by norm_num)) (b3.mono (by norm_num)) bT bP bM
   obtain ⟨si, hsi⟩ := Loan.interestDue_ok loan
   obtain ⟨v1, hv1⟩ := Loan.unimpairIfImpaired_ok loan v hunimpair

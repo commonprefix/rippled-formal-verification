@@ -63,18 +63,6 @@ lemma Vault.withdraw_payout_cases (v : Vault) (amount : WithdrawAmount) (waive :
     have h0 := (STAmount.toRat_eq_zero_iff _).mpr (by simpa using hnz)
     exact Or.inl ⟨h0, Or.inr h0⟩
 
-/-- A non-final withdrawal under a 100% early-exit fee pays nothing: the whole priced amount is
-the fee, which stays in the vault. -/
-lemma Vault.withdraw_full_fee_payout (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
-    (hpos : 0 < amount.amount.toRat) (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
-    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
-    (hfee : v.earlyExitFeeRateAt t = maxEarlyExitFeeRate) (hlt : r.shares.toRat < v.toExact.sharesTotal) :
-    r.assets.toRat = 0 := by
-  obtain ⟨_, -, hcase⟩ := Vault.withdraw_payout_cases v amount waive t hpos hc hty r hok hlt
-  rcases hcase with ⟨h0, -⟩ | ⟨_, _, _, _, _, hlow, -⟩
-  · exact h0
-  · exact absurd hfee hlow
-
 /-- A passed dust check converts the cash into the asset: the check reads the cash as an amount
 before it compares, so a failed conversion would refuse the debit. -/
 lemma Vault.checkDebitNotDust_converts (v : Vault) (n : Number) (hn : n.operator_eq Number.zero = false)
@@ -229,20 +217,6 @@ lemma Vault.integral_debit_fit (v : Vault) (hint : v.numericType.isIntegral = tr
   rw [zpow_zero, mul_one]
   linarith
 
-/-- Proof of `Vault.withdraw_full_fee`. A reachable vault stores its cash exactly, so taking nothing
-from it leaves it as it was. -/
-lemma Vault.withdraw_full_fee_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t t0 : UInt32)
-    (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
-    (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
-    (hfee : v.earlyExitFeeRateAt t = maxEarlyExitFeeRate) (hlt : r.shares.toRat < v.toExact.sharesTotal) :
-    r.assets.toRat = 0 ∧ r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat ∧
-      (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal - r.shares.toRat := by
-  have h0 := Vault.withdraw_full_fee_payout v amount waive t hpos hc hty r hok hfee hlt
-  obtain ⟨haa, hst⟩ := Vault.withdraw_vault_updates_exact_proof v amount waive t t0 hpos hr hc hty hmax r hok
-  exact ⟨h0, by rw [haa, h0, sub_zero], hst⟩
-
 /-- Proof of `Vault.withdraw_final_iff`. -/
 lemma Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t : UInt32)
     (hpos : 0 < amount.amount.toRat) (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
@@ -267,8 +241,8 @@ lemma Vault.withdraw_final_iff_proof (v : Vault) (amount : WithdrawAmount) (waiv
     rw [hcast]
     linarith
 
-/-- Proof of `Vault.withdraw_final_payout`: a reachable vault stores its cash exactly and deploys
-nothing, so the final payout is all the cash and the whole share total is worth exactly that. -/
+/-- A reachable vault stores its cash exactly and deploys nothing, so the final payout is all the cash and the whole
+share total is worth exactly that. -/
 lemma Vault.withdraw_final_payout_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool) (t t0 : UInt32)
     (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
     (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)

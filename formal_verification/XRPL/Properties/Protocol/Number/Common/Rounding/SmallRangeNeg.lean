@@ -44,7 +44,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .downward
         .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
         (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     refine ⟨?_, by omega⟩
@@ -64,7 +64,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
         unfold Number.normalizeToRange
         rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) .downward
           .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
@@ -86,7 +86,7 @@ theorem normalizeToRange_16_ceil_neg (n : Number) (mant : Int64) (exp : Int)
         unfold Number.normalizeToRange
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) .downward
           .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨?_, by omega⟩
@@ -124,7 +124,7 @@ theorem normalizeToRange_16_floor_neg (n : Number) (mant : Int64) (exp : Int) (m
     rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
       .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
       (by omega) (by omega)]
-    rfl
+    ntr_tail
   rw [hcompute] at hok
   obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
   refine ⟨?_, by omega⟩

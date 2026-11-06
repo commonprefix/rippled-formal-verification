@@ -83,6 +83,11 @@ private lemma Loan.delete_numericType (loan : Loan) (v : Vault) (r : LoanBrokerW
   have hrel : ∀ lb lb' d, LoanBroker.releaseLoan lb d = .ok lb' → lb'.numericType = lb.numericType :=
     fun lb lb' d h => by
       unfold LoanBroker.releaseLoan at h
+      simp only [bind, Except.bind] at h
+      split at h
+      · cases h
+      rename_i _ hc
+      obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
       exact (congrArg RawLoanBroker.numericType (RawLoanBroker.to_lawful_ok h).1 :)
   by_cases hp : loan.isPending = true
   · obtain ⟨_, _, _, -, -, -, -, hr⟩ := Loan.delete_pending_ok_inv loan v r hp h

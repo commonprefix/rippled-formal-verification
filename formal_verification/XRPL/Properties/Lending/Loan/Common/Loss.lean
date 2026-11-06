@@ -171,7 +171,8 @@ lemma Loan.manageDefault_lossStep (loan : Loan) (v : Vault) (r : LoanWithAmounts
   · show r.loan'.toRawLoan.isImpaired = _; rw [hloan]; rfl
 
 /-- Impair needs a loan that is not impaired. -/
-lemma Loan.canManage_impair_not_impaired (loan : Loan) (now : UInt32) (h : loan.canManage .impair now = .tesSUCCESS) :
+lemma Loan.canManage_impair_not_impaired (loan : Loan) (now : UInt32)
+    (h : loan.canManage .impair now = .ok .tesSUCCESS) :
     loan.isImpaired = false := by
   cases hi : loan.isImpaired
   · rfl
@@ -184,7 +185,8 @@ lemma Loan.canManage_impair_not_impaired (loan : Loan) (now : UInt32) (h : loan.
     cases h
 
 /-- Unimpair needs an impaired loan. -/
-lemma Loan.canManage_unimpair_impaired (loan : Loan) (now : UInt32) (h : loan.canManage .unimpair now = .tesSUCCESS) :
+lemma Loan.canManage_unimpair_impaired (loan : Loan) (now : UInt32)
+    (h : loan.canManage .unimpair now = .ok .tesSUCCESS) :
     loan.isImpaired = true := by
   cases hi : loan.isImpaired
   · unfold Loan.canManage at h

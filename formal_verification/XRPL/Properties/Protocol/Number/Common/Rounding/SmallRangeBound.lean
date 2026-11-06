@@ -61,7 +61,9 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
         rcases this with h | h <;> rw [h] at hb <;> simp at hb
       exact round_bool_upward_pos (g.push 9) 999999999999999 (hpush_sbit.trans hsb) hpush_ne
   -- drive the doRoundUp pipeline through the doDropDigit branch
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep (by rw [maxRep_val, cMaxValue_val]; omega) g mode, hb]
   simp only [if_true]
@@ -72,7 +74,7 @@ lemma doRoundUp_small_cusp (g : Guard) (neg : Bool) (e : Int) (mode : rounding_m
   rw [h9, hdiv]
   simp only []
   rw [if_pos hroundUp', hdivsucc,
-      show Guard.bringIntoRange neg cMinValue (e + 1) cMinValue
+      show Guard.bringIntoRangeSpec neg cMinValue (e + 1) cMinValue
           = { negative_ := neg, mantissa_ := cMinValue, exponent_ := e + 1 } from by
         rw [bringIntoRange_noscale_result (fun h => absurd (UInt64.lt_iff_toNat_lt.mp h.1) (by omega)),
             if_neg (not_or.mpr ⟨by omega, by decide⟩)]]
@@ -108,7 +110,7 @@ theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
           unfold Number.normalizeToRange
           rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) mode
             .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         have hMk : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by
@@ -132,7 +134,7 @@ theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
           unfold Number.normalizeToRange
           rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
             .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         refine ⟨(n.mantissa_ / 10 / 10 / 10 + 1).toNat, Or.inr hadd, by rw [hadd]; omega, ?_⟩
@@ -146,7 +148,7 @@ theorem normalizeToRange_16_within_ulp (n : Number) (mode : rounding_mode)
         rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
           .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
           (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨(n.mantissa_ / 10 / 10 / 10).toNat, Or.inl hm3, by rw [hm3]; omega, ?_⟩
@@ -268,7 +270,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
           unfold Number.normalizeToRange
           rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) .to_nearest
             .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         have hMk : M / 1000 = 10 ^ 16 - 1 := by
@@ -297,7 +299,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
           unfold Number.normalizeToRange
           rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) .to_nearest
             .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         refine ⟨(n.mantissa_ / 10 / 10 / 10 + 1).toNat, ?_, ?_⟩
@@ -318,7 +320,7 @@ theorem normalizeToRange_16_within_half_ulp (n : Number) (mant : Int64) (exp : I
         rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .to_nearest
           .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
           (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       refine ⟨(n.mantissa_ / 10 / 10 / 10).toNat, ?_, ?_⟩
@@ -377,7 +379,7 @@ theorem normalizeToRange_16_mantissa_range (n : Number) (mode : rounding_mode)
         unfold Number.normalizeToRange
         rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) mode
           .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, _⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, signed_mantissa_natAbs n.negative_ cMinValue (by rw [hcMin]; omega),
@@ -396,7 +398,7 @@ theorem normalizeToRange_16_mantissa_range (n : Number) (mode : rounding_mode)
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
           .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hm3]; exact hlt)
           (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, _⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, signed_mantissa_natAbs n.negative_ _ (by rw [hadd]; omega),
@@ -408,7 +410,7 @@ theorem normalizeToRange_16_mantissa_range (n : Number) (mode : rounding_mode)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
         .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
         (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, _⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hmant, signed_mantissa_natAbs n.negative_ _ (by rw [hm3]; omega),
@@ -437,7 +439,7 @@ theorem normalizeToRange_16_exp_range (n : Number) (mode : rounding_mode)
         unfold Number.normalizeToRange
         rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) mode
           .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨_, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hexp]; omega
@@ -452,7 +454,7 @@ theorem normalizeToRange_16_exp_range (n : Number) (mode : rounding_mode)
         rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) mode
           .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hm3]; exact hlt)
           (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨_, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hexp]; omega
@@ -463,7 +465,7 @@ theorem normalizeToRange_16_exp_range (n : Number) (mode : rounding_mode)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) mode
         .normalize2 (by simpa using hround) (by rw [hcMin, hm3]; omega)
         (by rw [hcMax, hm3]; omega) (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨_, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hexp]; omega
@@ -513,7 +515,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
         rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .downward
           .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
           (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
@@ -539,7 +541,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
           unfold Number.normalizeToRange
           rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) .downward
             .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         have hMk : n.mantissa_.toNat / 1000 = 10 ^ 16 - 1 := by
@@ -567,7 +569,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
           unfold Number.normalizeToRange
           rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) .downward
             .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), htruth, hpow]
@@ -591,7 +593,7 @@ theorem normalizeToRange_16_downward (n : Number) (mant : Int64) (exp : Int)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .downward
         .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
         (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
@@ -639,7 +641,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
       rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .upward
         .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
         (by omega) (by omega)]
-      rfl
+      ntr_tail
     rw [hcompute] at hok
     obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
     rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
@@ -671,7 +673,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
         rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .upward
           .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
           (by omega) (by omega)]
-        rfl
+        ntr_tail
       rw [hcompute] at hok
       obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
       rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hm3]; omega), htruth, hpow]
@@ -696,7 +698,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
           unfold Number.normalizeToRange
           rw [h_red, hcusp, doRoundUp_small_cusp g n.negative_ (n.exponent_ + 3) .upward
             .normalize2 (by rw [hcusp] at hround; exact hround) (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ cMinValue (by rw [hcMin]; omega), htruth]
@@ -721,7 +723,7 @@ theorem normalizeToRange_16_upward (n : Number) (mant : Int64) (exp : Int)
           unfold Number.normalizeToRange
           rw [h_red, doRoundUp_small_fire g n.negative_ _ (n.exponent_ + 3) .upward
             .normalize2 hround (by rw [hcMin, hm3]; omega) hlt (by omega) (by omega)]
-          rfl
+          ntr_tail
         rw [hcompute] at hok
         obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
         rw [← hmant, ← hexp, signed_mantissa_toInt n.negative_ _ (by rw [hadd]; omega), htruth, hpow]
@@ -758,7 +760,7 @@ theorem normalizeToRange_16_towards_zero (n : Number) (mant : Int64) (exp : Int)
     rw [h_red, doRoundUp_small_truncate g n.negative_ _ (n.exponent_ + 3) .towards_zero
       .normalize2 hround (by rw [hcMin, hm3]; omega) (by rw [hcMax, hm3]; omega)
       (by omega) (by omega)]
-    rfl
+    ntr_tail
   rw [hcompute] at hok
   obtain ⟨hmant, hexp⟩ := Prod.mk.inj (Except.ok.inj hok)
   have hval : (mant.toInt : ℚ) * 10 ^ exp

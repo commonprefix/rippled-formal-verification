@@ -17,6 +17,11 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 private lemma LoanBroker.releaseLoan_rate (lb lb' : LoanBroker) (d : Number) (h : lb.releaseLoan d = .ok lb') :
     lb'.managementFeeRate = lb.managementFeeRate := by
   unfold LoanBroker.releaseLoan at h
+  simp only [bind, Except.bind] at h
+  split at h
+  · cases h
+  rename_i _ hc
+  obtain ⟨-, rfl⟩ := UInt32.subChecked_eq_ok.mp hc
   exact (congrArg RawLoanBroker.managementFeeRate (RawLoanBroker.to_lawful_ok h).1 :)
 
 /-- What a loan transaction writes: the slot of its loan, or the end of the list for a LoanSet, and the slot of
@@ -52,11 +57,7 @@ private lemma LendingLedger.applyLoan_effect {l : LendingLedger} {tx : LendingTx
     · obtain ⟨_, _, _, -, -, -, -, hrel⟩ := Loan.delete_pending_ok_inv loan _ r hp hr
       exact LoanBroker.releaseLoan_rate _ _ _ hrel
     · simp only [Bool.not_eq_true] at hp
-      rw [Loan.delete_active_reduce loan _ hp] at hr
-      obtain ⟨b', hb', -⟩ := Loan.deleteActive_ok loan.broker
-      rw [hb'] at hr
-      obtain rfl : b' = r.broker' := by injection hr with hr; injection hr with hr; rw [← hr]
-      exact LoanBroker.releaseLoan_rate _ _ _ hb'
+      exact LoanBroker.releaseLoan_rate _ _ _ (Loan.delete_active_ok_inv loan _ r hp hr).1
   | loanManage i action =>
     obtain ⟨e, broker, loan, r, he, hb, hw, -, hr, rfl⟩ := l.applyLoan_manage_inv u i action hu
     have hlb : loan.broker = broker := (congrArg RawLoan.broker (Loan.withBroker_eq hw) :)

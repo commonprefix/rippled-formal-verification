@@ -320,6 +320,47 @@ theorem RawLoan.to_lawful_not_lawful {rl : RawLoan} (h : ¬ (rl.WF ∧ rl.Valid)
     rl.to_lawful = .error .notLawful := by
   unfold RawLoan.to_lawful; rw [dif_neg h]
 
+/-- A lawful loan's grace period ends within the ledger clock: its due date is on the schedule, and the schedule
+with the grace period fits. -/
+lemma Loan.gracePeriodEnd_lt (loan : Loan) :
+    loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < 2 ^ 32 := by
+  have hv := loan.valid
+  have hM : maxTime.toNat = 4294967295 := rfl
+  have hin := hv.schedule_in_time
+  by_cases hr : loan.paymentRemaining = 0
+  · have hd : loan.nextPaymentDueDate = 0 := hv.paid_no_due_date hr
+    rw [hd, UInt32.toNat_zero]
+    have := loan.schedule.gracePeriod.toNat_lt
+    omega
+  · have hd := hv.dueDate_schedule hr
+    have hle := UInt32.le_iff_toNat_le.mp hv.paymentRemaining_le_total
+    have hpos : 1 ≤ loan.paymentRemaining.toNat := by
+      rcases Nat.eq_zero_or_pos loan.paymentRemaining.toNat with h0 | h0
+      · exact absurd (UInt32.toNat_inj.mp (by rw [h0, UInt32.toNat_zero])) hr
+      · exact h0
+    have hmul : (loan.schedule.paymentTotal.toNat - loan.paymentRemaining.toNat + 1) *
+        loan.schedule.paymentInterval.toNat ≤ loan.schedule.paymentTotal.toNat * loan.schedule.paymentInterval.toNat :=
+      Nat.mul_le_mul_right _ (by omega)
+    change loan.toRawLoan.nextPaymentDueDate.toNat + loan.toRawLoan.schedule.gracePeriod.toNat < 2 ^ 32
+    omega
+
+/-- A lawful loan with two or more payments left is due within the ledger clock one interval later. -/
+lemma Loan.nextDue_lt (loan : Loan) (h2 : 2 ≤ loan.paymentRemaining.toNat) :
+    loan.nextPaymentDueDate.toNat + loan.schedule.paymentInterval.toNat < 2 ^ 32 := by
+  have hv := loan.valid
+  have hM : maxTime.toNat = 4294967295 := rfl
+  have hin := hv.schedule_in_time
+  have hne : loan.paymentRemaining ≠ 0 := by
+    intro h0; rw [h0, UInt32.toNat_zero] at h2; omega
+  have hd := hv.dueDate_schedule hne
+  have hle := UInt32.le_iff_toNat_le.mp hv.paymentRemaining_le_total
+  have hmul : (loan.schedule.paymentTotal.toNat - loan.paymentRemaining.toNat + 1) *
+      loan.schedule.paymentInterval.toNat + loan.schedule.paymentInterval.toNat ≤
+      loan.schedule.paymentTotal.toNat * loan.schedule.paymentInterval.toNat := by
+    rw [← Nat.succ_mul]; exact Nat.mul_le_mul_right _ (by omega)
+  change loan.toRawLoan.nextPaymentDueDate.toNat + loan.toRawLoan.schedule.paymentInterval.toNat < 2 ^ 32
+  omega
+
 /-- The interest a loan computes is a normalized `Number`. -/
 lemma RawLoan.interestDue_isNormalized (loan : Loan) (i : Number) (hi : loan.interestDue = .ok i) :
     i.isNormalized := by

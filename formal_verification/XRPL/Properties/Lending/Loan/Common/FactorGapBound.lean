@@ -29,8 +29,8 @@ private lemma Number.tiny : ∃ w : Number, w.isNormalized ∧ w.toRat = 1 / 10 
 /-- The steps of the payment factor of a positive rate over at least one payment. -/
 private lemma computePaymentFactor_steps (rate : Number) (k : UInt32) (f : Number) (hrate : rate.isNormalized)
     (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePaymentFactor rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok f) :
-    ∃ pm R num : Number, computePowerMinusOneHybrid rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm ∧
+    (h : computePaymentFactor rate (Number.ofInt64 k.toInt64) k = .ok f) :
+    ∃ pm R num : Number, computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm ∧
       (Number.ofInt64 1).operator_add pm .to_nearest = .ok R ∧ rate.operator_mul R .to_nearest = .ok num ∧
       num.operator_div pm .to_nearest = .ok f := by
   unfold computePaymentFactor at h
@@ -51,13 +51,13 @@ private lemma computePaymentFactor_steps (rate : Number) (k : UInt32) (f : Numbe
 to `10^-9` or more, else the binomial series, and then `k·rate` is below `10^-9`. -/
 private lemma computePowerMinusOneHybrid_cases (rate : Number) (k : UInt32) (pm : Number)
     (hrate : rate.isNormalized) (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm) :
+    (h : computePowerMinusOneHybrid rate (Number.ofInt64 k.toInt64) k = .ok pm) :
     (∃ b p : Number, (Number.ofInt64 1).operator_add rate .to_nearest = .ok b ∧ b.power k.toNat = .ok p ∧
         p.operator_sub (Number.ofInt64 1) .to_nearest = .ok pm ∧
         1 / 10 ^ 9 ≤ (k.toNat : ℚ) * rate.toRat * (1 + ε)) ∨
       ((k.toNat : ℚ) * rate.toRat < 1 / 10 ^ 9 ∧
-        computePowerMinusOne rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm) := by
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+        computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) := by
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   unfold computePowerMinusOneHybrid at h
   dsimp only at h
@@ -141,7 +141,11 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
     rw [powerMinusOneLoop] at h
     split at h
     · obtain ⟨c1, h1, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c2, h2, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨_, hk, h⟩ := bind_ok_peel _ _ _ h
+      obtain ⟨-, rfl⟩ := Nat.toInt64Checked_eq_ok.mp hk
       obtain ⟨c3, h3, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨ns, h4, h⟩ := bind_ok_peel _ _ _ h
       have hk1 := Number.ofInt64_nat (pr - index) (by omega)
@@ -165,9 +169,9 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
 /-- The binomial series is at least `k·rate`, less one rounding. -/
 private lemma computePowerMinusOne_ge (rate : Number) (k : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hr0 : 0 < rate.toRat) (hk : k ≠ 0)
-    (h : computePowerMinusOne rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm) :
+    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) :
     (k.toNat : ℚ) * rate.toRat * (1 - ε) ≤ pm.toRat := by
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   have hk1 : (1 : ℚ) ≤ k.toNat := by
     have : k.toNat ≠ 0 := fun h0 => hk (UInt32.toNat_inj.mp (by simpa using h0))
@@ -195,11 +199,11 @@ private lemma computePowerMinusOne_ge (rate : Number) (k : UInt32) (pm : Number)
 /-- The binomial series is at most `k·rate` over `1 − 10^-9`, plus its roundings. -/
 private lemma computePowerMinusOne_le (rate : Number) (k : UInt32) (pm : Number) (hrate : rate.isNormalized)
     (hr0 : 0 ≤ rate.toRat) (hsm : (k.toNat : ℚ) * rate.toRat < 1 / 10 ^ 9)
-    (h : computePowerMinusOne rate (Number.ofInt64 k.toUInt64.toInt64) k = .ok pm) :
+    (h : computePowerMinusOne rate (Number.ofInt64 k.toInt64) k = .ok pm) :
     pm.toRat ≤ (k.toNat * rate.toRat * (1 + ε) + k.toNat * rate.toRat * (1 + ε) / (10 ^ 9 - 1)) *
       (1 + ε) ^ (k.toNat - 1) := by
   have he := Number.nearestError_pos
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
   have hNv := Number.ofInt64_count k
   have hx0 : 0 ≤ (k.toNat : ℚ) * rate.toRat := by positivity
   unfold computePowerMinusOne at h
@@ -614,8 +618,8 @@ lemma FactorGap.of_bound (rate : Number) (k : UInt32) (hrate : rate.isNormalized
   have hk2 : (2 : ℚ) ≤ k.toNat := by exact_mod_cast hk
   obtain ⟨pm, R, num, hpm, hR, hnum, hdiv⟩ := computePaymentFactor_steps rate k f hrate hr0 hk0 hf
   obtain ⟨pm', R', num', hpm', hR', hnum', hdiv'⟩ := computePaymentFactor_steps rate (k - 1) f' hrate hr0 hk10 hf'
-  have hN := Number.ofInt64_isNormalized k.toUInt64.toInt64
-  have hN' := Number.ofInt64_isNormalized (k - 1).toUInt64.toInt64
+  have hN := Number.ofInt64_isNormalized k.toInt64
+  have hN' := Number.ofInt64_isNormalized (k - 1).toInt64
   have hpmN := computePowerMinusOneHybrid_isNormalized rate _ k pm hrate hN hpm
   have hpmN' := computePowerMinusOneHybrid_isNormalized rate _ (k - 1) pm' hrate hN' hpm'
   have hpm0 := computePowerMinusOneHybrid_nonneg rate _ k pm hrate hr0.le hN

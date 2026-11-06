@@ -126,7 +126,7 @@ private lemma Loan.instalment_deltas (l l' : Loan) (pc0 pc : PaymentComponents) 
     simp only [Loan.doPayment, hpcf, Bool.false_eq_true, ↓reduceIte] at hdo
     unfold_ter at hdo
     walk_ok
-    rename_i _ tv htv _ _ _ _ _ _ hlaw
+    rename_i _ tv htv _ _ _ _ _ _ _ _ hlaw
     have hr := (RawLoan.to_lawful_ok hlaw).1
     have r1 := (congrArg RawLoan.totalValueOutstanding hr :)
     simp only at r1
@@ -254,21 +254,22 @@ private lemma loanLatePaymentInterest_nonneg (l : Loan) (now : UInt32) (li : Num
   · simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, Except.ok.injEq, bind,
       Except.bind] at h
     exact hzero h.symm
-  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, bind, Except.bind] at h
+  simp only [h1, h2, h3, ↓reduceIte, Bool.false_eq_true, pure, Except.pure, bind, Except.bind,
+    UInt32.subChecked_of_le (UInt32.le_of_lt (UInt32.not_le.mp h3))] at h
   split at h
   · cases h
   rename_i rate hrate
   have hrn := loanPeriodicRate_isNormalized _ _ _ hrate
   have hr0 : 0 ≤ rate.toRat := by
     have heq : loanPeriodicRate l.rates.lateInterestRate (now - l.nextPaymentDueDate) =
-        (tenthBipsOfValue (Number.ofInt64 (now - l.nextPaymentDueDate).toUInt64.toInt64)
+        (tenthBipsOfValue (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64)
           l.rates.lateInterestRate .to_nearest) >>= (fun t => t.operator_div secondsInYear .to_nearest) := rfl
     rw [heq] at hrate
     obtain ⟨tb, htb, hrate⟩ := bind_ok_peel _ _ _ hrate
-    have hin := Number.ofInt64_isNormalized (now - l.nextPaymentDueDate).toUInt64.toInt64
-    have hi0 : 0 ≤ (Number.ofInt64 (now - l.nextPaymentDueDate).toUInt64.toInt64).toRat := by
+    have hin := Number.ofInt64_isNormalized (now - l.nextPaymentDueDate).toInt64
+    have hi0 : 0 ≤ (Number.ofInt64 (now - l.nextPaymentDueDate).toInt64).toRat := by
       have := TenthBips32.toNumber_facts (now - l.nextPaymentDueDate)
-      rw [show Number.ofInt64 (now - l.nextPaymentDueDate).toUInt64.toInt64 =
+      rw [show Number.ofInt64 (now - l.nextPaymentDueDate).toInt64 =
         TenthBips32.toNumber (now - l.nextPaymentDueDate) from rfl, this.2]
       positivity
     have htbn := tenthBipsOfValue_normalized hin htb

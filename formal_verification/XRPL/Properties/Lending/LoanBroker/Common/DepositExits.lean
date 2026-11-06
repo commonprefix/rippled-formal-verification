@@ -88,7 +88,7 @@ lemma LoanBroker.canCoverDeposit_error_codes_proof (lb : LoanBroker) (pool : α)
   | ok x =>
     cases x with
     | error t =>
-      rw [LoanBroker.roundedCoverAmount_error_code lb pool amount t h] at h
+      rw [LoanBroker.roundedCoverAmount_error_codes_proof lb pool amount t h] at h
       rw [LoanBroker.canCoverDeposit_precision_loss_proof lb pool amount h] at hok
       cases hok
       exact Or.inr (Or.inl rfl)

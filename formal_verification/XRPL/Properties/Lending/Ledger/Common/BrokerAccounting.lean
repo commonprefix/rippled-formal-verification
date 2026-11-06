@@ -310,6 +310,8 @@ private lemma STAmount.ofNumber_int64_zero_sign (n : Number) (hn : n.isNormalize
   simp only [Bool.false_eq_true, if_false, show NumericType.int64.isIntegral = true from rfl, if_true] at hok
   split at hok
   · cases hok
+  obtain ⟨vpeel, hvpeel, hok⟩ := bind_ok_peel _ _ _ hok
+  obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hvpeel
   unfold STAmount.checked STAmount.canonicalize at hok
   rw [if_pos (show (STAmount.unchecked .int64 _ 0 false).integral = true from rfl)] at hok
   split at hok

@@ -251,25 +251,4 @@ private lemma Vault.withdrawNav_le_total (v : Vault) : v.withdrawNav ≤ v.toExa
   change 0 ≤ v.lossUnrealized.toRat at this
   linarith
 
-/-- Proof of `Vault.deposit_donation_no_dilution_total`. -/
-lemma Vault.deposit_donation_no_dilution_total_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
-    (hpos : 0 < amountDeposit.toRat) (hcanon : amountDeposit.Canonical)
-    (hty : amountDeposit.mNumericType = v.numericType)
-    (r : VaultWithAmounts) (hok : (v.deposit amountDeposit true t hpos).run = .ok (.ok r)) :
-    v.withdrawNav < r.vault'.withdrawNav +
-        (v.assetsAvailable.toRat + r.assets.toRat - r.vault'.assetsAvailable.toRat) ∧
-      r.vault'.toExact.sharesTotal = v.toExact.sharesTotal := by
-  obtain ⟨ra, -, -, hra, -, -, -, -, -, -⟩ := Vault.deposit_ok_reduces v amountDeposit true t hpos r hok
-  obtain ⟨hras, hrsh⟩ := Vault.deposit_donation_proof v amountDeposit ra t hpos hcanon hra r hok
-  obtain ⟨-, hrapos⟩ := DepRnd.Vault.roundedDepositAmount_canonical_pos v amountDeposit ra hcanon hra
-  obtain ⟨aa', st', hv⟩ := Vault.deposit_frame v _ _ _ _ r hok
-  have hs0 : r.shares.toRat = 0 := by
-    rw [hrsh]; exact STAmount.zero_toRat _
-  have hST' := Vault.deposit_exact_sharesTotal v amountDeposit true t hpos hcanon hty r hok (by
-    rw [hs0, add_zero, RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]; exact v.sharesTotal_le_maxRep)
-  rw [hs0, add_zero] at hST'
-  refine ⟨?_, by exact_mod_cast hST'⟩
-  rw [Vault.withdrawNav_of_cash v r.vault' aa' st' hv, hras]
-  linarith
-
 end XRPL.Model.SingleAssetVault

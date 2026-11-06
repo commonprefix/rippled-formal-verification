@@ -140,22 +140,4 @@ lemma LoanBroker.Reachable.coverClawback_maxValue_fits (lb : LoanBroker) (base :
   LoanBroker.Reachable.maxValue_fits lb base hr (LoanBroker.coverClawback_cover_pos lb pool amount res
     (LoanBroker.Reachable.debtTotal_zero_proof lb base hr) hok)
 
-/-- The whole cover of a reachable broker converted to a nonzero amount shows there is cover, so the
-asset's integral maximum fits an `int64` amount. -/
-lemma LoanBroker.Reachable.cover_amount_maxValue_fits (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
-    (s : STAmount) (hs : STAmount.ofNumber lb.numericType lb.coverAvailable .to_nearest = .ok s)
-    (hnz : s.mValue ≠ 0) :
-    lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat := by
-  have hv := LoanBroker.roundedCoverAvailable_of_exact lb s (LoanBroker.Reachable.openZone lb base hr).coverExact hs
-  refine LoanBroker.Reachable.maxValue_fits lb base hr ?_
-  rw [← hv]
-  exact lt_of_le_of_ne (hv ▸ lb.exact.coverAvailable_nonneg)
-    (fun h => hnz ((STAmount.toRat_eq_zero_iff s).mp h.symm))
-
-/-- Proof body of `Reachable.roundedCoverAvailable_exact`. -/
-lemma LoanBroker.Reachable.roundedCoverAvailable_exact_proof (lb : LoanBroker) (base : Int)
-    (hr : lb.Reachable base) (s : STAmount) (hok : lb.roundedCoverAvailable = .ok s) :
-    s.toRat = lb.toExact.coverAvailable :=
-  LoanBroker.roundedCoverAvailable_of_exact lb s (LoanBroker.Reachable.openZone lb base hr).coverExact hok
-
 end XRPL.Model.Lending
