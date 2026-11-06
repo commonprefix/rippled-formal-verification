@@ -75,7 +75,7 @@ def computeWithdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss :
 
 -- withdraw assets from the vault
 -- returns the updated vault, the assets withdrawn and the shares redeemed, or the TER that rejects it
--- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+-- `hpos`: the preflight check `sfAmount > 0` passed. Callers outside the model check it.
 def Vault.withdraw (v : Vault) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (parentCloseTime : UInt32)
     (_hpos : 0 < amount.amount.toRat) (holderShares : Option Number := none) : TerExcept VaultWithAmounts := do
   -- a vault with an early-exit fee rate, even a zero one, allows withdrawals in the investment phase

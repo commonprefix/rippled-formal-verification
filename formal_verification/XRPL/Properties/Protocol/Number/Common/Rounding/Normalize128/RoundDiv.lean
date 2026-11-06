@@ -8,20 +8,10 @@ import XRPL.Properties.Protocol.Number.Common.Constants
 
 namespace XRPL.Model.Protocol
 
-/-! # Exact value-fraction / round agreement for `doNormalize128`
+/-! # The `doNormalize128` guard matches the exact fraction
 
-The `doNormalize128` staged pipeline (used by `operator_div`) tracks the dropped
-digits in a `Guard`, but the standard `represents g ftilde` characterization only
-pins a coarse shadow `ftilde` of the true value fraction `f`. For the
-round-to-nearest decision we need the guard's `round` output to agree with the
-*true* fraction `f ⋛ 1/2`.
-
-`decimalValue g.digits_` captures the top `p` dropped decimal digits of `f`
-exactly, with a bounded tail: `f = decimalValue g.digits_ / 10^16 + x`,
-`0 ≤ x < 1/10^p`, `xbit ↔ x > 0`, and `decimalValue g.digits_ · 10^p` divisible by
-`10^16`. From this the guard's `round` value coincides with `f ⋛ 1/2`. -/
-
-/-! ## Nibble-0 helpers -/
+In `doNormalize128` the guard holds the leading dropped digits of the exact fraction `f` and a flag for the rest,
+so its `to_nearest` decision matches the comparison of `f` with `1/2`. -/
 
 /-- The sum of positions `1..15` of `decimalValue` is divisible by `10`. -/
 lemma ten_dvd_decimalValue_tail (d : UInt64) :
@@ -59,14 +49,10 @@ lemma allNibblesAtMost9_push (g : Guard) (d : UInt64) (hd : d.toNat < 10)
   · have hp15 : q.val = 15 := by omega
     rw [hp15, nibble_push_top, d_eq]; omega
 
-/-! ## The enriched scale-down invariant -/
-
 set_option maxHeartbeats 1000000 in
--- Heavy functional-induction over `doNormalize_scaleDown128` with per-step ℚ algebra.
-/-- Value/digit invariant threaded through `doNormalize_scaleDown128`. The output
-fraction `φ'` decomposes exactly against the accumulated guard, with the tail `x'`
-below the captured `p'` digits, and the captured digits sitting in the top nibbles
-(`10^16 ∣ decimalValue · 10^p'`). The `size` conjunct bounds the push count. -/
+-- Heavy functional-induction over `doNormalize_scaleDown128Spec` with per-step ℚ algebra.
+/-- `doNormalize_scaleDown128Spec` keeps the value exact and the guard invariant: the fraction is the captured digits
+plus a tail `x' < 1/10^p'`, with the digits in the top nibbles and the size and coupling bounds kept. -/
 theorem doNormalize_scaleDown128_valueInv
     (maxMantissa : UInt64) (m : UInt128) (e : Int) (g : Guard)
     (hmaxM : maxMantissa.toNat = 9999999999999999999)
@@ -79,7 +65,7 @@ theorem doNormalize_scaleDown128_valueInv
     (hsize : m.toNat * 10 ^ p < 10 ^ 23)
     (hcouple : x * 10 ^ 20 ≤ (m.toNat : ℚ) * 10 ^ p)
     (out : UInt128 × Int × Guard)
-    (hok : doNormalize_scaleDown128 maxMantissa m e g = .ok out) :
+    (hok : doNormalize_scaleDown128Spec maxMantissa m e g = .ok out) :
     ∃ (φ' x' : ℚ) (p' : ℕ),
       0 ≤ x' ∧ x' < 1 / 10 ^ p' ∧
       φ' = (decimalValue out.2.2.digits_ : ℚ) / 10 ^ 16 + x' ∧
@@ -89,16 +75,16 @@ theorem doNormalize_scaleDown128_valueInv
       out.1.toNat * 10 ^ p' < 10 ^ 23 ∧
       x' * 10 ^ 20 ≤ (out.1.toNat : ℚ) * 10 ^ p' ∧
       ((m.toNat : ℚ) + φ) * 10 ^ e = ((out.1.toNat : ℚ) + φ') * 10 ^ out.2.1 := by
-  induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := maxMantissa)
+  induction m, e, g using doNormalize_scaleDown128Spec.induct (maxMantissa := maxMantissa)
     generalizing φ x p with
   | case1 m e g hgt hge =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error .normalize1 from by
-      rw [doNormalize_scaleDown128.eq_def, dif_pos hgt, if_pos hge]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .error .normalize1 from by
+      rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_pos hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g
-        = doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
-        from by rw [doNormalize_scaleDown128.eq_def, dif_pos hgt, if_neg hnge]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g
+        = doNormalize_scaleDown128Spec maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
+        from by rw [doNormalize_scaleDown128Spec.eq_def, dif_pos hgt, if_neg hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by rw [BitVec.toNat_udiv, h10]
     have h_mod : (m % 10 : UInt128).toNat = m.toNat % 10 := by rw [BitVec.toNat_umod, h10]
@@ -147,7 +133,6 @@ theorem doNormalize_scaleDown128_valueInv
       have hd_eq : (toUInt64 (m % 10)).toNat % 16 = (toUInt64 (m % 10)).toNat :=
         Nat.mod_eq_of_lt (by omega)
       rw [hd_eq] at hpr
-      -- hpr : 10 * decimalValue (push) = decimalValue g + d * 10^16
       have key : decimalValue (g.push (toUInt64 (m % 10))).digits_ * 10 ^ (p + 1)
           = decimalValue g.digits_ * 10 ^ p + (toUInt64 (m % 10)).toNat * 10 ^ 16 * 10 ^ p := by
         have : 10 * decimalValue (g.push (toUInt64 (m % 10))).digits_ * 10 ^ p
@@ -193,8 +178,8 @@ theorem doNormalize_scaleDown128_valueInv
     field_simp
     ring
   | case3 m e g hgt =>
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .ok (m, e, g) from by
-      rw [doNormalize_scaleDown128.eq_def, dif_neg hgt]] at hok
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .ok (m, e, g) from by
+      rw [doNormalize_scaleDown128Spec.eq_def, dif_neg hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, x, p, hx_nn, hx_lt, hval, hxbit, hall, hdvd, hsize, hcouple, by ring⟩
 
@@ -314,13 +299,8 @@ theorem doNormalize_capAtMaxRep_valueInv
     obtain rfl := (Except.ok.inj hok).symm
     exact ⟨φ, x, p, hx_nn, hx_lt, hval, hxbit, hall, hdvd, hsize, hcouple, by ring⟩
 
-/-! ## Round-decision agreement -/
-
-/-- **Case-B core.** When the captured digits sit strictly below the tie
-(`decimalValue < 5·10^15`), the true fraction is strictly below `1/2`. The captured
-digits occupy the top `p` nibbles (`10^16 ∣ decimalValue·10^p`), so their value is
-at most `5·10^15 - 10^(16-p)`, which the tail `x < 1/10^p` cannot lift over the
-midpoint. The `p = 0` corner (no digits captured) is supplied externally. -/
+/-- If the captured digits are below the tie (`decimalValue < 5·10^15`), the true fraction is below `1/2`, since
+the tail `x < 1/10^p` cannot lift them over the midpoint. The `p = 0` case comes from `hp0`. -/
 lemma valueInv_le_half_of_dec_lt (decVal : ℕ) (x f : ℚ) (p : ℕ)
     (_hx_nn : 0 ≤ x) (hx_lt : x < 1 / 10 ^ p)
     (hval : f = (decVal : ℚ) / 10 ^ 16 + x)
@@ -386,8 +366,8 @@ private lemma valueInv_key (g : Guard) (f x : ℚ)
     f - 1 / 2 = ((decimalValue g.digits_ : ℚ) - 5 * 10 ^ 15) / 10 ^ 16 + x := by
   rw [hval]; field_simp; ring
 
-/-- **Div round = 1 ⟹ f > ½.** The `to_nearest` guard rounds up only strictly above
-the midpoint. Mirrors `represents_round_eq_one`, but for the true value fraction. -/
+/-- Div round = 1 ⟹ f > ½. The `to_nearest` guard rounds up only strictly above
+the midpoint. Same as `represents_round_eq_one`, for the true value fraction. -/
 lemma div_round_eq_one (g : Guard) (f x : ℚ)
     (hx_nn : 0 ≤ x) (hval : f = (decimalValue g.digits_ : ℚ) / 10 ^ 16 + x)
     (hxbit : g.xbit_ = true ↔ 0 < x) (hall : allNibblesAtMost9 g.digits_)
@@ -418,7 +398,7 @@ lemma div_round_eq_one (g : Guard) (f x : ℚ)
       · rw [if_neg hxb] at h1
         exact absurd h1 (by decide)
 
-/-- **Div round = 0 ⟹ f = ½.** Mirrors `represents_round_eq_zero`. -/
+/-- Div round = 0 ⟹ f = ½. Same as `represents_round_eq_zero`, for the true value fraction. -/
 lemma div_round_eq_zero (g : Guard) (f x : ℚ)
     (hx_nn : 0 ≤ x) (hval : f = (decimalValue g.digits_ : ℚ) / 10 ^ 16 + x)
     (hxbit : g.xbit_ = true ↔ 0 < x) (hall : allNibblesAtMost9 g.digits_)
@@ -445,9 +425,8 @@ lemma div_round_eq_zero (g : Guard) (f x : ℚ)
           exact absurd (hxbit.mpr (lt_of_le_of_ne hx_nn (Ne.symm hxne))) hxb
         rw [hx0] at key; linarith only [key, hq]
 
-/-- **Div f > ½ ⟹ round = 1.** The hard direction: below the tie the captured
-digits leave a `10^(16-p)` gap the tail cannot cross (`valueInv_le_half_of_dec_lt`),
-so `f > ½` forces the guard above the tie. Mirrors `represents_f_gt_half`. -/
+/-- In the div pipeline, `f > 1/2` forces the `to_nearest` round decision to `1`, since below the tie the captured
+digits leave a gap the tail cannot cross. Same as `represents_f_gt_half`, for the true value fraction. -/
 lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
     (hx_nn : 0 ≤ x) (hx_lt : x < 1 / 10 ^ p)
     (hval : f = (decimalValue g.digits_ : ℚ) / 10 ^ 16 + x)
@@ -481,9 +460,8 @@ lemma div_f_gt_half (g : Guard) (f x : ℚ) (p : ℕ)
         unfold Guard.empty Guard.unrecoverable; rw [hxb]; simp
       rw [round_to_nearest_def hne, if_neg hgt, if_neg hlt, if_pos hxb]
 
-/-- **Div f = ½ ⟹ round = 0.** At an exact tie the captured digits are exactly the
-half-mark and the tail vanishes (`¬xbit`). Mirrors the `f = ½ ↔ round = 0` clause of
-`round_correct`. -/
+/-- In the div pipeline, `f = 1/2` forces the `to_nearest` round decision to `0`, since the captured digits are
+exactly the half-mark and the tail is zero. Same as the tie case of `round_correct`. -/
 lemma div_f_eq_half (g : Guard) (f x : ℚ) (p : ℕ)
     (hx_nn : 0 ≤ x) (hx_lt : x < 1 / 10 ^ p)
     (hval : f = (decimalValue g.digits_ : ℚ) / 10 ^ 16 + x)
@@ -528,21 +506,8 @@ lemma div_f_eq_half (g : Guard) (f x : ℚ) (p : ℕ)
         rw [this] at hdec; norm_num at hdec
       rw [round_to_nearest_def hne, if_neg hgt, if_neg hlt, if_neg hxb]
 
-/-- `decimalValue` of a valid decimal guard fits in 16 digits. -/
-lemma decimalValue_lt_pow16 (d : UInt64) (hall : allNibblesAtMost9 d) :
-    decimalValue d < 10 ^ 16 := by
-  obtain ⟨heq, hlt⟩ := decimalValue_decomp d hall
-  have h15 : nibble d 15 ≤ 9 := hall ⟨15, by omega⟩
-  rw [heq]
-  have : nibble d 15 * 10 ^ 15 ≤ 9 * 10 ^ 15 := Nat.mul_le_mul_right _ h15
-  have h15pow : (10 : ℕ) ^ 15 < 10 ^ 16 := by norm_num
-  omega
-
-/-- **`p = 0` corner discharge.** When no digit was captured (`p = 0`), the guard
-holds no digits (`decimalValue = 0`), so `f = x`, and the coupling
-`x·10^20 ≤ zm` with `zm < 10^19` forces `x < 1/10 ≤ 1/2`. This supplies the
-external `hp0` hypothesis of `div_f_gt_half` for the div pipeline (no scale-down or
-cap push happened, so the output mantissa `zm ≤ maxRepUp < 10^19`). -/
+/-- With no captured digit (`p = 0`), the coupling `x · 10^20 ≤ zm` with `zm < 10^19` gives `f = x < 1/10`, so
+`f < 1/2`. This supplies the `hp0` hypothesis of `div_f_gt_half`. -/
 lemma valueInv_p0_le_half (g : Guard) (f x : ℚ) (zm : ℕ)
     (hval : f = (decimalValue g.digits_ : ℚ) / 10 ^ 16 + x)
     (hall : allNibblesAtMost9 g.digits_)
@@ -551,7 +516,7 @@ lemma valueInv_p0_le_half (g : Guard) (f x : ℚ) (zm : ℕ)
     (hzm : zm < 10 ^ 19) : f < 1 / 2 := by
   simp only [pow_zero, mul_one] at hdvd hcouple
   have hdv0 : decimalValue g.digits_ = 0 :=
-    Nat.eq_zero_of_dvd_of_lt hdvd (decimalValue_lt_pow16 g.digits_ hall)
+    Nat.eq_zero_of_dvd_of_lt hdvd (decimalValue_lt_pow_16 hall)
   rw [hval, hdv0, Nat.cast_zero, zero_div, zero_add]
   have hzmq : (zm : ℚ) < 10 ^ 19 := by exact_mod_cast hzm
   have h20 : (0 : ℚ) < 10 ^ 20 := by positivity

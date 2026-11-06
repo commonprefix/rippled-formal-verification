@@ -18,7 +18,7 @@ theorem STAmount.operator_add_rounds_integral (v1 v2 result : STAmount) (mode : 
   RoundsWithin_of_eq result (v1.toRat + v2.toRat) mode
     (STAmount.operator_add_integral_exact v1 v2 result mode hc1 hc2 hbound_val hsum hok)
 
-/-- **IOU addition rounds within `IOUAmount.εToNearest`.** -/
+/-- IOU addition rounds within `IOUAmount.εToNearest`. -/
 theorem STAmount.operator_add_rounds_iou (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
@@ -27,7 +27,7 @@ theorem STAmount.operator_add_rounds_iou (v1 v2 result : STAmount)
     RoundsWithin result (v1.toRat + v2.toRat) .to_nearest IOUAmount.εToNearest :=
   STAmount.operator_add_iou_rel_error v1 v2 result hc1 hc2 h_truth_ne hok hresult
 
-/-- **Tightness witness for the IOU addition bound.** -/
+/-- IOU addition can err by more than `4/10¹⁶` of the exact sum, close to the `εToNearest` bound. -/
 theorem STAmount.operator_add_rounds_iou_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
@@ -35,7 +35,7 @@ theorem STAmount.operator_add_rounds_iou_witness :
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   STAmount.operator_add_rounds_iou_witness_proof
 
-/-- **IOU addition, `downward`:  rounding within `IOUAmount.εDirected`.** -/
+/-- IOU addition, `downward`: rounding within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_add_rounds_iou_downward (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
@@ -45,7 +45,7 @@ theorem STAmount.operator_add_rounds_iou_downward (v1 v2 result : STAmount)
   STAmount.operator_add_iou_rounds_directed v1 v2 result .downward hc1 hc2
     h_truth_ne hok hresult
 
-/-- **IOU addition, `upward`:  rounding within `IOUAmount.εDirected`.** -/
+/-- IOU addition, `upward`: rounding within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_add_rounds_iou_upward (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
@@ -55,7 +55,7 @@ theorem STAmount.operator_add_rounds_iou_upward (v1 v2 result : STAmount)
   STAmount.operator_add_iou_rounds_directed v1 v2 result .upward hc1 hc2
     h_truth_ne hok hresult
 
-/-- **IOU addition, `towards_zero`: rounding within `IOUAmount.εDirected`.** -/
+/-- IOU addition, `towards_zero`: rounding within `IOUAmount.εDirected`. -/
 theorem STAmount.operator_add_rounds_iou_towards_zero (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
     (h_truth_ne : v1.toRat + v2.toRat ≠ 0)
@@ -65,7 +65,7 @@ theorem STAmount.operator_add_rounds_iou_towards_zero (v1 v2 result : STAmount)
   STAmount.operator_add_iou_rounds_directed v1 v2 result .towards_zero hc1 hc2
     h_truth_ne hok hresult
 
-/-- **Tightness witness, IOU addition `downward`.** -/
+/-- IOU addition rounding `downward` can err by more than `4/10¹⁶` of the exact sum. -/
 theorem STAmount.operator_add_rounds_iou_downward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
@@ -73,7 +73,7 @@ theorem STAmount.operator_add_rounds_iou_downward_witness :
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   add_dir_wit_core .downward 1000000000000000 (by decide) (Or.inl rfl)
 
-/-- **Tightness witness, IOU addition `upward`.** -/
+/-- IOU addition rounding `upward` can err by more than `4/10¹⁶` of the exact sum. -/
 theorem STAmount.operator_add_rounds_iou_upward_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
@@ -81,7 +81,7 @@ theorem STAmount.operator_add_rounds_iou_upward_witness :
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   add_dir_wit_core .upward 1000000000000001 (by decide) (Or.inr (Or.inl rfl))
 
-/-- **Tightness witness, IOU addition `towards_zero`.** -/
+/-- IOU addition rounding `towards_zero` can err by more than `4/10¹⁶` of the exact sum. -/
 theorem STAmount.operator_add_rounds_iou_towards_zero_witness :
     ∃ (v1 v2 result : STAmount),
       v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧

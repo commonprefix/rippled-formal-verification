@@ -1,20 +1,14 @@
 import XRPL.Model.Protocol.Number
 import XRPL.Model.Protocol.NumericType
--- Re-exported for the files that import this one (these lemmas moved to Protocol)
+-- Re-exported for the files that import this one
 import XRPL.Properties.Protocol.Common.AmountArith
 import XRPL.Properties.Protocol.Common.Reduction
 
 /-! # Basic facts
 
-Generic facts about `ℚ`, `ℤ`, `Int64` and `Except` used by the vault proofs. -/
+Generic `Int64` facts used by the vault proofs. -/
 
 namespace XRPL.Model.Protocol
-
-/-- The two modeled integral asset types both fit `maxRep`. -/
-lemma NumericType.maxValue_le_maxRep_of_real (nt : NumericType)
-    (hnt : nt = .int64 ∨ nt = .native) :
-    nt.maxValue.toNat ≤ maxRep.toNat := by
-  rcases hnt with h | h <;> rw [h] <;> decide
 
 /-- `Int64 → UInt64` is a bit-cast, so it sends only zero to zero. -/
 lemma Int64.toUInt64_eq_zero_iff (x : Int64) : x.toUInt64 = 0 ↔ x = 0 := by

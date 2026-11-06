@@ -1,7 +1,10 @@
 import XRPL.Properties.Protocol.Number.Sub.Common.RoundsToRepresentableProofs
 
-/-! # `operator_sub` is correctly rounded (`RoundsToRepresentable`), via `x - y = x + (-y)`.
-Proofs in `Common.RoundsToRepresentableProofs`. -/
+/-! # `operator_sub` rounds to a neighbouring `Number`
+
+`x - y` is computed as `x + (-y)`. The result is the largest `Number` at or below the exact value (`downward`), the
+smallest at or above it (`upward`), the one of these two nearer zero (`towards_zero`), or either of them
+(`to_nearest`). `downward` and `upward` assume a nonzero result, since a value too small for a `Number` becomes zero. -/
 
 namespace XRPL.Model.Protocol
 

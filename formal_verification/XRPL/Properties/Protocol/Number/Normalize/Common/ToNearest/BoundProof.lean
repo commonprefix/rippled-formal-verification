@@ -5,13 +5,8 @@ import XRPL.Properties.Approx
 
 namespace XRPL.Model.Protocol
 
-/-! ## to_nearest -/
-
-/-- Relative-error bound for `Number.normalize` under `.to_nearest` rounding.
-
-`normalize` accepts an arbitrary `(mantissa, exponent)` pair (the input need not
-be normalized). Its final stage is `doRoundUp`, so the rounding error matches the
-same-sign `doRoundUp` to-nearest supremum `5/(2^63 + 7)`. -/
+/-- `Number.normalize` under `.to_nearest` on any nonzero `(mantissa, exponent)` pair, normalized or not, has
+relative error at most `5/(2^63 + 7)` when the result is nonzero. -/
 theorem normalize_rounding_bound_to_nearest (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)

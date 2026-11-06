@@ -66,7 +66,8 @@ private def Loan.scheduledComponents (loan : Loan) : Except Error PaymentCompone
              isFinal := true }
 
   let currentState ← loan.state
-  let targetState ← LoanState.buildTheoretical periodicPayment periodicRate (paymentRemaining - 1) mgmtRate
+  let paymentRemaining' ← paymentRemaining.subChecked 1
+  let targetState ← LoanState.buildTheoretical periodicPayment periodicRate paymentRemaining' mgmtRate
 
   let targetPO ← STAmount.roundToNumericType nt targetState.principalOutstanding .upward (some scale)
   let targetInterest ← STAmount.roundToNumericType nt targetState.interestDue .downward (some scale)
@@ -267,14 +268,16 @@ private def Loan.doPayment (loan : Loan) (pc : PaymentComponents) : Except Error
   let totalValueOutstanding' ← loan.totalValueOutstanding.operator_sub pc.totalValueDelta .to_nearest
   let principalOutstanding' ← loan.principalOutstanding.operator_sub pc.principalDelta .to_nearest
   let managementFeeOutstanding' ← loan.managementFeeOutstanding.operator_sub pc.managementFeeDelta .to_nearest
+  let paymentRemaining' ← loan.paymentRemaining.subChecked 1
+  let nextPaymentDueDate' ← loan.nextPaymentDueDate.addChecked loan.schedule.paymentInterval
 
   let rawLoan' : RawLoan := { loan.toRawLoan with
     totalValueOutstanding := totalValueOutstanding'
     principalOutstanding := principalOutstanding'
     managementFeeOutstanding := managementFeeOutstanding'
-    paymentRemaining := loan.paymentRemaining - 1
+    paymentRemaining := paymentRemaining'
     previousPaymentDueDate := loan.nextPaymentDueDate
-    nextPaymentDueDate := loan.nextPaymentDueDate + loan.schedule.paymentInterval }
+    nextPaymentDueDate := nextPaymentDueDate' }
   rawLoan'.to_lawful
 
 -- Settle the summed amounts against the broker and its pool, then re-check the pool
@@ -363,7 +366,8 @@ private def UnsettledPayment.payInstalments {α : Type} (payment : UnsettledPaym
     else payment'.payInstalments remaining amount
 
 -- Reverse any impairment before paying
-private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) :=
+private def Loan.unimpairIfImpaired {α : Type} [AssetPool α] (loan : Loan) (pool : α)
+    : TerExcept (LoanWithPool α) :=
   if loan.isImpaired then loan.manageUnimpair pool else pure { loan' := loan, pool' := pool }
 
 private def Loan.payScheduledInstalments {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
@@ -457,7 +461,7 @@ def Loan.latePayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amoun
   let pc ← loan.lateComponents now
   loan.paySingleInstalment pool pc amount
 
--- Pay off the loan early: clear the whole outstanding value plus early-payoff interest and the close fee
+-- Pay off the loan early: pay the principal plus early-payoff interest and the close fee
 def Loan.fullPayment {α : Type} [AssetPool α] (loan : Loan) (pool : α) (amount : Number)
     (now : UInt32) : TerExcept (LoanWithAmounts α) := do
   if loan.paymentRemaining == 0 || loan.principalOutstanding.operator_eq Number.zero then

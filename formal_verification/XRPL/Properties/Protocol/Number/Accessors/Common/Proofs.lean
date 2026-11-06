@@ -3,12 +3,10 @@ import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 
 namespace XRPL.Model.Protocol
 
-/-- `maxRep.toNat = 2^63 - 1 < 2^63`  the internal mantissa always fits in
-the positive `Int64` range when below the `maxRep` cusp. -/
+/-- `maxRep` is `2^63 - 1`, so a mantissa at or below `maxRep` fits in a positive `Int64`. -/
 private lemma maxRep_lt_2pow63 : maxRep.toNat < 2 ^ 63 := by rw [maxRep_val]; norm_num
 
-/-- The external mantissa view as an integer:
-`n.mantissa.toInt = sign · (post-`/10`-or-not internal magnitude)`. -/
+/-- The signed `mantissa()` as an integer: the sign times `mantissa_`, divided by 10 when `mantissa_ > maxRep`. -/
 lemma Number.mantissa_toInt (n : Number) :
     n.mantissa.toInt =
       (if n.negative_ then -1 else 1) *
@@ -77,8 +75,8 @@ theorem mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNormalized) 
       rw [hneg, if_pos (by decide), Number.toRat_of_neg n hneg]
       push_cast; ring
 
-theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
-    (n.mantissa).toInt.natAbs ≤ maxRep.toNat := by
+/-- The public mantissa of any `Number`, normalized or not, fits the signed rep. -/
+lemma Number.mantissa_natAbs_le (n : Number) : n.mantissa.toInt.natAbs ≤ maxRep.toNat := by
   rw [Number.mantissa_toInt n, Int.natAbs_mul]
   have hsign : (if n.negative_ then (-1 : ℤ) else 1).natAbs = 1 := by
     cases n.negative_ <;> decide
@@ -89,5 +87,9 @@ theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
     rw [maxRep_val]; omega
   · rw [if_neg hcusp, Int.natAbs_natCast]
     exact le_of_not_gt (fun hc => hcusp (UInt64.lt_iff_toNat_lt.mpr hc))
+
+theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
+    (n.mantissa).toInt.natAbs ≤ maxRep.toNat :=
+  Number.mantissa_natAbs_le n
 
 end XRPL.Model.Protocol

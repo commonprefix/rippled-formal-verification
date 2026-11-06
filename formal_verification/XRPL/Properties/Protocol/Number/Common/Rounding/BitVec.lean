@@ -1,6 +1,7 @@
 import Mathlib.Tactic
 
 import XRPL.Model.Protocol.Number
+import XRPL.Properties.Protocol.Common.FixedWidth
 
 namespace XRPL.Model.Protocol
 

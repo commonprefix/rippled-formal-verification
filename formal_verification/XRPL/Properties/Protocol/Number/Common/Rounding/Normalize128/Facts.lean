@@ -10,43 +10,25 @@ namespace XRPL.Model.Protocol
 
 /-! # Value preservation and rounding for `doNormalize128`
 
-`doNormalize128` is the tail of the diff-sign addition path:
+`doNormalize128` is the last step of division and of opposite-sign addition. Each stage keeps the exact value
+`(M + δ)·10^e`. The proofs track two dropped fractions: `φ`, the exact one, and `f̃`, the one the guard holds
+(`represents g f̃`). Each digit push maps both through `(· + d)/10`, so the gap between them (the slip) never grows. -/
 
-  `scaleUp (exact) → doNormalize_scaleDown128 (pushes digits) → capAtMaxRep
-     (one conditional push) → doRoundUp (rounds)`.
-
-The true value entering the pipeline is `(M + δ) * 10^e` where `δ ∈ [0,1)` is
-the sticky tail (`δ = 0` iff the sticky flag is off). The guard cannot
-`represents` the tail tightly (its hidden-fraction bound is `1/10^16`), so we
-thread TWO fractions through the digit-pushing stages:
-
-* `φ` — the *true* discarded fraction (arbitrary in `[0,1)`), giving the exact
-  value equation; and
-* `f̃` — a *representable* shadow (`represents g f̃`), within slip `s` of `φ`.
-
-Each push maps both through `(· + d)/10`, so the slip never grows. At the final
-`doRoundUp`, the supTight bound applies to `f̃` and a triangle step absorbs the
-slip (the mantissa there is `≥ 10^18`, the slip `< 1`). -/
-
-/-! ## scaleUp: exact value, bounds -/
-
-/-- `doNormalize128.scaleUp` preserves the value exactly and keeps the mantissa
-positive and below `10^23` (it only scales while `m < 10^18`, so it never exceeds
-`10^19`). The final conjunct records that it is either the identity or its
-output is below `10^19` (one scaling step happened last at `m < 10^18`). -/
+/-- `doNormalize128_scaleUpSpec` keeps the value `m · 10^e`, keeps the mantissa in `[1, 10^23)` and never raises the
+exponent. It either returns its input unchanged or a mantissa below `10^19`. -/
 lemma doNormalize128_scaleUp_facts (minMantissa : UInt64) (m : UInt128) (e : Int)
     (hmin : minMantissa.toNat = 1000000000000000000)
     (hm_pos : 1 ≤ m.toNat) (hm_lt : m.toNat < 10 ^ 23) :
-    let r := doNormalize128.scaleUp minMantissa m e
+    let r := doNormalize128_scaleUpSpec minMantissa m e
     ((r.1.toNat : ℚ) * 10 ^ r.2 = (m.toNat : ℚ) * 10 ^ e) ∧
     1 ≤ r.1.toNat ∧ r.1.toNat < 10 ^ 23 ∧ r.2 ≤ e ∧
     (r.1 = m ∧ r.2 = e ∨ r.1.toNat < 10 ^ 19) := by
-  induction m, e using doNormalize128.scaleUp.induct (minMantissa := minMantissa) with
+  induction m, e using doNormalize128_scaleUpSpec.induct (minMantissa := minMantissa) with
   | case1 m e hcond ih =>
     obtain ⟨h1, h2⟩ := hcond
-    rw [show doNormalize128.scaleUp minMantissa m e
-        = doNormalize128.scaleUp minMantissa (m * 10) (e - 1) from by
-      rw [doNormalize128.scaleUp.eq_def]
+    rw [show doNormalize128_scaleUpSpec minMantissa m e
+        = doNormalize128_scaleUpSpec minMantissa (m * 10) (e - 1) from by
+      rw [doNormalize128_scaleUpSpec.eq_def]
       simp only [if_pos (And.intro h1 h2)]]
     have h_lt_min : m.toNat < 1000000000000000000 := by
       have := BitVec.lt_def.mp h1
@@ -73,19 +55,15 @@ lemma doNormalize128_scaleUp_facts (minMantissa : UInt64) (m : UInt128) (e : Int
       · rw [hm_eq, h_mul]; omega
       · exact hlt19
   | case2 m e hcond =>
-    rw [show doNormalize128.scaleUp minMantissa m e = (m, e) from by
-      rw [doNormalize128.scaleUp.eq_def]
+    rw [show doNormalize128_scaleUpSpec minMantissa m e = (m, e) from by
+      rw [doNormalize128_scaleUpSpec.eq_def]
       simp only [if_neg hcond]]
     exact ⟨rfl, hm_pos, hm_lt, le_refl _, Or.inl ⟨rfl, rfl⟩⟩
 
-/-! ## scaleDown128: digit-push accumulation with a representable shadow -/
-
 set_option maxHeartbeats 1600000 in
 -- Functional induction over UInt128 digit pushes with per-step slip algebra is heartbeat-heavy.
-/-- Value/`represents` accumulation through `doNormalize_scaleDown128`. Threads
-the true fraction `φ` and a representable shadow `f̃` through each digit push.
-The slip between them is tracked *at scale*: `|φ₂ − f̃₂|·10^e₂ ≤ |φ − f̃|·10^e`
-(each push divides the slip by exactly the factor the exponent gains). -/
+/-- `doNormalize_scaleDown128Spec` keeps the value with the exact fraction `φ`, and the guard fraction `f̃` stays
+within the same slip at scale: `|φ₂ - f̃₂| · 10^e₂ ≤ |φ - f̃| · 10^e`. -/
 theorem doNormalize_scaleDown128_repr
     (maxMantissa : UInt64) (m : UInt128) (e : Int) (g : Guard)
     (_hmaxM : maxMantissa.toNat = 9999999999999999999)
@@ -94,7 +72,7 @@ theorem doNormalize_scaleDown128_repr
     (hrep : represents g ftilde)
     (hm_lt : m.toNat < 10 ^ 23)
     (out : UInt128 × Int × Guard)
-    (hok : doNormalize_scaleDown128 maxMantissa m e g = .ok out) :
+    (hok : doNormalize_scaleDown128Spec maxMantissa m e g = .ok out) :
     ∃ φ₂ ftilde₂ : ℚ,
       0 ≤ φ₂ ∧ φ₂ ≤ 1 ∧
       represents out.2.2 ftilde₂ ∧
@@ -107,20 +85,20 @@ theorem doNormalize_scaleDown128_repr
       (g.xbit_ = true → out.2.2.xbit_ = true) ∧
       (0 < φ → 0 < φ₂) ∧
       (φ < 1 → φ₂ < 1) := by
-  induction m, e, g using doNormalize_scaleDown128.induct (maxMantissa := maxMantissa)
+  induction m, e, g using doNormalize_scaleDown128Spec.induct (maxMantissa := maxMantissa)
     generalizing φ ftilde with
   | case1 m e g hgt hge =>
-    -- error branch: m > maxMantissa and e ≥ maxExponent — contradicts hok.
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .error .normalize1 from by
-      rw [doNormalize_scaleDown128.eq_def]
+    -- error branch: m > maxMantissa and e ≥ maxExponent, which contradicts hok.
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .error .normalize1 from by
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt, if_pos hge]] at hok
     exact absurd hok (by intro h; cases h)
   | case2 m e g hgt hnge ih =>
-    -- step: m > maxMantissa, ¬ e ≥ maxExponent; push m % 10, recurse on m / 10.
-    rw [show doNormalize_scaleDown128 maxMantissa m e g
-        = doNormalize_scaleDown128 maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
+    -- step: m > maxMantissa, ¬ e ≥ maxExponent, so push m % 10 and recurse on m / 10.
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g
+        = doNormalize_scaleDown128Spec maxMantissa (m / 10) (e + 1) (g.push (toUInt64 (m % 10)))
         from by
-      rw [doNormalize_scaleDown128.eq_def]
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_pos hgt, if_neg hnge]] at hok
     have h10 : ((10 : UInt128)).toNat = 10 := by decide
     have h_div : (m / 10 : UInt128).toNat = m.toNat / 10 := by
@@ -201,8 +179,8 @@ theorem doNormalize_scaleDown128_repr
       linarith
   | case3 m e g hgt =>
     -- exit: m ≤ maxMantissa.
-    rw [show doNormalize_scaleDown128 maxMantissa m e g = .ok (m, e, g) from by
-      rw [doNormalize_scaleDown128.eq_def]
+    rw [show doNormalize_scaleDown128Spec maxMantissa m e g = .ok (m, e, g) from by
+      rw [doNormalize_scaleDown128Spec.eq_def]
       rw [dif_neg hgt]] at hok
     obtain rfl := (Except.ok.inj hok).symm
     have h_le : m.toNat ≤ maxMantissa.toNat := by
@@ -215,12 +193,8 @@ theorem doNormalize_scaleDown128_repr
     exact ⟨φ, ftilde, hφ_low, hφ_le, hrep, le_refl _, rfl, h_le, hm_lt, le_refl _,
       rfl, fun hx => hx, fun h => h, fun h => h⟩
 
-/-! ## capAtMaxRep: one conditional push -/
-
-/-- Value/`represents` accumulation through `doNormalize_capAtMaxRep` (at most one
-push). Inputs satisfy `10^18 ≤ m ≤ maxMantissa`; the output mantissa lies in
-`[mantissaFloorSucc, maxRepUp]` — in particular strictly above `mantissaFloor`,
-which makes the supTight floor-constraint vacuous downstream. -/
+/-- `doNormalize_capAtMaxRep` (at most one push) keeps the value and slip facts of `doNormalize_scaleDown128_repr`,
+and its output mantissa lies in `(mantissaFloor, maxRepUp]`. -/
 theorem doNormalize_capAtMaxRep_repr
     (m : UInt64) (e : Int) (g : Guard)
     (hm_ge : 1000000000000000000 ≤ m.toNat)
@@ -320,27 +294,8 @@ theorem doNormalize_capAtMaxRep_repr
     change (mantissaFloor : ℕ) < m.toNat
     omega
 
-/-! ## Initial guards -/
-
-/-- The sign-seeded initial guard represents `0`. -/
-lemma represents_initial128 (zn : Bool) :
-    represents (if zn then Guard.new.set_negative else Guard.new) 0 := by
-  obtain ⟨x0, hx0_nn, hx0_lt, hf0, hxb0, hall0⟩ := represents_new
-  have hdig : (if zn then Guard.new.set_negative else Guard.new).digits_ = Guard.new.digits_ := by
-    by_cases h : zn
-    · rw [if_pos h]; rfl
-    · rw [if_neg h]
-  have hxbit : (if zn then Guard.new.set_negative else Guard.new).xbit_ = Guard.new.xbit_ := by
-    by_cases h : zn
-    · rw [if_pos h]; rfl
-    · rw [if_neg h]
-  refine ⟨x0, hx0_nn, hx0_lt, ?_, ?_, ?_⟩
-  · rw [hdig]; exact hf0
-  · rw [hxbit]; exact hxb0
-  · rw [hdig]; exact hall0
-
 /-- The sticky-seeded initial guard (digits `0`, `xbit = true`) represents the
-fixed positive shadow `1/10^17`. -/
+fixed positive fraction `1/10^17`. -/
 lemma represents_sticky_initial128 (zn : Bool) :
     represents ((if zn then Guard.new.set_negative else Guard.new).set_sticky)
       ((1 : ℚ) / 10 ^ 17) := by

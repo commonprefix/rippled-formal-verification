@@ -1,5 +1,4 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
--- Discrete-grid rounding identification for `operator_add` under `.downward`.
 import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.Downward.BoundProof
 import XRPL.Properties.Protocol.Number.Add.RoundsWithin
@@ -21,7 +20,7 @@ theorem operator_add_no_inbetween_below_downward (x y result : Number)
     ∀ m : Number, m.isNormalized →
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat + y.toRat) := by
   by_cases h_sign_eq : x.negative_ = y.negative_
-  · -- Same-sign: the facts bundle is frame-ready (true fraction represented).
+  · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hfloor_constr, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_sbit, hzm_succ, _, _, _⟩ :=
       operator_add_algorithmic_facts_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
@@ -37,7 +36,7 @@ theorem operator_add_no_inbetween_below_downward (x y result : Number)
       (fun h_neg => h_sbit.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_neg))
       (fun h_pos => h_sbit.trans (add_same_sign_xn_false_of_truth_pos x y h_sign_eq h_pos))
       h_le
-  · -- Diff-sign: through the `doNormalize128` keystone (shadow transfers).
+  · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
       operator_add_algorithmic_facts_diff_sign_represents x y result .downward hx hy
@@ -82,7 +81,8 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero y hmeq
     have h_result : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     have hx_mant : x.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
@@ -97,7 +97,8 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact Number.toRat_eq_zero_of_mantissa_zero x hmeq
     have h_result : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     have hy_mant : y.mantissa_ ≠ 0 := fun h => hresult (by rw [h_result]; exact h)
@@ -105,11 +106,12 @@ theorem operator_add_rounded_downward_proof (x y result : Number)
     rw [hx0, zero_add]
     obtain ⟨n, h_lo, h_val⟩ := Number.lower_value_self y hy hy_ne
     exact ⟨n, h_lo, by rw [h_result]; exact h_val⟩
-  -- Exact cancellation would return the canonical zero — excluded by `hresult`.
+  -- Exact cancellation would return the canonical zero, which `hresult` excludes.
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · exfalso
     have h_result : result = Number.zero := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm

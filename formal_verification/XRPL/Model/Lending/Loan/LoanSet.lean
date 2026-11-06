@@ -53,7 +53,7 @@ private def canFundLoan {α : Type} [AssetPool α] (pool : α) (schedule : LoanS
 -- start date in `schedule` is the ledger close time (`LoanSchedule.build`).
 def Loan.canCreate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principalRequested : Number)
     (fees : LoanFees) (schedule : LoanSchedule) (parentCloseTime : UInt32) (twoStep : Bool) : Except Error TER := do
-  let scheduleTer := schedule.checkTimeAvailability
+  let scheduleTer ← schedule.checkTimeAvailability
   if !scheduleTer.isTesSuccess then return scheduleTer
 
   let hasExpired : Bool := parentCloseTime ≥ schedule.startDate
@@ -75,7 +75,7 @@ def computeLoanPropertiesFromPeriodicRate (principal periodicRate : Number) (pay
 
   -- Round up when there is interest, else to nearest. The scale of the total value sets the loan scale.
   let mode : rounding_mode := if periodicRate.operator_eq Number.zero then .to_nearest else .upward
-  let amount ← periodicPayment.operator_mul (Number.ofInt64 paymentsRemaining.toUInt64.toInt64) mode
+  let amount ← periodicPayment.operator_mul (Number.ofInt64 paymentsRemaining.toInt64) mode
   let amountSt ← STAmount.ofNumber nt amount mode
   let loanScale := max minimumScale amountSt.exponent
   let totalValueOutstanding ← STAmount.roundToNumericType nt amount mode (some loanScale)
@@ -85,7 +85,8 @@ def computeLoanPropertiesFromPeriodicRate (principal periodicRate : Number) (pay
   let managementFeeOutstanding ← computeManagementFee nt totalInterest managementFeeRate loanScale
 
   let startPrincipal ← loanPrincipalFromPeriodicPayment periodicPayment periodicRate paymentsRemaining
-  let nextPrincipal ← loanPrincipalFromPeriodicPayment periodicPayment periodicRate (paymentsRemaining - 1)
+  let nextPaymentsRemaining ← paymentsRemaining.subChecked 1
+  let nextPrincipal ← loanPrincipalFromPeriodicPayment periodicPayment periodicRate nextPaymentsRemaining
   let firstPaymentPrincipal ← startPrincipal.operator_sub nextPrincipal .to_nearest
 
   return {
@@ -120,7 +121,7 @@ def LoanProperties.amortizationGuards (properties : LoanProperties) (principal :
   -- guard 4: the rounded payments must complete the loan in exactly the scheduled count
   let ratio ← properties.totalValueOutstanding.operator_div roundedPayment .upward
   let computedPayments ← ratio.to_rep .upward
-  if computedPayments != paymentsRemaining.toUInt64.toInt64 then return .tecPRECISION_LOSS
+  if computedPayments != paymentsRemaining.toInt64 then return .tecPRECISION_LOSS
   return .tesSUCCESS
 
 -- The amortization guards, then the sanity check on the computed values that follows them in LoanSet
@@ -145,7 +146,7 @@ def LoanBroker.checkLimits (broker : LoanBroker) (debtTotal' : Number) (vaultExp
 
 -- Assemble the raw loan object from its computed properties (C++ buildLoan)
 def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule)
-    (broker : LoanBroker) (allowsOverpayment isPending : Bool) : RawLoan := {
+    (broker : LoanBroker) (allowsOverpayment isPending : Bool) (nextPaymentDueDate : UInt32) : RawLoan := {
   broker := broker
   rates := rates
   fees := fees
@@ -157,7 +158,7 @@ def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : Loan
   managementFeeOutstanding := properties.managementFeeOutstanding
   loanScale := properties.loanScale
   previousPaymentDueDate := 0
-  nextPaymentDueDate := schedule.startDate + schedule.paymentInterval
+  nextPaymentDueDate := nextPaymentDueDate
   isPending := isPending
   isImpaired := false
   isDefault := false
@@ -201,12 +202,14 @@ def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (pr
     reserved := if pending then principal' else Number.zero }
   let pool' ← AssetPool.adjustBalances pool change
 
+  let loanCount' ← broker.loanCount.addChecked 1
   let rawBroker' : RawLoanBroker := { broker.toRawLoanBroker with
-    debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
+    debtTotal := debtTotal', loanCount := loanCount' }
   let broker' ← rawBroker'.to_lawful
 
+  let nextPaymentDueDate ← schedule.startDate.addChecked schedule.paymentInterval
   let rawLoan := RawLoan.build properties rates fees schedule broker'
-    allowsOverpayment pending
+    allowsOverpayment pending nextPaymentDueDate
   let loan ← rawLoan.to_lawful
 
   return { loan' := loan, pool' := pool' }

@@ -1,5 +1,4 @@
-import XRPL.Model.Vault.VaultBurn
-import XRPL.Properties.Vault.Proofs.Lawful
+import XRPL.Properties.Vault.Proofs.Burn
 
 /-! # `Vault.burnShares` exits -/
 
@@ -9,55 +8,39 @@ open XRPL.Model.Protocol
 
 variable (v : Vault)
 
-/-! ## `Vault.canBurnShares` -/
+/-- `tecNO_PERMISSION` and `tecLIMIT_EXCEEDED` are the only rejections `canBurnShares` can
+return. -/
+theorem Vault.canBurnShares_error_codes (amount holderShares : STAmount) (ter : TER)
+    (hok : (v.canBurnShares amount holderShares).run = .ok (.error ter)) :
+    ter = .tecNO_PERMISSION ∨ ter = .tecLIMIT_EXCEEDED :=
+  Vault.canBurnShares_error_codes_proof v amount holderShares ter hok
 
-/-- `tecNO_PERMISSION` is the only rejection `canBurnShares` can return. -/
-theorem Vault.canBurnShares_rejected_code (ter : TER)
-    (hok : v.canBurnShares = .ok (.error ter)) :
-    ter = .tecNO_PERMISSION :=
-  Vault.canBurnShares_rejected_code_proof v ter hok
+/-- The exits of `canBurnShares`, in the order it runs its checks. Each line assumes the checks before it passed. -/
+theorem Vault.canBurnShares_exits (amount holderShares : STAmount) :
+    (v.isInsolvent = false → (v.canBurnShares amount holderShares).run = .ok (.error .tecNO_PERMISSION)) ∧
+    (v.isInsolvent = true → (!amount.isZero && !(amount.operator_eq holderShares)) = true →
+      (v.canBurnShares amount holderShares).run = .ok (.error .tecLIMIT_EXCEEDED)) ∧
+    ∀ sharesTotalAmount : STAmount, v.isInsolvent = true →
+      (!amount.isZero && !(amount.operator_eq holderShares)) = false →
+      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
+      (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) :=
+  ⟨Vault.canBurnShares_no_permission_proof v amount holderShares,
+    Vault.canBurnShares_limit_exceeded_proof v amount holderShares, Vault.canBurnShares_ok_proof v amount holderShares⟩
 
-/-- Force-burning shares is allowed only when shares are outstanding while both
-asset totals are zero. When `sharesTotal` is zero, or `assetsTotal` or
-`assetsAvailable` is nonzero: `.error .tecNO_PERMISSION`. -/
-theorem Vault.canBurnShares_no_permission
-    (hperm : v.sharesTotal.mantissa_ = 0 ∨
-      v.assetsTotal.mantissa_ ≠ 0 ∨ v.assetsAvailable.mantissa_ ≠ 0) :
-    v.canBurnShares = .ok (.error .tecNO_PERMISSION) :=
-  Vault.canBurnShares_no_permission_proof v hperm
-
-/-- The vault has outstanding shares and both `assetsTotal` and
-`assetsAvailable` are zero: the result is the whole `sharesTotal` converted
-to an `int64` amount. -/
-theorem Vault.canBurnShares_ok (sharesTotalAmount : STAmount)
-    (hsh : v.sharesTotal.mantissa_ ≠ 0)
-    (hat : v.assetsTotal.mantissa_ = 0)
-    (hav : v.assetsAvailable.mantissa_ = 0)
-    (hshares : STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount) :
-    v.canBurnShares = .ok (.assets sharesTotalAmount) :=
-  Vault.canBurnShares_ok_proof v sharesTotalAmount hsh hat hav hshares
-
-/-! ## `Vault.burnShares` -/
-
-/-- `burnShares` stores the rounded difference `sharesTotal - sharesDestroyed`
-and changes no other field. The post-state is a `Vault` (`v'`): the in-op
-`to_lawful` re-check succeeds via `burnShares_record_never_notLawful`. -/
-theorem Vault.burnShares_ok (sharesDestroyed sharesTotalAmount : STAmount)
-    (sharesDestroyedNumber st' : Number)
-    (hcan : v.canBurnShares = .ok (.assets sharesTotalAmount))
-    (hcanon : sharesDestroyed.IntegralCanonical)
-    (hnn : sharesDestroyed.negative = false)
-    (hle : sharesDestroyed.toRat ≤ sharesTotalAmount.toRat)
-    (hfit : (v.toExact.sharesTotal : ℚ) ≤ 2 ^ 63 - 1)
-    (hnum : sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
-    (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st') :
-    ∃ v' : Vault, v.burnShares sharesDestroyed = .ok v' ∧
-      v'.toRawVault = { v.toRawVault with sharesTotal := st' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.burnShares_record_never_notLawful v sharesDestroyed sharesTotalAmount
-    sharesDestroyedNumber st' hcan hcanon hnn hle hfit hnum hst
-  refine ⟨v', ?_, hlv'eq⟩
-  unfold Vault.burnShares
-  simp only []
-  rw [hnum, ok_bind, hst, ok_bind, htl]
+/-- The exits of `burnShares`, in the order it runs its checks. Each line assumes the checks before it passed. -/
+theorem Vault.burnShares_exits (sharesDestroyed : STAmount) :
+    (sharesDestroyed.isZero = true → (v.burnShares sharesDestroyed).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    -- the destroyed shares are a holder's balance: a canonical, nonnegative MPT amount within the share total
+    ∀ (amount holderShares sharesTotalAmount : STAmount) (sharesDestroyedNumber st' : Number),
+      (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
+      sharesDestroyed.IntegralCanonical → sharesDestroyed.negative = false → sharesDestroyed.isZero = false →
+      sharesDestroyed.toRat ≤ sharesTotalAmount.toRat →
+      sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber →
+      v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st' →
+      ∃ v' : Vault, (v.burnShares sharesDestroyed).run = .ok (.ok v') ∧
+        v'.toRawVault = { v.toRawVault with sharesTotal := st' } :=
+  ⟨Vault.burnShares_zero_shares_proof v sharesDestroyed,
+    fun amount holderShares sharesTotalAmount =>
+      Vault.burnShares_ok_proof v amount holderShares sharesDestroyed sharesTotalAmount⟩
 
 end XRPL.Model.SingleAssetVault

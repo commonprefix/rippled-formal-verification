@@ -6,16 +6,10 @@ import XRPL.Properties.Approx
 
 namespace XRPL.Model.Protocol
 
-/-! ## downward -/
-
 set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) needs extra heartbeats
-/-- Relative-error bound for `Number.normalize` under `.downward` rounding.
-
-`normalize` accepts an arbitrary `(mantissa, exponent)` pair. Its final stage is
-`doRoundUp`, so the error matches the same-sign `.downward` supremum
-`10/(2^63 + 2)`, the tight supremum (not attained — see
-`normalize_rounding_bound_downward_attained`). -/
+/-- `Number.normalize` under `.downward` on any nonzero `(mantissa, exponent)` pair with a nonzero result never rounds
+above the input and has relative error strictly below `10/(2^63 + 2)`. -/
 theorem normalize_rounding_bound_downward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .downward = .ok result)
@@ -131,7 +125,7 @@ theorem normalize_rounding_bound_downward (n result : Number)
         .normalize2 res_pos h_rup_pos hres_pos_mant_ne
       try simp only at h_tr_val
       by_cases h_zn : n.negative_ = true
-      · -- n < 0. sbit=true; ¬shouldRoundUp_downward ⇒ guard = 0 ⇒ f = 0 ⇒ result = n.
+      · -- n < 0. sbit=true and ¬shouldRoundUp_downward ⇒ guard = 0 ⇒ f = 0 ⇒ result = n.
         have h_g_sbit_true : g.sbit_ = true := by rw [h_g_sbit]; exact h_zn
         have h_no_or : ¬ (g.digits_ > 0 ∨ g.xbit_ = true) := by
           intro h
@@ -211,7 +205,7 @@ theorem normalize_rounding_bound_downward (n result : Number)
           have h_inner : f < (((zm.toNat : ℚ) + f)) * (10 / ((2 ^ 63 + 2 : ℚ))) := f_lt_releps hzm_q_ge hf_lt1
           exact releps_lift h_inner h10ze'_pos
         exact ⟨h_direction, h_magnitude⟩
-  · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp — no digits were pushed, f = 0 =====
+  · -- ===== CUSP RANGE: maxRep < zm ≤ maxRepUp: no digits were pushed, f = 0 =====
     push Not at h_zm_le_rep
     obtain ⟨hf0, hempty⟩ := hcusp_state h_zm_le_rep
     obtain ⟨v, hv_val, hv_cases⟩ := doRoundUp_value_cuspRange_cases g zm ze' .downward
@@ -246,7 +240,7 @@ theorem normalize_rounding_bound_downward (n result : Number)
       · -- v = maxRepNat: impossible for negative (the pushed-guard decision fires).
         exfalso
         obtain ⟨hdig_pos, hsb⟩ := pushOverflow_cusp_interior_facts g zm .downward h_zm_le_rep hzm_lt_up
-        have h1 : (g.pushOverflow zm .downward).round .downward = 1 :=
+        have h1 : (g.pushOverflowSpec zm .downward).round .downward = 1 :=
           (round_downward_eq_one_iff _).mpr ⟨by rw [hsb, h_g_sbit]; exact h_zn, Or.inl hdig_pos⟩
         rw [h1, show ((1 : Int) == 1) = true from rfl, Bool.true_or] at hbool
         exact Bool.noConfusion hbool
@@ -313,21 +307,21 @@ theorem normalize_rounding_bound_downward (n result : Number)
           rcases hcoup with ⟨h, _⟩ | ⟨_, h⟩
           · exact h
           · exfalso
-            have hr_ne1 : (g.pushOverflow zm .downward).round .downward ≠ 1 := by
+            have hr_ne1 : (g.pushOverflowSpec zm .downward).round .downward ≠ 1 := by
               intro h1
               have hsru := (round_downward_eq_one_iff _).mp h1
-              have hsb : (g.pushOverflow zm .downward).sbit_ = g.sbit_ := by
-                simp only [Guard.pushOverflow, Guard.push]
+              have hsb : (g.pushOverflowSpec zm .downward).sbit_ = g.sbit_ := by
+                simp only [Guard.pushOverflowSpec, Guard.push]
                 split_ifs <;> rfl
               have hsb' := hsru.1
               rw [hsb, h_g_sbit_false] at hsb'
               exact Bool.noConfusion hsb'
-            have hr_ne0 : (g.pushOverflow zm .downward).round .downward ≠ 0 := by
+            have hr_ne0 : (g.pushOverflowSpec zm .downward).round .downward ≠ 0 := by
               unfold Guard.round
               split_ifs <;> decide
-            rw [show ((g.pushOverflow zm .downward).round .downward == 1) = false from
+            rw [show ((g.pushOverflowSpec zm .downward).round .downward == 1) = false from
                   beq_eq_false_iff_ne.mpr hr_ne1,
-                show ((g.pushOverflow zm .downward).round .downward == 0) = false from
+                show ((g.pushOverflowSpec zm .downward).round .downward == 0) = false from
                   beq_eq_false_iff_ne.mpr hr_ne0,
                 Bool.false_and] at h
             exact absurd h (by decide)

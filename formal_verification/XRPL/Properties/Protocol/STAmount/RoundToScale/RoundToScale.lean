@@ -1,16 +1,13 @@
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 
-/-! # `STAmount.roundToExponent` is correctly rounded onto the scale grid
+/-! # `STAmount.roundToExponent` rounds onto the scale grid
 
-`roundToExponent` quantizes an IOU `STAmount` onto the `10^s · ℤ` grid faithfully (in every
-mode). Built from the `roundToExponent_sum_spec` workhorse in `RoundToScale.Common.Sum`. -/
+`roundToExponent` rounds an IOU `STAmount` onto the `10^s · ℤ` grid in every rounding mode. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **`STAmount.roundToExponent` rounds `value.toRat` onto the `10^s` grid faithfully.**
-Holds on the full IOU scale range `[-96, 80]` given a nonzero result: below `-81`
-the 16-digit clamp only ever flushes a tiny grid coefficient to zero, so a nonzero
-result is always the exact grid point. -/
+/-- `STAmount.roundToExponent` rounds `value` onto the `10^s` grid in the given mode. For `s` below `-81` the result
+can flush to zero, so the theorem assumes a nonzero result. -/
 theorem STAmount.roundToExponent_rounded (value result : STAmount) (s : ℤ)
     (mode : rounding_mode)
     (hc : value.IOUCanonical)

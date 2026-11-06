@@ -11,22 +11,15 @@ instance : RatValued STAmount where
 instance : RatValued IOUAmount where
   toRat := IOUAmount.toRat
 
-/-- A well-formed integral (XRP or MPT) STAmount: stored canonically with
-`mOffset = 0`, and within the numericType's own carried bound (`maxValue`). XRP
-(`NumericType.native`) and MPT (`NumericType.int64`) differ only in the carried
-bound *value*, so this single predicate (parameterized by `s.mNumericType`) covers
-both. The model's integral arithmetic reads `signedDrops` (which ignores `mOffset`),
-so these are the preconditions under which it is faithful. -/
+/-- A well-formed integral (XRP or MPT) STAmount: `mOffset = 0` and within its numeric type's `maxValue`. The
+integral arithmetic reads `signedDrops`, which ignores `mOffset`, so it gives the right value only under these. -/
 structure STAmount.IntegralCanonical (s : STAmount) : Prop where
   is_integral : s.mNumericType.isIntegral = true
   offset_zero : s.mOffset = 0
   in_range : s.mValue.toNat ≤ s.mNumericType.maxValue.toNat
 
-/-- `result` is the value `truth` correctly rounded onto the scale grid
-`10^s·ℤ` (faithfully for `.to_nearest`: one of the two enclosing grid
-points). Discrete-grid analog of `RoundsWithin` for quantization at a fixed
-decimal scale. The grid is uniform and total, so no `Option` and no
-existential. -/
+/-- `result` is `truth` rounded onto the grid `10^s·ℤ`: floor for `downward`, ceiling for `upward`, toward zero
+for `towards_zero`, and either enclosing grid point for `to_nearest`. -/
 def RoundsToRepresentableAt {A : Type} [RatValued A] (result : A) (truth : ℚ) (s : ℤ)
     (mode : rounding_mode) : Prop :=
   match mode with
@@ -93,9 +86,7 @@ lemma RoundsWithin_of_eq {A : Type} [RatValued A] (result : A) (truth : ℚ)
   unfold RoundsWithin
   cases mode <;> simp [h]
 
-/-- `RoundsWithin` is monotone in the error budget: a bound at `ε` is also a bound
-at any `ε' ≥ ε`. Lets the exact (`ε = 0`) native/MPT paths share a single
-relative-error statement with the double-rounded IOU path. -/
+/-- `RoundsWithin` is monotone in the error budget: a bound at `ε` is also a bound at any `ε' ≥ ε`. -/
 lemma RoundsWithin_mono {A : Type} [RatValued A] (result : A) (truth ε ε' : ℚ)
     (mode : rounding_mode) (h : RoundsWithin result truth mode ε) (hε : ε ≤ ε') :
     RoundsWithin result truth mode ε' := by
@@ -106,9 +97,8 @@ lemma RoundsWithin_mono {A : Type} [RatValued A] (result : A) (truth ε ε' : �
     | exact le_trans h hmul
     | exact ⟨h.1, le_trans h.2 hmul⟩
 
-/-- A faithful rounding (any mode, relative error `ε ≤ 1`) at most doubles the
-magnitude: `|result| ≤ 2·|truth|`. The crude magnitude bound the exponent-overflow
-argument needs, uniform across modes. -/
+/-- A rounding with relative error `ε ≤ 1` (any mode) at most doubles the magnitude:
+`|result| ≤ 2·|truth|`. The exponent-overflow arguments use it. -/
 lemma RoundsWithin_abs_le_two {A : Type} [RatValued A] (result : A) (truth ε : ℚ)
     (mode : rounding_mode) (h : RoundsWithin result truth mode ε) (hε : ε ≤ 1) :
     |RatValued.toRat result| ≤ |truth| * 2 := by
@@ -133,13 +123,6 @@ lemma RoundsWithin_abs_le_two {A : Type} [RatValued A] (result : A) (truth ε : 
   | towards_zero =>
     obtain ⟨hd, _⟩ := h
     nlinarith [hd, habs_nn]
-
-/-! ## Nested-grid composition
-
-Rounding at `10^E` and then at `10^s = 10^(E+c)` equals rounding at `10^s`
-directly, for the directed modes. (For `to_nearest` only two-neighbor
-membership survives the composition. The main theorem handles that case by
-direct membership, not by composition.) -/
 
 /-- Floor composes through a coarser grid: `⌊⌊x⌋ / n⌋ = ⌊x / n⌋`. -/
 lemma Int.floor_floor_div (x : ℚ) (n : ℕ) (hn : 0 < n) :
@@ -188,13 +171,6 @@ lemma Int.ceil_ceil_div (x : ℚ) (n : ℕ) (hn : 0 < n) :
     apply Int.ceil_le_ceil
     exact div_le_div_of_nonneg_right (Int.le_ceil x) (le_of_lt hn_q)
 
-/-! ## Relative-error composition for double-rounded arithmetic
-
-STAmount IOU arithmetic rounds twice (the `Number` operation, then the
-`ofNumber`/canonicalize snap onto the 16-digit grid). The two relative errors
-compose by a triangle inequality, so the result inherits a relative-error bound
-despite the double rounding. -/
-
 /-- Two relative-error roundings compose: `mid` within `ε₁` of `truth` and
 `result` within `ε₂` of `mid` gives `result` within `ε₁ + ε₂ + ε₁·ε₂` of `truth`. -/
 lemma rel_error_trans {result mid truth ε₁ ε₂ : ℚ}
@@ -211,20 +187,16 @@ lemma rel_error_trans {result mid truth ε₁ ε₂ : ℚ}
     _ ≤ (|truth| + |truth| * ε₁) * ε₂ + |truth| * ε₁ := by linarith
     _ = |truth| * (ε₁ + ε₂ + ε₁ * ε₂) := by ring
 
-/-- `RoundsWithin` depends only on the embedded rational value: transport across an
-equal-`toRat` boundary (here `STAmount` ↔ its backing `IOUAmount`). -/
+/-- `RoundsWithin` depends only on the value, so it carries over between two amounts with the same `toRat`, such
+as an `STAmount` and its `IOUAmount`. -/
 lemma RoundsWithin_toRat_congr {A B : Type} [RatValued A] [RatValued B]
     (a : A) (b : B) (truth ε : ℚ) (mode : rounding_mode)
     (h : RatValued.toRat a = RatValued.toRat b) (hb : RoundsWithin b truth mode ε) :
     RoundsWithin a truth mode ε := by
   unfold RoundsWithin at hb ⊢; rw [h]; exact hb
 
-/-- **`RoundsWithin` transitivity, every mode.** A double-rounding composes: if
-`intermediate` rounds `truth` within `ε₁` and `result` rounds `intermediate`'s value
-within `ε₂` (both in direction `mode`), then `result` rounds `truth` within
-`ε₁ + ε₂ + ε₁·ε₂`. For the directed modes the correct-side clause composes
-(`result ≤ intermediate ≤ truth`, etc.), and the magnitude is `rel_error_trans`. This is
-the engine behind the directed-mode IOU headlines (`Number`-op bound ∘ re-round bound). -/
+/-- `RoundsWithin` transitivity, every mode. If `intermediate` rounds `truth` within `ε₁` and `result`
+rounds `intermediate` within `ε₂` in the same mode, `result` rounds `truth` within `ε₁ + ε₂ + ε₁·ε₂`. -/
 lemma RoundsWithin_trans {A B : Type} [RatValued A] [RatValued B]
     (result : A) (intermediate : B) (truth ε₁ ε₂ : ℚ) (mode : rounding_mode)
     (h1 : RoundsWithin intermediate truth mode ε₁)
@@ -273,10 +245,8 @@ lemma RoundsWithin_trans {A B : Type} [RatValued A] [RatValued B]
       nlinarith [h0]
     linarith
 
-/-- STAmount discrete/ULP guarantee: `result` lands within `k` ULP of `truth`
-(ULP = `10^result.exponent`, the IOU grid step), on the correct side for directed
-modes. `k = 1` is the achievable target for IOU arithmetic, the relaxed
-`RoundsToRepresentable` that survives double-rounding. -/
+/-- `result` lands within `k` ULP (`10^result.exponent`) of `truth`, and on the correct side for `downward` and
+`upward`. IOU arithmetic achieves `k = 1` despite double rounding. -/
 def STAmount.RoundsToRepresentableWithin
     (result : STAmount) (truth : ℚ) (mode : rounding_mode) (k : ℕ) : Prop :=
   (match mode with
@@ -293,12 +263,8 @@ lemma RoundsToRepresentableWithin_of_eq (result : STAmount) (truth : ℚ) (mode 
   · cases mode <;> simp [h]
   · rw [h]; simp
 
-/-- **Double-rounding ⟹ tight ULP *magnitude* bound** (mode- and sign-independent). The
-IOU pipeline rounds the exact `truth` to a 19-digit `Number` `r` (relative error `ε`,
-tiny) then snaps `r` to the 16-digit result (within `csnap` ULP of `r`). Since
-`|r| ≤ 10¹⁶·ULP` and `ε ≤ 10⁻¹⁷`, the Number step contributes `< ⅕` ULP, so the result
-lands within `k` ULP whenever `csnap + ⅕ ≤ k`. This is the accuracy guarantee with no
-directional claim. It holds for any operand signs. -/
+/-- After two roundings `result` is within `k` ULP of `truth`, in any mode and sign. With `|r| ≤ 10¹⁶` ULP and
+`ε ≤ 10⁻¹⁷` the `Number` step adds less than `⅕` ULP, so `csnap + ⅕ ≤ k` is enough. -/
 lemma STAmount.double_round_abs_le
     (result : STAmount) (r : Number) (truth : ℚ) (k : ℕ) (csnap ε : ℚ)
     (hsnap : |result.toRat - r.toRat| ≤ csnap * (10 : ℚ) ^ result.exponent)
@@ -329,8 +295,8 @@ lemma STAmount.double_round_abs_le
     _ ≤ csnap * U + (1 / 5) * U := by linarith [hsnap, hop_ulp]
     _ ≤ (k : ℚ) * U := by nlinarith [hk, hU_pos]
 
-/-- **Double-rounding ⟹ tight ULP bound**, with the directed side-clause passed through.
-With `csnap = ½` (`to_nearest`) gives `k = 1`, and `csnap = 1` (directed) gives `k = 2`. -/
+/-- The same `k` ULP bound as `RoundsToRepresentableWithin`, with the `downward`/`upward` side taken as a
+hypothesis. `csnap = ½` (`to_nearest`) gives `k = 1`, and `csnap = 1` (directed) gives `k = 2`. -/
 lemma STAmount.RoundsToRepresentableWithin_of_double_round
     (result : STAmount) (r : Number) (truth : ℚ) (mode : rounding_mode) (k : ℕ) (csnap ε : ℚ)
     (h_dir : (match mode with

@@ -26,7 +26,7 @@ lemma abs_add_eq_of_diff_sign {x y : Number} (h : x.negative_ ≠ y.negative_) :
     have hx_np : x.toRat ≤ 0 := Number.toRat_nonpos_of_negative x hxn
     have hy_nn : 0 ≤ y.toRat := Number.toRat_nonneg_of_nonnegative y hyn
     rw [abs_of_nonpos hx_np, abs_of_nonneg hy_nn]
-    -- x + y = y - (-x); we want | y - x | but get | -x - y |
+    -- x + y = -(-x - y), so the absolute value is | -x - y |
     have h_eq : x.toRat + y.toRat = -(-x.toRat - y.toRat) := by ring
     rw [h_eq, abs_neg]
 

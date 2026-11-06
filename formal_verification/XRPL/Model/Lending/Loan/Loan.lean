@@ -82,29 +82,25 @@ def LoanSchedule.build (paymentInterval paymentTotal gracePeriod : Option UInt32
     -- C++ getStartDate: two-step keeps the provided StartDate, one-step uses ledgerCloseTime
     startDate := if twoStep then startDate else ledgerCloseTime }
 
-def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : TER :=
-  let timeAvailable := maxTime - schedule.startDate
+def LoanSchedule.checkTimeAvailability (schedule : LoanSchedule) : Except Error TER := do
+  let timeAvailable ← maxTime.subChecked schedule.startDate
   if schedule.gracePeriod > timeAvailable
       || schedule.paymentInterval > timeAvailable
-      || schedule.paymentTotal > timeAvailable  -- double check as paymentTotal is count, not seconds?
-      || (timeAvailable - schedule.gracePeriod) / schedule.paymentInterval < schedule.paymentTotal then
-    .tecKILLED
+      || schedule.paymentTotal > timeAvailable then  -- double check as paymentTotal is count, not seconds?
+    return .tecKILLED
   else
-    .tesSUCCESS
+    let timeLastPayment ← timeAvailable.subChecked schedule.gracePeriod
+    if timeLastPayment / schedule.paymentInterval < schedule.paymentTotal then return .tecKILLED
+    else return .tesSUCCESS
 
 def RawLoan.interestDue (rl : RawLoan) : Except Error Number := do
   let totalValueOutstanding' ← rl.totalValueOutstanding.operator_sub rl.principalOutstanding .to_nearest
   totalValueOutstanding'.operator_sub rl.managementFeeOutstanding .to_nearest
 
--- matching C++ `Number{-1, loanScale}` tolerance
-def RawLoan.interestTolerance (rl : RawLoan) : Except Error Number :=
-  if rl.broker.numericType.isIntegral then .ok Number.zero
-  else Number.from_rep (-1 : Int64) rl.loanScale largeRange.min largeRange.max .to_nearest
-
-def RawLoan.interestWithinTolerance (rl : RawLoan) : Bool :=
-  match rl.interestDue, rl.interestTolerance with
-  | .ok i, .ok tol => tol.operator_le i
-  | _, _ => false
+def RawLoan.interestNonneg (rl : RawLoan) : Bool :=
+  match rl.interestDue with
+  | .ok i => Number.zero.operator_le i
+  | .error _ => false
 
 structure RawLoan.WF (rl : RawLoan) : Prop where
   periodicPayment_norm : rl.periodicPayment.isNormalized
@@ -139,7 +135,12 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   closePaymentFee_nonneg : Number.zero.operator_le rl.fees.closePaymentFee = true
   periodicPayment_pos : Number.zero.operator_lt rl.periodicPayment = true
   paid_no_due_date : rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0
-  interest_within_tolerance : rl.interestWithinTolerance = true
+  interest_nonneg : rl.interestNonneg = true
+  paymentRemaining_le_total : rl.paymentRemaining ≤ rl.schedule.paymentTotal
+  dueDate_schedule : rl.paymentRemaining ≠ 0 → rl.nextPaymentDueDate.toNat = rl.schedule.startDate.toNat +
+    (rl.schedule.paymentTotal.toNat - rl.paymentRemaining.toNat + 1) * rl.schedule.paymentInterval.toNat
+  schedule_in_time : rl.schedule.startDate.toNat + rl.schedule.gracePeriod.toNat +
+    rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤ maxTime.toNat
   -- field ranges
   interestRate_cap : rl.rates.interestRate ≤ maxLoanRate
   lateInterestRate_cap : rl.rates.lateInterestRate ≤ maxLoanRate
@@ -179,16 +180,21 @@ instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
       Number.zero.operator_le rl.fees.closePaymentFee = true ∧
       Number.zero.operator_lt rl.periodicPayment = true ∧
       (rl.paymentRemaining = 0 → rl.nextPaymentDueDate = 0) ∧
-      rl.interestWithinTolerance = true ∧
+      rl.interestNonneg = true ∧
+      rl.paymentRemaining ≤ rl.schedule.paymentTotal ∧
+      (rl.paymentRemaining ≠ 0 → rl.nextPaymentDueDate.toNat = rl.schedule.startDate.toNat +
+        (rl.schedule.paymentTotal.toNat - rl.paymentRemaining.toNat + 1) * rl.schedule.paymentInterval.toNat) ∧
+      rl.schedule.startDate.toNat + rl.schedule.gracePeriod.toNat +
+        rl.schedule.paymentTotal.toNat * rl.schedule.paymentInterval.toNat ≤ maxTime.toNat ∧
       rl.rates.interestRate ≤ maxLoanRate ∧ rl.rates.lateInterestRate ≤ maxLoanRate ∧
       rl.rates.closeInterestRate ≤ maxLoanRate ∧ rl.rates.overpaymentInterestRate ≤ maxLoanRate ∧
       rl.rates.overpaymentFee ≤ maxLoanRate ∧ Number.zero.operator_le rl.fees.originationFee = true ∧
       0 < rl.schedule.paymentTotal ∧ minPaymentInterval ≤ rl.schedule.paymentInterval ∧
       (defaultGracePeriod ≤ rl.schedule.gracePeriod ∧ rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t⟩⟩
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩⟩
 
 structure Loan extends RawLoan where
   wf : toRawLoan.WF

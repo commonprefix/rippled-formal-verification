@@ -1,6 +1,6 @@
 import XRPL.Properties.Protocol.STAmount.Add.Common.Integral
 import XRPL.Properties.Protocol.STAmount.Common.STAmountToNumber
--- Re-exported for the files that import this one (these lemmas moved to Protocol)
+-- Re-exported for the files that import this one
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 
@@ -14,34 +14,36 @@ Model-independent facts used by the exact (integral) vault theorems:
 
 namespace XRPL.Model.Protocol
 
-/-! ## Rational bookkeeping -/
-
-/-- An integer-valued rational is the cast of its numerator. -/
-lemma rat_eq_num_cast_of_den_one (q : ℚ) (hden : q.den = 1) : ((q.num : ℤ) : ℚ) = q := by
-  conv_rhs => rw [← Rat.num_div_den q]
-  rw [hden, Nat.cast_one, div_one]
-
 /-- A non-negative integer-valued rational is recovered from `q.num.toNat`. -/
 lemma rat_toNat_cast_of_den_one (q : ℚ) (hden : q.den = 1) (h0 : 0 ≤ q) :
     ((q.num.toNat : ℕ) : ℚ) = q := by
   have hnum : 0 ≤ q.num := Rat.num_nonneg.mpr h0
   rw [← Int.cast_natCast, Int.toNat_of_nonneg hnum]
-  exact rat_eq_num_cast_of_den_one q hden
+  exact Rat.coe_int_num_of_den_eq_one hden
 
 /-- Numerator magnitude bound for a small non-negative integer-valued rational. -/
 lemma rat_num_natAbs_lt_of_le (q : ℚ) (hden : q.den = 1) (h0 : 0 ≤ q)
     (hle : q ≤ 2 ^ 63 - 1) : q.num.natAbs < 2 ^ 63 := by
   have hnum0 : 0 ≤ q.num := Rat.num_nonneg.mpr h0
-  have hcast := rat_eq_num_cast_of_den_one q hden
+  have hcast := Rat.coe_int_num_of_den_eq_one hden
   have hle' : ((q.num : ℤ) : ℚ) ≤ ((2 ^ 63 - 1 : ℤ) : ℚ) := by
     rw [hcast]; exact le_trans hle (by norm_num)
   have hz : q.num ≤ 2 ^ 63 - 1 := by exact_mod_cast hle'
   omega
 
+/-- A rational with denominator one strictly between `-2^63` and `2^63` has a numerator below `2^63`. -/
+lemma Rat.num_natAbs_lt {q : ℚ} (hq : q.den = 1) (hlo : -2 ^ 63 < q) (hhi : q < 2 ^ 63) :
+    q.num.natAbs < 2 ^ 63 := by
+  have h := Rat.coe_int_num_of_den_eq_one hq
+  rw [← h] at hlo hhi
+  have h1 : -2 ^ 63 < q.num := by exact_mod_cast hlo
+  have h2 : q.num < 2 ^ 63 := by exact_mod_cast hhi
+  omega
+
 /-- An integer within distance `< 1` of an integer-valued rational equals it. -/
 lemma int_cast_eq_of_abs_lt_one (a : ℤ) (q : ℚ) (hden : q.den = 1)
     (h : |(a : ℚ) - q| < 1) : (a : ℚ) = q := by
-  have hcast := rat_eq_num_cast_of_den_one q hden
+  have hcast := Rat.coe_int_num_of_den_eq_one hden
   rw [← hcast] at h ⊢
   have h' : |((a - q.num : ℤ) : ℚ)| < 1 := by push_cast; exact h
   have hz : (a - q.num : ℤ).natAbs < 1 := by
@@ -57,7 +59,7 @@ lemma int_cast_eq_of_abs_lt_one (a : ℤ) (q : ℚ) (hden : q.den = 1)
 /-- Integer-valued rationals subtract to the cast of the numerator difference. -/
 lemma rat_sub_eq_num_cast (a b : ℚ) (ha : a.den = 1) (hb : b.den = 1) :
     a - b = ((a.num - b.num : ℤ) : ℚ) := by
-  conv_lhs => rw [← rat_eq_num_cast_of_den_one a ha, ← rat_eq_num_cast_of_den_one b hb]
+  conv_lhs => rw [← Rat.coe_int_num_of_den_eq_one ha, ← Rat.coe_int_num_of_den_eq_one hb]
   push_cast; ring
 
 /-- A gap between distinct integer-valued rationals is at least one. -/
@@ -66,41 +68,19 @@ lemma rat_one_le_sub_of_lt (a b : ℚ) (ha : a.den = 1) (hb : b.den = 1) (h : b 
   rw [rat_sub_eq_num_cast a b ha hb]
   have hnum : b.num < a.num := by
     have h1 : ((b.num : ℤ) : ℚ) < ((a.num : ℤ) : ℚ) := by
-      rw [rat_eq_num_cast_of_den_one a ha, rat_eq_num_cast_of_den_one b hb]; exact h
+      rw [Rat.coe_int_num_of_den_eq_one ha, Rat.coe_int_num_of_den_eq_one hb]; exact h
     exact_mod_cast h1
   have : (1 : ℤ) ≤ a.num - b.num := by omega
   exact_mod_cast this
 
-/-! ## STAmount canonical-shape exactness
+/-- A positive integer-valued rational is at least one. -/
+lemma rat_one_le_of_den_one_pos (q : ℚ) (hden : q.den = 1) (hpos : 0 < q) : 1 ≤ q := by
+  have hnum := Rat.coe_int_num_of_den_eq_one hden
+  have hpos' : (0 : ℤ) < q.num := Rat.num_pos.mpr hpos
+  rw [← hnum]; exact_mod_cast hpos'
 
-The `ExactCanonical` shape and its `toNumber` exactness lemmas
-(`toNumber_integral_small_exact`, `toNumber_exact_canonical`) live upstream in
-`STAmountToNumber`; this section adds the integral-magnitude facts on top. -/
-
-/-- On a non-negative canonical integral amount the stored magnitude is the
-value. -/
-lemma STAmount.IntegralCanonical.mValue_eq_toRat_of_nonneg (s : STAmount)
-    (hc : s.IntegralCanonical) (hnn : 0 ≤ s.toRat) :
-    ((s.mValue.toNat : ℕ) : ℚ) = s.toRat := by
-  by_cases h : s.mIsNegative = true
-  · have hm0 : s.mValue.toNat = 0 := by
-      rw [STAmount.IntegralCanonical.toRat_eq_signedDrops s hc] at hnn
-      unfold STAmount.signedDrops at hnn
-      rw [if_pos h] at hnn
-      have h1 : (0 : ℤ) ≤ -(s.mValue.toNat : ℤ) := by exact_mod_cast hnn
-      omega
-    rw [STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
-    unfold STAmount.signedDrops
-    rw [if_pos h, hm0]
-    norm_num
-  · rw [STAmount.IntegralCanonical.toRat_eq_signedDrops s hc]
-    unfold STAmount.signedDrops
-    rw [if_neg h]
-    norm_cast
-
-/-- **`ofNumber .int64` record shape** on a non-negative integer-valued
-normalized `Number` within `Int64`: the stored record is offset-`0`,
-positive-signed, `.int64`-typed, and value-exact. -/
+/-- `ofNumber .int64` record shape. A nonnegative whole `Number` within `Int64` packs to an offset-`0`,
+nonnegative `.int64` record with the exact value. -/
 lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : STAmount)
     (hn : n.isNormalized) (hnn : 0 ≤ n.toRat) (hden : n.toRat.den = 1)
     (hfit : n.toRat ≤ 2 ^ 63 - 1)
@@ -124,6 +104,8 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
   | ok rv =>
     rw [hrep] at hok
     simp only [] at hok
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hexact : (rv.toInt : ℚ) = n.toRat :=
       int_cast_eq_of_abs_lt_one rv.toInt n.toRat hden (to_rep_within_one n mode rv hn hrep)
     have h0 : 0 ≤ rv.toInt := by
@@ -170,6 +152,7 @@ lemma STAmount.ofNumber_int64_shape (n : Number) (mode : rounding_mode) (sta : S
       | ok r2 =>
         rw [hr2] at hok
         simp only [] at hok
+        rw [Int64.magnitude_eq] at hok
         have hmaxrep : rv.toUInt64.toNat ≤ maxRep.toNat := by
           rw [maxRep_val]; omega
         have hkey := to_rep_exact_of_exponent_zero false rv.toUInt64 mode r2 hmaxrep hr2

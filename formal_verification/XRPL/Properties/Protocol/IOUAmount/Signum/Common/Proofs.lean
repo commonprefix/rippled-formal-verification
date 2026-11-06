@@ -2,12 +2,10 @@ import Mathlib.Tactic
 import XRPL.Model.Protocol.IOUAmount
 import XRPL.Properties.Protocol.IOUAmount.Common.ToRatLemmas
 
-/-! # Proof bodies for the `IOUAmount.signum` correctness headlines.
+/-! # Proofs of the `IOUAmount.signum` theorems
 
-`IOUAmount.signum` returns the sign of the value. Since `toRat = mantissa · 10^exponent`
-with `10^exponent > 0`, the sign of `toRat` is the sign of the mantissa, so the sign tests
-reduce to integer sign tests on `mantissa_.toInt`. The thin headlines live in
-`IOUAmount.Signum.Signum`. -/
+Since `toRat = mantissa · 10^exponent` with `10^exponent > 0`, the sign tests reduce to integer sign tests
+on `mantissa_.toInt`. -/
 
 namespace XRPL.Model.Protocol
 
@@ -46,7 +44,7 @@ private lemma IOUAmount.toRat_pos_iff (a : IOUAmount) : 0 < a.toRat ↔ 0 < a.ma
   have h10 : (0 : ℚ) < (10 : ℚ) ^ a.exponent_ := by positivity
   rw [IOUAmount.toRat_eq, mul_pos_iff_of_pos_right h10, Int.cast_pos]
 
-/-- **`signum` returns the sign of `toRat`.** -/
+/-- `signum` returns the sign of `toRat`. -/
 theorem IOUAmount.signum_eq_proof (a : IOUAmount) :
     a.signum = if 0 < a.toRat then 1 else if a.toRat < 0 then -1 else 0 := by
   have hpos := IOUAmount.toRat_pos_iff a
@@ -59,17 +57,17 @@ theorem IOUAmount.signum_eq_proof (a : IOUAmount) :
     · rw [if_pos h2, if_pos (hpos.mpr h2)]
     · rw [if_neg h2, if_neg (fun h => h2 (hpos.mp h)), if_neg (fun h => h1 (hnegR.mp h))]
 
-/-- **`signum = 1 ↔ value is positive`.** -/
+/-- `signum = 1 ↔ value is positive`. -/
 theorem IOUAmount.signum_eq_one_iff_proof (a : IOUAmount) : a.signum = 1 ↔ 0 < a.toRat := by
   rw [IOUAmount.signum_eq_int, IOUAmount.toRat_pos_iff]
   constructor <;> intro h <;> split_ifs at h ⊢ <;> omega
 
-/-- **`signum = -1 ↔ value is negative`.** -/
+/-- `signum = -1 ↔ value is negative`. -/
 theorem IOUAmount.signum_eq_neg_one_iff_proof (a : IOUAmount) : a.signum = -1 ↔ a.toRat < 0 := by
   rw [IOUAmount.signum_eq_int, IOUAmount.toRat_neg_iff]
   constructor <;> intro h <;> split_ifs at h ⊢ <;> omega
 
-/-- **`signum = 0 ↔ value is zero`.** -/
+/-- `signum = 0 ↔ value is zero`. -/
 theorem IOUAmount.signum_eq_zero_iff_proof (a : IOUAmount) : a.signum = 0 ↔ a.toRat = 0 := by
   have h10 : (10 : ℚ) ^ a.exponent_ ≠ 0 := by positivity
   rw [IOUAmount.signum_eq_int,

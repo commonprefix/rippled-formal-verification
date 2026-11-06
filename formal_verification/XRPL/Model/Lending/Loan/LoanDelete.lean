@@ -13,8 +13,8 @@ def Loan.canDelete (loan : Loan) : TER :=
   if !loan.isPending && loan.paymentRemaining > 0 then .tecHAS_OBLIGATIONS
   else .tesSUCCESS
 
-def LoanBroker.releaseLoan (lb : LoanBroker) (debtTotal : Number) : Except Error LoanBroker :=
-  let loanCount' := lb.loanCount - 1
+def LoanBroker.releaseLoan (lb : LoanBroker) (debtTotal : Number) : Except Error LoanBroker := do
+  let loanCount' ← lb.loanCount.subChecked 1
   let debtTotal' := if loanCount' == 0 then Number.zero else debtTotal
   let rawBroker' : RawLoanBroker := { lb.toRawLoanBroker with loanCount := loanCount', debtTotal := debtTotal' }
   rawBroker'.to_lawful

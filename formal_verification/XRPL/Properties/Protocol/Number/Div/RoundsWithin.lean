@@ -9,6 +9,10 @@ import XRPL.Properties.Protocol.Number.Div.Common.ToNearest.BoundProof
 import XRPL.Properties.Protocol.Number.Div.Common.ToNearest.WitnessTrace
 import XRPL.Properties.Protocol.Number.Div.Common.Decompose
 
+/-! # Relative error of `operator_div`
+
+Each bound assumes a nonzero result, since a quotient too small for a `Number` becomes zero. The `_attained`
+theorems give operands whose error passes a smaller bound. -/
 
 namespace XRPL.Model.Protocol
 

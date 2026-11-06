@@ -12,7 +12,7 @@ and the upward rounding of the product. -/
 
 namespace XRPL.Model.Protocol
 
-/-- With a zero value, `tenthBipsOfValue` gives zero. -/
+/-- With a zero value, upward `tenthBipsOfValue` gives zero. -/
 lemma tenthBipsOfValue_zero (rate : TenthBips32) :
     tenthBipsOfValue Number.zero rate .upward = .ok Number.zero := by
   have hz : Number.zero.operator_eq Number.zero = true :=
@@ -20,7 +20,7 @@ lemma tenthBipsOfValue_zero (rate : TenthBips32) :
   obtain ⟨r, hok, hval, hnorm⟩ := Number.from_rep_exact (100000 : Int64) 0 .to_nearest
     (by decide) (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have hunit : kTenthBipsPerUnity.toNumber = r := by
-    unfold kTenthBipsPerUnity TenthBips32.toNumber Number.ofInt64
+    unfold kTenthBipsPerUnity TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
     rw [show ((⟨100000⟩ : UInt32).toUInt64.toInt64) = (100000 : Int64) from by decide, hok]; rfl
   have hu : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false := by
     rw [hunit, Bool.eq_false_iff]
@@ -50,7 +50,7 @@ lemma TenthBips32.toNumber_facts (rate : TenthBips32) :
   obtain ⟨r, hok, hv, hnorm⟩ := Number.from_rep_exact rate.toUInt64.toInt64 0 .to_nearest hne
     (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have h : rate.toNumber = r := by
-    unfold TenthBips32.toNumber Number.ofInt64
+    unfold TenthBips32.toNumber Number.ofInt64 UInt32.toInt64
     rw [hok]
     rfl
   rw [h]
@@ -58,14 +58,46 @@ lemma TenthBips32.toNumber_facts (rate : TenthBips32) :
   rw [hv, hval, UInt32.toNat_toUInt64]
   simp
 
+/-- Zero divided by unity is zero. -/
+lemma zero_div_unity (mode : rounding_mode) :
+    Number.zero.operator_div kTenthBipsPerUnity.toNumber mode = .ok Number.zero := by
+  obtain ⟨hun, huv⟩ := TenthBips32.toNumber_facts kTenthBipsPerUnity
+  have hu : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false := by
+    rw [Bool.eq_false_iff]
+    intro h
+    have := (operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
+    rw [huv, Number.toRat_zero] at this
+    exact absurd this (by decide)
+  unfold Number.operator_div
+  rw [if_neg (by rw [hu]; decide), if_pos (by decide)]
+  rfl
+
+/-- A zero share of a normalized value is zero. -/
+lemma tenthBipsOfValue_zero_rate (x : Number) (hx : x.isNormalized) (mode : rounding_mode) :
+    tenthBipsOfValue x 0 mode = .ok Number.zero := by
+  have h0 : (0 : TenthBips32).toNumber = Number.zero := rfl
+  have heq : tenthBipsOfValue x 0 mode =
+      (x.operator_mul Number.zero mode) >>= (fun p => p.operator_div kTenthBipsPerUnity.toNumber mode) := by
+    rw [← h0]; rfl
+  rw [heq]
+  have hm : x.operator_mul Number.zero mode = .ok Number.zero := by
+    rw [Number.operator_mul_eq_spec]
+    unfold Number.operator_mulSpec
+    by_cases hxz : x.operator_eq Number.zero = true
+    · rw [if_pos hxz]
+      rw [Number.eq_zero_of_mantissa_zero x hx (Number.mantissa_eq_zero_of_operator_eq_zero hxz)]
+      rfl
+    · rw [if_neg hxz, if_pos (by decide)]
+      rfl
+  rw [hm]
+  exact zero_div_unity mode
+
 /-- A rate's `Number` is not negative. -/
 lemma TenthBips32.toNumber_nonneg (rate : TenthBips32) : 0 ≤ rate.toNumber.toRat := by
   rw [(TenthBips32.toNumber_facts rate).2]
   positivity
 
-/-- An upward `tenthBipsOfValue` of a normalized nonnegative value is normalized
-and not negative. It is zero, or the value times the rate divided by unity rounded
-up twice. -/
+/-- An upward `tenthBipsOfValue` of a normalized nonnegative value is normalized and not negative. -/
 lemma tenthBipsOfValue_upward_facts (d : Number) (rate : TenthBips32) (raw : Number)
     (hd : d.isNormalized) (h0 : 0 ≤ d.toRat)
     (hok : tenthBipsOfValue d rate .upward = .ok raw) :
@@ -94,9 +126,8 @@ lemma tenthBipsOfValue_upward_facts (d : Number) (rate : TenthBips32) (raw : Num
   · exact Or.inl h
   · exact Or.inr (operator_div_rounded_upward _ _ _ hpn hun hok h)
 
-/-- **Upward `tenthBipsOfValue` keeps the order of nonnegative products.** The
-multiplication by the rate and the division by unity both round up, and rounding
-up keeps the order, so a larger value times rate never gives less. -/
+/-- Upward `tenthBipsOfValue` keeps the order of nonnegative products when the larger result is nonzero. The
+multiplication by the rate and the division by unity both round up, and rounding up keeps the order. -/
 lemma tenthBipsOfValue_upward_le (d d' : Number) (rate rate' : TenthBips32) (raw raw' : Number)
     (hd : d.isNormalized) (hd' : d'.isNormalized) (h0 : 0 ≤ d.toRat)
     (hprod : d.toRat * rate.toNumber.toRat ≤ d'.toRat * rate'.toNumber.toRat)

@@ -1,15 +1,44 @@
 import XRPL.Properties.Protocol.Number.Common.Notation
 import XRPL.Properties.Protocol.Number.Common.Rounding.Normalize
+import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.AlgorithmicFacts
 
 
 namespace XRPL.Model.Protocol
 
+/-- A mantissa with three digits dropped fits an `Int64`. -/
+lemma UInt64.div_thousand_toNat_lt (x : UInt64) : (x / 10 / 10 / 10).toNat < 2 ^ 63 := by
+  have := x.toNat_lt
+  simp only [UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl]
+  omega
+
+/-- A mantissa with three digits dropped and rounded up fits an `Int64`. -/
+lemma UInt64.div_thousand_succ_toNat_lt (x : UInt64) : (x / 10 / 10 / 10 + 1).toNat < 2 ^ 63 := by
+  have := x.toNat_lt
+  simp only [UInt64.toNat_add, UInt64.toNat_div, show (10 : UInt64).toNat = 10 from rfl,
+    show (1 : UInt64).toNat = 1 from rfl]
+  omega
+
+/-- The tail of `normalizeToRange` after a successful normalization whose mantissa fits an `Int64`: the
+conversion and the sign flip are exact. -/
+lemma Number.normalizeToRange_tail {r : Number} (hfit : r.mantissa_.toNat < 2 ^ 63) :
+    (r.mantissa_.toInt64Checked >>= fun mant =>
+      (if r.negative_ then mant.negChecked else pure mant) >>= fun signedM =>
+        (pure (signedM, r.exponent_) : Except Error (Int64 × Int)))
+      = .ok (if r.negative_ then -r.mantissa_.toInt64 else r.mantissa_.toInt64, r.exponent_) := by
+  rw [UInt64.toInt64Checked_of_lt hfit, ok_bind]
+  split
+  · have hnn : 0 ≤ r.mantissa_.toInt64.toInt := by
+      rw [UInt64.toInt64_toInt_of_lt _ hfit]; positivity
+    rw [Int64.negChecked_of_ne (fun h => absurd hnn (by rw [h]; decide)), ok_bind]
+    rfl
+  · rfl
+
 /-! # The 16-digit (`cMinValue`/`cMaxValue`) `doNormalize` instantiation
 
-`IOUAmount.fromNumber` runs `Number.normalizeToRange cMinValue cMaxValue`, i.e.
+`IOUAmount.fromNumber` runs `Number.normalizeToRange cMinValue cMaxValue`, which is
 `doNormalize` at the 16-digit mantissa range. For the inputs the
-`STAmount.roundToExponent` proof produces — 19-digit normalized mantissas — the
+`STAmount.roundToExponent` proof produces (19-digit normalized mantissas) the
 pipeline is a 3-step `scaleDown` followed by a cusp-free `doRoundUp`: every
 16-digit mantissa sits far below `maxRep`, so `pushOverflow`, the cusp
 branches, and `capAtMaxRep` are all dead. -/
@@ -120,7 +149,9 @@ lemma doRoundUp_small_truncate (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     simp at hmin
   have h_lt_maxRep : m.toNat < maxRep.toNat := by
     rw [maxRep_val]; rw [cMaxValue_val] at hmax; omega
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep h_lt_maxRep g mode, hb]
   simp only [Bool.false_eq_true, if_false]
@@ -152,7 +183,9 @@ lemma doRoundUp_small_fire (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
     have : (m + 1).toNat = 0 := by rw [h]; rfl
     omega
   have h_lt_maxRep2 : m.toNat < maxRep.toNat := UInt64.lt_iff_toNat_lt.mp h_branch.2
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_lt_maxRep h_lt_maxRep2 g mode, hb]
   simp only [if_true]
@@ -162,10 +195,16 @@ lemma doRoundUp_small_fire (g : Guard) (neg : Bool) (m : UInt64) (e : Int)
   rw [if_neg (not_or.mpr ⟨not_lt.mpr hexp_lo, h_m1_ne⟩)]
   rw [if_neg (not_lt.mpr hexp_hi)]
 
-/-- The 16-digit `doNormalize` reduction for 19-digit inputs: the pipeline
-reduces to a single `doRoundUp` over the 3-digit-truncated mantissa, with the
-guard representing the dropped fraction `(M % 1000)/1000`. The guard's sign
-bit tracks `neg`, and it stays empty when the dropped digits are all zero. -/
+/-- Close the tail of an unfolded `normalizeToRange` whose normalized mantissa is a known small value. -/
+macro "ntr_tail" : tactic => `(tactic| exact Number.normalizeToRange_tail (by
+  try dsimp only [RoundResult.toNumber]
+  first
+    | decide
+    | exact UInt64.div_thousand_toNat_lt _
+    | exact UInt64.div_thousand_succ_toNat_lt _))
+
+/-- For a 19-digit input, the 16-digit `doNormalize` reduces to one `doRoundUp` of `M / 1000`, with a guard that
+represents `(M % 1000) / 1000`, carries the sign `neg` and is empty when `M % 1000 = 0`. -/
 theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : rounding_mode)
     (hM_lo : 10 ^ 18 ≤ M.toNat) (hM_hi : M.toNat < 10 ^ 19)
     (hexp_lo : minExponent ≤ e + 3) (hexp_hi : e + 3 ≤ maxExponent) :
@@ -211,7 +250,9 @@ theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : roun
       have : M = 0 := by exact_mod_cast beq_iff_eq.mp h
       rw [this] at hM_lo
       simp at hM_lo
-    unfold doNormalize
+    rw [doNormalize_eq_spec]
+    all_goals try min_fit
+    unfold doNormalizeSpec
     rw [show (M == 0) = false from Bool.not_eq_true _ ▸ Bool.eq_false_iff.mpr
       (fun h => hM_ne h)]
     simp only [Bool.false_eq_true, if_false]
@@ -242,24 +283,18 @@ theorem doNormalize_small_facts (neg : Bool) (M : UInt64) (e : Int) (mode : roun
     rw [h_cap]
     rfl
 
-/-! ## `doNormalize` at `largeRange` on 16-digit mantissas (the `from_rep` leg)
-
-`IOUAmount.normalize`/`STAmount.iou` first run the signed mantissa through the
-**19-digit** constructor pipeline. A 16-digit mantissa scales up by exactly
-`×1000`; the result is exact in every mode. -/
-
-/-- One firing step of `doNormalize_scaleUp`. -/
+/-- One firing step of `doNormalize_scaleUpSpec`. -/
 lemma doNormalize_scaleUp_step {minMant m : UInt64} {e : Int}
     (hlt : m < minMant) (he : minExponent < e) :
-    doNormalize_scaleUp minMant m e = doNormalize_scaleUp minMant (m * 10) (e - 1) := by
-  conv_lhs => unfold doNormalize_scaleUp
+    doNormalize_scaleUpSpec minMant m e = doNormalize_scaleUpSpec minMant (m * 10) (e - 1) := by
+  conv_lhs => unfold doNormalize_scaleUpSpec
   rw [if_pos ⟨hlt, he⟩]
 
 /-- A 16-digit mantissa scales up exactly three times at `largeRange.min`. -/
 lemma doNormalize_scaleUp_three (m₀ : UInt64) (e : Int)
     (h_lo : 10 ^ 15 ≤ m₀.toNat) (h_hi : m₀.toNat < 10 ^ 16)
     (he : minExponent + 3 ≤ e) :
-    doNormalize_scaleUp largeRange.min m₀ e = (m₀ * 10 * 10 * 10, e - 3) := by
+    doNormalize_scaleUpSpec largeRange.min m₀ e = (m₀ * 10 * 10 * 10, e - 3) := by
   have hminN : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
   have hm1 : (m₀ * 10).toNat = m₀.toNat * 10 :=
     m_mul_ten_no_overflow (by rw [hminN]; omega)
@@ -280,9 +315,8 @@ lemma doNormalize_scaleUp_three (m₀ : UInt64) (e : Int)
   have he3 : e - 1 - 1 - 1 = e - 3 := by ring
   rw [he3]
 
-/-- `doNormalize` at `largeRange` of a 16-digit mantissa: exact `×1000` shift,
-every mode. (Both `capAtMaxRep` branches land on the same record: the keep arm
-directly, the divide arm via the `bringIntoRange` rescale.) -/
+/-- In every mode, `doNormalize` at `largeRange` shifts a 16-digit mantissa exactly to `m₀ · 1000` at exponent
+`e - 3`. -/
 theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode : rounding_mode)
     (h_lo : 10 ^ 15 ≤ m₀.toNat) (h_hi : m₀.toNat < 10 ^ 16)
     (he_lo : minExponent + 3 ≤ e) (he_hi : e - 3 < maxExponent) :
@@ -312,7 +346,9 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
   set g0 : Guard := if neg then Guard.new.set_negative else Guard.new with hg0_def
   have hg0_empty : g0.empty = true := by
     rw [hg0_def]; cases neg <;> decide
-  unfold doNormalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show (m₀ == 0) = false from Bool.eq_false_iff.mpr (fun h => hm₀_ne h)]
   simp only [Bool.false_eq_true, if_false]
   rw [doNormalize_scaleUp_three m₀ e h_lo h_hi he_lo]
@@ -328,7 +364,7 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
   rw [h_zero_check]
   simp only [Bool.false_eq_true, if_false]
   by_cases h_cap_fire : M > maxRepUp
-  · -- Divide arm: capAtMaxRep pushes the zero low digit; doRoundUp rescales back.
+  · -- Divide arm: capAtMaxRep pushes the zero low digit and doRoundUp rescales back.
     have h_cap : doNormalize_capAtMaxRep M (e - 3) g0
         = .ok (M / 10, e - 3 + 1, g0.push (M % 10)) := by
       unfold doNormalize_capAtMaxRep
@@ -353,7 +389,7 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
         (by omega)
         (by omega) (by omega)]
     rfl
-  · -- Keep arm: capAtMaxRep is the identity; the empty guard truncates in place.
+  · -- Keep arm: capAtMaxRep is the identity and the empty guard truncates in place.
     have h_cap : doNormalize_capAtMaxRep M (e - 3) g0 = .ok (M, e - 3, g0) := by
       unfold doNormalize_capAtMaxRep
       rw [if_neg h_cap_fire]
@@ -374,8 +410,6 @@ theorem doNormalize_large_16digit (neg : Bool) (m₀ : UInt64) (e : Int) (mode :
           omega)
         (by omega) (by omega)]
     rfl
-
-/-! ## Decision booleans for 16-digit `doRoundUp` -/
 
 /-- A guard representing a positive fraction is nonempty. -/
 lemma Guard.not_empty_of_represents_pos {g : Guard} {f : ℚ}
@@ -475,8 +509,6 @@ lemma round_bool_empty (g : Guard) (m : UInt64) (mode : rounding_mode)
   rw [empty_guard_round_neg_two g mode h]
   rfl
 
-/-! ## `normalizeToRange` at the 16-digit range: per-mode characterization -/
-
 /-- Exact case: dropped digits all zero. Identity up to the `/1000` shift,
 every mode. -/
 theorem normalizeToRange_16_exact (n : Number) (mode : rounding_mode)
@@ -499,11 +531,10 @@ theorem normalizeToRange_16_exact (n : Number) (mode : rounding_mode)
       (by rw [cMinValue_val, hm3]; omega)
       (by rw [cMaxValue_val, hm3]; omega)
       (by omega) (by omega)]
-  rfl
+  exact Number.normalizeToRange_tail (by dsimp only [RoundResult.toNumber]; rw [hm3]; omega)
 
-/-- General per-mode characterization for mantissas up to `2·10^18` (the
-sum-decade the `roundToExponent` proof produces). The output mantissa is the
-3-digit truncation, optionally bumped per the mode/sign decision. -/
+/-- For mantissas in `[10^18, 2·10^18]`, the 16-digit `normalizeToRange` output is `M / 1000`, plus 1 when the
+mode and sign round the magnitude up. -/
 theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
     (h_lo : 10 ^ 18 ≤ n.mantissa_.toNat) (h_hi : n.mantissa_.toNat ≤ 2 * 10 ^ 18)
     (he_lo : minExponent ≤ n.exponent_ + 3) (he_hi : n.exponent_ + 3 ≤ maxExponent) :
@@ -543,7 +574,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
         (by rw [cMinValue_val, hm3]; omega)
         (by rw [cMaxValue_val, hm3]; omega)
         (by omega) (by omega)]
-    rfl
+    exact Number.normalizeToRange_tail (by dsimp only [RoundResult.toNumber]; rw [hm3]; omega)
   have h_fire : ∀ (_hb : (g.round mode == 1 || (g.round mode == 0
         && (n.mantissa_ / 10 / 10 / 10) % 2 == 1)) = true),
       n.normalizeToRange cMinValue cMaxValue mode
@@ -555,7 +586,7 @@ theorem normalizeToRange_16_per_mode (n : Number) (mode : rounding_mode)
         (by rw [cMinValue_val, hm3]; omega)
         (by rw [cMaxValue_val, hm3]; omega)
         (by omega) (by omega)]
-    rfl
+    exact Number.normalizeToRange_tail (by dsimp only [RoundResult.toNumber]; rw [h_add]; omega)
   set mLow : UInt64 := n.mantissa_ / 10 / 10 / 10 with hmLow_def
   set mHigh : UInt64 := n.mantissa_ / 10 / 10 / 10 + 1 with hmHigh_def
   have h_low_char : mLow.toNat = n.mantissa_.toNat / 1000 := hm3

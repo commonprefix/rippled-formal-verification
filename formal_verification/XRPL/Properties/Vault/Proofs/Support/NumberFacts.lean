@@ -3,9 +3,8 @@ import XRPL.Properties.Protocol.Number.Normalize.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.ToRep.ToRep
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Vault.Common.RoundMonotoneSatDiv
-import XRPL.Properties.Vault.Common.WitnessSupport
 import XRPL.Properties.Vault.Proofs.Support.Basic
--- Re-exported for the files that import this one (these lemmas moved to Protocol)
+-- Re-exported for the files that import this one
 import XRPL.Properties.Protocol.Number.ToRep.Common.Proofs
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberBoundary
 import XRPL.Properties.Protocol.STAmount.Common.OfNumberFacts
@@ -18,9 +17,8 @@ Facts about `Number`: rounding of the arithmetic operators, `to_rep`, `truncate`
 
 namespace XRPL.Model.Protocol
 
-/-- `truncateAux` divides out the negative exponent: the resulting value is the
-natural quotient by `10 ^ (-e)`, the mantissa never grows, and a nonzero result
-lands at exponent `0`. -/
+/-- `truncateAux` divides out the negative exponent: the value is the natural quotient by `10 ^ (-e)`, the mantissa
+never grows, and a nonzero result lands at exponent `0`. -/
 lemma Number.truncateAux_val (m : UInt64) (e : Int) :
     e ≤ 0 →
     ((Number.truncateAux m e).1.toNat : ℚ) * 10 ^ (Number.truncateAux m e).2
@@ -60,7 +58,7 @@ lemma Number.truncateAux_val (m : UInt64) (e : Int) :
       subst hm
       refine ⟨by norm_num, le_refl _, fun h0 => absurd rfl h0⟩
 
-/-- **`Number.truncate` floors a non-negative normalized value.** The result is
+/-- `Number.truncate` floors a non-negative normalized value. The result is
 the integer part, integer-valued, and normalized whenever nonzero. -/
 lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
     (hneg : n.negative_ = false) (hok : n.truncate = .ok t) :
@@ -89,20 +87,17 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
     push Not at hg
     obtain ⟨hexp_neg', hm_ne⟩ := hg
     have hexp_neg : n.exponent_ < 0 := by omega
-    -- expose the truncated pair
     obtain ⟨hval, hle, hzero⟩ := Number.truncateAux_val n.mantissa_ n.exponent_ (le_of_lt hexp_neg)
     cases hp : Number.truncateAux n.mantissa_ n.exponent_ with
     | mk m' e' =>
       rw [hp] at hok hval hle hzero
       simp only [] at hok hval hle hzero
-      -- the target integer value
       set K : ℕ := n.mantissa_.toNat / 10 ^ (-n.exponent_).toNat with hK
       -- the input to the final normalize denotes exactly `K`
       have hin_val : (Number.unchecked n.negative_ m' e').toRat = (K : ℚ) := by
         rw [Number.toRat_of_nonneg _
           (show (Number.unchecked n.negative_ m' e').negative_ = false from hneg)]
         exact hval
-      -- `K` is the floor of the value
       have hfloor : ⌊n.toRat⌋ = (K : ℤ) := by
         have hd_pos : 0 < 10 ^ (-n.exponent_).toNat := by positivity
         have hnval : n.toRat = (n.mantissa_.toNat : ℚ) / ((10 ^ (-n.exponent_).toNat : ℕ) : ℚ) := by
@@ -158,9 +153,8 @@ lemma Number.truncate_toRat_mono (n₁ n₂ t₁ t₂ : Number)
       (Number.truncate_floor n₂ t₂ hn₂ hneg₂ hok₂).1]
   exact_mod_cast Int.floor_mono hle
 
-/-- **Pricing chain monotone.** For fixed positive `k`, `d` (normalized, nonzero,
-nonnegative), the map `a ↦ (k * a) / d` (`.to_nearest` at each stage) is monotone
-in the varying positive operand `a`. -/
+/-- Pricing chain monotone. For fixed positive normalized `k` and `d`, the `.to_nearest` map `a ↦ (k * a) / d`
+is monotone in a positive `a`. -/
 lemma Number.mul_div_num_mono (k d a₁ a₂ m₁ m₂ q₁ q₂ : Number)
     (hk : k.isNormalized) (hkm : k.mantissa_ ≠ 0) (hkneg : k.negative_ = false)
     (hd : d.isNormalized) (hdm : d.mantissa_ ≠ 0) (hdneg : d.negative_ = false)
@@ -220,43 +214,15 @@ lemma Number.normalized_zero_mantissa (neg : Bool) (e : Int) (mn mx : UInt64)
   unfold Number.normalized Number.normalize doNormalize
   simp [Number.unchecked]
 
-/-- **Upper monotonicity of `operator_sub` under `.to_nearest`.** When the exact
-difference `x - y` is at most a representable `z`, so is the rounded result: no
-representable lies strictly between the truth and a value above `z`. -/
-lemma Number.operator_sub_to_nearest_le (x y z result : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized) (hz : z.isNormalized)
-    (hxm : x.mantissa_ ≠ 0) (hym : y.mantissa_ ≠ 0)
-    (hne : ¬ x.operator_eq y)
-    (hok : Number.operator_sub x y .to_nearest = .ok result)
-    (hres : result.mantissa_ ≠ 0)
-    (hz_ge : x.toRat - y.toRat ≤ z.toRat) :
-    result.toRat ≤ z.toRat := by
-  by_contra hlt
-  push Not at hlt
-  have hyneg_norm : (y.operator_neg).isNormalized := Number.operator_neg_isNormalized y hy
-  have hyneg_m : (y.operator_neg).mantissa_ ≠ 0 := by
-    rw [Number.operator_neg_mantissa_of_ne y hym]; exact hym
-  have hnz : ¬ x.operator_eq ((y.operator_neg).operator_neg) := by
-    rw [neg_neg_of_mant_ne hym]; exact hne
-  have hok' : Number.operator_add x (y.operator_neg) .to_nearest = .ok result := hok
-  have hyneg_val : (y.operator_neg).toRat = - y.toRat := Number.toRat_neg y
-  have h_ge : x.toRat + (y.operator_neg).toRat ≤ result.toRat := by
-    rw [hyneg_val]; linarith [hz_ge, hlt]
-  have hcontra := operator_add_no_inbetween_above x (y.operator_neg) result hx hyneg_norm
-    hxm hyneg_m hnz hok' hres h_ge
-  exact hcontra z hz hlt (by rw [hyneg_val]; linarith [hz_ge])
-
-/-- **`.downward` addition of two non-negative operands stays inside the exact sum
-and never goes negative.** All three of `operator_add`'s early exits keep the value,
-and the general branch's relative error is far below `1`, so the floored sum cannot
-cross zero. -/
+/-- `.downward` addition of two non-negative operands stays inside the exact sum and never goes negative. -/
 lemma Number.operator_add_downward_nonneg_le (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxnn : 0 ≤ x.toRat) (hynn : 0 ≤ y.toRat)
     (hok : Number.operator_add x y .downward = .ok result) :
     result.toRat ≤ x.toRat + y.toRat ∧ 0 ≤ result.toRat := by
   have hok0 := hok
-  unfold Number.operator_add at hok
+  replace hok := Number.operator_add_ok_spec hok
+  unfold Number.operator_addSpec at hok
   by_cases hy0 : y.operator_eq Number.zero = true
   · rw [if_pos hy0] at hok
     have hym : y.mantissa_ = 0 := by
@@ -308,8 +274,8 @@ lemma Number.truncate_source_ne_zero (n t : Number)
   rw [← Except.ok.inj hok] at ht
   exact ht h0
 
-/-- `to_nearest` `Number` addition of two non-negative normalized operands rounds
-within the keystone relative error, with the zero cases exact. -/
+/-- `to_nearest` addition of two nonnegative normalized operands rounds within relative error `6 / (2^63 - 3)`. A
+zero operand returns the other exactly. -/
 lemma operator_add_nonneg_rounds (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxnn : 0 ≤ x.toRat) (hynn : 0 ≤ y.toRat)
@@ -319,7 +285,8 @@ lemma operator_add_nonneg_rounds (x y result : Number)
   by_cases hym : y.mantissa_ = 0
   · have hy0 : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hym
     have hres : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos (by rw [hy0]; decide)] at hok
       exact (Except.ok.inj hok).symm
     refine RoundsWithin_mono result _ 0 _ _ (RoundsWithin_of_eq result _ _ ?_) hε
@@ -328,7 +295,8 @@ lemma operator_add_nonneg_rounds (x y result : Number)
   by_cases hxm : x.mantissa_ = 0
   · have hx0 : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxm
     have hres : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hym),
           if_pos (by rw [hx0]; decide)] at hok
       exact (Except.ok.inj hok).symm
@@ -384,266 +352,40 @@ lemma Number.negative_false_of_pos (n : Number) (h : 0 < n.toRat) :
   · rfl
   · exact absurd h (not_lt.mpr (Number.toRat_nonpos_of_negative n hb))
 
-/-- Subtracting an equal (nonzero) `arn` yields `Number.zero` (`x - x = 0`). -/
-lemma Number.operator_sub_eq_zero_of_operator_eq (x arn result : Number)
-    (hxm : x.mantissa_ ≠ 0) (harnm : arn.mantissa_ ≠ 0)
-    (heq : x.operator_eq arn = true)
-    (hok : x.operator_sub arn .to_nearest = .ok result) : result = Number.zero := by
-  unfold Number.operator_sub at hok
-  unfold Number.operator_add at hok
-  have hnegm : (arn.operator_neg).mantissa_ ≠ 0 := by
-    rw [Number.operator_neg_mantissa_of_ne arn harnm]; exact harnm
-  rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hnegm)] at hok
-  rw [if_neg (Number.not_operator_eq_zero_of_mantissa_ne hxm)] at hok
-  have h3 : x.operator_eq ((arn.operator_neg).operator_neg) = true := by
-    rw [neg_neg_of_mant_ne harnm]; exact heq
-  rw [if_pos h3] at hok
-  simp only [pure, Except.pure] at hok
-  exact (Except.ok.inj hok).symm
+/-- Dividing by a whole number floors the same from any value between two integers. -/
+private lemma floor_div_of_floor (z : ℚ) (m : ℤ) (n : ℕ) (hn : 0 < n) (h1 : (m : ℚ) ≤ z) (h2 : z < m + 1) :
+    ⌊z / n⌋ = m / n := by
+  have hnq : (0 : ℚ) < n := by exact_mod_cast hn
+  rw [Int.floor_eq_iff]
+  have hdiv := Int.mul_ediv_add_emod m n
+  have hmod0 := Int.emod_nonneg m (by exact_mod_cast hn.ne' : (n : ℤ) ≠ 0)
+  have hmodlt := Int.emod_lt_of_pos m (by exact_mod_cast hn : (0 : ℤ) < n)
+  constructor
+  · rw [le_div_iff₀ hnq]
+    have : ((m / n : ℤ) : ℚ) * n ≤ m := by
+      have h : (m / n) * (n : ℤ) ≤ m := by nlinarith
+      exact_mod_cast h
+    linarith
+  · rw [div_lt_iff₀ hnq]
+    have : (m : ℚ) + 1 ≤ (((m / n : ℤ) : ℚ) + 1) * n := by
+      have h : m + 1 ≤ (m / n + 1) * (n : ℤ) := by nlinarith
+      exact_mod_cast h
+    linarith
 
-/-- Subtracting a zero-mantissa `arn` is the identity (`operator_add x 0 = x`). -/
-lemma Number.operator_sub_zero_right (x arn result : Number) (harn : arn.mantissa_ = 0)
-    (hok : x.operator_sub arn .to_nearest = .ok result) : result = x := by
-  unfold Number.operator_sub at hok
-  have hneg0 : arn.operator_neg = Number.zero := by
-    unfold Number.operator_neg; rw [if_pos (by rw [harn]; rfl)]
-  rw [hneg0] at hok
-  unfold Number.operator_add at hok
-  rw [if_pos (by decide : Number.zero.operator_eq Number.zero = true)] at hok
-  simp only [pure, Except.pure] at hok
-  exact (Except.ok.inj hok).symm
-
-/-- **Subtracting a non-negative operand under `.to_nearest` never overshoots the
-minuend.** The rounded difference `x - y` is at most `x`: a zero result is `≤ x`
-because `x ≥ 0`, an equal-operand cancellation gives the zero result, and the
-generic case is `operator_sub_to_nearest_le` at `z = x` (using `x - y ≤ x`). -/
-lemma Number.operator_sub_nonneg_le (x y result : Number)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hxm : x.mantissa_ ≠ 0) (hym : y.mantissa_ ≠ 0)
-    (hxnn : 0 ≤ x.toRat) (hynn : 0 ≤ y.toRat)
-    (hok : x.operator_sub y .to_nearest = .ok result) :
-    result.toRat ≤ x.toRat := by
-  by_cases hresm : result.mantissa_ = 0
-  · rw [Number.toRat_eq_zero_of_mantissa_zero result hresm]; exact hxnn
-  · have hne : ¬ x.operator_eq y := fun heq => by
-      have hres0 := Number.operator_sub_eq_zero_of_operator_eq x y result hxm hym heq hok
-      rw [hres0] at hresm; exact hresm rfl
-    exact Number.operator_sub_to_nearest_le x y x result hx hy hx hxm hym hne hok hresm
-      (by linarith [hynn])
-
-/-- `J·10^ec` is a non-negative normalized `Number` for `1 ≤ J < 10^19` with the
-sticky-tail condition and a small exponent window. Scaled generalization of
-`Number.exists_normalized_of_pos_nat`. -/
-lemma Number.exists_normalized_scaled (J : ℕ) (ec : ℤ)
-    (h1 : 1 ≤ J) (h2 : J < 10 ^ 19)
-    (h3 : J ≤ maxRep.toNat ∨ J % 10 = 0)
-    (hlo : (-18 : ℤ) ≤ ec) (hhi : ec ≤ 0) :
-    ∃ w : Number, w.isNormalized ∧ w.negative_ = false ∧
-      w.toRat = (J : ℚ) * (10 : ℚ) ^ ec := by
-  have hJne : J ≠ 0 := by omega
-  have hlog_lo : 10 ^ Nat.log 10 J ≤ J := Nat.pow_log_le_self 10 hJne
-  have hlog_hi : J < 10 ^ (Nat.log 10 J + 1) := Nat.lt_pow_succ_log_self (by norm_num) J
-  set L := Nat.log 10 J with hL_def
-  have hL_le : L ≤ 18 := by
-    by_contra hcon
-    push Not at hcon
-    have : (10 : ℕ) ^ 19 ≤ 10 ^ L := Nat.pow_le_pow_right (by norm_num) (by omega)
+/-- Flooring onto a finer grid, then onto a coarser one, is flooring onto the coarser one. -/
+lemma floor_grid_floor_of_le (x : ℚ) (g b : ℤ) (hgb : g ≤ b) :
+    ⌊(⌊x / 10 ^ g⌋ : ℚ) * 10 ^ g / 10 ^ b⌋ = ⌊x / 10 ^ b⌋ := by
+  set n : ℕ := 10 ^ (b - g).toNat with hn_def
+  have hn : 0 < n := by positivity
+  have hg : (0 : ℚ) < 10 ^ g := zpow_pos (by norm_num) _
+  have hpow : (10 : ℚ) ^ b = (n : ℚ) * 10 ^ g := by
+    rw [hn_def, Nat.cast_pow, Nat.cast_ofNat, ← zpow_natCast, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
+    congr 1
     omega
-  set k : ℕ := 18 - L with hk_def
-  set M : ℕ := J * 10 ^ k with hM_def
-  have hLk : L + k = 18 := by omega
-  have hM_lo : 10 ^ 18 ≤ M := by
-    calc (10 : ℕ) ^ 18 = 10 ^ L * 10 ^ k := by rw [← pow_add, hLk]
-      _ ≤ J * 10 ^ k := mul_le_mul_of_nonneg_right hlog_lo (by positivity)
-  have hM_hi : M < 10 ^ 19 := by
-    calc M = J * 10 ^ k := rfl
-      _ < 10 ^ (L + 1) * 10 ^ k := mul_lt_mul_of_pos_right hlog_hi (by positivity)
-      _ = 10 ^ 19 := by rw [← pow_add]; congr 1; omega
-  have hM_lt : M < UInt64.size := by rw [uint64_size_val]; omega
-  have hM_toNat : (Nat.toUInt64 M).toNat = M :=
-    UInt64.toNat_ofNat_of_lt' (by rw [uint64_size_val]; exact hM_lt)
-  have hsticky : Nat.toUInt64 M ≤ maxRep ∨ (Nat.toUInt64 M).toNat % 10 = 0 := by
-    by_cases hk0 : k = 0
-    · rcases h3 with h3 | h3
-      · left
-        rw [UInt64.le_iff_toNat_le, hM_toNat]
-        have hMJ : M = J := by rw [hM_def, hk0, pow_zero, Nat.mul_one]
-        rw [hMJ]; exact h3
-      · right
-        rw [hM_toNat, hM_def, hk0, pow_zero, Nat.mul_one]
-        exact h3
-    · right
-      rw [hM_toNat]
-      have hdvd : (10 : ℕ) ∣ M := by
-        rw [hM_def]
-        exact Dvd.dvd.mul_left (dvd_pow_self 10 (by omega)) J
-      omega
-  refine ⟨⟨false, Nat.toUInt64 M, ec - (k : ℤ)⟩, ?_, rfl, ?_⟩
-  · right
-    refine ⟨?_, ?_, hsticky, ?_, ?_⟩
-    · rw [UInt64.le_iff_toNat_le, largeRange_min_val, hM_toNat]; omega
-    · rw [UInt64.le_iff_toNat_le, largeRange_max_val, hM_toNat]; omega
-    · show minExponent ≤ ec - (k : ℤ); unfold minExponent; omega
-    · show ec - (k : ℤ) ≤ maxExponent; unfold maxExponent; omega
-  · rw [Number.toRat_of_nonneg _ rfl]
-    show ((Nat.toUInt64 M).toNat : ℚ) * (10 : ℚ) ^ (ec - (k : ℤ)) = (J : ℚ) * (10 : ℚ) ^ ec
-    rw [hM_toNat, hM_def, zpow_sub₀ (by norm_num : (10 : ℚ) ≠ 0), zpow_natCast]
-    push_cast
-    have h10k : (0 : ℚ) < (10 : ℚ) ^ k := by positivity
-    field_simp
-
-/-- **Exact subtraction of an integer within the int64 window.** For a normalized
-`x` with `0 ≤ x ≤ 2^63 - 1` and an integer value `0 ≤ k ≤ x` held in a
-normalized `aN`, the `to_nearest` subtraction returns exactly `x - k`: the
-difference is representable, so the correctly-rounded result equals it.
-(`0 ≤ x` is implied by `0 ≤ k ≤ x`.) -/
-lemma operator_sub_exact_int_le (x aN result : Number) (k : ℚ)
-    (hx : x.isNormalized) (hxle : x.toRat ≤ 2 ^ 63 - 1)
-    (haN : aN.isNormalized) (haN_val : aN.toRat = k)
-    (hk_int : k.den = 1) (hknn : 0 ≤ k) (hkle : k ≤ x.toRat)
-    (hok : x.operator_sub aN .to_nearest = .ok result) :
-    result.toRat = x.toRat - k := by
-  have hrtr := operator_sub_rounded_to_nearest x aN result hx haN hok
-  rw [haN_val] at hrtr
-  -- a representable witness for x - k closes the goal
-  suffices hwit : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat - k by
-    obtain ⟨w, hw_norm, hw_val⟩ := hwit
-    exact Number.RoundsToRepresentable.eq_of_representable result _ hrtr w hw_norm hw_val
-  by_cases hk0 : k = 0
-  · exact ⟨x, hx, by rw [hk0, sub_zero]⟩
-  have hk1 : 1 ≤ k := by
-    have hnum_pos : 0 < k.num := by
-      rcases lt_trichotomy k.num 0 with h | h | h
-      · exact absurd (Rat.num_nonneg.mpr hknn) (by omega)
-      · exact absurd (Rat.zero_iff_num_zero.mpr h) hk0
-      · exact h
-    have : (1 : ℚ) ≤ (k.num : ℚ) := by exact_mod_cast hnum_pos
-    calc (1 : ℚ) ≤ (k.num : ℚ) := this
-      _ = k := by
-        conv_rhs => rw [← Rat.num_div_den k]
-        rw [hk_int]; push_cast; ring
-  have hx_mne : x.mantissa_ ≠ 0 := by
-    intro h0
-    have hx0 : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx h0
-    rw [hx0, Number.toRat_zero] at hkle
-    linarith
-  have hx_neg : x.negative_ = false := by
-    by_contra hc
-    have hc' : x.negative_ = true := by simpa using hc
-    have := Number.toRat_of_neg x hc'
-    have hmpos : 0 < (x.mantissa_.toNat : ℚ) := by
-      have : 0 < x.mantissa_.toNat := by
-        have := (hx.mantissaBounds_nat hx_mne).1; omega
-      exact_mod_cast this
-    nlinarith [zpow_pos (show (0:ℚ) < 10 from by norm_num) x.exponent_,
-      le_trans hknn hkle]
-  have hx_val : x.toRat = (x.mantissa_.toNat : ℚ) * (10 : ℚ) ^ x.exponent_ :=
-    Number.toRat_of_nonneg x hx_neg
-  obtain ⟨hmA_lo, hmA_hi⟩ := hx.mantissaBounds_nat hx_mne
-  have hexp_range : minExponent ≤ x.exponent_ ∧ x.exponent_ ≤ maxExponent := by
-    rcases hx with h_zero | ⟨_, _, _, hlo, hhi⟩
-    · exact absurd (show x.mantissa_ = 0 by rw [h_zero]; rfl) hx_mne
-    · exact ⟨hlo, hhi⟩
-  set eA := x.exponent_ with heA_def
-  have heA_le : eA ≤ 0 := by
-    by_contra hc
-    push Not at hc
-    have h10 : (10 : ℚ) ^ (1 : ℤ) ≤ (10 : ℚ) ^ eA := zpow_le_zpow_right₀ (by norm_num) (by omega)
-    have hm18 : ((10 : ℕ) ^ 18 : ℚ) ≤ (x.mantissa_.toNat : ℚ) := by exact_mod_cast hmA_lo
-    rw [hx_val] at hxle
-    push_cast at hm18
-    nlinarith [hxle, h10, hm18]
-  have heA_ge : (-18 : ℤ) ≤ eA := by
-    by_contra hc
-    push Not at hc
-    have h10 : (10 : ℚ) ^ eA ≤ (10 : ℚ) ^ (-19 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
-    have hm19 : (x.mantissa_.toNat : ℚ) < ((10 : ℕ) ^ 19 : ℚ) := by exact_mod_cast hmA_hi
-    have hxlt : x.toRat < 1 := by
-      rw [hx_val]
-      push_cast at hm19
-      calc (x.mantissa_.toNat : ℚ) * (10 : ℚ) ^ eA
-          < 10 ^ 19 * (10 : ℚ) ^ (-19 : ℤ) := by
-            have hmnn : (0 : ℚ) ≤ (x.mantissa_.toNat : ℚ) := by positivity
-            have hppos : (0 : ℚ) < (10 : ℚ) ^ eA := zpow_pos (by norm_num) _
-            nlinarith [h10, hm19, hppos]
-        _ = 1 := by
-            rw [show ((10 : ℚ) ^ 19 : ℚ) = (10 : ℚ) ^ (19 : ℤ) from by norm_num,
-              ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-            norm_num
-    linarith
-  -- the integer k scaled onto x's grid
-  set K : ℕ := k.num.toNat with hK_def
-  have hK_val : (K : ℚ) = k := by
-    rw [hK_def]
-    have : (k.num.toNat : ℤ) = k.num := Int.toNat_of_nonneg (Rat.num_nonneg.mpr hknn)
-    have hq : ((k.num.toNat : ℤ) : ℚ) = (k.num : ℚ) := by exact_mod_cast this
-    push_cast at hq ⊢
-    rw [hq]
-    conv_rhs => rw [← Rat.num_div_den k]
-    rw [hk_int]; push_cast; ring
-  set KK : ℕ := K * 10 ^ (-eA).toNat with hKK_def
-  have hpow_eq : ((10 : ℚ) ^ (-eA).toNat) * (10 : ℚ) ^ eA = 1 := by
-    rw [← zpow_natCast (10 : ℚ) (-eA).toNat, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-    rw [show ((-eA).toNat : ℤ) + eA = 0 from by omega]
-    norm_num
-  have hKK_le : KK ≤ x.mantissa_.toNat := by
-    have hcross : (KK : ℚ) ≤ (x.mantissa_.toNat : ℚ) := by
-      rw [hKK_def]
-      push_cast
-      have h1 : (K : ℚ) * ((10 : ℚ) ^ (-eA).toNat) * (10 : ℚ) ^ eA ≤
-          (x.mantissa_.toNat : ℚ) * (10 : ℚ) ^ eA := by
-        rw [mul_assoc, hpow_eq, mul_one, hK_val, ← hx_val]
-        exact hkle
-      have hppos : (0 : ℚ) < (10 : ℚ) ^ eA := zpow_pos (by norm_num) _
-      exact le_of_mul_le_mul_right (by rw [mul_assoc] at h1 ⊢; exact h1) hppos
-    exact_mod_cast hcross
-  set J : ℕ := x.mantissa_.toNat - KK with hJ_def
-  have hJ_val : (J : ℚ) * (10 : ℚ) ^ eA = x.toRat - k := by
-    rw [hJ_def, hx_val]
-    push_cast [Nat.cast_sub hKK_le]
-    rw [hKK_def]
-    push_cast
-    rw [sub_mul, mul_assoc, hpow_eq, mul_one, hK_val]
-  by_cases hJ0 : J = 0
-  · refine ⟨Number.zero, Or.inl rfl, ?_⟩
-    rw [Number.toRat_zero, ← hJ_val, hJ0]
-    norm_num
-  have hsticky : J ≤ maxRep.toNat ∨ J % 10 = 0 := by
-    by_cases hJle : J ≤ maxRep.toNat
-    · exact Or.inl hJle
-    · right
-      push Not at hJle
-      have hmA_gt : maxRep.toNat < x.mantissa_.toNat := by
-        have : J ≤ x.mantissa_.toNat := by rw [hJ_def]; omega
-        omega
-      have heA_neg : eA ≤ -1 := by
-        by_contra hc
-        push Not at hc
-        have heA0 : eA = 0 := by omega
-        have hxq : x.toRat = (x.mantissa_.toNat : ℚ) := by
-          rw [hx_val, heA0]; norm_num
-        rw [hxq] at hxle
-        have hlt : (x.mantissa_.toNat : ℚ) < 2 ^ 63 := by linarith
-        have : x.mantissa_.toNat < 2 ^ 63 := by exact_mod_cast hlt
-        rw [maxRep_val] at hmA_gt
-        omega
-      have hmA_mod : x.mantissa_.toNat % 10 = 0 := by
-        rcases hx with h_zero | ⟨_, _, hst, _, _⟩
-        · exact absurd (show x.mantissa_ = 0 by rw [h_zero]; rfl) hx_mne
-        · rcases hst with hst | hst
-          · exact absurd (UInt64.le_iff_toNat_le.mp hst) (by omega)
-          · exact hst
-      have hKK_dvd : (10 : ℕ) ∣ KK := by
-        rw [hKK_def]
-        exact Dvd.dvd.mul_left (dvd_pow_self 10 (by omega)) K
-      have hmA_dvd : (10 : ℕ) ∣ x.mantissa_.toNat := Nat.dvd_of_mod_eq_zero hmA_mod
-      rw [hJ_def]
-      obtain ⟨a, ha⟩ := hmA_dvd
-      obtain ⟨b, hb⟩ := hKK_dvd
-      rw [ha, hb]
-      omega
-  obtain ⟨w, hw_norm, _, hw_val⟩ := Number.exists_normalized_scaled J eA
-    (by omega) (by rw [hJ_def]; omega) hsticky heA_ge heA_le
-  exact ⟨w, hw_norm, by rw [hw_val, hJ_val]⟩
+  have h1 : (⌊x / 10 ^ g⌋ : ℚ) * 10 ^ g / 10 ^ b = (⌊x / 10 ^ g⌋ : ℚ) / n := by
+    rw [hpow]; field_simp
+  have h2 : x / 10 ^ b = x / 10 ^ g / n := by rw [hpow]; field_simp
+  rw [h1, h2, floor_div_of_floor _ ⌊x / 10 ^ g⌋ n hn le_rfl (by linarith),
+    floor_div_of_floor _ ⌊x / 10 ^ g⌋ n hn (Int.floor_le _) (Int.lt_floor_add_one _)]
 
 end XRPL.Model.Protocol

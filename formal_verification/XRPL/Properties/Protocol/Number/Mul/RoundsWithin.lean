@@ -10,6 +10,10 @@ import XRPL.Properties.Protocol.Number.Mul.Common.TowardsZero.WitnessTrace
 import XRPL.Properties.Protocol.Number.Mul.Common.ToNearest.BoundProof
 import XRPL.Properties.Protocol.Number.Mul.Common.ToNearest.WitnessTrace
 
+/-! # Relative error of `operator_mul`
+
+Each bound assumes a nonzero result, since a product too small for a `Number` becomes zero. The `_attained` theorems
+reach the `to_nearest` bound exactly and pass a smaller bound in the other modes. -/
 
 namespace XRPL.Model.Protocol
 

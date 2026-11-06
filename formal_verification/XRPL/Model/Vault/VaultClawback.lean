@@ -50,9 +50,12 @@ def computeClawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealize
       throwThe Error e
 
 
--- `hnn`: the preflight check `sfAmount >= 0` passed (zero means all); callers outside the model check it
+-- `hnn`: the preflight check `sfAmount >= 0` passed (zero means all). Callers outside the model check it.
 def Vault.clawback (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
     (_hnn : 0 ≤ assets.toRat) : TerExcept VaultWithAmounts := do
+  if v.numericType == NumericType.native then
+    throw .tecNO_PERMISSION
+
   let amounts ← computeClawback v assets holderShares waiveUnrealizedLoss
 
   if amounts.shares.isZero then

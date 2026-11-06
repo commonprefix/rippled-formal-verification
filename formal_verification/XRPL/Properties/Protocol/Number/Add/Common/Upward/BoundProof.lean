@@ -35,8 +35,6 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
       have hy_nn' : 0 ≤ y.toRat := Number.toRat_nonneg_of_nonnegative y hy_nn
       linarith
   rw [h_abs_diff_eq, h_result_abs, habs_xy_eq]
-  -- Now we must show:
-  -- | (res_pos.mantissa_ : ℚ) * 10^res_pos.exp - ((zm+f) * 10^ze') | ≤ ((zm+f) * 10^ze') * 10/(2^63+2)
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge
@@ -116,7 +114,7 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
     rw [hv_val]
     obtain ⟨hzm_q_gt, hzm_q_le3⟩ := cusp_zm_qbounds h_zm_le_rep hzm_le_maxRep
     rcases hv_cases with ⟨hv, _, _⟩ | ⟨hv, _⟩ | ⟨hv, hzm_eq, hfire⟩
-    · -- v = maxRepNat: truncate clamp; err = zm + f − maxRepNat ∈ (0, 4).
+    · -- v = maxRepNat: truncate clamp, err = zm + f − maxRepNat ∈ (0, 4).
       subst hv
       rw [show (maxRepNat : ℚ) * 10 ^ ze' - ((zm.toNat : ℚ) + f) * 10 ^ ze'
             = -((((zm.toNat : ℚ) + f) - maxRepNat) * 10 ^ ze') from by ring,
@@ -180,10 +178,8 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
             mul_lt_mul_of_pos_right h_inner h10ze'_pos
         _ = (((maxRepNat : ℚ) + 3) + f) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
 
-/-- Combined **tight** relative-error bound for `Number.operator_add` under
-`.upward` rounding, covering both same-sign and diff-sign branches with the
-uniform ε-scale `11/(2^63 - 18)`. Mirrors `operator_add_rounding_bound_downward_tight`
-for `.downward`. -/
+/-- Relative-error bound `11/(2^63 - 18)` for `Number.operator_add` under `.upward`, for both sign cases, when the
+result is nonzero. -/
 theorem operator_add_rounding_bound_upward_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

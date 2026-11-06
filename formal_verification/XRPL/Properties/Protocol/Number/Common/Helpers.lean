@@ -3,8 +3,6 @@ import XRPL.Properties.Protocol.Number.Common.Defs
 
 namespace XRPL.Model.Protocol
 
-/-! ## Helper lemmas for `operator_mul_rounded_to_nearest` -/
-
 /-- If `n` is the maximal normalized Number with `n.toRat ≤ q`, then
 `n.toRat = n_lo.toRat` where `n_lo = Number.lower q`. -/
 lemma Number.toRat_eq_lower_of_max (q : ℚ) (n n_lo : Number)
@@ -30,8 +28,6 @@ lemma Number.toRat_eq_upper_of_min (q : ℚ) (n n_up : Number)
   have h1 : n_up.toRat ≤ n.toRat := Number.upper_tight q n_up h_upper n h_norm h_ge
   have h2 : n.toRat ≤ n_up.toRat := h_min n_up h_n_up_norm h_n_up_ge
   linarith
-
-/-! ## Nonzero product -/
 
 /-- The product `x.toRat * y.toRat` is nonzero when both mantissas are nonzero
 and the inputs are normalized. -/
@@ -67,21 +63,20 @@ lemma toRat_mul_ne_zero_of_normalized (x y : Number)
   · rw [hx0] at habsx; simp at habsx
   · rw [hy0] at habsy; simp at habsy
 
-/-- `scaleDown128` preserves the guard's sign bit (each digit-push keeps `sbit_`).
-Shared by the directed-mode `Mul` algorithmic-facts files. -/
+/-- `scaleDown128Spec` keeps the guard's sign bit. -/
 lemma scaleDown128_sbit_preserved (M : UInt128) (e : Int) (g0 : Guard) :
-    (scaleDown128 M e g0).2.2.sbit_ = g0.sbit_ := by
-  induction M, e, g0 using scaleDown128.induct with
+    (scaleDown128Spec M e g0).2.2.sbit_ = g0.sbit_ := by
+  induction M, e, g0 using scaleDown128Spec.induct with
   | case1 M e g0 hcond _d IH =>
-    have hunfold : scaleDown128 M e g0
-        = scaleDown128 (M / 10) (e + 1) (g0.push (toUInt64 (M % 10))) := by
-      conv_lhs => rw [scaleDown128]
+    have hunfold : scaleDown128Spec M e g0
+        = scaleDown128Spec (M / 10) (e + 1) (g0.push (toUInt64 (M % 10))) := by
+      conv_lhs => rw [scaleDown128Spec]
       simp [hcond]
     rw [hunfold]
     have h_push_sbit : (g0.push (toUInt64 (M % 10))).sbit_ = g0.sbit_ := rfl
     rw [IH, h_push_sbit]
   | case2 M e g0 hcond =>
-    unfold scaleDown128
+    unfold scaleDown128Spec
     simp [hcond]
 
 end XRPL.Model.Protocol

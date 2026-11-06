@@ -80,7 +80,7 @@ def computeDeposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) : 
     else
       throwThe Error e
 
--- `hpos`: the preflight check `sfAmount > 0` passed; callers outside the model check it
+-- `hpos`: the preflight check `sfAmount > 0` passed. Callers outside the model check it.
 def Vault.deposit (v : Vault) (amountDeposit : STAmount) (isDonation : Bool) (parentCloseTime : UInt32)
     (_hpos : 0 < amountDeposit.toRat) : TerExcept VaultWithAmounts := do
   let phase := v.phase parentCloseTime

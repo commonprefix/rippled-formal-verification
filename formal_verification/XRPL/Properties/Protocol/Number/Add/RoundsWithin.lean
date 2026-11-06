@@ -1,11 +1,10 @@
 import XRPL.Properties.Protocol.Number.Add.Common.RoundsWithinProofs
 import XRPL.Properties.Approx
 
-/-! # `operator_add` relative-error bounds (`RoundsWithin`), per mode:
-* `operator_add_rounds_<mode>`: unconditional, ε `11/(2^63-18)` (`6/(2^63-3)` for to_nearest).
-* `operator_add_rounds_same_sign_<mode>`: tighter ε `10/(2^63+2)` (`5/(2^63+7)`) when operands
-  share a sign (no cancellation). The general theorem case-splits onto it; Sub reuses it via
-  `x - y = x + (-y)`, which turns a diff-sign subtraction into a same-sign addition. -/
+/-! # Relative error of `operator_add`
+
+`operator_add_rounds_<mode>` holds for any signs and assumes a nonzero result, since a sum too small for a `Number`
+becomes zero. `operator_add_rounds_same_sign_<mode>` gives the smaller bound when both operands have the same sign. -/
 
 namespace XRPL.Model.Protocol
 

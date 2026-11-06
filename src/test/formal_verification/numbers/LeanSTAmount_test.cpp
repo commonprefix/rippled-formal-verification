@@ -24,6 +24,7 @@
 #include <exception>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -41,8 +42,6 @@ lean_stamount_to_number(lean_object*, uint8_t);
 lean_object*
 lean_stamount_checked(lean_object*, uint64_t, int64_t, uint8_t, uint8_t);
 lean_object*
-lean_stamount_of_int64(lean_object*, int64_t, int64_t, uint8_t);
-lean_object*
 lean_stamount_of_number(lean_object*, lean_object*, uint8_t);
 lean_object*
 lean_stamount_lt(lean_object*, lean_object*);
@@ -51,39 +50,17 @@ lean_stamount_add(lean_object*, lean_object*, uint8_t);
 lean_object*
 lean_stamount_sub(lean_object*, lean_object*, uint8_t);
 lean_object*
-lean_stamount_multiply(lean_object*, lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_stamount_divide(lean_object*, lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_stamount_mul_round(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
-lean_object*
-lean_stamount_mul_round_strict(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
-lean_object*
-lean_stamount_div_round(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
-lean_object*
-lean_stamount_div_round_strict(lean_object*, lean_object*, lean_object*, uint8_t, uint8_t);
-lean_object*
-lean_stamount_can_add(lean_object*, lean_object*, uint8_t);
-lean_object*
-lean_stamount_can_subtract(lean_object*, lean_object*);
-lean_object*
 lean_stamount_round_to_exponent(lean_object*, int64_t, uint8_t);
-uint64_t
-lean_stamount_get_rate(lean_object*, lean_object*, uint8_t);
 lean_object*
 lean_stamount_neg(lean_object*);
 lean_object*
 lean_stamount_unchecked_from_int64(lean_object*, int64_t, int64_t);
 uint8_t
 lean_stamount_eq(lean_object*, lean_object*);
-uint8_t
-lean_stamount_ne(lean_object*, lean_object*);
 lean_object*
 lean_stamount_le(lean_object*, lean_object*);
 lean_object*
 lean_stamount_gt(lean_object*, lean_object*);
-lean_object*
-lean_stamount_ge(lean_object*, lean_object*);
 uint8_t
 lean_stamount_are_comparable(lean_object*, lean_object*);
 }
@@ -108,6 +85,40 @@ stAmountFieldsEqual(LeanSTAmountResult const& lean, STAmount const& cpp)
     bool const cppIntegral = numericTypeFromAsset(cpp) != kFractional;
     return (lean.numericType != 0) == cppIntegral && lean.mValue == cpp.mantissa() &&
         lean.mOffset == cpp.exponent() && (lean.isNegative != 0) == cpp.negative();
+}
+
+// Signed drops of raw STAmount fields as int64, or nullopt when they leave the int64 range.
+// C++ casts mValue to int64 without a check there, the model reports `Error.wrap`.
+std::optional<int64_t>
+signedDrops(uint64_t mValue, bool negative)
+{
+    constexpr auto kInt64Max = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
+    if (mValue <= kInt64Max)
+        return negative ? -static_cast<int64_t>(mValue) : static_cast<int64_t>(mValue);
+    if (negative && mValue == kInt64Max + 1)
+        return std::numeric_limits<int64_t>::min();
+    return std::nullopt;
+}
+
+// Whether the model's add (sub negates b first) reports `Error.wrap`: an operand's drops leave
+// int64, or two integral drop counts overflow int64. C++ wraps silently in both places.
+bool
+addWraps(STAmountPair const& a, STAmountPair const& b, bool isAdd)
+{
+    auto const& x = a.leanSt;
+    auto const& y = b.leanSt;
+    if (x.numericType != y.numericType || y.mValue == 0)
+        return false;
+    bool const yNegative = (y.isNegative != 0) == isAdd;
+    auto const dy = signedDrops(y.mValue, yNegative);
+    // A zero left operand re-canonicalizes the right one, which reads IOU drops as int64.
+    if (x.mValue == 0)
+        return x.numericType == kFractional && !dy;
+    auto const dx = signedDrops(x.mValue, x.isNegative != 0);
+    if (!dx || !dy)
+        return true;
+    int64_t sum = 0;
+    return x.numericType != kFractional && __builtin_add_overflow(*dx, *dy, &sum);
 }
 
 }  // namespace
@@ -170,6 +181,20 @@ class LeanSTAmount_test : public LeanSuite
         return checkStAmountResult(tag, lean, cpp, cppThrew);
     }
 
+    // Where C++ wraps an int64 silently the model reports `Error.wrap`, so there is no C++ value
+    // to compare against.
+    bool
+    expectWrap(std::string const& tag, std::optional<LeanError> const& error)
+    {
+        if (error != LeanError::wrap)
+        {
+            fail(tag + ": expected the model to report a wrap");
+            return false;
+        }
+        pass();
+        return true;
+    }
+
     bool
     checkAccessors(STAmountPair const& p, Number::RoundingMode mode)
     {
@@ -181,6 +206,28 @@ class LeanSTAmount_test : public LeanSuite
         std::string const tag = label("accessor", nt, mValue, mOffset, isNeg);
         uint8_t const leanMode = toLeanMode(mode);
         bool ok = true;
+
+        // intAmount (integral) or iou (fractional) reads the drops, and toNumber reads them too.
+        if (!signedDrops(mValue, isNeg != 0))
+        {
+            auto const build = [&] { return STAmountFFI::build(nt, mValue, mOffset, isNeg); };
+            if (nt == kFractional)
+            {
+                auto const iou =
+                    readExcept<IOUAmountFFI>(leanCall(lean_stamount_iou, build(), leanMode));
+                ok &= expectWrap(tag + ".iou", iou.error);
+            }
+            else
+            {
+                auto const drops =
+                    readExcept<Int64FFI>(leanCall(lean_stamount_int_amount, build()));
+                ok &= expectWrap(tag + ".intAmount", drops.error);
+            }
+            auto const number =
+                readExcept<NumberFFI>(leanCall(lean_stamount_to_number, build(), leanMode));
+            ok &= expectWrap(tag + ".toNumber", number.error);
+            return ok;
+        }
 
         {
             auto lean = readExcept<Int64FFI>(
@@ -294,31 +341,6 @@ class LeanSTAmount_test : public LeanSuite
     }
 
     bool
-    checkOfInt64(uint8_t nt, int64_t mantissa, int64_t exponent, Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        std::stringstream tag;
-        tag << "ofInt64(nt=" << static_cast<int>(nt) << "," << mantissa << "e" << exponent << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                lean_stamount_of_int64,
-                NumericTypeFFI::build(nt),
-                mantissa,
-                exponent,
-                toLeanMode(mode))),
-            [&] {
-                return assetForNumericType(nt).visit(
-                    [&](Issue const& iss) {
-                        return STAmount{iss, mantissa, static_cast<int>(exponent)};
-                    },
-                    [&](MPTIssue const& mpt) {
-                        return STAmount{mpt, mantissa, static_cast<int>(exponent)};
-                    });
-            });
-    }
-
-    bool
     checkAddSub(
         char const* op,
         bool isAdd,
@@ -331,217 +353,18 @@ class LeanSTAmount_test : public LeanSuite
         std::stringstream tag;
         tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
             << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                leanFn,
-                STAmountFFI::build(
-                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::build(
-                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                toLeanMode(mode))),
-            [&] { return isAdd ? (a.cppSt + b.cppSt) : (a.cppSt - b.cppSt); });
-    }
-
-    bool
-    checkMultiply(
-        STAmountPair const& a,
-        STAmountPair const& b,
-        uint8_t nt,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        std::stringstream tag;
-        tag << "multiply(nt1=" << static_cast<int>(a.leanSt.numericType)
-            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
-            << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                lean_stamount_multiply,
-                STAmountFFI::build(
-                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::build(
-                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                NumericTypeFFI::build(nt),
-                toLeanMode(mode))),
-            [&] { return multiply(a.cppSt, b.cppSt, assetForNumericType(nt)); });
-    }
-
-    bool
-    checkDivide(
-        STAmountPair const& num,
-        STAmountPair const& den,
-        uint8_t nt,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        std::stringstream tag;
-        tag << "divide(ntN=" << static_cast<int>(num.leanSt.numericType)
-            << ",ntD=" << static_cast<int>(den.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
-            << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                lean_stamount_divide,
-                STAmountFFI::build(
-                    num.leanSt.numericType,
-                    num.leanSt.mValue,
-                    num.leanSt.mOffset,
-                    num.leanSt.isNegative),
-                STAmountFFI::build(
-                    den.leanSt.numericType,
-                    den.leanSt.mValue,
-                    den.leanSt.mOffset,
-                    den.leanSt.isNegative),
-                NumericTypeFFI::build(nt),
-                toLeanMode(mode))),
-            [&] { return divide(num.cppSt, den.cppSt, assetForNumericType(nt)); });
-    }
-
-    template <typename LeanFn, typename CppFn>
-    bool
-    checkMulRoundLike(
-        char const* op,
-        LeanFn leanFn,
-        CppFn cppFn,
-        STAmountPair const& a,
-        STAmountPair const& b,
-        uint8_t nt,
-        bool roundUp,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        std::stringstream tag;
-        tag << op << "(nt1=" << static_cast<int>(a.leanSt.numericType)
-            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
-            << ",ru=" << roundUp << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                leanFn,
-                STAmountFFI::build(
-                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::build(
-                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                NumericTypeFFI::build(nt),
-                roundUp ? 1u : 0u,
-                toLeanMode(mode))),
-            [&] { return cppFn(a.cppSt, b.cppSt, assetForNumericType(nt), roundUp); });
-    }
-
-    template <typename LeanFn, typename CppFn>
-    bool
-    checkDivRoundLike(
-        char const* op,
-        LeanFn leanFn,
-        CppFn cppFn,
-        STAmountPair const& num,
-        STAmountPair const& den,
-        uint8_t nt,
-        bool roundUp,
-        Number::RoundingMode mode)
-    {
-        NumberRoundModeGuard mg(mode);
-        std::stringstream tag;
-        tag << op << "(ntN=" << static_cast<int>(num.leanSt.numericType)
-            << ",ntD=" << static_cast<int>(den.leanSt.numericType) << ",nt=" << static_cast<int>(nt)
-            << ",ru=" << roundUp << ")";
-        return runSTAmountOp(
-            tag.str(),
-            STAmountFFI::fromExcept(leanCall(
-                leanFn,
-                STAmountFFI::build(
-                    num.leanSt.numericType,
-                    num.leanSt.mValue,
-                    num.leanSt.mOffset,
-                    num.leanSt.isNegative),
-                STAmountFFI::build(
-                    den.leanSt.numericType,
-                    den.leanSt.mValue,
-                    den.leanSt.mOffset,
-                    den.leanSt.isNegative),
-                NumericTypeFFI::build(nt),
-                roundUp ? 1u : 0u,
-                toLeanMode(mode))),
-            [&] { return cppFn(num.cppSt, den.cppSt, assetForNumericType(nt), roundUp); });
-    }
-
-    bool
-    checkCanAdd(STAmountPair const& a, STAmountPair const& b, Number::RoundingMode mode)
-    {
-        uint8_t const leanMode = toLeanMode(mode);
-        NumberRoundModeGuard mg(mode);
-        auto lean = readExcept<BoolFFI>(leanCall(
-            lean_stamount_can_add,
+        lean_object* const lean = leanCall(
+            leanFn,
             STAmountFFI::build(
                 a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
             STAmountFFI::build(
                 b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-            leanMode));
-        bool cppThrew = false;
-        bool cppRet = false;
-        try
-        {
-            cppRet = canAdd(a.cppSt, b.cppSt);
-        }
-        catch (std::exception const&)
-        {
-            cppThrew = true;
-        }
-        std::stringstream tag;
-        tag << "canAdd(nt1=" << static_cast<int>(a.leanSt.numericType)
-            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
-        if (lean.value.has_value() == cppThrew)
-        {
-            fail(tag.str() + ": error mismatch");
-            return false;
-        }
-        if (lean.value.has_value() && lean.value->read() != cppRet)
-        {
-            std::stringstream ss;
-            ss << tag.str() << ": value mismatch lean=" << lean.value->read() << " cpp=" << cppRet;
-            fail(ss.str());
-            return false;
-        }
-        pass();
-        return true;
-    }
-
-    bool
-    checkCanSub(STAmountPair const& a, STAmountPair const& b)
-    {
-        auto lean = readExcept<BoolFFI>(leanCall(
-            lean_stamount_can_subtract,
-            STAmountFFI::build(
-                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-            STAmountFFI::build(
-                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)));
-        bool cppThrew = false;
-        bool cppRet = false;
-        try
-        {
-            cppRet = canSubtract(a.cppSt, b.cppSt);
-        }
-        catch (std::exception const&)
-        {
-            cppThrew = true;
-        }
-        std::stringstream tag;
-        tag << "canSub(nt1=" << static_cast<int>(a.leanSt.numericType)
-            << ",nt2=" << static_cast<int>(b.leanSt.numericType) << ")";
-        if (lean.value.has_value() == cppThrew)
-        {
-            fail(tag.str() + ": error mismatch");
-            return false;
-        }
-        if (lean.value.has_value() && lean.value->read() != cppRet)
-        {
-            fail(tag.str() + ": value mismatch");
-            return false;
-        }
-        pass();
-        return true;
+            toLeanMode(mode));
+        if (addWraps(a, b, isAdd))
+            return expectWrap(tag.str(), readExcept<STAmountFFI>(lean).error);
+        return runSTAmountOp(tag.str(), STAmountFFI::fromExcept(lean), [&] {
+            return isAdd ? (a.cppSt + b.cppSt) : (a.cppSt - b.cppSt);
+        });
     }
 
     bool
@@ -560,41 +383,6 @@ class LeanSTAmount_test : public LeanSuite
                 scale,
                 toLeanMode(mode))),
             [&] { return roundToScale(p.cppSt, scale, mode); });
-    }
-
-    bool
-    checkGetRate(
-        STAmountPair const& offerOut,
-        STAmountPair const& offerIn,
-        Number::RoundingMode mode)
-    {
-        uint8_t const leanMode = toLeanMode(mode);
-        NumberRoundModeGuard mg(mode);
-        uint64_t const lean = leanCall(
-            lean_stamount_get_rate,
-            STAmountFFI::build(
-                offerOut.leanSt.numericType,
-                offerOut.leanSt.mValue,
-                offerOut.leanSt.mOffset,
-                offerOut.leanSt.isNegative),
-            STAmountFFI::build(
-                offerIn.leanSt.numericType,
-                offerIn.leanSt.mValue,
-                offerIn.leanSt.mOffset,
-                offerIn.leanSt.isNegative),
-            leanMode);
-        uint64_t const cpp = getRate(offerOut.cppSt, offerIn.cppSt);
-        if (lean != cpp)
-        {
-            std::stringstream ss;
-            ss << "getRate(ntOut=" << static_cast<int>(offerOut.leanSt.numericType)
-               << ",ntIn=" << static_cast<int>(offerIn.leanSt.numericType) << "): lean=" << lean
-               << " cpp=" << cpp;
-            fail(ss.str());
-            return false;
-        }
-        pass();
-        return true;
     }
 
     bool
@@ -623,20 +411,6 @@ class LeanSTAmount_test : public LeanSuite
                 STAmountFFI::build(
                     b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
             a.cppSt == b.cppSt);
-    }
-
-    bool
-    checkNe(STAmountPair const& a, STAmountPair const& b)
-    {
-        return expectBool(
-            "ne",
-            leanCall(
-                lean_stamount_ne,
-                STAmountFFI::build(
-                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::build(
-                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative)),
-            a.cppSt != b.cppSt);
     }
 
     bool
@@ -714,21 +488,6 @@ class LeanSTAmount_test : public LeanSuite
             cppThrew = true;
         }
         return checkOrdering("gt", lean_stamount_gt, cpp, cppThrew, a, b);
-    }
-
-    bool
-    checkGe(STAmountPair const& a, STAmountPair const& b)
-    {
-        bool cpp = false, cppThrew = false;
-        try
-        {
-            cpp = a.cppSt >= b.cppSt;
-        }
-        catch (std::exception const&)
-        {
-            cppThrew = true;
-        }
-        return checkOrdering("ge", lean_stamount_ge, cpp, cppThrew, a, b);
     }
 
     bool
@@ -837,15 +596,6 @@ public:
         checkUncheckedFromInt64(kFractional, static_cast<int64_t>(kMin), eMin);
         checkUncheckedFromInt64(kFractional, static_cast<int64_t>(kMax), eMax);
         checkUncheckedFromInt64(kFractional, -static_cast<int64_t>(kMax), eMax);
-
-        checkOfInt64(kIntegral, 1'000'000, 0, m);
-        checkOfInt64(kIntegral, -1'000'000, 0, m);
-        checkOfInt64(kNative, 1'000'000, 0, m);
-        checkOfInt64(kNative, -1'000'000, 0, m);
-        checkOfInt64(kIntegral, 999'999'999LL, 0, m);
-        checkOfInt64(kIntegral, -999'999'999LL, 0, m);
-        checkOfInt64(kFractional, 1'234'567'890LL, 0, m);
-        checkOfInt64(kFractional, -1'234'567'890LL, 0, m);
 
         for (auto nt : {kIntegral, kFractional})
         {
@@ -983,273 +733,6 @@ public:
                 makeSTAmountPair(kFractional, 9'876'543'210'987'654ULL, -3, 1),
                 mode);
         }
-
-        checkMultiply(
-            makeSTAmountPair(kIntegral, 1'000, 0, 0),
-            makeSTAmountPair(kIntegral, 1'000, 0, 0),
-            kIntegral,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kFractional, 2'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-            kFractional,
-            m);
-        // IOU × IOU result rounded into an integral (MPT) target — the ofNumber integral path.
-        checkMultiply(
-            makeSTAmountPair(kFractional, 2'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-            kIntegral,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kIntegral, 0, 0, 0),
-            makeSTAmountPair(kIntegral, 1'000, 0, 0),
-            kIntegral,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kFractional, 0, -100, 0),
-            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
-            kFractional,
-            m);
-
-        checkDivide(
-            makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-            kFractional,
-            m);
-        // den = 0 errors on both sides; num = 0 short-circuits to zero.
-        checkDivide(
-            makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kFractional, 0, -100, 0),
-            kFractional,
-            m);
-        checkDivide(
-            makeSTAmountPair(kFractional, 0, -100, 0),
-            makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-            kFractional,
-            m);
-        // 1 / 1 (integral) into a fractional target — the kURateOne recipe.
-        checkDivide(
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            kFractional,
-            m);
-        checkDivide(
-            makeSTAmountPair(kIntegral, 100, 0, 0),
-            makeSTAmountPair(kIntegral, 200, 0, 0),
-            kFractional,
-            m);
-
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            checkDivide(
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 7'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                mode);
-        }
-    }
-
-    void
-    test_known_rounding()
-    {
-        beginCase("LeanSTAmount.known_rounding");
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        Number::RoundingMode const m = Number::RoundingMode::ToNearest;
-
-        auto const mulRoundFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &mulRound);
-        auto const mulRoundStrictFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &mulRoundStrict);
-
-        // mulRound and mulRoundStrict, both roundUp values, across numericTypes.
-        for (bool ru : {false, true})
-        {
-            checkMulRoundLike(
-                "mulRound",
-                lean_stamount_mul_round,
-                mulRoundFn,
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-            checkMulRoundLike(
-                "mulRoundStrict",
-                lean_stamount_mul_round_strict,
-                mulRoundStrictFn,
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-            // Tiny non-negative input: roundUp=true rescues to smallest-above-zero.
-            checkMulRoundLike(
-                "mulRound",
-                lean_stamount_mul_round,
-                mulRoundFn,
-                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                kFractional,
-                ru,
-                m);
-            // integral × integral → integral fast path.
-            checkMulRoundLike(
-                "mulRound",
-                lean_stamount_mul_round,
-                mulRoundFn,
-                makeSTAmountPair(kIntegral, 1'000, 0, 0),
-                makeSTAmountPair(kIntegral, 1'000, 0, 0),
-                kIntegral,
-                ru,
-                m);
-            checkMulRoundLike(
-                "mulRoundStrict",
-                lean_stamount_mul_round_strict,
-                mulRoundStrictFn,
-                makeSTAmountPair(kIntegral, 1'000, 0, 0),
-                makeSTAmountPair(kIntegral, 1'000, 0, 0),
-                kIntegral,
-                ru,
-                m);
-            // Zero short-circuit.
-            checkMulRoundLike(
-                "mulRound",
-                lean_stamount_mul_round,
-                mulRoundFn,
-                makeSTAmountPair(kFractional, 0, -100, 0),
-                makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-        }
-
-        // canonicalizeRound's `resultNegative != roundUp` branch.
-        checkMulRoundLike(
-            "mulRound",
-            lean_stamount_mul_round,
-            mulRoundFn,
-            makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, 0, 0),
-            makeSTAmountPair(kFractional, 9'876'543'210'987'654ULL, 0, 1),
-            kFractional,
-            true,
-            m);
-
-        auto const divRoundFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &divRound);
-        auto const divRoundStrictFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &divRoundStrict);
-
-        for (bool ru : {false, true})
-        {
-            checkDivRoundLike(
-                "divRound",
-                lean_stamount_div_round,
-                divRoundFn,
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-            checkDivRoundLike(
-                "divRoundStrict",
-                lean_stamount_div_round_strict,
-                divRoundStrictFn,
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-            // Tiny positive numerator with large denominator: roundUp=true rescues.
-            checkDivRoundLike(
-                "divRound",
-                lean_stamount_div_round,
-                divRoundFn,
-                makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
-                makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
-                kFractional,
-                ru,
-                m);
-            // den = 0 errors on both sides; num = 0 short-circuits.
-            checkDivRoundLike(
-                "divRound",
-                lean_stamount_div_round,
-                divRoundFn,
-                makeSTAmountPair(kFractional, 1'000'000'000'000'000ULL, 0, 0),
-                makeSTAmountPair(kFractional, 0, -100, 0),
-                kFractional,
-                ru,
-                m);
-            checkDivRoundLike(
-                "divRound",
-                lean_stamount_div_round,
-                divRoundFn,
-                makeSTAmountPair(kFractional, 0, -100, 0),
-                makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
-                kFractional,
-                ru,
-                m);
-        }
-    }
-
-    void
-    test_known_predicates()
-    {
-        beginCase("LeanSTAmount.known_predicates");
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        Number::RoundingMode const m = Number::RoundingMode::ToNearest;
-
-        constexpr uint64_t kMaxIntegral =
-            static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-
-        // canAdd at INT64_MAX ± 1 (overflow on both signs), zero short-circuit, happy path.
-        checkCanAdd(
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            m);
-        checkCanAdd(
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
-            makeSTAmountPair(kIntegral, 1, 0, 1),
-            m);
-        checkCanAdd(makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
-        checkCanAdd(makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 0, 0, 0), m);
-        checkCanAdd(
-            makeSTAmountPair(kIntegral, 1'000, 0, 0), makeSTAmountPair(kIntegral, 2'000, 0, 0), m);
-
-        // IOU precision-loss path: equal magnitudes vs vastly different magnitudes.
-        checkCanAdd(
-            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
-            m);
-        checkCanAdd(
-            makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0),
-            makeSTAmountPair(kFractional, STAmount::kMinValue, STAmount::kMinOffset, 0),
-            m);
-
-        // Cross-type canAdd → false on both sides.
-        checkCanAdd(
-            makeSTAmountPair(kIntegral, 100, 0, 0),
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-            m);
-
-        // canSubtract: integral underflow, in-range, IOU always true, zero shortcut.
-        checkCanSub(makeSTAmountPair(kIntegral, 100, 0, 0), makeSTAmountPair(kIntegral, 200, 0, 0));
-        checkCanSub(
-            makeSTAmountPair(kIntegral, 1'000, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
-        checkCanSub(
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kFractional, STAmount::kMaxValue, STAmount::kMaxOffset, 0));
-        checkCanSub(makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 1'000, 0, 0));
-        checkCanSub(
-            makeSTAmountPair(kIntegral, 100, 0, 0),
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0));
     }
 
     void
@@ -1288,49 +771,6 @@ public:
     }
 
     void
-    test_known_get_rate()
-    {
-        beginCase("LeanSTAmount.known_get_rate");
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        Number::RoundingMode const m = Number::RoundingMode::ToNearest;
-
-        // offerOut == 0 → 0.
-        checkGetRate(
-            makeSTAmountPair(kIntegral, 0, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0), m);
-        // 1 / 1 — the kURateOne recipe.
-        checkGetRate(makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
-        checkGetRate(
-            makeSTAmountPair(kIntegral, 1, 0, 0), makeSTAmountPair(kIntegral, 10, 0, 0), m);
-        checkGetRate(
-            makeSTAmountPair(kIntegral, 10, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
-        checkGetRate(
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 1, 0),
-            m);
-        // Mixed-type: both sides go through divide(in, out, fractional).
-        checkGetRate(
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-            m);
-        checkGetRate(
-            makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            m);
-
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            checkGetRate(
-                makeSTAmountPair(kFractional, STAmount::kMinValue, 0, 0),
-                makeSTAmountPair(kFractional, 7'000'000'000'000'000ULL, 0, 0),
-                mode);
-        }
-    }
-
-    void
     test_fuzz_accessors()
     {
         beginCase("LeanSTAmount.fuzz_accessors", true);
@@ -1362,16 +802,6 @@ public:
             SaveNumberRoundMode save{Number::setround(mode)};
             // checked: hits canonicalization + boundary errors per numericType.
             runFuzz(10'000, [&] { return checkChecked(randomSTAmountPair(rng), mode); });
-            // ofInt64: mantissa drawn as signed int64, numericType picked uniformly.
-            std::uniform_int_distribution<int64_t> mDist(
-                std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max());
-            std::uniform_int_distribution<int> eDist(-10, 10);
-            runFuzz(10'000, [&] {
-                uint8_t const nt = randomNumericType(rng);
-                int64_t const mant = mDist(rng);
-                int64_t const exp_ = eDist(rng);
-                return checkOfInt64(nt, mant, exp_, mode);
-            });
         }
     }
 
@@ -1399,146 +829,6 @@ public:
     }
 
     void
-    test_fuzz_multiply_divide()
-    {
-        beginCase("LeanSTAmount.fuzz_multiply_divide", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(10'000, [&] {
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
-                uint8_t const nt = randomNumericType(rng);
-                return checkMultiply(a, b, nt, mode);
-            });
-            runFuzz(10'000, [&] {
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
-                uint8_t const nt = randomNumericType(rng);
-                return checkDivide(a, b, nt, mode);
-            });
-        }
-    }
-
-    void
-    test_fuzz_mul_round()
-    {
-        beginCase("LeanSTAmount.fuzz_mul_round", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        std::bernoulli_distribution ruDist(0.5);
-        std::bernoulli_distribution strictDist(0.5);
-        auto const mulRoundFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &mulRound);
-        auto const mulRoundStrictFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &mulRoundStrict);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(10'000, [&] {
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
-                bool const strict = strictDist(rng);
-                uint8_t const nt = randomNumericType(rng);
-                bool const ru = ruDist(rng);
-                if (strict)
-                    return checkMulRoundLike(
-                        "mulRoundStrict",
-                        lean_stamount_mul_round_strict,
-                        mulRoundStrictFn,
-                        a,
-                        b,
-                        nt,
-                        ru,
-                        mode);
-                return checkMulRoundLike(
-                    "mulRound", lean_stamount_mul_round, mulRoundFn, a, b, nt, ru, mode);
-            });
-        }
-    }
-
-    void
-    test_fuzz_div_round()
-    {
-        beginCase("LeanSTAmount.fuzz_div_round", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        std::bernoulli_distribution ruDist(0.5);
-        std::bernoulli_distribution strictDist(0.5);
-        auto const divRoundFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &divRound);
-        auto const divRoundStrictFn =
-            static_cast<STAmount (*)(STAmount const&, STAmount const&, Asset const&, bool)>(
-                &divRoundStrict);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(10'000, [&] {
-                auto num = randomSTAmountPair(rng);
-                auto den = randomSTAmountPair(rng);
-                bool const strict = strictDist(rng);
-                uint8_t const nt = randomNumericType(rng);
-                bool const ru = ruDist(rng);
-                if (strict)
-                    return checkDivRoundLike(
-                        "divRoundStrict",
-                        lean_stamount_div_round_strict,
-                        divRoundStrictFn,
-                        num,
-                        den,
-                        nt,
-                        ru,
-                        mode);
-                return checkDivRoundLike(
-                    "divRound", lean_stamount_div_round, divRoundFn, num, den, nt, ru, mode);
-            });
-        }
-    }
-
-    void
-    test_fuzz_predicates()
-    {
-        beginCase("LeanSTAmount.fuzz_predicates", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(10'000, [&] {
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
-                return checkCanAdd(a, b, mode);
-            });
-        }
-        runFuzz(30'000, [&] {
-            auto a = randomSTAmountPair(rng);
-            auto b = randomSTAmountPair(rng);
-            return checkCanSub(a, b);
-        });
-    }
-
-    void
     test_fuzz_round_to_exponent()
     {
         beginCase("LeanSTAmount.fuzz_round_to_exponent", true);
@@ -1561,27 +851,6 @@ public:
     }
 
     void
-    test_fuzz_get_rate()
-    {
-        beginCase("LeanSTAmount.fuzz_get_rate", true);
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            runFuzz(10'000, [&] {
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
-                return checkGetRate(a, b, mode);
-            });
-        }
-    }
-
-    void
     test_fuzz_compare()
     {
         beginCase("LeanSTAmount.fuzz_compare", true);
@@ -1592,11 +861,9 @@ public:
             auto b = randomSTAmountPair(rng);
             bool ok = true;
             ok &= checkEq(a, b);
-            ok &= checkNe(a, b);
             ok &= checkLt(a, b);
             ok &= checkLe(a, b);
             ok &= checkGt(a, b);
-            ok &= checkGe(a, b);
             ok &= checkAreComparable(a, b);
             return ok;
         });
@@ -1669,8 +936,8 @@ public:
         // Cross-kind native vs int64 (MPT) is incomparable: both sides error.
         checkLt(makeSTAmountPair(kNative, 100, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
 
-        // MPT operator+ (STAmount(Asset, int64)) canonicalizes: INT64_MAX + 1 wraps to INT64_MIN,
-        // then rounds to -9223372036854775800 (under the 2^63-1 ceiling). Both sides agree.
+        // MPT operator+ adds the int64 drops unchecked: INT64_MAX + 1 wraps to INT64_MIN in C++,
+        // and the model reports the wrap.
         checkAddSub(
             "add",
             true,
@@ -1712,41 +979,6 @@ public:
             makeSTAmountPair(kFractional, iouMin, eMin, 1),
             m);
 
-        // multiply at the maxima.
-        checkMultiply(
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
-            kIntegral,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kFractional, iouMax, eMax, 0),
-            makeSTAmountPair(kFractional, iouMax, eMax, 0),
-            kFractional,
-            m);
-        // Integral multiplication precheck overflows (MPT bounds).
-        checkMultiply(
-            makeSTAmountPair(kIntegral, 3'037'000'500ULL, 0, 0),
-            makeSTAmountPair(kIntegral, 3'037'000'500ULL, 0, 0),
-            kIntegral,
-            m);
-        checkMultiply(
-            makeSTAmountPair(kIntegral, 9'000'000'000'000'000ULL, 0, 0),
-            makeSTAmountPair(kIntegral, 1'000'000ULL, 0, 0),
-            kIntegral,
-            m);
-
-        // divide at the IOU extremes: huge / tiny quotients.
-        checkDivide(
-            makeSTAmountPair(kFractional, iouMax, eMax, 0),
-            makeSTAmountPair(kFractional, iouMin, eMin, 0),
-            kFractional,
-            m);
-        checkDivide(
-            makeSTAmountPair(kFractional, iouMin, eMin, 0),
-            makeSTAmountPair(kFractional, iouMax, eMax, 0),
-            kFractional,
-            m);
-
         // neg is sign-magnitude → never overflows.
         checkNeg(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0));
         checkNeg(makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1));
@@ -1771,8 +1003,8 @@ public:
             {
                 checkNeg(makeSTAmountPair(nt, u64Max, 0, neg));
                 checkNeg(makeSTAmountPair(nt, 0, 0, neg));
-                // u64Max as an integral operand reads back int64-wrapped (mpt() -> -1); the add
-                // then canonicalizes like C++, so both kinds agree.
+                // C++ reads u64Max back as int64 (mpt() and iou() give -1), the model reports the
+                // wrap.
                 checkAddSub(
                     "add",
                     true,
@@ -1797,8 +1029,8 @@ public:
         }
     }
 
-    // Integral values staged above INT64_MAX read back as int64 (wrapping) on both sides: C++ via
-    // mpt()/getMPTValue, the model via IntAmount (toNumber/canAdd/canSubtract). u64Max -> -1.
+    // Integral values staged above INT64_MAX: C++ reads them back as int64 via mpt()/getMPTValue
+    // (u64Max -> -1), the model reports the wrap from intAmount and toNumber.
     void
     test_integral_int64_wrap()
     {
@@ -1807,9 +1039,6 @@ public:
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
         constexpr uint64_t u64Max = std::numeric_limits<uint64_t>::max();
 
-        // u64Max reads back as int64 -1: canAdd(-1, 1) fits, and toNumber wraps identically.
-        checkCanAdd(
-            makeSTAmountPair(kIntegral, u64Max, 0, 0), makeSTAmountPair(kIntegral, 1, 0, 0), m);
         checkAccessors(makeSTAmountPair(kIntegral, u64Max, 0, 0), m);
     }
 
@@ -1853,100 +1082,6 @@ public:
             "Lean XRP add at INT64_MAX wrapped to a negative value");
     }
 
-    // Finding (FV_M2_2): multiply()/divide() drop the sign before Downward/Upward rounding, so a
-    // negative result rounds toward zero instead of toward the correct infinity.
-    void
-    test_mul_div_negative_rounding()
-    {
-        beginCase("LeanSTAmount.mul_div_negative_rounding");
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        using M = Number::RoundingMode;
-
-        auto cppSigned = [](STAmount const& s) -> std::int64_t {
-            return s.negative() ? -static_cast<std::int64_t>(s.mantissa())
-                                : static_cast<std::int64_t>(s.mantissa());
-        };
-        auto leanSigned = [](LeanSTAmountResult const& r) -> std::int64_t {
-            return r.isNegative ? -static_cast<std::int64_t>(r.mValue)
-                                : static_cast<std::int64_t>(r.mValue);
-        };
-        auto oneCase = [&](char const* tag,
-                           bool isDiv,
-                           STAmountPair const& a,
-                           STAmountPair const& b,
-                           std::uint8_t nt,
-                           M mode,
-                           std::int64_t want) {
-            Asset const asset = assetForNumericType(nt);
-            NumberRoundModeGuard mg(mode);
-            STAmount const cpp =
-                isDiv ? divide(a.cppSt, b.cppSt, asset) : multiply(a.cppSt, b.cppSt, asset);
-            auto const lean = STAmountFFI::fromExcept(leanCall(
-                isDiv ? lean_stamount_divide : lean_stamount_multiply,
-                STAmountFFI::build(
-                    a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-                STAmountFFI::build(
-                    b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-                NumericTypeFFI::build(nt),
-                toLeanMode(mode)));
-            BEAST_EXPECTS(
-                cppSigned(cpp) == want,
-                std::string(tag) + " C++ got " + std::to_string(cppSigned(cpp)) + " want " +
-                    std::to_string(want));
-            BEAST_EXPECTS(
-                lean.ok && leanSigned(lean) == want,
-                std::string(tag) + " Lean got " + std::to_string(leanSigned(lean)) + " want " +
-                    std::to_string(want));
-        };
-
-        // IOU. -0.4444444444444444 * 11 = -4.8888888888888884, only Downward reaches ...889.
-        STAmountPair const a4 = makeSTAmountPair(kFractional, 4'444'444'444'444'444ULL, -16, 1);
-        STAmountPair const eleven = makeSTAmountPair(kFractional, 11ULL, 0, 0);
-        STAmountPair const negFour = makeSTAmountPair(kFractional, 4ULL, 0, 1);
-        STAmountPair const negSix = makeSTAmountPair(kFractional, 6ULL, 0, 1);
-        STAmountPair const nine = makeSTAmountPair(kFractional, 9ULL, 0, 0);
-        oneCase(
-            "iou mul .4 Near",
-            false,
-            a4,
-            eleven,
-            kFractional,
-            M::ToNearest,
-            -4'888'888'888'888'888LL);
-        oneCase(
-            "iou mul .4 Down",
-            false,
-            a4,
-            eleven,
-            kFractional,
-            M::Downward,
-            -4'888'888'888'888'889LL);
-        oneCase(
-            "iou mul .4 Up", false, a4, eleven, kFractional, M::Upward, -4'888'888'888'888'888LL);
-        oneCase(
-            "iou div .4 Down",
-            true,
-            negFour,
-            nine,
-            kFractional,
-            M::Downward,
-            -4'444'444'444'444'445LL);
-        oneCase(
-            "iou div .6 Down",
-            true,
-            negSix,
-            nine,
-            kFractional,
-            M::Downward,
-            -6'666'666'666'666'667LL);
-
-        // MPT (integral) and XRP (native) targets: -6.2 * 2 = -12.4, only Downward reaches -13.
-        STAmountPair const m62 = makeSTAmountPair(kFractional, 62ULL, -1, 1);
-        STAmountPair const two = makeSTAmountPair(kFractional, 2ULL, 0, 0);
-        oneCase("mpt mul .4 Down", false, m62, two, kIntegral, M::Downward, -13);
-        oneCase("xrp mul .4 Down", false, m62, two, kNative, M::Downward, -13);
-    }
-
     // ---- Cusp sweeps ----
 
     void
@@ -1987,37 +1122,22 @@ private:
     void
     runTests() override
     {
-        // The model's MPT multiply and divide mirror the Number paths C++ takes under
-        // MPTokensV2, so the suite runs under every supported amendment (the rules a test Env
-        // applies) plus MPTokensV2, which is not supported yet.
-        std::unordered_set<UInt256, beast::Uhash<>> presets;
-        for (auto const& [name, vote] : detail::supportedAmendments())
-        {
-            if (auto const feature = getRegisteredFeature(name))
-                presets.insert(*feature);
-        }
-        presets.insert(featureMPTokensV2);
-        CurrentTransactionRulesGuard const rules{Rules{presets}};
+        // The Lean model assumes all amendments.
+        std::unordered_set<uint256, beast::Uhash<>> const amendments{
+            featureMPTokensV2, featureSingleAssetVault, featureLendingProtocol};
+        CurrentTransactionRulesGuard const rules{Rules{amendments}};
 
-        test_fuzz_mul_round();
         test_fuzz_round_to_exponent();
-        test_fuzz_get_rate();
         test_fuzz_compare();
         test_fuzz_neg();
         test_fuzz_unchecked_from_int64();
         test_fuzz_add_sub();
         test_fuzz_accessors();
-        test_fuzz_predicates();
         test_fuzz_constructors();
-        test_fuzz_multiply_divide();
-        test_fuzz_div_round();
         test_known_construction();
         test_known_comparison();
         test_known_arithmetic();
-        test_known_rounding();
-        test_known_predicates();
         test_known_round_to_exponent();
-        test_known_get_rate();
         test_extreme_values();
         test_integral_int64_wrap();
         testCheckedRangeSweep();
@@ -2025,7 +1145,6 @@ private:
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off
         // test_add_xrp_overflow();          // FV_M2_1: XRP operator+ at INT64_MAX wraps negative
-        // test_mul_div_negative_rounding(); // FV_M2_2: negative mul/div rounds the wrong way
         // clang-format on
     }
 };

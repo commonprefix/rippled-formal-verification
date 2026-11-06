@@ -1,43 +1,50 @@
-import XRPL.Properties.Vault.Common.VaultDecidable
-import XRPL.Properties.Vault.Common.ReachableDefs
+import XRPL.Properties.Vault.Proofs.DilutionWitness
 
 /-! # Witness for the history dilution bound
 
-An `int64` vault with 5 assets and 20 shares redeems 6 shares (worth `1.5`, paid `2`), then
-7 of the remaining 14 (worth `1.5`, paid `2`). Per-share value falls `1/4 → 3/14 → 1/7`,
-by `3/28`, exactly the accumulated budget `1/2/14 + 1/2/7`. -/
+A reachable `int64` vault of 7 assets and 4 shares (a deposit of 4, then a donation of 3) redeems 2
+shares, worth `3.5`, for `4`, then 1 of the remaining 2, worth `1.5`, for `2`. Per-share value falls
+`7/4 → 3/2 → 1` although the run has no deposit, so its budget is zero. -/
 
 set_option linter.style.nativeDecide false
-set_option maxRecDepth 10000
 
-namespace XRPL.Model.SingleAssetVault
+namespace XRPL.Model.SingleAssetVault.DilWit
 
 open XRPL.Model.Protocol
 
+def vH : Vault := intVault 4 3
+
+lemma vH_reach : Vault.Reachable vH 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+
+lemma burn2_pos : 0 < (burn 2).amount.toRat := by native_decide
+
+def r1 : VaultWithAmounts := wdRun vH (burn 2) burn2_pos
+def r2 : VaultWithAmounts := wdRun r1.vault' (burn 1) burn1_pos
+
+lemma shareBalance (n : UInt64) (h : (int64Amount n).canonicalB = true) : (int64Amount n).ShareBalance :=
+  ⟨rfl, STAmount.canonical_of_canonicalB _ h, rfl⟩
+
+end XRPL.Model.SingleAssetVault.DilWit
+
+namespace XRPL.Model.SingleAssetVault
+
+open XRPL.Model.Protocol DilWit
+
+/-- Two withdrawals that each overpay by half a unit lower per-share value. -/
 lemma Vault.ReachableFromIn.dilution_witness :
-    ∃ (lw u : Vault) (n : ℕ) (D : ℚ),
-      1 < n ∧ lw.toExact.lossUnrealized = 0 ∧ Vault.ReachableFromIn lw u n D ∧
-      u.withdrawNav / (u.toExact.sharesTotal : ℚ) <
-        lw.withdrawNav / (lw.toExact.sharesTotal : ℚ) * (1 - depositε) ^ n -
-          (1 - 1 / 10 ^ 15) * D := by
-  have h1 : ((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).sharesBurned = (STAmount.unchecked .int64 6 (0) false) := by native_decide
-  have h2 : (((((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).vault').withdraw (.vaultShares (STAmount.unchecked .int64 7 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected ((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).vault' .tecINTERNAL)).sharesBurned = (STAmount.unchecked .int64 7 (0) false) := by native_decide
-  have s1 := Vault.ReachableFromIn.withdraw (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) 0 0 (.vaultShares (STAmount.unchecked .int64 6 (0) false))
-    ((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL))
-    (Vault.ReachableFromIn.refl (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)) (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by rw [h1]; exact ⟨fun _ => ⟨⟨rfl, rfl, by decide⟩, by decide⟩, fun h => absurd h (by decide)⟩) (by native_decide) (by native_decide) (by native_decide)
-  have s2 := Vault.ReachableFromIn.withdraw (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) ((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).vault' (0 + 1) _ (.vaultShares (STAmount.unchecked .int64 7 (0) false))
-    (((((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).vault').withdraw (.vaultShares (STAmount.unchecked .int64 7 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected ((((⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault)).withdraw (.vaultShares (STAmount.unchecked .int64 6 (0) false)) false (by native_decide)).toOption.getD
-      (WithdrawResult.rejected (⟨{ assetsTotal := ⟨false, 5000000000000000000, -18⟩, assetsAvailable := ⟨false, 5000000000000000000, -18⟩, assetsReserved := Number.zero, assetsMaximum := none, numericType := .int64, scale := 0, sharesTotal := ⟨false, 2000000000000000000, -17⟩, lossUnrealized := Number.zero }, by native_decide, by native_decide⟩ : Vault) .tecINTERNAL)).vault' .tecINTERNAL))
-    s1 (by native_decide) (by native_decide) (by native_decide) (by native_decide) (by rw [h2]; exact ⟨fun _ => ⟨⟨rfl, rfl, by decide⟩, by decide⟩, fun h => absurd h (by decide)⟩) (by native_decide) (by native_decide) (by native_decide)
-  refine ⟨_, _, 0 + 1 + 1, _, by decide, by native_decide, s2, ?_⟩
-  unfold depositε; native_decide
+    ∃ (v : Vault) (t0 t : UInt32) (n : ℕ) (w : Vault),
+      Vault.Reachable v t0 ∧ Vault.ReachableFromIn false v t w n ∧ 1 < n ∧
+      w.withdrawNav / (w.toExact.sharesTotal : ℚ) < v.withdrawNav / (v.toExact.sharesTotal : ℚ) := by
+  have s1 := Vault.ReachableFromIn.withdraw (whole := false) vH vH 0 0 0 (burn 2) (int64Amount 2) false r1
+    (Vault.ReachableFromIn.refl (whole := false) vH 0) (by decide)
+    (STAmount.canonical_of_canonicalB _ (by native_decide)) rfl
+    (shareBalance 2 (by native_decide)) (by unfold Vault.IsSoleShareholder; native_decide) burn2_pos
+    (by native_decide) (by native_decide) (by native_decide) (fun h => absurd h (by decide))
+  have s2 := Vault.ReachableFromIn.withdraw (whole := false) vH r1.vault' 0 0 _ (burn 1) (int64Amount 1) false r2 s1
+    (by decide)
+    (STAmount.canonical_of_canonicalB _ (by native_decide)) rfl
+    (shareBalance 1 (by native_decide)) (by unfold Vault.IsSoleShareholder; native_decide) burn1_pos
+    (by native_decide) (by native_decide) (by native_decide) (fun h => absurd h (by decide))
+  exact ⟨vH, 0, 0, _, _, vH_reach, s2, by decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

@@ -3,8 +3,9 @@ import XRPL.Properties.Protocol.STAmount.Add.RoundsWithin
 import XRPL.Properties.Protocol.STAmount.Common.IOUWitnessTraces
 import XRPL.Properties.Protocol.STAmount.Common.IOUDirectedWitnesses
 
-/-! # Proof bodies for the IOU subtraction `RoundsWithin` headlines. Subtraction reduces
-to addition via `v1 - v2 = v1 + (-v2)`. The thin headlines live in `Sub.RoundsWithin`. -/
+/-! # Proofs of the IOU subtraction `RoundsWithin` theorems
+
+Subtraction reduces to addition via `v1 - v2 = v1 + (-v2)`. -/
 
 namespace XRPL.Model.Protocol
 
@@ -51,9 +52,8 @@ theorem STAmount.operator_sub_rounds_iou_witness_proof :
           = (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2]
     norm_num
 
-/-- IOU subtraction in any directed mode: `v1 − v2 = v1 + (−v2)`, so the directed addition
-bound applies. The `to_nearest` re-round inside `−v2` is value-exact. (Shared by the three
-directed `Sub.RoundsWithin` headlines.) -/
+/-- IOU subtraction rounds within the directed addition bound in every mode, since `v1 − v2 = v1 + (−v2)` and
+negating `v2` only flips its sign. -/
 theorem STAmount.operator_sub_iou_rounds_directed (v1 v2 result : STAmount)
     (mode : rounding_mode)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)

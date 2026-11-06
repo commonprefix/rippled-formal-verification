@@ -7,18 +7,18 @@ namespace XRPL.Model.Protocol
 
 /-! # `Number.normalize` is an identity for `doRoundUp` output
 
-When the input satisfies `minMantissa ≤ m ≤ maxMantissa`, `minExponent ≤ e ≤ maxExponent`,
-and `m > maxRep → m % 10 = 0`, `doNormalize` returns the input unchanged. -/
+When `minMantissa ≤ m ≤ maxMantissa`, `minExponent ≤ e ≤ maxExponent`, `m > maxRep → m % 10 = 0`, and
+`e < maxExponent` whenever `m > maxRepUp`, `doNormalize` returns the input unchanged. -/
 
 /-- `Guard.new.push 0 = Guard.new`. -/
 lemma guard_new_push_zero : Guard.new.push 0 = Guard.new := by
   unfold Guard.push Guard.new
   simp
 
-/-- `doNormalize_scaleUp` is identity when `m ≥ minMantissa`. -/
+/-- `doNormalize_scaleUpSpec` is identity when `m ≥ minMantissa`. -/
 lemma doNormalize_scaleUp_id (minMant m : UInt64) (e : Int)
-    (h : minMant ≤ m) : doNormalize_scaleUp minMant m e = (m, e) := by
-  unfold doNormalize_scaleUp
+    (h : minMant ≤ m) : doNormalize_scaleUpSpec minMant m e = (m, e) := by
+  unfold doNormalize_scaleUpSpec
   have h_nlt : ¬ m < minMant := by
     rw [UInt64.lt_iff_toNat_lt]
     exact Nat.not_lt.mpr (UInt64.le_iff_toNat_le.mp h)
@@ -41,9 +41,8 @@ lemma empty_guard_round_neg_two (g : Guard) (mode : rounding_mode) (h_empty : g.
     g.round mode = -2 := by
   unfold Guard.round; rw [if_pos h_empty]
 
-/-- For an EMPTY guard `g`, `m ≥ minMantissa`, `m` NOT strictly in the cusp `(maxRep, maxRepUp)`
-(so `pushOverflow` is a no-op), `e ∈ [minExponent, maxExponent]`: `g.doRoundUp` returns
-`.ok { negative, m, e }` (identity) in ANY mode. The empty guard forces `round = -2`. -/
+/-- With an empty guard, `m ≥ minMantissa`, `m` outside the cusp `(maxRep, maxRepUp)` and `e` in the exponent
+range, `doRoundUp` returns `{ negative, m, e }` unchanged in every mode. -/
 lemma empty_guard_doRoundUp_id
     (g : Guard) (mode : rounding_mode)
     (negative : Bool) (m : UInt64) (e : Int) (loc : Error)
@@ -59,7 +58,9 @@ lemma empty_guard_doRoundUp_id
   have h_m_ne : m ≠ 0 := by
     intro h; rw [h] at hmin
     rw [UInt64.le_iff_toNat_le] at hmin; simp [largeRange_min_val] at hmin
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_empty g mode h_empty h_no_push,
       empty_guard_round_neg_two g mode h_empty]
@@ -67,14 +68,13 @@ lemma empty_guard_doRoundUp_id
   rw [h_round_false]
   simp only [if_false, Bool.false_eq_true]
   rw [if_neg h_no_push]
-  unfold Guard.bringIntoRange
+  unfold Guard.bringIntoRangeSpec
   rw [if_neg (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
   simp only []
   rw [if_neg (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
       if_neg (not_lt.mpr hexp_le)]
 
-/-- Key lemma: when `m > maxRep` AND `m ≤ maxMantissa` AND `m % 10 = 0`,
-`m / 10 < minMantissa`. -/
+/-- For `maxRep < m ≤ largeRange.max`, `m / 10` is below `largeRange.min`. -/
 lemma div_ten_lt_minMantissa
     {m : UInt64} (h_gt : m > maxRep) (h_le : m.toNat ≤ largeRange.max.toNat) :
     (m / 10) < largeRange.min := by
@@ -127,7 +127,9 @@ lemma empty_guard_doRoundUp_divu10
     rw [h10] at h0; omega
   have h_m_ne : m ≠ 0 := by
     intro h; rw [h] at h_gt; exact absurd h_gt (by decide)
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_le_maxRep_of_empty h_div_le_maxRep g mode h_empty,
       empty_guard_round_neg_two g mode h_empty]
@@ -138,7 +140,7 @@ lemma empty_guard_doRoundUp_divu10
   have h_not_cusp : ¬ (maxRep < m / 10 ∧ m / 10 < maxRepUp) := by
     intro h; exact absurd (UInt64.lt_iff_toNat_lt.mp h.1) (Nat.not_lt.mpr h_div_le_maxRep)
   rw [if_neg h_not_cusp]
-  unfold Guard.bringIntoRange
+  unfold Guard.bringIntoRangeSpec
   rw [if_pos (show m / 10 < largeRange.min ∧ m / 10 ≠ 0 from ⟨h_resc, h_div_ne⟩)]
   simp only []
   have h_mul : ((m / 10) * 10).toNat = m.toNat := mul_div_ten_cancel h_mod h_le_max
@@ -164,7 +166,9 @@ lemma empty_guard_doRoundUp_exp_overflow
   have h_m_ne : m ≠ 0 := by
     intro h; rw [h] at hmin
     rw [UInt64.le_iff_toNat_le] at hmin; simp [largeRange_min_val] at hmin
-  unfold Guard.doRoundUp
+  rw [Guard.doRoundUp_eq_spec]
+  all_goals try min_fit
+  unfold Guard.doRoundUpSpec
   simp only []
   rw [pushOverflow_noop_of_empty g mode h_empty h_no_push,
       empty_guard_round_neg_two g mode h_empty]
@@ -172,7 +176,7 @@ lemma empty_guard_doRoundUp_exp_overflow
   rw [h_round_false]
   simp only [if_false, Bool.false_eq_true]
   rw [if_neg h_no_push]
-  unfold Guard.bringIntoRange
+  unfold Guard.bringIntoRangeSpec
   rw [if_neg (show ¬ (m < largeRange.min ∧ m ≠ 0) from fun h => h_no_resc h.1)]
   simp only []
   rw [if_neg (show ¬ (e < minExponent ∨ m = 0) from not_or.mpr ⟨not_lt.mpr hexp, h_m_ne⟩),
@@ -190,7 +194,9 @@ lemma doNormalize_id
     (h_mru_exp : m.toNat > maxRepUp.toNat → e < maxExponent) :
     doNormalize negative m e largeRange.min largeRange.max mode
       = .ok { negative_ := negative, mantissa_ := m, exponent_ := e } := by
-  unfold doNormalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   have hm_ne_zero : m ≠ 0 := by
     intro h
     rw [h] at hmin
@@ -251,13 +257,13 @@ lemma doNormalize_id
       rw [empty_guard_doRoundUp_divu10 Guard.new.set_negative mode true m e .normalize2
         (by decide) h_mr hmax h_mod hexp h_exp_le]
       rfl
-  · -- m ≤ maxRepUp: capAtMaxRep is identity; pushOverflow is a no-op for valid inputs.
+  · -- m ≤ maxRepUp: capAtMaxRep keeps `m`, and `doRoundUp` on the empty guard keeps `m` and `e`.
     have h_cap_eq : ∀ (g : Guard),
         doNormalize_capAtMaxRep m e g = .ok (m, e, g) := by
       intro g
       unfold doNormalize_capAtMaxRep
       rw [if_neg h_mru]
-    -- No multiple-of-10 lies strictly in `(maxRep, maxRepUp)`, so `pushOverflow` is a no-op.
+    -- No multiple of 10 lies strictly in `(maxRep, maxRepUp)`, so `pushOverflow` cannot change the empty guard.
     have h_no_push : ¬ (maxRep < m ∧ m < maxRepUp) := by
       rintro ⟨h1, h2⟩
       have hm10 : m.toNat % 10 = 0 := hm_mod (UInt64.lt_iff_toNat_lt.mp h1)
@@ -287,7 +293,9 @@ lemma Number.normalize_mantissa_ne_zero_of_result {n result : Number}
     (hres : result.mantissa_ ≠ 0) :
     n.mantissa_ ≠ 0 := by
   intro h_zero
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   have h_cond : (n.mantissa_ == 0) = true := by rw [beq_iff_eq]; exact h_zero
   simp only [h_cond, if_true] at hok
   have h_res_eq : Number.zero = result := Except.ok.inj hok
@@ -322,7 +330,9 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
     rw [hup] at hb2; omega
   have h_exp_le : n.exponent_ ≤ maxExponent := by
     by_contra h; push Not at h
-    unfold Number.normalize doNormalize at hok
+    unfold Number.normalize at hok
+    replace hok := doNormalize_ok_spec hok
+    unfold doNormalizeSpec at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
     simp only [Bool.false_eq_true, if_false] at hok
     rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
@@ -356,7 +366,9 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
   have h_mru_exp : n.mantissa_.toNat > maxRepUp.toNat → n.exponent_ < maxExponent := by
     intro h_mru_nat
     by_contra h_ge; push Not at h_ge
-    unfold Number.normalize doNormalize at hok
+    unfold Number.normalize at hok
+    replace hok := doNormalize_ok_spec hok
+    unfold doNormalizeSpec at hok
     rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
     simp only [Bool.false_eq_true, if_false] at hok
     rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
@@ -380,8 +392,8 @@ lemma Number.normalize_eq_of_invariants {n result : Number} {mode : rounding_mod
   cases n
   simpa using h_eq.symm
 
-/-! ## Mode-generic helpers: extract exponent bounds from `normalize` success -/
-
+/-- If `normalize` succeeds on a `largeRange` mantissa that is a multiple of 10 whenever it is above `maxRep`, the
+input exponent is at most `maxExponent`. -/
 lemma Number.normalize_exp_bound {n result : Number} {mode : rounding_mode}
     (h_min : largeRange.min.toNat ≤ n.mantissa_.toNat)
     (h_max : n.mantissa_.toNat ≤ largeRange.max.toNat)
@@ -408,7 +420,9 @@ lemma Number.normalize_exp_bound {n result : Number} {mode : rounding_mode}
     have hup : maxRepUp.toNat = maxRepUpNat := rfl
     rw [hup] at hb2; omega
   by_contra h; push Not at h
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
   simp only [Bool.false_eq_true, if_false] at hok
   rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
@@ -440,6 +454,8 @@ lemma Number.normalize_exp_bound {n result : Number} {mode : rounding_mode}
         n.exponent_ .normalize2 (by decide) h_min_le h_no_push h_exp h] at hok
       exact absurd hok (by intro hc; cases hc)
 
+/-- If `normalize` succeeds on a `largeRange` mantissa, the input does not have both a mantissa above `maxRepUp`
+and an exponent of at least `maxExponent`. -/
 lemma Number.normalize_no_cusp_overflow {n result : Number} {mode : rounding_mode}
     (h_min : largeRange.min.toNat ≤ n.mantissa_.toNat)
     (h_max : n.mantissa_.toNat ≤ largeRange.max.toNat)
@@ -455,7 +471,9 @@ lemma Number.normalize_no_cusp_overflow {n result : Number} {mode : rounding_mod
   have h_no_under_mant : ¬ n.mantissa_ < largeRange.min := by
     rw [UInt64.lt_iff_toNat_lt]; exact Nat.not_lt.mpr h_min
   have h_no_under_exp : ¬ n.exponent_ < minExponent := not_lt.mpr h_exp
-  unfold Number.normalize doNormalize at hok
+  unfold Number.normalize at hok
+  replace hok := doNormalize_ok_spec hok
+  unfold doNormalizeSpec at hok
   rw [beq_eq_false_iff_ne.mpr hm_ne_zero] at hok
   simp only [Bool.false_eq_true, if_false] at hok
   rw [doNormalize_scaleUp_id largeRange.min n.mantissa_ n.exponent_ h_min_le] at hok
@@ -473,10 +491,7 @@ lemma Number.normalize_no_cusp_overflow {n result : Number} {mode : rounding_mod
   exact absurd hok (by intro hc; cases hc)
 
 /-- Given the four `doRoundUp` output invariants for a `RoundResult` `res` and
-that `normalize res = result`, the result is normalized. The shared tail of every
-`operator_*_result_isNormalized_*`: mode-generic (composes the mode-independent
-`normalize_eq_of_invariants` + `normalize_exp_bound`), so the per-mode callers
-differ only in the `doRoundUp_output_invariants_*` they feed in. -/
+that `normalize res = result`, the result is normalized, in every mode. -/
 lemma Number.normalize_isNormalized_of_invariants {res : RoundResult} {result : Number}
     {mode : rounding_mode}
     (h_min : largeRange.min.toNat ≤ res.mantissa_.toNat)
@@ -506,8 +521,7 @@ lemma Number.normalize_isNormalized_of_invariants {res : RoundResult} {result : 
     exact Number.normalize_exp_bound h_min h_max h_exp h_mod hok
 
 /-- Given the same `doRoundUp` output invariants, a normalized result sitting at
-or above `maxExponent` has mantissa `≤ maxRepUp`. Shared tail of every
-`operator_*_no_overflow_mantissa_*`. -/
+or above `maxExponent` has mantissa `≤ maxRepUp`. -/
 lemma Number.normalize_mantissa_le_maxRepUp_of_invariants {res : RoundResult} {result : Number}
     {mode : rounding_mode}
     (h_min : largeRange.min.toNat ≤ res.mantissa_.toNat)

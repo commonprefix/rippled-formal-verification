@@ -2,16 +2,16 @@ import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.Number.Common.Notation
 import XRPL.Model.Protocol.Number
+import XRPL.Properties.Protocol.Common.FixedWidth
+import XRPL.Properties.Protocol.Number.Common.Rounding.Spec
 
 
 namespace XRPL.Model.Protocol
 
-/-! # Concrete values of the `Number` magic constants
+/-! # Values of the `Number` constants
 
-These `decide`/`rfl` facts are re-derived inline all over the proof tree (each
-`largeRange` `decide` is a slow 19-digit `BitVec` kernel evaluation). Centralizing
-them here, in a tiny file importing only the model, lets both the `Rounding` layer
-and the `Closest` layer share one cached copy instead of recomputing. -/
+`decide` and `rfl` facts for `largeRange`, `maxRep` and the other constants, and small rational inequalities
+near `mantissaFloor` and the `maxRep` cusp. -/
 
 /-- `Number.zero` is normalized. -/
 lemma Number.zero_isNormalized : Number.zero.isNormalized := Or.inl rfl
@@ -31,8 +31,7 @@ lemma uint64_ten_toNat : (10 : UInt64).toNat = 10 := rfl
 /-- `UInt64.size = 2^64` as a concrete numeral. -/
 lemma uint64_size_val : UInt64.size = 18446744073709551616 := rfl
 
-/-- A normalized `Number` with zero mantissa is `Number.zero`. Re-derived inline
-all over the operator-rounding tree. It lives here so every layer shares it. -/
+/-- A normalized `Number` with zero mantissa is `Number.zero`. -/
 lemma Number.eq_zero_of_mantissa_zero (n : Number) (hn : n.isNormalized)
     (h : n.mantissa_ = 0) : n = Number.zero := by
   rcases hn with h_zero | ⟨hmin, _, _, _, _⟩

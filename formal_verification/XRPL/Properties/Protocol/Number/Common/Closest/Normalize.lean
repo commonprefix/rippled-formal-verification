@@ -4,8 +4,6 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Defs
 
 namespace XRPL.Model.Protocol
 
-/-! ## Helper lemmas for m_real bounds -/
-
 /-- For positive `q`, `m_real = q * 10^(18 - Int.log 10 q)` lies in `[10^18, 10^19)`. -/
 lemma m_real_bounds (q : ℚ) (hq : 0 < q) :
     let e_q : ℤ := Int.log 10 q - mantissaLog
@@ -55,8 +53,6 @@ lemma m_ceil_nat_bounds (q : ℚ) (hq : 0 < q) :
   · have h_le : q * (10 : ℚ)^(-(Int.log 10 q - mantissaLog)) ≤ ((10^19 : ℕ) : ℚ) := by
       exact_mod_cast le_of_lt h_hi
     exact Nat.ceil_le.mpr h_le
-
-/-! ## Normalization and sign-flip lemmas -/
 
 /-- Sign-flip lemma: flipping `negative_` negates `toRat`. -/
 private lemma Number.toRat_flip (n : Number) :
@@ -111,7 +107,8 @@ lemma Number.upper_neg_eq (q : ℚ) (hq : q < 0) :
   have hq_ne : q ≠ 0 := ne_of_lt hq
   rw [if_neg hq_ne, if_pos hq]
 
-/-- Helper: given m, e, and validity props, the Number `⟨false, ⟨m, h⟩, e⟩` is normalized. -/
+/-- A mantissa `m` in `largeRange` that is at most `maxRep` or a multiple of 10, with `e` in the
+exponent range, gives a normalized Number of either sign. -/
 private lemma isNormalized_anonymous
     (m : ℕ) (h_m64 : m < 2 ^ 64) (neg : Bool) (e : Int)
     (h_min : largeRange.min.toNat ≤ m)
@@ -123,7 +120,6 @@ private lemma isNormalized_anonymous
         mantissa_ := { toBitVec := { toFin := ⟨m, h_m64⟩ } }
         exponent_ := e } := by
   right
-  -- The mantissa as UInt64 has toNat = m (since m < 2^64).
   have h_toNat : ((⟨⟨⟨m, h_m64⟩⟩⟩ : UInt64)).toNat = m := rfl
   refine ⟨?_, ?_, ?_, h_emin, h_emax⟩
   · change largeRange.min ≤ (⟨⟨⟨m, h_m64⟩⟩⟩ : UInt64)

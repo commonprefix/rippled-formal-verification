@@ -12,12 +12,10 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 
 namespace XRPL.Model.Protocol
 
-/-! # Decade bridge: `lower`/`upper` as floor/ceil inside a decade
+/-! # `lower` and `upper` as floor and ceiling on the `10^E` grid
 
-For a value in the lower half of the decade `[10^18·10^E, 10^19·10^E)` —
-where the 19-digit grid spacing is exactly `10^E` and the `pushOverflow`
-cusp is out of reach — `Number.lower` and `Number.upper` are literally
-`⌊q/10^E⌋·10^E` and `⌈q/10^E⌉·10^E`. -/
+For `10^18·10^E ≤ q < 2·10^18·10^E`, every mantissa is valid and the grid step is exactly `10^E`, so `Number.lower`
+and `Number.upper` are `⌊q/10^E⌋·10^E` and `⌈q/10^E⌉·10^E`. -/
 
 /-- The canonical positive grid point at mantissa `k`, exponent `E`. -/
 private def gridPt (k : ℕ) (E : ℤ) (hk : k < 2 ^ 64) : Number :=
@@ -51,8 +49,7 @@ private lemma gridPt_isNormalized (k : ℕ) (E : ℤ) (hk : k < 2 ^ 64)
     rw [(by decide : maxRep.toNat = 9223372036854775807)]
     omega
 
-/-- In the lower half-decade, `Number.lower` of a positive value is its
-floor on the `10^E` grid. -/
+/-- For `10^18·10^E ≤ q < 2·10^18·10^E`, `Number.lower q` is the floor of `q` on the `10^E` grid. -/
 theorem Number.lower_eq_floor_in_decade (q : ℚ) (E : ℤ)
     (hE_lo : minExponent ≤ E) (hE_hi : E ≤ maxExponent)
     (h_lo : (10 : ℚ) ^ (18 : ℕ) * 10 ^ E ≤ q)
@@ -86,7 +83,6 @@ theorem Number.lower_eq_floor_in_decade (q : ℚ) (E : ℤ)
   have hk_fit : k < 2 ^ 64 := by omega
   have hk1_fit : k + 1 < 2 ^ 64 := by omega
   have hk_q : ((k : ℕ) : ℚ) = (K : ℚ) := by exact_mod_cast hk_K
-  -- The two bracketing grid points.
   set x : Number := gridPt k E hk_fit with hx_def
   have hx_norm : x.isNormalized := gridPt_isNormalized k E hk_fit hk_lo hk_hi hE_lo hE_hi
   have hx_val : x.toRat = (K : ℚ) * 10 ^ E := by
@@ -116,7 +112,6 @@ theorem Number.lower_eq_floor_in_decade (q : ℚ) (E : ℤ)
     have h2 : q = (q / 10 ^ E) * 10 ^ E := (div_mul_cancel₀ q (ne_of_gt hpow_pos)).symm
     rw [h2, hk_q]
     exact le_of_lt (mul_lt_mul_of_pos_right h1 hpow_pos)
-  -- Existence + pinning.
   obtain ⟨n, hn_eq⟩ := Number.lower_some_of_pos_witnesses q hq_pos x hx_norm hx_pos hx_le
     y hy_norm hy_ge
   refine ⟨n, hn_eq, ?_⟩
@@ -139,8 +134,7 @@ theorem Number.lower_eq_floor_in_decade (q : ℚ) (E : ℤ)
         rw [h2, hk_q]
         exact mul_lt_mul_of_pos_right h1 hpow_pos
       linarith
-/-- In the lower half-decade, `Number.upper` of a positive value is its
-ceiling on the `10^E` grid. -/
+/-- For `10^18·10^E ≤ q < 2·10^18·10^E`, `Number.upper q` is the ceiling of `q` on the `10^E` grid. -/
 theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
     (hE_lo : minExponent ≤ E) (hE_hi : E ≤ maxExponent)
     (h_lo : (10 : ℚ) ^ (18 : ℕ) * 10 ^ E ≤ q)
@@ -173,7 +167,7 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
   have hc_hi : c ≤ 2 * 10 ^ 18 := by omega
   have hc_fit : c < 2 ^ 64 := by omega
   have hc_q : ((c : ℕ) : ℚ) = (C : ℚ) := by exact_mod_cast hc_C
-  -- Bracketing grid points: x below (the floor), y = ceil above.
+  -- Bracketing grid points: `x = 10^18 · 10^E` at or below `q`, and `y`, the ceiling `C · 10^E`.
   set y : Number := gridPt c E hc_fit with hy_def
   have hy_norm : y.isNormalized := gridPt_isNormalized c E hc_fit hc_lo hc_hi hE_lo hE_hi
   have hy_val : y.toRat = (C : ℚ) * 10 ^ E := by rw [hy_def, gridPt_toRat, hc_q]
@@ -182,7 +176,7 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
     have h1 : q / 10 ^ E ≤ (C : ℚ) := Int.le_ceil _
     calc q = (q / 10 ^ E) * 10 ^ E := (div_mul_cancel₀ q (ne_of_gt hpow_pos)).symm
       _ ≤ (C : ℚ) * 10 ^ E := mul_le_mul_of_nonneg_right h1 (le_of_lt hpow_pos)
-  -- Lower witness: the floor grid point.
+  -- Lower witness: the grid point `10^18 · 10^E`, at or below `q`.
   have h18_fit : (10 ^ 18 : ℕ) < 2 ^ 64 := by norm_num
   set x : Number := gridPt (10 ^ 18) E h18_fit with hx_def
   have hx_norm : x.isNormalized :=
@@ -195,7 +189,7 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
   obtain ⟨n, hn_eq⟩ := Number.upper_some_of_pos_witnesses q hq_pos x hx_norm hx_pos hx_le
     y hy_norm hy_ge
   refine ⟨n, hn_eq, ?_⟩
-  have h_n_ge : q ≤ n.toRat := Number.upper_ge q n hn_eq
+  have h_n_ge : q ≤ n.toRat := Number.le_upper q n hn_eq
   have h_n_le_y : n.toRat ≤ y.toRat := Number.upper_tight q n hn_eq y hy_norm hy_ge
   have h_n_norm : n.isNormalized := Number.upper_isNormalized q n hn_eq
   by_cases h_eq : n.toRat = y.toRat
@@ -242,8 +236,8 @@ theorem Number.upper_eq_ceil_in_decade (q : ℚ) (E : ℤ)
       rw [h_eq2, ← hy_val]
       exact h_n_lt
 
-/-- Negative-side mirror: `lower` of a negative value in the half-decade is
-`−(ceil of the magnitude)`, i.e. the floor on the `10^E` grid. -/
+/-- With `-q` in `[10^18·10^E, 2·10^18·10^E)`, `Number.lower q` is `−(ceil of the magnitude)`, which is the floor
+on the `10^E` grid. -/
 theorem Number.lower_eq_floor_in_decade_neg (q : ℚ) (E : ℤ)
     (hE_lo : minExponent ≤ E) (hE_hi : E ≤ maxExponent)
     (h_lo : (10 : ℚ) ^ (18 : ℕ) * 10 ^ E ≤ -q)
@@ -252,7 +246,7 @@ theorem Number.lower_eq_floor_in_decade_neg (q : ℚ) (E : ℤ)
   have hpow_pos : (0 : ℚ) < (10 : ℚ) ^ E := zpow_pos (by norm_num) _
   have hq_neg : q < 0 := by nlinarith [pow_pos (show (0:ℚ) < 10 by norm_num) 18]
   obtain ⟨m, hm_eq, hm_val⟩ := Number.upper_eq_ceil_in_decade (-q) E hE_lo hE_hi h_lo h_hi
-  -- lower q = (upperPosAux (−q)).map (negate); upper (−q) routes through upperPosAux.
+  -- lower q = (upperPosAux (−q)).map (negate), and upper (−q) routes through upperPosAux.
   have h_up_unfold : Number.upper (-q) = upperPosAux (-q) := by
     unfold Number.upper
     rw [if_neg (by intro h; linarith : ¬ (-q : ℚ) = 0),
@@ -285,8 +279,8 @@ theorem Number.lower_eq_floor_in_decade_neg (q : ℚ) (E : ℤ)
   push_cast
   ring
 
-/-- Negative-side mirror: `upper` of a negative value in the half-decade is
-`−(floor of the magnitude)`, i.e. the ceiling on the `10^E` grid. -/
+/-- With `-q` in `[10^18·10^E, 2·10^18·10^E)`, `Number.upper q` is `−(floor of the magnitude)`, which is the
+ceiling on the `10^E` grid. -/
 theorem Number.upper_eq_ceil_in_decade_neg (q : ℚ) (E : ℤ)
     (hE_lo : minExponent ≤ E) (hE_hi : E ≤ maxExponent)
     (h_lo : (10 : ℚ) ^ (18 : ℕ) * 10 ^ E ≤ -q)

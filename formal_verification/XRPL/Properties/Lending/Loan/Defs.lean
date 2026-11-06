@@ -60,9 +60,6 @@ def RawLoan.toExact (rl : RawLoan) : RawLoan.Exact where
 def RawLoan.Exact.interestDue (s : RawLoan.Exact) : ℚ :=
   s.totalValueOutstanding - s.principalOutstanding - s.managementFeeOutstanding
 
-def RawLoan.Exact.interestTolerance (s : RawLoan.Exact) : ℚ :=
-  if s.numericType.isIntegral then 0 else -((10 : ℚ) ^ s.loanScale)
-
 structure RawLoan.Exact.Valid (s : RawLoan.Exact) : Prop where
   paid_zeroed : s.paymentRemaining = 0 →
     s.totalValueOutstanding = 0 ∧ s.principalOutstanding = 0 ∧ s.managementFeeOutstanding = 0
@@ -76,7 +73,12 @@ structure RawLoan.Exact.Valid (s : RawLoan.Exact) : Prop where
   closePaymentFee_nonneg : 0 ≤ s.closePaymentFee
   periodicPayment_pos : 0 < s.periodicPayment
   paid_no_due_date : s.paymentRemaining = 0 → s.nextPaymentDueDate = 0
-  interest_within_tolerance : s.interestTolerance ≤ s.interestDue
+  interest_nonneg : 0 ≤ s.interestDue
+  paymentRemaining_le_total : s.paymentRemaining ≤ s.paymentTotal
+  dueDate_schedule : s.paymentRemaining ≠ 0 → s.nextPaymentDueDate.toNat = s.startDate.toNat +
+    (s.paymentTotal.toNat - s.paymentRemaining.toNat + 1) * s.paymentInterval.toNat
+  schedule_in_time : s.startDate.toNat + s.gracePeriod.toNat + s.paymentTotal.toNat * s.paymentInterval.toNat ≤
+    maxTime.toNat
   interestRate_cap : s.interestRate ≤ maxLoanRate.toNat
   lateInterestRate_cap : s.lateInterestRate ≤ maxLoanRate.toNat
   closeInterestRate_cap : s.closeInterestRate ≤ maxLoanRate.toNat
@@ -86,11 +88,11 @@ structure RawLoan.Exact.Valid (s : RawLoan.Exact) : Prop where
   paymentTotal_pos : 0 < s.paymentTotal
   paymentInterval_min : minPaymentInterval ≤ s.paymentInterval
   gracePeriod_range : defaultGracePeriod ≤ s.gracePeriod ∧ s.gracePeriod ≤ s.paymentInterval
+
+/-- The exact view of the grid clauses of `RawLoan.WF`: LoanScale is an STAmount exponent and the three outstanding
+amounts are whole LoanScale units the asset stores. -/
+structure RawLoan.Exact.Grid (s : RawLoan.Exact) : Prop where
   loanScale_range : cMinOffset ≤ s.loanScale ∧ s.loanScale ≤ cMaxOffset
-  paymentRemaining_le : s.paymentRemaining ≤ s.paymentTotal
-  dueDates_ordered : s.paymentRemaining ≠ 0 → s.previousPaymentDueDate < s.nextPaymentDueDate
-  nextPaymentDueDate_on_schedule : s.paymentRemaining ≠ 0 →
-    s.startDate ≤ s.nextPaymentDueDate ∧ (s.nextPaymentDueDate - s.startDate) % s.paymentInterval = 0
   totalValueOutstanding_atExponent :
     Number.AtExponent s.totalValueOutstanding s.loanScale s.numericType.mantissaBound
   principalOutstanding_atExponent : Number.AtExponent s.principalOutstanding s.loanScale s.numericType.mantissaBound

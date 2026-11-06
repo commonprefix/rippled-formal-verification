@@ -37,4 +37,21 @@ theorem bind_ok_peel {ε α β} (x : Except ε α) (f : α → Except ε β) (r 
   | error e => rw [hx, err_bind] at h; exact absurd h (by simp)
   | ok a => rw [hx, ok_bind] at h; exact ⟨a, rfl, h⟩
 
+/-- A block fails with `e` only when its first step or the rest of it does. -/
+theorem bind_ne_error {ε α β} {x : Except ε α} {f : α → Except ε β} {e : ε} (hx : x ≠ .error e)
+    (hf : ∀ a, f a ≠ .error e) : (x >>= f) ≠ .error e := by
+  cases x with
+  | error e' =>
+    rw [err_bind]
+    intro h
+    exact hx (by cases h; rfl)
+  | ok a => rw [ok_bind]; exact hf a
+
+/-- An `if` fails with `e` only when one of its branches does. -/
+theorem ite_ne_error {ε α} {c : Prop} [Decidable c] {a b : Except ε α} {e : ε} (ha : a ≠ .error e)
+    (hb : b ≠ .error e) : (if c then a else b) ≠ .error e := by
+  split
+  · exact ha
+  · exact hb
+
 end XRPL.Model.Protocol

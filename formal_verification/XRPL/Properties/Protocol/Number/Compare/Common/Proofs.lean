@@ -81,7 +81,7 @@ private lemma toRat_eq_abs (n : Number) (hneg : n.negative_ = false) :
     n.toRat = |n.toRat| := by
   rw [abs_of_nonneg (Number.toRat_nonneg_of_nonnegative n hneg)]
 
-/-- **Correctness of `operator_lt`**: on normalized values the comparison agrees
+/-- Correctness of `operator_lt`: on normalized values the comparison agrees
 with the rational order. -/
 theorem operator_lt_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
@@ -100,7 +100,7 @@ theorem operator_lt_iff_proof (x y : Number)
           show (y.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hym]
       simp only [Bool.false_eq_true, if_false]
       rcases lt_trichotomy x.exponent_ y.exponent_ with hexp | hexp | hexp
-      · -- ex < ey: |x| < |y| so x > y; the operator returns !lneg = false.
+      · -- ex < ey: |x| < |y| so x > y, and the operator returns !lneg = false.
         rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_), if_pos hexp,
             show (!(true : Bool)) = false from rfl]
         simp only [Bool.false_eq_true, false_iff, not_lt]
@@ -119,7 +119,7 @@ theorem operator_lt_iff_proof (x y : Number)
         · intro h
           rw [hxs, hys] at h
           exact (abs_toRat_lt_iff_of_exp_eq y x hexp.symm).mp (by linarith)
-      · -- ex > ey: |x| > |y| so x < y; the operator returns lneg = true.
+      · -- ex > ey: |x| > |y| so x < y, and the operator returns lneg = true.
         rw [if_pos hexp]
         constructor
         · intro _
@@ -198,7 +198,7 @@ theorem operator_lt_iff_proof (x y : Number)
         · rw [show (y.mantissa_ == 0) = false from beq_eq_false_iff_ne.mpr hym]
           simp only [Bool.false_eq_true, if_false]
           rcases lt_trichotomy x.exponent_ y.exponent_ with hexp | hexp | hexp
-          · -- ex < ey: |x| < |y| so x < y; the operator returns !lneg = true.
+          · -- ex < ey: |x| < |y| so x < y, and the operator returns !lneg = true.
             rw [if_neg (by omega : ¬ x.exponent_ > y.exponent_), if_pos hexp,
                 show (!(false : Bool)) = true from rfl]
             simp only [true_iff]
@@ -217,14 +217,14 @@ theorem operator_lt_iff_proof (x y : Number)
             · intro h
               rw [hxs, hys] at h
               exact (abs_toRat_lt_iff_of_exp_eq x y hexp).mp (by linarith)
-          · -- ex > ey: |x| > |y| so never x < y; the operator returns lneg = false.
+          · -- ex > ey: |x| > |y| so never x < y, and the operator returns lneg = false.
             rw [if_pos hexp]
             simp only [Bool.false_eq_true, false_iff, not_lt]
             have habs := abs_toRat_lt_of_exp_lt y x hy hx hym hxm hexp
             rw [hxs, hys]
             linarith
 
-/-- **Correctness of `operator_le`**. -/
+/-- Correctness of `operator_le`. -/
 theorem operator_le_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_le y = true ↔ x.toRat ≤ y.toRat := by
@@ -245,14 +245,14 @@ theorem operator_le_iff_proof (x y : Number)
     rw [hbf]
     rfl
 
-/-- **Correctness of `operator_gt`**. -/
+/-- Correctness of `operator_gt`. -/
 theorem operator_gt_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_gt y = true ↔ y.toRat < x.toRat := by
   unfold Number.operator_gt
   exact operator_lt_iff_proof y x hy hx
 
-/-- **Correctness of `operator_ge`**. -/
+/-- Correctness of `operator_ge`. -/
 theorem operator_ge_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_ge y = true ↔ y.toRat ≤ x.toRat := by
@@ -273,7 +273,7 @@ theorem operator_ge_iff_proof (x y : Number)
     rw [hbf]
     rfl
 
-/-- **Correctness of `operator_eq`**: normalized representations are canonical,
+/-- Correctness of `operator_eq`: normalized representations are canonical,
 so field equality decides rational equality. -/
 theorem operator_eq_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
@@ -345,7 +345,7 @@ theorem operator_eq_iff_proof (x y : Number)
       rw [hsign, hmant, hexp]
       simp
 
-/-- **Correctness of `operator_ne`**. -/
+/-- Correctness of `operator_ne`. -/
 theorem operator_ne_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_ne y = true ↔ x.toRat ≠ y.toRat := by

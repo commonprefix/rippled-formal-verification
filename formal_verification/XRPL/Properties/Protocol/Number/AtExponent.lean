@@ -11,8 +11,8 @@ import XRPL.Properties.Protocol.Number.Totality
 
 `Number.isAtExponent value exponent nt` says `value` is a whole number of units at `exponent`, with a unit count an
 STAmount of the type can carry. This file gives its exact reading (`Number.AtExponent`) and the
-consequence the lending invariants rest on: a `to_nearest` subtraction of two such amounts is total
-and exact while the difference stays below `2^63` units. -/
+consequence the lending invariants rest on: a `to_nearest` subtraction of two such amounts always succeeds
+and is exact while the difference stays below `2^63` units. -/
 
 namespace XRPL.Model.Protocol
 
@@ -70,6 +70,20 @@ lemma Number.roundsToRepresentable_eq (d : Number) (truth : ℚ)
       have hnn : n = n' := Option.some.inj (hn.symm.trans hn')
       rw [hd, hnn]; exact hval.symm
 
+/-- A `to_nearest` sum that fits a `Number` is exact. -/
+lemma Number.operator_add_exact_of_fits {x y r : Number} (hx : x.isNormalized) (hy : y.isNormalized)
+    (hok : x.operator_add y .to_nearest = .ok r)
+    (hfit : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat + y.toRat) : r.toRat = x.toRat + y.toRat := by
+  obtain ⟨w, hw, hwt⟩ := hfit
+  exact Number.roundsToRepresentable_eq r _ (operator_add_rounded_to_nearest x y r hx hy hok) w hw hwt
+
+/-- A `to_nearest` difference that fits a `Number` is exact. -/
+lemma Number.operator_sub_exact_of_fits {x y r : Number} (hx : x.isNormalized) (hy : y.isNormalized)
+    (hok : x.operator_sub y .to_nearest = .ok r)
+    (hfit : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat - y.toRat) : r.toRat = x.toRat - y.toRat := by
+  obtain ⟨w, hw, hwt⟩ := hfit
+  exact Number.roundsToRepresentable_eq r _ (operator_sub_rounded_to_nearest x y r hx hy hok) w hw hwt
+
 /-- A `to_nearest` rounding never lands above a representable value that bounds the truth. -/
 lemma Number.roundsToRepresentable_le (d : Number) (truth : ℚ)
     (hR : d.RoundsToRepresentable truth .to_nearest) (w : Number) (hw : w.isNormalized)
@@ -77,6 +91,14 @@ lemma Number.roundsToRepresentable_le (d : Number) (truth : ℚ)
   rcases hR with ⟨n, hn, hd⟩ | ⟨n, hn, hd⟩
   · rw [hd]; exact (Number.lower_le truth n hn).trans hwt
   · rw [hd]; exact Number.upper_tight truth n hn w hw hwt
+
+/-- A `to_nearest` rounding never lands below a representable value under the truth. -/
+lemma Number.roundsToRepresentable_ge (d : Number) (truth : ℚ)
+    (hR : d.RoundsToRepresentable truth .to_nearest) (w : Number) (hw : w.isNormalized)
+    (hwt : w.toRat ≤ truth) : w.toRat ≤ d.toRat := by
+  rcases hR with ⟨n, hn, hd⟩ | ⟨n, hn, hd⟩
+  · rw [hd]; exact Number.lower_tight truth n hn w hw hwt
+  · rw [hd]; exact hwt.trans (Number.le_upper truth n hn)
 
 /-- A nonzero normalized nonnegative `Number` below `10^19` units at a scale has its exponent at
 most the scale: its 19-digit mantissa cannot sit any higher. -/
@@ -156,7 +178,7 @@ theorem Number.isAtExponent_iff (value : Number) (exponent : Int) (nt : NumericT
         have h1 : m < 2 ^ 63 := lt_of_lt_of_le hm (NumericType.mantissaBound_le nt)
         have h2 : (m : ℚ) < (2 : ℚ) ^ 63 := by exact_mod_cast h1
         linarith [show (2 : ℚ) ^ 63 < (10 : ℚ) ^ (19 : ℕ) by norm_num]
-      -- the exponent cannot exceed the exponent, or the mantissa alone would overshoot the count
+      -- `value.exponent_ ≤ exponent`, since `value` is below `10^19 · 10^exponent`
       have hexp : value.exponent_ ≤ exponent :=
         Number.exponent_le_of_toRat_lt_of_ne value exponent hn hneg hm0 (by
           calc value.toRat = (m : ℚ) * (10 : ℚ) ^ exponent := hmv
@@ -196,7 +218,22 @@ lemma Number.operator_sub_toRat_of_grid (x y d : Number) (a b : ℤ) (s : Int)
   rw [htruth] at hR
   exact Number.roundsToRepresentable_eq d _ hR w hw hwt
 
-/-- Subtracting two nonnegative whole-unit amounts at an STAmount scale always succeeds. -/
+/-- A successful `to_nearest` addition of two whole-unit amounts at one scale is exact while the
+sum stays below `2^63` units. -/
+lemma Number.operator_add_toRat_of_grid (x y d : Number) (a b : ℤ) (s : Int)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hxv : x.toRat = (a : ℚ) * (10 : ℚ) ^ s) (hyv : y.toRat = (b : ℚ) * (10 : ℚ) ^ s)
+    (hab : -2 ^ 63 < a + b ∧ a + b < 2 ^ 63) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1)
+    (hok : x.operator_add y .to_nearest = .ok d) :
+    d.toRat = ((a + b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
+  have hR := operator_add_rounded_to_nearest x y d hx hy hok
+  obtain ⟨w, hw, hwt⟩ := Number.exists_normalized_int_mul_pow (a + b) s hab hs
+  have htruth : x.toRat + y.toRat = ((a + b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
+    rw [hxv, hyv]; push_cast; ring
+  rw [htruth] at hR
+  exact Number.roundsToRepresentable_eq d _ hR w hw hwt
+
+/-- Subtracting two nonnegative whole-unit amounts below `2^63` units at an STAmount scale always succeeds. -/
 lemma Number.operator_sub_ok_of_grid (x y : Number) (a b : ℕ) (s : Int)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxv : x.toRat = (a : ℚ) * (10 : ℚ) ^ s) (hyv : y.toRat = (b : ℚ) * (10 : ℚ) ^ s)
@@ -267,9 +304,8 @@ lemma Number.operator_sub_zero (x : Number) (mode : rounding_mode) :
     x.operator_sub Number.zero mode = .ok x :=
   Number.operator_sub_of_mantissa_zero x Number.zero mode rfl
 
-/-- Rounding up keeps the order of the values. A result that is zero, or that
-rounds a smaller nonnegative value up, is at most a result that rounds a larger
-value up. -/
+/-- Rounding up keeps the order of the values. A result that is zero, or that rounds a smaller nonnegative
+value up, is at most a result that rounds a larger value up. -/
 lemma Number.toRat_le_of_rounds_upward (q q' : Number) (t t' : ℚ) (hq' : q'.isNormalized)
     (ht : 0 ≤ t) (htt : t ≤ t')
     (hq : q.mantissa_ = 0 ∨ Number.RoundsToRepresentable q t .upward)

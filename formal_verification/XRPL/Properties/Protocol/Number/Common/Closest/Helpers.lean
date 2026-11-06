@@ -11,8 +11,10 @@ namespace XRPL.Model.Protocol
 /-! # Discrete-grid primitives for representable Numbers
 
 For any rational `q`, define:
-- `Number.upper q` — the smallest representable Number with `n.toRat ≥ q`, if it exists
-- `Number.lower q` — the largest representable Number with `n.toRat ≤ q`, if it exists
+- `Number.upper q`: the smallest representable Number with `n.toRat ≥ q`
+- `Number.lower q`: the largest representable Number with `n.toRat ≤ q`
+
+Both return `none` when `|q|` is too large for a Number.
 
 These are the foundation for interval arithmetic over Numbers and for the
 `_rounded` theorems that state operator correctness in discrete terms.
@@ -39,18 +41,8 @@ lemma cuspMin_mod_ten : cuspMin % 10 = 0 := by decide
 
 lemma cuspMin_lt_pow19 : cuspMin < 10^19 := by decide
 
-/-! ## Cusp helpers — round a candidate mantissa up/down to a valid value -/
-
-/-- Round a candidate mantissa up to the next valid mantissa value, respecting
-the cusp's divisibility-by-10 invariant.
-
-Returns `none` if the result would exceed `10^19 - 10`; the caller must bump
-the exponent in that case.
-
-Three cases:
-1. `m ≤ maxRep`: already valid (integer grid is dense below the cusp)
-2. `maxRep < m < 2^63 + 2`: in the cusp gap; bump up to `2^63 + 2`
-3. `m ≥ 2^63 + 2`: round up to next multiple of 10 -/
+/-- Rounds a mantissa up to the next valid one: the cusp gap `(maxRep, 2^63 + 2)` goes to `2^63 + 2`, larger values
+to a multiple of 10. Returns `none` above `10^19 - 10`, where the caller must bump the exponent. -/
 def bumpToValidMantissa (m : ℕ) : Option ℕ :=
   if m ≤ maxRep.toNat then
     some m
@@ -60,12 +52,8 @@ def bumpToValidMantissa (m : ℕ) : Option ℕ :=
     let rounded := ((m + 9) / 10) * 10
     if rounded < 10^19 then some rounded else none
 
-/-- Round a candidate mantissa down to the previous valid mantissa value.
-
-Three cases:
-1. `m ≤ maxRep`: already valid
-2. `maxRep < m < 2^63 + 2`: in the cusp gap; fall back to `maxRep`
-3. `m ≥ 2^63 + 2`: round down to nearest multiple of 10 -/
+/-- Rounds a mantissa down to the previous valid one: the cusp gap `(maxRep, 2^63 + 2)` goes to `maxRep`, larger
+values to a multiple of 10. -/
 def truncToValidMantissa (m : ℕ) : ℕ :=
   if m ≤ maxRep.toNat then
     m
@@ -73,8 +61,6 @@ def truncToValidMantissa (m : ℕ) : ℕ :=
     maxRep.toNat
   else
     (m / 10) * 10
-
-/-! ## Properties of the cusp helpers -/
 
 /-- `bumpToValidMantissa` is monotone-up: output ≥ input. -/
 lemma bumpToValidMantissa_ge (m : ℕ) (m_out : ℕ)

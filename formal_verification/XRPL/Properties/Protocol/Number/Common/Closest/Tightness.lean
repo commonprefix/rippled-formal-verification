@@ -4,8 +4,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Bounds
 
 namespace XRPL.Model.Protocol
 
-/-! ## Helper: exponent lower bound for any representable Number ≥ q -/
-
+/-- A normalized Number at least a positive `q` has exponent at least `Int.log 10 q - 18`. -/
 lemma exponent_ge_of_toRat_ge (q : ℚ) (hq : 0 < q) (m : Number)
     (h_norm : m.isNormalized) (h_ge : q ≤ m.toRat) :
     Int.log 10 q - mantissaLog ≤ m.exponent_ := by
@@ -59,8 +58,7 @@ lemma exponent_ge_of_toRat_ge (q : ℚ) (hq : 0 < q) (m : Number)
     exact (zpow_lt_zpow_iff_right₀ h_one_lt).mp h_log_lt
   linarith
 
-/-! ## Helper: tightness of `upperPosAux` for positive q -/
-
+/-- For positive `q`, `upperPosAux q` is at most every normalized Number that is at least `q`. -/
 lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
     (h : upperPosAux q = some n) (m : Number) (h_norm : m.isNormalized)
     (h_ge : q ≤ m.toRat) : n.toRat ≤ m.toRat := by
@@ -273,8 +271,6 @@ lemma upperPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         bumpToValidMantissa_tight m_ceil_nat m_out h_bump_eq m.mantissa_.toNat h_k_valid h_ceil_le
       exact_mod_cast h_tight
 
-/-! ## Helper: tightness of `lowerPosAux` for positive q -/
-
 /-- Upper bound on exponent for a non-negative normalized Number below `q`. -/
 lemma exponent_le_of_toRat_le_pos (q : ℚ) (_hq : 0 < q) (m : Number)
     (h_norm : m.isNormalized) (h_m_neg : m.negative_ = false)
@@ -320,21 +316,20 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
         split at h
         · split at h
           · exact congrArg (·.negative_) (Option.some.inj h).symm
-          · -- else branch: (if e_q < minExp then some zero else none) = some n
+          · -- exponent `e_q` out of range: `lowerPosAux` gives `Number.zero` or `none`.
             split at h
             · exact congrArg (·.negative_) (Option.some.inj h).symm  -- corner: n = zero
             · exact absurd h (by simp)
         · split at h
           · exact congrArg (·.negative_) (Option.some.inj h).symm
-          · -- else branch: (if e_q - 1 < minExp then some zero else none) = some n
+          · -- exponent `e_q - 1` out of range: `lowerPosAux` gives `Number.zero` or `none`.
             split at h
             · exact congrArg (·.negative_) (Option.some.inj h).symm  -- corner: n = zero
             · exact absurd h (by simp)
       exact Number.toRat_nonneg_of_nonnegative n h_n_neg
-    · -- m ≠ zero. Use exponent_le and case analysis.
+    · -- m ≠ zero.
       have h_e_le : m.exponent_ ≤ Int.log 10 q - mantissaLog :=
         exponent_le_of_toRat_le_pos q hq m h_norm h_m_neg h_m_zero h_le
-      -- Extract mantissa bounds.
       rcases h_norm with h_zero | ⟨h_min, h_max, h_v, _h_emin, _h_emax⟩
       · exact absurd h_zero h_m_zero
       have h_min_nat : (10^18 : ℕ) ≤ m.mantissa_.toNat := by
@@ -480,7 +475,6 @@ lemma lowerPosAux_tight (q : ℚ) (hq : 0 < q) (n : Number)
                 calc maxRepCuspTarget = mantissaFloorSucc * 10 := h_eq2.symm
                   _ ≤ m_floor_nat / 10 * 10 := Nat.mul_le_mul_right 10 h_lower
               omega
-        -- Establish m_tr < 2^64
         have h_tr_lt_64 : truncToValidMantissa m_floor_nat < 2^64 := by
           have h_le : truncToValidMantissa m_floor_nat ≤ m_floor_nat := truncToValidMantissa_le _
           omega

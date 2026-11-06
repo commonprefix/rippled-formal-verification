@@ -4,33 +4,25 @@ import XRPL.Properties.Protocol.Number.Div.Common.Upward.BoundProof
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_div` under `.upward`
-
-`x = 1000735865998747695`, `y = 1085000000000004899`: staged quotient
-`9223372036854775820000` + sticky. The dropped digits are all zero, so only
-the sticky `xbit` survives in the guard — `.upward` rounds up by a full unit
-at scale `mantissaFloorSucc + 1` (the `capAtMaxRep` corner), giving relative
-error ≈ 1.084·10⁻¹⁸ > 9/(2⁶³−18). -/
-
 /-- The staged quotient on the witness inputs. -/
 lemma divQuotient128_upward_witness :
     divQuotient128 (1000735865998747695 : UInt64) (1085000000000004899 : UInt64) 0 0
-      = (9223372036854775820000, -22, true) := by
+      = .ok (9223372036854775820000, -22, true) := by
   decide
 
 local syntax "dsd_step" : tactic
 local macro_rules | `(tactic| dsd_step) => `(tactic|
-  (conv_lhs => rw [doNormalize_scaleDown128]; rw [dif_pos (by decide), if_neg (by decide)]; rfl))
+  (conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dif_pos (by decide), if_neg (by decide)]; rfl))
 
-/-- `doNormalize_scaleDown128` trace: three drops of `0` (the sticky bit alone
+/-- `doNormalize_scaleDown128Spec` trace: three drops of `0` (the sticky bit alone
 carries the residual). -/
 lemma doNormalize_scaleDown128_upward_witness :
-    doNormalize_scaleDown128 largeRange.max (9223372036854775820000 : UInt128) (-22)
+    doNormalize_scaleDown128Spec largeRange.max (9223372036854775820000 : UInt128) (-22)
         { digits_ := 0, xbit_ := true, sbit_ := false }
       = .ok (9223372036854775820, -19,
              { digits_ := 0, xbit_ := true, sbit_ := false }) := by
   dsd_step; dsd_step; dsd_step
-  conv_lhs => rw [doNormalize_scaleDown128]; rw [dif_neg (by decide)]
+  conv_lhs => rw [doNormalize_scaleDown128Spec]; rw [dif_neg (by decide)]
   rfl
 
 /-- `doNormalize128` trace on the staged quotient. -/
@@ -38,12 +30,13 @@ lemma doNormalize128_upward_witness :
     doNormalize128 false (9223372036854775820000 : UInt128) (-22)
         largeRange.min largeRange.max .upward true
       = .ok ⟨false, 9223372036854775830, -19⟩ := by
-  unfold doNormalize128
+  rw [doNormalize128_eq_spec]
+  unfold doNormalize128Spec
   rw [show ((9223372036854775820000 : UInt128) == 0) = false from by decide]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize128.scaleUp largeRange.min (9223372036854775820000 : UInt128) (-22)
+  rw [show doNormalize128_scaleUpSpec largeRange.min (9223372036854775820000 : UInt128) (-22)
         = ((9223372036854775820000 : UInt128), (-22 : Int)) from by
-      rw [doNormalize128.scaleUp.eq_def]; rw [if_neg (by decide)]]
+      rw [doNormalize128_scaleUpSpec.eq_def]; rw [if_neg (by decide)]]
   simp only [if_true]
   rw [show (Guard.new.set_sticky : Guard)
         = { digits_ := 0, xbit_ := true, sbit_ := false } from rfl]
@@ -65,7 +58,9 @@ lemma doNormalize128_upward_witness :
         false (922337203685477582 : UInt64) (-18) largeRange.min largeRange.max .upward
         .normalize2
         = .ok { negative_ := false, mantissa_ := 9223372036854775830, exponent_ := -19 } from by
-      unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit
+      rw [Guard.doRoundUp_eq_spec]
+      all_goals try min_fit
+      unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit
       rfl]
   simp only [RoundResult.toNumber]
 
@@ -75,22 +70,20 @@ lemma operator_div_upward_witness :
         .upward = .ok ⟨false, 9223372036854775830, -19⟩ := by
   unfold Number.operator_div
   rw [if_neg (by decide), if_neg (by decide)]
-  change (match divQuotient128 (1000735865998747695 : UInt64) (1085000000000004899 : UInt64) 0 0 with
+  change (divQuotient128 (1000735865998747695 : UInt64) (1085000000000004899 : UInt64) 0 0 >>= fun x =>
+        match x with
         | (zm128, ze, dropped) =>
           doNormalize128 false zm128 ze largeRange.min largeRange.max .upward dropped)
       = Except.ok ⟨false, 9223372036854775830, -19⟩
-  rw [divQuotient128_upward_witness]
+  rw [divQuotient128_upward_witness, ok_bind]
   change doNormalize128 false (9223372036854775820000 : UInt128) (-22)
       largeRange.min largeRange.max .upward true
       = Except.ok ⟨false, 9223372036854775830, -19⟩
   exact doNormalize128_upward_witness
 
 
-/-- The directed bound is sharp up to its integer numerator: the sticky-driven
-round-up at the `capAtMaxRep` corner overshoots by a full unit, exceeding
-`9/(2^63 − 18)`. (`10/(2^63 − 18)` is unattainable — the true supremum is
-`10/(2^63 + 12)` — so the provable numerator over this denominator is at most
-`9` while the bound holds with `11`.) -/
+/-- Division rounding upward can overshoot by more than `9/(2^63 − 18)` of the value. The error stays under
+`10/(2^63 + 2)` and gets close to it, so 9 is the largest numerator reachable over this denominator. -/
 theorem operator_div_upward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧

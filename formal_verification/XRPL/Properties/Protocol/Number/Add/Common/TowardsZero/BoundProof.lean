@@ -132,10 +132,8 @@ theorem operator_add_rounding_bound_same_sign_towards_zero_rel (x y : Number) (r
       abs_neg, abs_of_nonneg h_diff_nn]
   exact h_mag
 
-/-- Combined **tight** relative-error bound for `Number.operator_add` under
-`.towards_zero` rounding, covering both same-sign and diff-sign branches with the
-uniform ε-scale `11/(2^63 - 18)`. Mirrors `operator_add_rounding_bound_downward_tight`
-for `.downward`. -/
+/-- Relative-error bound `11/(2^63 - 18)` for `Number.operator_add` under `.towards_zero`, for both sign cases,
+when the result is nonzero. -/
 theorem operator_add_rounding_bound_towards_zero_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

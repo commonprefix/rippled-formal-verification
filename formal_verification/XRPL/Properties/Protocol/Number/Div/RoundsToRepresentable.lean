@@ -3,6 +3,11 @@ import XRPL.Properties.Protocol.Number.Div.Common.Upward.RoundedHelpers
 import XRPL.Properties.Protocol.Number.Div.Common.TowardsZero.RoundedHelpers
 import XRPL.Properties.Protocol.Number.Div.Common.ToNearest.RoundedHelpers
 
+/-! # `operator_div` rounds to a neighbouring `Number`
+
+The result is the largest `Number` at or below the exact value (`downward`), the smallest at or above it (`upward`),
+the one of these two nearer zero (`towards_zero`), or either of them (`to_nearest`). `downward` and `upward` assume a
+nonzero result, since a value too small for a `Number` becomes zero. -/
 
 namespace XRPL.Model.Protocol
 

@@ -7,28 +7,15 @@ import XRPL.Properties.Protocol.Number.Add.Common.Rounded
 import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.AlgorithmicFacts.SameSign
 import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
 
-/-! # Number rounding bridge for the vault proofs
+/-! # `to_nearest` add and sub on the `Number` grid
 
-Reusable `to_nearest` facts about `Number.operator_add` / `operator_sub`, phrased
-against the grid characterization (`Number.lower` / `Number.upper` tightness). The
-vault reductions need three things the `Number` tree only proves inline inside
-`Add/Common/DirectedTight.lean`:
-
-* **grid minimality**: a `to_nearest` rounding never crosses a normalized point the
-  exact value was already on the far side of,
-* **sign preservation**: a `to_nearest` rounding of a non-negative value is
-  non-negative,
-* **exact integer arithmetic**: sums / differences of small integers are stored
-  with no rounding error.
-
-Monotonicity of `to_nearest` is deliberately absent: the `RoundsToRepresentable`
-predicate is a disjunction (`result` is *either* neighbor), so at a tie the two
-operands could round to opposite neighbors, and the predicate does not pin the
-"nearest" choice needed for monotonicity. -/
+A `to_nearest` sum or difference never moves past a normalized value that bounds the exact result, keeps a
+non-negative value non-negative, and is exact on small integers. There is no monotonicity lemma, because
+`RoundsToRepresentable` accepts either neighbour for `to_nearest`. -/
 
 namespace XRPL.Model.Protocol
 
-/-- **Grid upper minimality.** A `to_nearest` rounding of `z` never lands above a
+/-- Grid upper minimality. A `to_nearest` rounding of `z` never lands above a
 normalized point `m` that already dominates `z`. -/
 lemma Number.RoundsToRepresentable.le_of_le_normalized (result : Number) (z : ℚ)
     (hr : Number.RoundsToRepresentable result z .to_nearest)
@@ -38,7 +25,7 @@ lemma Number.RoundsToRepresentable.le_of_le_normalized (result : Number) (z : �
   · rw [hval]; exact le_trans (Number.lower_le z n hlo) hle
   · rw [hval]; exact Number.upper_tight z n hup m hm hle
 
-/-- **Grid lower maximality.** A `to_nearest` rounding of `z` never lands below a
+/-- Grid lower maximality. A `to_nearest` rounding of `z` never lands below a
 normalized point `m` already dominated by `z`. -/
 lemma Number.RoundsToRepresentable.ge_of_ge_normalized (result : Number) (z : ℚ)
     (hr : Number.RoundsToRepresentable result z .to_nearest)
@@ -48,7 +35,7 @@ lemma Number.RoundsToRepresentable.ge_of_ge_normalized (result : Number) (z : �
   · rw [hval]; exact Number.lower_tight z n hlo m hm hge
   · rw [hval]; exact le_trans hge (Number.le_upper z n hup)
 
-/-- **Sign preservation.** A `to_nearest` rounding of a non-negative value is
+/-- Sign preservation. A `to_nearest` rounding of a non-negative value is
 non-negative. -/
 lemma Number.RoundsToRepresentable.nonneg_of_nonneg (result : Number) (z : ℚ)
     (hr : Number.RoundsToRepresentable result z .to_nearest) (hz : 0 ≤ z) :
@@ -57,7 +44,7 @@ lemma Number.RoundsToRepresentable.nonneg_of_nonneg (result : Number) (z : ℚ)
     (Or.inl rfl) (by rw [Number.toRat_zero]; exact hz)
   rwa [Number.toRat_zero] at h
 
-/-- **Sign preservation, non-positive side.** -/
+/-- Sign preservation, non-positive side. -/
 lemma Number.RoundsToRepresentable.nonpos_of_nonpos (result : Number) (z : ℚ)
     (hr : Number.RoundsToRepresentable result z .to_nearest) (hz : z ≤ 0) :
     result.toRat ≤ 0 := by
@@ -65,10 +52,8 @@ lemma Number.RoundsToRepresentable.nonpos_of_nonpos (result : Number) (z : ℚ)
     (Or.inl rfl) (by rw [Number.toRat_zero]; exact hz)
   rwa [Number.toRat_zero] at h
 
-/-- Any positive integer below `2^63` is the value of a non-negative normalized
-`Number`. The mantissa `V·10^k` with `k = 18 - ⌊log₁₀ V⌋` lands in
-`[10^18, 10^19)`. When `k ≥ 1` it is divisible by 10 and when `k = 0` we have
-`V ≤ maxRep`, so the sticky-tail normalization condition holds either way. -/
+/-- Any positive integer `V` below `2^63` is the value of a non-negative normalized `Number`, with mantissa
+`V · 10^k` in `[10^18, 10^19)` for `k = 18 - ⌊log₁₀ V⌋`. -/
 lemma Number.exists_normalized_of_pos_nat (V : ℕ) (h1 : 1 ≤ V) (h2 : V < 2 ^ 63) :
     ∃ w : Number, w.isNormalized ∧ w.negative_ = false ∧ w.toRat = (V : ℚ) := by
   have hVne : V ≠ 0 := by omega
@@ -146,7 +131,7 @@ lemma Number.exists_normalized_of_int (V : ℤ) (h : V.natAbs < 2 ^ 63) :
     rw [hw_val, show ((V.toNat : ℕ) : ℚ) = ((V.toNat : ℤ) : ℚ) by push_cast; ring,
       Int.toNat_of_nonneg (le_of_lt hpos)]
 
-/-- **Exact on representable targets.** If the exact value `z` equals the value of
+/-- Exact on representable targets. If the exact value `z` equals the value of
 some normalized `Number`, then any `to_nearest` rounding of `z` is exactly `z`. -/
 lemma Number.RoundsToRepresentable.eq_of_representable (result : Number) (z : ℚ)
     (hr : Number.RoundsToRepresentable result z .to_nearest)
@@ -214,16 +199,7 @@ lemma operator_sub_nonneg (x y result : Number)
   Number.RoundsToRepresentable.nonneg_of_nonneg result (x.toRat - y.toRat)
     (operator_sub_rounded_to_nearest x y result hx hy hok) hnn
 
-/-! ## Result normalization (both signs)
-
-`operator_add_result_isNormalized` in the `Number` tree only covers the
-diff-sign branch. The vault lawfulness clauses need the general fact: any
-nonzero `to_nearest` add/sub of normalized operands is normalized. The same-sign
-branch is picked up from the algorithmic facts (which carry `result.isNormalized`
-directly), the diff-sign branch from the existing lemma, and the zero/cancellation
-guards return an operand or the canonical zero. -/
-
-/-- **General-sign add normalization, every mode.** A nonzero-mantissa sum of two normalized
+/-- General-sign add normalization, every mode. A nonzero-mantissa sum of two normalized
 operands is normalized, regardless of the operands' relative sign or the rounding mode. -/
 lemma operator_add_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -233,21 +209,24 @@ lemma operator_add_isNormalized (x y result : Number) (mode : rounding_mode)
   -- Zero-`y` guard: result = x.
   by_cases hy_guard : y.operator_eq Number.zero = true
   · have h_result : result = x := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_pos hy_guard] at hok
       exact (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hx
   -- Zero-`x` guard: result = y.
   by_cases hx_guard : x.operator_eq Number.zero = true
   · have h_result : result = y := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_pos hx_guard] at hok
       exact (Except.ok.inj (show (Except.ok y : Except Error Number) = .ok result from hok)).symm
     rw [h_result]; exact hy
   -- Exact cancellation: result = Number.zero, excluded by `hresult`.
   by_cases heq_guard : x.operator_eq y.operator_neg = true
   · have h_result : result = Number.zero := by
-      unfold Number.operator_add at hok
+      replace hok := Number.operator_add_ok_spec hok
+      unfold Number.operator_addSpec at hok
       rw [if_neg hy_guard, if_neg hx_guard, if_pos heq_guard] at hok
       exact (Except.ok.inj
         (show (Except.ok Number.zero : Except Error Number) = .ok result from hok)).symm
@@ -271,9 +250,7 @@ lemma operator_add_isNormalized (x y result : Number) (mode : rounding_mode)
   · exact operator_add_result_isNormalized x y result mode hx hy hx_mant_ne hy_mant_ne
       h_sign_eq heq_guard hok hresult
 
-/-- **General-sign add normalization (`to_nearest`).** A nonzero-mantissa
-`to_nearest` sum of two normalized operands is normalized, regardless of the
-operands' relative sign. -/
+/-- A nonzero-mantissa `to_nearest` sum of two normalized operands is normalized, whatever the operands' signs. -/
 lemma operator_add_isNormalized_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .to_nearest = .ok result)
@@ -281,9 +258,7 @@ lemma operator_add_isNormalized_to_nearest (x y result : Number)
     result.isNormalized :=
   operator_add_isNormalized x y result .to_nearest hx hy hok hresult
 
-/-- **General-sign sub normalization, every mode.** A nonzero-mantissa difference of two
-normalized operands is normalized. Reduces to the add case via
-`operator_sub x y = operator_add x (-y)`. -/
+/-- A nonzero-mantissa difference of two normalized operands is normalized, in every rounding mode. -/
 lemma operator_sub_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_sub x y mode = .ok result)
@@ -293,9 +268,7 @@ lemma operator_sub_isNormalized (x y result : Number) (mode : rounding_mode)
   exact operator_add_isNormalized x y.operator_neg result mode hx
     (Number.operator_neg_isNormalized y hy) hok hresult
 
-/-- **General-sign sub normalization (`to_nearest`).** A nonzero-mantissa
-`to_nearest` difference of two normalized operands is normalized. Reduces to the
-add case via `operator_sub x y = operator_add x (-y)`. -/
+/-- A nonzero-mantissa `to_nearest` difference of two normalized operands is normalized. -/
 lemma operator_sub_isNormalized_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_sub x y .to_nearest = .ok result)
@@ -309,9 +282,8 @@ private lemma toRat_eq_num_cast (x : Number) (hxd : x.toRat.den = 1) :
   conv_lhs => rw [← Rat.num_div_den x.toRat]
   rw [hxd, Nat.cast_one, div_one]
 
-/-- **Exact integer addition.** When both operands are integer-valued and the
-integer sum fits `19` digits (below `2^63`), the `to_nearest` sum is stored with
-no rounding error and stays integer-valued. -/
+/-- When both operands are integers and their sum is below `2^63` in absolute value, the `to_nearest` sum is exact
+and stays an integer. -/
 lemma operator_add_exact_int (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxd : x.toRat.den = 1) (hyd : y.toRat.den = 1)
@@ -333,7 +305,7 @@ lemma operator_add_exact_int (x y result : Number)
       (operator_add_rounded_to_nearest x y result hx hy hok) w hw_norm hw_val'
   exact ⟨hres, by rw [hres, hsum_eq]; exact Rat.den_intCast _⟩
 
-/-- **Exact integer subtraction.** -/
+/-- Exact integer subtraction. -/
 lemma operator_sub_exact_int (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hxd : x.toRat.den = 1) (hyd : y.toRat.den = 1)

@@ -1,7 +1,12 @@
 import XRPL.Properties.Vault.Proofs.ClawbackExits
-import XRPL.Properties.Vault.Proofs.Lawful
+import XRPL.Properties.Vault.Proofs.ClawbackUpdates
+import XRPL.Properties.Vault.Proofs.MaxValueFits
 
-/-! # `Vault.clawback` exits -/
+/-! # `Vault.clawback` exits
+
+One line per exit of `Vault.clawback_exits`, in the order the clawback runs its checks. A rejection
+carries only its code: the vault is not touched. The later exits assume a vault whose asset is not XRP, and the pricing
+exits assume the pricing reached them, read off the code (`Vault.ClawbackPriced`). -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -9,94 +14,91 @@ open XRPL.Model.Protocol
 
 variable (v : Vault)
 
-/-! ## `Vault.clawback` -/
+/-- The exits of `clawback`, in the order it runs its checks, then its success lines. Each line assumes the checks
+before it passed. -/
+theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hnn : 0 ≤ assets.toRat) :
+    (v.numericType = NumericType.native →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecNO_PERMISSION)) ∧
+    (v.numericType ≠ NumericType.native →
+      (computeClawback v assets holderShares waive).run = .ok (.error .tecPATH_DRY) →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPATH_DRY)) ∧
+    (∀ (shares recovered capped shares' recovered' : STAmount) (recoveredNumber recoveredNumber' : Number),
+      v.numericType ≠ NumericType.native →
+      assetsToSharesClawback v assets holderShares waive = .ok shares →
+      v.sharesToAssetsWithdraw shares waive = .ok recovered →
+      recovered.toNumber .to_nearest = .ok recoveredNumber → recoveredNumber.operator_gt v.assetsAvailable = true →
+      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok capped →
+      assetsToSharesWithdraw v capped true waive = .ok shares' →
+      v.sharesToAssetsWithdraw shares' waive = .ok recovered' →
+      recovered'.toNumber .to_nearest = .ok recoveredNumber' → recoveredNumber'.operator_gt v.assetsAvailable = true →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecINTERNAL)) ∧
+    (∀ shares recovered sharesTotalAmount : STAmount, v.numericType ≠ NumericType.native →
+      v.ClawbackPriced assets holderShares waive shares recovered →
+      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
+      shares.operator_eq sharesTotalAmount = true → v.assetsDeployed.operator_ne Number.zero = true →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecHAS_OBLIGATIONS)) ∧
+    (∀ shares recovered sharesTotalAmount clamped : STAmount, v.numericType ≠ NumericType.native →
+      v.ClawbackPriced assets holderShares waive shares recovered →
+      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
+      (shares.operator_eq sharesTotalAmount && v.assetsDeployed.operator_ne Number.zero) = false →
+      recovered.isZero = false →
+      clampToSumExponent v.assetsAvailable recovered.operator_neg v.baseExponent = .ok clamped →
+      clamped.isFractionalNonPositive = .ok true →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ amounts : VaultAmounts, v.numericType ≠ NumericType.native →
+      (computeClawback v assets holderShares waive).run = .ok (.ok amounts) → amounts.shares.isZero = true →
+      (v.clawback assets holderShares waive hnn).run = .ok (.error .tecPRECISION_LOSS)) ∧
+    (∀ (amounts : VaultAmounts) (assetsNumber : Number) (ter : TER), v.numericType ≠ NumericType.native →
+      (computeClawback v assets holderShares waive).run = .ok (.ok amounts) → amounts.shares.isZero = false →
+      amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.checkDebitNotDust assetsNumber = .ok ter →
+      (ter != .tesSUCCESS) = true → (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) ∧
+    -- a clawback amount is canonical, or zero to claw back the holding, and the asset's maximum fits an int64
+    -- amount, as C++ caps every MPT maximum
+    (assets.CanonicalOrZero → holderShares.ShareBalance →
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
+      (∀ amounts : VaultAmounts, (computeClawback v assets holderShares waive).run = .ok (.ok amounts) →
+        amounts.shares.toRat < v.toExact.sharesTotal) →
+      (v.clawback assets holderShares waive hnn).run ≠ .error .notLawful) ∧
+    -- a clawback amount is canonical, or zero to claw back the holding
+    (∀ (t0 : UInt32) (r : VaultWithAmounts), Vault.Reachable v t0 → assets.CanonicalOrZero →
+      holderShares.ShareBalance → (v.clawback assets holderShares waive hnn).run = .ok (.ok r) →
+      r.shares.toRat = v.toExact.sharesTotal →
+      r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
+        r.vault'.sharesTotal = Number.zero) ∧
+    -- a clawback amount is canonical, or zero to claw back the holding. The clawback destroys every outstanding
+    -- share
+    ∀ t0 : UInt32, Vault.Reachable v t0 → assets.CanonicalOrZero → holderShares.ShareBalance →
+      (∀ amounts : VaultAmounts, (computeClawback v assets holderShares waive).run = .ok (.ok amounts) →
+        amounts.shares.toRat = v.toExact.sharesTotal) →
+      (v.clawback assets holderShares waive hnn).run ≠ .error .notLawful :=
+  ⟨Vault.clawback_no_permission_proof v assets holderShares waive hnn,
+    fun hxrp => Vault.clawback_compute_rejected_proof v assets holderShares waive hnn hxrp _,
+    fun shares recovered capped shares' recovered' recoveredNumber recoveredNumber' hxrp =>
+      Vault.clawback_capped_internal_proof v assets holderShares waive hnn hxrp shares recovered capped shares'
+        recovered' recoveredNumber recoveredNumber',
+    fun shares recovered sharesTotalAmount hxrp =>
+      Vault.clawback_has_obligations_proof v assets holderShares waive hnn hxrp shares recovered sharesTotalAmount,
+    fun shares recovered sharesTotalAmount clamped hxrp =>
+      Vault.clawback_clamp_precision_loss_proof v assets holderShares waive hnn hxrp shares recovered
+        sharesTotalAmount clamped,
+    fun amounts hxrp => Vault.clawback_zero_shares_proof v assets holderShares waive hnn hxrp amounts,
+    fun amounts assetsNumber ter hxrp =>
+      Vault.clawback_recovery_too_small_proof v assets holderShares waive hnn hxrp amounts assetsNumber ter,
+    Vault.clawback_success_proof v assets holderShares waive hnn,
+    fun t0 r hr hc hhs hok hfinal => Vault.clawback_final_proof v assets holderShares waive t0 hnn hr hc hhs
+      (Vault.Reachable.maxValue_fits v t0 hr
+        (Vault.Reachable.clawback_sharesTotal_pos v t0 hr assets holderShares waive hhs hnn r hok)) r hok hfinal,
+    fun t0 => Vault.clawback_final_success_proof v assets holderShares waive t0 hnn⟩
 
-/-- The exchange computation destroys zero shares: `some .tecPRECISION_LOSS`
-and the vault is unchanged. -/
-theorem Vault.clawback_zero_shares (assets holderShares : STAmount)
-    (result : ComputeClawbackResult)
-    (hcomp : computeClawback v assets holderShares = .ok result)
-    (herr : result.error = none)
-    (hz : result.sharesDestroyed.isZero = true)
-    (hnn : 0 ≤ assets.toRat) :
-    v.clawback assets holderShares hnn = .ok (.rejected v .tecPRECISION_LOSS) :=
-  Vault.clawback_zero_shares_proof v assets holderShares result hcomp herr hz hnn
-
-/-- A nonzero recovery whose subtraction does not change `assetsTotal` rounded
-into the vault's `numericType`: `some .tecPRECISION_LOSS`. The guard is marked
-"(waiting the C++ fix)" in the model. -/
-theorem Vault.clawback_recovery_too_small (assets holderShares : STAmount)
-    (result : ComputeClawbackResult)
-    (sharesDestroyedNumber assetsRecoveredNumber at' : Number)
-    (assetsTotalRounded assetsTotalRounded' : STAmount)
-    (hcomp : computeClawback v assets holderShares = .ok result)
-    (herr : result.error = none)
-    (hz : result.sharesDestroyed.isZero = false)
-    (hsN : result.sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
-    (haN : result.assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hat : v.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest = .ok at')
-    (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
-    (hrt' : STAmount.ofNumber v.numericType at' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsRecoveredNumber.mantissa_ != 0 &&
-      assetsTotalRounded.operator_eq assetsTotalRounded') = true)
-    (hnn : 0 ≤ assets.toRat) :
-    v.clawback assets holderShares hnn = .ok (.rejected v .tecPRECISION_LOSS) :=
-  Vault.clawback_recovery_too_small_proof v assets holderShares result sharesDestroyedNumber
-    assetsRecoveredNumber at' assetsTotalRounded assetsTotalRounded'
-    hcomp herr hz hsN haN hat hrt hrt' hguard hnn
-
-/-- Every guard passes on a clawback: the stored total and available assets each
-drop by the recovery and the share total by the destroyed shares, the post-state
-is still a `Vault`. -/
-theorem Vault.clawback_success (assets holderShares : STAmount) (result : ComputeClawbackResult)
-    (sharesDestroyedNumber assetsRecoveredNumber st' av' at' : Number)
-    (assetsTotalRounded assetsTotalRounded' : STAmount)
-    (hL : v.toExact.lossUnrealized = 0)
-    (hAV : v.assetsAvailable = v.assetsTotal)
-    (hr_norm : assetsRecoveredNumber.isNormalized) (hr_nn : 0 ≤ assetsRecoveredNumber.toRat)
-    (hr_le : assetsRecoveredNumber.toRat ≤ v.assetsTotal.toRat)
-    (hd_norm : sharesDestroyedNumber.isNormalized) (hd_nn : 0 ≤ sharesDestroyedNumber.toRat)
-    (hd_den : sharesDestroyedNumber.toRat.den = 1)
-    (hd_le : sharesDestroyedNumber.toRat ≤ v.sharesTotal.toRat)
-    (hfit : v.sharesTotal.toRat ≤ 2 ^ 63 - 1)
-    (hcomp : computeClawback v assets holderShares = .ok result)
-    (herr : result.error = none)
-    (hz : result.sharesDestroyed.isZero = false)
-    (hsN : result.sharesDestroyed.toNumber .to_nearest = .ok sharesDestroyedNumber)
-    (haN : result.assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hat : v.assetsTotal.operator_sub assetsRecoveredNumber .to_nearest = .ok at')
-    (hrt : STAmount.ofNumber v.numericType v.assetsTotal .to_nearest = .ok assetsTotalRounded)
-    (hrt' : STAmount.ofNumber v.numericType at' .to_nearest = .ok assetsTotalRounded')
-    (hguard : (assetsRecoveredNumber.mantissa_ != 0 &&
-      assetsTotalRounded.operator_eq assetsTotalRounded') = false)
-    (hst : v.sharesTotal.operator_sub sharesDestroyedNumber .to_nearest = .ok st')
-    (hav : v.assetsAvailable.operator_sub assetsRecoveredNumber .to_nearest = .ok av')
-    (hempty : st'.toRat = 0 → at'.toRat = 0)
-    (hnn : 0 ≤ assets.toRat) :
-    ∃ v' : Vault,
-      v.clawback assets holderShares hnn =
-        .ok ⟨none, v', result.assetsRecovered, result.sharesDestroyed⟩ ∧
-      v'.toRawVault = { v.toRawVault with sharesTotal := st', assetsAvailable := av', assetsTotal := at' } := by
-  obtain ⟨v', htl, hlv'eq⟩ := Vault.subtract_record_never_notLawful v assetsRecoveredNumber
-    sharesDestroyedNumber at' av' st' hL hAV hr_norm hr_nn hr_le hd_norm hd_nn hd_den hd_le hfit
-    hat hav hst hempty
-  refine ⟨v', ?_, hlv'eq⟩
-  simp [Vault.clawback, hcomp, herr, hz, hsN, haN, hat, hrt, hrt', hguard, hst, hav, htl, bind,
-    Except.bind, pure, Except.pure]
-
-/-- Every outcome of a clawback that runs without a throw.
-
-`tecINTERNAL` comes from the check after the recomputation against
-`assetsAvailable` (when the first computed recovery exceeded `assetsAvailable`,
-the amount is recomputed from truncated shares, and a recovery that still
-exceeds `assetsAvailable` returns `tecINTERNAL`). xrpld excludes that check from
-coverage as believed unreachable, but no proof exists either way. -/
-theorem Vault.clawback_error_codes (assets holderShares : STAmount) (r : ClawbackResult)
-    (hnn : 0 ≤ assets.toRat) (hok : v.clawback assets holderShares hnn = .ok r) :
-    r.error = none ∨
-    r.error = some .tecINTERNAL ∨
-    r.error = some .tecPATH_DRY ∨
-    r.error = some .tecPRECISION_LOSS :=
-  Vault.clawback_error_codes_proof v assets holderShares r hnn hok
+/-- Every rejection of a clawback. -/
+theorem Vault.clawback_error_codes (assets holderShares : STAmount) (waive : Bool) (hnn : 0 ≤ assets.toRat)
+    (hc : assets.CanonicalOrZero) -- a clawback amount is canonical, or zero to claw back the holding
+    (hhs : holderShares.ShareBalance)
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (ter : TER) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) :
+    ter = .tecNO_PERMISSION ∨ ter = .tecINTERNAL ∨ ter = .tecHAS_OBLIGATIONS ∨ ter = .tecPRECISION_LOSS ∨
+      ter = .tecPATH_DRY :=
+  Vault.clawback_error_codes_proof v assets holderShares waive hnn hc hhs hmax ter hok
 
 end XRPL.Model.SingleAssetVault

@@ -1,21 +1,12 @@
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 
-namespace XRPL.Model.Protocol
-
 /-! # Correctness of the `STAmount` comparison operators
 
-`STAmount` compares lexicographically by (sign, exponent `mOffset`, magnitude
-`mValue`), the rippled `STAmount::operator<` algorithm. This file proves that, on
-**well-formed comparable** operands, every comparison operator (`<`, `≤`, `>`, `≥`,
-`==`, `!=`) decides the rational order of `toRat`.
+`STAmount` compares lexicographically by (sign, exponent `mOffset`, magnitude `mValue`), as rippled's
+`STAmount::operator<`. On `CmpFaithful` operands every comparison operator decides the rational order of `toRat`. -/
 
-The hypothesis `CmpFaithful lhs rhs` captures exactly what makes the lexicographic
-order faithful: the operands are comparable, their zeros are sign-cleared, and either
-they share an exponent (integral XRP/MPT, both `mOffset = 0`) or both are 16-digit
-normalized IOU mantissas (`mValue ∈ [10¹⁵, 10¹⁶)`), so that a strictly smaller
-exponent forces a strictly smaller magnitude. Per-asset adapters build it from the
-`NativeCanonical` / `MPTCanonical` / `IOUCanonical` structures. -/
+namespace XRPL.Model.Protocol
 
 /-- A `Bool` equals `decide P` exactly when it is `true` iff `P` holds. -/
 private lemma bool_eq_decide_of_iff {b : Bool} {P : Prop} [Decidable P]
@@ -32,15 +23,15 @@ strictly smaller exponent forces a strictly smaller magnitude. -/
 def STAmount.Banded (s : STAmount) : Prop :=
   10 ^ 15 ≤ s.mValue.toNat ∧ s.mValue.toNat < 10 ^ 16
 
-/-- The conditions under which `STAmount`'s lexicographic comparison faithfully decides
-the rational order of `lhs` and `rhs`. -/
+/-- The conditions under which `STAmount`'s field-by-field comparison decides the order of the exact values of
+`lhs` and `rhs`. -/
 structure STAmount.CmpFaithful (lhs rhs : STAmount) : Prop where
   comparable : STAmount.areComparable lhs rhs = true
   lhs_zero_sign : lhs.mValue = 0 → lhs.mIsNegative = false
   rhs_zero_sign : rhs.mValue = 0 → rhs.mIsNegative = false
   offset_or_band : lhs.mOffset = rhs.mOffset ∨ (STAmount.Banded lhs ∧ STAmount.Banded rhs)
 
-/-- `areComparable` is symmetric. Now just `NumericType` equality, so `beq_comm`. -/
+/-- `areComparable` is symmetric. It is `NumericType` equality, so `beq_comm`. -/
 lemma STAmount.areComparable_comm (a b : STAmount) :
     STAmount.areComparable a b = STAmount.areComparable b a := by
   unfold STAmount.areComparable
@@ -58,8 +49,6 @@ lemma STAmount.CmpFaithful.symm {lhs rhs : STAmount} (h : STAmount.CmpFaithful l
     rcases h.offset_or_band with he | ⟨hl, hr⟩
     · exact Or.inl he.symm
     · exact Or.inr ⟨hr, hl⟩
-
-/-! ## Magnitude lemmas -/
 
 /-- `mValue = 0` iff the value is zero. -/
 lemma STAmount.toRat_eq_zero_iff (s : STAmount) : s.toRat = 0 ↔ s.mValue = 0 := by
@@ -92,6 +81,39 @@ lemma STAmount.toRat_neg_of (s : STAmount) (hn : s.mIsNegative = true) (hm : s.m
     s.toRat < 0 := by
   have h0 : s.toRat ≠ 0 := fun h => hm ((STAmount.toRat_eq_zero_iff s).mp h)
   exact lt_of_le_of_ne (STAmount.toRat_nonpos_of s hn) h0
+
+/-- An amount is not zero exactly when its mantissa is not zero. -/
+lemma STAmount.isZero_eq_false_iff (s : STAmount) : s.isZero = false ↔ s.mValue ≠ 0 := by
+  simp [STAmount.isZero]
+
+/-- A non-negative amount is not zero exactly when its value is positive. -/
+lemma STAmount.isZero_eq_false_iff_pos (s : STAmount) (h0 : 0 ≤ s.toRat) : s.isZero = false ↔ 0 < s.toRat := by
+  rw [STAmount.isZero_eq_false_iff]
+  constructor
+  · intro hm
+    exact lt_of_le_of_ne h0 (fun h => hm ((STAmount.toRat_eq_zero_iff s).mp h.symm))
+  · intro h hm
+    rw [(STAmount.toRat_eq_zero_iff s).mpr hm] at h
+    exact lt_irrefl _ h
+
+/-- An amount has a positive signum exactly when its value is positive. -/
+lemma STAmount.signum_pos_iff_toRat_pos (s : STAmount) : 0 < s.signum ↔ 0 < s.toRat := by
+  constructor
+  · intro h
+    have hm : s.mValue ≠ 0 := by
+      intro h0
+      simp [STAmount.signum, h0] at h
+    cases hneg : s.mIsNegative
+    · exact STAmount.toRat_pos_of s hneg hm
+    · simp [STAmount.signum, hm, hneg] at h
+  · intro h
+    have hm : s.mValue ≠ 0 := fun h0 => by
+      rw [(STAmount.toRat_eq_zero_iff s).mpr h0] at h
+      exact lt_irrefl _ h
+    cases hneg : s.mIsNegative
+    · simp [STAmount.signum, hm, hneg]
+    · have := STAmount.toRat_nonpos_of s hneg
+      linarith
 
 /-- Exponent dominance: in the 16-digit band, a strictly smaller exponent means a
 strictly smaller magnitude. -/
@@ -136,9 +158,7 @@ private lemma STAmount.toRat_eq_abs (s : STAmount) (hn : s.mIsNegative = false) 
     s.toRat = |s.toRat| := by
   rw [abs_of_nonneg (STAmount.toRat_nonneg_of s hn)]
 
-/-! ## `operator_lt` and its derived operators -/
-
-/-- **Correctness of `operator_lt`.** On well-formed comparable operands, the
+/-- Correctness of `operator_lt`. On well-formed comparable operands, the
 lexicographic comparison decides the rational order. -/
 theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_lt lhs rhs = .ok (decide (lhs.toRat < rhs.toRat)) := by
@@ -151,7 +171,7 @@ theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
     rw [if_neg (show ¬ ((lhs.mIsNegative != rhs.mIsNegative) = true) from by
       rw [hsign]; simp)]
     by_cases hlz : lhs.mValue = 0
-    · -- `lhs = 0`; sign-cleared, so both flags are `false`.
+    · -- `lhs = 0` is sign-cleared, so both flags are `false`.
       have hlf : lhs.mIsNegative = false := h.lhs_zero_sign hlz
       have hrf : rhs.mIsNegative = false := by rw [← hsign, hlf]
       rw [if_pos (beq_iff_eq.mpr hlz), hrf]
@@ -164,7 +184,7 @@ theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
     · -- `lhs ≠ 0`.
       rw [if_neg (by simpa using hlz)]
       by_cases hrz : rhs.mValue = 0
-      · -- `rhs = 0`; same sign forces both flags `false`, so `lhs > 0`.
+      · -- `rhs = 0`: same sign forces both flags `false`, so `lhs > 0`.
         have hrf : rhs.mIsNegative = false := h.rhs_zero_sign hrz
         have hlf : lhs.mIsNegative = false := by rw [hsign, hrf]
         rw [if_pos (beq_iff_eq.mpr hrz)]
@@ -243,7 +263,7 @@ theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
           · have hrt : rhs.mIsNegative = true := by rw [← hsign, hsl]
             rw [STAmount.toRat_eq_neg_abs lhs hsl, STAmount.toRat_eq_neg_abs rhs hrt]
             exact iff_of_false (by decide) (by rw [habs]; exact lt_irrefl _)
-  · -- different signs: the leading sign branch is taken; result is `lhs.mIsNegative`.
+  · -- different signs: the leading sign branch is taken and returns `lhs.mIsNegative`.
     rw [if_pos (show (lhs.mIsNegative != rhs.mIsNegative) = true from by
       rw [bne_iff_ne]; exact hsign)]
     cases hsl : lhs.mIsNegative
@@ -268,13 +288,13 @@ theorem STAmount.operator_lt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
       have h2 : 0 ≤ rhs.toRat := STAmount.toRat_nonneg_of rhs hrf
       exact iff_of_true rfl (by linarith)
 
-/-- **Correctness of `operator_gt`.** -/
+/-- Correctness of `operator_gt`. -/
 theorem STAmount.operator_gt_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_gt lhs rhs = .ok (decide (rhs.toRat < lhs.toRat)) := by
   unfold STAmount.operator_gt
   exact STAmount.operator_lt_eq_proof rhs lhs h.symm
 
-/-- **Correctness of `operator_le`.** -/
+/-- Correctness of `operator_le`. -/
 theorem STAmount.operator_le_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_le lhs rhs = .ok (decide (lhs.toRat ≤ rhs.toRat)) := by
   unfold STAmount.operator_le
@@ -283,18 +303,8 @@ theorem STAmount.operator_le_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
   rw [← decide_not]
   exact congrArg Except.ok (decide_eq_decide.mpr not_lt)
 
-/-- **Correctness of `operator_ge`.** -/
-theorem STAmount.operator_ge_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ge lhs rhs = .ok (decide (rhs.toRat ≤ lhs.toRat)) := by
-  unfold STAmount.operator_ge
-  rw [STAmount.operator_lt_eq_proof lhs rhs h]
-  show Except.ok (!decide (lhs.toRat < rhs.toRat)) = Except.ok (decide (rhs.toRat ≤ lhs.toRat))
-  rw [← decide_not]
-  exact congrArg Except.ok (decide_eq_decide.mpr not_lt)
-
-/-- **Correctness of `operator_eq`.** On well-formed comparable operands, field
-equality decides rational equality (canonical representations are unique per value;
-the shared numericType is part of `CmpFaithful.comparable`). -/
+/-- Correctness of `operator_eq`. On well-formed comparable operands, field equality decides rational
+equality, because each value has exactly one canonical representation. -/
 theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
     STAmount.operator_eq lhs rhs = decide (lhs.toRat = rhs.toRat) := by
   apply bool_eq_decide_of_iff
@@ -338,20 +348,8 @@ theorem STAmount.operator_eq_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFait
       exact_mod_cast mul_right_cancel₀ hpow hmul
     exact ⟨⟨hsigneq, hoffeq⟩, hvaleq⟩
 
-/-- **Correctness of `operator_ne`.** -/
-theorem STAmount.operator_ne_eq_proof (lhs rhs : STAmount) (h : STAmount.CmpFaithful lhs rhs) :
-    STAmount.operator_ne lhs rhs = decide (lhs.toRat ≠ rhs.toRat) := by
-  unfold STAmount.operator_ne
-  rw [STAmount.operator_eq_eq_proof lhs rhs h, ← decide_not]
-
-/-! ## Per-asset adapters for `CmpFaithful`
-
-Each asset class supplies the `CmpFaithful` premise from its canonical form: native
-XRP and MPT share `mOffset = 0`; IOU amounts are 16-digit normalized (`Banded`). -/
-
-/-- Two canonical IOU amounts of comparable assets are comparison-faithful (both are
-16-digit normalized, hence `Banded`; their nonzero mantissas make the zero clauses
-vacuous). -/
+/-- Two canonical IOU amounts of comparable assets satisfy `CmpFaithful`: both are 16-digit normalized
+(`Banded`), and their nonzero mantissas make the zero clauses vacuous. -/
 lemma STAmount.CmpFaithful.ofIOU (lhs rhs : STAmount)
     (hc1 : lhs.IOUCanonical) (hc2 : rhs.IOUCanonical)
     (hcmp : STAmount.areComparable lhs rhs = true) : STAmount.CmpFaithful lhs rhs where
@@ -361,7 +359,7 @@ lemma STAmount.CmpFaithful.ofIOU (lhs rhs : STAmount)
   offset_or_band := Or.inr ⟨⟨hc1.mant_lo, hc1.mant_hi⟩, ⟨hc2.mant_lo, hc2.mant_hi⟩⟩
 
 /-- Two canonical integral (XRP/MPT) amounts of comparable numericTypes, with sign-cleared
-zeros, are comparison-faithful (both have `mOffset = 0`). -/
+zeros, satisfy `CmpFaithful` (both have `mOffset = 0`). -/
 lemma STAmount.CmpFaithful.ofIntegral (lhs rhs : STAmount)
     (hc1 : lhs.IntegralCanonical) (hc2 : rhs.IntegralCanonical)
     (hcmp : STAmount.areComparable lhs rhs = true)

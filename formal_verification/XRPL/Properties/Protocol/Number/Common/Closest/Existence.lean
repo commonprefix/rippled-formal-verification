@@ -5,12 +5,6 @@ import XRPL.Properties.Protocol.Number.Common.Closest.Tightness
 namespace XRPL.Model.Protocol
 
 
-/-! ## Existence of `Number.lower` and `Number.upper` (positive case)
-
-These lemmas show `Number.lower q` and `Number.upper q` are defined when
-`q > 0` is bracketed by normalized witnesses constraining `e_q` to
-`[minExponent, maxExponent]`. -/
-
 /-- `Number.lower q` succeeds given positive normalized lower and upper witnesses. -/
 lemma Number.lower_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
     (n_lo : Number) (h_lo_norm : n_lo.isNormalized)
@@ -236,11 +230,8 @@ lemma Number.upper_some_of_pos_witnesses (q : ℚ) (hq : 0 < q)
           else none) = _
     rw [dif_pos h_inner]
 
-/-- `lowerPosAux` is total below the lattice top: for any positive `q` below
-`10^19 · 10^maxExponent`, it returns `some`. Unlike
-`Number.lower_some_of_pos_witnesses` this needs no upper witness — values in
-`(maxMul10Witness · 10^maxExponent, 10^19 · 10^maxExponent)` have no
-representable above them, yet their `lower` is still defined. -/
+/-- `lowerPosAux` returns `some` for every positive `q` below `10^19 · 10^maxExponent`. Unlike
+`Number.lower_some_of_pos_witnesses`, it needs no representable Number above `q`. -/
 lemma lowerPosAux_isSome_of_lt_top (q : ℚ) (hq : 0 < q)
     (h_top : q < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ)) :
     ∃ n, lowerPosAux q = some n := by

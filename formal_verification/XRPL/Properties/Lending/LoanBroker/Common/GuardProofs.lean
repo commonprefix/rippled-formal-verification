@@ -4,6 +4,7 @@ import XRPL.Properties.Lending.Common.Reduction
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
 import XRPL.Properties.Protocol.Number.Signum.Signum
 import XRPL.Properties.Protocol.Number.Compare.Compare
+import XRPL.Properties.Protocol.STAmount.Common.Representable
 
 /-! # Proof bodies for the LoanBroker guard theorems
 
@@ -43,90 +44,121 @@ private lemma canUpdate_guard_false_iff (lb : LoanBroker) (dm : Number) (hnorm :
       · exact absurd h0 hne
       · exact absurd hle (not_le.mpr hlt)
 
-/-- When that guard does not fire, `canUpdate` is the precision check. -/
-private lemma canUpdate_guard_false (lb : LoanBroker) (dm : Number)
+/-- When that guard does not fire, `canUpdate` is the base-grid check. -/
+private lemma canUpdate_guard_false (lb : LoanBroker) (pool : α) (dm : Number)
     (hguard : (dm.signum != 0 && dm.operator_lt lb.debtTotal) = false) :
-    lb.canUpdate (some dm) = (do
-      if !(← STAmount.equalAfterNumberConvert lb.numericType dm) then
+    lb.canUpdate pool (some dm) = (do
+      if !(← dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType) then
         return .tecPRECISION_LOSS
       return .tesSUCCESS) := by
   simp only [LoanBroker.canUpdate]
   rw [if_neg (by rw [hguard]; decide)]
   rfl
 
-/-- **Proof body of `canCreate_precision_loss`.** -/
-lemma LoanBroker.canCreate_precision_loss_proof (dm : Number) (nt : NumericType)
-    (hround : STAmount.equalAfterNumberConvert nt dm = .ok false) :
-    LoanBroker.canCreate (some dm) nt = .ok .tecPRECISION_LOSS := by
-  simp [LoanBroker.canCreate, hround]
+/-- On a closed-ended pool, `canCreate` is the base-grid check. -/
+private lemma canCreate_closed (pool : α) (debtMaximum : Option Number) (nt : NumericType)
+    (hclosed : AssetPool.redemptionDate pool ≠ none) :
+    LoanBroker.canCreate pool debtMaximum nt = (match debtMaximum with
+      | none => .ok .tesSUCCESS
+      | some dm => do
+        if !(← dm.isOnExponentGrid (AssetPool.baseExponent pool) nt) then
+          return .tecPRECISION_LOSS
+        return .tesSUCCESS) := by
+  cases hr : AssetPool.redemptionDate pool with
+  | none => exact absurd hr hclosed
+  | some r => cases debtMaximum <;> simp [LoanBroker.canCreate, hr]
 
-/-- **Proof body of `canCreate_success`.** -/
-lemma LoanBroker.canCreate_success_proof (debtMaximum : Option Number) (nt : NumericType)
-    (hexact : ∀ dm ∈ debtMaximum, STAmount.equalAfterNumberConvert nt dm = .ok true) :
-    LoanBroker.canCreate debtMaximum nt = .ok .tesSUCCESS := by
+/-- Proof body of the no-permission exit of `LoanBroker.canCreate_exits`. -/
+lemma LoanBroker.canCreate_no_permission_proof (pool : α) (debtMaximum : Option Number)
+    (nt : NumericType) (hopen : AssetPool.redemptionDate pool = none) :
+    LoanBroker.canCreate pool debtMaximum nt = .ok .tecNO_PERMISSION := by
+  simp [LoanBroker.canCreate, hopen]
+
+/-- Proof body of the precision-loss exit of `LoanBroker.canCreate_exits`. -/
+lemma LoanBroker.canCreate_precision_loss_proof (pool : α) (dm : Number) (nt : NumericType)
+    (hclosed : AssetPool.redemptionDate pool ≠ none)
+    (hround : dm.isOnExponentGrid (AssetPool.baseExponent pool) nt = .ok false) :
+    LoanBroker.canCreate pool (some dm) nt = .ok .tecPRECISION_LOSS := by
+  rw [canCreate_closed pool _ nt hclosed]
+  simp [hround]
+
+/-- Proof body of the success exit of `LoanBroker.canCreate_exits`. -/
+lemma LoanBroker.canCreate_success_proof (pool : α) (debtMaximum : Option Number) (nt : NumericType)
+    (hclosed : AssetPool.redemptionDate pool ≠ none)
+    (hgrid : ∀ dm ∈ debtMaximum, dm.isOnExponentGrid (AssetPool.baseExponent pool) nt = .ok true) :
+    LoanBroker.canCreate pool debtMaximum nt = .ok .tesSUCCESS := by
+  rw [canCreate_closed pool _ nt hclosed]
   cases debtMaximum with
   | none => rfl
-  | some dm => simp [LoanBroker.canCreate, hexact dm rfl]
+  | some dm => simp [hgrid dm rfl]
 
-/-- **Proof body of `canCreate_error_codes`.** -/
-lemma LoanBroker.canCreate_error_codes_proof (debtMaximum : Option Number) (nt : NumericType)
-    (ter : TER) (hok : LoanBroker.canCreate debtMaximum nt = .ok ter) :
-    ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS := by
-  cases debtMaximum with
-  | none => simp [LoanBroker.canCreate] at hok; exact Or.inl hok.symm
-  | some dm =>
-    simp only [LoanBroker.canCreate] at hok
-    cases h : STAmount.equalAfterNumberConvert nt dm with
-    | error e => rw [h, err_bind] at hok; exact absurd hok (by simp)
-    | ok b =>
-      rw [h, ok_bind] at hok
-      cases b
-      · exact Or.inr (by simpa using hok.symm)
-      · exact Or.inl (by simpa using hok.symm)
+/-- Proof body of `canCreate_error_codes`. -/
+lemma LoanBroker.canCreate_error_codes_proof (pool : α) (debtMaximum : Option Number)
+    (nt : NumericType) (ter : TER) (hok : LoanBroker.canCreate pool debtMaximum nt = .ok ter) :
+    ter = .tesSUCCESS ∨ ter = .tecNO_PERMISSION ∨ ter = .tecPRECISION_LOSS := by
+  cases hr : AssetPool.redemptionDate pool with
+  | none =>
+    rw [LoanBroker.canCreate_no_permission_proof pool debtMaximum nt hr] at hok
+    exact Or.inr (Or.inl (by simpa using hok.symm))
+  | some r =>
+    rw [canCreate_closed pool _ nt (by simp [hr])] at hok
+    cases debtMaximum with
+    | none => exact Or.inl (by simpa using hok.symm)
+    | some dm =>
+      cases h : dm.isOnExponentGrid (AssetPool.baseExponent pool) nt with
+      | error e => simp [h] at hok
+      | ok b =>
+        cases b
+        · exact Or.inr (Or.inr (by simpa [h] using hok.symm))
+        · exact Or.inl (by simpa [h] using hok.symm)
 
-/-- **Proof body of `canCreate_debtMaximum_not_rounded`.** -/
-lemma LoanBroker.canCreate_debtMaximum_not_rounded_proof (dm : Number) (nt : NumericType)
-    (hcan : LoanBroker.canCreate (some dm) nt = .ok .tesSUCCESS) :
-    STAmount.isRounded nt dm = false := by
-  simp only [LoanBroker.canCreate] at hcan
-  unfold STAmount.isRounded
-  cases h : STAmount.equalAfterNumberConvert nt dm with
-  | error e => rw [h, err_bind] at hcan; exact absurd hcan (by simp)
-  | ok b =>
-    rw [h, ok_bind] at hcan
-    cases b
-    · simp at hcan
-    · simp
+/-- A DebtMaximum that passed `canCreate` is on the pool's base grid. -/
+lemma LoanBroker.canCreate_grid (pool : α) (dm : Number) (nt : NumericType)
+    (hcan : LoanBroker.canCreate pool (some dm) nt = .ok .tesSUCCESS) :
+    dm.isOnExponentGrid (AssetPool.baseExponent pool) nt = .ok true := by
+  cases hr : AssetPool.redemptionDate pool with
+  | none => rw [LoanBroker.canCreate_no_permission_proof pool _ nt hr] at hcan; simp at hcan
+  | some r =>
+    rw [canCreate_closed pool _ nt (by simp [hr])] at hcan
+    cases h : dm.isOnExponentGrid (AssetPool.baseExponent pool) nt with
+    | error e => simp [h] at hcan
+    | ok b => cases b <;> simp_all
 
-/-- **Proof body of `canUpdate_limit_exceeded`.** -/
-lemma LoanBroker.canUpdate_limit_exceeded_proof (lb : LoanBroker) (dm : Number)
+/-- Proof body of the rounding line of `LoanBroker.create_success`. -/
+lemma LoanBroker.canCreate_debtMaximum_not_rounded_proof (pool : α) (dm : Number) (nt : NumericType)
+    (hcan : LoanBroker.canCreate pool (some dm) nt = .ok .tesSUCCESS) :
+    STAmount.isRounded nt dm = false :=
+  Number.isRounded_eq_false_of_isOnExponentGrid dm _ nt (LoanBroker.canCreate_grid pool dm nt hcan)
+
+/-- Proof body of the limit exit of `LoanBroker.canUpdate_exits`. -/
+lemma LoanBroker.canUpdate_limit_exceeded_proof (lb : LoanBroker) (pool : α) (dm : Number)
     (hne : dm.signum ≠ 0) (hlt : dm.operator_lt lb.debtTotal = true) :
-    lb.canUpdate (some dm) = .ok .tecLIMIT_EXCEEDED := by
+    lb.canUpdate pool (some dm) = .ok .tecLIMIT_EXCEEDED := by
   simp [LoanBroker.canUpdate, hne, hlt]
 
-/-- **Proof body of `canUpdate_precision_loss`.** -/
-lemma LoanBroker.canUpdate_precision_loss_proof (lb : LoanBroker) (dm : Number)
+/-- Proof body of the precision-loss exit of `LoanBroker.canUpdate_exits`. -/
+lemma LoanBroker.canUpdate_precision_loss_proof (lb : LoanBroker) (pool : α) (dm : Number)
     (hguard : (dm.signum != 0 && dm.operator_lt lb.debtTotal) = false)
-    (hround : STAmount.equalAfterNumberConvert lb.numericType dm = .ok false) :
-    lb.canUpdate (some dm) = .ok .tecPRECISION_LOSS := by
-  rw [canUpdate_guard_false lb dm hguard, hround, ok_bind]
+    (hround : dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType = .ok false) :
+    lb.canUpdate pool (some dm) = .ok .tecPRECISION_LOSS := by
+  rw [canUpdate_guard_false lb pool dm hguard, hround, ok_bind]
   rfl
 
-/-- **Proof body of `canUpdate_success`.** -/
-lemma LoanBroker.canUpdate_success_proof (lb : LoanBroker) (debtMaximum : Option Number)
+/-- Proof body of the success exit of `LoanBroker.canUpdate_exits`. -/
+lemma LoanBroker.canUpdate_success_proof (lb : LoanBroker) (pool : α) (debtMaximum : Option Number)
     (hok : ∀ dm ∈ debtMaximum, (dm.signum != 0 && dm.operator_lt lb.debtTotal) = false ∧
-      STAmount.equalAfterNumberConvert lb.numericType dm = .ok true) :
-    lb.canUpdate debtMaximum = .ok .tesSUCCESS := by
+      dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType = .ok true) :
+    lb.canUpdate pool debtMaximum = .ok .tesSUCCESS := by
   cases debtMaximum with
   | none => rfl
   | some dm =>
-    obtain ⟨hguard, hexact⟩ := hok dm rfl
-    rw [canUpdate_guard_false lb dm hguard, hexact, ok_bind]
+    obtain ⟨hguard, hgrid⟩ := hok dm rfl
+    rw [canUpdate_guard_false lb pool dm hguard, hgrid, ok_bind]
     rfl
 
-/-- **Proof body of `canUpdate_error_codes`.** -/
-lemma LoanBroker.canUpdate_error_codes_proof (lb : LoanBroker) (debtMaximum : Option Number)
-    (ter : TER) (hok : lb.canUpdate debtMaximum = .ok ter) :
+/-- Proof body of `canUpdate_error_codes`. -/
+lemma LoanBroker.canUpdate_error_codes_proof (lb : LoanBroker) (pool : α) (debtMaximum : Option Number)
+    (ter : TER) (hok : lb.canUpdate pool debtMaximum = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS := by
   cases debtMaximum with
   | none => simp [LoanBroker.canUpdate] at hok; exact Or.inl hok.symm
@@ -134,7 +166,7 @@ lemma LoanBroker.canUpdate_error_codes_proof (lb : LoanBroker) (debtMaximum : Op
     simp only [LoanBroker.canUpdate] at hok
     split_ifs at hok
     · simp at hok; exact Or.inr (Or.inl hok.symm)
-    · cases h : STAmount.equalAfterNumberConvert lb.numericType dm with
+    · cases h : dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType with
       | error e => rw [h, err_bind] at hok; exact absurd hok (by simp)
       | ok b =>
         rw [h, ok_bind] at hok
@@ -142,56 +174,52 @@ lemma LoanBroker.canUpdate_error_codes_proof (lb : LoanBroker) (debtMaximum : Op
         · exact Or.inr (Or.inr (by simpa using hok.symm))
         · exact Or.inl (by simpa using hok.symm)
 
-/-- **Proof body of `canUpdate_debtMaximum_not_rounded`.** -/
-lemma LoanBroker.canUpdate_debtMaximum_not_rounded_proof (lb : LoanBroker) (dm : Number)
-    (hcan : lb.canUpdate (some dm) = .ok .tesSUCCESS) :
-    STAmount.isRounded lb.numericType dm = false := by
+/-- A DebtMaximum that passed `canUpdate` is on the pool's base grid. -/
+lemma LoanBroker.canUpdate_grid (lb : LoanBroker) (pool : α) (dm : Number)
+    (hcan : lb.canUpdate pool (some dm) = .ok .tesSUCCESS) :
+    dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType = .ok true := by
   simp only [LoanBroker.canUpdate] at hcan
   split_ifs at hcan
   · simp at hcan
-  · unfold STAmount.isRounded
-    cases h : STAmount.equalAfterNumberConvert lb.numericType dm with
+  · cases h : dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType with
     | error e => rw [h, err_bind] at hcan; exact absurd hcan (by simp)
     | ok b =>
       rw [h, ok_bind] at hcan
       cases b
       · simp at hcan
-      · simp
+      · rfl
 
-/-- **Proof body of `lawful_canUpdate_iff`.** -/
-lemma LoanBroker.lawful_canUpdate_iff_proof (lb : LoanBroker) (dm : Number)
+/-- Proof body of the rounding line of `LoanBroker.update_success`. -/
+lemma LoanBroker.canUpdate_debtMaximum_not_rounded_proof (lb : LoanBroker) (pool : α) (dm : Number)
+    (hcan : lb.canUpdate pool (some dm) = .ok .tesSUCCESS) :
+    STAmount.isRounded lb.numericType dm = false :=
+  Number.isRounded_eq_false_of_isOnExponentGrid dm _ _ (LoanBroker.canUpdate_grid lb pool dm hcan)
+
+/-- Proof body of `canUpdate_lawful_iff`. -/
+lemma LoanBroker.canUpdate_lawful_iff_proof (lb : LoanBroker) (pool : α) (dm : Number)
     (hnorm : dm.isNormalized) :
-    lb.canUpdate (some dm) = .ok .tesSUCCESS ↔
+    lb.canUpdate pool (some dm) = .ok .tesSUCCESS ↔
       (dm.toRat = 0 ∨ lb.toExact.debtTotal ≤ dm.toRat) ∧
-        STAmount.equalAfterNumberConvert lb.numericType dm = .ok true := by
+        dm.isOnExponentGrid (AssetPool.baseExponent pool) lb.numericType = .ok true := by
   constructor
   · intro hok
     have hguard : (dm.signum != 0 && dm.operator_lt lb.debtTotal) = false := by
       cases hb : (dm.signum != 0 && dm.operator_lt lb.debtTotal)
       · rfl
       · rw [Bool.and_eq_true, bne_iff_ne] at hb
-        rw [LoanBroker.canUpdate_limit_exceeded_proof lb dm hb.1 hb.2] at hok
+        rw [LoanBroker.canUpdate_limit_exceeded_proof lb pool dm hb.1 hb.2] at hok
         simp at hok
-    refine ⟨(canUpdate_guard_false_iff lb dm hnorm).mp hguard, ?_⟩
-    cases hc : STAmount.equalAfterNumberConvert lb.numericType dm with
-    | error e =>
-      rw [canUpdate_guard_false lb dm hguard, hc, err_bind] at hok
-      simp at hok
-    | ok b =>
-      cases b
-      · rw [LoanBroker.canUpdate_precision_loss_proof lb dm hguard hc] at hok
-        simp at hok
-      · rfl
-  · rintro ⟨hg, hexact⟩
-    exact LoanBroker.canUpdate_success_proof lb (some dm)
-      (fun d hd => by cases hd; exact ⟨(canUpdate_guard_false_iff lb dm hnorm).mpr hg, hexact⟩)
+    exact ⟨(canUpdate_guard_false_iff lb dm hnorm).mp hguard, LoanBroker.canUpdate_grid lb pool dm hok⟩
+  · rintro ⟨hg, hgrid⟩
+    exact LoanBroker.canUpdate_success_proof lb pool (some dm)
+      (fun d hd => by cases hd; exact ⟨(canUpdate_guard_false_iff lb dm hnorm).mpr hg, hgrid⟩)
 
-/-- **Proof body of `canDelete_has_loans`.** -/
+/-- Proof body of the has-loans exit of `LoanBroker.canDelete_exits`. -/
 lemma LoanBroker.canDelete_has_loans_proof (lb : LoanBroker) (pool : α)
     (hloans : lb.loanCount ≠ 0) : lb.canDelete pool = .ok .tecHAS_OBLIGATIONS := by
   simp [LoanBroker.canDelete, hloans]
 
-/-- **Proof body of `canDelete_has_debt`.** -/
+/-- Proof body of the has-debt exit of `LoanBroker.canDelete_exits`. -/
 lemma LoanBroker.canDelete_has_debt_proof (lb : LoanBroker) (pool : α)
     (hdebt : lb.debtTotal.signum ≠ 0) : lb.canDelete pool = .ok .tecHAS_OBLIGATIONS := by
   -- on a lawful broker no loans means no debt
@@ -199,13 +227,13 @@ lemma LoanBroker.canDelete_has_debt_proof (lb : LoanBroker) (pool : α)
   rw [lb.valid.empty_broker hloans]
   decide
 
-/-- **Proof body of `canDelete_success`.** -/
+/-- Proof body of the success exit of `LoanBroker.canDelete_exits`. -/
 lemma LoanBroker.canDelete_success_proof (lb : LoanBroker) (pool : α)
     (hloans : lb.loanCount = 0) : lb.canDelete pool = .ok .tesSUCCESS := by
   have hd : lb.debtTotal = Number.zero := lb.valid.empty_broker hloans
   simp [LoanBroker.canDelete, hloans, hd, Number.signum, Number.zero]
 
-/-- **Proof body of `canDelete_error_codes`.** -/
+/-- Proof body of `canDelete_error_codes`. -/
 lemma LoanBroker.canDelete_error_codes_proof (lb : LoanBroker) (pool : α) (ter : TER)
     (hok : lb.canDelete pool = .ok ter) : ter = .tesSUCCESS ∨ ter = .tecHAS_OBLIGATIONS := by
   unfold LoanBroker.canDelete at hok
@@ -225,8 +253,8 @@ lemma LoanBroker.canDelete_error_codes_proof (lb : LoanBroker) (pool : α) (ter 
         · exact Or.inl (by simpa [hz] using hok.symm)
   · exact Or.inl (by simpa using hok.symm)
 
-/-- **Proof body of `lawful_canDelete_iff`.** -/
-lemma LoanBroker.lawful_canDelete_iff_proof (lb : LoanBroker) (pool : α) :
+/-- Proof body of `canDelete_lawful_iff`. -/
+lemma LoanBroker.canDelete_lawful_iff_proof (lb : LoanBroker) (pool : α) :
     lb.canDelete pool = .ok .tesSUCCESS ↔ lb.loanCount = 0 := by
   constructor
   · intro h

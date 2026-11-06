@@ -10,6 +10,10 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.TowardsZero.WitnessTrace
 import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.BoundProof
 import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.WitnessTrace
 
+/-! # Relative error of `normalize`
+
+Each bound assumes a nonzero result, since a value too small for a `Number` becomes zero. The `_attained` theorems
+reach the `to_nearest` bound exactly and pass a smaller bound in the other modes. -/
 
 namespace XRPL.Model.Protocol
 

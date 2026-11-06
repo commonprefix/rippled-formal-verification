@@ -22,7 +22,8 @@ private lemma diffSign_UL_bound : (toUInt128 largeRange.min * 1000).toNat * 10 <
 
 set_option maxHeartbeats 3200000 in
 -- Three-leg recover analysis over large UInt128 terms needs a raised budget.
-/-- Post-subtract processing for the diff-sign branch -/
+/-- After the opposite-sign subtraction, `recover` and the borrow give `M` and `δ` in `[0, 1)` with
+`|truth| = (M + δ)·10^ze'`, and `doNormalize128` on `M` returns `result`. -/
 theorem operator_add_post_subtract
     (zn : Bool) (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ)
     (mode : rounding_mode)
@@ -34,12 +35,12 @@ theorem operator_add_post_subtract
     (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E)
     (result : Number)
     (hok : doNormalize128 zn
-        (if (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
-          then (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
-          else (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
-        (Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
+        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
+          then (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
+          else (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
+        (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
         largeRange.min largeRange.max mode
-        (!(Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
+        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
         = .ok result) :
     ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (sticky : Bool),
       (0 ≤ δ) ∧ δ ≤ 1 ∧
@@ -55,18 +56,16 @@ theorem operator_add_post_subtract
     obtain ⟨_, _, _, _, _, h⟩ := hrep; exact h
   have hf_nn : 0 ≤ f_aln := represents_nonneg hrep
   have hf_lt : f_aln < 1 := represents_lt_one hrep
-  set R := Number.operator_add.recover (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40
+  set R := recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40
     with hR_def
   have hzm_pos_q : (1 : ℚ) ≤ (zm_pre.toNat : ℚ) := by exact_mod_cast hzm_pos
   have h10E_pos : (0 : ℚ) < (10 : ℚ) ^ E := zpow_pos (by norm_num) _
-  -- The recover output stays below 10^22.
   have hupper : R.1.toNat < 10 ^ 22 := by
     have h := recover_mantissa_lt (toUInt128 largeRange.min * 1000) zm_pre hUL E g_aln 40
       hzm_pos hall (by rw [diffSign_UL_val]; omega)
     rw [diffSign_UL_val] at h
     calc R.1.toNat < 10 ^ 21 * 10 := h
       _ = 10 ^ 22 := by norm_num
-  -- The exit condition holds at the output.
   have hexit := recover_40_exits zm_pre E g_aln hzm_pos hall
   have hcases := recover_exit_cases hexit
   by_cases hemp : R.2.2.empty = true
@@ -74,7 +73,6 @@ theorem operator_add_post_subtract
     have hexact := recover_exact_of_empty (toUInt128 largeRange.min * 1000) zm_pre hUL
       E g_aln 40 hzm_pos hrep hemp
     rw [← hR_def] at hexact
-    -- The output mantissa is positive (the value is positive).
     have hL_pos : (0 : ℚ) < ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E := by
       apply mul_pos _ h10E_pos
       linarith
@@ -91,7 +89,7 @@ theorem operator_add_post_subtract
     · rw [htruth, hexact, add_zero]
     · rw [if_pos hemp, hemp] at hok
       simpa using hok
-  · -- NON-EMPTY legs: the mantissa is huge; borrow and pass the sticky tail.
+  · -- NON-EMPTY legs: the mantissa is huge, so borrow and pass the sticky tail.
     have hUL_le : (toUInt128 largeRange.min * 1000).toNat ≤ R.1.toNat :=
       hcases.resolve_right hemp
     rw [diffSign_UL_val] at hUL_le
@@ -106,15 +104,13 @@ theorem operator_add_post_subtract
     have hM_cast : ((R.1 - 1).toNat : ℚ) = (R.1.toNat : ℚ) - 1 := by
       rw [hM_toNat, Nat.cast_sub (by omega : 1 ≤ R.1.toNat)]
       norm_num
-    -- The residue: tight on both legs (the xbit-true leg via the ≤4-pop
-    -- digit-exactness bound), and strictly positive (the exit guard is
-    -- non-empty, so its residue cannot vanish).
+    -- In both cases the leftover fraction is in (0, 1).
     have hresidue : ∃ f' : ℚ, 0 ≤ f' ∧ f' < 1 ∧ 0 < f' ∧
         ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E
           = ((R.1.toNat : ℚ) - f') * 10 ^ R.2.1 := by
       by_cases hxbit : g_aln.xbit_ = true
-      · -- xbit leg: the 4-pop bound from the coupled magnitude makes the
-        -- digit-exactness conjunct applicable.
+      · -- xbit set: the mantissa is at least 10^18 - 101, so at most 4 digits come back from the guard
+        -- and the fraction stays below 1.
         have hzm_big := hxbit_big hxbit
         obtain ⟨f', k, hk_le, hk_eq, hf'_nn, hf'_slack, hstrict, hf'_pos, hval, _⟩ :=
           recover_value_in_unit_interval_at_exit (toUInt128 largeRange.min * 1000) zm_pre hUL
@@ -155,8 +151,7 @@ theorem operator_add_post_subtract
             pow_le_pow_right₀ (by norm_num) hk
           nlinarith [hcore, hZ_low, hR_hi, h5]
         exact ⟨f', hf'_nn, hstrict (by omega), hf'_pos hxbit, hval⟩
-      · -- xbit-false leg: the tight chain; positivity from the non-empty exit
-        -- guard (xbit stays false, so a nonzero digit survives).
+      · -- xbit clear: the guard keeps the exact fraction, which is positive because the guard is not empty.
         have hdich : g_aln.xbit_ = true →
             ¬ (zm_pre < toUInt128 largeRange.min * 1000 ∧ ¬ g_aln.empty) :=
           fun hxt => absurd hxt hxbit
@@ -228,7 +223,7 @@ lemma diff_sign_sum_sign_of_dominant {x y : Number}
     linarith
 
 set_option maxHeartbeats 8000000 in
--- 8-way diff-sign case analysis; large elaboration requires a raised heartbeat limit
+-- The five-way case split on exponents and mantissas needs a raised heartbeat budget.
 theorem operator_add_algorithmic_facts_diff_sign_represents
     (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -267,7 +262,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
   have h_xneqyn : (x.negative_ == y.negative_) = false := by
     rw [beq_eq_false_iff_ne]; exact h_diff_sign
   have h_abs_add := abs_add_eq_of_diff_sign h_diff_sign
-  unfold Number.operator_add at hok
+  replace hok := Number.operator_add_ok_spec hok
+  unfold Number.operator_addSpec at hok
   simp only [hy_ne_zero, hx_ne_zero, h_not_zero, Bool.false_eq_true, if_false] at hok
   rw [h_xneqyn] at hok
   simp only [Bool.false_eq_true, if_false] at hok
@@ -276,7 +272,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
     rw [if_pos h_xe_lt_ye] at hok
     simp only at hok
     set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-    have hg₀_rep : represents g₀ 0 := represents_initial_guard_eq x.negative_
+    have hg₀_rep : represents g₀ 0 := g0_represents_zero x.negative_
     set aln_result : UInt64 × Int × Guard :=
       Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_ with haln_def
     set xm_a : UInt64 := aln_result.1 with hxm_a_def
@@ -326,8 +322,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
         convert h_lemma using 2
       linarith
     have h_y_abs : |y.toRat| = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := abs_toRat_eq y
-    -- Only the "− f" sub-case is reachable. The other branches need ¬(xm_a > y.mantissa_).
-    -- zm_pre = toUInt128 y.mantissa_ - toUInt128 xm_a.
+    -- Only the "− f" sub-case (`xm_a < y.mantissa_`) is reachable, so the model takes its `ym - xm` branch.
     set zm_pre : UInt128 := toUInt128 y.mantissa_ - toUInt128 xm_a with hzm_pre_def
     have h_ym_ge_xm : toUInt128 xm_a ≤ toUInt128 y.mantissa_ := by
       rw [BitVec.le_def, toNat_toUInt128, toNat_toUInt128]
@@ -358,7 +353,6 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
           = (y.mantissa_.toNat : ℚ) - (xm_a.toNat : ℚ) := by
         rw [Nat.cast_sub (Nat.le_of_lt hxm_a_lt_ym)]
       rw [hsub_q]; ring
-    -- Helper inputs: magnitude bound and the xbit ⇒ huge-mantissa coupling.
     have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
     have hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
       intro hxbit
@@ -399,7 +393,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       rw [if_neg (not_lt.mpr h_xe_lt_ye), if_pos h_xe_gt_ye] at hok
       simp only at hok
       set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-      have hg₀_rep : represents g₀ 0 := represents_initial_guard_eq y.negative_
+      have hg₀_rep : represents g₀ 0 := g0_represents_zero y.negative_
       set aln_result : UInt64 × Int × Guard :=
         Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_ with haln_def
       set ym_a : UInt64 := aln_result.1 with hym_a_def
@@ -473,7 +467,6 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
             = (x.mantissa_.toNat : ℚ) - (ym_a.toNat : ℚ) := by
           rw [Nat.cast_sub (Nat.le_of_lt hym_a_lt_xm)]
         rw [hsub_q]; ring
-      -- Helper inputs: magnitude bound and the xbit ⇒ huge-mantissa coupling.
       have hzm_pre_lt : zm_pre.toNat < 10 ^ 20 := by rw [hzm_pre_toNat]; omega
       have hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat := by
         intro hxbit
@@ -506,7 +499,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
           result hok
       exact ⟨M, ze', δ, x.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
         hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
-    · -- Case 3: xe = ye, no alignment. g = Guard.new, f_aln = 0.
+    · -- Case 3: xe = ye, no alignment. The guard starts empty with x's sign, and f_aln = 0.
       push Not at h_xe_gt_ye
       have h_xe_eq_ye : x.exponent_ = y.exponent_ := le_antisymm h_xe_gt_ye h_xe_lt_ye
       rw [if_neg (not_lt.mpr h_xe_lt_ye), if_neg (not_lt.mpr h_xe_gt_ye)] at hok
@@ -515,7 +508,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       have h_y_abs : |y.toRat| = (y.mantissa_.toNat : ℚ) * 10 ^ y.exponent_ := abs_toRat_eq y
       -- The sign-aware initial guard (no alignment in the equal-exponent case).
       set g₀ : Guard := if x.negative_ then Guard.new.set_negative else Guard.new with hg₀_def
-      have hg₀_rep : represents g₀ 0 := represents_initial_guard_eq x.negative_
+      have hg₀_rep : represents g₀ 0 := g0_represents_zero x.negative_
       have hg₀_xbit : g₀.xbit_ = false := by
         rw [hg₀_def]
         cases hxn : x.negative_ <;> rfl
@@ -570,7 +563,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
           hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
       · push Not at h_xm_gt
         by_cases h_xm_eq : x.mantissa_.toNat = y.mantissa_.toNat
-        · -- Degenerate: xm = ym ∧ xe = ye ∧ diff-sign means x = -y — contradicts h_not_zero.
+        · -- Degenerate: xm = ym ∧ xe = ye ∧ diff-sign means x = -y, which contradicts h_not_zero.
           exfalso
           apply h_not_zero
           have h_xm_eq_uint : x.mantissa_ = y.mantissa_ := UInt64.toNat_inj.mp h_xm_eq

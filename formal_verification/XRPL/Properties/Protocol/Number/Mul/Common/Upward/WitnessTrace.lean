@@ -5,20 +5,20 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! ### Sharpness witness for `operator_mul_rounding_bound_upward`
+/-! # Witness for `operator_mul_rounding_bound_upward`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = maxRepNat`, `y = 1000000000000000009` exceeds `9/(2^63+2)`.
-The guard is nonzero so `.upward` rounds up, producing a mantissa > maxRep;
-`normalize` fires `capAtMaxRep` to reach `mulUpwardWitness * 10^18`. -/
+The guard is nonzero so `.upward` rounds up, giving a mantissa above `maxRepUp`, so `normalize` fires
+`capAtMaxRep` and returns `mulUpwardWitness * 10^18`. -/
 
 local syntax "sd_step" : tactic
 local macro_rules | `(tactic| sd_step) => `(tactic|
-  (conv_lhs => rw [scaleDown128]; rw [dif_pos (by decide)]; rfl))
+  (conv_lhs => rw [scaleDown128Spec]; rw [dif_pos (by decide)]; rfl))
 
-/-- `scaleDown128` trace for the upward witness inputs. -/
+/-- `scaleDown128Spec` trace for the upward witness inputs. -/
 lemma scaleDown128_upward_witness :
-    scaleDown128 (toUInt128 (maxRepNat : UInt64) * toUInt128 (1000000000000000009 : UInt64))
+    scaleDown128Spec (toUInt128 (maxRepNat : UInt64) * toUInt128 (1000000000000000009 : UInt64))
                  (0 : Int) Guard.new
         = (922337203685477589, 19,
            { digits_ := 4561337701706114, xbit_ := true, sbit_ := false }) := by
@@ -29,21 +29,23 @@ lemma scaleDown128_upward_witness :
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step; sd_step
   sd_step; sd_step; sd_step; sd_step
-  conv_lhs => rw [scaleDown128]; rw [dif_neg (by decide)]
+  conv_lhs => rw [scaleDown128Spec]; rw [dif_neg (by decide)]
   rfl
 
 /-- `doNormalize` trace for the upward witness result.
-The mantissa `mulUpwardWitness > maxRep`, so `capAtMaxRep` fires. -/
+The mantissa `mulUpwardWitness` is above `maxRepUp`, so `capAtMaxRep` fires. -/
 lemma doNormalize_upward_witness :
     doNormalize false (mulUpwardWitness : UInt64) (18 : Int)
         largeRange.min largeRange.max .upward =
         .ok { negative_ := false, mantissa_ := mulUpwardWitness, exponent_ := 18 } := by
-  unfold doNormalize
+  rw [doNormalize_eq_spec]
+  all_goals try min_fit
+  unfold doNormalizeSpec
   rw [show ((mulUpwardWitness : UInt64) == 0) = false from rfl]
   simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUp largeRange.min (mulUpwardWitness : UInt64) (18 : Int)
+  rw [show doNormalize_scaleUpSpec largeRange.min (mulUpwardWitness : UInt64) (18 : Int)
         = ((mulUpwardWitness : UInt64), (18 : Int)) by
-        unfold doNormalize_scaleUp; rw [if_neg (by decide)]]
+        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
   rw [show doNormalize_scaleDown largeRange.max (mulUpwardWitness : UInt64) (18 : Int) Guard.new
         = .ok ((mulUpwardWitness : UInt64), (18 : Int), Guard.new) by
         unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
@@ -59,7 +61,8 @@ lemma doNormalize_upward_witness :
   have h_rup2 : Guard.new.doRoundUp false (922337203685477590 : UInt64) (19 : Int)
       largeRange.min largeRange.max .upward .normalize2 =
       .ok { negative_ := false, mantissa_ := mulUpwardWitness, exponent_ := 18 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
   rw [h_rup2]
   simp only [RoundResult.toNumber]
 
@@ -70,7 +73,8 @@ lemma operator_mul_upward_witness :
         ⟨false, 1000000000000000009, 0⟩
         .upward =
       .ok ⟨false, mulUpwardWitness, 18⟩ := by
-  unfold Number.operator_mul
+  rw [Number.operator_mul_eq_spec]
+  unfold Number.operator_mulSpec
   have hx_ne : (⟨false, maxRepNat, 0⟩ : Number).operator_eq Number.zero = false := by decide
   have hy_ne : (⟨false, 1000000000000000009, 0⟩ : Number).operator_eq Number.zero = false := by decide
   simp only [hx_ne, hy_ne, Bool.false_eq_true, if_false, bne_self_eq_false, add_zero]
@@ -79,7 +83,8 @@ lemma operator_mul_upward_witness :
       false (922337203685477589 : UInt64) (19 : Int) largeRange.min largeRange.max .upward
       .overflow =
       .ok { negative_ := false, mantissa_ := mulUpwardWitness, exponent_ := 18 } := by
-    unfold Guard.doRoundUp Guard.bringIntoRange Guard.round Guard.doDropDigit; rfl
+    rw_doRoundUp_spec
+    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
   unfold Number.normalize
@@ -108,10 +113,7 @@ theorem operator_mul_upward_attained :
                 = mulUpwardWitness * (10 : ℚ) ^ (18 : ℕ) := by
       unfold Number.toRat; simp; ring
     rw [hx_rat, hy_rat, hr_rat]
-    -- truth = maxRepNat * 1000000000000000009
-    -- result = mulUpwardWitness * 10^18
-    -- error = result - truth = mulUpwardWitness * 10^18 - maxRepNat * 1000000000000000009
-    --       = 9989651668307017737
+    -- error = mulUpwardWitness · 10^18 - maxRepNat · 1000000000000000009 = 9989651668307017737
     rw [show (maxRepNat : ℚ) * 1000000000000000009
           = 9223372036854775890010348331692982263 / 1 by norm_num]
     rw [show mulUpwardWitness * (10 : ℚ) ^ (18 : ℕ) - 9223372036854775890010348331692982263 / 1

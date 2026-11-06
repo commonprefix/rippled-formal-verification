@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `truth` and `result.toRat`. -/
+/-- No normalized Number lies at or above `truth` and below `result.toRat`. -/
 theorem operator_mul_no_inbetween_above_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -41,7 +41,8 @@ theorem operator_mul_rounded_upward_proof (x y result : Number)
   by_cases hxz : x.mantissa_ = 0
   · exfalso
     have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
-    unfold Number.operator_mul at hok
+    rw [Number.operator_mul_eq_spec] at hok
+    unfold Number.operator_mulSpec at hok
     rw [if_pos (show x.operator_eq Number.zero = true from by rw [hx_zero]; decide)] at hok
     have h_result : result = x :=
       (Except.ok.inj (show (Except.ok x : Except Error Number) = .ok result from hok)).symm
@@ -55,7 +56,8 @@ theorem operator_mul_rounded_upward_proof (x y result : Number)
       have hmeq := Number.mantissa_eq_zero_of_operator_eq_zero h
       exact hxz hmeq
     have hy_zero : y = Number.zero := Number.eq_zero_of_mantissa_zero y hy hyz
-    unfold Number.operator_mul at hok
+    rw [Number.operator_mul_eq_spec] at hok
+    unfold Number.operator_mulSpec at hok
     rw [if_neg hx_guard,
         if_pos (show y.operator_eq Number.zero = true from by rw [hy_zero]; decide)] at hok
     have h_result : result = y :=

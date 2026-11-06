@@ -7,11 +7,15 @@ import XRPL.Properties.Protocol.STAmount.Common.RoundToScaleHelpers
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
 import XRPL.Properties.Protocol.Number.Common.Int64Lemmas
 
+/-! # IOU re-rounding to 16 digits
+
+`STAmount.ofNumber` rounds a 19-digit `Number` back to a 16-digit IOU amount within one ULP, and within half a ULP
+in `to_nearest`. The file also covers `checked` and `toNumber` on canonical IOU amounts. -/
+
 namespace XRPL.Model.Protocol
 
-/-- **`IOUAmount.normalize` on a canonical 16-digit signed mantissa.** The 19-digit
-re-lift then 16-digit re-round round-trips exactly (it's already canonical), so the
-only effect is the `[cMinOffset, cMaxOffset]` exponent clamp. -/
+/-- `IOUAmount.normalize` on a canonical 16-digit signed mantissa. The 19-digit re-lift and 16-digit
+re-round are exact, so the only effect is the `[cMinOffset, cMaxOffset]` exponent clamp. -/
 lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (mode : rounding_mode)
     (h_lo : 10 ^ 15 ≤ mant.toNat) (h_hi : mant.toNat < 10 ^ 16)
     (he_lo : minExponent + 3 ≤ exp) (he_hi : exp ≤ maxExponent) :
@@ -37,7 +41,7 @@ lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (
       largeRange.min largeRange.max mode = .ok ⟨neg, mant * 10 * 10 * 10, exp - 3⟩ := by
     show Number.from_rep sd exp largeRange.min largeRange.max mode = _
     unfold Number.from_rep Number.normalized Number.normalize Number.unchecked
-    rw [h_neg_dec, h_mAbs]
+    rw [h_neg_dec, Int64.magnitude_eq, h_mAbs]
     exact doNormalize_large_16digit neg mant exp mode h_lo h_hi (by omega) (by omega)
   rw [h_fr]
   simp only []
@@ -66,17 +70,8 @@ lemma IOUAmount.normalize_canonical16 (mant : UInt64) (exp : Int) (neg : Bool) (
     rw [m_div_thousand_toNat (mant * 10 * 10 * 10), hM_toNat]; omega
   rw [h_q3]
 
-/-! # STAmount IOU multiplication rounding
-
-`STAmount.multiply` on the IOU path lifts both operands to 19-digit `Number`s
-(`toNumber`), multiplies (`Number.operator_mul`), then snaps back to the 16-digit
-IOU grid via `STAmount.ofNumber`/`checked`. This double-rounds, so the headline is
-a relative-error bound `εMul = ε₁ + ε₂ + ε₁·ε₂` with `ε₁ = 5/(2⁶³+7)` (the `Number`
-multiply bound) and `ε₂ = 10⁻¹⁵` (the 16-digit re-round). -/
-
-/-- **`STAmount.checked` on a canonical 16-digit IOU mantissa.** A successful,
-nonzero result forces the exponent into `[cMinOffset, cMaxOffset]` and reproduces
-the record exactly (out-of-range exponents would error or flush to zero). -/
+/-- `STAmount.checked` on a canonical 16-digit IOU mantissa. A successful, nonzero result forces the exponent
+into `[cMinOffset, cMaxOffset]` and reproduces the record exactly. -/
 lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) (neg : Bool)
     (mode : rounding_mode)
     (hnt : nt = .fractional)
@@ -105,7 +100,8 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
     unfold STAmount.iou
     rw [if_neg h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
+    rw [STAmount.signedDrops_toInt64Checked _ (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat
+      < 2 ^ 63 from h_fit), ok_bind, h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · exfalso
@@ -134,7 +130,6 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
           hcid] at hok
       exact (Except.ok.inj hok).symm
 
-
 /-- `checked` of a canonical 16-digit mantissa gives a zero amount only when the
 exponent is below the IOU floor `cMinOffset`. -/
 lemma STAmount.checked_iou_zero_exp_lt (mant : UInt64) (exp : Int) (neg : Bool)
@@ -162,7 +157,8 @@ lemma STAmount.checked_iou_zero_exp_lt (mant : UInt64) (exp : Int) (neg : Bool)
     unfold STAmount.iou
     rw [if_neg h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
+    rw [STAmount.signedDrops_toInt64Checked _ (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat
+      < 2 ^ 63 from h_fit), ok_bind, h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
@@ -235,9 +231,8 @@ lemma STAmount.toNumber_iou_canonical_isNormalized (s : STAmount) (hc : s.IOUCan
   · show minExponent ≤ s.mOffset - 3; have := hc.exp_lo; unfold minExponent; omega
   · show s.mOffset - 3 ≤ maxExponent; have := hc.exp_hi; unfold maxExponent; omega
 
-/-- **`STAmount.ofNumber` IOU re-rounding bound.** Snapping a 19-digit-normalized
-`Number` `r` to the 16-digit IOU grid (via `normalizeToRange` then the
-value-preserving `checked`) loses at most one 16-digit ULP. -/
+/-- `STAmount.ofNumber` IOU re-rounding bound. Snapping a 19-digit-normalized `Number` `r` to the 16-digit
+IOU grid (`normalizeToRange`, then the value-preserving `checked`) loses at most one 16-digit ULP. -/
 lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : rounding_mode)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -292,7 +287,7 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     obtain ⟨mant, exp⟩ := me
     rw [hnorm] at hok
     simp only at hok
-    -- keystone facts (kMinValue/kMaxValue ≡ cMinValue/cMaxValue).
+    -- 16-digit rounding facts (kMinValue and kMaxValue equal cMinValue and cMaxValue).
     have hnorm' : working.normalizeToRange cMinValue cMaxValue mode = .ok (mant, exp) := hnorm
     have hbound := normalizeToRange_16_within_ulp working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
     have hmrange := normalizeToRange_16_mantissa_range working mode mant exp hw_lo hw_hi hwe_lo hwe_hi hnorm'
@@ -329,10 +324,11 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg mode rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
-    -- value transport.
     have hres_toRat : result.toRat = (if neg then (-1 : ℚ) else 1) * ((mant.toInt : ℚ) * 10 ^ exp) := by
       rw [hres_eq, STAmount.toRat_signed]
       show (if neg then (-1 : ℚ) else 1) * (mant.toUInt64.toNat : ℚ) * 10 ^ exp = _
@@ -350,9 +346,8 @@ lemma STAmount.ofNumber_iou_within_ulp (nt : NumericType) (r : Number) (mode : r
     rw [hsabs, one_mul, hw_exp] at *
     exact ⟨hbound, hexp⟩
 
-/-- **Tight (half-ULP) `STAmount.ofNumber` IOU bound, `to_nearest`.** Identical to
-`ofNumber_iou_within_ulp` but the round-to-nearest snap lands within *half* a 16-digit
-ULP, the tight `ε₂` for `to_nearest` IOU arithmetic. -/
+/-- Tight (half-ULP) `STAmount.ofNumber` IOU bound, `to_nearest`. The round-to-nearest snap lands within
+*half* a 16-digit ULP. -/
 lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
     (result : STAmount)
     (hnt : nt = .fractional)
@@ -439,6 +434,8 @@ lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
       have := hmrange.1; rw [hcMin] at this; omega
     have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
       have := hmrange.2; rw [hcMax] at this; omega
+    obtain ⟨v, hv, hok⟩ := bind_ok_peel _ _ _ hok
+    obtain ⟨-, rfl⟩ := Int64.toUInt64Checked_eq_ok.mp hv
     have hcc := STAmount.checked_iou_cases .fractional mant.toUInt64 exp neg .to_nearest rfl
       hmtu_lo hmtu_hi (by rw [hw_exp] at herange; omega) (by rw [hw_exp] at herange; omega) result hok hresult
     obtain ⟨_, _, hres_eq⟩ := hcc
@@ -458,22 +455,6 @@ lemma STAmount.ofNumber_iou_within_half_ulp (nt : NumericType) (r : Number)
       rw [hres_eq]; show r.exponent_ + 3 ≤ exp; rw [hw_exp] at herange; omega
     rw [hsabs, one_mul, hw_exp] at *
     exact ⟨hbound, hexp⟩
-
-/-- The lift's mantissa is nonzero. -/
-lemma STAmount.toNumber_iou_canonical_mantissa_ne (s : STAmount) (hc : s.IOUCanonical) :
-    (⟨s.mIsNegative, s.mValue * 10 * 10 * 10, s.mOffset - 3⟩ : Number).mantissa_ ≠ 0 := by
-  have hmin : largeRange.min.toNat = 1000000000000000000 := largeRange_min_val
-  have hm3 : (s.mValue * 10 * 10 * 10).toNat = s.mValue.toNat * 1000 := by
-    have hm1 : (s.mValue * 10).toNat = s.mValue.toNat * 10 :=
-      m_mul_ten_no_overflow (by have := hc.mant_hi; rw [hmin]; omega)
-    have hm2 : (s.mValue * 10 * 10).toNat = s.mValue.toNat * 100 := by
-      rw [m_mul_ten_no_overflow (by rw [hm1]; have := hc.mant_hi; rw [hmin]; omega), hm1]; ring
-    rw [m_mul_ten_no_overflow (by rw [hm2]; have := hc.mant_hi; rw [hmin]; omega), hm2]; ring
-  intro h
-  have hM0 : s.mValue * 10 * 10 * 10 = 0 := h
-  rw [hM0] at hm3
-  simp at hm3
-  have := hc.mant_lo; omega
 
 /-- A nonzero `STAmount.ofNumber` result forces a nonzero source mantissa. -/
 lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mode : rounding_mode)
@@ -495,13 +476,17 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
     unfold Number.normalizeToRange
     rw [show doNormalize working.negative_ working.mantissa_ working.exponent_
           kMinValue kMaxValue mode = .ok Number.zero from by
-      unfold doNormalize
+      rw [doNormalize_eq_spec]
+      all_goals try min_fit
+      unfold doNormalizeSpec
       rw [if_pos (show (working.mantissa_ == 0) = true from by rw [hw_mant0]; rfl)]]
-    rfl
+    ntr_tail
   have hof : STAmount.ofNumber .fractional r mode
       = STAmount.checked .fractional (0 : Int64).toUInt64 Number.zero.exponent_ neg mode := by
     unfold STAmount.ofNumber
     rw [if_neg (by decide), ← hneg_def, ← hw_def, hnz]
+    dsimp only
+    rw [Int64.toUInt64Checked_of_nonneg (by decide), ok_bind]
   rw [hof] at hok
   have h_unint : ¬ (STAmount.unchecked .fractional (0 : Int64).toUInt64 Number.zero.exponent_ neg).integral = true := by
     simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
@@ -515,219 +500,14 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
     unfold STAmount.iou
     rw [if_neg h_unint]
     unfold IOUAmount.ofMantissaExp IOUAmount.normalize
-    rw [hsd0]
+    rw [STAmount.signedDrops_toInt64Checked _ (show ((0 : Int64).toUInt64).toNat < 2 ^ 63 by decide), ok_bind, hsd0]
     rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok
   rw [if_neg h_unint, hiou0] at hok
   simp only at hok
   rw [← Except.ok.inj hok]
-  show (if IOUAmount.zero.signum < 0 then -IOUAmount.zero.mantissa_
-        else IOUAmount.zero.mantissa_).toUInt64 = 0
+  show IOUAmount.zero.mantissa_.magnitude = 0
   decide
-
-/-- The `Number` product of two normalized operands with bounded exponents has an
-exponent well below the `maxExponent` ceiling (`|r| ≈ |n1|·|n2|`, so `r.exp ≲
-n1.exp + n2.exp`). Discharges the cusp side condition of the 16-digit re-round. -/
-lemma operator_mul_exponent_hi (n1 n2 r : Number) (E : Int)
-    (hn1_norm : n1.isNormalized) (hn2_norm : n2.isNormalized)
-    (hn1_ne : n1.mantissa_ ≠ 0) (hn2_ne : n2.mantissa_ ≠ 0) (hr_ne : r.mantissa_ ≠ 0)
-    (hn1e : n1.exponent_ ≤ E) (hn2e : n2.exponent_ ≤ E) (hE : 2 * E + 24 ≤ maxExponent)
-    (hmul : Number.operator_mul n1 n2 .to_nearest = .ok r) :
-    r.exponent_ + 4 ≤ maxExponent := by
-  by_contra hcon
-  push Not at hcon
-  have hr_norm : r.isNormalized := operator_mul_result_isNormalized n1 n2 r .to_nearest
-    hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
-  have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-  -- lower bound: 10^(maxExponent+15) ≤ |r.toRat|.
-  have hlower : (10 : ℚ) ^ (maxExponent + 15) ≤ |r.toRat| := by
-    rw [abs_toRat_eq r]
-    have h1018 : (10 : ℚ) ^ (18 : ℤ) ≤ (r.mantissa_.toNat : ℚ) := by
-      have : ((10 ^ 18 : ℕ) : ℚ) ≤ (r.mantissa_.toNat : ℚ) := by exact_mod_cast hr_mant.1
-      rwa [show ((10 ^ 18 : ℕ) : ℚ) = (10 : ℚ) ^ (18 : ℤ) by push_cast; norm_num] at this
-    calc (10 : ℚ) ^ (maxExponent + 15)
-        ≤ (10 : ℚ) ^ (r.exponent_ + 18) := zpow_le_zpow_right₀ (by norm_num) (by omega)
-      _ = (10 : ℚ) ^ (18 : ℤ) * (10 : ℚ) ^ r.exponent_ := by
-          rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
-      _ ≤ (r.mantissa_.toNat : ℚ) * (10 : ℚ) ^ r.exponent_ := by gcongr
-  -- upper bound: |r.toRat| < 10^(maxExponent+15).
-  have hmb := operator_mul_rounds_to_nearest n1 n2 r hn1_norm hn2_norm hmul hr_ne
-  simp only [RoundsWithin, show RatValued.toRat r = r.toRat from rfl] at hmb
-  have hbound_n : ∀ (n : Number), n.mantissa_.toNat < 10 ^ 19 → n.exponent_ ≤ E →
-      |n.toRat| < (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E := by
-    intro n hn_hi hne
-    rw [abs_toRat_eq n]
-    have hmant : (n.mantissa_.toNat : ℚ) < (10 : ℚ) ^ (19 : ℤ) := by
-      have : (n.mantissa_.toNat : ℚ) < ((10 ^ 19 : ℕ) : ℚ) := by exact_mod_cast hn_hi
-      rwa [show ((10 ^ 19 : ℕ) : ℚ) = (10 : ℚ) ^ (19 : ℤ) by push_cast; norm_num] at this
-    have hexp : (10 : ℚ) ^ n.exponent_ ≤ (10 : ℚ) ^ E := zpow_le_zpow_right₀ (by norm_num) hne
-    calc (n.mantissa_.toNat : ℚ) * (10 : ℚ) ^ n.exponent_
-        < (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ n.exponent_ :=
-          mul_lt_mul_of_pos_right hmant (zpow_pos (by norm_num) _)
-      _ ≤ (10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E := mul_le_mul_of_nonneg_left hexp (by positivity)
-  have hn1b := hbound_n n1 (hn1_norm.mantissaBounds_nat hn1_ne).2 hn1e
-  have hn2b := hbound_n n2 (hn2_norm.mantissaBounds_nat hn2_ne).2 hn2e
-  have hupper : |r.toRat| < (10 : ℚ) ^ (maxExponent + 15) := by
-    have hnn : (0 : ℚ) ≤ |n1.toRat * n2.toRat| := abs_nonneg _
-    have hr_le : |r.toRat| ≤ |n1.toRat * n2.toRat| + |n1.toRat * n2.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
-      have h := abs_sub_abs_le_abs_sub r.toRat (n1.toRat * n2.toRat); linarith [hmb]
-    have hr2 : |r.toRat| ≤ |n1.toRat * n2.toRat| * 2 := by nlinarith [hr_le, hnn]
-    have hprod : |n1.toRat * n2.toRat| < (10 : ℚ) ^ (2 * E + 38) := by
-      rw [abs_mul]
-      have hbig : |n1.toRat| * |n2.toRat|
-          < ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) * ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) :=
-        mul_lt_mul'' hn1b hn2b (abs_nonneg _) (abs_nonneg _)
-      have hpoweq : ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E) * ((10 : ℚ) ^ (19 : ℤ) * (10 : ℚ) ^ E)
-          = (10 : ℚ) ^ (2 * E + 38) := by
-        rw [mul_mul_mul_comm, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0),
-            ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0), ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]
-        congr 1; ring
-      rw [hpoweq] at hbig; exact hbig
-    have hpos38 : (0 : ℚ) < (10 : ℚ) ^ (2 * E + 38) := zpow_pos (by norm_num) _
-    have hfin : (10 : ℚ) ^ (2 * E + 38) * 2 ≤ (10 : ℚ) ^ (maxExponent + 15) := by
-      have h39 : (10 : ℚ) ^ (2 * E + 38) * 2 ≤ (10 : ℚ) ^ (2 * E + 38) * 10 := by nlinarith [hpos38]
-      have heq : (10 : ℚ) ^ (2 * E + 38) * 10 = (10 : ℚ) ^ (2 * E + 39) := by
-        rw [show (2 * E + 39 : ℤ) = (2 * E + 38) + 1 from by ring,
-            zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0) (2 * E + 38) 1, zpow_one]
-      rw [heq] at h39
-      exact le_trans h39 (zpow_le_zpow_right₀ (by norm_num) (by omega))
-    calc |r.toRat| ≤ |n1.toRat * n2.toRat| * 2 := hr2
-      _ < (10 : ℚ) ^ (2 * E + 38) * 2 := by nlinarith [hprod, hpos38]
-      _ ≤ (10 : ℚ) ^ (maxExponent + 15) := hfin
-  linarith [hlower, hupper]
-
-/-- **STAmount IOU multiplication rel-error engine (`to_nearest`).** Two canonical
-16-digit IOU amounts multiply (lift to 19-digit `Number`s, multiply, snap back to
-the 16-digit grid) within the composed double-rounding relative error
-`εMul = ε₁ + ε₂ + ε₁·ε₂`, `ε₁ = 5/(2⁶³+7)`, `ε₂ = 10⁻¹⁵`. -/
-theorem STAmount.operator_mul_iou_rel_error (v1 v2 result : STAmount) (nt : NumericType)
-    (hnt : nt = .fractional)
-    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result)
-    (hresult : result.mValue ≠ 0) :
-    |result.toRat - (v1.toRat * v2.toRat)|
-      ≤ |v1.toRat * v2.toRat| *
-        (5 / (2 ^ 63 + 7 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
-          + 5 / (2 ^ 63 + 7 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))) := by
-  subst hnt
-  have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  -- navigate guards down to the `Number` path
-  unfold STAmount.multiply at hok
-  rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by
-        simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
-        rw [hint1]; simp),
-      STAmount.toNumber_iou_canonical v1 .to_nearest hc1,
-      STAmount.toNumber_iou_canonical v2 .to_nearest hc2] at hok
-  simp only at hok
-  set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
-  set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
-  cases hmul : Number.operator_mul n1 n2 .to_nearest with
-  | error e => rw [hmul] at hok; simp at hok
-  | ok r =>
-    rw [hmul] at hok
-    simp only at hok
-    have hofn : STAmount.ofNumber .fractional r .to_nearest = .ok result := hok
-    have hn1_norm : n1.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
-    have hn2_norm : n2.isNormalized := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
-    have hn1_ne : n1.mantissa_ ≠ 0 := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
-    have hn2_ne : n2.mantissa_ ≠ 0 := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
-    have hn1_val : n1.toRat = v1.toRat := STAmount.toNumber_iou_canonical_toRat v1 hc1
-    have hn2_val : n2.toRat = v2.toRat := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne : r.mantissa_ ≠ 0 :=
-      STAmount.ofNumber_iou_mantissa_ne_zero .fractional r .to_nearest result rfl hofn hresult
-    have hr_norm := operator_mul_result_isNormalized n1 n2 r .to_nearest
-      hn1_norm hn2_norm hn1_ne hn2_ne hmul hr_ne
-    have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-    have hr_exp_lo : minExponent ≤ r.exponent_ := by
-      rcases hr_norm with hz | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show r.mantissa_ = 0 by rw [hz]; rfl) hr_ne
-      · exact hlo
-    have hr_exp_hi : r.exponent_ + 4 ≤ maxExponent :=
-      operator_mul_exponent_hi n1 n2 r 77 hn1_norm hn2_norm hn1_ne hn2_ne hr_ne
-        (by show v1.mOffset - 3 ≤ 77; have := hc1.exp_hi; omega)
-        (by show v2.mOffset - 3 ≤ 77; have := hc2.exp_hi; omega) (by unfold maxExponent; omega) hmul
-    -- the 16-digit re-round bound (tight, half-ULP), recast as a relative error in `|r.toRat|`.
-    have hofn_bound := STAmount.ofNumber_iou_within_half_ulp .fractional r result
-      rfl hr_mant.1 hr_mant.2 hr_exp_lo hr_exp_hi hofn hresult
-    have hr_abs : |r.toRat| = (r.mantissa_.toNat : ℚ) * 10 ^ r.exponent_ := abs_toRat_eq r
-    have hold : (10 : ℚ) ^ (r.exponent_ + 3) ≤ |r.toRat| * (10 : ℚ) ^ (-15 : ℤ) := by
-      rw [hr_abs]
-      have hpow : (10 : ℚ) ^ (r.exponent_ + 3)
-          = (10 : ℚ) ^ (18 : ℤ) * (10 : ℚ) ^ (r.exponent_ - 15) := by
-        rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
-      have hmul' : (r.mantissa_.toNat : ℚ) * 10 ^ r.exponent_ * (10 : ℚ) ^ (-15 : ℤ)
-          = (r.mantissa_.toNat : ℚ) * (10 : ℚ) ^ (r.exponent_ - 15) := by
-        rw [mul_assoc, ← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
-      rw [hpow, hmul']
-      have hlo_q : (10 : ℚ) ^ (18 : ℤ) ≤ (r.mantissa_.toNat : ℚ) := by
-        have : ((10 ^ 18 : ℕ) : ℚ) ≤ (r.mantissa_.toNat : ℚ) := by exact_mod_cast hr_mant.1
-        rwa [show ((10 ^ 18 : ℕ) : ℚ) = (10 : ℚ) ^ (18 : ℤ) by push_cast; norm_num] at this
-      gcongr
-    have h2 : |result.toRat - r.toRat| ≤ |r.toRat| * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ)) := by
-      calc |result.toRat - r.toRat| ≤ (1 / 2) * (10 : ℚ) ^ (r.exponent_ + 3) := hofn_bound.1
-        _ ≤ (1 / 2) * (|r.toRat| * (10 : ℚ) ^ (-15 : ℤ)) := by
-            apply mul_le_mul_of_nonneg_left hold (by norm_num)
-        _ = |r.toRat| * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ)) := by ring
-    -- the `Number`-multiply relative-error bound, with truth `v1.toRat * v2.toRat`.
-    have hmb := operator_mul_rounds_to_nearest n1 n2 r hn1_norm hn2_norm hmul hr_ne
-    simp only [RoundsWithin, show RatValued.toRat r = r.toRat from rfl] at hmb
-    rw [hn1_val, hn2_val] at hmb
-    exact rel_error_trans hmb h2 (by positivity)
-
-/-- **IOU multiply pipeline decomposition (`to_nearest`).** Exposes the 19-digit
-`Number` product `r` (`= ofNumber → result`), its range, and the `Number`-multiply
-relative-error bound. Feeds both the relative headline and the ULP/repr headline. -/
-lemma STAmount.operator_mul_iou_decompose (v1 v2 result : STAmount) (nt : NumericType)
-    (hnt : nt = .fractional)
-    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (hok : STAmount.multiply v1 v2 nt .to_nearest = .ok result) (hresult : result.mValue ≠ 0) :
-    ∃ r : Number, STAmount.ofNumber nt r .to_nearest = .ok result ∧
-      10 ^ 18 ≤ r.mantissa_.toNat ∧ r.mantissa_.toNat < 10 ^ 19 ∧
-      minExponent ≤ r.exponent_ ∧ r.exponent_ + 4 ≤ maxExponent ∧
-      |r.toRat - v1.toRat * v2.toRat| ≤ |v1.toRat * v2.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
-  subst hnt
-  have hv1ne : v1.mValue ≠ 0 := by intro h; have := hc1.mant_lo; rw [h] at this; simp at this
-  have hv2ne : v2.mValue ≠ 0 := by intro h; have := hc2.mant_lo; rw [h] at this; simp at this
-  have hint1 : v1.integral = false := by unfold STAmount.integral; rw [hc1.is_fractional]; rfl
-  unfold STAmount.multiply at hok
-  rw [if_neg (show ¬ (v1.isZero || v2.isZero) = true from by simp [STAmount.isZero, hv1ne, hv2ne]),
-      if_neg (show ¬ (v1.integral && v2.integral && NumericType.fractional.isIntegral) = true from by
-        rw [hint1]; simp),
-      STAmount.toNumber_iou_canonical v1 .to_nearest hc1,
-      STAmount.toNumber_iou_canonical v2 .to_nearest hc2] at hok
-  simp only at hok
-  set n1 : Number := ⟨v1.mIsNegative, v1.mValue * 10 * 10 * 10, v1.mOffset - 3⟩ with hn1_def
-  set n2 : Number := ⟨v2.mIsNegative, v2.mValue * 10 * 10 * 10, v2.mOffset - 3⟩ with hn2_def
-  cases hmul : Number.operator_mul n1 n2 .to_nearest with
-  | error e => rw [hmul] at hok; simp at hok
-  | ok r =>
-    rw [hmul] at hok; simp only at hok
-    have hofn : STAmount.ofNumber .fractional r .to_nearest = .ok result := hok
-    have hn1_norm := STAmount.toNumber_iou_canonical_isNormalized v1 hc1
-    have hn2_norm := STAmount.toNumber_iou_canonical_isNormalized v2 hc2
-    have hn1_ne := STAmount.toNumber_iou_canonical_mantissa_ne v1 hc1
-    have hn2_ne := STAmount.toNumber_iou_canonical_mantissa_ne v2 hc2
-    have hn1_val := STAmount.toNumber_iou_canonical_toRat v1 hc1
-    have hn2_val := STAmount.toNumber_iou_canonical_toRat v2 hc2
-    have hr_ne := STAmount.ofNumber_iou_mantissa_ne_zero .fractional r .to_nearest result rfl
-      hofn hresult
-    have hr_norm := operator_mul_result_isNormalized n1 n2 r .to_nearest hn1_norm hn2_norm hn1_ne
-      hn2_ne hmul hr_ne
-    have hr_mant := hr_norm.mantissaBounds_nat hr_ne
-    have hr_exp_lo : minExponent ≤ r.exponent_ := by
-      rcases hr_norm with hz | ⟨_, _, _, hlo, _⟩
-      · exact absurd (show r.mantissa_ = 0 by rw [hz]; rfl) hr_ne
-      · exact hlo
-    have hr_exp_hi := operator_mul_exponent_hi n1 n2 r 77 hn1_norm hn2_norm hn1_ne hn2_ne hr_ne
-      (by show v1.mOffset - 3 ≤ 77; have := hc1.exp_hi; omega)
-      (by show v2.mOffset - 3 ≤ 77; have := hc2.exp_hi; omega) (by unfold maxExponent; omega) hmul
-    have hmb := operator_mul_rounds_to_nearest n1 n2 r hn1_norm hn2_norm hmul hr_ne
-    simp only [RoundsWithin, show RatValued.toRat r = r.toRat from rfl] at hmb
-    rw [hn1_val, hn2_val] at hmb
-    exact ⟨r, hofn, hr_mant.1, hr_mant.2, hr_exp_lo, hr_exp_hi, hmb⟩
 
 end XRPL.Model.Protocol

@@ -1,19 +1,18 @@
 import Mathlib.Tactic
 
 import XRPL.Model.Protocol.Number
+import XRPL.Properties.Protocol.Common.FixedWidth
 
 /-! # The digit-dropping loops with and without the early exit
 
-`alignDownSpec` and `shiftSpec` are the loops as implemented before rippled PR 7825: one
-digit dropped per step, with no early exit.
+`alignDownSpec` and `shiftSpec` drop one digit per step with no early exit. C++ `doDropDigitWithTarget`
+(Number.cpp:428) jumps to the target exponent once the mantissa and the guard digits are all zero.
 
 `alignDown_eq_spec` equates `Number.operator_add.alignDown` with `alignDownSpec`, and
 `shift_eq_spec` equates `Number.to_rep.shift` with `shiftSpec`: each pair returns the same
 result on every input. -/
 
 namespace XRPL.Model.Protocol
-
-/-! ## `alignDown` (the `operator_add` exponent alignment) -/
 
 /-- The alignment loop written without the early exit: one `doDropDigit` per step. -/
 def alignDownSpec (m : UInt64) (e : Int) (g : Guard) (target : Int) : UInt64 × Int × Guard :=
@@ -64,9 +63,8 @@ lemma alignDownSpec_fixed (e : Int) (g : Guard) (target : Int) (h : g.digits_ = 
     alignDownSpec 0 e g target = (0, (if e < target then target else e), g) :=
   alignDownSpec_fixed_aux (target - e).toNat e g target h rfl
 
-/-- `doDropDigitWithTargetU64` returns the same result as `alignDownSpec`: when it exits
-early, the steps it skips would have left the mantissa and guard unchanged
-(`alignDownSpec_fixed`). -/
+/-- `doDropDigitWithTargetU64` returns the same result as `alignDownSpec`. When it exits early, the steps it skips
+would leave the mantissa and guard unchanged. -/
 private lemma doDropDigitWithTargetU64_eq_spec_aux :
     ∀ (n : Nat) (g : Guard) (m : UInt64) (e target : Int),
     (target - e).toNat = n →
@@ -105,8 +103,6 @@ theorem alignDown_eq_spec (m : UInt64) (e : Int) (g : Guard) (target : Int) :
   rw [Number.operator_add.alignDown.eq_def]
   exact doDropDigitWithTargetU64_eq_spec g m e target
 
-/-! ## `shift` (the `to_rep` mantissa shift) -/
-
 /-- The `shift` loop written without the early exit: one digit dropped per step. -/
 def shiftSpec (drops : rep) (offset : Int) (g : Guard) : rep × Guard :=
   if offset < 0 then shiftSpec (drops / 10) (offset + 1) (g.push (drops % 10).toUInt64)
@@ -140,18 +136,33 @@ lemma shiftSpec_fixed (offset : Int) (g : Guard) (h : g.digits_ = 0) :
     shiftSpec 0 offset g = (0, g) :=
   shiftSpec_fixed_aux (-offset).toNat offset g h rfl
 
+/-- The digit and the quotient of a non-negative `Int64` divided by `10` are non-negative. -/
+private lemma mod_div_ten_nonneg {drops : rep} (h0 : 0 ≤ drops.toInt) :
+    0 ≤ drops % 10 ∧ 0 ≤ (drops / 10).toInt := by
+  have ha2 := Int64.toInt_lt drops
+  have hten : (10 : Int64).toInt = 10 := by decide
+  refine ⟨?_, ?_⟩
+  · rw [Int64.le_iff_toInt_le, Int64.toInt_mod, hten, Int.tmod_eq_emod_of_nonneg h0]
+    exact Int.emod_nonneg _ (by norm_num)
+  · have hdiv_nonneg : 0 ≤ drops.toInt / 10 := Int.ediv_nonneg h0 (by norm_num)
+    have hdiv_le : drops.toInt / 10 ≤ drops.toInt := Int.ediv_le_self _ h0
+    have heq : (drops / 10).toInt = drops.toInt / 10 := by
+      rw [Int64.toInt_div, hten, Int.bmod_eq_iff (by norm_num), Int.tdiv_eq_ediv_of_nonneg h0]
+      omega
+    omega
+
 private lemma doDropDigitWithTargetI64_eq_shiftSpec_aux :
     ∀ (n : Nat) (g : Guard) (drops : rep) (offset : Int),
-    (-offset).toNat = n →
-    g.doDropDigitWithTargetI64 drops offset 0 = shiftSpec drops offset g := by
+    (-offset).toNat = n → 0 ≤ drops.toInt →
+    g.doDropDigitWithTargetI64 drops offset 0 = .ok (shiftSpec drops offset g) := by
   intro n
   induction n with
   | zero =>
-    intro g drops offset hn
+    intro g drops offset hn _
     have hge : ¬ offset < 0 := by omega
     rw [Guard.doDropDigitWithTargetI64, shiftSpec, if_neg hge, if_neg hge]
   | succ k ih =>
-    intro g drops offset hn
+    intro g drops offset hn h0
     by_cases hlt : offset < 0
     · by_cases hsc : (drops == 0 && g.unrecoverable) = true
       · rw [Guard.doDropDigitWithTargetI64, if_pos hlt, if_pos hsc]
@@ -160,18 +171,21 @@ private lemma doDropDigitWithTargetI64_eq_shiftSpec_aux :
           simp only [Bool.and_eq_true, beq_iff_eq, Guard.unrecoverable] at hsc; exact hsc.2
         subst hm
         rw [shiftSpec_fixed offset g hd]
-      · rw [Guard.doDropDigitWithTargetI64, shiftSpec, if_pos hlt, if_pos hlt, if_neg hsc]
-        exact ih (g.push (drops % 10).toUInt64) (drops / 10) (offset + 1) (by omega)
+      · obtain ⟨hmod, hdiv⟩ := mod_div_ten_nonneg h0
+        rw [Guard.doDropDigitWithTargetI64, shiftSpec, if_pos hlt, if_pos hlt, if_neg hsc,
+          Int64.toUInt64Checked_of_nonneg hmod]
+        exact ih (g.push (drops % 10).toUInt64) (drops / 10) (offset + 1) (by omega) hdiv
     · rw [Guard.doDropDigitWithTargetI64, shiftSpec, if_neg hlt, if_neg hlt]
 
-lemma doDropDigitWithTargetI64_eq_shiftSpec (g : Guard) (drops : rep) (offset : Int) :
-    g.doDropDigitWithTargetI64 drops offset 0 = shiftSpec drops offset g :=
-  doDropDigitWithTargetI64_eq_shiftSpec_aux (-offset).toNat g drops offset rfl
+/-- On a non-negative value the digit-dropping loop never wraps, and it equals `shiftSpec`. -/
+lemma doDropDigitWithTargetI64_eq_shiftSpec (g : Guard) (drops : rep) (offset : Int) (h0 : 0 ≤ drops.toInt) :
+    g.doDropDigitWithTargetI64 drops offset 0 = .ok (shiftSpec drops offset g) :=
+  doDropDigitWithTargetI64_eq_shiftSpec_aux (-offset).toNat g drops offset rfl h0
 
 /-- `Number.to_rep.shift` calls `doDropDigitWithTargetI64`, so it equals `shiftSpec`. -/
-lemma shift_eq_spec (drops : rep) (offset : Int) (g : Guard) :
-    Number.to_rep.shift drops offset g = shiftSpec drops offset g := by
+lemma shift_eq_spec (drops : rep) (offset : Int) (g : Guard) (h0 : 0 ≤ drops.toInt) :
+    Number.to_rep.shift drops offset g = .ok (shiftSpec drops offset g) := by
   rw [Number.to_rep.shift.eq_def]
-  exact doDropDigitWithTargetI64_eq_shiftSpec g drops offset
+  exact doDropDigitWithTargetI64_eq_shiftSpec g drops offset h0
 
 end XRPL.Model.Protocol

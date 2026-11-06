@@ -7,8 +7,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 
 namespace XRPL.Model.Protocol
 
-/-- No normalized Number sits strictly between `result.toRat` and the quotient
-when `result.toRat ≤ x/y`. -/
+/-- No normalized Number lies above `result.toRat` and at or below the quotient when `result.toRat ≤ x/y`. -/
 theorem operator_div_no_inbetween_below_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -42,8 +41,7 @@ theorem operator_div_no_inbetween_below_to_nearest (x y result : Number)
       exact Number.toRat_nonneg_of_nonnegative result (h_neg.trans hzn_false))
     h_le
 
-/-- No normalized Number sits strictly between the quotient and `result.toRat`
-when `x/y ≤ result.toRat`. -/
+/-- No normalized Number lies at or above the quotient and below `result.toRat` when `x/y ≤ result.toRat`. -/
 theorem operator_div_no_inbetween_above (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
@@ -81,8 +79,7 @@ theorem operator_div_no_inbetween_above (x y result : Number)
     h_ge
 
 
-/-- `operator_div` under `.to_nearest` is **faithfully rounded**: the result
-is `Number.lower` or `Number.upper` of the exact quotient. -/
+/-- `operator_div` under `.to_nearest` returns `Number.lower` or `Number.upper` of the exact quotient. -/
 theorem operator_div_rounded_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .to_nearest = .ok result) :

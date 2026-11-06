@@ -18,7 +18,8 @@ class RatValued (A : Type) where
 instance : RatValued Number where
   toRat := Number.toRat
 
-/-- `result` rounds `truth` in direction `mode` with relative error at most `ε`. -/
+/-- `result` rounds `truth` in direction `mode` with relative error at most `ε`. For `towards_zero` this compares
+magnitudes only, so a `result` of the wrong sign also passes. -/
 def RoundsWithin {A : Type} [RatValued A] (result : A) (truth : ℚ) (mode : rounding_mode) (ε : ℚ) : Prop :=
   match mode with
   | .to_nearest   => |RatValued.toRat result - truth| ≤ |truth| * ε
@@ -29,8 +30,7 @@ def RoundsWithin {A : Type} [RatValued A] (result : A) (truth : ℚ) (mode : rou
   | .towards_zero => |RatValued.toRat result| ≤ |truth| ∧
                      |truth| - |RatValued.toRat result| ≤ |truth| * ε
 
-/-- Dual of `RoundsWithin`: `result` witnesses that relative error `lo` is *exceeded*,
-proving a `RoundsWithin` bound's numerator is optimal (the bound is tight). -/
+/-- `result` errs by more than relative error `lo`, so no error bound of `lo` or less holds for it. -/
 def RoundsWithinWitness {A : Type} [RatValued A] (result : A) (truth : ℚ) (lo : ℚ) : Prop :=
   |RatValued.toRat result - truth| > |truth| * lo
 

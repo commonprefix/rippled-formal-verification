@@ -1,8 +1,7 @@
 import XRPL.Properties.Protocol.STAmount.Common.IOUWitnessTraces
 import XRPL.Properties.Protocol.STAmount.Common.IOUDirectedWitnesses
 
-/-! # Proof body for the IOU addition `to_nearest` tightness witness. The thin headline
-lives in `Add.RoundsWithin`. -/
+/-! # Proof of the IOU addition `to_nearest` witness -/
 
 namespace XRPL.Model.Protocol
 
