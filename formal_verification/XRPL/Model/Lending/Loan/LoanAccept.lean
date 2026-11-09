@@ -29,7 +29,7 @@ def Loan.canAccept {α : Type} [AssetPool α] (loan : Loan) (pool : α) (ledgerC
   return .tesSUCCESS
 
 -- LoanAccept -> doApply. The principal leaves the reserved assets, the interest joins the unrealized yield.
-def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithPool α) := do
+def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept (LoanWithDisbursement α) := do
   let interestDue ← loan.interestDue
   let change : PoolBalanceChange := {
     yield := interestDue
@@ -39,6 +39,8 @@ def Loan.accept {α : Type} [AssetPool α] (loan : Loan) (pool : α) : TerExcept
   let rawLoan' : RawLoan := { loan.toRawLoan with isPending := false }
   let loan' ← rawLoan'.to_lawful
 
-  return { loan' := loan', pool' := pool' }
+  let amountToBorrower ← loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest
+
+  return { loan' := loan', pool' := pool', amountToBorrower := amountToBorrower }
 
 end XRPL.Model.Lending

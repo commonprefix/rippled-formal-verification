@@ -67,11 +67,8 @@ theorem Vault.redemption_exit_order_upper_bound_attained :
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
       (rB2.vault'.withdraw (.vaultShares sA) waiveA' t hposA).run = .ok (.ok rA2) ∧
-      0 < rA1.assets.toRat - rA2.assets.toRat := by
-  obtain ⟨v, t, t0, sA, sB, hposA, hposB, waiveA, waiveB, waiveA', rA1, rB2, rA2, hr, ht, hph, hA, hB, hsum, hA1,
-    hB2, hA2, heq⟩ := Vault.redemption_exit_order_upper_bound_witness
-  exact ⟨v, t, t0, sA, sB, hposA, hposB, waiveA, waiveB, waiveA', rA1, rB2, rA2, hr, ht, hph, hA, hB, hsum, hA1,
-    hB2, hA2, by rw [heq]; exact zpow_pos (by norm_num) _⟩
+      rA1.assets.toRat - rA2.assets.toRat = (10 : ℚ) ^ v.baseExponent :=
+  Vault.redemption_exit_order_upper_bound_witness
 
 /-- Witness for the second line of `redemption_exit_order`: A gets two base units more after B (`999999999999999`
 alone, `1000000000000001` after B), holding `9·10^14` of `1800000000000001` shares on `2000000000000001`. -/

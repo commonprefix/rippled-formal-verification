@@ -46,7 +46,7 @@ lemma Loan.KeepsTerms.of_lawful {loan loan' : Loan} {raw : RawLoan} (h : raw.to_
   exact ⟨hr, hf, hs, hl, ho⟩
 
 /-- Accept keeps the terms. -/
-lemma Loan.accept_keepsTerms (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_keepsTerms (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : Loan.KeepsTerms loan r.loan' := by
   simp only [Loan.accept] at h
   unfold_ter at h

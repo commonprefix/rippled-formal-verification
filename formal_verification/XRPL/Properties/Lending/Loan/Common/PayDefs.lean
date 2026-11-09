@@ -255,12 +255,12 @@ lemma Loan.PayChecks.more_than_one {loan : Loan} {now : UInt32} (h : loan.PayChe
 /-! ## The unimpair -/
 
 private lemma RawLoan.wf_unimpaired (rl : RawLoan) (h : rl.WF) : ({ rl with isImpaired := false } : RawLoan).WF :=
-  ⟨h.1, h.2, h.3, h.4, h.5, h.6, h.7, h.8, h.9, h.10, h.11, h.12⟩
+  ⟨h.1, h.2, h.3, h.4, h.5, h.6, h.7, h.8, h.9, h.10, h.11, h.12, h.13, h.14⟩
 
 private lemma RawLoan.valid_unimpaired (rl : RawLoan) (h : rl.Valid) :
     ({ rl with isImpaired := false } : RawLoan).Valid :=
   ⟨h.1, h.2, h.3, h.4, h.5, h.6, h.7, h.8, h.9, h.10, h.11, h.12, h.13, h.14, h.15, h.16, h.17, h.18, h.19,
-    h.20, h.21, h.22, h.23⟩
+    h.20, h.21, h.22, h.23, h.24⟩
 
 /-- The loan without the impaired flag. -/
 def Loan.unimpaired (loan : Loan) : Loan :=

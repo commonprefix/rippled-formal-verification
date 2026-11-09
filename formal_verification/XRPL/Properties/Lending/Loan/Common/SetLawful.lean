@@ -156,6 +156,8 @@ structure Loan.CreatePreflight (broker : LoanBroker) (principal : Number) (rates
   principal_exact : STAmount.isRounded broker.numericType principal = false
   fees_norm : ∀ fee ∈ fees.amountFields, fee.isNormalized
   fees_nonneg : ∀ fee ∈ fees.amountFields, 0 ≤ fee.toRat
+  originationFee_le : fees.originationFee.toRat ≤ principal.toRat
+  originationFee_exact : STAmount.isRounded broker.numericType fees.originationFee = false
   interestRate_cap : rates.interestRate ≤ maxLoanRate
   lateInterestRate_cap : rates.lateInterestRate ≤ maxLoanRate
   closeInterestRate_cap : rates.closeInterestRate ≤ maxLoanRate
@@ -661,6 +663,30 @@ private lemma Loan.create_broker_lawful (broker : LoanBroker) (v : Vault) (princ
   obtain ⟨broker', hb, -⟩ := RawLoanBroker.to_lawful_ok_of hwf ((RawLoanBroker.valid_iff_exact rb hwf).mpr hvalid)
   exact ⟨broker', hb⟩
 
+/-- The origination fee passed the precision check at LoanScale and is at most PrincipalRequested, so it is a whole
+number of LoanScale units, no more than PrincipalRequested's. -/
+private lemma Loan.create_fee_grid (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
+    (fees : LoanFees) (schedule : LoanSchedule) (props : LoanProperties) (loanState : LoanState)
+    (debtTotal' : Number) (hpre : Loan.CreatePreflight broker principal rates fees schedule)
+    (hgrid : Loan.CreateGrid broker v)
+    (hchecks : Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal') :
+    ∃ j k : ℕ, principal.toRat = (j : ℚ) * 10 ^ props.loanScale ∧
+      fees.originationFee.toRat = (k : ℚ) * 10 ^ props.loanScale ∧ k ≤ j ∧ j < 10 ^ 16 ∧
+      k < broker.numericType.mantissaBound := by
+  obtain ⟨j, aT, -, hlo, hls80, -, hls0, hj, -, hja, hj16, -, -, haT, -⟩ :=
+    Loan.create_checks_facts broker v principal rates fees schedule props loanState debtTotal' hpre hgrid hchecks
+  have hmem : fees.originationFee ∈ principal :: fees.amountFields := by simp [LoanFees.amountFields]
+  have hmem' : fees.originationFee ∈ fees.amountFields := by simp [LoanFees.amountFields]
+  obtain ⟨k, hk⟩ := isRounded_grid broker.numericType fees.originationFee props.loanScale
+    (hpre.fees_norm _ hmem') (hpre.fees_nonneg _ hmem') hpre.originationFee_exact ⟨by omega, hls80⟩ hls0
+    (hchecks.exact _ hmem)
+  have hp10 : (0 : ℚ) < 10 ^ props.loanScale := zpow_pos (by norm_num) _
+  have hkj : k ≤ j := by
+    have h := hpre.originationFee_le
+    rw [hk, hj] at h
+    exact_mod_cast le_of_mul_le_mul_right h hp10
+  exact ⟨j, k, hj, hk, hkj, hj16, by omega⟩
+
 /-- The new loan is lawful. Its amounts are the computed ones, whole numbers of LoanScale units within
 the asset's range, its interest is not negative, and its terms and schedule passed the preflight. -/
 private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
@@ -669,7 +695,7 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
     (hpre : Loan.CreatePreflight broker principal rates fees schedule) (hgrid : Loan.CreateGrid broker v)
     (hchecks : Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal')
     (hbnt : broker'.numericType = broker.numericType) :
-    ∃ loan, (RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+    ∃ loan, (RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
       (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok loan := by
   obtain ⟨j, aT, mm, hlo, hls80, hlsmin, hls0, hj, hj1, hja, hj16, htvN, haTv, haT, hpoN, hpov, hmfN, hmm, hmmK,
     hppN, hpp0, -, -⟩ := Loan.create_checks_facts broker v principal rates fees schedule props loanState
@@ -680,6 +706,8 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
   simp only [LoanFees.amountFields, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq]
     at hfee
   obtain ⟨⟨ho, ho0⟩, ⟨hsv, hsv0⟩, ⟨hl, hl0⟩, ⟨hc, hc0⟩⟩ := hfee
+  obtain ⟨-, k, -, hk, -, -, hkb⟩ := Loan.create_fee_grid broker v principal rates fees schedule props loanState
+    debtTotal' hpre hgrid hchecks
   have hfits := hpre.fits
   have hn := hfits.paymentTotal_pos
   have hn' : 1 ≤ schedule.paymentTotal.toNat := by rw [UInt32.lt_iff_toNat_lt] at hn; simpa using hn
@@ -695,7 +723,7 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
   have hnext : (schedule.startDate + schedule.paymentInterval).toNat =
       schedule.startDate.toNat + schedule.paymentInterval.toNat := by
     rw [UInt32.toNat_add]; omega
-  set rl := RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+  set rl := RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
     (schedule.startDate + schedule.paymentInterval) with hrl
   have htv0 : 0 < props.totalValueOutstanding.toRat := by
     rw [haTv]; exact mul_pos (by exact_mod_cast (show 0 < aT by omega)) hp10
@@ -712,6 +740,7 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
       totalValueOutstanding_norm := htvN
       managementFeeOutstanding_norm := hmfN
       originationFee_norm := ho
+      principalInitial_norm := hpre.principal_norm
       serviceFee_norm := hsv
       latePaymentFee_norm := hl
       closePaymentFee_norm := hc
@@ -721,7 +750,9 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
       totalValueOutstanding_atExponent := (Number.isAtExponent_iff _ _ _ htvN htv0.le).mpr ⟨aT, haT', haTv⟩
       principalOutstanding_atExponent := (Number.isAtExponent_iff _ _ _ hpoN hpo0).mpr ⟨j, hj', by
         show props.principalOutstanding.toRat = (j : ℚ) * 10 ^ props.loanScale; rw [hpov, hj]⟩
-      managementFeeOutstanding_atExponent := (Number.isAtExponent_iff _ _ _ hmfN hmf0).mpr ⟨mm, hmm', hmm⟩ }
+      managementFeeOutstanding_atExponent := (Number.isAtExponent_iff _ _ _ hmfN hmf0).mpr ⟨mm, hmm', hmm⟩
+      originationFee_atExponent := (Number.isAtExponent_iff _ _ _ ho ho0).mpr
+        ⟨k, (by rw [hbound]; exact hkb : k < broker'.numericType.mantissaBound), hk⟩ }
   have hvalid : rl.toExact.Valid :=
     { paid_zeroed := fun h => absurd h hn0
       unpaid_nonzero := fun _ => Or.inl (ne_of_gt htv0)
@@ -753,6 +784,7 @@ private lemma Loan.create_loan_lawful (broker : LoanBroker) (v : Vault) (princip
       overpaymentInterestRate_cap := UInt32.le_iff_toNat_le.mp hpre.overpaymentInterestRate_cap
       overpaymentFee_cap := UInt32.le_iff_toNat_le.mp hpre.overpaymentFee_cap
       originationFee_nonneg := ho0
+      originationFee_cap := hpre.originationFee_le
       paymentTotal_pos := hn
       paymentInterval_min := hpre.paymentInterval_min
       gracePeriod_range := hpre.gracePeriod_range }
@@ -767,9 +799,9 @@ lemma Loan.create_success_lawful (broker : LoanBroker) (v : Vault) (principal : 
     (hpre : Loan.CreatePreflight broker principal rates fees schedule) (hasset : Vault.HoldsAsset v)
     (hgrid : Loan.CreateGrid broker v) (hcount : broker.loanCount + 1 ≠ 0)
     (hchecks : Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal') :
-    ∃ loan v', (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
-      .ok (.ok { loan' := loan, pool' := v' }) := by
-  obtain ⟨j, aT, mm, -, -, hlsmin, -, hj, -, -, -, -, -, -, -, -, -, -, -, -, -, hiDN, hiDv⟩ :=
+    ∃ loan v' amountToBorrower, (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
+      .ok (.ok { loan' := loan, pool' := v', amountToBorrower := amountToBorrower }) := by
+  obtain ⟨j, aT, mm, hlo, hls80, hlsmin, -, hj, -, -, -, -, -, -, -, -, -, -, -, -, -, hiDN, hiDv⟩ :=
     Loan.create_checks_facts broker v principal rates fees schedule props loanState debtTotal' hpre hgrid hchecks
   have hp := hpre.principal_norm
   have hpos := hpre.principal_pos
@@ -797,9 +829,20 @@ lemma Loan.create_success_lawful (broker : LoanBroker) (v : Vault) (principal : 
     rw [(RawLoanBroker.to_lawful_ok hbroker).1]
   obtain ⟨loan, hloan⟩ := Loan.create_loan_lawful broker v principal rates fees schedule allowsOverpayment pending
     props loanState debtTotal' broker' hpre hgrid hchecks hbnt
-  exact ⟨loan, v', Loan.create_success_proof broker v principal rates fees schedule allowsOverpayment pending props
-    loanState debtTotal' principal' raw v' broker' loan hchecks hround hadj hv' hbroker
-    (UInt32.toNat_add_one_lt hcount) hpre.fits.firstDue_lt hloan⟩
+  -- the amount sent to the borrower: PrincipalRequested less the fee, both whole LoanScale units
+  obtain ⟨j₁, k, hj₁, hk, hkj, hj16, -⟩ := Loan.create_fee_grid broker v principal rates fees schedule props
+    loanState debtTotal' hpre hgrid hchecks
+  obtain ⟨a, ha⟩ : ∃ a, Loan.createAmountToBorrower principal fees pending = .ok a := by
+    unfold Loan.createAmountToBorrower
+    cases pending
+    · have hfN := hpre.fees_norm fees.originationFee (by simp [LoanFees.amountFields])
+      have h63 : j₁ < 2 ^ 63 := lt_trans hj16 (by norm_num)
+      exact Number.operator_sub_ok_of_grid _ _ j₁ k props.loanScale hp hfN hj₁ hk h63 (by omega)
+        ⟨by unfold cMinOffset; omega, by unfold cMaxOffset; omega⟩
+    · exact ⟨_, rfl⟩
+  exact ⟨loan, v', a, Loan.create_success_proof broker v principal rates fees schedule allowsOverpayment pending
+    props loanState debtTotal' principal' raw v' broker' loan a hchecks hround hadj hv' hbroker
+    (UInt32.toNat_add_one_lt hcount) hpre.fits.firstDue_lt hloan ha⟩
 
 /-- A to-nearest rounding is at least a representable value at or below the truth. -/
 private lemma rn_ge {r : Number} {t : ℚ} (hR : r.RoundsToRepresentable t .to_nearest) (w : Number)
@@ -1389,7 +1432,7 @@ lemma Loan.create_error_codes_proof (broker : LoanBroker) (v : Vault) (principal
   all_goals
     -- every check passed, so the create succeeds
     exfalso
-    obtain ⟨loan, v', hrun⟩ := Loan.create_success_lawful broker v principal rates fees schedule
+    obtain ⟨loan, v', _, hrun⟩ := Loan.create_success_lawful broker v principal rates fees schedule
       allowsOverpayment pending _ _ _ hpre hasset hgrid hcount
       (Loan.createChecks_of_steps broker v principal rates fees schedule _ _ _ _ _ _ _ ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
         ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›)

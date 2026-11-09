@@ -2,8 +2,12 @@ import XRPL.Properties.Vault.Defs
 import XRPL.Properties.Vault.Common.GuardProofs
 import XRPL.Properties.Vault.Proofs.CanVaultUpdate
 import XRPL.Model.Vault.VaultSet
+import XRPL.Properties.Vault.Proofs.CreateUpdate
+import XRPL.Properties.Vault.Proofs.Frame
 
-/-! # `Vault.canVaultUpdate` exits -/
+/-! # `Vault.canVaultUpdate` and `Vault.update`
+
+The exits of `canVaultUpdate`. An update changes only AssetsMaximum and the deposit block. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -45,5 +49,34 @@ theorem Vault.canVaultUpdate_lawful_iff (m assetsTotal : Number) (blockDeposit u
       (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false ∧
       (m.toRat = 0 ∨ assetsTotal.toRat ≤ m.toRat) :=
   Vault.canVaultUpdate_lawful_iff_proof v m assetsTotal blockDeposit unblockDeposit hnorm hat
+
+/-- Vault update with a new AssetsMaximum and deposit flags that pass the lawfulness check -> it succeeds and only they
+change, a maximum that passes the checks is stored exactly, and no change keeps the vault as it is. -/
+theorem Vault.update_success :
+    (∀ (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool),
+      (∀ m ∈ assetsMaximum, m.operator_eq Number.zero = false →
+        m.isNormalized ∧ Number.zero.operator_lt m = true) →
+      (blockDeposit = true → v.ownerCanBlockDeposit = true) →
+      ∃ v', v.update assetsMaximum blockDeposit unblockDeposit = .ok v' ∧
+        ∃ assetsMaximum' depositBlocked', v'.toRawVault =
+          { v.toRawVault with assetsMaximum := assetsMaximum', depositBlocked := depositBlocked' }) ∧
+    (∀ (m : Number) (blockDeposit unblockDeposit : Bool),
+      v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS →
+      STAmount.isRounded v.numericType m = false) ∧
+    v.update none false false = .ok v :=
+  ⟨fun assetsMaximum blockDeposit unblockDeposit hmax hblock =>
+      have ⟨v', hok⟩ := Vault.update_success_proof v assetsMaximum blockDeposit unblockDeposit hmax hblock
+      ⟨v', hok, Vault.update_frame v assetsMaximum blockDeposit unblockDeposit v' hok⟩,
+    Vault.canVaultUpdate_assetsMaximum_not_rounded_proof v, Vault.update_none_proof v⟩
+
+/-- A field out of range -> `update` returns notLawful, one line per field rule. -/
+theorem Vault.update_not_lawful (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) :
+    (∀ m : Number, assetsMaximum = some m → m.operator_eq Number.zero = false →
+      ¬ m.isNormalized ∨ Number.zero.operator_lt m = false →
+      v.update assetsMaximum blockDeposit unblockDeposit = .error .notLawful) ∧
+    (blockDeposit = true → v.ownerCanBlockDeposit = false →
+      v.update assetsMaximum blockDeposit unblockDeposit = .error .notLawful) :=
+  ⟨fun m hm => hm ▸ Vault.update_assetsMaximum_out_of_range_proof v m blockDeposit unblockDeposit,
+    fun hb hocb => hb ▸ Vault.update_block_not_permitted_proof v assetsMaximum unblockDeposit hocb⟩
 
 end XRPL.Model.SingleAssetVault

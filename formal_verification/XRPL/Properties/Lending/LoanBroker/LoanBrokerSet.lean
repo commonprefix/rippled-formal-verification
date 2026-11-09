@@ -11,8 +11,8 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- A new loan broker -> with every field in range and consistent with the others a lawful broker is created, with
-DebtTotal = CoverAvailable = LoanCount = 0, and a DebtMaximum that passes the checks is stored exactly. -/
+/-- Loan broker creation with fields that pass the lawfulness check -> it succeeds with DebtTotal = CoverAvailable =
+LoanCount = 0, and a DebtMaximum that passes the checks is stored exactly. -/
 theorem LoanBroker.create_success (nt : NumericType) :
     -- ManagementFeeRate at most 10%, each cover rate at most 100%, and both cover rates set or neither
     (∀ tx : LoanBrokerSetCreate, (∀ dm ∈ tx.debtMaximum, dm.isNormalized ∧ Number.zero.operator_le dm = true ∧
@@ -28,8 +28,8 @@ theorem LoanBroker.create_success (nt : NumericType) :
   ⟨fun tx => LoanBroker.create_success_proof tx nt, fun tx => LoanBroker.create_no_exposure_proof tx nt,
     fun pool dm hcan => LoanBroker.canCreate_debtMaximum_not_rounded_proof pool dm nt hcan⟩
 
-/-- Loan broker update -> a new DebtMaximum in range gives a lawful broker where no other field changes, one that
-passes the checks is stored exactly, and no DebtMaximum changes nothing. -/
+/-- Loan broker update with a new DebtMaximum that passes the lawfulness check -> it succeeds and only DebtMaximum
+changes, one that passes the checks is stored exactly, and no DebtMaximum changes nothing. -/
 theorem LoanBroker.update_success :
     (∀ dm : Number, dm.isNormalized → Number.zero.operator_le dm = true → dm.operator_le debtMaximumCap = true →
       (dm ≠ Number.zero → lb.debtTotal.operator_le dm = true) →

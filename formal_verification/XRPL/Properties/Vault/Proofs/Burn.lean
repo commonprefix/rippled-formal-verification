@@ -120,6 +120,14 @@ lemma Vault.canBurnShares_error_codes_proof (v : Vault) (amount holderShares : S
   walk_ok
   all_goals simp
 
+lemma Vault.burnShares_error_codes_proof (v : Vault) (sharesDestroyed : STAmount) (ter : TER)
+    (hok : (v.burnShares sharesDestroyed).run = .ok (.error ter)) :
+    ter = .tecPRECISION_LOSS := by
+  simp only [Vault.burnShares] at hok
+  unfold_ter at hok
+  walk_ok
+  all_goals simp
+
 lemma Vault.canBurnShares_no_permission_proof (v : Vault) (amount holderShares : STAmount)
     (hsolvent : v.isInsolvent = false) :
     (v.canBurnShares amount holderShares).run = .ok (.error .tecNO_PERMISSION) := by

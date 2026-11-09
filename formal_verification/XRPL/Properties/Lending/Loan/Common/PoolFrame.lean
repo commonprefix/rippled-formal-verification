@@ -58,14 +58,14 @@ private lemma Vault.poolAdjust_keepsSettings (v v' : Vault) (c : PoolBalanceChan
       (congrArg RawVault.ownerCanBlockDeposit he :), (congrArg RawVault.depositBlocked he :)⟩
 /-- A new loan keeps the vault settings. -/
 lemma Loan.create_keepsSettings (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (h : (Loan.create broker v principal rates fees schedule ao pending).run = .ok (.ok r)) :
     Vault.KeepsSettings v r.pool' := by
   obtain ⟨_, _, _, _, _, -, -, hpool, -, -⟩ := Loan.create_ok_inv broker v principal rates fees schedule ao pending r h
   exact Vault.poolAdjust_keepsSettings _ _ _ hpool
 
 /-- Accept keeps the vault settings. -/
-lemma Loan.accept_keepsSettings (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_keepsSettings (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : Vault.KeepsSettings v r.pool' := by
   simp only [Loan.accept] at h
   unfold_ter at h

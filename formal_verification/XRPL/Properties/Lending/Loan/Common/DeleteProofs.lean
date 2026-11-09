@@ -130,7 +130,7 @@ variable (broker : LoanBroker) (principal : Number) (rates : LoanRates) (fees : 
   (schedule : LoanSchedule) (allowsOverpayment : Bool)
 
 /-- Proof body of `createPending_deletePending_restores`. -/
-lemma Loan.createPending_deletePending_restores_proof (r : LoanWithPool Vault) (r' : LoanBrokerWithPool Vault)
+lemma Loan.createPending_deletePending_restores_proof (r : LoanWithDisbursement Vault) (r' : LoanBrokerWithPool Vault)
     (hpn : principal.isNormalized) (hp0 : 0 ≤ principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (haa : STAmount.isRounded v.numericType v.assetsAvailable = false)

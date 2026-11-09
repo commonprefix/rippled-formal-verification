@@ -1079,11 +1079,11 @@ private lemma loanPeriodicRate_pos (ir : TenthBips32) (interval : UInt32) (rate 
 /-- A successful create stores the loan built from its computed properties, on the broker with
 the new DebtTotal and LoanCount. -/
 lemma Loan.create_loan_eq (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ props loanState debtTotal' broker',
       Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal' ∧
-      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+      r.loan'.toRawLoan = RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
         (schedule.startDate + schedule.paymentInterval) ∧
       broker'.toRawLoanBroker =
         { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 } := by
@@ -1095,7 +1095,7 @@ lemma Loan.create_loan_eq (broker : LoanBroker) (v : Vault) (principal : Number)
 /-- The total value at LoanScale. With interest every step rounds up, so it is `PP × n` rounded up
 onto the LoanScale grid. -/
 private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hrate : rates.interestRate ≠ 0) :
     r.loan'.toExact.totalValueOutstanding =
@@ -1227,7 +1227,7 @@ lemma Loan.create_loanScale_range (broker : LoanBroker) (v : Vault) (principal :
 /-- Proof body of the upper bound part of `Lending.create_value`. -/
 lemma Loan.create_value_upper_bound_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault)
+    (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hrate : rates.interestRate ≠ 0) :
     r.loan'.toExact.totalValueOutstanding - r.loan'.toExact.periodicPayment * r.loan'.toExact.paymentTotal.toNat <
@@ -1245,7 +1245,7 @@ lemma Loan.create_value_upper_bound_proof (broker : LoanBroker) (v : Vault) (pri
 /-- Proof body of the lower bound part of `Lending.create_value`. -/
 lemma Loan.create_value_lower_bound_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault)
+    (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hrate : rates.interestRate ≠ 0) :
     r.loan'.toExact.periodicPayment * r.loan'.toExact.paymentTotal.toNat - r.loan'.toExact.totalValueOutstanding ≤
@@ -1257,7 +1257,7 @@ lemma Loan.create_value_lower_bound_proof (broker : LoanBroker) (v : Vault) (pri
 /-- Proof body of the PrincipalRequested part of `Lending.create_value`. -/
 lemma Loan.create_covers_principal_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hrate : rates.interestRate ≠ 0) :
@@ -1560,7 +1560,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
 /-- Proof body of the zero InterestRate line of `Lending.create_value`. -/
 lemma Loan.create_zero_rate_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hrate : rates.interestRate = 0) :
@@ -1818,7 +1818,7 @@ lemma computeManagementFee_bounds (nt : NumericType) (ti mfo : Number) (K : ℕ)
 /-- Proof body of `create_managementFee_lower_bound`. -/
 lemma Loan.create_managementFee_lower_bound_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault)
+    (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     (r.loan'.broker.managementFeeRate.toNat : ℚ) / 100000 *
       (r.loan'.toExact.totalValueOutstanding - r.loan'.toExact.principalOutstanding) -

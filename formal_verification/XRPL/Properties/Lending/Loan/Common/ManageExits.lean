@@ -263,6 +263,7 @@ lemma Loan.manageDefault_success_proof (interestDue dc debtTotal' coverAvailable
         .ok (.ok { loan' := loan', pool' := v', amountToPool := dc, amountToBroker := Number.zero }) ∧
       loan'.toRawLoan = loan.defaultedLoan broker' := by
   obtain ⟨loan', hl, hleq⟩ := Loan.defaultedLoan_lawful loan broker'
+    (congrArg RawLoanBroker.numericType (RawLoanBroker.to_lawful_ok hbroker).1 :)
   refine ⟨loan', ?_, hleq⟩
   rw [Loan.manageDefault_run loan v, hi]
   simp only

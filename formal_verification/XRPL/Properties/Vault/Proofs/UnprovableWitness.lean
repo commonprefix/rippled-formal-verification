@@ -1,7 +1,8 @@
 import XRPL.Properties.Vault.Common.VaultDecidable
 import XRPL.Properties.Vault.Common.ReachableDefs
+import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 
-/-! # Counterexample for `Vault.withdraw_can_empty_claim` (CanEmpty.lean)
+/-! # Witness for `Vault.Reachable.canEmpty` on a lawful vault (CanEmpty.lean)
 
 * A lawful int64 vault holding `9223372036854775806` with `3` shares: redeeming all three
   shares prices one unit above `assetsAvailable`, so the funds guard rejects the full
@@ -46,13 +47,13 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol UnprovableWit
 
-lemma Vault.full_exit_rejected_witness :
-    ∃ (v : Vault) (t : UInt32) (sharesTotalAmount : STAmount)
-      (hpos : 0 < (WithdrawAmount.vaultShares sharesTotalAmount).amount.toRat),
-      v.assetsDeployed = Number.zero ∧ v.phase t ≠ .investment ∧
-      STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount ∧
-      (v.withdraw (.vaultShares sharesTotalAmount) false t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS) :=
-  ⟨ceL, 0, ceShares, ceShares_pos, rfl, by native_decide, by native_decide,
+lemma Vault.Reachable.canEmpty_witness :
+    ∃ (v : Vault) (t : UInt32) (shares : STAmount) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat),
+      v.assetsDeployed = Number.zero ∧ (v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment) ∧
+      shares.Canonical ∧ shares.mNumericType = .int64 ∧ shares.toRat = v.toExact.sharesTotal ∧
+      (v.withdraw (.vaultShares shares) false t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS) :=
+  ⟨ceL, 0, ceShares, ceShares_pos, rfl, Or.inr (by native_decide),
+    STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, by native_decide,
     eq_of_rejectedTer _ _ (by native_decide)⟩
 
 end XRPL.Model.SingleAssetVault

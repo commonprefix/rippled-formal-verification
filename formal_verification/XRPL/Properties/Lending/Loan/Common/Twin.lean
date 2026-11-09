@@ -121,7 +121,7 @@ lemma Loan.doPayment_twin {l l' r r' : Loan} (h : Loan.Twin l l') (pc : PaymentC
 /-- Loans created with the same terms and PrincipalRequested, on brokers of the same asset and management fee
 rate and vaults of the same base scale, are twins. -/
 lemma Loan.create_twin (b b' : LoanBroker) (v v' : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r r' : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r r' : LoanWithDisbursement Vault)
     (hnt : b'.numericType = b.numericType) (hm : b'.managementFeeRate = b.managementFeeRate)
     (hbe : v'.baseExponent = v.baseExponent)
     (h : (Loan.create b v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))

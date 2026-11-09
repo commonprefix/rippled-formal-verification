@@ -320,8 +320,8 @@ private lemma LendingLedger.loanTx_twin {l L l₂ L₂ : LendingLedger} (hr : l.
     refine Or.inr (LendingLedger.commit_twin he he' _ _ ?_)
     obtain ⟨i1, hi1⟩ := Loan.interestDue_ok loan
     obtain ⟨i2, hi2⟩ := Loan.interestDue_ok loan'
-    obtain ⟨_, -, -, h1⟩ := Loan.accept_ok_inv loan _ i1 r hi1 hok
-    obtain ⟨_, -, -, h2⟩ := Loan.accept_ok_inv loan' _ i2 r' hi2 hok'
+    obtain ⟨_, -, -, h1, -⟩ := Loan.accept_ok_inv loan _ i1 r hi1 hok
+    obtain ⟨_, -, -, h2, -⟩ := Loan.accept_ok_inv loan' _ i2 r' hi2 hok'
     rw [(RawLoan.to_lawful_ok h2).1, (RawLoan.to_lawful_ok h1).1, (htwin _ _ hat hat').raw]
   · obtain ⟨-, -, -, -, -, -, -, -, -, hl2, -⟩ := LendingLedger.loanDelete_ok hb
     obtain ⟨-, -, -, -, -, -, -, -, -, hL2, -⟩ := LendingLedger.loanDelete_ok hb'

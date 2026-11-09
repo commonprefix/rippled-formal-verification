@@ -64,7 +64,7 @@ private lemma loanPeriodicPayment_nonpos (principal rate : Number) (pr : UInt32)
 /-- A successful create lends a positive amount. A nonpositive principal would give a nonpositive
 PeriodicPayment, which the sanity check rejects. -/
 private lemma Loan.create_principal_pos (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     0 < principal.toRat := by
@@ -83,7 +83,7 @@ private lemma Loan.create_principal_pos (broker : LoanBroker) (v : Vault) (princ
 /-- A new loan has nonnegative interestDue. PrincipalOutstanding is PrincipalRequested, at most the total
 value, and the fee is at most the interest. -/
 private lemma Loan.create_interestDue_nonneg (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     0 ≤ r.loan'.toExact.interestDue := by

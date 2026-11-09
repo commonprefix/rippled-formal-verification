@@ -169,7 +169,7 @@ lemma operator_mul_rounded_valueMode (rate x y r : Number) (hx : x.isNormalized)
 
 /-- Proof body of the LoanScale line of `Lending.create_updates`. -/
 lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false) (hnt : broker.numericType = v.numericType)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -358,7 +358,7 @@ lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal :
 /-- A new loan's total value is at least PrincipalRequested. -/
 lemma Loan.create_principal_le_value (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     principal.toRat ≤ r.loan'.toExact.totalValueOutstanding := by

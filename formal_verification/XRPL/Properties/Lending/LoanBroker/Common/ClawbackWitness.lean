@@ -15,7 +15,7 @@ open XRPL.Model.SingleAssetVault (Vault)
 /-- A full clawback from `wbOffGridDebt`. -/
 private def wrClawDebt : LoanBrokerCoverResult := wResultOf (wbOffGridDebt.coverClawback wvBase0 none)
 
-/-- Proof body of `coverClawback_keeps_minimum_attained`. -/
+/-- Proof body of `cover_keeps_minimum_clawback_attained`. -/
 lemma LoanBroker.coverClawback_keeps_minimum_witness :
     ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult)
       (minimumCover : Number),
@@ -59,7 +59,7 @@ lemma LoanBroker.coverClawback_all_leaves_minimum_witness :
     fun h => absurd h (by native_decide), (fun a ha => by cases ha), Or.inl rfl, by native_decide,
     by native_decide, by native_decide, by native_decide⟩
 
-/-- Proof body of `coverClawback_total_lawful_attained`. -/
+/-- Proof body of `cover_total_clawback_attained`. -/
 lemma LoanBroker.coverClawback_lawful_total_witness :
     ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount),
       v.numericType = lb.numericType ∧
@@ -75,7 +75,7 @@ private def wrClaw2 : LoanBrokerCoverResult :=
   wResultOf (wrClaw1.loanBroker'.coverClawback wvBase6 (some waHalves))
 private def wrClaw3 : LoanBrokerCoverResult := wResultOf (wbHeld.coverClawback wvBase6 (some waThree))
 
-/-- Proof body of `coverClawback_split_attained`. -/
+/-- Proof body of `cover_split_clawback_attained`. -/
 lemma LoanBroker.coverClawback_split_witness :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
       lb.Reachable base ∧

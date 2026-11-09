@@ -76,7 +76,7 @@ private lemma Vault.poolAdjust_zero_total_eq (v v' : Vault) (c : PoolBalanceChan
 
 /-- A new loan keeps the total exactly: its principal leaves AssetsAvailable and joins AssetsDeployed. -/
 private lemma Loan.create_total_eq (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
@@ -119,7 +119,7 @@ private lemma Loan.create_total_eq (broker : LoanBroker) (v : Vault) (principal 
 
 
 /-- An accept moves no cash and deploys nothing. -/
-private lemma Loan.accept_total_eq (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_total_eq (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (h : (loan.accept v).run = .ok (.ok r)) :

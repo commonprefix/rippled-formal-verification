@@ -149,7 +149,7 @@ lemma Loan.payment_unimpaired {α : Type} [AssetPool α] (loan : Loan) (pool : �
     | (rw [Loan.paySingleInstalment_flag _ _ _ _ _ ‹(Loan.paySingleInstalment _ _ _ _) = _›]
        exact Loan.unimpairIfImpaired_flag _ _ _ ‹(Loan.unimpairIfImpaired _ _) = _›)
 /-- Accept keeps the impaired flag. -/
-private lemma Loan.accept_flag (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_flag (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.isImpaired = loan.isImpaired := by
   simp only [Loan.accept] at h
   unfold_ter at h

@@ -522,7 +522,7 @@ private lemma clawback_capped_bounds (v : Vault) (cash shares : STAmount) (waive
     (Number.negative_false_of_nonneg _ v.wf.assetsAvailable_norm v.exact.assetsAvailable_nonneg) hcash
   exact clawback_shares_bounds v cash shares waive nav hnav hcc hc0 hok hnz
 
-/-- Proof of the valid-vault line of `Vault.clawback_sharesDestroyed_clamped`. -/
+/-- Proof of the capped line of `Vault.clawback_sharesDestroyed`. -/
 lemma Vault.clawback_sharesDestroyed_clamped_total_proof (v : Vault)
     (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount) (waive : Bool)
     (assetsRecoveredNumber nav : Number) (hnav : v.assetsTotalForWithdrawal waive = .ok nav)

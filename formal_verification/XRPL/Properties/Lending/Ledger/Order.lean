@@ -271,7 +271,7 @@ theorem Lending.Reachable.broker_subsequence_cover_attained :
 base scale -> the same totalDue for every instalment at the same time. -/
 theorem Lending.same_terms_same_payments (b b' : LoanBroker) (v v' : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r r' : LoanWithPool Vault) (hnt : b'.numericType = b.numericType)
+    (r r' : LoanWithDisbursement Vault) (hnt : b'.numericType = b.numericType)
     (hm : b'.managementFeeRate = b.managementFeeRate) (hbe : v'.baseExponent = v.baseExponent)
     (h : (Loan.create b v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (h' : (Loan.create b' v' principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r')) :

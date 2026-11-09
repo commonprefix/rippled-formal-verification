@@ -9,9 +9,12 @@ import XRPL.Properties.Protocol.STAmount.Compare.Compare
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Vault.AssociateAsset
 import XRPL.Properties.Vault.Defs
-import XRPL.Properties.Vault.Vault
 import XRPL.Properties.Vault.Reachable
 import XRPL.Properties.Vault.VaultBurn
+import XRPL.Properties.Vault.VaultCreate
+import XRPL.Properties.Vault.Accounting
+import XRPL.Properties.Vault.NoInternalErrors
+import XRPL.Properties.Vault.Isolation
 import XRPL.Properties.Vault.VaultSet
 import XRPL.Properties.Vault.VaultDelete
 import XRPL.Properties.Vault.VaultDepositReturn
@@ -29,7 +32,6 @@ import XRPL.Properties.Vault.ExitOrder
 import XRPL.Properties.Lending.Loan.Defs
 import XRPL.Properties.Lending.LoanBroker.Defs
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerValid
-import XRPL.Properties.Lending.LoanBroker.LoanBroker
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerSetReturn
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerSet
 import XRPL.Properties.Lending.LoanBroker.LoanBrokerDeleteReturn

@@ -11,7 +11,7 @@ open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault.DepAcc
 
 /-- The issued shares are the floor of a value within `sharesOverε` relatively of the ideal share count. -/
-private lemma shares_spec_exact (v : Vault) (amount shares : STAmount)
+lemma shares_spec_exact (v : Vault) (amount shares : STAmount)
     (hc : amount.Canonical) (hpos : 0 < amount.toRat)
     (navN : Number) (hat : v.assetsTotal = .ok navN)
     (hok : assetsToSharesDeposit v amount = .ok shares)

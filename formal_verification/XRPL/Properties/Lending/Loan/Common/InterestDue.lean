@@ -578,7 +578,7 @@ private lemma Loan.overpayment_interestDue_nonneg (loan : Loan) (v : Vault)
     | fractional => exact hn
 
 /-- An accept keeps the loan's amounts, so it keeps interestDue. -/
-lemma Loan.accept_interestDue (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_interestDue (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.toExact.interestDue = loan.toExact.interestDue := by
   simp only [Loan.accept] at h
   unfold_ter at h

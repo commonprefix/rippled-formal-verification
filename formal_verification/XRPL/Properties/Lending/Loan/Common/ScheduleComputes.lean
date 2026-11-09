@@ -259,7 +259,7 @@ lemma Loan.pay_computes (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amount
       (UnsettledPayment.payInstalments_computes amount _ _ p0 hloop hu) h1
 
 /-- An accept keeps the loan's schedule computing. -/
-private lemma Loan.accept_computes (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_computes (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hn : loan.ScheduleComputes) (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.ScheduleComputes := by
   simp only [Loan.accept] at h
   unfold_ter at h

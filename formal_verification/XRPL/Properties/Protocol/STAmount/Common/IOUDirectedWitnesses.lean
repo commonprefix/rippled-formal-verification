@@ -62,7 +62,10 @@ lemma add_lift_trace_g (mode : rounding_mode) :
   rw [show Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
       largeRange.min largeRange.max mode .normalize2 =
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
-      from by rw_doRoundUp_spec; unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit Guard.new; rfl]
+      from by
+        rw_doRoundUp_spec
+        unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit Guard.new
+        rfl]
   simp only [RoundResult.toNumber]
 
 lemma ofnum_dir (mode : rounding_mode) (m16 : UInt64)
@@ -131,7 +134,7 @@ lemma add_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
     ∃ (v1 v2 result : STAmount),
-      v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
+      v1.IOUCanonical ∧ v2.IOUCanonical ∧
       STAmount.operator_add v1 v2 mode = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) := by
   have hmv : m16.toNat = (if mode = .upward then 1000000000000001 else 1000000000000000) := by
@@ -156,8 +159,7 @@ lemma add_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
   refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, false⟩,
           ⟨.fractional, m16, 1, false⟩,
           ⟨by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
-  · rw [h1, h2]; norm_num
+          ⟨by decide, by decide, by decide, by decide, by decide⟩, hop, ?_, ?_⟩
   · show m16 ≠ 0; rw [hm16]; split <;> decide
   · unfold RoundsWithinWitness
     rw [show RatValued.toRat (⟨.fractional, m16, 1, false⟩ : STAmount)
@@ -170,7 +172,7 @@ theorem sub_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))
     (hmode : mode = .downward ∨ mode = .upward ∨ mode = .towards_zero) :
     ∃ (v1 v2 result : STAmount),
-      v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
+      v1.IOUCanonical ∧ v2.IOUCanonical ∧
       STAmount.operator_sub v1 v2 mode = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) := by
   have hmv : m16.toNat = (if mode = .upward then 1000000000000001 else 1000000000000000) := by
@@ -199,8 +201,7 @@ theorem sub_dir_wit_core (mode : rounding_mode) (m16 : UInt64)
   refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, true⟩,
           ⟨.fractional, m16, 1, false⟩,
           ⟨by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_, hop, ?_, ?_⟩
-  · rw [h1, h2]; norm_num
+          ⟨by decide, by decide, by decide, by decide, by decide⟩, hop, ?_, ?_⟩
   · show m16 ≠ 0; rw [hm16]; split <;> decide
   · unfold RoundsWithinWitness
     rw [show RatValued.toRat (⟨.fractional, m16, 1, false⟩ : STAmount)

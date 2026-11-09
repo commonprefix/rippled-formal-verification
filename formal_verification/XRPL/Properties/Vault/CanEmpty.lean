@@ -1,5 +1,7 @@
 import XRPL.Properties.Vault.Proofs.CanEmpty
 import XRPL.Properties.Vault.Proofs.UnprovableWitness
+import XRPL.Properties.Vault.Proofs.WithdrawFee
+import XRPL.Properties.Vault.Proofs.WithdrawUpdates
 
 /-! # Emptying a vault
 
@@ -10,14 +12,9 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- A reachable vault can be emptied by a finite withdrawal sequence. One withdrawal of every share
-suffices, made once the vault is outside its investment phase. -/
-theorem Vault.Reachable.canEmpty (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) : CanEmpty v t :=
-  Vault.Reachable.canEmpty_proof v t hr
-
 /-- When withdrawals are open, a withdrawal of every share from a reachable vault succeeds, pays out
 all the cash, and leaves no cash and no shares. -/
-theorem Vault.withdraw_all (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
+lemma Vault.withdraw_all (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0) (waive : Bool)
     (hopen : v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment)
     (shares : STAmount) (hc : shares.Canonical) (hty : shares.mNumericType = .int64)
     (hall : shares.toRat = v.toExact.sharesTotal) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) :
@@ -27,24 +24,46 @@ theorem Vault.withdraw_all (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t
   Vault.withdraw_all_proof v t0 t hr waive
     (by rcases hopen with h | h <;> cases hf : v.earlyExitFeeRate <;> simp_all) shares hc hty hall hpos
 
-/-- Every lawful vault with nothing lent out can be emptied by redeeming all its shares once withdrawals are
-open. False, see `withdraw_can_empty_false`. -/
-def Vault.withdraw_can_empty_claim : Prop :=
-  ∀ (v : Vault) (t : UInt32) (sharesTotalAmount : STAmount),
-    v.assetsDeployed = Number.zero →
-    (v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment) →
-    STAmount.ofNumber .int64 v.sharesTotal .to_nearest = .ok sharesTotalAmount →
-    ∀ hpos : 0 < (WithdrawAmount.vaultShares sharesTotalAmount).amount.toRat,
-    ∃ r : VaultWithAmounts,
-      (v.withdraw (.vaultShares sharesTotalAmount) false t hpos).run = .ok (.ok r) ∧
-      r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
-      r.vault'.sharesTotal = Number.zero
+/-- Every reachable vault -> it can be emptied, a full withdrawal by shares succeeds outside a fee-free investment
+phase, a full withdrawal pays all the cash, a share withdrawal never lacks funds, only a full withdrawal empties it. -/
+theorem Vault.Reachable.canEmpty (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) :
+    CanEmpty v t0 ∧
+    (∀ (t : UInt32) (waive : Bool), (v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment) →
+      ∀ shares : STAmount, shares.Canonical → shares.mNumericType = .int64 →
+      shares.toRat = v.toExact.sharesTotal → ∀ hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat,
+      ∃ r : VaultWithAmounts, (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok r) ∧
+        r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
+        r.vault'.sharesTotal = Number.zero) ∧
+    (∀ (shares : STAmount) (waiveUnrealizedLoss : Bool) (t : UInt32)
+      (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat),
+      shares.Canonical → -- a transaction amount is a canonical amount
+      shares.toRat ≤ v.toExact.sharesTotal →
+      (v.withdraw (.vaultShares shares) waiveUnrealizedLoss t hpos).run ≠ .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
+    ∀ (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
+      amount.amount.Canonical → -- a transaction amount is a canonical amount
+      amount.InAsset v.numericType → -- of the vault's asset, or its shares
+      ∀ r : VaultWithAmounts, (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) →
+      (r.shares.toRat = v.toExact.sharesTotal → r.assets.toRat = v.assetsAvailable.toRat) ∧
+      (r.shares.toRat = v.toExact.sharesTotal ↔
+        r.vault'.toRawVault = { v.toRawVault with assetsAvailable := Number.zero, sharesTotal := Number.zero }) :=
+  ⟨Vault.Reachable.canEmpty_proof v t0 hr,
+    fun t waive hopen shares hc hty hall hpos => Vault.withdraw_all v t0 t hr waive hopen shares hc hty hall hpos,
+    fun shares waiveUnrealizedLoss t hpos hc hle =>
+      Vault.withdraw_under_available_proof v shares waiveUnrealizedLoss t t0 hpos hr hc
+        (Vault.Reachable.maxValue_fits v t0 hr (lt_of_lt_of_le hpos hle)) hle,
+    fun amount waiveUnrealizedLoss t hpos hc hty r hok =>
+      ⟨fun hfinal => (Vault.withdraw_final_proof v amount waiveUnrealizedLoss t t0 hpos hr hc hty
+          (Vault.Reachable.maxValue_fits v t0 hr
+            (Vault.withdraw_sharesTotal_pos v amount waiveUnrealizedLoss t hpos hc hty r hok)) r hok hfinal).1,
+        Vault.withdraw_final_iff_proof v amount waiveUnrealizedLoss t hpos hc hty r hok⟩⟩
 
-/-- `withdraw_can_empty_claim` is false: an int64 vault with `9223372036854775806` assets and `3` shares
-prices the full exit one unit above the cash and rejects it with `tecINSUFFICIENT_FUNDS`. -/
-theorem Vault.withdraw_can_empty_false : ¬ Vault.withdraw_can_empty_claim := fun h =>
-  let ⟨v, t, s, hpos, hlent, hphase, hst, hrej⟩ := Vault.full_exit_rejected_witness
-  let ⟨_, hok, _⟩ := h v t s hlent (Or.inr hphase) hst hpos
-  by rw [hok] at hrej; cases hrej
+/-- Witness for `Reachable.canEmpty`: a lawful int64 vault with nothing deployed, `9223372036854775806` assets and `3`
+shares, outside the investment phase, prices a full withdrawal one unit above the cash and rejects it. -/
+theorem Vault.Reachable.canEmpty_attained :
+    ∃ (v : Vault) (t : UInt32) (shares : STAmount) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat),
+      v.assetsDeployed = Number.zero ∧ (v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment) ∧
+      shares.Canonical ∧ shares.mNumericType = .int64 ∧ shares.toRat = v.toExact.sharesTotal ∧
+      (v.withdraw (.vaultShares shares) false t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS) :=
+  Vault.Reachable.canEmpty_witness
 
 end XRPL.Model.SingleAssetVault

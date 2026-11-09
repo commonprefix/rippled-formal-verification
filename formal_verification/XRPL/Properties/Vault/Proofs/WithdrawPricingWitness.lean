@@ -1,11 +1,11 @@
 import XRPL.Properties.Vault.Proofs.Support.ReachableHistory
 import XRPL.Properties.Vault.Common.WithdrawDefs
 
-/-! # Witness for the `sharesToAssetsWithdraw` pricing
+/-! # Witness for the withdrawal payout with no fee
 
 Each vault comes from a reachable history the model computes: a create, a deposit, then a donation.
 
-* `vI`: an integral vault of 3 assets / 2 shares, one share is worth `1.5` and is priced `2`
+* `vI`: an integral vault of 3 assets / 2 shares, one share is worth `1.5` and a withdrawal of it pays `2`
   (ties to even), a full half unit above the worth. -/
 
 set_option linter.style.nativeDecide false
@@ -28,6 +28,12 @@ def one : STAmount := int64Amount 1
 
 lemma one_canonical : one.Canonical := STAmount.canonical_of_canonicalB _ (by native_decide)
 
+lemma oneShare_pos : 0 < one.toRat := by native_decide
+
+/-- The withdrawal of one share from `vI`, as the model computes it. -/
+def wdOne : VaultWithAmounts :=
+  ((vI.withdraw (.vaultShares one) false 0 oneShare_pos).run.toOption.bind Except.toOption).getD ⟨⟨one, one⟩, vI⟩
+
 /-- The net asset value a vault's withdrawal prices at, as the model computes it. -/
 def nav (v : Vault) : Number := (v.assetsTotalForWithdrawal false).toOption.getD Number.zero
 
@@ -37,16 +43,16 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol WdPriceWit
 
-/-- Integral overshoot: one share worth `1.5` is priced `2`. -/
-lemma Vault.sharesToAssetsWithdraw_overshoot_witness :
-    ∃ (v : Vault) (t0 : UInt32) (shares assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number),
-      Vault.Reachable v t0 ∧ 0 ≤ shares.toRat ∧ shares.Canonical ∧
+/-- Integral overshoot: a withdrawal with no fee of one share worth `1.5` pays `2`. -/
+lemma Vault.withdraw_payout_worth_witness :
+    ∃ (v : Vault) (t t0 : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+      (hpos : 0 < amount.amount.toRat) (r : VaultWithAmounts) (netAssetValue : Number),
+      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
+      (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
+      r.shares.toRat < v.toExact.sharesTotal ∧ v.earlyExitFeeRateAt t = 0 ∧
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
-      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
-      v.sharesToAssetsWithdraw shares waiveUnrealizedLoss = .ok assets ∧
-      v.idealAssetsWithdrawAt netAssetValue.toRat shares.toRat < assets.toRat :=
-  ⟨vI, 0, one, int64Amount 2, false, nav vI, vI_reach, by native_decide, one_canonical, by native_decide,
-    fun _ => by native_decide, by native_decide, by native_decide, by native_decide⟩
+      v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat :=
+  ⟨vI, 0, 0, .vaultShares one, false, oneShare_pos, wdOne, nav vI, vI_reach, one_canonical, rfl, by native_decide,
+    by native_decide, by native_decide, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

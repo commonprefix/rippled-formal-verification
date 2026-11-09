@@ -112,7 +112,7 @@ lemma LoanBroker.Reachable.coverClawback_facts (lb : LoanBroker) (base : Int) (h
     hrz.resolve_right (by simp [(STAmount.isZero_eq_false_iff_pos _ hpos'.le).2 hpos']), ?_, hpos', hj, hfl, hcov⟩
   rw [hrt, STAmount.operator_neg_mNumericType, STAmount.ofNumber_mNumericType _ _ _ _ hof]
 
-/-- Proof body of the withdrawable part of `LoanBroker.coverDeposit_coverWithdraw_restores`. -/
+/-- Proof body of the withdrawable part of the deposit then withdrawal line of `LoanBroker.cover_restores`. -/
 lemma LoanBroker.coverDeposit_withdrawable_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -131,7 +131,7 @@ lemma LoanBroker.coverDeposit_withdrawable_proof (lb : LoanBroker) (base : Int) 
   rw [Number.toRat_zero, zero_add, hcov]
   linarith [lb.exact.coverAvailable_nonneg]
 
-/-- Proof body of the restore part of `LoanBroker.coverDeposit_coverWithdraw_restores`. -/
+/-- Proof body of the restore part of the deposit then withdrawal line of `LoanBroker.cover_restores`. -/
 lemma LoanBroker.coverDeposit_coverWithdraw_restores_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -153,7 +153,7 @@ lemma LoanBroker.coverDeposit_coverWithdraw_restores_proof (lb : LoanBroker) (ba
   rw [hcov', hfl, hcov]
   ring
 
-/-- Proof body of the clawable part of `LoanBroker.coverDeposit_coverClawback_restores`. -/
+/-- Proof body of the clawable part of the deposit then clawback line of `LoanBroker.cover_restores`. -/
 lemma LoanBroker.coverDeposit_clawable_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -192,7 +192,7 @@ lemma LoanBroker.coverDeposit_clawable_proof (lb : LoanBroker) (base : Int) (hr 
   rw [min_eq_left hle]
   exact floor_units_self _ _ (j : ℤ) (by rw [hj]; norm_cast)
 
-/-- Proof body of the restore part of `LoanBroker.coverDeposit_coverClawback_restores`. -/
+/-- Proof body of the restore part of the deposit then clawback line of `LoanBroker.cover_restores`. -/
 lemma LoanBroker.coverDeposit_coverClawback_restores_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -257,7 +257,7 @@ private lemma LoanBroker.Reachable.redeposit (lb lb1 : LoanBroker) (base : Int) 
   rw [floor_units_self _ _ (j : ℤ) (by rw [hj]; norm_cast)] at hfl
   rw [hcov', hfl, hsum]
 
-/-- Proof body of `coverWithdraw_coverDeposit_restores`. -/
+/-- Proof body of the withdrawal then deposit line of `cover_restores`. -/
 lemma LoanBroker.coverWithdraw_coverDeposit_restores_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -270,7 +270,7 @@ lemma LoanBroker.coverWithdraw_coverDeposit_restores_proof (lb : LoanBroker) (ba
     LoanBroker.Reachable.coverWithdraw_facts lb base hr hmax v hvb hnt amount hc hat hpos hcan res hok
   exact LoanBroker.Reachable.redeposit lb _ base hr hr1 hnt1 hmax v hvb hnt _ hcr htr hpos' hj hcov res' hdep
 
-/-- Proof body of `coverClawback_coverDeposit_restores`. -/
+/-- Proof body of the clawback then deposit line of `cover_restores`. -/
 lemma LoanBroker.coverClawback_coverDeposit_restores_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -284,7 +284,7 @@ lemma LoanBroker.coverClawback_coverDeposit_restores_proof (lb : LoanBroker) (ba
     LoanBroker.Reachable.coverClawback_facts lb base hr hmax v hvb hnt amount hreq hcan res hok
   exact LoanBroker.Reachable.redeposit lb _ base hr hr1 hnt1 hmax v hvb hnt _ hcr htr hpos' hj hcov res' hdep
 
-/-- Proof body of `coverWithdraw_split`. -/
+/-- Proof body of the withdrawal line of `cover_split`. -/
 lemma LoanBroker.coverWithdraw_split_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (a b c : STAmount)
@@ -313,7 +313,7 @@ lemma LoanBroker.coverWithdraw_split_proof (lb : LoanBroker) (base : Int) (hr : 
   rw [hcov2, hcov1, hcov3, hf1, hf2, hf3, hsum]
   ring
 
-/-- Proof body of `coverDeposit_split`. -/
+/-- Proof body of the deposit line of `cover_split`. -/
 lemma LoanBroker.coverDeposit_split_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (a b c : STAmount)
@@ -375,7 +375,7 @@ private lemma LoanBroker.Reachable.clawback_some (lb : LoanBroker) (base : Int) 
   rw [floor_min_grid a.toRat lb.toExact.coverAvailable base jc hjc] at hfl
   exact ⟨hr1, hnt1, by rw [hcov, hfl]⟩
 
-/-- Proof body of `coverClawback_split`. -/
+/-- Proof body of the clawback line of `cover_split`. -/
 lemma LoanBroker.coverClawback_split_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -407,7 +407,7 @@ lemma LoanBroker.coverClawback_split_proof (lb : LoanBroker) (base : Int) (hr : 
   rw [hcov2, hcov1, hcov3, hsum, ← min_add_min_sub a.toRat b.toRat _ hpb.le]
   ring
 
-/-- Proof body of `coverWithdraw_comm`. -/
+/-- Proof body of the withdrawal line of `cover_comm`. -/
 lemma LoanBroker.coverWithdraw_comm_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (a b : STAmount)
@@ -432,7 +432,7 @@ lemma LoanBroker.coverWithdraw_comm_proof (lb : LoanBroker) (base : Int) (hr : l
   rw [hcov2, hcov1, hcov4, hcov3, hf1, hf2, hf3, hf4]
   ring
 
-/-- Proof body of `coverDeposit_comm`. -/
+/-- Proof body of the deposit line of `cover_comm`. -/
 lemma LoanBroker.coverDeposit_comm_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (a b : STAmount)
@@ -467,7 +467,7 @@ lemma LoanBroker.coverDeposit_comm_proof (lb : LoanBroker) (base : Int) (hr : lb
   rw [hcov2, hcov1, hcov4, hcov3, hf1, hf2, hf3, hf4]
   ring
 
-/-- Proof body of `coverClawback_comm`. -/
+/-- Proof body of the clawback line of `cover_comm`. -/
 lemma LoanBroker.coverClawback_comm_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)

@@ -116,7 +116,8 @@ lemma Loan.canCreate_ne_wrap (broker : LoanBroker) (v : Vault) (principal : Numb
 lemma Loan.create_ne_wrap (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
     (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
     (hpr : schedule.paymentTotal ≠ 0) (hcount : broker.loanCount.toNat + 1 < 2 ^ 32)
-    (hdue : schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32) (hp : principal.isNormalized) :
+    (hdue : schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32) (hp : principal.isNormalized)
+    (hfee : fees.originationFee.isNormalized) :
     (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run ≠ .error .wrap := by
   intro h
   simp only [Loan.create] at h

@@ -240,6 +240,41 @@ lemma IOUAmount.toNumber_canonical (i : IOUAmount) (mode : rounding_mode)
       unfold Number.normalize; exact hdn
     · show (⟨neg, m₀ * 10 * 10 * 10, i.exponent_ - 3⟩ : Number).mantissa_ ≠ 0; exact hm3_ne
 
+/-- A nonzero IOU sum means the exact sum is nonzero: an exact cancellation `x + (-x)` returns zero. -/
+lemma IOUAmount.operator_add_truth_ne_of_result (x y result : IOUAmount) (mode : rounding_mode)
+    (hx : x.InRange16) (hy : y.InRange16)
+    (hok : IOUAmount.operator_add x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
+    x.toRat + y.toRat ≠ 0 := by
+  intro h0
+  have hxm : x.mantissa_ ≠ 0 := by intro h; have := hx.mant_lo; rw [h] at this; simp at this
+  have hym : y.mantissa_ ≠ 0 := by intro h; have := hy.mant_lo; rw [h] at this; simp at this
+  obtain ⟨xn, hxn_eq, hxn_val, hxn_norm, hxn_ne⟩ := IOUAmount.toNumber_canonical x mode hx.mant_lo hx.mant_hi
+    (by have := hx.exp_lo; unfold minExponent; omega) (by have := hx.exp_hi; unfold maxExponent; omega)
+  obtain ⟨yn, hyn_eq, hyn_val, hyn_norm, hyn_ne⟩ := IOUAmount.toNumber_canonical y mode hy.mant_lo hy.mant_hi
+    (by have := hy.exp_lo; unfold minExponent; omega) (by have := hy.exp_hi; unfold maxExponent; omega)
+  unfold IOUAmount.operator_add at hok
+  rw [if_neg (by simpa using hym), if_neg (by simpa using hxm), hxn_eq, hyn_eq] at hok
+  simp only at hok
+  cases hs : Number.operator_add xn yn mode with
+  | error e => rw [hs] at hok; simp at hok
+  | ok sum =>
+    rw [hs] at hok
+    simp only at hok
+    by_cases hcancel : xn.operator_eq yn.operator_neg = true
+    · -- the sum is `Number.zero`, which converts to the zero IOU
+      have hy0 : ¬ yn.operator_eq Number.zero = true :=
+        fun h => hyn_ne (Number.mantissa_eq_zero_of_operator_eq_zero h)
+      have hx0 : ¬ xn.operator_eq Number.zero = true :=
+        fun h => hxn_ne (Number.mantissa_eq_zero_of_operator_eq_zero h)
+      unfold Number.operator_add at hs
+      rw [if_neg hy0, if_neg hx0, if_pos hcancel] at hs
+      have hsum : sum = Number.zero := (Except.ok.inj hs).symm
+      have hzero : IOUAmount.ofNumber Number.zero mode = .ok IOUAmount.zero := by cases mode <;> rfl
+      rw [hsum, hzero] at hok
+      exact hresult (by rw [← Except.ok.inj hok]; rfl)
+    · exact XRPL.Model.Protocol.operator_add_truth_ne xn yn hxn_norm hyn_norm hxn_ne hyn_ne hcancel mode sum hs
+        (by rw [hxn_val, hyn_val]; exact h0)
+
 /-- A nonzero `operator_add` result is normalized, whether the operands have the same or opposite signs. -/
 theorem operator_add_result_isNormalized_anyMode (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
@@ -560,6 +595,44 @@ lemma STAmount.iou_canonical_mantissa_natAbs (s : STAmount) (hc : s.IOUCanonical
   rw [STAmount.signedDrops_toInt64_toInt s hc.mant_hi]
   unfold STAmount.signedDrops
   rcases s.mIsNegative <;> simp
+
+/-- A nonzero IOU `STAmount` sum means the exact sum is nonzero: an exact cancellation returns zero. -/
+lemma STAmount.operator_add_iou_truth_ne_of_result (v1 v2 result : STAmount) (mode : rounding_mode)
+    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
+    (hok : STAmount.operator_add v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
+    v1.toRat + v2.toRat ≠ 0 := by
+  have hcmp : STAmount.areComparable v1 v2 = true := by
+    rcases hb : STAmount.areComparable v1 v2 with _ | _
+    · rw [STAmount.operator_add, hb] at hok; simp at hok
+    · rfl
+  rw [STAmount.operator_add, if_neg (by rw [hcmp]; decide)] at hok
+  have hv2ne : v2.mValue ≠ 0 := by
+    intro h; have := hc2.mant_lo; rw [h] at this; simp at this
+  have hv1ne : v1.mValue ≠ 0 := by
+    intro h; have := hc1.mant_lo; rw [h] at this; simp at this
+  have hint1 : ¬ v1.integral = true := by
+    unfold STAmount.integral; rw [hc1.is_fractional]; decide
+  rw [if_neg (by simpa using hv2ne), if_neg (by simpa using hv1ne), if_neg hint1,
+    STAmount.iou_canonical_id v1 mode hc1, STAmount.iou_canonical_id v2 mode hc2] at hok
+  simp only at hok
+  set i1 : IOUAmount := ⟨v1.signedDrops.toInt64, v1.mOffset⟩ with hi1
+  set i2 : IOUAmount := ⟨v2.signedDrops.toInt64, v2.mOffset⟩ with hi2
+  cases hadd : IOUAmount.operator_add i1 i2 mode with
+  | error e => rw [hadd] at hok; simp at hok
+  | ok sumI =>
+    rw [hadd] at hok
+    simp only at hok
+    have hi1n : i1.mantissa_.toInt.natAbs = v1.mValue.toNat := STAmount.iou_canonical_mantissa_natAbs v1 hc1
+    have hi2n : i2.mantissa_.toInt.natAbs = v2.mValue.toNat := STAmount.iou_canonical_mantissa_natAbs v2 hc2
+    have hr1 : i1.InRange16 := ⟨by rw [hi1n]; exact hc1.mant_lo, by rw [hi1n]; exact hc1.mant_hi,
+      by have := hc1.exp_lo; show (-96 : ℤ) ≤ v1.mOffset; omega,
+      by have := hc1.exp_hi; show v1.mOffset ≤ 80; omega⟩
+    have hr2 : i2.InRange16 := ⟨by rw [hi2n]; exact hc2.mant_lo, by rw [hi2n]; exact hc2.mant_hi,
+      by have := hc2.exp_lo; show (-96 : ℤ) ≤ v2.mOffset; omega,
+      by have := hc2.exp_hi; show v2.mOffset ≤ 80; omega⟩
+    rw [← STAmount.iou_canonical_toRat v1 hc1, ← STAmount.iou_canonical_toRat v2 hc2]
+    exact IOUAmount.operator_add_truth_ne_of_result i1 i2 sumI mode hr1 hr2 hadd
+      (STAmount.ofIOU_mantissa_ne_zero sumI mode result hok hresult)
 
 /-- IOU `STAmount` addition with `to_nearest` on two canonical amounts rounds within the relative error of
 `IOUAmount.operator_add_rounds_to_nearest`, since the conversions are exact. -/

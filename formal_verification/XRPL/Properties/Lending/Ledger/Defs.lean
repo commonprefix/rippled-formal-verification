@@ -315,7 +315,7 @@ def LendingLedger.applyBroker (l : LendingLedger) : LendingTx → TerExcept Brok
   | _ => throw .temMALFORMED
 
 /-- The effect of a new loan on broker `i`, stored at slot `n`. -/
-def LoanEffect.ofCreate (i n : Nat) (r : LoanWithPool Vault) : LoanEffect :=
+def LoanEffect.ofCreate (i n : Nat) (r : LoanWithDisbursement Vault) : LoanEffect :=
   { vault := r.pool', brokerIndex := i, broker := r.loan'.broker, loanIndex := n
     loan := some { brokerIndex := i, loan := r.loan' } }
 

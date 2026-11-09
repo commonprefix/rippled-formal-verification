@@ -45,7 +45,7 @@ private lemma Loan.refresh_owesNoMore {loan loan' : Loan} {b : LoanBroker}
     (congrArg RawLoan.managementFeeOutstanding hr :) (congrArg RawLoan.paymentRemaining hr :)
 
 /-- An accept owes the same. -/
-private lemma Loan.accept_owesNoMore (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_owesNoMore (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : Loan.OwesNoMore loan r.loan' := by
   simp only [Loan.accept] at h
   unfold_ter at h
