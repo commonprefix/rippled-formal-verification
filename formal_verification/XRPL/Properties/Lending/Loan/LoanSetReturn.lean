@@ -169,7 +169,7 @@ theorem Loan.create_exits :
       (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
         .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
     (∀ (properties : LoanProperties) (loanState : LoanState) (debtTotal' principal' : Number) (raw : RawVault)
-      (v' : Vault) (broker' : LoanBroker) (loan : Loan),
+      (v' : Vault) (broker' : LoanBroker) (loan : Loan) (amountToBorrower : Number),
       Loan.CreateChecks broker v principalRequested rates fees schedule properties loanState debtTotal' →
       STAmount.roundToNumericType broker.numericType principalRequested .to_nearest = .ok principal' →
       (v.adjustBalances (Loan.createChange principalRequested principal' loanState.interestDue
@@ -180,10 +180,12 @@ theorem Loan.create_exits :
       -- LoanCount and the first due date fit a UInt32. C++ LoanSequence stops a broker before `2^32` loans, and the
       -- LoanSet schedule check keeps the due date in time
       broker.loanCount.toNat + 1 < 2 ^ 32 → schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32 →
-      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
+      (RawLoan.build principalRequested properties rates fees schedule broker' allowsOverpayment pending
         (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok loan →
+      -- an active loan sends the borrower PrincipalRequested less the origination fee, a pending one sends nothing
+      Loan.createAmountToBorrower principalRequested fees pending = .ok amountToBorrower →
       (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
-        .ok (.ok { loan' := loan, pool' := v' })) :=
+        .ok (.ok { loan' := loan, pool' := v', amountToBorrower := amountToBorrower })) :=
   ⟨Loan.create_insufficient_funds_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
     Loan.create_precision_loss_proof broker v principalRequested rates fees schedule allowsOverpayment pending,
     Loan.create_no_interest_proof broker v principalRequested rates fees schedule allowsOverpayment pending,

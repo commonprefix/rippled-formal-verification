@@ -223,7 +223,7 @@ lemma Vault.OpenZone.idealAssetsWithdraw_eq {v : Vault} (hz : v.OpenZone) (w : B
   · show (v.assetsAvailable.toRat + v.assetsDeployed.toRat) * x / _ = _
     rw [hAD0]; ring
 
-/-- Proof of `Vault.deposit_donation_no_dilution`. -/
+/-- Proof of the donation line of `Vault.no_dilution`. -/
 lemma Vault.deposit_donation_no_dilution_proof (v : Vault) (amountDeposit : STAmount) (t t0 : UInt32)
     (hpos : 0 < amountDeposit.toRat) (hr : Vault.Reachable v t0) (hcanon : amountDeposit.Canonical)
     (hty : amountDeposit.mNumericType = v.numericType)

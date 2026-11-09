@@ -265,10 +265,12 @@ lemma Loan.create_run_of_checks (properties : LoanProperties) (loanState : LoanS
     (hcount : broker.loanCount.toNat + 1 < 2 ^ 32)
     (hdue : schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32) :
     (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
-      (match (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
+      (match (RawLoan.build principal properties rates fees schedule broker' allowsOverpayment pending
         (schedule.startDate + schedule.paymentInterval)).to_lawful with
        | .error e => .error e
-       | .ok loan => .ok (.ok { loan' := loan, pool' := v' })) := by
+       | .ok loan => match Loan.createAmountToBorrower principal fees pending with
+         | .error e => .error e
+         | .ok a => .ok (.ok { loan' := loan, pool' := v', amountToBorrower := a })) := by
   have hpool := Vault.poolAdjust_ok v _ raw v' hadj hv'
   simp only [Loan.createChange] at hpool
   simp only [Loan.create]
@@ -278,9 +280,11 @@ lemma Loan.create_run_of_checks (properties : LoanProperties) (loanState : LoanS
     hchecks.guards,
     hchecks.state, Vault.pool_exceedsOpenLimit, hchecks.open_zone, hchecks.debt, hchecks.limits, hround, hpool, hbroker,
     show TER.tesSUCCESS.isTesSuccess = true from rfl,
-    UInt32.addChecked_of_lt (b := 1) hcount, UInt32.addChecked_of_lt hdue]
-  cases (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
-    (schedule.startDate + schedule.paymentInterval)).to_lawful <;> rfl
+    UInt32.addChecked_of_lt (b := 1) hcount, UInt32.addChecked_of_lt hdue, Loan.createAmountToBorrower]
+  cases (RawLoan.build principal properties rates fees schedule broker' allowsOverpayment pending
+    (schedule.startDate + schedule.paymentInterval)).to_lawful <;> try rfl
+  cases pending <;> try rfl
+  cases principal.operator_sub fees.originationFee .to_nearest <;> rfl
 
 /-- A create with a rate, OverpaymentFee or fee out of range builds a loan that isn't lawful. -/
 lemma Loan.create_terms_out_of_range_proof (properties : LoanProperties) (loanState : LoanState)
@@ -436,6 +440,7 @@ lemma Loan.create_grace_out_of_range_proof (properties : LoanProperties) (loanSt
 /-- Proof body of the success line of `Loan.create_exits`. -/
 lemma Loan.create_success_proof (properties : LoanProperties) (loanState : LoanState)
     (debtTotal' principal' : Number) (raw : RawVault) (v' : Vault) (broker' : LoanBroker) (loan : Loan)
+    (amountToBorrower : Number)
     (hchecks : Loan.CreateChecks broker v principal rates fees schedule properties loanState debtTotal')
     (hround : STAmount.roundToNumericType broker.numericType principal .to_nearest = .ok principal')
     (hadj : (v.adjustBalances (Loan.createChange principal principal' loanState.interestDue pending)).run =
@@ -445,11 +450,13 @@ lemma Loan.create_success_proof (properties : LoanProperties) (loanState : LoanS
       : RawLoanBroker).to_lawful = .ok broker')
     (hcount : broker.loanCount.toNat + 1 < 2 ^ 32)
     (hdue : schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32)
-    (hloan : (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
-      (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok loan) :
+    (hloan : (RawLoan.build principal properties rates fees schedule broker' allowsOverpayment pending
+      (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok loan)
+    (hamount : Loan.createAmountToBorrower principal fees pending = .ok amountToBorrower) :
     (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run =
-      .ok (.ok { loan' := loan, pool' := v' }) := by
+      .ok (.ok { loan' := loan, pool' := v', amountToBorrower := amountToBorrower }) := by
   rw [Loan.create_run_of_checks broker v principal rates fees schedule allowsOverpayment pending properties
     loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue, hloan]
+  simp only [hamount]
 
 end XRPL.Model.Lending

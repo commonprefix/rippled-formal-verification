@@ -87,7 +87,7 @@ lemma Loan.canCreate_exact (broker : LoanBroker) (v : Vault) (p : Number) (fees 
 /-- A successful create passed every check. It returns the loan built from the computed
 properties on the broker with the new debt, and the vault after the balance change. -/
 lemma Loan.create_ok_inv (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ properties loanState debtTotal' principal' broker',
       Loan.CreateChecks broker v principal rates fees schedule properties loanState debtTotal' ∧
@@ -96,7 +96,7 @@ lemma Loan.create_ok_inv (broker : LoanBroker) (v : Vault) (principal : Number) 
         .ok (.ok r.pool') ∧
       ({ broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }
         : RawLoanBroker).to_lawful = .ok broker' ∧
-      (RawLoan.build properties rates fees schedule broker' allowsOverpayment pending
+      (RawLoan.build principal properties rates fees schedule broker' allowsOverpayment pending
         (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok r.loan' := by
   simp only [Loan.create] at hok
   unfold_ter at hok
@@ -117,14 +117,17 @@ lemma Loan.create_ok_inv (broker : LoanBroker) (v : Vault) (principal : Number) 
     simp only [Bool.not_eq_eq_eq_not, Bool.not_true, Bool.not_eq_true] at *
     simp only [Bool.not_eq_false, TER.isTesSuccess_iff] at *
     subst_vars
-    refine ⟨_, _, _, _, _, ⟨⟨by simpa [Vault.pool_amounts] using hfunds, hprops,
-      checkPrecisionFields_success_inv _ _ _ hprec⟩, hguards, hstate, hopen, hdebt, hlimits⟩, hround, ?_, hbroker,
-      hloan⟩
-    simp [Loan.createChange, *] at hpool ⊢
+    -- the amount sent to the borrower splits on `pending`, a branch can be left with `true = false`
+    first
+    | exact absurd ‹true = false› (by decide)
+    | refine ⟨_, _, _, _, _, ⟨⟨by simpa [Vault.pool_amounts] using hfunds, hprops,
+        checkPrecisionFields_success_inv _ _ _ hprec⟩, hguards, hstate, hopen, hdebt, hlimits⟩, hround, ?_, hbroker,
+        hloan⟩
+      simp [Loan.createChange, *] at hpool ⊢
 
 /-- A successful create counted one more loan and set the first due date without wrapping. -/
 lemma Loan.create_ok_fits (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     broker.loanCount.toNat + 1 < 2 ^ 32 ∧ schedule.startDate.toNat + schedule.paymentInterval.toNat < 2 ^ 32 := by
   simp only [Loan.create] at hok
@@ -141,10 +144,26 @@ lemma Loan.create_ok_fits (broker : LoanBroker) (v : Vault) (principal : Number)
     simp only [hbad] at hok
     walk_ok
 
+/-- A successful create sends the borrower what `Loan.createAmountToBorrower` computes. -/
+lemma Loan.create_ok_amount (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
+    (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
+    Loan.createAmountToBorrower principal fees pending = .ok r.amountToBorrower := by
+  obtain ⟨properties, loanState, debtTotal', principal', broker', hchecks, hround, hpool, hbroker, hloan⟩ :=
+    Loan.create_ok_inv broker v principal rates fees schedule allowsOverpayment pending r hok
+  obtain ⟨hcount, hdue⟩ := Loan.create_ok_fits broker v principal rates fees schedule allowsOverpayment pending r hok
+  obtain ⟨raw, hadj, hv'⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
+  rw [Loan.create_run_of_checks broker v principal rates fees schedule allowsOverpayment pending properties
+    loanState debtTotal' principal' raw r.pool' broker' hchecks hround hadj hv' hbroker hcount hdue, hloan] at hok
+  revert hok
+  cases Loan.createAmountToBorrower principal fees pending with
+  | error e => intro hok; cases hok
+  | ok a => intro hok; injection hok with hok; injection hok with hok; rw [← hok]
+
 /-- The new loan sits on the broker with the new debt, and that broker is the old one with DebtTotal
 and LoanCount updated. -/
 lemma Loan.create_ok_broker (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ properties loanState debtTotal',
       Loan.CreateChecks broker v principal rates fees schedule properties loanState debtTotal' ∧
@@ -161,7 +180,7 @@ lemma Loan.create_ok_broker (broker : LoanBroker) (v : Vault) (principal : Numbe
 /-- Proof body of the DebtMaximum part of `Lending.create_updates`. -/
 lemma Loan.create_within_debtMaximum_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault)
+    (r : LoanWithDisbursement Vault)
     (_hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hmax : r.loan'.broker.toExact.debtMaximum ≠ 0) :
     r.loan'.broker.toExact.debtTotal ≤ r.loan'.broker.toExact.debtMaximum :=
@@ -170,7 +189,7 @@ lemma Loan.create_within_debtMaximum_proof (broker : LoanBroker) (v : Vault) (pr
 /-- Proof body of the minCover part of `Lending.create_updates`. -/
 lemma Loan.create_meets_minCover_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault)
+    (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     r.loan'.broker.HasMinimumCover v.baseExponent := by
   obtain ⟨_, _, debtTotal', hchecks, hb⟩ :=

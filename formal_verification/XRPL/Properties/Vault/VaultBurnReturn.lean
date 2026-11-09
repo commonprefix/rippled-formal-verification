@@ -1,6 +1,6 @@
 import XRPL.Properties.Vault.Proofs.Burn
 
-/-! # `Vault.burnShares` exits -/
+/-! # `Vault.canBurnShares` and `Vault.burnShares` exits -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -42,5 +42,11 @@ theorem Vault.burnShares_exits (sharesDestroyed : STAmount) :
   ⟨Vault.burnShares_zero_shares_proof v sharesDestroyed,
     fun amount holderShares sharesTotalAmount =>
       Vault.burnShares_ok_proof v amount holderShares sharesDestroyed sharesTotalAmount⟩
+
+/-- `tecPRECISION_LOSS` is the only rejection `burnShares` can return. -/
+theorem Vault.burnShares_error_codes (sharesDestroyed : STAmount) (ter : TER)
+    (hok : (v.burnShares sharesDestroyed).run = .ok (.error ter)) :
+    ter = .tecPRECISION_LOSS :=
+  Vault.burnShares_error_codes_proof v sharesDestroyed ter hok
 
 end XRPL.Model.SingleAssetVault

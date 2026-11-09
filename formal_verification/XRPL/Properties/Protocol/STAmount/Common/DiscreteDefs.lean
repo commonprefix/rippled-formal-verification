@@ -255,14 +255,6 @@ def STAmount.RoundsToRepresentableWithin
    | _         => True) ∧
   |result.toRat - truth| ≤ (k : ℚ) * (10 : ℚ) ^ result.exponent
 
-/-- An exact result lands within `0` ULP of `truth` in every mode. -/
-lemma RoundsToRepresentableWithin_of_eq (result : STAmount) (truth : ℚ) (mode : rounding_mode)
-    (h : result.toRat = truth) : STAmount.RoundsToRepresentableWithin result truth mode 0 := by
-  unfold STAmount.RoundsToRepresentableWithin
-  refine ⟨?_, ?_⟩
-  · cases mode <;> simp [h]
-  · rw [h]; simp
-
 /-- After two roundings `result` is within `k` ULP of `truth`, in any mode and sign. With `|r| ≤ 10¹⁶` ULP and
 `ε ≤ 10⁻¹⁷` the `Number` step adds less than `⅕` ULP, so `csnap + ⅕ ≤ k` is enough. -/
 lemma STAmount.double_round_abs_le

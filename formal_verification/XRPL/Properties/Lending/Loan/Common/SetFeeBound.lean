@@ -77,7 +77,7 @@ lemma operator_div_unity_le (y q : Number) (hy : y.isNormalized) (hy0 : 0 ≤ y.
 /-- Proof body of `create_managementFee_upper_bound`. -/
 lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hst : STAmount.isRounded broker.numericType principal = false)
+    (r : LoanWithDisbursement Vault) (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hfit : (r.loan'.toExact.totalValueOutstanding - r.loan'.toExact.principalOutstanding) *
       (r.loan'.broker.managementFeeRate.toNat : ℚ) < 2 ^ 63 * 10 ^ r.loan'.toExact.loanScale) :

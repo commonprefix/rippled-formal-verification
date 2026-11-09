@@ -43,7 +43,7 @@ private lemma open_bound_lt (s : ℤ) :
   exact mul_lt_mul_of_pos_right (by norm_num) hp
 
 variable (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-  (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+  (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
 
 /-- A successful create wrote its five new balances into the vault record, and the new DebtTotal and one
 more loan into the broker record. -/
@@ -173,7 +173,7 @@ private lemma Loan.create_debt_grid (hp : principal.isNormalized) (hpos : 0 < pr
 /-- Both orders of two creates on the base grid write the same vault. Loan 1 is created on `b₁` first and on
 `c₁` second, loan 2 on `b₂` first and on `c₂` second. -/
 private lemma creates_comm_vault (b₁ b₂ c₁ c₂ : LoanBroker) (p₁ p₂ : Number) (ra₁ ra₂ : LoanRates)
-    (f₁ f₂ : LoanFees) (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithPool Vault)
+    (f₁ f₂ : LoanFees) (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithDisbursement Vault)
     (hp₁ : p₁.isNormalized) (hpos₁ : 0 < p₁.toRat) (hst₁ : STAmount.isRounded b₁.numericType p₁ = false)
     (hp₂ : p₂.isNormalized) (hpos₂ : 0 < p₂.toRat) (hst₂ : STAmount.isRounded b₂.numericType p₂ = false)
     (hnt₁ : c₁.numericType = b₁.numericType) (hm₁ : c₁.managementFeeRate = b₁.managementFeeRate)
@@ -225,7 +225,7 @@ private lemma create_broker_terms (hok : (Loan.create broker v principal rates f
 
 /-- Proof body of `creates_comm`, two loans on one broker. -/
 lemma Loan.creates_comm_same_proof (b : LoanBroker) (p₁ p₂ : Number) (ra₁ ra₂ : LoanRates) (f₁ f₂ : LoanFees)
-    (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithPool Vault)
+    (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithDisbursement Vault)
     (hp₁ : p₁.isNormalized) (hpos₁ : 0 < p₁.toRat) (hst₁ : STAmount.isRounded b.numericType p₁ = false)
     (hp₂ : p₂.isNormalized) (hpos₂ : 0 < p₂.toRat) (hst₂ : STAmount.isRounded b.numericType p₂ = false)
     (hnt : b.numericType = v.numericType) (hgrid : Loan.CreateGrid b v)
@@ -268,7 +268,7 @@ lemma Loan.creates_comm_same_proof (b : LoanBroker) (p₁ p₂ : Number) (ra₁ 
 
 /-- Proof body of `creates_comm`, two loans on two brokers. -/
 lemma Loan.creates_comm_other_proof (b₁ b₂ : LoanBroker) (p₁ p₂ : Number) (ra₁ ra₂ : LoanRates)
-    (f₁ f₂ : LoanFees) (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithPool Vault)
+    (f₁ f₂ : LoanFees) (s₁ s₂ : LoanSchedule) (ao₁ ao₂ pn₁ pn₂ : Bool) (r₁ r₁₂ r₂ r₂₁ : LoanWithDisbursement Vault)
     (hp₁ : p₁.isNormalized) (hpos₁ : 0 < p₁.toRat) (hst₁ : STAmount.isRounded b₁.numericType p₁ = false)
     (hp₂ : p₂.isNormalized) (hpos₂ : 0 < p₂.toRat) (hst₂ : STAmount.isRounded b₂.numericType p₂ = false)
     (hnt₁ : b₁.numericType = v.numericType) (hnt₂ : b₂.numericType = v.numericType)

@@ -25,7 +25,8 @@ lemma Loan.withBroker_ok (loan : Loan) (b : LoanBroker) (hnt : b.numericType = l
       totalValueOutstanding_atExponent := by show _ = true; rw [hnt]; exact hw.totalValueOutstanding_atExponent
       principalOutstanding_atExponent := by show _ = true; rw [hnt]; exact hw.principalOutstanding_atExponent
       managementFeeOutstanding_atExponent := by
-        show _ = true; rw [hnt]; exact hw.managementFeeOutstanding_atExponent }
+        show _ = true; rw [hnt]; exact hw.managementFeeOutstanding_atExponent
+      originationFee_atExponent := by show _ = true; rw [hnt]; exact hw.originationFee_atExponent }
   obtain ⟨l', hl', -⟩ := RawLoan.to_lawful_ok_of hwf hvalid
   exact ⟨l', hl'⟩
 

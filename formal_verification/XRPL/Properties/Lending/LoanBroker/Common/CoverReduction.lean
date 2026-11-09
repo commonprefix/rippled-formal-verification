@@ -353,46 +353,6 @@ lemma LoanBroker.coverClawback_debtMaximum (lb : LoanBroker) (pool : α)
   have h := congrArg RawLoanBroker.debtMaximum hraw
   exact h
 
-/-- The new `coverAvailable` after a credit, as a rational. -/
-lemma LoanBroker.applyCoverTransaction_credit_value (lb : LoanBroker) (amount : STAmount)
-    (res : LoanBrokerCoverResult)
-    (hok : lb.applyCoverTransaction .credit amount = .ok res) (hc : amount.ExactCanonical)
-    (hexact : ∃ w : Number, w.isNormalized ∧
-      w.toRat = lb.toExact.coverAvailable + amount.toRat) :
-    res.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable + amount.toRat ∧
-      res.amount' = amount := by
-  obtain ⟨m, c', hm, hadd, hamt, hraw⟩ :=
-    LoanBroker.applyCoverTransaction_credit_inv lb amount res hok
-  obtain ⟨hmv, hmn⟩ := STAmount.toNumber_exact_of amount m hc hm
-  refine ⟨?_, hamt⟩
-  show res.loanBroker'.toRawLoanBroker.coverAvailable.toRat = lb.coverAvailable.toRat + amount.toRat
-  rw [hraw]
-  show c'.toRat = lb.coverAvailable.toRat + amount.toRat
-  obtain ⟨w, hw, hwt⟩ := hexact
-  rw [← hmv] at hwt ⊢
-  exact Number.roundsToRepresentable_eq c' _
-    (operator_add_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hadd) w hw hwt
-
-/-- The new `coverAvailable` after a debit, as a rational. -/
-lemma LoanBroker.applyCoverTransaction_debit_value (lb : LoanBroker) (amount : STAmount)
-    (res : LoanBrokerCoverResult)
-    (hok : lb.applyCoverTransaction .debit amount = .ok res) (hc : amount.ExactCanonical)
-    (hexact : ∃ w : Number, w.isNormalized ∧
-      w.toRat = lb.toExact.coverAvailable - amount.toRat) :
-    res.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable - amount.toRat ∧
-      res.amount' = amount := by
-  obtain ⟨m, c', hm, hsub, hamt, hraw⟩ :=
-    LoanBroker.applyCoverTransaction_debit_inv lb amount res hok
-  obtain ⟨hmv, hmn⟩ := STAmount.toNumber_exact_of amount m hc hm
-  refine ⟨?_, hamt⟩
-  show res.loanBroker'.toRawLoanBroker.coverAvailable.toRat = lb.coverAvailable.toRat - amount.toRat
-  rw [hraw]
-  show c'.toRat = lb.coverAvailable.toRat - amount.toRat
-  obtain ⟨w, hw, hwt⟩ := hexact
-  rw [← hmv] at hwt ⊢
-  exact Number.roundsToRepresentable_eq c' _
-    (operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hsub) w hw hwt
-
 /-- A raw broker whose `coverAvailable` compares below zero is not lawful. -/
 lemma RawLoanBroker.to_lawful_negative_cover (lb : LoanBroker) (c' : Number)
     (hneg : Number.zero.operator_le c' = false) :
@@ -457,19 +417,5 @@ lemma LoanBroker.credit_lawful (lb : LoanBroker) (m c' : Number) (hmn : m.isNorm
     le_trans lb.exact.coverAvailable_nonneg
       (operator_add_ge_of_ge_normalized _ _ _ _ hcn hmn hadd hcn (by linarith))
   exact LoanBroker.withCover_lawful lb c' hcn' hc0
-
-/-- A whole `coverAvailable` below `2^63` minus a nonnegative canonical whole
-amount is debited exactly. -/
-lemma LoanBroker.applyCoverTransaction_debit_integral (lb : LoanBroker) (a : STAmount)
-    (res : LoanBrokerCoverResult) (happ : lb.applyCoverTransaction .debit a = .ok res)
-    (hic : a.IntegralCanonical) (hsz : a.mValue.toNat ≤ 2 ^ 63 - 1) (ha0 : 0 ≤ a.toRat)
-    (hcint : lb.toExact.coverAvailable.den = 1) (hbound : lb.toExact.coverAvailable < 2 ^ 63) :
-    res.loanBroker'.toExact.coverAvailable = lb.toExact.coverAvailable - a.toRat ∧
-      res.amount' = a := by
-  have hden := Rat.den_one_sub _ _ hcint (STAmount.IntegralCanonical.den_eq_one a hic)
-  have hamax := (abs_le.mp (STAmount.IntegralCanonical.abs_toRat_le_of_mValue_le a hic hsz)).2
-  have hcov0 : 0 ≤ lb.toExact.coverAvailable := lb.exact.coverAvailable_nonneg
-  exact LoanBroker.applyCoverTransaction_debit_value lb a res happ (Or.inr ⟨hic, hsz⟩)
-    (Number.exists_of_int _ hden (by linarith) (by linarith))
 
 end XRPL.Model.Lending

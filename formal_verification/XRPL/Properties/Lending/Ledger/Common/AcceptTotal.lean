@@ -30,7 +30,7 @@ private lemma Loan.canAccept_withBroker {loan loan' : Loan} {b : LoanBroker} (hw
 
 /-- An accept that passes its checks and succeeds on the stored loan writes its result. -/
 private lemma LendingLedger.apply_accept_ok (l : LendingLedger) (hnd : l.vaultDeleted = false) (i : Nat)
-    (e : LoanEntry) (b : LoanBroker) (loan : Loan) (r : LoanWithPool Vault)
+    (e : LoanEntry) (b : LoanBroker) (loan : Loan) (r : LoanWithDisbursement Vault)
     (he : l.loan? i = some e) (hb : l.broker? e.brokerIndex = some b) (hw : e.loan.withBroker b = .ok loan)
     (hc : loan.canAccept l.vault l.now = .ok .tesSUCCESS) (hr : (loan.accept l.vault).run = .ok (.ok r)) :
     (l.apply (.loanAccept i)).run = .ok (.ok (l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool'))) := by
@@ -98,7 +98,8 @@ lemma LendingLedger.accept_total_proof (l : LendingLedger) (hr : l.Reachable) (h
     (Vault.lossUnrealized_gt_false l.vault)
   obtain ⟨v', hv', -⟩ := Loan.accept_vault_lawful loan l.vault x _ hx hadj
   obtain ⟨loan', hl', -⟩ := Loan.accept_loan_lawful loan
-  have hacc := Loan.accept_success_proof loan l.vault x _ v' loan' hx hadj hv' hl'
+  obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan
+  have hacc := Loan.accept_success_proof loan l.vault x _ v' loan' a hx hadj hv' hl' ha
   exact ⟨_, LendingLedger.apply_accept_ok l hnd i e b loan _ he hb hw hc' hacc⟩
 
 /-- Proof body of the accept line of `Lending.Reachable.loan_resolvable`. A pending loan exists only after the

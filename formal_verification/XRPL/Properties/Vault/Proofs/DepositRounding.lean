@@ -86,4 +86,21 @@ lemma Vault.roundedDepositAmount_bounds_proof (v : Vault) (amountDeposit rounded
   rw [hnum]
   exact hps
 
+/-- A canonical positive XRP or MPT deposit rounds to itself, a whole number of units. -/
+lemma Vault.roundedDepositAmount_integral_floor_proof (v : Vault) (amountDeposit roundedAmount : STAmount)
+    (hc : amountDeposit.Canonical) (hint : amountDeposit.integral = true) (hpos : 0 < amountDeposit.toRat)
+    (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount)) :
+    RoundsToRepresentableAt roundedAmount amountDeposit.toRat 0 .downward := by
+  obtain ⟨assetsTotal, hat, -, -⟩ := roundedDepositAmount_rounded v amountDeposit roundedAmount hrounded
+  have h := Vault.roundedDepositAmount_integral_proof v amountDeposit assetsTotal hint hpos hat
+  rw [hrounded] at h
+  have hra : roundedAmount = amountDeposit := by
+    have h' := Except.ok.inj h
+    exact Except.ok.inj h'
+  subst hra
+  have hval := STAmount.toRat_of_offset_zero roundedAmount (hc.1 hint).1.offset_zero
+  show RatValued.toRat roundedAmount = ⌊roundedAmount.toRat / 10 ^ (0 : ℤ)⌋ * 10 ^ (0 : ℤ)
+  rw [show RatValued.toRat roundedAmount = roundedAmount.toRat from rfl, hval]
+  simp
+
 end XRPL.Model.SingleAssetVault

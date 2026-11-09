@@ -155,8 +155,10 @@ lemma Vault.balances_lawful (v : Vault) (aa' ad' ar' lu' yu' : Number)
       assetsAvailable_representable := haar
       assetsAvailable_onGrid := Vault.onGrid_clause v aa' han ha haag }
 
-/-- The loan a default writes is lawful: nothing is outstanding and no payment remains. -/
-lemma Loan.defaultedLoan_lawful (loan : Loan) (broker' : LoanBroker) :
+/-- The loan a default writes is lawful: nothing is outstanding and no payment remains. The new broker holds the same
+asset, so the origination fee stays on the LoanScale grid. -/
+lemma Loan.defaultedLoan_lawful (loan : Loan) (broker' : LoanBroker)
+    (hnt : broker'.numericType = loan.broker.numericType) :
     ∃ loan', (loan.defaultedLoan broker').to_lawful = .ok loan' ∧ loan'.toRawLoan = loan.defaultedLoan broker' := by
   have hwf := loan.wf
   have he := loan.exact
@@ -171,7 +173,10 @@ lemma Loan.defaultedLoan_lawful (loan : Loan) (broker' : LoanBroker) :
     managementFeeOutstanding_norm := Number.zero_isNormalized
     totalValueOutstanding_atExponent := hat'
     principalOutstanding_atExponent := hat'
-    managementFeeOutstanding_atExponent := hat' }
+    managementFeeOutstanding_atExponent := hat'
+    originationFee_atExponent := by
+      show loan.fees.originationFee.isAtExponent loan.loanScale broker'.numericType = true
+      rw [hnt]; exact hwf.originationFee_atExponent }
   have hex : (loan.defaultedLoan broker').toExact.Valid := { he with
     paid_zeroed := fun _ => ⟨Number.toRat_zero, Number.toRat_zero, Number.toRat_zero⟩
     unpaid_nonzero := fun h => absurd rfl h

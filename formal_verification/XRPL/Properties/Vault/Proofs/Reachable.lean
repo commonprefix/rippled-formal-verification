@@ -74,10 +74,19 @@ lemma Vault.Reachable.openZone_proof (v : Vault) (t : UInt32) (hr : Vault.Reacha
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     exact Vault.update_openZone u _ _ _ u' (ih (hnt ▸ hmax)) hok
 
-lemma Vault.Reachable.lossUnrealized_zero_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) :
-    v.toExact.lossUnrealized = 0 := by
-  show v.lossUnrealized.toRat = 0
-  rw [(Vault.Reachable.noLending_proof v t hr).2.1, Number.toRat_zero]
+/-- A reachable vault has zero lending fields. AssetsReserved is 0 by `0 ≤ AssetsReserved ≤ AssetsDeployed`. -/
+lemma Vault.Reachable.lendingFields_zero_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) :
+    v.toExact.assetsDeployed = 0 ∧ v.toExact.assetsReserved = 0 ∧ v.toExact.lossUnrealized = 0 ∧
+      v.toExact.yieldUnrealized = 0 := by
+  obtain ⟨hAD, hLU, hYU⟩ := Vault.Reachable.noLending_proof v t hr
+  have hAD' : v.toExact.assetsDeployed = 0 := by
+    show v.assetsDeployed.toRat = 0
+    rw [hAD, Number.toRat_zero]
+  refine ⟨hAD', le_antisymm (hAD' ▸ v.exact.assetsReserved_le) v.exact.assetsReserved_nonneg, ?_, ?_⟩
+  · show v.lossUnrealized.toRat = 0
+    rw [hLU, Number.toRat_zero]
+  · show v.yieldUnrealized.toRat = 0
+    rw [hYU, Number.toRat_zero]
 
 lemma Vault.Reachable.asset_parity_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) :
     v.assetsTotal = .ok v.assetsAvailable :=

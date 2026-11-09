@@ -3,10 +3,9 @@ import XRPL.Properties.Protocol.STAmount.Common.FracCanonZero
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Protocol.Common.TenthBips
 
-/-! # Proof bodies for the minimum cover theorems
+/-! # Minimum cover facts
 
-Proofs for the minimum cover theorems, and the minimum cover facts the cover operations
-share. -/
+The minimum cover facts the cover operations share. -/
 
 namespace XRPL.Model.Lending
 
@@ -65,70 +64,6 @@ private lemma ofNumber_upward_fczr (nt : NumericType) (raw : Number) (ret : STAm
 private lemma roundToExponent_upward_of_zero (q : STAmount) (s : Int) (h0 : q.mValue = 0) :
     q.roundToExponent s .upward = .ok q :=
   STAmount.roundToExponent_eq_self q s .upward (Or.inr (Or.inl (by unfold STAmount.isZero; rw [h0]; rfl)))
-
-/-- Proof body of the scale line of `minimumBrokerCover_monotone`. -/
-lemma minimumBrokerCover_scale_monotone_proof (nt : NumericType) (debtTotal : Number)
-    (coverRateMinimum : TenthBips32) (e e' : Int) (m m' : Number)
-    (hle : e ≤ e') (he : -96 ≤ e) (he' : e' ≤ 80)
-    (hm : minimumBrokerCover nt debtTotal coverRateMinimum e = .ok m)
-    (hm' : minimumBrokerCover nt debtTotal coverRateMinimum e' = .ok m')
-    (hnz : m ≠ Number.zero) (hnz' : m' ≠ Number.zero) :
-    m.toRat ≤ m'.toRat := by
-  unfold minimumBrokerCover at hm hm'
-  obtain ⟨raw, hraw, hm⟩ := bind_ok_peel _ _ _ hm
-  rw [hraw, ok_bind] at hm'
-  unfold STAmount.roundToNumericType at hm hm'
-  cases hret : STAmount.ofNumber nt raw .upward with
-  | error err => rw [hret] at hm; exact absurd hm (by simp)
-  | ok ret =>
-    rw [hret] at hm hm'
-    dsimp only at hm hm'
-    by_cases hint : ret.integral = true
-    · -- an integral asset ignores the vault scale
-      rw [if_pos hint] at hm hm'
-      rw [hm, Except.ok.injEq] at hm'
-      rw [hm']
-    rw [if_neg hint] at hm hm'
-    obtain ⟨hfr, hcz⟩ := ofNumber_upward_fczr nt raw ret hret hint
-    -- a nonzero minimum cover is the exact value of a canonical rounded amount
-    have hval (s : Int) (q : STAmount) (n : Number)
-        (hq : ret.roundToExponent s .upward = .ok q) (hn : q.toNumber .upward = .ok n)
-        (hn0 : n ≠ Number.zero) :
-        n.toRat = q.toRat ∧ ret.IOUCanonical ∧ q.mValue ≠ 0 := by
-      obtain ⟨hqfr, hqcz⟩ := STAmount.roundToExponent_fczr ret q s .upward ⟨hfr, hcz⟩ hq
-      have hq0 : q.mValue ≠ 0 := by
-        intro h0
-        have hqi : q.integral = false := by unfold STAmount.integral; rw [hqfr]; rfl
-        rw [STAmount.toNumber_zero_fractional q .upward hqi h0, Except.ok.injEq] at hn
-        exact hn0 hn.symm
-      obtain ⟨n', hn', hv, _⟩ :=
-        STAmount.toNumber_exact_canonical q .upward (Or.inl (hqcz.resolve_right hq0))
-      rw [hn, Except.ok.injEq] at hn'
-      subst hn'
-      -- a zero `ret` would round to a zero `q`
-      have hretc : ret.IOUCanonical := by
-        refine hcz.resolve_right fun h0 => hq0 ?_
-        rw [roundToExponent_upward_of_zero ret s h0, Except.ok.injEq] at hq
-        rw [← hq]
-        exact h0
-      exact ⟨hv, hretc, hq0⟩
-    cases hr : ret.roundToExponent e .upward with
-    | error err => rw [hr] at hm; exact absurd hm (by simp)
-    | ok r =>
-      cases hr' : ret.roundToExponent e' .upward with
-      | error err => rw [hr'] at hm'; exact absurd hm' (by simp)
-      | ok r' =>
-        rw [hr] at hm
-        rw [hr'] at hm'
-        dsimp only at hm hm'
-        obtain ⟨hmv, hretc, hr0⟩ := hval e r m hr hm hnz
-        obtain ⟨hmv', _, hr0'⟩ := hval e' r' m' hr' hm' hnz'
-        -- both are `ret` rounded up, onto the `10^e` and the coarser `10^e'` grid
-        have hup := STAmount.roundToExponent_rounded ret r e .upward hretc he (by omega) hr0 hr
-        have hup' :=
-          STAmount.roundToExponent_rounded ret r' e' .upward hretc (by omega) he' hr0' hr'
-        rw [hmv, hmv']
-        exact RoundsToRepresentableAt.upward_mono r r' ret.toRat e e' hle hup hup'
 
 /-- At one vault scale, a larger debt times rate never gives a smaller minimum
 cover, when the larger minimum cover is nonzero. -/
@@ -300,34 +235,6 @@ private lemma minimumBrokerCover_le_of_prod_le (nt : NumericType) (d d' : Number
                   (ceil_grid_le_of_scale_le _ _ _ (by omega))
               rw [hv, hu, hu']
               exact ceil_grid_le_of_le _ _ e hretle
-
-/-- Proof body of the DebtTotal line of `minimumBrokerCover_monotone`. -/
-lemma minimumBrokerCover_debt_monotone_proof (nt : NumericType) (d d' : Number)
-    (coverRateMinimum : TenthBips32) (e : Int) (m m' : Number)
-    (hd : d.isNormalized) (hd' : d'.isNormalized) (h0 : 0 ≤ d.toRat)
-    (hle : d.toRat ≤ d'.toRat) (he : -96 ≤ e) (he' : e ≤ 80)
-    (hm : minimumBrokerCover nt d coverRateMinimum e = .ok m)
-    (hm' : minimumBrokerCover nt d' coverRateMinimum e = .ok m')
-    (hnz' : m' ≠ Number.zero) :
-    m.toRat ≤ m'.toRat :=
-  minimumBrokerCover_le_of_prod_le nt d d' _ _ e m m' hd hd' h0 (le_trans h0 hle)
-    (mul_le_mul_of_nonneg_right hle (TenthBips32.toNumber_nonneg coverRateMinimum)) he he' hm
-    hm' hnz'
-
-/-- Proof body of the CoverRateMinimum line of `minimumBrokerCover_monotone`. -/
-lemma minimumBrokerCover_rate_monotone_proof (nt : NumericType) (debtTotal : Number)
-    (rate rate' : TenthBips32) (e : Int) (m m' : Number)
-    (hd : debtTotal.isNormalized) (h0 : 0 ≤ debtTotal.toRat) (hle : rate.toNat ≤ rate'.toNat)
-    (he : -96 ≤ e) (he' : e ≤ 80)
-    (hm : minimumBrokerCover nt debtTotal rate e = .ok m)
-    (hm' : minimumBrokerCover nt debtTotal rate' e = .ok m')
-    (hnz' : m' ≠ Number.zero) :
-    m.toRat ≤ m'.toRat := by
-  have hr : rate.toNumber.toRat ≤ rate'.toNumber.toRat := by
-    rw [(TenthBips32.toNumber_facts rate).2, (TenthBips32.toNumber_facts rate').2]
-    exact_mod_cast hle
-  exact minimumBrokerCover_le_of_prod_le nt debtTotal debtTotal rate rate' e m m' hd hd h0 h0
-    (mul_le_mul_of_nonneg_left hr h0) he he' hm hm' hnz'
 
 /-- Below the finest IOU scale the vault scale no longer matters: every canonical
 IOU amount already sits on the grid. -/

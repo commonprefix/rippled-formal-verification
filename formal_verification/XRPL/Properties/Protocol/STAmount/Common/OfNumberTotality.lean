@@ -182,7 +182,7 @@ lemma STAmount.canonicalize_integral_ok_of_le (s : STAmount) (mode : rounding_mo
 
 /-- On an integral type, a normalized nonnegative `Number` within `2 ^ 63 - 1`
 converts by packing its `to_rep` integer, which lies in `[0, maxRep]`. -/
-private lemma STAmount.ofNumber_integral_reduce (nt : NumericType) (n : Number)
+lemma STAmount.ofNumber_integral_reduce (nt : NumericType) (n : Number)
     (mode : rounding_mode) (hnt : nt.isIntegral = true) (hnorm : n.isNormalized)
     (hneg : n.negative_ = false) (hcap : n.toRat ≤ 2 ^ 63 - 1) :
     ∃ r : Int64, n.to_rep mode = .ok r ∧ 0 ≤ r.toInt ∧ r.toUInt64.toNat ≤ maxRep.toNat ∧

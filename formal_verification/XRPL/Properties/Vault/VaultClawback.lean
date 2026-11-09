@@ -22,55 +22,55 @@ open XRPL.Model.Protocol
 
 variable (rv : RawVault) (v : Vault)
 
-/-- Clawback on any lawful vault with a nonzero amount whose recovery fits the cash -> the shares destroyed are the
-ideal at the computed net asset value rounded down. -/
-theorem Vault.clawback_sharesDestroyed (v : Vault)
-    (assets holderShares sharesDestroyed assetsRecovered : STAmount) (waiveUnrealizedLoss : Bool)
-    (assetsRecoveredNumber netAssetValue : Number)
-    (hc : assets.Canonical) -- a clawback amount is canonical
-    (hnav : v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue)
-    (hshares : assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed)
-    (hassets : v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered)
-    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
-    (hznz : assets.isZero = false)
-    (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
-    (hok : (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r))
-    -- the 19-digit price can cross a whole number within `sharesε` of the ideal
-    (hgap : ∀ n : ℤ, v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat * sharesε <
-      |v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat - n|) :
-    r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ :=
-  let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
-    (Vault.clawback_sharesDestroyed_total_proof v assets holderShares sharesDestroyed assetsRecovered
-      waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hc hshares hassets hnum hle hznz hnn r hok) hgap
-  shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2
-
-/-- Clawback on any lawful vault with a nonzero amount whose recovery exceeds the cash -> the shares destroyed are the
-ideal for the cash at the computed net asset value rounded down. -/
-theorem Vault.clawback_sharesDestroyed_clamped (v : Vault)
-    (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
-    (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number)
-    (hnav : v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue)
-    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (hshares : assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed)
-    (hassets : v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered)
-    (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
-    (hgt : assetsRecoveredNumber.operator_gt v.assetsAvailable = true)
-    (hclamped : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest =
-      .ok assetsRecovered')
-    (hznz : assets.isZero = false)
-    (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
-    (hok : (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r))
-    -- the 19-digit price can cross a whole number within `sharesε` of the ideal
-    (hgap : ∀ n : ℤ, v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat * sharesε <
-      |v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat - n|) :
-    r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ :=
-  let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
-    (Vault.clawback_sharesDestroyed_clamped_total_proof v assets holderShares sharesDestroyed assetsRecovered
-      assetsRecovered' waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hmax hshares hassets hnum
-      hgt hclamped hznz hnn r hok) hgap
-  shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2
+/-- Clawback on any lawful vault with amount ≠ 0 -> sharesDestroyed = ⌊idealShares⌋ at the computed net asset value,
+for the amount, or for the cash when the amount is priced above it. -/
+theorem Vault.clawback_sharesDestroyed (v : Vault) :
+    (∀ (assets holderShares sharesDestroyed assetsRecovered : STAmount) (waiveUnrealizedLoss : Bool)
+      (assetsRecoveredNumber netAssetValue : Number),
+      assets.Canonical → -- a clawback amount is canonical
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
+      assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed →
+      v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered →
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber →
+      assetsRecoveredNumber.operator_gt v.assetsAvailable = false →
+      assets.isZero = false →
+      ∀ (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
+      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) →
+      -- the 19-digit price can cross a whole number within `sharesε` of the ideal
+      (∀ n : ℤ, v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat * sharesε <
+        |v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat - n|) →
+      r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋) ∧
+    -- priced above the cash, the clawback is capped at the cash
+    ∀ (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
+      (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number),
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
+      -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
+      assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed →
+      v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered →
+      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber →
+      assetsRecoveredNumber.operator_gt v.assetsAvailable = true →
+      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered' →
+      assets.isZero = false →
+      ∀ (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
+      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) →
+      -- the 19-digit price can cross a whole number within `sharesε` of the ideal
+      (∀ n : ℤ, v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat * sharesε <
+        |v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat - n|) →
+      r.shares.toRat = ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ :=
+  ⟨fun assets holderShares sharesDestroyed assetsRecovered waiveUnrealizedLoss assetsRecoveredNumber netAssetValue
+      hc hnav hshares hassets hnum hle hznz hnn r hok hgap =>
+    let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
+      (Vault.clawback_sharesDestroyed_total_proof v assets holderShares sharesDestroyed assetsRecovered
+        waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hc hshares hassets hnum hle hznz hnn r hok) hgap
+    shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2,
+    fun assets holderShares sharesDestroyed assetsRecovered assetsRecovered' waiveUnrealizedLoss assetsRecoveredNumber
+      netAssetValue hnav hmax hshares hassets hnum hgt hclamped hznz hnn r hok hgap =>
+    let h := shares_floor_of_gap _ _ _ _ le_rfl sharesε_nonneg le_rfl
+      (Vault.clawback_sharesDestroyed_clamped_total_proof v assets holderShares sharesDestroyed assetsRecovered
+        assetsRecovered' waiveUnrealizedLoss assetsRecoveredNumber netAssetValue hnav hmax hshares hassets hnum
+        hgt hclamped hznz hnn r hok) hgap
+    shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2⟩
 
 /-- A zero clawback amount whose recovery fits the cash claws back the holder's whole balance, which is nonzero:
 exactly `holderShares` are destroyed, and the recovery is the priced one snapped to the grid of the cash it leaves. -/
@@ -109,8 +109,8 @@ theorem Vault.clawback_assetsRecovered (v : Vault) (assets holderShares : STAmou
       (r.assets.isZero = true →
         v.numericType.isIntegral = true ∧
           v.idealAssetsClawback waiveUnrealizedLoss r.shares.toRat * (1 - sharesε) ≤ 1 / 2)) ∧
-    -- the upper side on any lawful vault, against the worth at the computed net asset value. The whole worth and the
-    -- Open-limit bound as in `sharesToAssetsWithdraw_bounds`
+    -- the upper side on any lawful vault, against the worth at the computed net asset value. Priced to nearest, it
+    -- needs a worth of whole base units, within the Open limit
     ∀ netAssetValue : Number, v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
       assets.CanonicalOrZero → -- a clawback amount is canonical, or zero to claw back the holding
       holderShares.ShareBalance → -- the holder's balance of the vault's shares
@@ -159,44 +159,6 @@ theorem Vault.clawback_sharesDestroyed_relative_attained :
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=
   Vault.clawback_sharesDestroyed_upper_witness
-
-/-- Witness for `clawback_sharesDestroyed_clamped`: on a reachable vault a recovery capped at the cash destroys fewer
-shares than the ideal for the cash rounded down, as the share total times the cash needs 20 digits. -/
-theorem Vault.clawback_sharesDestroyed_clamped_attained :
-    ∃ (v : Vault) (t0 : UInt32) (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
-      (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
-      (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
-      -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
-      v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
-      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
-      assetsRecoveredNumber.operator_gt v.assetsAvailable = true ∧
-      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered' ∧
-      assets.isZero = false ∧
-      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
-      r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ :=
-  Vault.clawback_sharesDestroyed_clamped_witness
-
-/-- Witness for `clawback_sharesDestroyed_clamped` on any lawful vault: with cash 1 and `3000000000000000002` shares a
-capped recovery destroys more shares than the ideal for the cash rounded down. -/
-theorem Vault.clawback_sharesDestroyed_clamped_total_relative_attained :
-    ∃ (v : Vault) (assets holderShares sharesDestroyed assetsRecovered assetsRecovered' : STAmount)
-      (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
-      (r : VaultWithAmounts),
-      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
-      -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
-      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
-      v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
-      assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
-      assetsRecoveredNumber.operator_gt v.assetsAvailable = true ∧
-      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok assetsRecovered' ∧
-      assets.isZero = false ∧
-      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
-      ⌊v.idealSharesWithdrawAt netAssetValue.toRat assetsRecovered'.toRat⌋ < r.shares.toRat :=
-  Vault.clawback_sharesDestroyed_clamped_total_upper_witness
 
 /-- Witness for `clawback_assetsRecovered`: on a reachable vault a run recovers more than the destroyed shares'
 worth, half a unit above it (`2` for `1.5`). -/

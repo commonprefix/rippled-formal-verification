@@ -1,13 +1,12 @@
 import XRPL.Properties.Protocol.Number.Common.Rounding.DoRoundUp
 import Mathlib.Tactic
 
-
-namespace XRPL.Model.Protocol
-
 /-! # Int64 ↔ ℤ bridges
 
 `Int64` arithmetic wraps modulo `2^64`. The lemmas below take a bound that keeps every value under `2^63` in
 magnitude, so the operations match integer arithmetic. -/
+
+namespace XRPL.Model.Protocol
 
 /-- Int64←UInt64 cast bridge: when a `UInt64` value fits in the non-negative
 `Int64` range (`< 2^63`), `UInt64.toInt64` preserves the value. -/
@@ -50,14 +49,6 @@ lemma toInt_neg_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
     (-a).toInt = -a.toInt := by
   have ha2 := Int64.toInt_lt a
   rw [Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
-  refine ⟨?_, ?_⟩ <;> push_cast <;> omega
-
-/-- Adding two `Int64`s is exact while the sum stays in the `Int64` range
-`[-2^63, 2^63)` (no overflow / wraparound). -/
-lemma toInt_add_of_bounds (a b : Int64)
-    (hlo : -(2 ^ 63) ≤ a.toInt + b.toInt) (hhi : a.toInt + b.toInt < 2 ^ 63) :
-    (a + b).toInt = a.toInt + b.toInt := by
-  rw [Int64.toInt_add, Int.bmod_eq_iff (by norm_num)]
   refine ⟨?_, ?_⟩ <;> push_cast <;> omega
 
 /-- Dividing a non-negative `Int64` by `10` is exact (floor division). -/

@@ -111,7 +111,7 @@ private lemma Vault.poolAdjust_zero_total_le' (v v' : Vault) (c : PoolBalanceCha
 
 /-- A new loan never raises the total: its principal leaves AssetsAvailable and joins AssetsDeployed exactly. -/
 private lemma Loan.create_total_le' (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
@@ -152,7 +152,7 @@ private lemma Loan.create_total_le' (broker : LoanBroker) (v : Vault) (principal
   linarith
 
 /-- An accept moves no cash and deploys nothing. -/
-private lemma Loan.accept_total_le' (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_total_le' (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (h : (loan.accept v).run = .ok (.ok r)) :
@@ -373,7 +373,7 @@ private lemma Vault.yield_le_of_nonpos (v : Vault) (x yu' : Number) (hx : x.isNo
 /-- A new loan stays in the Open zone. It keeps AssetsTotal, a pending loan books no yield, and an active
 loan's interest passed the Open-limit check. -/
 private lemma Loan.create_openZone (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (hYg : Number.OnGrid v.baseExponent v.yieldUnrealized)
@@ -429,7 +429,7 @@ private lemma Loan.create_openZone (broker : LoanBroker) (v : Vault) (principal 
 
 /-- An accept stays in the Open zone. It keeps AssetsTotal, and the interest it books passed the Open-limit
 check. -/
-private lemma Loan.accept_openZone (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithPool Vault)
+private lemma Loan.accept_openZone (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithDisbursement Vault)
     (hasset : Vault.HoldsAsset v) (hv : Vault.OnBaseGrid v)
     (hS : v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ (16 + v.baseExponent))
     (hYg : Number.OnGrid v.baseExponent v.yieldUnrealized) (hls : loan.loanScale = v.baseExponent)

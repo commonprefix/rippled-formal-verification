@@ -179,7 +179,7 @@ private lemma Loan.SameOutstanding.of_raw {x y : Loan} {raw : RawLoan} (h : y.to
   · rw [show y.paymentRemaining = y.toRawLoan.paymentRemaining from rfl, h, h4]
 
 /-- LoanAccept, impair and unimpair change none of the four outstanding amounts. -/
-private lemma Loan.accept_same (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_same (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : loan.SameOutstanding r.loan' := by
   simp only [Loan.accept] at h
   unfold_ter at h

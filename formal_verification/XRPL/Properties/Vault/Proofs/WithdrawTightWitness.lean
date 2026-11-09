@@ -36,6 +36,7 @@ def vP : Vault :=
   createHistory.vault Vault.placeholder .int64 0 none none 0 [(int64Amount 2, false), (int64Amount 1, true)]
 lemma vT_reach : Vault.Reachable vT 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
 lemma vS_reach : Vault.Reachable vS 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
+lemma vP_reach : Vault.Reachable vP 0 := createHistory.vault_reachable _ _ _ _ _ _ _ (by native_decide)
 def aT : STAmount := int64Amount 5005
 def aS : STAmount := iouAmount 1000000009899901 (-2)
 lemma aT_pos : 0 < aT.toRat := by native_decide
@@ -87,18 +88,19 @@ lemma Vault.withdraw_sharesRedeemed_sharp_witness :
   ⟨vS, 0, 0, aS, false, nav vS, aS_pos, rS, vS_reach, STAmount.canonical_of_canonicalB _ (by native_decide),
     by native_decide, by native_decide, by native_decide⟩
 
-/-- Payout at the bound: with no fee the payout is the whole priced amount. -/
+/-- Payout at the bound: on a reachable vault with no fee the payout is the whole priced amount. -/
 lemma Vault.withdraw_payout_total_witness :
-    ∃ (v : Vault) (t : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
+    ∃ (v : Vault) (t t0 : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (hpos : 0 < amount.amount.toRat) (r : VaultWithAmounts),
-      amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
+      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
       r.shares.toRat < v.toExact.sharesTotal ∧
+      v.earlyExitFeeRateAt t = 0 ∧
       ∃ priced : STAmount, v.sharesToAssetsWithdraw r.shares waiveUnrealizedLoss = .ok priced ∧
         r.assets.toRat = priced.toRat * (1 - (v.earlyExitFeeRateAt t).toNat / 100000) :=
-  ⟨vP, 0, burn 1, false, burn1_pos, rP,
+  ⟨vP, 0, 0, burn 1, false, burn1_pos, rP, vP_reach,
     STAmount.canonical_of_canonicalB _ (by native_decide), rfl, fun _ => by native_decide, by native_decide,
-    by native_decide, priced vP 1, by native_decide, by native_decide⟩
+    by native_decide, by native_decide, priced vP 1, by native_decide, by native_decide⟩
 
 end XRPL.Model.SingleAssetVault

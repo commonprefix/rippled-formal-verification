@@ -1,5 +1,6 @@
 import XRPL.Properties.Protocol.STAmount.Common.RoundToScalePlumbing
 import XRPL.Properties.Protocol.STAmount.Common.DiscreteDefs
+import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 
 /-! # Negation of an STAmount
 
@@ -49,20 +50,6 @@ lemma STAmount.operator_neg_toRat (s : STAmount) : s.operator_neg.toRat = -s.toR
       have h2 : s.toRat = (s.mValue.toNat : ℚ) * 10 ^ s.mOffset := STAmount.toRat_of_nonneg s hf
       rw [h1, h2]
 
-/-- `operator_neg` negates the signed-drops view. -/
-lemma STAmount.operator_neg_signedDrops (s : STAmount) :
-    s.operator_neg.signedDrops = -s.signedDrops := by
-  unfold STAmount.signedDrops
-  rw [STAmount.operator_neg_mValue]
-  by_cases h : s.mValue = 0
-  · have hz : s.mValue.toNat = 0 := by rw [h]; rfl
-    rw [hz]; simp
-  · have hne : ¬ (s.mValue == 0) = true := by rw [beq_iff_eq]; exact h
-    have hneg : s.operator_neg.mIsNegative = !s.mIsNegative := by
-      unfold STAmount.operator_neg; rw [if_neg hne]
-    rw [hneg]
-    rcases hn : s.mIsNegative <;> simp
-
 /-- An `IntegralCanonical` amount stays `IntegralCanonical` under negation. -/
 lemma STAmount.IntegralCanonical.operator_neg {s : STAmount} (h : s.IntegralCanonical) :
     s.operator_neg.IntegralCanonical where
@@ -79,5 +66,14 @@ lemma STAmount.IOUCanonical.operator_neg {s : STAmount} (h : s.IOUCanonical) :
   mant_hi := by rw [STAmount.operator_neg_mValue]; exact h.mant_hi
   exp_lo := by rw [STAmount.operator_neg_mOffset]; exact h.exp_lo
   exp_hi := by rw [STAmount.operator_neg_mOffset]; exact h.exp_hi
+
+/-- A nonzero IOU `STAmount` difference means the exact difference is nonzero, since `v1 - v2 = v1 + (-v2)`. -/
+lemma STAmount.operator_sub_iou_truth_ne_of_result (v1 v2 result : STAmount) (mode : rounding_mode)
+    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
+    (hok : STAmount.operator_sub v1 v2 mode = .ok result) (hresult : result.mValue ≠ 0) :
+    v1.toRat - v2.toRat ≠ 0 := by
+  have h := STAmount.operator_add_iou_truth_ne_of_result v1 v2.operator_neg result mode hc1
+    hc2.operator_neg hok hresult
+  rwa [STAmount.operator_neg_toRat, ← sub_eq_add_neg] at h
 
 end XRPL.Model.Protocol

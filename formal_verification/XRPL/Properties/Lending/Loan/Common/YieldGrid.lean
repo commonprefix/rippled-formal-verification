@@ -41,7 +41,7 @@ lemma Loan.interestDue_onGrid (l : Loan) (i : Number) (h : l.interestDue = .ok i
 
 /-- A new loan adds a whole number of base units to YieldUnrealized. -/
 lemma Loan.create_yieldStep (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false) (hnt : broker.numericType = v.numericType)
     (har : ∃ n : ℕ, v.assetsReserved.toRat = (n : ℚ) * 10 ^ v.baseExponent)
@@ -84,7 +84,7 @@ lemma Loan.create_yieldStep (broker : LoanBroker) (v : Vault) (principal : Numbe
     exact hsums.yield
 
 /-- An accept adds a whole number of LoanScale units to YieldUnrealized. -/
-lemma Loan.accept_yieldStep (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_yieldStep (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) :
     ∃ y, Number.OnGrid loan.loanScale y ∧
       v.yieldUnrealized.operator_add y .to_nearest = .ok r.pool'.yieldUnrealized := by

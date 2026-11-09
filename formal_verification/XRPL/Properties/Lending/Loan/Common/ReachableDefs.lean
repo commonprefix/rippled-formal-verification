@@ -24,7 +24,7 @@ inductive Loan.ReachableFrom (start : Loan) (t₀ : UInt32) : Loan → UInt32 �
       broker.numericType = loan.broker.numericType → -- a loan's broker never changes its asset
       RawLoan.to_lawful { loan.toRawLoan with broker := broker } = .ok loan' →
       Loan.ReachableFrom start t₀ loan' t
-  | accept (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) :
+  | accept (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithDisbursement Vault) :
       Loan.ReachableFrom start t₀ loan t → t ≤ t' → loan.canAccept v t' = .ok .tesSUCCESS →
       (loan.accept v).run = .ok (.ok r) → Loan.ReachableFrom start t₀ r.loan' t'
   | regularPayment (loan : Loan) (t t' : UInt32) (v : Vault) (amount : Number) (r : LoanWithAmounts Vault) :
@@ -54,7 +54,7 @@ fields, `canCreate` passed and `create` succeeded. A two-step LoanSet creates a 
 def Loan.Created (start : Loan) (t₀ : UInt32) : Prop :=
   ∃ (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates) (fees : LoanFees)
     (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-    (twoStep allowsOverpayment : Bool) (r : LoanWithPool Vault),
+    (twoStep allowsOverpayment : Bool) (r : LoanWithDisbursement Vault),
     let schedule := LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate t₀ twoStep
     Loan.canCreate broker v principal fees schedule t₀ twoStep = .ok .tesSUCCESS ∧
       (Loan.create broker v principal rates fees schedule allowsOverpayment twoStep).run = .ok (.ok r) ∧

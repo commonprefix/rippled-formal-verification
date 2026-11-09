@@ -258,7 +258,7 @@ lemma Loan.pay_needs (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amount : 
       (by rw [hst.loanScale]; exact ⟨hlo, hhi⟩) h1
 
 /-- An accept keeps the loan needing every payment it has left. -/
-private lemma Loan.accept_needs (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_needs (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hn : loan.NeedsAllPayments) (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.NeedsAllPayments := by
   simp only [Loan.accept] at h
   unfold_ter at h

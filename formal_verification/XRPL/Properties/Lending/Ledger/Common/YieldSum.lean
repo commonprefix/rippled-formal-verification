@@ -122,7 +122,7 @@ lemma Vault.exceedsOpenLimit_false_sum (v : Vault) (x : Number) (hv : Vault.OnBa
 /-- A new loan stays inside the Open zone. AssetsDeployed gains the principal, which AssetsAvailable covers,
 and YieldUnrealized at most the interest the Open-limit check read. -/
 private lemma Loan.create_open_bound (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (hv : Vault.OnBaseGrid v) (hYg : Number.OnGrid v.baseExponent v.yieldUnrealized)
     (har : ∃ n : ℕ, v.assetsReserved.toRat = (n : ℚ) * 10 ^ v.baseExponent)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
@@ -183,7 +183,7 @@ private lemma Loan.create_open_bound (broker : LoanBroker) (v : Vault) (principa
 
 /-- An accept stays inside the Open zone. It keeps AssetsDeployed and adds to YieldUnrealized exactly the
 interest the Open-limit check read. -/
-private lemma Loan.accept_open_bound (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithPool Vault)
+private lemma Loan.accept_open_bound (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithDisbursement Vault)
     (hv : Vault.OnBaseGrid v) (hYg : Number.OnGrid v.baseExponent v.yieldUnrealized)
     (hls : loan.loanScale = v.baseExponent) (hi0 : 0 ≤ loan.toExact.interestDue)
     (hc : loan.canAccept v t = .ok .tesSUCCESS) (h : (loan.accept v).run = .ok (.ok r)) :

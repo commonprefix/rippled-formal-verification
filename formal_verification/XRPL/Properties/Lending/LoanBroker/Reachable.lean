@@ -13,14 +13,13 @@ open XRPL.Model.Protocol
 
 variable (lb : LoanBroker)
 
-/-- Every broker reachable from creation by a sequence of broker transactions is lawful, as every broker is by
-construction. -/
+/-- Every broker reachable by broker transactions is lawful, as every broker is by construction. -/
 theorem LoanBroker.Reachable.lawful (base : Int) (_hr : lb.Reachable base) :
     lb.toRawLoanBroker.WF ∧ lb.toRawLoanBroker.Valid :=
   ⟨lb.wf, lb.valid⟩
 
-/-- Every reachable broker -> no debt and no loans, its rates fixed at create, CoverAvailable and DebtMaximum on the
-base grid. -/
+/-- Every reachable broker -> no debt and no loans, its rates fixed at create, CoverAvailable on the base grid and
+within the Open limit, and DebtMaximum on the base grid. -/
 theorem LoanBroker.Reachable.broker_fields (base : Int) :
     (lb.Reachable base → lb.debtTotal = Number.zero) ∧
     (lb.Reachable base → lb.loanCount = 0) ∧

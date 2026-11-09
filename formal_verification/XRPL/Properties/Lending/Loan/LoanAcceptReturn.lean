@@ -57,10 +57,13 @@ theorem Loan.accept_exits :
       Vault.AdjustSums v (loan.acceptChange interestDue) aa' ad' lu' ar' yu' → ar'.signum < 0 →
       (loan.accept v).run = .ok (.error .tefBAD_LEDGER)) ∧
     -- `raw` - the updated vault
-    (∀ (interestDue : Number) (raw : RawVault) (v' : Vault) (loan' : Loan), loan.interestDue = .ok interestDue →
+    (∀ (interestDue : Number) (raw : RawVault) (v' : Vault) (loan' : Loan) (amountToBorrower : Number),
+      loan.interestDue = .ok interestDue →
       (v.adjustBalances (loan.acceptChange interestDue)).run = .ok (.ok raw) → raw.to_lawful = .ok v' →
       ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok loan' →
-      (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v' })) :=
+      -- the borrower gets PrincipalOutstanding less the origination fee
+      loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok amountToBorrower →
+      (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v', amountToBorrower := amountToBorrower })) :=
   ⟨Loan.accept_bad_ledger_proof loan v, Loan.accept_success_proof loan v⟩
 
 /-- The only accept rejection is tefBAD_LEDGER. -/

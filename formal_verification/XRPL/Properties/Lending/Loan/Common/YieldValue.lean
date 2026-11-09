@@ -15,7 +15,7 @@ open private Loan.changeImpairment from XRPL.Model.Lending.Loan.LoanManage
 /-- A new loan's booked interest. An active loan books its exact interest, at least zero and inside the
 Open zone with YieldUnrealized, a pending loan books nothing. -/
 lemma Loan.create_yieldValue (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false) (hnt : broker.numericType = v.numericType)
     (har : ∃ n : ℕ, v.assetsReserved.toRat = (n : ℚ) * 10 ^ v.baseExponent)
@@ -105,7 +105,7 @@ private lemma Loan.canAccept_open (loan : Loan) (v : Vault) (t : UInt32) (h : lo
 
 /-- An accept's booked interest. It books the loan's exact interest inside the Open zone with
 YieldUnrealized, and keeps the loan's interest. -/
-lemma Loan.accept_yieldValue (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithPool Vault)
+lemma Loan.accept_yieldValue (loan : Loan) (v : Vault) (t : UInt32) (r : LoanWithDisbursement Vault)
     (hc : loan.canAccept v t = .ok .tesSUCCESS) (h : (loan.accept v).run = .ok (.ok r)) :
     ∃ y, v.yieldUnrealized.operator_add y .to_nearest = .ok r.pool'.yieldUnrealized ∧
       Number.OnGrid loan.loanScale y ∧ y.toRat = loan.toExact.interestDue ∧

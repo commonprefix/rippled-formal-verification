@@ -159,7 +159,7 @@ open private Number.signum_nonneg_of_le Number.toRat_nonneg_of_le from XRPL.Prop
 variable (loan : Loan) (v : Vault)
 
 /-- Proof body of `accept_releases`. -/
-lemma Loan.accept_releases_proof (interestDue : Number) (r : LoanWithPool Vault)
+lemma Loan.accept_releases_proof (interestDue : Number) (r : LoanWithDisbursement Vault)
     (hi : loan.interestDue = .ok interestDue) (hok : (loan.accept v).run = .ok (.ok r))
     (haa : STAmount.isRounded v.numericType v.assetsAvailable = false)
     (har : STAmount.Representable v.numericType (v.assetsReserved.toRat - loan.principalOutstanding.toRat))
@@ -169,7 +169,7 @@ lemma Loan.accept_releases_proof (interestDue : Number) (r : LoanWithPool Vault)
       { r.pool'.toRawVault with assetsReserved := v.assetsReserved, yieldUnrealized := v.yieldUnrealized } =
         v.toRawVault ∧
       r.loan'.broker = loan.broker := by
-  obtain ⟨raw, hadj, hv', hl⟩ := Loan.accept_ok_inv loan v interestDue r hi hok
+  obtain ⟨raw, hadj, hv', hl, -⟩ := Loan.accept_ok_inv loan v interestDue r hi hok
   have hraw := (RawVault.to_lawful_ok hv').1
   have hloan := (RawLoan.to_lawful_ok hl).1
   obtain ⟨aa', ad', lu', ar', yu', hs, -, -, hrawEq⟩ := Vault.adjustBalances_ok_parts v _ raw hadj
@@ -235,7 +235,7 @@ private lemma Vault.baseExponent_ge (v : Vault) : -10 ≤ v.baseExponent := by
 LoanSet preclaim checks. The precision check at LoanScale then makes the rounding at LoanScale exact. -/
 private lemma Loan.create_principalOutstanding (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hpn : principal.isNormalized) (hp0 : 0 ≤ principal.toRat)
+    (r : LoanWithDisbursement Vault) (hpn : principal.isNormalized) (hp0 : 0 ≤ principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     r.loan'.principalOutstanding = principal := by
@@ -257,10 +257,11 @@ private lemma Loan.create_principalOutstanding (broker : LoanBroker) (v : Vault)
 /-- The interest a pending loan computes at accept is the interest its create computed, once its
 PrincipalOutstanding is PrincipalRequested. -/
 private lemma Loan.create_interestDue (principal : Number) (rates : LoanRates) (fees : LoanFees)
-    (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault) (props : LoanProperties)
+    (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
+    (props : LoanProperties)
     (loanState : LoanState) (broker' : LoanBroker)
     (hstate : LoanState.build props.totalValueOutstanding principal props.managementFeeOutstanding = .ok loanState)
-    (hloan : (RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+    (hloan : (RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
       (schedule.startDate + schedule.paymentInterval)).to_lawful = .ok r.loan')
     (hpo : r.loan'.principalOutstanding = principal) :
     r.loan'.interestDue = .ok loanState.interestDue := by
@@ -278,11 +279,50 @@ private lemma Loan.create_interestDue (principal : Number) (rates : LoanRates) (
   rw [htvo, hpo, ht, ok_bind, hmfo]
   exact hi
 
+/-- What a create sends the borrower: an active loan PrincipalRequested less the origination fee, exactly, a pending
+one nothing. -/
+lemma Loan.create_amountToBorrower_proof (broker : LoanBroker) (v : Vault) (principal : Number)
+    (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
+    (r : LoanWithDisbursement Vault) (hpn : principal.isNormalized) (hp0 : 0 ≤ principal.toRat)
+    (hst : STAmount.isRounded broker.numericType principal = false)
+    (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
+    (pending = false → r.amountToBorrower.toRat + fees.originationFee.toRat = principal.toRat) ∧
+      (pending = true → r.amountToBorrower = Number.zero) := by
+  have hamt := Loan.create_ok_amount broker v principal rates fees schedule allowsOverpayment pending r hok
+  refine ⟨fun hp => ?_, fun hp => ?_⟩
+  · subst hp
+    -- the new loan holds PrincipalRequested and the fee, and the accept amount of a loan is exact
+    have hPO := Loan.create_principalOutstanding broker v principal rates fees schedule allowsOverpayment false r
+      hpn hp0 hst hok
+    obtain ⟨_, _, _, _, _, -, -, -, -, hloan⟩ :=
+      Loan.create_ok_inv broker v principal rates fees schedule allowsOverpayment false r hok
+    have hfees : r.loan'.fees = fees := (congrArg RawLoan.fees (RawLoan.to_lawful_ok hloan).1 :)
+    obtain ⟨a, ha, hav⟩ := Loan.acceptAmount_ok r.loan'
+    rw [hPO, hfees] at ha hav
+    simp only [Loan.createAmountToBorrower, Bool.false_eq_true, ↓reduceIte, ha, Except.ok.injEq] at hamt
+    rw [← hamt, hav]; ring
+  · subst hp
+    simpa [Loan.createAmountToBorrower] using hamt.symm
+
+/-- What an accept sends the borrower: PrincipalOutstanding less the origination fee, exactly. -/
+lemma Loan.accept_amountToBorrower_proof (r : LoanWithDisbursement Vault) (hok : (loan.accept v).run = .ok (.ok r)) :
+    r.amountToBorrower.toRat + loan.fees.originationFee.toRat = loan.principalOutstanding.toRat := by
+  cases hi : loan.interestDue with
+  | error e =>
+    simp only [Loan.accept] at hok
+    unfold_ter at hok
+    simp [hi] at hok
+  | ok interestDue =>
+    obtain ⟨-, -, -, -, ha⟩ := Loan.accept_ok_inv loan v interestDue r hi hok
+    obtain ⟨a, ha', hav⟩ := Loan.acceptAmount_ok loan
+    rw [ha'] at ha
+    rw [← Except.ok.inj ha, hav]; ring
+
 variable (broker : LoanBroker) (principal : Number) (rates : LoanRates) (fees : LoanFees)
   (schedule : LoanSchedule) (allowsOverpayment : Bool)
 
 /-- Proof body of `createPending_accept`. -/
-lemma Loan.createPending_accept_proof (r rA : LoanWithPool Vault)
+lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
     (hpn : principal.isNormalized) (hp0 : 0 ≤ principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (har : STAmount.Representable v.numericType (v.assetsReserved.toRat + principal.toRat))
@@ -300,7 +340,7 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithPool Vault)
   subst hp'
   have hi := Loan.create_interestDue principal' rates fees schedule allowsOverpayment true r props loanState broker'
     hchecks.state hloan hPO
-  obtain ⟨rawA, hadjA, hvA, hlA⟩ := Loan.accept_ok_inv r.loan' r.pool' loanState.interestDue rA hi haccept
+  obtain ⟨rawA, hadjA, hvA, hlA, haA⟩ := Loan.accept_ok_inv r.loan' r.pool' loanState.interestDue rA hi haccept
   obtain ⟨rawP, hadjP, hvP⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
   have hrawP := (RawVault.to_lawful_ok hvP).1
   obtain ⟨aaP, adP, luP, arP, yuP, hsP, ⟨hgaP, hgdP, hglP, -, -⟩, hleP, hrawPeq⟩ :=
@@ -369,12 +409,16 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithPool Vault)
     rw [hrawAeq, hpf]
   rw [hrawI] at hvA
   have hl := (RawLoan.to_lawful_ok hloan).1
-  have hbuild : RawLoan.build props rates fees schedule broker' allowsOverpayment false
+  have hbuild : RawLoan.build principal' props rates fees schedule broker' allowsOverpayment false
     (schedule.startDate + schedule.paymentInterval) =
       { r.loan'.toRawLoan with isPending := false } := by
     rw [hl]; rfl
   rw [Loan.create_run_of_checks broker v principal' rates fees schedule allowsOverpayment false props loanState
     debtTotal' principal' _ rA.pool' broker' hchecks hround hadjI hvA hbroker
     (Loan.create_ok_fits _ _ _ _ _ _ _ _ _ hcreate).1 (Loan.create_ok_fits _ _ _ _ _ _ _ _ _ hcreate).2, hbuild, hlA]
+  -- the accept sends PrincipalOutstanding less the fee, which is what an active create sends
+  have hfees : r.loan'.fees = fees := (congrArg RawLoan.fees hl :)
+  rw [hPO, hfees] at haA
+  simp only [Loan.createAmountToBorrower, Bool.false_eq_true, ↓reduceIte, haA]
 
 end XRPL.Model.Lending

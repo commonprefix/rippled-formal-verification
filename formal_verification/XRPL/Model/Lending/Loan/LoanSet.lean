@@ -144,8 +144,9 @@ def LoanBroker.checkLimits (broker : LoanBroker) (debtTotal' : Number) (vaultExp
   return .tesSUCCESS
 
 -- Assemble the raw loan object from its computed properties (C++ buildLoan)
-def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule)
-    (broker : LoanBroker) (allowsOverpayment isPending : Bool) (nextPaymentDueDate : UInt32) : RawLoan := {
+def RawLoan.build (principal : Number) (properties : LoanProperties) (rates : LoanRates) (fees : LoanFees)
+    (schedule : LoanSchedule) (broker : LoanBroker) (allowsOverpayment isPending : Bool) (nextPaymentDueDate : UInt32)
+    : RawLoan := {
   broker := broker
   rates := rates
   fees := fees
@@ -153,6 +154,7 @@ def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : Loan
   paymentRemaining := schedule.paymentTotal
   periodicPayment := properties.periodicPayment
   principalOutstanding := properties.principalOutstanding
+  principalInitial := principal
   totalValueOutstanding := properties.totalValueOutstanding
   managementFeeOutstanding := properties.managementFeeOutstanding
   loanScale := properties.loanScale
@@ -167,7 +169,7 @@ def RawLoan.build (properties : LoanProperties) (rates : LoanRates) (fees : Loan
 -- LoanSet -> doApply
 def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    : TerExcept (LoanWithPool α) := do
+    : TerExcept (LoanWithDisbursement α) := do
   let nt := broker.numericType
   let poolAmounts := AssetPool.amounts pool
   if poolAmounts.assetsAvailable.operator_lt principal then throw .tecINSUFFICIENT_FUNDS
@@ -207,20 +209,22 @@ def Loan.create {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (pr
   let broker' ← rawBroker'.to_lawful
 
   let nextPaymentDueDate ← schedule.startDate.addChecked schedule.paymentInterval
-  let rawLoan := RawLoan.build properties rates fees schedule broker'
+  let rawLoan := RawLoan.build principal properties rates fees schedule broker'
     allowsOverpayment pending nextPaymentDueDate
   let loan ← rawLoan.to_lawful
 
-  return { loan' := loan, pool' := pool' }
+  let amountToBorrower ← if pending then pure Number.zero else principal.operator_sub fees.originationFee .to_nearest
+
+  return { loan' := loan, pool' := pool', amountToBorrower := amountToBorrower }
 
 def Loan.createPending {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
-    : TerExcept (LoanWithPool α) :=
+    : TerExcept (LoanWithDisbursement α) :=
   Loan.create broker pool principal rates fees schedule allowsOverpayment true
 
 def Loan.createImmediate {α : Type} [AssetPool α] (broker : LoanBroker) (pool : α) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment : Bool)
-    : TerExcept (LoanWithPool α) :=
+    : TerExcept (LoanWithDisbursement α) :=
   Loan.create broker pool principal rates fees schedule allowsOverpayment false
 
 end XRPL.Model.Lending

@@ -21,7 +21,7 @@ private lemma debit_le_worth (A S x π : ℚ) (hS : 0 < S) (hπ : π ≤ A * x /
     rwa [div_mul_cancel₀ _ hS.ne'] at this
   nlinarith
 
-/-- Proof of `Vault.withdraw_no_dilution`. -/
+/-- Proof of the withdrawal line of `Vault.no_dilution`. -/
 lemma Vault.Reachable.withdraw_no_dilution_intended_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
     (t t0 : UInt32) (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
     (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
@@ -60,7 +60,7 @@ lemma Vault.Reachable.withdraw_no_dilution_intended_proof (v : Vault) (amount : 
     exact le_of_eq (Vault.withdraw_final_payout_proof v amount waive t t0 hpos hr hc hty hmax r hok
       (by rw [hcast]; exact hfin))
 
-/-- Proof of `Vault.clawback_no_dilution`. -/
+/-- Proof of the clawback line of `Vault.no_dilution`. -/
 lemma Vault.Reachable.clawback_no_dilution_intended_proof (v : Vault) (assets holderShares : STAmount)
     (waive : Bool) (t0 : UInt32) (hnn : 0 ≤ assets.toRat) (hr : Vault.Reachable v t0)
     (hc : assets.CanonicalOrZero) (hhs : holderShares.ShareBalance)
@@ -231,7 +231,7 @@ lemma Vault.OpenZone.deposit_keeps_perShare {v : Vault} (hz : v.OpenZone) (amoun
   rw [hz.withdrawNav_eq, hz'.withdrawNav_eq, hAA', hST']
   nlinarith
 
-/-- Proof of `Vault.deposit_no_dilution`. -/
+/-- Proof of the deposit line of `Vault.no_dilution`. -/
 lemma Vault.Reachable.deposit_no_dilution_intended_proof (v : Vault) (amountDeposit : STAmount) (t t0 : UInt32)
     (hpos : 0 < amountDeposit.toRat) (hr : Vault.Reachable v t0) (hcanon : amountDeposit.Canonical)
     (hty : amountDeposit.mNumericType = v.numericType)

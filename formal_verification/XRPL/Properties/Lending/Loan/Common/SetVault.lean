@@ -37,7 +37,7 @@ private lemma Vault.adjustBalances_ok_sums (v : Vault) (c : PoolBalanceChange) (
 /-- What a successful create moves. The vault's new balances are the old ones updated by the
 create's change, the new DebtTotal is the old one plus PrincipalRequested, and the loan is the built one. -/
 lemma Loan.create_pool_sums (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ props loanState debtTotal' principal' broker' aa' ad' lu' ar' yu',
       Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal' ∧
@@ -50,7 +50,7 @@ lemma Loan.create_pool_sums (broker : LoanBroker) (v : Vault) (principal : Numbe
         assetsReserved := ar'
         lossUnrealized := lu'
         yieldUnrealized := yu' } ∧
-      r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+      r.loan'.toRawLoan = RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
         (schedule.startDate + schedule.paymentInterval) ∧
       broker'.toRawLoanBroker =
         { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 } := by
@@ -65,7 +65,7 @@ lemma Loan.create_pool_sums (broker : LoanBroker) (v : Vault) (principal : Numbe
 /-- The exact new balances of a create. On the base grid the principal moves from AssetsAvailable to
 AssetsDeployed and DebtTotal, a pending loan reserves it, an active loan adds its interest to the yield. -/
 lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hgrid : Loan.CreateGrid broker v)
@@ -289,7 +289,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
 /-- Proof body of the AssetsTotal line of `Lending.create_updates`. -/
 lemma Loan.create_assetsTotal_unchanged_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hgrid : Loan.CreateGrid broker v)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -305,7 +305,7 @@ lemma Loan.create_assetsTotal_unchanged_proof (broker : LoanBroker) (v : Vault) 
 /-- Proof body of the PrincipalRequested line of `Lending.create_updates`. -/
 lemma Loan.create_principal_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hgrid : Loan.CreateGrid broker v)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -325,7 +325,7 @@ lemma Loan.create_principal_proof (broker : LoanBroker) (v : Vault) (principal :
 pending. -/
 lemma Loan.create_yield_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r : LoanWithPool Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
+    (r : LoanWithDisbursement Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hgrid : Loan.CreateGrid broker v)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :

@@ -62,7 +62,7 @@ theorem LoanBroker.coverWithdraw_exits (pool : α) (amount : STAmount) :
         lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' }) :=
   ⟨LoanBroker.coverWithdraw_negative_cover_proof lb pool amount, LoanBroker.coverWithdraw_success_proof lb pool amount⟩
 
-/-- A withdrawal never returns a transaction error code. -/
+/-- A cover withdrawal never returns a rejection. -/
 theorem LoanBroker.coverWithdraw_error_codes (pool : α) (amount : STAmount) (ter : TER) :
     (lb.coverWithdraw pool amount).run ≠ .ok (.error ter) :=
   LoanBroker.coverWithdraw_error_codes_proof lb pool amount ter

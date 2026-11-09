@@ -1,4 +1,4 @@
-import XRPL.Properties.Protocol.STAmount.Sub.Common.Sub
+import XRPL.Properties.Protocol.STAmount.Sub.Common.Neg
 import XRPL.Properties.Protocol.STAmount.Add.RoundsWithin
 import XRPL.Properties.Protocol.STAmount.Common.IOUWitnessTraces
 import XRPL.Properties.Protocol.STAmount.Common.IOUDirectedWitnesses
@@ -12,7 +12,6 @@ namespace XRPL.Model.Protocol
 /-- Proof of `operator_sub_rounds_iou` (IOU subtraction, `to_nearest`). -/
 theorem STAmount.operator_sub_rounds_iou_proof (v1 v2 result : STAmount)
     (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
-    (h_truth_ne : v1.toRat - v2.toRat ≠ 0)
     (hok : STAmount.operator_sub v1 v2 .to_nearest = .ok result)
     (hresult : result.mValue ≠ 0) :
     RoundsWithin result (v1.toRat - v2.toRat) .to_nearest IOUAmount.εToNearest := by
@@ -20,13 +19,12 @@ theorem STAmount.operator_sub_rounds_iou_proof (v1 v2 result : STAmount)
     rw [STAmount.operator_neg_toRat]; ring
   have hok' : STAmount.operator_add v1 v2.operator_neg .to_nearest = .ok result := hok
   rw [← htruth]
-  exact STAmount.operator_add_rounds_iou v1 v2.operator_neg result hc1
-    hc2.operator_neg (by rw [htruth]; exact h_truth_ne) hok' hresult
+  exact STAmount.operator_add_rounds_iou v1 v2.operator_neg result hc1 hc2.operator_neg hok' hresult
 
 /-- Proof of `operator_sub_rounds_iou_witness`. -/
 theorem STAmount.operator_sub_rounds_iou_witness_proof :
     ∃ (v1 v2 result : STAmount),
-      v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat - v2.toRat ≠ 0 ∧
+      v1.IOUCanonical ∧ v2.IOUCanonical ∧
       STAmount.operator_sub v1 v2 .to_nearest = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) := by
   have h1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
@@ -44,13 +42,12 @@ theorem STAmount.operator_sub_rounds_iou_witness_proof :
   refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, true⟩,
           ⟨.fractional, 1000000000000000, 1, false⟩,
           ⟨by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩,
           hok, by decide, ?_⟩
-  · rw [h1, h2]; norm_num
-  · unfold RoundsWithinWitness
-    rw [show RatValued.toRat (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount)
-          = (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2]
-    norm_num
+  unfold RoundsWithinWitness
+  rw [show RatValued.toRat (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount)
+        = (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2]
+  norm_num
 
 /-- IOU subtraction rounds within the directed addition bound in every mode, since `v1 − v2 = v1 + (−v2)` and
 negating `v2` only flips its sign. -/

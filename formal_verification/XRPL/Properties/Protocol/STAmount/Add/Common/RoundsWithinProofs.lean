@@ -8,7 +8,7 @@ namespace XRPL.Model.Protocol
 /-- Proof of `operator_add_rounds_iou_witness`. -/
 theorem STAmount.operator_add_rounds_iou_witness_proof :
     ∃ (v1 v2 result : STAmount),
-      v1.IOUCanonical ∧ v2.IOUCanonical ∧ v1.toRat + v2.toRat ≠ 0 ∧
+      v1.IOUCanonical ∧ v2.IOUCanonical ∧
       STAmount.operator_add v1 v2 .to_nearest = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat + v2.toRat) (4 / 10 ^ 16 : ℚ) := by
   have h1 : (⟨.fractional, 5000000000000003, 0, false⟩ : STAmount).toRat = 5000000000000003 := by
@@ -23,12 +23,11 @@ theorem STAmount.operator_add_rounds_iou_witness_proof :
   refine ⟨⟨.fractional, 5000000000000003, 0, false⟩, ⟨.fractional, 5000000000000002, 0, false⟩,
           ⟨.fractional, 1000000000000000, 1, false⟩,
           ⟨by decide, by decide, by decide, by decide, by decide⟩,
-          ⟨by decide, by decide, by decide, by decide, by decide⟩, ?_,
+          ⟨by decide, by decide, by decide, by decide, by decide⟩,
           STAmount.operator_add_iou_witness_eq, by decide, ?_⟩
-  · rw [h1, h2]; norm_num
-  · unfold RoundsWithinWitness
-    rw [show RatValued.toRat (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount)
-          = (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2]
-    norm_num
+  unfold RoundsWithinWitness
+  rw [show RatValued.toRat (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount)
+        = (⟨.fractional, 1000000000000000, 1, false⟩ : STAmount).toRat from rfl, hr, h1, h2]
+  norm_num
 
 end XRPL.Model.Protocol

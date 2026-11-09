@@ -170,7 +170,7 @@ private lemma Loan.delete_broker_raw (loan : Loan) (v : Vault) (r : LoanBrokerWi
 
 /-- A new loan adds its principal to its broker's DebtTotal and one to LoanCount. -/
 private lemma Loan.create_broker_raw (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (h : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ d, broker.debtTotal.operator_add principal .to_nearest = .ok d ∧
       r.loan'.broker.toRawLoanBroker = { broker.toRawLoanBroker with

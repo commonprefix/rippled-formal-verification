@@ -38,7 +38,7 @@ lemma Loan.KeepsDueDate.of_lawful {loan loan' : Loan} {raw : RawLoan} (h : raw.t
   subst he
   exact ⟨hp, hn, hq⟩
 
-lemma Loan.accept_keepsDueDate (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_keepsDueDate (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : Loan.KeepsDueDate loan r.loan' := by
   simp only [Loan.accept] at h
   unfold_ter at h
