@@ -227,22 +227,4 @@ lemma Vault.priced_le_worth_total (v : Vault)
   have hg : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
   exact le_of_grid_lt _ k _ _ heb _ _ hpv hk (by linarith)
 
-/-- Proof of `Vault.sharesToAssetsWithdraw_bounds`. -/
-lemma Vault.sharesToAssetsWithdraw_intended_total_proof (v : Vault)
-    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (shares p : STAmount) (w : Bool) (nav : Number) (hnav : v.assetsTotalForWithdrawal w = .ok nav)
-    (hnn : 0 ≤ shares.toRat) (hsc : shares.Canonical) (hpr : v.sharesToAssetsWithdraw shares w = .ok p)
-    (hsmall : v.idealAssetsWithdrawAt nav.toRat shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
-    0 ≤ p.toRat ∧
-    ((∃ k : ℤ, v.idealAssetsWithdrawAt nav.toRat shares.toRat = k * 10 ^ v.baseExponent) →
-      p.toRat ≤ v.idealAssetsWithdrawAt nav.toRat shares.toRat) ∧
-    (p.isZero = false → v.idealAssetsWithdrawAt nav.toRat shares.toRat - p.toRat < (10 : ℚ) ^ p.exponent) := by
-  obtain ⟨hp0, -, -⟩ := Vault.sharesToAssetsWithdraw_total_proof v shares p w nav hnav hnn hsc hpr
-  refine ⟨hp0, Vault.priced_le_worth_total v hmax shares p w nav hnav hnn hsc hpr hsmall, fun hnz => ?_⟩
-  have hpm : p.mValue ≠ 0 := by simpa [STAmount.isZero] using hnz
-  obtain ⟨-, -, -, hlo, hrel⟩ := Vault.priced_grid_total v hmax shares p w nav hnav hnn hsc hpr hsmall
-    (STAmount.toRat_ne_zero p hpm)
-  have hg : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
-  linarith
-
 end XRPL.Model.SingleAssetVault

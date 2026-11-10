@@ -22,13 +22,13 @@ open private Loan.doPayment Loan.settlePayment validatePostPayment UnsettledPaym
 
 /-- The interest a new loan books, read by the Open-limit check, is at least zero. -/
 lemma Loan.create_checkedInterest_nonneg (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (props : LoanProperties) (loanState : LoanState) (debtTotal' : Number) (broker' : LoanBroker)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r))
     (hchecks : Loan.CreateChecks broker v principal rates fees schedule props loanState debtTotal')
-    (hl : r.loan'.toRawLoan = RawLoan.build props rates fees schedule broker' allowsOverpayment pending
+    (hl : r.loan'.toRawLoan = RawLoan.build principal props rates fees schedule broker' allowsOverpayment pending
       (schedule.startDate + schedule.paymentInterval))
     (hb : broker'.toRawLoanBroker =
       { broker.toRawLoanBroker with debtTotal := debtTotal', loanCount := broker.loanCount + 1 }) :
@@ -112,7 +112,7 @@ lemma Loan.create_checkedInterest_nonneg (broker : LoanBroker) (v : Vault) (prin
 /-- A new loan was made inside the Open zone. AssetsAvailable plus AssetsDeployed was below the
 limit, `9·10^15` base units plus half a unit, and the principal came out of AssetsAvailable. -/
 lemma Loan.create_inside_open_zone (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -145,7 +145,7 @@ lemma Loan.create_inside_open_zone (broker : LoanBroker) (v : Vault) (principal 
 /-- What a new loan reserves. On the base grid a pending loan adds PrincipalRequested to AssetsReserved
 exactly and an active one keeps it. The loan stores PrincipalRequested and is not impaired. -/
 lemma Loan.create_reserved (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false) (hnt : broker.numericType = v.numericType)
     (har : ∃ n : ℕ, v.assetsReserved.toRat = (n : ℚ) * 10 ^ v.baseExponent)
@@ -212,7 +212,7 @@ lemma Loan.create_reserved (broker : LoanBroker) (v : Vault) (principal : Number
   · show r.loan'.toRawLoan.isImpaired = _; rw [hl]; rfl
 
 /-- An accept takes PrincipalOutstanding out of AssetsReserved and marks the loan active. -/
-lemma Loan.accept_reserved (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_reserved (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) :
     v.assetsReserved.operator_add loan.principalOutstanding.operator_neg .to_nearest = .ok r.pool'.assetsReserved ∧
       r.loan'.isPending = false ∧ r.loan'.principalOutstanding = loan.principalOutstanding ∧

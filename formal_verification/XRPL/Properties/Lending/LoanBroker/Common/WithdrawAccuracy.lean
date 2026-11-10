@@ -14,7 +14,7 @@ open XRPL.Model.SingleAssetVault (Vault)
 
 variable {α : Type} [AssetPool α]
 
-/-- Proof body of `coverWithdraw_decreases_cover`. -/
+/-- Proof body of the withdrawal line of `cover_direction`. -/
 lemma LoanBroker.coverWithdraw_decreases_cover_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : (lb.coverWithdraw pool amount).run = .ok (.ok res))
     (hc : amount.Canonical)
@@ -25,7 +25,7 @@ lemma LoanBroker.coverWithdraw_decreases_cover_proof (lb : LoanBroker) (pool : �
     (STAmount.CanonicalOrZero.operator_neg (Or.inl hc)) hb.1 hb.2 hcl
   exact LoanBroker.applyCoverTransaction_debit_le lb a res hac ha0 happ
 
-/-- Proof body of `coverWithdraw_total`. -/
+/-- Proof body of the withdrawal line of `cover_total`. -/
 lemma LoanBroker.coverWithdraw_total_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS) :
     ∃ a res, clampToSumExponent lb.coverAvailable amount.operator_neg (AssetPool.baseExponent pool) = .ok a ∧
@@ -34,7 +34,7 @@ lemma LoanBroker.coverWithdraw_total_proof (lb : LoanBroker) (pool : α) (amount
   obtain ⟨lb', hres, -⟩ := LoanBroker.coverWithdraw_success_proof lb pool amount a aN c' hcl hnum hge hsub
   exact ⟨a, ⟨a, lb'⟩, hcl, hres, rfl⟩
 
-/-- Proof body of `coverWithdraw_keeps_minimum`. -/
+/-- Proof body of the withdrawal line of `cover_keeps_minimum`. -/
 lemma LoanBroker.coverWithdraw_keeps_minimum_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hcan : lb.canCoverWithdraw pool amount = .ok .tesSUCCESS)
     (hok : (lb.coverWithdraw pool amount).run = .ok (.ok res)) :
@@ -84,19 +84,15 @@ lemma LoanBroker.coverWithdraw_debit_le_amount_proof (lb : LoanBroker) (base : I
   obtain ⟨-, -, -, hle, -, hcov⟩ := LoanBroker.coverWithdraw_exact lb v amount res hz hc hpos hcan hok
   rw [hcov]; linarith
 
-/-- Proof body of the XRP or MPT part of `LoanBroker.coverWithdraw_debit`. -/
-lemma LoanBroker.coverWithdraw_debit_integral_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
+/-- Proof body of the XRP or MPT line of `LoanBroker.coverWithdraw_debit`. -/
+lemma LoanBroker.coverWithdraw_integral_amount_proof (lb : LoanBroker) (pool : α) (amount : STAmount)
     (res : LoanBrokerCoverResult) (hok : (lb.coverWithdraw pool amount).run = .ok (.ok res))
-    (hint : amount.IntegralCanonical) (hsz : amount.mValue.toNat ≤ 2 ^ 63 - 1)
-    (hnn : 0 ≤ amount.toRat) (hcint : lb.toExact.coverAvailable.den = 1)
-    (hbound : lb.toExact.coverAvailable < 2 ^ 63) :
-    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = amount.toRat := by
+    (hint : lb.numericType.isIntegral = true) (hc : amount.Canonical) (hat : amount.mNumericType = lb.numericType)
+    (hnn : 0 ≤ amount.toRat) : res.amount'.toRat = amount.toRat := by
   obtain ⟨a, hcl, happ⟩ := LoanBroker.coverWithdraw_ok_inv lb pool amount res hok
-  obtain ⟨hic, hval, hrat⟩ := clampToSumExponent_neg_integral _ _ _ _ hint hcl
-  rw [abs_of_nonneg hnn] at hrat
-  obtain ⟨hv, -⟩ := LoanBroker.applyCoverTransaction_debit_integral lb a res happ hic (by rw [hval]; exact hsz)
-    (by rw [hrat]; exact hnn) hcint hbound
-  rw [hv, hrat]
-  ring
+  have hic := (hc.1 (by unfold STAmount.integral; rw [hat]; exact hint)).1
+  obtain ⟨-, -, hrat⟩ := clampToSumExponent_neg_integral _ _ _ _ hic hcl
+  obtain ⟨-, -, -, -, hres, -⟩ := LoanBroker.applyCoverTransaction_debit_inv lb a res happ
+  rw [hres, hrat, abs_of_nonneg hnn]
 
 end XRPL.Model.Lending

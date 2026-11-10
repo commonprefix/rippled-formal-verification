@@ -187,4 +187,9 @@ def Loan.createChange (principal principal' interestDue : Number) (pending : Boo
     yield := if pending then Number.zero else interestDue
     reserved := if pending then principal' else Number.zero }
 
+/-- What a new loan sends the borrower: an active loan the principal less the origination fee, a pending one
+nothing until LoanAccept. -/
+def Loan.createAmountToBorrower (principal : Number) (fees : LoanFees) (pending : Bool) : Except Error Number :=
+  if pending then .ok Number.zero else principal.operator_sub fees.originationFee .to_nearest
+
 end XRPL.Model.Lending

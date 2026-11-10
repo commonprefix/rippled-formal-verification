@@ -55,7 +55,7 @@ lemma LoanBroker.roundedCoverClawback_capped_proof (lb : LoanBroker) (v : Vault)
     (fun a' ha' => by cases ha'; exact hreq) hm hok
   simpa only [LoanBroker.clawTarget, hnz, Bool.false_eq_true, if_false] using hfl
 
-/-- Proof body of `coverClawback_keeps_minimum`. -/
+/-- Proof body of the clawback line of `cover_keeps_minimum`. -/
 lemma LoanBroker.coverClawback_keeps_minimum_proof (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
     (res : LoanBrokerCoverResult) (m : Number) (hz : lb.OpenZone v.baseExponent)
     (hnt : v.numericType = lb.numericType)
@@ -85,7 +85,7 @@ lemma LoanBroker.coverClawback_all_leaves_minimum_proof (lb : LoanBroker) (v : V
   obtain ⟨-, -, -, -, hcov⟩ := LoanBroker.coverClawback_exact lb v amount res hz hmax hok
   rw [hcov, hall']; ring
 
-/-- Proof body of `coverClawback_decreases_cover`. -/
+/-- Proof body of the clawback line of `cover_direction`. -/
 lemma LoanBroker.coverClawback_decreases_cover_proof (lb : LoanBroker) (pool : α) (amount : Option STAmount)
     (res : LoanBrokerCoverResult) (hok : (lb.coverClawback pool amount).run = .ok (.ok res))
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
@@ -120,10 +120,12 @@ lemma LoanBroker.coverClawback_debit_le_amount_proof (lb : LoanBroker) (base : I
   rw [LoanBroker.coverClawback_debit_proof lb base hr hmax v hvb (some a) res hok]
   exact le_trans hub (min_le_left _ _)
 
-/-- Proof body of `coverClawback_monotone`. -/
-lemma LoanBroker.coverClawback_monotone_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
+/-- Proof body of the monotone line of `LoanBroker.roundedCoverClawback_capped`. -/
+lemma LoanBroker.coverClawback_monotone_proof (lb : LoanBroker) (v : Vault) (m : Number)
+    (hz : lb.OpenZone v.baseExponent) (hnt : v.numericType = lb.numericType)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) (a b : STAmount)
+    (hm : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok m)
+    (a b : STAmount)
     (ha : a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat)
     (hb : b.CanonicalOrZero ∧ b.mNumericType = lb.numericType ∧ 0 ≤ b.toRat)
     (hza : a.isZero = false) (hzb : b.isZero = false) (hab : a.toRat ≤ b.toRat)
@@ -131,7 +133,6 @@ lemma LoanBroker.coverClawback_monotone_proof (lb : LoanBroker) (base : Int) (hr
     (hoka : (lb.coverClawback v (some a)).run = .ok (.ok ra))
     (hokb : (lb.coverClawback v (some b)).run = .ok (.ok rb)) :
     ra.amount'.toRat ≤ rb.amount'.toRat := by
-  obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb base hr hmax v hvb
   have hfa := LoanBroker.coverClawback_floor lb v (some a) ra _ hz hnt hmax
     (fun a' ha' => by cases ha'; exact ha) hm hoka
   have hfb := LoanBroker.coverClawback_floor lb v (some b) rb _ hz hnt hmax
@@ -139,32 +140,12 @@ lemma LoanBroker.coverClawback_monotone_proof (lb : LoanBroker) (base : Int) (hr
   simp only [LoanBroker.clawTarget, hza, hzb, Bool.false_eq_true, if_false] at hfa hfb
   rw [hfa, hfb]
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have hle : min a.toRat (lb.toExact.coverAvailable - Number.zero.toRat) ≤
-      min b.toRat (lb.toExact.coverAvailable - Number.zero.toRat) := min_le_min_right _ hab
+  have hle : min a.toRat (lb.toExact.coverAvailable - m.toRat) ≤
+      min b.toRat (lb.toExact.coverAvailable - m.toRat) := min_le_min_right _ hab
   have := Int.floor_le_floor (div_le_div_of_nonneg_right hle hp.le)
-  have : (⌊min a.toRat (lb.toExact.coverAvailable - Number.zero.toRat) / 10 ^ v.baseExponent⌋ : ℚ) ≤
-      ⌊min b.toRat (lb.toExact.coverAvailable - Number.zero.toRat) / 10 ^ v.baseExponent⌋ := by
+  have : (⌊min a.toRat (lb.toExact.coverAvailable - m.toRat) / 10 ^ v.baseExponent⌋ : ℚ) ≤
+      ⌊min b.toRat (lb.toExact.coverAvailable - m.toRat) / 10 ^ v.baseExponent⌋ := by
     exact_mod_cast this
   exact mul_le_mul_of_nonneg_right this hp.le
-
-/-- Proof body of the MPT part of `LoanBroker.coverClawback_debit`. -/
-lemma LoanBroker.coverClawback_debit_integral_proof (lb : LoanBroker) (pool : α) (amount : Option STAmount)
-    (res : LoanBrokerCoverResult) (hok : (lb.coverClawback pool amount).run = .ok (.ok res))
-    (hint : lb.numericType.isIntegral = true)
-    (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
-    (hcint : lb.toExact.coverAvailable.den = 1) (hbound : lb.toExact.coverAvailable < 2 ^ 63) :
-    lb.toExact.coverAvailable - res.loanBroker'.toExact.coverAvailable = res.amount'.toRat := by
-  obtain ⟨c, hrc, happ⟩ := LoanBroker.coverClawback_ok_inv lb pool amount res hok
-  obtain ⟨_, _, claw, claw', _, _, _, _, hof, hcl, _⟩ := LoanBroker.roundedCoverClawback_ok lb pool amount c hrc
-  obtain ⟨hicw, hntw⟩ := STAmount.ofNumber_integral_canonical _ _ _ _ hint hof
-  obtain ⟨hic, hval, hrat⟩ := clampToSumExponent_neg_integral _ _ _ _ hicw hcl
-  have h63 : maxRep.toNat ≤ 2 ^ 63 - 1 := by rw [maxRep_val]; norm_num
-  have hsz : c.mValue.toNat ≤ 2 ^ 63 - 1 := by
-    rw [hval]
-    exact le_trans hicw.in_range (le_trans (by rw [hntw]; exact hmax hint) h63)
-  obtain ⟨hv, hamt⟩ := LoanBroker.applyCoverTransaction_debit_integral lb c res happ hic hsz
-    (by rw [hrat]; exact abs_nonneg _) hcint hbound
-  rw [hv, hamt]
-  ring
 
 end XRPL.Model.Lending

@@ -565,7 +565,7 @@ lemma Loan.overpayment_nextShape (loan : Loan) (v : Vault) (amount : Number) (no
   exact hp'.of_raw hloan rfl rfl rfl rfl rfl
 
 /-- An accept keeps the shape. -/
-lemma Loan.accept_nextShape (loan : Loan) (v : Vault) (r : LoanWithPool Vault) (hn : loan.NextShape)
+lemma Loan.accept_nextShape (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault) (hn : loan.NextShape)
     (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.NextShape := by
   simp only [Loan.accept] at h
   unfold_ter at h

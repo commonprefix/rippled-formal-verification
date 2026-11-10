@@ -214,6 +214,8 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
         overpaymentInterestRate_cap := UInt32.le_iff_toNat_le.mp hv.overpaymentInterestRate_cap
         overpaymentFee_cap := UInt32.le_iff_toNat_le.mp hv.overpaymentFee_cap
         originationFee_nonneg := nonneg _ hwf.originationFee_norm hv.originationFee_nonneg
+        originationFee_cap := (operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mp
+          hv.originationFee_cap
         paymentTotal_pos := hv.paymentTotal_pos
         paymentInterval_min := hv.paymentInterval_min
         gracePeriod_range := hv.gracePeriod_range }
@@ -261,6 +263,8 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
         overpaymentInterestRate_cap := UInt32.le_iff_toNat_le.mpr he.overpaymentInterestRate_cap
         overpaymentFee_cap := UInt32.le_iff_toNat_le.mpr he.overpaymentFee_cap
         originationFee_nonneg := nonneg' _ hwf.originationFee_norm he.originationFee_nonneg
+        originationFee_cap := (operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mpr
+          he.originationFee_cap
         paymentTotal_pos := he.paymentTotal_pos
         paymentInterval_min := he.paymentInterval_min
         gracePeriod_range := he.gracePeriod_range }
@@ -295,6 +299,8 @@ theorem RawLoan.WF.toExact_grid {rl : RawLoan} (hwf : rl.WF) (he : rl.toExact.Va
     he.principalOutstanding_nonneg).mp hwf.principalOutstanding_atExponent
   managementFeeOutstanding_atExponent := (Number.isAtExponent_iff _ _ _ hwf.managementFeeOutstanding_norm
     he.managementFeeOutstanding_nonneg).mp hwf.managementFeeOutstanding_atExponent
+  originationFee_atExponent := (Number.isAtExponent_iff _ _ _ hwf.originationFee_norm
+    he.originationFee_nonneg).mp hwf.originationFee_atExponent
 
 /-- The grid clauses of a lawful loan, read exactly: whole LoanScale units the asset stores. -/
 theorem Loan.grid (loan : Loan) : loan.toExact.Grid :=

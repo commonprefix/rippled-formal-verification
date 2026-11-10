@@ -1,89 +1,13 @@
 import XRPL.Properties.Vault.Proofs.CanEmpty
 import XRPL.Properties.Protocol.Number.Common.Rounding.SmallRangeBound
+import XRPL.Properties.Vault.Proofs.Support.IOUTotality
+import XRPL.Properties.Vault.Proofs.Support.ExactCash
 
 /-! # Paying out a settled vault
 
 A vault with nothing lent and nothing lost, whose cash is a whole number of base units stored exactly, pays out all
 its cash to one withdrawal of every share. An XRP or MPT cash must stay below `2.5·10^17` units, where the
 19-digit price of all the shares together is less than half a unit from the cash. -/
-
-namespace XRPL.Model.Protocol
-
-/-- A to-nearest IOU `ofNumber` of a positive value below `(10^16 - 1/2)·10^80` never throws. The rounding
-moves the value by at most half a unit of its 16th digit, so it never carries past the IOU ceiling. -/
-lemma STAmount.ofNumber_fractional_ok_below (r : Number) (hn : r.isNormalized) (hpos : 0 < r.toRat)
-    (hlt : r.toRat < (10 ^ 16 - 1 / 2) * 10 ^ 80) :
-    ∃ result, STAmount.ofNumber .fractional r .to_nearest = .ok result := by
-  have hr_ne : r.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hpos.ne'
-  obtain ⟨hr_lo, hr_hi⟩ := hn.mantissaBounds_nat hr_ne
-  have hneg := Number.negative_false_of_pos r hpos
-  have hre_lo := Number.exponent_ge_min r hn hr_ne
-  have hre_hi : r.exponent_ ≤ 77 :=
-    Number.exponent_le_of_toRat_lt r 77 hn hneg (by unfold minExponent; norm_num) (by norm_num; linarith)
-  by_cases h4 : r.exponent_ + 4 ≤ cMaxOffset
-  · exact STAmount.ofNumber_fractional_ok r .to_nearest hr_lo hr_hi hre_lo h4
-  have hco : cMaxOffset = 80 := rfl
-  have hme : maxExponent = 32768 := rfl
-  have he77 : r.exponent_ = 77 := by omega
-  obtain ⟨⟨mant, exp⟩, hnorm⟩ := normalizeToRange_16_ok r .to_nearest hr_lo hr_hi (by omega) (by omega)
-  obtain ⟨⟨hmlo, hmhi⟩, ⟨hexp_lo3, -⟩, hsgn⟩ :=
-    normalizeToRange_iou_ok_facts r .to_nearest mant exp hr_lo hr_hi (by omega) (by omega) hnorm
-  have hhalf := normalizeToRange_16_within_half_ulp r mant exp hr_lo hr_hi (by omega) (by omega) hnorm
-  have hrange := normalizeToRange_16_exp_range r .to_nearest mant exp hr_lo hr_hi (by omega) (by omega) hnorm
-  have hmant_pos : 0 ≤ mant.toInt := hsgn.1 hneg
-  have hmant_natAbs : mant.toInt.natAbs = mant.toUInt64.toNat := by
-    have := toUInt64_toNat_of_nonneg mant hmant_pos; omega
-  have hmtu_lo : 10 ^ 15 ≤ mant.toUInt64.toNat := by
-    rw [← hmant_natAbs]; have := hmlo; rw [(by decide : cMinValue.toNat = 10 ^ 15)] at this
-    exact this
-  have hmtu_hi : mant.toUInt64.toNat < 10 ^ 16 := by
-    rw [← hmant_natAbs]; have := hmhi; rw [(by decide : cMaxValue.toNat = 10 ^ 16 - 1)] at this
-    omega
-  -- a carry would need a value of at least `10^96`, half a unit above the bound
-  have hexp_hi : exp ≤ cMaxOffset := by
-    by_contra hc
-    have hexp : exp = 81 := by omega
-    have hm15 : (10 : ℚ) ^ 15 ≤ (mant.toInt : ℚ) := by
-      have h' : ((10 ^ 15 : ℕ) : ℤ) ≤ mant.toInt := by omega
-      exact_mod_cast h'
-    rw [hexp, he77] at hhalf
-    have h1 := (abs_le.mp hhalf).2
-    norm_num at h1
-    nlinarith
-  have hs : decide (r.signum < 0) = false := by
-    simpa using Number.signum_nonneg_of_negative_false r hneg
-  have hnorm' : r.normalizeToRange kMinValue kMaxValue .to_nearest = .ok (mant, exp) := hnorm
-  unfold STAmount.ofNumber
-  rw [if_neg (by decide), hs]
-  simp only [Bool.false_eq_true, if_false, hnorm']
-  have h_int : ¬ (STAmount.unchecked .fractional mant.toUInt64 exp false).integral = true := by
-    simp [STAmount.integral, STAmount.unchecked, NumericType.isIntegral]
-  have h_fit : mant.toUInt64.toNat < 2 ^ 63 := by omega
-  have h_sd : (STAmount.unchecked .fractional mant.toUInt64 exp false).signedDrops.toInt64
-      = if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64 := by
-    apply Int64.toInt_inj.mp
-    rw [STAmount.signedDrops_toInt64_toInt _
-          (show (STAmount.unchecked .fractional mant.toUInt64 exp false).mValue.toNat < 10 ^ 16 from hmtu_hi),
-        signed_mantissa_toInt false mant.toUInt64 h_fit]
-    show (STAmount.unchecked .fractional mant.toUInt64 exp false).signedDrops = _
-    unfold STAmount.signedDrops STAmount.unchecked
-    simp
-  have hiou : (STAmount.unchecked .fractional mant.toUInt64 exp false).iou .to_nearest
-      = (if exp > cMaxOffset then .error .overflow
-         else if exp < cMinOffset then .ok IOUAmount.zero
-         else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_of_lt .to_nearest h_int h_fit]
-    unfold IOUAmount.ofMantissaExp
-    rw [h_sd]
-    exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .to_nearest hmtu_lo hmtu_hi
-      (by omega) (by omega)
-  rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using hmant_pos)), ok_bind,
-    STAmount.checked]
-  unfold STAmount.canonicalize
-  rw [if_neg h_int, hiou, if_neg (by omega)]
-  split_ifs <;> exact ⟨_, rfl⟩
-
-end XRPL.Model.Protocol
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -411,19 +335,6 @@ lemma Vault.Settled.sharesToAssetsWithdraw_all (v : Vault) (hz : v.Settled)
   have heq := STAmount.ofNumber_to_nearest_eq_of_near_canonical _ an assets cash hann hanpos.le hcE hct
     (by rw [hcv]; exact hAApos) hnear hof hpz
   rw [heq, hcv]
-
-/-- A normalized value above `-10^96` and at most zero leaves the headroom `operator_add` needs. -/
-private lemma exponent_headroom_of_neg (n : Number) (hn : n.isNormalized) (hlo : -10 ^ 96 < n.toRat)
-    (hhi : n.toRat ≤ 0) : n.exponent_ + 22 ≤ maxExponent := by
-  by_cases hm : n.mantissa_ = 0
-  · rw [Number.eq_zero_of_mantissa_zero n hn hm]
-    show (-2147483648 : Int) + 22 ≤ maxExponent
-    unfold maxExponent; norm_num
-  have hneg := Number.exponent_headroom_of_lt n.operator_neg (Number.operator_neg_isNormalized n hn)
-    (by rw [Number.toRat_neg]; linarith) (by rw [Number.toRat_neg]; linarith)
-  have he : n.operator_neg.exponent_ = n.exponent_ := by
-    unfold Number.operator_neg; rw [if_neg (by simpa using hm)]
-  rwa [he] at hneg
 
 /-- Burning every share and paying out all the cash updates the vault, for any cash below `10^96`. -/
 lemma Vault.adjustAssetsAndShares_burn_all_ok' (v : Vault) (assets shares : STAmount)

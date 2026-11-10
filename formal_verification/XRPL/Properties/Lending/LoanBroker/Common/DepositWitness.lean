@@ -16,7 +16,7 @@ private def wrDep1 : LoanBrokerCoverResult := wResultOf (wbHeld.coverDeposit wvB
 private def wrDep2 : LoanBrokerCoverResult := wResultOf (wrDep1.loanBroker'.coverDeposit wvBase6 waHalves)
 private def wrDep3 : LoanBrokerCoverResult := wResultOf (wbHeld.coverDeposit wvBase6 waThree)
 
-/-- Proof body of `coverDeposit_split_attained`. -/
+/-- Proof body of `cover_split_deposit_attained`. -/
 lemma LoanBroker.coverDeposit_split_witness :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
       lb.Reachable base ∧

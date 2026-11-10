@@ -539,6 +539,17 @@ private lemma computeClawback_assets_units (v : Vault) (assets holderShares : ST
       (fun hi => le_of_eq (v.baseExponent_bounds.2.2 (by
         unfold STAmount.integral at hi; rwa [(STAmount.operator_neg_fields _).1, hrty] at hi))) hcl
 
+/-- A clawback recovers a nonnegative amount. -/
+lemma Vault.clawback_assets_nonneg (v : Vault) (assets holderShares : STAmount) (waive : Bool)
+    (hnn : 0 ≤ assets.toRat) (hc : assets.CanonicalOrZero) (hhs : holderShares.ShareBalance)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (r : VaultWithAmounts) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.ok r)) :
+    0 ≤ r.assets.toRat := by
+  obtain ⟨amounts, -, hcomp, -, -, hras, -⟩ := Vault.clawback_ok_reduces v assets holderShares waive hnn r hok
+  obtain ⟨j, hj⟩ := computeClawback_assets_units v _ _ waive _ hc hnn hhs hmax hcomp
+  rw [hras, hj]
+  positivity
+
 /-- A clawback from an Open-zone vault subtracts exactly its recovery from the cash, and the
 vault stays in the Open zone. -/
 lemma Vault.clawback_openZone (v : Vault) (assets holderShares : STAmount) (waive : Bool)

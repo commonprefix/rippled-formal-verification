@@ -32,7 +32,7 @@ lemma Vault.poolAdjust_deployed_zero (v v' : Vault) (c : PoolBalanceChange) (hc 
 /-- A new loan keeps LossUnrealized. As it fits the Open zone, AssetsDeployed after it and the principal are each
 at most `10^16` base units. -/
 lemma Loan.create_lossStep (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -64,7 +64,7 @@ lemma Loan.create_lossStep (broker : LoanBroker) (v : Vault) (principal : Number
   exact hd
 
 /-- An accept keeps LossUnrealized and AssetsDeployed. -/
-lemma Loan.accept_lossStep (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_lossStep (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) :
     r.pool'.lossUnrealized = v.lossUnrealized ∧ r.pool'.assetsDeployed = v.assetsDeployed := by
   simp only [Loan.accept] at h

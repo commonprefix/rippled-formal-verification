@@ -62,7 +62,7 @@ private lemma computeLoanProperties_periodicPayment (principal : Number) (ir : T
 
 /-- A successful create stores the periodic payment of its principal, and that payment is positive. -/
 private lemma Loan.create_periodicPayment (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     ∃ rate, loanPeriodicRate rates.interestRate schedule.paymentInterval = .ok rate ∧
       loanPeriodicPayment principal rate schedule.paymentTotal = .ok r.loan'.periodicPayment ∧
@@ -77,7 +77,7 @@ private lemma Loan.create_periodicPayment (broker : LoanBroker) (v : Vault) (pri
 /-- Proof body of `create_periodicPayment_principal_monotone`. -/
 lemma Loan.create_periodicPayment_principal_monotone_proof (broker : LoanBroker) (v : Vault)
     (principal₁ principal₂ : Number) (rates : LoanRates) (fees : LoanFees) (schedule : LoanSchedule)
-    (allowsOverpayment pending : Bool) (r₁ r₂ : LoanWithPool Vault)
+    (allowsOverpayment pending : Bool) (r₁ r₂ : LoanWithDisbursement Vault)
     (hp₁ : principal₁.isNormalized) (hp₂ : principal₂.isNormalized) (hpos : 0 < principal₁.toRat)
     (hok₁ : (Loan.create broker v principal₁ rates fees schedule allowsOverpayment pending).run = .ok (.ok r₁))
     (hok₂ : (Loan.create broker v principal₂ rates fees schedule allowsOverpayment pending).run = .ok (.ok r₂))

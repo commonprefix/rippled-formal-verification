@@ -3,6 +3,7 @@ import XRPL.Properties.Lending.Ledger.Common.LoanTxResults
 import XRPL.Properties.Lending.Loan.Common.CountMonotone
 import XRPL.Properties.Lending.Loan.Common.SetFeeBound
 import XRPL.Properties.Lending.Loan.Common.SetVault
+import XRPL.Properties.Lending.Loan.Common.AcceptProofs
 
 /-! # Proof bodies for LoanSet on a ledger
 
@@ -199,6 +200,28 @@ lemma LendingLedger.create_principal_proof (hr : l.Reachable) {broker : LoanBrok
   rw [hv]
   exact Loan.create_principal_proof broker l.vault principal rates fees _ allowsOverpayment twoStep r hp hpos hst
     (hr.createGrid hb hp hpos hst hc) hc
+
+/-- Proof body of the amountToBorrower lines of `Lending.create_updates`. -/
+lemma LendingLedger.create_amountToBorrower_proof (hr : l.Reachable) {broker : LoanBroker}
+    (hb : l.broker? j = some broker)
+    (h : (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
+      allowsOverpayment)).run = .ok (.ok l'))
+    (hat' : l'.LoanAt l.loans.length loan') (r : LoanWithDisbursement Vault)
+    (hc : (Loan.create broker l.vault principal rates fees
+      (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now twoStep) allowsOverpayment
+      twoStep).run = .ok (.ok r)) :
+    (twoStep = false →
+      r.amountToBorrower.toRat + fees.originationFee.toRat = principal.toRat ∧
+        l.vault.toExact.assetsAvailable - l'.vault.toExact.assetsAvailable =
+          r.amountToBorrower.toRat + fees.originationFee.toRat) ∧
+    (twoStep = true → r.amountToBorrower = Number.zero) := by
+  obtain ⟨b, _, hb', hp, hpos, hst, -, -, -⟩ := LendingLedger.loanSet_create h
+  obtain rfl := Option.some.inj (hb.symm.trans hb')
+  obtain ⟨hact, hpend⟩ := Loan.create_amountToBorrower_proof broker l.vault principal rates fees _ allowsOverpayment
+    twoStep r hp hpos.le hst hc
+  refine ⟨fun h2 => ⟨hact h2, ?_⟩, hpend⟩
+  rw [hact h2]
+  exact (LendingLedger.create_principal_proof hr hb h hat').1
 
 /-- A LoanSet -> YieldUnrealized' = YieldUnrealized + interestDue when the new loan is active, unchanged when it is
 pending. -/

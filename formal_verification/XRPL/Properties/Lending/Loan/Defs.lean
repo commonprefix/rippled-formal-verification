@@ -18,6 +18,7 @@ structure RawLoan.Exact where
   numericType : NumericType
   nextPaymentDueDate : UInt32
   originationFee : ℚ
+  principalInitial : ℚ
   serviceFee : ℚ
   latePaymentFee : ℚ
   closePaymentFee : ℚ
@@ -43,6 +44,7 @@ def RawLoan.toExact (rl : RawLoan) : RawLoan.Exact where
   numericType := rl.broker.numericType
   nextPaymentDueDate := rl.nextPaymentDueDate
   originationFee := rl.fees.originationFee.toRat
+  principalInitial := rl.principalInitial.toRat
   serviceFee := rl.fees.serviceFee.toRat
   latePaymentFee := rl.fees.latePaymentFee.toRat
   closePaymentFee := rl.fees.closePaymentFee.toRat
@@ -85,12 +87,13 @@ structure RawLoan.Exact.Valid (s : RawLoan.Exact) : Prop where
   overpaymentInterestRate_cap : s.overpaymentInterestRate ≤ maxLoanRate.toNat
   overpaymentFee_cap : s.overpaymentFee ≤ maxLoanRate.toNat
   originationFee_nonneg : 0 ≤ s.originationFee
+  originationFee_cap : s.originationFee ≤ s.principalInitial
   paymentTotal_pos : 0 < s.paymentTotal
   paymentInterval_min : minPaymentInterval ≤ s.paymentInterval
   gracePeriod_range : defaultGracePeriod ≤ s.gracePeriod ∧ s.gracePeriod ≤ s.paymentInterval
 
 /-- The exact view of the grid clauses of `RawLoan.WF`: LoanScale is an STAmount exponent and the three outstanding
-amounts are whole LoanScale units the asset stores. -/
+amounts and the origination fee are whole LoanScale units the asset stores. -/
 structure RawLoan.Exact.Grid (s : RawLoan.Exact) : Prop where
   loanScale_range : cMinOffset ≤ s.loanScale ∧ s.loanScale ≤ cMaxOffset
   totalValueOutstanding_atExponent :
@@ -98,5 +101,6 @@ structure RawLoan.Exact.Grid (s : RawLoan.Exact) : Prop where
   principalOutstanding_atExponent : Number.AtExponent s.principalOutstanding s.loanScale s.numericType.mantissaBound
   managementFeeOutstanding_atExponent :
     Number.AtExponent s.managementFeeOutstanding s.loanScale s.numericType.mantissaBound
+  originationFee_atExponent : Number.AtExponent s.originationFee s.loanScale s.numericType.mantissaBound
 
 end XRPL.Model.Lending

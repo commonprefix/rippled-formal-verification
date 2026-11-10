@@ -11,8 +11,6 @@ below the XRP or MPT maximum rounds to that asset. The result is at most twice t
 
 namespace XRPL.Model.Protocol
 
-open private STAmount.ofNumber_integral_reduce from XRPL.Properties.Protocol.STAmount.Common.OfNumberTotality
-
 /-- A sum in any mode is no bigger in size than a normalized bound on the true sum's size. -/
 private lemma Number.add_abs_le_any (x y n w : Number) (mode : rounding_mode) (hx : x.isNormalized)
     (hy : y.isNormalized) (hok : Number.operator_add x y mode = .ok n) (hw : w.isNormalized)

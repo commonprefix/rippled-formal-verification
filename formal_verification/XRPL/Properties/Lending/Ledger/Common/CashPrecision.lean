@@ -53,14 +53,14 @@ private lemma Vault.poolAdjust_keepsStored (v v' : Vault) (c : PoolBalanceChange
 
 /-- A new loan keeps AssetsAvailable stored exactly. -/
 private lemma Loan.create_keepsStored (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (h : (Loan.create broker v principal rates fees schedule ao pending).run = .ok (.ok r)) :
     Vault.KeepsAvailableStored v r.pool' := by
   obtain ⟨_, _, _, _, _, -, -, hpool, -, -⟩ := Loan.create_ok_inv broker v principal rates fees schedule ao pending r h
   exact Vault.poolAdjust_keepsStored _ _ _ hpool
 
 /-- Accept keeps AssetsAvailable stored exactly. -/
-private lemma Loan.accept_keepsStored (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_keepsStored (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : Vault.KeepsAvailableStored v r.pool' := by
   simp only [Loan.accept] at h
   unfold_ter at h

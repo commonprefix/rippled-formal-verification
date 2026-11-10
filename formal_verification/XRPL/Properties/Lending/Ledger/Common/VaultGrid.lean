@@ -65,7 +65,7 @@ private lemma Vault.poolAdjust_onBaseGrid (v v' : Vault) (c : PoolBalanceChange)
 
 /-- A new loan keeps the vault on the base grid: its principal is a whole number of base units. -/
 private lemma Loan.create_onBaseGrid (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (ao pending : Bool) (r : LoanWithDisbursement Vault)
     (hfr : v.numericType = .fractional) (hv : Vault.OnBaseGrid v) (hp : principal.isNormalized)
     (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false) (hnt : broker.numericType = v.numericType)
@@ -82,7 +82,7 @@ private lemma Loan.create_onBaseGrid (broker : LoanBroker) (v : Vault) (principa
   exact Vault.poolAdjust_onBaseGrid v r.pool' _ hfr hv hpg'.neg hpg hpool
 
 /-- An accept keeps the vault on the base grid: it moves no cash and deploys nothing. -/
-private lemma Loan.accept_onBaseGrid (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_onBaseGrid (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hfr : v.numericType = .fractional) (hv : Vault.OnBaseGrid v) (h : (loan.accept v).run = .ok (.ok r)) :
     Vault.OnBaseGrid r.pool' := by
   simp only [Loan.accept] at h

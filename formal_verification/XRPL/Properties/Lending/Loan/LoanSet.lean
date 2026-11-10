@@ -10,6 +10,7 @@ namespace XRPL.Model
 
 open XRPL.Model.Protocol
 open XRPL.Model.Lending
+open XRPL.Model.SingleAssetVault (Vault)
 
 variable (l l' : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
   (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
@@ -164,23 +165,34 @@ theorem Lending.create_managementFee_lower_bound_attained :
         loan'.toExact.managementFeeOutstanding = 99999 / 100000 * 10 ^ loan'.toExact.loanScale :=
   LendingLedger.create_managementFee_lower_bound_witness
 
-/-- A new loan -> AssetsTotal and LossUnrealized unchanged, the principal moves from AssetsAvailable to AssetsDeployed
-and DebtTotal, LoanScale = the vault's base scale, the broker never ends above DebtMaximum or below minCover. -/
+/-- A new loan -> AssetsTotal and LossUnrealized unchanged, the principal leaves AssetsAvailable for AssetsDeployed and
+DebtTotal, an active loan pays it out as amountToBorrower + OriginationFee, LoanScale = base scale, broker in limits. -/
 theorem Lending.create_updates (hr : l.Reachable) (broker : LoanBroker) (hb : l.broker? j = some broker)
     (h : (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
       allowsOverpayment)).run = .ok (.ok l'))
-    (hat' : l'.LoanAt l.loans.length loan') :
+    (hat' : l'.LoanAt l.loans.length loan')
+    -- `r` - the create the LoanSet runs, `r.amountToBorrower` is what the vault sends the borrower
+    (r : LoanWithDisbursement Vault)
+    (hc : (Loan.create broker l.vault principal rates fees
+      (LoanSchedule.build paymentInterval paymentTotal gracePeriod startDate l.now twoStep) allowsOverpayment
+      twoStep).run = .ok (.ok r)) :
     (l'.vault.toExact.assetsTotal = l.vault.toExact.assetsTotal ∧
       l'.vault.toExact.lossUnrealized = l.vault.toExact.lossUnrealized) ∧
     (l.vault.toExact.assetsAvailable - l'.vault.toExact.assetsAvailable = principal.toRat ∧
       l'.vault.toExact.assetsDeployed - l.vault.toExact.assetsDeployed = principal.toRat ∧
       loan'.broker.toExact.debtTotal - broker.toExact.debtTotal = principal.toRat ∧
       l'.vault.toExact.assetsReserved - l.vault.toExact.assetsReserved = if twoStep then principal.toRat else 0) ∧
+    ((twoStep = false →
+      r.amountToBorrower.toRat + fees.originationFee.toRat = principal.toRat ∧
+        l.vault.toExact.assetsAvailable - l'.vault.toExact.assetsAvailable =
+          r.amountToBorrower.toRat + fees.originationFee.toRat) ∧
+      (twoStep = true → r.amountToBorrower = Number.zero)) ∧
     loan'.toExact.loanScale = l.vault.baseExponent ∧
     (loan'.broker.toExact.debtMaximum ≠ 0 → loan'.broker.toExact.debtTotal ≤ loan'.broker.toExact.debtMaximum) ∧
     loan'.broker.HasMinimumCover l.vault.baseExponent :=
   ⟨LendingLedger.create_assetsTotal_unchanged_proof hr h, LendingLedger.create_principal_proof hr hb h hat',
-    LendingLedger.create_loanScale_proof hr h hat', LendingLedger.create_within_debtMaximum_proof h hat',
+    LendingLedger.create_amountToBorrower_proof hr hb h hat' r hc, LendingLedger.create_loanScale_proof hr h hat',
+    LendingLedger.create_within_debtMaximum_proof h hat',
     LendingLedger.create_meets_minCover_proof h hat'⟩
 
 end XRPL.Model

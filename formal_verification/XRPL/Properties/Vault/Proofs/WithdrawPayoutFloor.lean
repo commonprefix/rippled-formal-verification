@@ -1,5 +1,6 @@
 import XRPL.Properties.Vault.Proofs.ClawbackRecovery
 import XRPL.Properties.Vault.Proofs.ExactUpdates.Grid
+import XRPL.Properties.Vault.Proofs.MaxValueFits
 import XRPL.Properties.Protocol.Number.Mul.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Div.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
@@ -57,7 +58,7 @@ open XRPL.Model.Protocol
 
 /-- What is left of an amount on a fine grid after whole steps of a coarser grid is representable,
 and so is its `100000`-fold. -/
-private lemma gap_representable (x : ℚ) (z : ℕ) (q b k : ℤ) (hx : x = z * 10 ^ q) (hz : z < 10 ^ 16)
+lemma gap_representable (x : ℚ) (z : ℕ) (q b k : ℤ) (hx : x = z * 10 ^ q) (hz : z < 10 ^ 16)
     (hqb : q ≤ b) (hq : -96 ≤ q) (hb : b ≤ 70) (hk : 0 ≤ k) (hc : 0 < x - k * 10 ^ b) :
     ∃ c c5 : Number, c.isNormalized ∧ c.toRat = x - k * 10 ^ b ∧ c5.isNormalized ∧
       c5.toRat = (x - k * 10 ^ b) * 100000 := by
@@ -88,7 +89,7 @@ private lemma gap_representable (x : ℚ) (z : ℕ) (q b k : ℤ) (hx : x = z * 
 
 /-- A positive priced amount of a reachable vault sits on a grid no coarser than the base grid,
 fewer than `10^16` steps of it. -/
-private lemma Vault.priced_grid (v : Vault) (p : STAmount) (hpc : p.CanonicalOrZero)
+lemma Vault.priced_grid (v : Vault) (p : STAmount) (hpc : p.CanonicalOrZero)
     (hpt : p.mNumericType = v.numericType) (hp : 0 < p.toRat)
     (hle : p.toRat ≤ 9 * (10 : ℚ) ^ (15 + v.baseExponent)) :
     ∃ (z : ℕ) (q : ℤ), p.toRat = z * 10 ^ q ∧ z < 10 ^ 16 ∧ -96 ≤ q ∧ q ≤ v.baseExponent := by
@@ -401,5 +402,198 @@ lemma Vault.withdraw_payout_monotone_proof (v : Vault) (amount₁ amount₂ : Wi
   rw [hfl₁, hfl₂]
   apply mul_le_mul_of_nonneg_right _ hbpos.le
   exact_mod_cast Int.floor_mono (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hp hρ1) hbpos.le)
+
+/-- A nonzero withdrawal price for a worth within the Open limit is a whole number of `10^e`, no coarser than the
+base grid, and less than one `10^e` away from the worth. -/
+private lemma Vault.priced_near_worth (v : Vault)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (shares p : STAmount) (w : Bool) (nav : Number) (hnav : v.assetsTotalForWithdrawal w = .ok nav)
+    (hnn : 0 ≤ shares.toRat) (hsc : shares.Canonical) (hpr : v.sharesToAssetsWithdraw shares w = .ok p)
+    (hsmall : v.idealAssetsWithdrawAt nav.toRat shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent)
+    (hpm : p.mValue ≠ 0) :
+    p.toRat = (p.mValue.toNat : ℚ) * 10 ^ p.exponent ∧ p.exponent ≤ v.baseExponent ∧
+      |v.idealAssetsWithdrawAt nav.toRat shares.toRat - p.toRat| < (10 : ℚ) ^ p.exponent := by
+  set I := v.idealAssetsWithdrawAt nav.toRat shares.toRat
+  obtain ⟨hp0, hpu, hpl⟩ := Vault.sharesToAssetsWithdraw_total_proof v shares p w nav hnav hnn hsc hpr
+  obtain ⟨hpcz, hpt⟩ := Vault.sharesToAssetsWithdraw_form v shares p w hmax hpr
+  have hppos : 0 < p.toRat := lt_of_le_of_ne hp0 (Ne.symm (STAmount.toRat_ne_zero p hpm))
+  have hpcan : p.Canonical := hpcz.resolve_right (by simpa [STAmount.isZero] using hpm)
+  replace hpl := hpl (by simpa [STAmount.isZero] using hpm)
+  have hpv : p.toRat = (p.mValue.toNat : ℚ) * 10 ^ p.exponent :=
+    STAmount.toRat_of_nonneg p (STAmount.mIsNegative_false_of_pos p hppos)
+  have hgpos : (0 : ℚ) < 10 ^ p.exponent := zpow_pos (by norm_num) _
+  have hε : (sharesε : ℚ) = 11 / 10 ^ 19 := rfl
+  rw [hε] at hpu hpl
+  by_cases hint : v.numericType.isIntegral = true
+  · -- integral: the price is a whole number of base units
+    have hb0 : v.baseExponent = 0 := v.baseExponent_bounds.2.2 hint
+    have hic : p.IntegralCanonical := (hpcan.1 (by unfold STAmount.integral; rw [hpt]; exact hint)).1
+    have he : p.exponent = 0 := hic.offset_zero
+    rw [hb0, zpow_zero, mul_one] at hsmall
+    rw [he, zpow_zero] at hpu hpl
+    refine ⟨hpv, by rw [he, hb0], ?_⟩
+    rw [he, zpow_zero]
+    exact abs_lt.mpr ⟨by linarith, by linarith⟩
+  -- fractional: a 16-digit price on a grid no coarser than the base grid
+  have hvfr : v.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hint)
+  have hio : p.IOUCanonical := hpcan.2 (by unfold STAmount.integral; rw [hpt, hvfr]; rfl)
+  have hmlo : (10 ^ 15 : ℚ) ≤ p.mValue.toNat := by exact_mod_cast hio.mant_lo
+  have hmhi : (p.mValue.toNat : ℚ) < 10 ^ 16 := by exact_mod_cast hio.mant_hi
+  have hsm : p.toRat < 10 ^ 16 * (10 : ℚ) ^ p.exponent := by
+    rw [hpv]; exact mul_lt_mul_of_pos_right hmhi hgpos
+  have hbig : 10 ^ 15 * (10 : ℚ) ^ p.exponent ≤ p.toRat := by
+    rw [hpv]; exact mul_le_mul_of_nonneg_right hmlo hgpos.le
+  have hrel : I * (11 / 10 ^ 19) < 111 / 10 ^ 4 * (10 : ℚ) ^ p.exponent := by linarith
+  refine ⟨hpv, ?_, abs_lt.mpr ⟨by linarith, by linarith⟩⟩
+  -- the price stays below `10^16` base units, so its grid is no coarser than the base grid
+  by_contra h
+  push Not at h
+  have h1 : (10 : ℚ) ^ (v.baseExponent + 1) ≤ 10 ^ p.exponent := zpow_le_zpow_right₀ (by norm_num) (by omega)
+  have h2 : (10 : ℚ) ^ (v.baseExponent + 1) = 10 * 10 ^ v.baseExponent := by
+    rw [zpow_add_one₀ (by norm_num)]; ring
+  linarith
+
+/-- On a reachable vault a positive whole number of shares prices to zero only below one base unit of worth.
+The cash is at least `10⁻¹⁰`, so only an integral worth below one half rounds to zero. -/
+private lemma Vault.Reachable.worth_lt_of_priced_zero (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
+    (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
+    (shares p : STAmount) (w : Bool) (nav : Number) (hnav : v.assetsTotalForWithdrawal w = .ok nav)
+    (hsic : shares.IntegralCanonical) (hs64 : shares.mNumericType = .int64) (hspos : 0 < shares.toRat)
+    (hpr : v.sharesToAssetsWithdraw shares w = .ok p) (hpz : p.mValue = 0) :
+    v.idealAssetsWithdrawAt nav.toRat shares.toRat < (10 : ℚ) ^ v.baseExponent := by
+  have hsc : shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  have hbpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
+  have hnavv := Vault.Reachable.nav_eq_cash v t0 hr w nav hnav
+  have hI : v.idealAssetsWithdrawAt nav.toRat shares.toRat = nav.toRat * shares.toRat / v.sharesTotal.toRat := by
+    unfold RawVault.idealAssetsWithdrawAt
+    rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+  rw [hI]
+  obtain ⟨nav', hnav', hnavn, hcase⟩ := WdPrice.price_cases v _ _ w hpr
+  rw [hnav, Except.ok.injEq] at hnav'
+  subst hnav'
+  rcases hcase with ⟨h0, -⟩ | ⟨hnm, sn, NS, an, hsn, hmul, hdiv, hof⟩
+  · rw [Number.toRat_eq_zero_of_mantissa_zero _ h0, zero_mul, zero_div]
+    exact hbpos
+  -- the vault prices at its cash, at least `10⁻¹⁰`
+  have hAApos : 0 < v.assetsAvailable.toRat := lt_of_le_of_ne v.exact.assetsAvailable_nonneg
+    (fun h => Number.toRat_ne_zero_of_mantissa_ne_zero _ hnm (hnavv.trans h.symm))
+  have hAA : (10 : ℚ) ^ (-10 : ℤ) ≤ v.assetsAvailable.toRat :=
+    ((Vault.Reachable.openZone_proof v t0 hr hmax).cash_ge hAApos).2
+  -- the shares are a whole positive number, and the share total is below `10¹⁹`
+  obtain ⟨sn0, hsn0, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical shares .to_nearest
+    (STAmount.Canonical.exactCanonical _ hsc)
+  obtain rfl := Except.ok.inj (hsn0.symm.trans hsn)
+  have hs1 : (1 : ℚ) ≤ shares.toRat := rat_one_le_of_den_one_pos _ hsic.den_eq_one hspos
+  obtain ⟨hSTpos, hST1, hST⟩ := Vault.sharesTotal_bounds_of_cash v hAApos
+  -- the worth is at least `10⁻²⁹`, so its `Number` stages do not underflow
+  rw [← hsnv]
+  set T := nav.toRat * sn0.toRat / v.sharesTotal.toRat with hT
+  have hT29 : (10 : ℚ) ^ (-29 : ℤ) ≤ T := by
+    rw [hT, hnavv, hsnv, le_div_iff₀ hSTpos]
+    have h19 : (10 : ℚ) ^ (-29 : ℤ) * (2 ^ 63 - 1) ≤ 10 ^ (-10 : ℤ) := by norm_num
+    calc (10 : ℚ) ^ (-29 : ℤ) * v.sharesTotal.toRat ≤ 10 ^ (-29 : ℤ) * (2 ^ 63 - 1) :=
+          mul_le_mul_of_nonneg_left hST (by positivity)
+      _ ≤ 10 ^ (-10 : ℤ) * 1 := by rw [mul_one]; exact h19
+      _ ≤ v.assetsAvailable.toRat * shares.toRat :=
+          mul_le_mul hAA hs1 zero_le_one (le_trans (by positivity) hAA)
+  obtain ⟨hann, hanpos, hb⟩ := pipe_large nav sn0 NS an v.sharesTotal hnavn hsnn v.wf.sharesTotal_norm
+    (by rw [hnavv]; exact hAApos.le) (by rw [hsnv]; exact hspos.le) hSTpos hST1
+    (le_trans (zpow_le_zpow_right₀ (by norm_num) (by norm_num)) hT29) hmul hdiv
+  rw [← hT] at hb
+  obtain ⟨hb1, -⟩ := abs_le.mp hb
+  have hT0 : 0 ≤ T := le_trans (zpow_pos (by norm_num) _).le hT29
+  have hε : (sharesε : ℚ) = 11 / 10 ^ 19 := rfl
+  rw [hε] at hb1
+  by_cases hint : v.numericType.isIntegral = true
+  · -- an integral worth rounds to zero only below one half
+    have hhalf := STAmount.ofNumber_integral_within_half _ an p hint hann
+      (Number.negative_false_of_pos an hanpos) hof
+    rw [(STAmount.toRat_eq_zero_iff _).mpr hpz, zero_sub, abs_neg, abs_of_pos hanpos] at hhalf
+    rw [(Vault.baseExponent_bounds v).2.2 hint, zpow_zero]
+    linarith
+  -- a fractional worth of at least `10⁻²⁹` converts to a nonzero amount
+  exfalso
+  have hge : (10 : ℚ) ^ (-81 : ℤ) ≤ an.toRat := by
+    have h81 : (10 : ℚ) ^ (-81 : ℤ) ≤ 10 ^ (-29 : ℤ) / 2 := by norm_num
+    have h1 : T / 2 ≤ T * (1 - 11 / 10 ^ 19) := by nlinarith
+    calc (10 : ℚ) ^ (-81 : ℤ) ≤ 10 ^ (-29 : ℤ) / 2 := h81
+      _ ≤ T / 2 := div_le_div_of_nonneg_right hT29 (by norm_num)
+      _ ≤ T * (1 - 11 / 10 ^ 19) := h1
+      _ ≤ an.toRat := by linarith
+  exact STAmount.ofNumber_frac_ne_zero_of_ge an .to_nearest p hann hge
+    (NumericType.eq_fractional_of_not_integral (by simpa using hint) ▸ hof) hpz
+
+/-- On a reachable vault a withdrawal with no fee that leaves shares pays at most a worth of whole base units, and
+less than one base unit below the worth. -/
+lemma Vault.Reachable.withdraw_payout_worth_proof (v : Vault) (amount : WithdrawAmount) (waive : Bool)
+    (t t0 : UInt32) (hpos : 0 < amount.amount.toRat) (hr : Vault.Reachable v t0)
+    (hc : amount.amount.Canonical) (hty : amount.InAsset v.numericType)
+    (r : VaultWithAmounts) (hok : (v.withdraw amount waive t hpos).run = .ok (.ok r))
+    (hlt : r.shares.toRat < v.toExact.sharesTotal) (hfee : v.earlyExitFeeRateAt t = 0)
+    (nav : Number) (hnav : v.assetsTotalForWithdrawal waive = .ok nav) :
+    ((∃ k : ℤ, v.idealAssetsWithdrawAt nav.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
+      r.assets.toRat ≤ v.idealAssetsWithdrawAt nav.toRat r.shares.toRat) ∧
+    v.idealAssetsWithdrawAt nav.toRat r.shares.toRat - r.assets.toRat < (10 : ℚ) ^ v.baseExponent := by
+  have hmax := Vault.Reachable.maxValue_fits v t0 hr
+    (Vault.withdraw_sharesTotal_pos v amount waive t hpos hc hty r hok)
+  obtain ⟨hsic, hs64, hspos⟩ := Vault.withdraw_shares_form v amount waive t hpos hc hty r hok
+  have hsc : r.shares.Canonical := hsic.canonical (by rw [hs64]; decide)
+  obtain ⟨priced, hpr, hfl⟩ :=
+    Vault.Reachable.withdraw_payout_floor_proof v amount waive t t0 hpos hr hc hty hmax r hok hlt
+  have hρ : ((v.earlyExitFeeRateAt t).toNat : ℚ) = 0 := by rw [hfee]; rfl
+  rw [hρ, zero_div, sub_zero, mul_one] at hfl
+  have hbpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
+  set I := v.idealAssetsWithdrawAt nav.toRat r.shares.toRat with hI
+  -- the worth is at most the cash, so within the Open limit
+  have hnavv := Vault.Reachable.nav_eq_cash v t0 hr waive nav hnav
+  have hA0 : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
+  have hSpos : 0 < (v.toExact.sharesTotal : ℚ) := hspos.trans hlt
+  have hI0 : 0 ≤ I := by
+    rw [hI]; unfold RawVault.idealAssetsWithdrawAt; rw [hnavv]; positivity
+  have hsmall : I ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent := by
+    have hopen := (Vault.Reachable.openZone_proof v t0 hr hmax).assetsAvailable_le_openLimit
+    have h9 : (9 : ℚ) * 10 ^ (15 + v.baseExponent) = 9 * 10 ^ 15 * 10 ^ v.baseExponent := by
+      rw [zpow_add₀ (by norm_num), ← mul_assoc]; norm_num
+    have hIA : I ≤ v.assetsAvailable.toRat := by
+      rw [hI]; unfold RawVault.idealAssetsWithdrawAt
+      rw [hnavv, div_le_iff₀ hSpos]
+      exact mul_le_mul_of_nonneg_left hlt.le hA0
+    linarith
+  -- the payout is the price floored onto the base grid
+  have hfle : r.assets.toRat ≤ priced.toRat := by
+    have h := Int.floor_le (priced.toRat / 10 ^ v.baseExponent)
+    rw [le_div_iff₀ hbpos] at h
+    rw [hfl]; exact h
+  have hflt : priced.toRat < r.assets.toRat + 10 ^ v.baseExponent := by
+    have h := Int.lt_floor_add_one (priced.toRat / 10 ^ v.baseExponent)
+    rw [div_lt_iff₀ hbpos, add_mul, one_mul] at h
+    rw [hfl]; exact h
+  by_cases hpm : priced.mValue = 0
+  · -- a zero price pays nothing, for a worth below one base unit
+    have hp0 : priced.toRat = 0 := (STAmount.toRat_eq_zero_iff _).mpr hpm
+    have ha0 : r.assets.toRat = 0 := by
+      rw [hfl, hp0, zero_div, Int.floor_zero, Int.cast_zero, zero_mul]
+    have hlow := Vault.Reachable.worth_lt_of_priced_zero v t0 hr hmax r.shares priced waive nav hnav
+      hsic hs64 hspos hpr hpm
+    exact ⟨fun _ => by rw [ha0]; exact hI0, by rw [ha0, sub_zero]; exact hlow⟩
+  obtain ⟨hpv, heb, hnear⟩ := Vault.priced_near_worth v hmax r.shares priced waive nav hnav hspos.le hsc hpr
+    hsmall hpm
+  obtain ⟨hn1, hn2⟩ := abs_lt.mp hnear
+  have hpz : priced.toRat = ((priced.mValue.toNat : ℤ) : ℚ) * 10 ^ priced.exponent := by
+    rw [hpv, Int.cast_natCast]
+  refine ⟨fun ⟨k, hk⟩ => ?_, ?_⟩
+  · -- a price above a worth on the base grid is at least one of its own steps above it
+    have hple : priced.toRat ≤ I := by
+      by_contra h
+      push Not at h
+      have hg := grid_diff_ge priced.toRat I priced.exponent v.baseExponent _ k hpz hk h
+      rw [min_eq_left heb] at hg
+      linarith
+    linarith
+  -- the payout plus one base step sits at least one step of the price above it
+  have hg := grid_diff_ge (r.assets.toRat + 10 ^ v.baseExponent) priced.toRat v.baseExponent priced.exponent
+    (⌊priced.toRat / 10 ^ v.baseExponent⌋ + 1) _ (by rw [hfl]; push_cast; ring) hpz hflt
+  rw [min_eq_right heb] at hg
+  linarith
 
 end XRPL.Model.SingleAssetVault

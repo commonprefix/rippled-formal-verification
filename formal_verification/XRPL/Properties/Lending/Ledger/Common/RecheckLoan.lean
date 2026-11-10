@@ -129,7 +129,8 @@ lemma Loan.accept_ne_notLawful (loan : Loan) (v : Vault) : (loan.accept v).run �
     cases h
     exact RawLoan.interestDue_ne_notLawful _ hi
   | ok interestDue =>
-    rw [Loan.accept_reduce loan v interestDue hi] at h
+    obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan
+    rw [Loan.accept_reduce loan v interestDue a hi ha] at h
     have hvault := Vault.poolAdjust_ne_notLawful_of_lawful v (loan.acceptChange interestDue) fun raw hadj => by
       obtain ⟨v', hv', -⟩ := Loan.accept_vault_lawful loan v interestDue raw hi hadj
       exact ⟨v', hv'⟩
@@ -334,6 +335,7 @@ lemma Loan.manageDefault_ne_notLawful (loan : Loan) (v : Vault)
   · rename_i e he; rw [hb] at he; cases he
   rename_i broker' hb'
   obtain ⟨loan', hl', -⟩ := Loan.defaultedLoan_lawful loan broker'
+    (congrArg RawLoanBroker.numericType (RawLoanBroker.to_lawful_ok hb').1 :)
   split at h
   · rename_i e he; rw [hl'] at he; cases he
   · cases h

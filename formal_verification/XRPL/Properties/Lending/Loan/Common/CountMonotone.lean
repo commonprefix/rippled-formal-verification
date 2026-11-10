@@ -136,7 +136,7 @@ private lemma loanPrincipalFromPeriodicPayment_div (pp rate f tpo : Number) (k :
 /-- Proof body of `Lending.create_periodicPayment_monotone`. -/
 lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v : Vault) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (schedule schedule₂ : LoanSchedule) (allowsOverpayment pending : Bool)
-    (r₁ r₂ : LoanWithPool Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
+    (r₁ r₂ : LoanWithDisbursement Vault) (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hs : schedule₂ = { schedule with paymentTotal := schedule₂.paymentTotal })
     (hlt : schedule.paymentTotal < schedule₂.paymentTotal)

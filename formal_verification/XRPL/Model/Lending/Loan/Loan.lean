@@ -57,6 +57,7 @@ structure RawLoan where
   paymentRemaining : UInt32
   periodicPayment : Number
   principalOutstanding : Number
+  principalInitial : Number
   totalValueOutstanding : Number
   managementFeeOutstanding : Number
   loanScale : Int
@@ -108,6 +109,7 @@ structure RawLoan.WF (rl : RawLoan) : Prop where
   totalValueOutstanding_norm : rl.totalValueOutstanding.isNormalized
   managementFeeOutstanding_norm : rl.managementFeeOutstanding.isNormalized
   originationFee_norm : rl.fees.originationFee.isNormalized
+  principalInitial_norm : rl.principalInitial.isNormalized
   serviceFee_norm : rl.fees.serviceFee.isNormalized
   latePaymentFee_norm : rl.fees.latePaymentFee.isNormalized
   closePaymentFee_norm : rl.fees.closePaymentFee.isNormalized
@@ -117,6 +119,7 @@ structure RawLoan.WF (rl : RawLoan) : Prop where
   principalOutstanding_atExponent : rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
   managementFeeOutstanding_atExponent :
     rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true
+  originationFee_atExponent : rl.fees.originationFee.isAtExponent rl.loanScale rl.broker.numericType = true
 
 structure RawLoan.Valid (rl : RawLoan) : Prop where
   -- fully paid off exactly when no payments remain
@@ -148,6 +151,7 @@ structure RawLoan.Valid (rl : RawLoan) : Prop where
   overpaymentInterestRate_cap : rl.rates.overpaymentInterestRate ≤ maxLoanRate
   overpaymentFee_cap : rl.rates.overpaymentFee ≤ maxLoanRate
   originationFee_nonneg : Number.zero.operator_le rl.fees.originationFee = true
+  originationFee_cap : rl.fees.originationFee.operator_le rl.principalInitial = true
   paymentTotal_pos : 0 < rl.schedule.paymentTotal
   paymentInterval_min : minPaymentInterval ≤ rl.schedule.paymentInterval
   gracePeriod_range : defaultGracePeriod ≤ rl.schedule.gracePeriod ∧
@@ -157,14 +161,15 @@ instance RawLoan.decidableWF (rl : RawLoan) : Decidable rl.WF :=
   decidable_of_iff
     (rl.periodicPayment.isNormalized ∧ rl.principalOutstanding.isNormalized ∧
       rl.totalValueOutstanding.isNormalized ∧ rl.managementFeeOutstanding.isNormalized ∧
-      rl.fees.originationFee.isNormalized ∧ rl.fees.serviceFee.isNormalized ∧
+      rl.fees.originationFee.isNormalized ∧ rl.principalInitial.isNormalized ∧ rl.fees.serviceFee.isNormalized ∧
       rl.fees.latePaymentFee.isNormalized ∧ rl.fees.closePaymentFee.isNormalized ∧
       (cMinOffset ≤ rl.loanScale ∧ rl.loanScale ≤ cMaxOffset) ∧
       rl.totalValueOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
       rl.principalOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
-      rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true)
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩ => ⟨a, b, c, d, e, f, g, h, i, j, k, l⟩⟩
+      rl.managementFeeOutstanding.isAtExponent rl.loanScale rl.broker.numericType = true ∧
+      rl.fees.originationFee.isAtExponent rl.loanScale rl.broker.numericType = true)
+    ⟨fun ⟨a, b, c, d, e, e1, f, g, h, i, j, k, l, m⟩ => ⟨a, b, c, d, e, e1, f, g, h, i, j, k, l, m⟩,
+     fun ⟨a, b, c, d, e, e1, f, g, h, i, j, k, l, m⟩ => ⟨a, b, c, d, e, e1, f, g, h, i, j, k, l, m⟩⟩
 
 instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
   decidable_of_iff
@@ -189,12 +194,13 @@ instance RawLoan.decidableValid (rl : RawLoan) : Decidable rl.Valid :=
       rl.rates.interestRate ≤ maxLoanRate ∧ rl.rates.lateInterestRate ≤ maxLoanRate ∧
       rl.rates.closeInterestRate ≤ maxLoanRate ∧ rl.rates.overpaymentInterestRate ≤ maxLoanRate ∧
       rl.rates.overpaymentFee ≤ maxLoanRate ∧ Number.zero.operator_le rl.fees.originationFee = true ∧
+      rl.fees.originationFee.operator_le rl.principalInitial = true ∧
       0 < rl.schedule.paymentTotal ∧ minPaymentInterval ≤ rl.schedule.paymentInterval ∧
       (defaultGracePeriod ≤ rl.schedule.gracePeriod ∧ rl.schedule.gracePeriod ≤ rl.schedule.paymentInterval))
-    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩,
-     fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩ =>
-        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, r, s, t⟩⟩
+    ⟨fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, q1, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, q1, r, s, t⟩,
+     fun ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, q1, r, s, t⟩ =>
+        ⟨a, b, c, d, e, f, g, h, i, j, k, k1, k2, k3, l, m, n, o, p, q, q1, r, s, t⟩⟩
 
 structure Loan extends RawLoan where
   wf : toRawLoan.WF
@@ -207,6 +213,10 @@ def RawLoan.to_lawful (rl : RawLoan) : Except Error Loan :=
 structure LoanWithPool (α : Type) where
   loan' : Loan
   pool' : α
+
+-- A loan with what the vault sends the borrower
+structure LoanWithDisbursement (α : Type) extends LoanWithPool α where
+  amountToBorrower : Number
 
 -- The loan with the amounts a fund-moving operation transfers (zero where nothing moves to that party)
 structure LoanWithAmounts (α : Type) extends LoanWithPool α where

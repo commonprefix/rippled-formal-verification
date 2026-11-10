@@ -37,6 +37,20 @@ lemma Vault.deposit_donation_no_shares_proof (v : Vault) (amountDeposit : STAmou
   unfold_ter
   simp [hsh]
 
+/-- A successful donation comes into a vault that has shares, since a donation with none is rejected. -/
+lemma Vault.deposit_donation_sharesTotal_pos (v : Vault) (amountDeposit : STAmount) (t : UInt32)
+    (hpos : 0 < amountDeposit.toRat) (r : VaultWithAmounts)
+    (hok : (v.deposit amountDeposit true t hpos).run = .ok (.ok r)) :
+    0 < v.toExact.sharesTotal := by
+  refine Nat.pos_of_ne_zero fun h0 => ?_
+  have hm : v.sharesTotal.mantissa_ = 0 := by
+    by_contra hm
+    apply Number.mantissa_ne_zero_iff.mp hm
+    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
+    exact_mod_cast h0
+  rw [Vault.deposit_donation_no_shares_proof v amountDeposit t hpos hm] at hok
+  cases hok
+
 lemma Vault.deposit_insolvent_proof (v : Vault) (amountDeposit : STAmount) (t : UInt32)
     (hpos : 0 < amountDeposit.toRat)
     (hphase : (v.phase t == .investment || v.phase t == .redemption) = false)

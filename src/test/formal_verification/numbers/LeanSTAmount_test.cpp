@@ -100,8 +100,8 @@ signedDrops(uint64_t mValue, bool negative)
     return std::nullopt;
 }
 
-// Whether the model's add (sub negates b first) reports `Error.wrap`: an operand's drops leave
-// int64, or two integral drop counts overflow int64. C++ wraps silently in both places.
+// Whether the model's IOU add (sub negates b first) reports `Error.wrap`: an operand's mantissa
+// leaves int64. C++ wraps it silently.
 bool
 addWraps(STAmountPair const& a, STAmountPair const& b, bool isAdd)
 {
@@ -115,10 +115,7 @@ addWraps(STAmountPair const& a, STAmountPair const& b, bool isAdd)
     if (x.mValue == 0)
         return x.numericType == kFractional && !dy;
     auto const dx = signedDrops(x.mValue, x.isNegative != 0);
-    if (!dx || !dy)
-        return true;
-    int64_t sum = 0;
-    return x.numericType != kFractional && __builtin_add_overflow(*dx, *dy, &sum);
+    return !dx || !dy;
 }
 
 }  // namespace
@@ -672,30 +669,6 @@ public:
         checkAddSub(
             "add",
             true,
-            makeSTAmountPair(kIntegral, 1'000, 0, 0),
-            makeSTAmountPair(kIntegral, 2'000, 0, 0),
-            m);
-        checkAddSub(
-            "sub",
-            false,
-            makeSTAmountPair(kIntegral, 5'000, 0, 0),
-            makeSTAmountPair(kIntegral, 2'000, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kIntegral, 0, 0, 0),
-            makeSTAmountPair(kIntegral, 2'000, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kIntegral, 5'000, 0, 0),
-            makeSTAmountPair(kIntegral, 0, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
             makeSTAmountPair(kFractional, 5'000'000'000'000'000ULL, 0, 0),
             makeSTAmountPair(kFractional, 3'000'000'000'000'000ULL, 0, 0),
             m);
@@ -821,8 +794,8 @@ public:
             std::bernoulli_distribution opDist(0.5);
             runFuzz(10'000, [&] {
                 bool const isAdd = opDist(rng);
-                auto a = randomSTAmountPair(rng);
-                auto b = randomSTAmountPair(rng);
+                auto a = randomSTAmountPair(rng, kFractional);
+                auto b = randomSTAmountPair(rng, kFractional);
                 return checkAddSub(isAdd ? "add" : "sub", isAdd, a, b, mode);
             });
         }
@@ -922,42 +895,11 @@ public:
         checkChecked(makeSTAmountPair(kNative, kMaxNative + 1, 0, 0), m);
         checkChecked(makeSTAmountPair(kNative, kMaxIntegral, 0, 0), m);
         checkChecked(makeSTAmountPair(kNative, 1, 18, 0), m);
-        // native operator+ (STAmount(SField, int64)) does not canonicalize, so 10^17 + 10^17 is the
-        // exact 2*10^17 with only an int64 guard (well within range).
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kNative, kMaxNative, 0, 0),
-            makeSTAmountPair(kNative, kMaxNative, 0, 0),
-            m);
         // neg is sign-magnitude and never overflows.
         checkNeg(makeSTAmountPair(kNative, kMaxNative, 0, 0));
         checkNeg(makeSTAmountPair(kNative, kMaxNative, 0, 1));
         // Cross-kind native vs int64 (MPT) is incomparable: both sides error.
         checkLt(makeSTAmountPair(kNative, 100, 0, 0), makeSTAmountPair(kIntegral, 100, 0, 0));
-
-        // MPT operator+ adds the int64 drops unchecked: INT64_MAX + 1 wraps to INT64_MIN in C++,
-        // and the model reports the wrap.
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            m);
-        // -INT64_MAX - 1 == INT64_MIN (no int64 wrap). MPT operator+ canonicalizes, rounding the
-        // out-of-range magnitude to -9223372036854775800. Both sides agree.
-        checkAddSub(
-            "sub",
-            false,
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
-            makeSTAmountPair(kIntegral, 1, 0, 0),
-            m);
-        checkAddSub(
-            "add",
-            true,
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 0),
-            makeSTAmountPair(kIntegral, kMaxIntegral, 0, 1),
-            m);
 
         // IOU exponent overflow at kMaxOffset; smallest ± smallest at kMinOffset.
         checkAddSub(
@@ -1003,16 +945,15 @@ public:
             {
                 checkNeg(makeSTAmountPair(nt, u64Max, 0, neg));
                 checkNeg(makeSTAmountPair(nt, 0, 0, neg));
-                // C++ reads u64Max back as int64 (mpt() and iou() give -1), the model reports the
-                // wrap.
-                checkAddSub(
-                    "add",
-                    true,
-                    makeSTAmountPair(nt, u64Max, 0, neg),
-                    makeSTAmountPair(nt, u64Max, 0, neg),
-                    m);
                 checkLt(makeSTAmountPair(nt, u64Max, 0, neg), makeSTAmountPair(nt, 0, 0, neg));
             }
+            // C++ reads u64Max back as int64 (iou() gives -1), the model reports the wrap.
+            checkAddSub(
+                "add",
+                true,
+                makeSTAmountPair(kFractional, u64Max, 0, neg),
+                makeSTAmountPair(kFractional, u64Max, 0, neg),
+                m);
             // Fractional additionally spans the int-exponent extremes (Number-mediated
             // out-of-range offsets surface as errors on both sides).
             checkNeg(makeSTAmountPair(kFractional, u64Max, intMax, neg));

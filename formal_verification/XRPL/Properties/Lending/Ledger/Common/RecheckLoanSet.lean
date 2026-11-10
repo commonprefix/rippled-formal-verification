@@ -275,7 +275,7 @@ lemma Loan.create_ne_notLawful (broker : LoanBroker) (v : Vault) (principal : Nu
   all_goals
     have hchecks := Loan.createChecks_of_steps broker v principal rates fees schedule _ _ _ _ _ _ _ ‹_› ‹_›
       ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_› ‹_›
-    obtain ⟨loan, v', hrun⟩ := Loan.create_success_lawful broker v principal rates fees schedule
+    obtain ⟨loan, v', _, hrun⟩ := Loan.create_success_lawful broker v principal rates fees schedule
       allowsOverpayment pending _ _ _ hpre hasset (hgrid _ _ _ hchecks) hcount hchecks
     rw [hrun] at h0
     exact absurd h0 (by simp)
@@ -392,7 +392,7 @@ lemma LendingTx.loanSet_createPreflight (l : LendingLedger) (i : Nat) (principal
   split at hpre
   · rename_i hall
     simp only [Bool.and_eq_true, decide_eq_true_eq, and_assoc] at hall
-    obtain ⟨-, ho, -, hsv, hlf, hcf, hir, hlr, hcr, hor, hof, hn, hint, hg1, hg2⟩ := hall
+    obtain ⟨-, ho, hole, hsv, hlf, hcf, hir, hlr, hcr, hor, hof, hn, hint, hg1, hg2⟩ := hall
     obtain ⟨hoN, ho0⟩ := isNonnegativeInput_facts ho
     obtain ⟨hsvN, hsv0⟩ := isNonnegativeInput_facts hsv
     obtain ⟨hlfN, hlf0⟩ := isNonnegativeInput_facts hlf
@@ -423,6 +423,8 @@ lemma LendingTx.loanSet_createPreflight (l : LendingLedger) (i : Nat) (principal
             principal_exact := hexact principal List.mem_cons_self
             fees_norm := fun fee hf => (hfee fee hf).1
             fees_nonneg := fun fee hf => (hfee fee hf).2
+            originationFee_le := (operator_le_iff _ _ hoN hp.1).mp hole
+            originationFee_exact := hexact fees.originationFee (by simp [LoanFees.amountFields])
             interestRate_cap := hir
             lateInterestRate_cap := hlr
             closeInterestRate_cap := hcr

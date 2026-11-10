@@ -62,9 +62,32 @@ def Loan.acceptChange (loan : Loan) (interestDue : Number) : PoolBalanceChange :
   { yield := interestDue
     reserved := loan.principalOutstanding.operator_neg }
 
+/-- What an accept sends the borrower, PrincipalOutstanding less the origination fee, is exact: both are whole
+LoanScale units. -/
+lemma Loan.acceptAmount_ok (loan : Loan) :
+    ∃ a, loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok a ∧
+      a.toRat = loan.principalOutstanding.toRat - loan.fees.originationFee.toRat := by
+  obtain ⟨m, hm, hmv⟩ := loan.grid.principalOutstanding_atExponent
+  obtain ⟨k, hk, hkv⟩ := loan.grid.originationFee_atExponent
+  have hb := NumericType.mantissaBound_le loan.broker.numericType
+  have hmv' : loan.principalOutstanding.toRat = (m : ℚ) * (10 : ℚ) ^ loan.loanScale := hmv
+  have hkv' : loan.fees.originationFee.toRat = (k : ℚ) * (10 : ℚ) ^ loan.loanScale := hkv
+  have hm63 : m < 2 ^ 63 := lt_of_lt_of_le hm hb
+  have hk63 : k < 2 ^ 63 := lt_of_lt_of_le hk hb
+  obtain ⟨a, ha⟩ := Number.operator_sub_ok_of_grid _ _ m k loan.loanScale loan.wf.principalOutstanding_norm
+    loan.wf.originationFee_norm hmv' hkv' hm63 hk63 loan.wf.loanScale_range
+  have hs : minExponent + 18 ≤ loan.loanScale ∧ loan.loanScale ≤ maxExponent - 1 := by
+    have := loan.wf.loanScale_range; unfold cMinOffset cMaxOffset at this; unfold minExponent maxExponent; omega
+  refine ⟨a, ha, ?_⟩
+  rw [Number.operator_sub_toRat_of_grid _ _ a m k loan.loanScale loan.wf.principalOutstanding_norm
+    loan.wf.originationFee_norm (by rw [hmv']; push_cast; ring) (by rw [hkv']; push_cast; ring) (by omega) hs ha,
+    hmv', hkv']
+  push_cast; ring
+
 /-- The run of an accept: the pool update with the accept change, then the re-check of the loan. -/
-private lemma Loan.accept_reduce (loan : Loan) (v : Vault) (interestDue : Number)
-    (hi : loan.interestDue = .ok interestDue) :
+private lemma Loan.accept_reduce (loan : Loan) (v : Vault) (interestDue a : Number)
+    (hi : loan.interestDue = .ok interestDue)
+    (ha : loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok a) :
     (loan.accept v).run =
       match AssetPool.adjustBalances v (loan.acceptChange interestDue) with
       | .error e => .error e
@@ -72,21 +95,24 @@ private lemma Loan.accept_reduce (loan : Loan) (v : Vault) (interestDue : Number
       | .ok (.ok v') =>
         match ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful with
         | .error e => .error e
-        | .ok loan' => .ok (.ok { loan' := loan', pool' := v' }) := by
+        | .ok loan' => .ok (.ok { loan' := loan', pool' := v', amountToBorrower := a }) := by
   simp only [Loan.accept]
   unfold_ter
   simp only [hi, Loan.acceptChange]
   rcases AssetPool.adjustBalances v { yield := interestDue, reserved := loan.principalOutstanding.operator_neg }
     with e | (ter | v') <;> try rfl
-  cases ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful <;> rfl
+  cases ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful <;> simp [ha]
 
-/-- A successful accept ran a successful vault update, and its loan is the re-checked active loan. -/
-lemma Loan.accept_ok_inv (loan : Loan) (v : Vault) (interestDue : Number) (r : LoanWithPool Vault)
+/-- A successful accept ran a successful vault update, its loan is the re-checked active loan, and it sends the
+borrower PrincipalOutstanding less the origination fee. -/
+lemma Loan.accept_ok_inv (loan : Loan) (v : Vault) (interestDue : Number) (r : LoanWithDisbursement Vault)
     (hi : loan.interestDue = .ok interestDue) (hok : (loan.accept v).run = .ok (.ok r)) :
     ∃ raw, (v.adjustBalances (loan.acceptChange interestDue)).run = .ok (.ok raw) ∧
       raw.to_lawful = .ok r.pool' ∧
-      ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok r.loan' := by
-  rw [Loan.accept_reduce loan v interestDue hi] at hok
+      ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok r.loan' ∧
+      loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok r.amountToBorrower := by
+  obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan
+  rw [Loan.accept_reduce loan v interestDue a hi ha] at hok
   revert hok
   rcases hp : AssetPool.adjustBalances v (loan.acceptChange interestDue) with e | (t | v')
   · intro hok; cases hok
@@ -97,10 +123,10 @@ lemma Loan.accept_ok_inv (loan : Loan) (v : Vault) (interestDue : Number) (r : L
     | error e => rw [hl] at hok; dsimp only at hok; cases hok
     | ok loan' =>
       rw [hl] at hok; dsimp only at hok; injection hok with hok; injection hok with hok; subst hok
-      exact ⟨raw, hadj, hv', rfl⟩
+      exact ⟨raw, hadj, hv', rfl, ha⟩
 
 /-- An accept keeps the broker. -/
-lemma Loan.accept_broker (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_broker (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.broker = loan.broker := by
   simp only [Loan.accept] at h
   unfold_ter at h
@@ -180,16 +206,18 @@ lemma Loan.accept_bad_ledger_proof (interestDue aa' ad' lu' ar' yu' : Number)
     (loan.accept v).run = .ok (.error .tefBAD_LEDGER) := by
   have hadj := Vault.adjustBalances_bad_ledger v _ aa' ad' lu' ar' yu' hs
     (Or.inr (Or.inr (Or.inr (Or.inr hneg))))
-  rw [Loan.accept_reduce loan v interestDue hi, Vault.poolAdjust_rejected v _ _ hadj]
+  obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan
+  rw [Loan.accept_reduce loan v interestDue a hi ha, Vault.poolAdjust_rejected v _ _ hadj]
 
 /-- Proof body of the success line of `Loan.accept_exits`. -/
 lemma Loan.accept_success_proof (interestDue : Number) (raw : RawVault) (v' : Vault) (loan' : Loan)
-    (hi : loan.interestDue = .ok interestDue)
+    (amountToBorrower : Number) (hi : loan.interestDue = .ok interestDue)
     (hadj : (v.adjustBalances (loan.acceptChange interestDue)).run = .ok (.ok raw))
     (hv' : raw.to_lawful = .ok v')
-    (hloan : ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok loan') :
-    (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v' }) := by
-  rw [Loan.accept_reduce loan v interestDue hi, Vault.poolAdjust_ok v _ raw v' hadj hv']
+    (hloan : ({ loan.toRawLoan with isPending := false } : RawLoan).to_lawful = .ok loan')
+    (hamount : loan.principalOutstanding.operator_sub loan.fees.originationFee .to_nearest = .ok amountToBorrower) :
+    (loan.accept v).run = .ok (.ok { loan' := loan', pool' := v', amountToBorrower := amountToBorrower }) := by
+  rw [Loan.accept_reduce loan v interestDue amountToBorrower hi hamount, Vault.poolAdjust_ok v _ raw v' hadj hv']
   simp only [hloan]
 
 /-- Proof body of `accept_error_codes`. -/
@@ -201,7 +229,8 @@ lemma Loan.accept_error_codes_proof (ter : TER) (hok : (loan.accept v).run = .ok
     unfold_ter at hok
     simp [hi] at hok
   | ok interestDue =>
-    rw [Loan.accept_reduce loan v interestDue hi] at hok
+    obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan
+    rw [Loan.accept_reduce loan v interestDue a hi ha] at hok
     revert hok
     rcases hp : AssetPool.adjustBalances v (loan.acceptChange interestDue) with e | (t | v')
     · intro hok; cases hok

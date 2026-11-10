@@ -174,7 +174,7 @@ lemma LoanBroker.canCoverClawback_of_units (lb : LoanBroker) (v : Vault) (amount
     (LoanBroker.roundedCoverClawback_rounded_proof lb v amount minimumCover mx claw claw' c hmin hsub hsig
       hclaw hof hcl hnz)
 
-/-- Proof body of the never-throws part of `LoanBroker.coverClawback_total`. -/
+/-- Proof body of the never-throws part of the clawback line of `LoanBroker.cover_total`. -/
 lemma LoanBroker.coverClawback_total_proof (lb : LoanBroker) (pool : α) (amount : Option STAmount)
     (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
     -- CoverAvailable is an asset balance, and every IOU amount is below 10^96
@@ -235,7 +235,7 @@ lemma LoanBroker.coverClawback_total_proof (lb : LoanBroker) (pool : α) (amount
   · exact Or.inr (LoanBroker.coverClawback_negative_cover_proof lb pool amount c cN c' hrc hcN hsub
       (by simpa using hneg))
 
-/-- Proof body of the never-notLawful part of `LoanBroker.coverClawback_total`. -/
+/-- Proof body of the never-notLawful part of the clawback line of `LoanBroker.cover_total`. -/
 lemma LoanBroker.coverClawback_lawful_total_proof (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
     (hz : lb.OpenZone v.baseExponent) (hnt : v.numericType = lb.numericType)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)

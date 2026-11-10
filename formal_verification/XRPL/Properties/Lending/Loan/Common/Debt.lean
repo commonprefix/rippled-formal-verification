@@ -13,7 +13,7 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 
 /-- A new loan adds PrincipalRequested to DebtTotal and AssetsDeployed. -/
 lemma Loan.create_debtStep (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hok : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     broker.debtTotal.operator_add principal .to_nearest = .ok r.loan'.broker.debtTotal ∧
       v.assetsDeployed.operator_add principal .to_nearest = .ok r.pool'.assetsDeployed := by

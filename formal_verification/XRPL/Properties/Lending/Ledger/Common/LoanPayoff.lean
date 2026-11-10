@@ -48,7 +48,7 @@ private lemma Loan.withBroker_principal {loan loan' : Loan} {b : LoanBroker} (h 
   (congrArg RawLoan.principalOutstanding (Loan.withBroker_eq h) :)
 
 /-- Accept keeps the principal. -/
-private lemma Loan.accept_principal (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_principal (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.principalOutstanding = loan.principalOutstanding := by
   simp only [Loan.accept] at h
   unfold_ter at h

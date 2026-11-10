@@ -183,7 +183,7 @@ inductive Loan.RegularPayoff (fits : Loan → Vault → UInt32 → UnsettledPaym
       broker.numericType = loan.broker.numericType → -- a loan's broker never changes its asset
       RawLoan.to_lawful { loan.toRawLoan with broker := broker } = .ok loan' →
       Loan.RegularPayoff fits start t₀ loan' t cost toVault toBroker
-  | accept (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithPool Vault) (cost toVault toBroker : ℚ) :
+  | accept (loan : Loan) (t t' : UInt32) (v : Vault) (r : LoanWithDisbursement Vault) (cost toVault toBroker : ℚ) :
       Loan.RegularPayoff fits start t₀ loan t cost toVault toBroker → t ≤ t' →
       loan.canAccept v t' = .ok .tesSUCCESS → (loan.accept v).run = .ok (.ok r) →
       Loan.RegularPayoff fits start t₀ r.loan' t' cost toVault toBroker
@@ -230,7 +230,7 @@ lemma Loan.KeepsAmounts.of_raw {l l' : Loan} {raw : RawLoan} (hl : raw.to_lawful
   exact ⟨by rw [← h1, ← hr], by rw [← h2, ← hr], by rw [← h3, ← hr]⟩
 
 /-- An accept keeps the amounts. -/
-lemma Loan.accept_keepsAmounts (l : Loan) (v : Vault) (r : LoanWithPool Vault)
+lemma Loan.accept_keepsAmounts (l : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (h : (l.accept v).run = .ok (.ok r)) : Loan.KeepsAmounts l r.loan' := by
   simp only [Loan.accept] at h
   unfold_ter at h

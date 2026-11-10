@@ -253,7 +253,7 @@ lemma Loan.pay_room {T0 : ℚ} (loan : Loan) (v : Vault) (pt : LoanPaymentType) 
     exact UnsettledPayment.applyOverpayment_room p0 p amount hr0 (by rw [hst.loanScale]; exact hs) hT' h1
 
 /-- An accept keeps the room. -/
-private lemma Loan.accept_room {T0 : ℚ} (loan : Loan) (v : Vault) (r : LoanWithPool Vault)
+private lemma Loan.accept_room {T0 : ℚ} (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
     (hroom : loan.PaymentRoom T0) (h : (loan.accept v).run = .ok (.ok r)) : r.loan'.PaymentRoom T0 := by
   simp only [Loan.accept] at h
   unfold_ter at h

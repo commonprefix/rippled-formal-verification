@@ -13,7 +13,7 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 /-- A new loan adds one to its broker's LoanCount. The count never wraps, because a broker without
 loans has no debt. -/
 lemma Loan.create_loanCount (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
-    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithPool Vault)
+    (fees : LoanFees) (schedule : LoanSchedule) (allowsOverpayment pending : Bool) (r : LoanWithDisbursement Vault)
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (h : (Loan.create broker v principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
     r.loan'.broker.loanCount.toNat = broker.loanCount.toNat + 1 := by

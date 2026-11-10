@@ -40,8 +40,21 @@ lemma LendingLedger.accept_releases_proof {l l' : LendingLedger} (hr : l.Reachab
   rw [hv]
   exact Loan.accept_releases_proof loan l.vault interestDue r hi hok hr.availableStored hf.1 hf.2
 
+/-- Proof body of the amountToBorrower lines of `Lending.accept_releases`. -/
+lemma LendingLedger.accept_amountToBorrower_proof {l l' : LendingLedger} (hr : l.Reachable) {i : Nat}
+    (h : (l.apply (.loanAccept i)).run = .ok (.ok l')) {loan loan' : Loan} (hat : l.LoanAt i loan)
+    (hat' : l'.LoanAt i loan') {interestDue : Number} (hi : loan.interestDue = .ok interestDue)
+    (r : LoanWithDisbursement Vault) (hacc : (loan.accept l.vault).run = .ok (.ok r)) :
+    r.amountToBorrower.toRat + loan.fees.originationFee.toRat = loan.principalOutstanding.toRat ∧
+      l.vault.assetsReserved.toRat - l'.vault.assetsReserved.toRat =
+        r.amountToBorrower.toRat + loan.fees.originationFee.toRat := by
+  have ha := Loan.accept_amountToBorrower_proof loan l.vault r hacc
+  refine ⟨ha, ?_⟩
+  rw [ha, (LendingLedger.accept_releases_proof hr h hat hat' hi).1]
+  ring
+
 /-- The loan a LoanSet adds sits on its broker at the end of the loan list. -/
-private lemma LendingLedger.loan?_ofCreate {l l₁ : LendingLedger} {j : Nat} {r : LoanWithPool Vault}
+private lemma LendingLedger.loan?_ofCreate {l l₁ : LendingLedger} {j : Nat} {r : LoanWithDisbursement Vault}
     (hl₁ : l₁ = l.commitLoan (LoanEffect.ofCreate j l.loans.length r)) :
     l₁.loan? l.loans.length = some { brokerIndex := j, loan := r.loan' } := by
   subst hl₁
@@ -90,7 +103,7 @@ private lemma Loan.canCreate_active_eq (broker : LoanBroker) (v : Vault) (p : Nu
 /-- A LoanSet whose checks pass and whose create succeeds adds the created loan to the ledger. -/
 private lemma LendingLedger.apply_loanSet_of_create {l : LendingLedger} (hnd : l.vaultDeleted = false) {j : Nat}
     {principal : Number} {rates : LoanRates} {fees : LoanFees} {pi pt gp : Option UInt32} {sd : UInt32}
-    {twoStep ao : Bool} {schedule : LoanSchedule} {broker : LoanBroker} {r : LoanWithPool Vault}
+    {twoStep ao : Bool} {schedule : LoanSchedule} {broker : LoanBroker} {r : LoanWithDisbursement Vault}
     (hs : LoanSchedule.build pi pt gp sd l.now twoStep = schedule)
     (hpre : (LendingTx.loanSet j principal rates fees pi pt gp sd twoStep ao).preflight l = .tesSUCCESS)
     (hsched : schedule.checkTimeAvailability = .ok .tesSUCCESS) (hb : l.broker? j = some broker)

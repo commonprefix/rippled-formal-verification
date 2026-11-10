@@ -136,7 +136,7 @@ lemma LendingLedger.applyBroker_ne_wrap (l : LendingLedger) (hr : l.Reachable) (
 schedule check passes only for a first due date within the ledger clock. -/
 lemma LendingLedger.applyLoanSet_ne_wrap (l : LendingLedger) (i : Nat) (principal : Number) (rates : LoanRates)
     (fees : LoanFees) (schedule : LoanSchedule) (twoStep ao : Bool) (hpr : schedule.paymentTotal ≠ 0)
-    (hint : 0 < schedule.paymentInterval) (hp : principal.isNormalized)
+    (hint : 0 < schedule.paymentInterval) (hp : principal.isNormalized) (hfee : fees.originationFee.isNormalized)
     (hcount : ∀ b, l.broker? i = some b → b.loanCount.toNat + 1 < 2 ^ 32) :
     (l.applyLoanSet i principal rates fees schedule twoStep ao).run ≠ .error .wrap := by
   intro h
@@ -167,15 +167,16 @@ lemma LendingLedger.applyLoanSet_ne_wrap (l : LendingLedger) (i : Nat) (principa
     exact Loan.canCreate_ne_wrap _ _ _ _ _ _ _ he
   split at h
   · cases h
-  exact Loan.create_ne_wrap _ _ _ _ _ _ _ _ hpr (hcount b hb) hfits.firstDue_lt hp (TerExcept.map_error h)
+  exact Loan.create_ne_wrap _ _ _ _ _ _ _ _ hpr (hcount b hb) hfits.firstDue_lt hp hfee (TerExcept.map_error h)
 
 /-- A LoanSet that passed its preflight has a payment, a payment interval above zero and a normalized principal. -/
 private lemma LendingTx.preflight_loanSet_schedule (l : LendingLedger) (i : Nat) (principal : Number)
     (rates : LoanRates) (fees : LoanFees) (pi pt gp : Option UInt32) (sd : UInt32) (twoStep ao : Bool)
     (h : (LendingTx.loanSet i principal rates fees pi pt gp sd twoStep ao).preflight l = .tesSUCCESS) :
     0 < pt.getD defaultPaymentTotal ∧ minPaymentInterval ≤ pi.getD defaultPaymentInterval ∧
-      principal.isNormalized := by
-  refine ⟨?_, ?_, ?_⟩ <;> by_contra hne <;> simp [LendingTx.preflight, isPositiveInput, hne] at h
+      principal.isNormalized ∧ fees.originationFee.isNormalized := by
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> by_contra hne <;>
+    simp [LendingTx.preflight, isPositiveInput, isNonnegativeInput, hne] at h
 
 /-- A loan transaction on a reachable ledger never wraps while no broker has `2^32 − 1` loans. -/
 lemma LendingLedger.applyLoan_ne_wrap (l : LendingLedger) (hr : l.Reachable) (tx : LendingTx)
@@ -184,10 +185,10 @@ lemma LendingLedger.applyLoan_ne_wrap (l : LendingLedger) (hr : l.Reachable) (tx
     (l.applyLoan tx).run ≠ .error .wrap := by
   cases tx with
   | loanSet i principal rates fees pi pt gp sd twoStep ao =>
-    obtain ⟨hpt, hpi, hp⟩ :=
+    obtain ⟨hpt, hpi, hp, hfee⟩ :=
       LendingTx.preflight_loanSet_schedule l i principal rates fees pi pt gp sd twoStep ao hpre
     simp only [LendingLedger.applyLoan]
-    refine LendingLedger.applyLoanSet_ne_wrap l i principal rates fees _ twoStep ao ?_ ?_ hp (hcount i)
+    refine LendingLedger.applyLoanSet_ne_wrap l i principal rates fees _ twoStep ao ?_ ?_ hp hfee (hcount i)
     · show pt.getD defaultPaymentTotal ≠ 0
       intro h0; rw [h0] at hpt; exact absurd hpt (by decide)
     · show 0 < pi.getD defaultPaymentInterval

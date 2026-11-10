@@ -92,47 +92,21 @@ lemma LoanBroker.coverDeposit_applied_delta_proof (lb : LoanBroker) (base : Int)
       lb.toExact.coverAvailable + amount.toRat ≤ lb.numericType.maxValue.toNat)
     (hcan : lb.canCoverDeposit v amount = .ok .tesSUCCESS)
     (res : LoanBrokerCoverResult) (hok : (lb.coverDeposit v amount).run = .ok (.ok res)) :
-    (∃ (deltaCover : Number) (deltaAmount : STAmount),
+    ∃ (deltaCover : Number) (deltaAmount : STAmount),
       res.loanBroker'.coverAvailable.operator_sub lb.coverAvailable .to_nearest = .ok deltaCover ∧
       STAmount.ofNumber lb.numericType deltaCover .to_nearest = .ok deltaAmount ∧
-      deltaAmount.toRat = res.amount'.toRat) ∧
-    ∃ amount'' : STAmount, (lb.roundedCoverAmount v res.amount').run = .ok (.ok amount'') ∧
-      amount''.toRat = res.amount'.toRat := by
-  obtain ⟨hr1, hnt1, hcr, htr, hpos', ⟨j, hj⟩, -, hcov⟩ :=
+      deltaAmount.toRat = res.amount'.toRat := by
+  obtain ⟨hr1, hnt1, -, -, -, ⟨j, hj⟩, -, hcov⟩ :=
     LoanBroker.Reachable.coverDeposit_facts lb base hr hmax v hvb hnt amount hc hat hpos hcap hcan res hok
   subst hvb
   have hmax1 : res.loanBroker'.numericType.isIntegral = true →
       res.loanBroker'.numericType.maxValue.toNat ≤ maxRep.toNat := by rw [hnt1]; exact hmax
   obtain ⟨hz, -⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
   obtain ⟨hz1, -⟩ := LoanBroker.Reachable.zone_setup _ _ hr1 hmax1 v rfl
-  have hC : res.loanBroker'.coverAvailable.toRat = lb.coverAvailable.toRat + res.amount'.toRat := hcov
-  have hC0 : (0 : ℚ) ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
-  constructor
-  · obtain ⟨deltaCover, deltaAmount, hsub, hda, hdv⟩ := LoanBroker.debit_delta res.loanBroker' lb v hz1
-      (by rw [hnt1]; exact hnt) hz.cover _ j hj (by rw [hcov]; linarith [lb.exact.coverAvailable_nonneg])
-      (by rw [hcov]; ring)
-    exact ⟨deltaCover, deltaAmount, hsub, by rw [← hnt1]; exact hda, hdv⟩
-  · -- depositing the credit again on the same broker passes the checks and credits it whole
-    have hcap1 : lb.numericType.isIntegral = true →
-        lb.toExact.coverAvailable + res.amount'.toRat ≤ lb.numericType.maxValue.toNat := by
-      intro hi
-      have h := LoanBroker.OpenZone.cover_le_maxValue _ _ hz1 (by rw [hnt1]; exact hi)
-      rw [hnt1, hcov] at h
-      exact h
-    -- the cover after the deposit is not zero and stored exactly, so an XRP or MPT asset admits offset `0`
-    have hoff : lb.numericType.isIntegral = true → (0 : Int) ≤ lb.numericType.maxOffset := by
-      intro hi
-      have h := LoanBroker.OpenZone.maxOffset_nonneg _ _ hz1 (by rw [hnt1]; exact hi)
-        (show (0 : ℚ) < res.loanBroker'.coverAvailable.toRat by rw [hC]; linarith)
-      rw [hnt1] at h
-      exact h
-    have hcan1 := LoanBroker.canCoverDeposit_of_units lb v _ hz hnt hcr htr ⟨j, units_pos hj hpos', hj⟩ hcap1
-      hoff (by rw [← hcov]; exact hz1.coverLimit)
-    obtain ⟨r, res2, hr2, hres2, hamt⟩ :=
-      LoanBroker.coverDeposit_total_proof lb v _ hcr hpos'.le v.baseExponent_range hcan1
-    have hfl := LoanBroker.coverDeposit_floor lb v _ res2 hz hnt hcr htr hpos' hcan1 hres2
-    rw [hamt, floor_units_self _ _ (j : ℤ) (by rw [hj]; norm_cast)] at hfl
-    exact ⟨r, hr2, hfl⟩
+  obtain ⟨deltaCover, deltaAmount, hsub, hda, hdv⟩ := LoanBroker.debit_delta res.loanBroker' lb v hz1
+    (by rw [hnt1]; exact hnt) hz.cover _ j hj (by rw [hcov]; linarith [lb.exact.coverAvailable_nonneg])
+    (by rw [hcov]; ring)
+  exact ⟨deltaCover, deltaAmount, hsub, by rw [← hnt1]; exact hda, hdv⟩
 
 /-- Proof body of the STAmount part of `LoanBroker.coverWithdraw_debit`. -/
 lemma LoanBroker.coverWithdraw_applied_delta_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
@@ -224,7 +198,7 @@ lemma LoanBroker.coverDeposit_increase_possible_proof (lb : LoanBroker) (base : 
     LoanBroker.Reachable.coverDeposit_facts lb _ hr hmax v rfl hnt st hcs hty hspos hcap hcan res hres
   exact ⟨st, res, hcs, hty, hspos, hcan, hres, by rw [hcov]; linarith⟩
 
-/-- Proof body of `coverWithdraw_all`. -/
+/-- Proof body of the withdrawal line of `cover_all`. -/
 lemma LoanBroker.coverWithdraw_all_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)
@@ -245,7 +219,7 @@ lemma LoanBroker.coverWithdraw_all_proof (lb : LoanBroker) (base : Int) (hr : lb
   rw [floor_units_self _ _ (k : ℤ) (by rw [hk]; norm_cast)] at hfl
   exact ⟨s, res, hcs, hst, hv, hcan, hres, by rw [hcov, hfl, hv, sub_self]⟩
 
-/-- Proof body of `coverClawback_all`. -/
+/-- Proof body of the clawback line of `cover_all`. -/
 lemma LoanBroker.coverClawback_all_proof (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType)

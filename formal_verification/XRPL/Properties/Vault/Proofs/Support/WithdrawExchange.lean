@@ -3,6 +3,8 @@ import XRPL.Properties.Protocol.Number.Sub.ZeroShape
 import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.ReachableDefs
+import XRPL.Properties.Vault.Proofs.Support.NavUnderflow
+import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.Nearest
 
 /-! # Withdrawal exchange of shares for assets
 
@@ -34,12 +36,13 @@ lemma Vault.assetsTotalForWithdrawal_nonneg (v : Vault) (waive : Bool) (nav : Nu
       exact ⟨hatn, by linarith⟩
 
 /-- The net asset value a withdrawal prices against. The total is the cash plus the deployed assets rounded
-down, and the net asset value is that total less the loss (nothing when waived) rounded to nearest. -/
+down, and the net asset value is that total less the loss (nothing when waived) rounded to the nearest Number. -/
 lemma Vault.assetsTotalForWithdrawal_steps_proof (v : Vault) (waive : Bool) (nav : Number)
     (h : v.assetsTotalForWithdrawal waive = .ok nav) :
     ∃ total : Number, v.assetsTotal = .ok total ∧
       total.RoundsToRepresentable (v.assetsAvailable.toRat + v.assetsDeployed.toRat) .downward ∧
-      nav.RoundsToRepresentable (total.toRat - (if waive then 0 else v.lossUnrealized.toRat)) .to_nearest := by
+      nav.RoundsToRepresentable (total.toRat - (if waive then 0 else v.lossUnrealized.toRat)) .to_nearest ∧
+      nav.RoundsToNearest (total.toRat - (if waive then 0 else v.lossUnrealized.toRat)) := by
   simp only [Vault.assetsTotalForWithdrawal, bind, Except.bind] at h
   cases hat : v.assetsTotal with
   | error e => rw [hat] at h; cases h
@@ -47,7 +50,7 @@ lemma Vault.assetsTotalForWithdrawal_steps_proof (v : Vault) (waive : Bool) (nav
     rw [hat] at h
     dsimp only at h
     obtain ⟨htn, -⟩ := Vault.assetsTotal_ge_deployed v total hat
-    refine ⟨total, rfl, ?_, ?_⟩
+    refine ⟨total, rfl, ?_, ?_, ?_⟩
     · by_cases hm : total.mantissa_ = 0
       · -- an empty total: the exact sum is zero too
         have h0 := (Vault.assetsTotal_eq_zero_iff v total hat).mp hm
@@ -62,6 +65,18 @@ lemma Vault.assetsTotalForWithdrawal_steps_proof (v : Vault) (waive : Bool) (nav
       · simpa using operator_sub_rounded_to_nearest _ _ _ htn v.wf.lossUnrealized_norm h
       · have h' := operator_sub_rounded_to_nearest _ _ _ htn (Or.inl rfl) h
         simpa [Number.toRat_zero] using h'
+    · cases waive
+      · -- a zero result is an exact zero, the subtraction never flushes on a lawful vault
+        have hLU0 : 0 ≤ v.lossUnrealized.toRat := v.exact.lossUnrealized_nonneg
+        have hLU : v.lossUnrealized.toRat ≤ v.assetsDeployed.toRat := v.exact.lossUnrealized_le
+        have hn := Number.operator_sub_nearest _ _ _ htn v.wf.lossUnrealized_norm h (by
+          by_cases h0 : nav.mantissa_ = 0
+          · exact Or.inr (Vault.assetsTotal_sub_zero_exact v total _ nav hat v.wf.lossUnrealized_norm hLU0 hLU h h0)
+          · exact Or.inl h0)
+        simpa using hn
+      · rw [Number.operator_sub_zero] at h
+        obtain rfl := Except.ok.inj h
+        exact Number.roundsToNearest_of_eq (by simp)
 
 /-- The shares a withdrawal by assets burns are positive when nonzero. It prices a nonnegative
 canonical-or-zero amount against a nonnegative net asset value and truncates. -/

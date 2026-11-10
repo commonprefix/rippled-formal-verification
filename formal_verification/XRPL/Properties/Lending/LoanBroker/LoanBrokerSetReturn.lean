@@ -26,7 +26,7 @@ theorem LoanBroker.canCreate_exits (pool : α) :
   ⟨LoanBroker.canCreate_no_permission_proof pool, LoanBroker.canCreate_precision_loss_proof pool,
     LoanBroker.canCreate_success_proof pool⟩
 
-/-- When the check returns a code -> success, tecNO_PERMISSION or tecPRECISION_LOSS. -/
+/-- Error codes: success, tecNO_PERMISSION or tecPRECISION_LOSS. -/
 theorem LoanBroker.canCreate_error_codes (pool : α) (debtMaximum : Option Number) (nt : NumericType)
     (ter : TER) (hok : LoanBroker.canCreate pool debtMaximum nt = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecNO_PERMISSION ∨ ter = .tecPRECISION_LOSS :=
@@ -46,7 +46,7 @@ theorem LoanBroker.canUpdate_exits (pool : α) :
   ⟨LoanBroker.canUpdate_limit_exceeded_proof lb pool, LoanBroker.canUpdate_precision_loss_proof lb pool,
     LoanBroker.canUpdate_success_proof lb pool⟩
 
-/-- When the check returns a code -> success, tecLIMIT_EXCEEDED or tecPRECISION_LOSS. -/
+/-- Error codes: success, tecLIMIT_EXCEEDED or tecPRECISION_LOSS. -/
 theorem LoanBroker.canUpdate_error_codes (pool : α) (debtMaximum : Option Number)
     (ter : TER) (hok : lb.canUpdate pool debtMaximum = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecLIMIT_EXCEEDED ∨ ter = .tecPRECISION_LOSS :=

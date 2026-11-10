@@ -57,7 +57,7 @@ lemma LendingLedger.Reachable.representable {l : LendingLedger} (hr : l.Reachabl
 number of base units below `10^16`, as the create passed the Open-limit check. -/
 lemma LendingLedger.Reachable.createGrid {l : LendingLedger} (hr : l.Reachable) {j : Nat} {broker : LoanBroker}
     (hb : l.broker? j = some broker) {principal : Number} {rates : LoanRates} {fees : LoanFees}
-    {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithPool Vault}
+    {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithDisbursement Vault}
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker l.vault principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -90,7 +90,7 @@ lemma LendingLedger.Reachable.createGrid {l : LendingLedger} (hr : l.Reachable) 
 AssetsAvailable plus AssetsDeployed is below `10^16` base units, and DebtTotal is at most AssetsDeployed. -/
 private lemma LendingLedger.Reachable.create_room {l : LendingLedger} (hr : l.Reachable) {j : Nat}
     {broker : LoanBroker} (hb : l.broker? j = some broker) {principal : Number} {rates : LoanRates}
-    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithPool Vault}
+    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithDisbursement Vault}
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker l.vault principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -109,7 +109,7 @@ private lemma LendingLedger.Reachable.create_room {l : LendingLedger} (hr : l.Re
 /-- On a reachable ledger a create keeps DebtTotal plus PrincipalRequested below `10^16` base units. -/
 lemma LendingLedger.Reachable.create_debt_room {l : LendingLedger} (hr : l.Reachable) {j : Nat}
     {broker : LoanBroker} (hb : l.broker? j = some broker) {principal : Number} {rates : LoanRates}
-    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithPool Vault}
+    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithDisbursement Vault}
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker l.vault principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -121,7 +121,7 @@ lemma LendingLedger.Reachable.create_debt_room {l : LendingLedger} (hr : l.Reach
 AssetsReserved plus it and DebtTotal plus it are whole base units below `10^16`. -/
 lemma LendingLedger.Reachable.create_fits {l : LendingLedger} (hr : l.Reachable) {j : Nat}
     {broker : LoanBroker} (hb : l.broker? j = some broker) {principal : Number} {rates : LoanRates}
-    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithPool Vault}
+    {fees : LoanFees} {schedule : LoanSchedule} {allowsOverpayment pending : Bool} {r : LoanWithDisbursement Vault}
     (hp : principal.isNormalized) (hpos : 0 < principal.toRat)
     (hst : STAmount.isRounded broker.numericType principal = false)
     (hok : (Loan.create broker l.vault principal rates fees schedule allowsOverpayment pending).run = .ok (.ok r)) :
@@ -230,7 +230,7 @@ private lemma LendingLedger.Reachable.reserved_sub_fits {l : LendingLedger} (hr 
 /-- What an accept on a reachable ledger writes fits the asset. AssetsReserved less the loan's principal,
 and YieldUnrealized plus its interest, are whole base units from `0` to `10^16`. -/
 lemma LendingLedger.Reachable.accept_fits {l : LendingLedger} (hr : l.Reachable) {i : Nat} {loan : Loan}
-    (hat : l.LoanAt i loan) {interestDue : Number} {r : LoanWithPool Vault}
+    (hat : l.LoanAt i loan) {interestDue : Number} {r : LoanWithDisbursement Vault}
     (hc : loan.canAccept l.vault l.now = .ok .tesSUCCESS) (hi : loan.interestDue = .ok interestDue)
     (hok : (loan.accept l.vault).run = .ok (.ok r)) :
     STAmount.Representable l.vault.numericType (l.vault.assetsReserved.toRat - loan.principalOutstanding.toRat) ∧
