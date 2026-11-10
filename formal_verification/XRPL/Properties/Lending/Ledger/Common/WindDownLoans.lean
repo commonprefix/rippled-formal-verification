@@ -4,6 +4,7 @@ import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
 import XRPL.Properties.Lending.Ledger.Common.DefaultOrder
 import XRPL.Properties.Lending.Ledger.Common.LoanClosable
 import XRPL.Properties.Lending.Ledger.Common.PhaseProofs
+import XRPL.Properties.Lending.Ledger.Common.BrokerProofs
 
 /-! # Closing every loan of a vault in its redemption phase
 
@@ -30,7 +31,8 @@ structure LendingLedger.LoanPhase (l : LendingLedger) (s : VaultSchedule) : Prop
   pending : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened
   active : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
     e.loan.paymentRemaining ≠ 0 → l.NotCoarsened
-  cover : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat < 10 ^ 96
+  cover : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+    b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount
 
 /-- Emptying an occupied slot lowers the number of occupied slots. -/
 lemma List.countP_set_none_lt {α : Type} (xs : List (Option α)) (i : Nat) (x : α) (h : xs[i]? = some (some x)) :
@@ -231,7 +233,8 @@ private lemma LendingLedger.LoanPhase.of_frame {l l' : LendingLedger} {s : Vault
     fun j e hj hp hrem => hnc (hP.active j e (hold j e hj) hp hrem),
     fun j b₁ hj => ?_⟩
   obtain ⟨b₀, hb₀, hle⟩ := hcov j b₁ hj
-  exact lt_of_le_of_lt hle (hP.cover j b₀ hb₀)
+  rw [hset.numericType]
+  exact le_trans hle (hP.cover j b₀ hb₀)
 
 
 /-- A LoanDelete adds nothing to AssetsAvailable + AssetsDeployed on a vault that is not coarsened. -/
@@ -284,7 +287,7 @@ private lemma LendingLedger.LoanPhase.close_one {l : LendingLedger} {s : VaultSc
     · exact absurd (hreach.default_paidOff hdf) hrem
   obtain ⟨l₁, h₁⟩ := LendingLedger.default_possible_proof l hr hnd hr.holdsAsset i e he hnp hd hrem (hP.late he hrem)
     hnc (hr.assetsAvailable_units hr.holdsAsset) hr.yield_lt (hr.interest_le_yield he hnp)
-    (fun b hb => hP.cover _ b hb)
+    (fun b hb => lt_of_le_of_lt (hP.cover _ b hb) (NumericType.maxAmount_lt _))
   obtain ⟨e₀, e', b, b', he₀, hb, hloans₁, hbi, hrem', hnp', hbr₁, hcov₁, hnd₁, hnow₁, -, hset₁, htot₁⟩ :=
     LendingLedger.default_frame hr hnc h₁
   rw [he] at he₀

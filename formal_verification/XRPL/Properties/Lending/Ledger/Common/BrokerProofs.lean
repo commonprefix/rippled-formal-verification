@@ -3,11 +3,36 @@ import XRPL.Properties.Lending.Ledger.Common.Exits
 import XRPL.Properties.Lending.Ledger.Common.IntegralCoverInv
 import XRPL.Properties.Lending.Ledger.Common.Scope
 import XRPL.Properties.Lending.Ledger.Common.VaultSteps
+import XRPL.Properties.Vault.Proofs.Support.IOUTotality
 
 /-! # Brokers on the lending ledger
 
 No transaction changes the vault's base exponent. A broker without loans can always be deleted, and a cover the
 asset stores exactly comes back unchanged. -/
+
+namespace XRPL.Model.Protocol
+
+/-- The largest amount of an asset: its maximum for XRP or MPT, `cMaxValue·10^cMaxOffset` for an IOU. -/
+def NumericType.maxAmount (nt : NumericType) : ℚ :=
+  if nt.isIntegral then nt.maxValue.toNat else cMaxValue.toNat * 10 ^ cMaxOffset
+
+/-- The largest IOU amount is `(10^16 - 1)·10^80`. -/
+lemma NumericType.maxAmount_fractional : NumericType.fractional.maxAmount = (10 ^ 16 - 1) * 10 ^ 80 := by
+  unfold NumericType.maxAmount
+  rw [if_neg (by decide), show cMaxOffset = 80 from rfl, show cMaxValue.toNat = 9999999999999999 from rfl]
+  norm_num
+
+/-- Every asset's maximum is below `10^96`. -/
+lemma NumericType.maxAmount_lt (nt : NumericType) : nt.maxAmount < 10 ^ 96 := by
+  cases hint : nt.isIntegral
+  · rw [NumericType.eq_fractional_of_not_integral hint, NumericType.maxAmount_fractional]
+    norm_num
+  · unfold NumericType.maxAmount
+    rw [if_pos hint]
+    have h : (nt.maxValue.toNat : ℚ) < 2 ^ 64 := by exact_mod_cast UInt64.toNat_lt_size nt.maxValue
+    linarith [show (2 : ℚ) ^ 64 < 10 ^ 96 by norm_num]
+
+end XRPL.Model.Protocol
 
 namespace XRPL.Model.Lending
 
@@ -54,15 +79,17 @@ private lemma LoanBroker.canDelete_empty (lb : LoanBroker) (v : Vault) (h0 : lb.
   rw [h0, show lb.debtTotal = Number.zero from hd]
   rfl
 
-/-- A broker without loans is deleted. -/
+/-- A broker without loans whose cover converts to the asset is deleted. -/
 private lemma LendingLedger.broker_delete_ok (l : LendingLedger) (hnd : l.vaultDeleted = false) (j : Nat)
-    (b : LoanBroker) (hb : l.broker? j = some b) (h0 : b.loanCount = 0) :
+    (b : LoanBroker) (hb : l.broker? j = some b) (h0 : b.loanCount = 0) (c : STAmount)
+    (hc : b.roundedCoverAvailable = .ok c) :
     (l.apply (.loanBrokerDelete j)).run = .ok (.ok (l.commitBroker { index := j, broker := none })) := by
   rw [LendingLedger.apply_of_preflight rfl]
   simp only [LendingLedger.applyChecked, hnd, LendingTx.isVault, LendingTx.isBroker, Bool.false_eq_true,
     ↓reduceIte, LendingLedger.applyBroker, hb]
   unfold_ter
   rw [LoanBroker.canDelete_empty b l.vault h0]
+  simp only [hc]
   rfl
 
 /-- A cover the asset stores exactly comes back unchanged. The delete converts it to the asset without
@@ -89,15 +116,41 @@ lemma LoanBroker.roundedCoverAvailable_of_representable (lb : LoanBroker)
       rw [← hnum, Number.toRat_zero]
   · exact (STAmount.toNumber_exact_of st n (STAmount.ofNumber_exactCanonical _ _ _ st hn h0 hst hz) hnum).1.symm
 
+/-- A cover within the asset's maximum converts to the asset, so LoanBrokerDelete can send it to the owner. -/
+lemma LendingLedger.Reachable.roundedCoverAvailable_ok {l : LendingLedger} (hr : l.Reachable) {j : Nat}
+    {b : LoanBroker} (hb : l.broker? j = some b) (hmax : b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) :
+    ∃ c, b.roundedCoverAvailable = .ok c := by
+  have hnt : b.numericType = l.vault.numericType := hr.scaleInv.brokers j b hb
+  cases hint : l.vault.numericType.isIntegral
+  · -- an IOU cover is zero, or positive and below the largest IOU amount
+    have hfr := NumericType.eq_fractional_of_not_integral hint
+    rw [hfr, NumericType.maxAmount_fractional] at hmax
+    have hn := b.wf.coverAvailable_norm
+    unfold LoanBroker.roundedCoverAvailable
+    rw [hnt, hfr]
+    rcases b.exact.coverAvailable_nonneg.lt_or_eq with hpos | h0
+    · exact STAmount.ofNumber_fractional_ok_below _ hn hpos (by linarith)
+    · rw [(Number.toRat_eq_zero_iff_eq_zero hn).mp h0.symm, STAmount.ofNumber_fractional_zero]
+      exact ⟨_, rfl⟩
+  · unfold NumericType.maxAmount at hmax
+    rw [if_pos hint] at hmax
+    obtain ⟨c, hc, -⟩ := LoanBroker.roundedCoverAvailable_of_representable b
+      (by rw [hnt]; exact hr.cover_representable_integral hint hb hmax)
+    exact ⟨c, hc⟩
+
 /-- Proof body of `Lending.broker_exit`. -/
 lemma LendingLedger.broker_exit_proof (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)
     (j : Nat) (b : LoanBroker) (hb : l.broker? j = some b) (h0 : b.loanCount = 0)
-    (hcap : l.vault.numericType.isIntegral = true → b.coverAvailable.toRat ≤ l.vault.numericType.maxValue.toNat) :
+    (hcap : l.vault.numericType.isIntegral = true → b.coverAvailable.toRat ≤ l.vault.numericType.maxValue.toNat)
+    (c : STAmount) (hc : b.roundedCoverAvailable = .ok c) :
     (l.apply (.loanBrokerDelete j)).run = .ok (.ok (l.commitBroker { index := j, broker := none })) ∧
       (l.vault.numericType.isIntegral = true ∨ b.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent →
-        ∃ c, b.roundedCoverAvailable = .ok c ∧ c.toRat = b.coverAvailable.toRat) := by
-  refine ⟨LendingLedger.broker_delete_ok l hnd j b hb h0, fun hcase => ?_⟩
-  apply LoanBroker.roundedCoverAvailable_of_representable
+        c.toRat = b.coverAvailable.toRat) := by
+  refine ⟨LendingLedger.broker_delete_ok l hnd j b hb h0 c hc, fun hcase => ?_⟩
+  suffices hrep : STAmount.Representable b.numericType b.coverAvailable.toRat by
+    obtain ⟨c', hc', hval⟩ := LoanBroker.roundedCoverAvailable_of_representable b hrep
+    obtain rfl := Except.ok.inj (hc.symm.trans hc')
+    exact hval
   rw [hr.scaleInv.brokers j b hb]
   cases hint : l.vault.numericType.isIntegral
   · -- an IOU cover is whole base units, so below `10^16` of them it fits 16 digits

@@ -862,8 +862,8 @@ private lemma vault_credit_at_base (nt : NumericType) (A c toPool aa A' : Number
   ring
 
 
-/-- On the base grid a payment credits principalPaid + interestPaid floored to whole base units. The sum
-stays a unit below `10^(16 + b)`, so the scale of AssetsAvailable' is the base scale. -/
+/-- On the base grid a payment credits principalPaid + interestPaid floored to whole base units, which is amountToPool.
+The sum stays a unit below `10^(16 + b)`, so the scale of AssetsAvailable' is the base scale. -/
 lemma Loan.payment_vault_at_base (payment : UnsettledPayment Vault) (a : ℕ)
     (hnt : loan.broker.numericType = v.numericType)
     (hAA : STAmount.isRounded v.numericType v.assetsAvailable = false)
@@ -877,8 +877,9 @@ lemma Loan.payment_vault_at_base (payment : UnsettledPayment Vault) (a : ℕ)
     r.pool'.assetsAvailable.toRat = v.assetsAvailable.toRat +
       (⌊(payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) / 10 ^ v.baseExponent⌋ : ℚ) *
         10 ^ v.baseExponent ∧
-      ∀ e, numberExponent r.pool'.assetsAvailable v.baseExponent v.numericType = .ok e → e = v.baseExponent := by
-  obtain ⟨p, tp, credit, toPool, aa, hp, hu, htp, hcredit, hto, -, haa', hA', -, hb⟩ :=
+      (∀ e, numberExponent r.pool'.assetsAvailable v.baseExponent v.numericType = .ok e → e = v.baseExponent) ∧
+      r.pool'.assetsAvailable.toRat = v.assetsAvailable.toRat + r.amountToPool.toRat := by
+  obtain ⟨p, tp, credit, toPool, aa, hp, hu, htp, hcredit, hto, hamt, haa', hA', -, hb⟩ :=
     Loan.pay_vault_sums loan v amount now paymentType r hok
   rw [hpay] at hp
   obtain rfl := Except.ok.inj (Except.ok.inj hp)
@@ -896,7 +897,7 @@ lemma Loan.payment_vault_at_base (payment : UnsettledPayment Vault) (a : ℕ)
   obtain ⟨htov, hA'v⟩ := vault_credit_at_base _ _ _ _ _ _ _ _ a (by rw [hnt1]; exact hbint)
     ⟨hblo, hbhi⟩ payment.pool.wf.assetsAvailable_norm hAv' htpn htp0 hroom' hcredit hto haa' hA'
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  refine ⟨by rw [hA'v, htov, hAv, htpv], fun e he => ?_⟩
+  refine ⟨by rw [hA'v, htov, hAv, htpv], fun e he => ?_, by rw [hA'v, hamt, hAv]⟩
   refine numberExponent_at_base _ _ _ e r.pool'.wf.assetsAvailable_norm r.pool'.exact.assetsAvailable_nonneg
     (by omega) hbint ?_ he
   change r.pool'.assetsAvailable.toRat < _
@@ -921,7 +922,7 @@ lemma Loan.payment_vault_lower_bound_at_base (payment : UnsettledPayment Vault) 
     payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat -
         (r.pool'.assetsAvailable.toRat - v.assetsAvailable.toRat) < 10 ^ v.baseExponent ∧
       ∀ e, numberExponent r.pool'.assetsAvailable v.baseExponent v.numericType = .ok e → e = v.baseExponent := by
-  obtain ⟨h1, h2⟩ := Loan.payment_vault_at_base loan v amount now paymentType r payment a hnt hAA hpay hok hsum haa
+  obtain ⟨h1, h2, -⟩ := Loan.payment_vault_at_base loan v amount now paymentType r payment a hnt hAA hpay hok hsum haa
     hroom
   refine ⟨?_, h2⟩
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
@@ -958,7 +959,7 @@ lemma Loan.payment_assetsTotal_lower_bound_at_base (payment : UnsettledPayment V
 
 
 /-- Proof body of the base-grid `payment_fees_lower_bound`. The cover gains feePaid floored to whole base
-units, and the scale of CoverAvailable' is the base scale. -/
+units, which is amountToBroker, and the scale of CoverAvailable' is the base scale. -/
 lemma Loan.payment_fees_lower_bound_at_base (payment : UnsettledPayment Vault) (c : ℕ)
     (hnt : loan.broker.numericType = v.numericType)
     (hcover : loan.broker.hasMinimumCover v.baseExponent = .ok false)
@@ -970,9 +971,10 @@ lemma Loan.payment_fees_lower_bound_at_base (payment : UnsettledPayment Vault) (
       (10 : ℚ) ^ (16 + v.baseExponent) - 10 ^ v.baseExponent) :
     loan.broker.coverAvailable.toRat + payment.amounts.feePaid.toRat - r.loan'.broker.coverAvailable.toRat <
         10 ^ v.baseExponent ∧
-      ∀ e, numberExponent r.loan'.broker.coverAvailable v.baseExponent loan.broker.numericType = .ok e →
-        e = v.baseExponent := by
-  obtain ⟨p, fc, toBroker, hp, hfc, hto, -, hcov⟩ := Loan.pay_cover_sums loan v amount now paymentType r hcover hok
+      (∀ e, numberExponent r.loan'.broker.coverAvailable v.baseExponent loan.broker.numericType = .ok e →
+        e = v.baseExponent) ∧
+      r.loan'.broker.coverAvailable.toRat = loan.broker.coverAvailable.toRat + r.amountToBroker.toRat := by
+  obtain ⟨p, fc, toBroker, hp, hfc, hto, htob, hcov⟩ := Loan.pay_cover_sums loan v amount now paymentType r hcover hok
   rw [hpay] at hp
   obtain rfl := Except.ok.inj (Except.ok.inj hp)
   obtain ⟨-, -, hfn⟩ := Loan.payInstalments_norm loan v amount now paymentType payment hpay
@@ -1009,7 +1011,7 @@ lemma Loan.payment_fees_lower_bound_at_base (payment : UnsettledPayment Vault) (
     (by constructor <;> omega) hs hcov
   have hcv' : r.loan'.broker.coverAvailable.toRat = loan.broker.coverAvailable.toRat + toBroker.toRat := by
     rw [hu.val, hcv, htv']; push_cast; ring
-  refine ⟨by rw [hcv', htv']; linarith, fun e he => ?_⟩
+  refine ⟨by rw [hcv', htv']; linarith, fun e he => ?_, by rw [hcv', htob]⟩
   refine numberExponent_at_base _ _ _ e r.loan'.broker.wf.coverAvailable_norm r.loan'.broker.exact.coverAvailable_nonneg
     (by omega) hint ?_ he
   rw [hcv', htv']

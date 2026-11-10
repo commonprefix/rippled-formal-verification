@@ -13,7 +13,7 @@ import XRPL.Properties.Lending.Ledger.Common.PaymentShareLarge
 shareValue = (AssetsTotal − LossUnrealized) / SharesTotal, read exactly. defaultCovered is the cover a default
 pays the vault. The actions run on a reachable ledger's vault, on the loan stored at `i` read with its broker.
 `l.PaysLoan i fits l' paid` is a run from `l` to `l'` that never defaults the loan at `i`, where `paid` sums
-AssetsAvailable' − AssetsAvailable over its payments of that loan, and each payment satisfies `fits`. -/
+amountToPool, what the vault receives, over its payments of that loan, and each payment satisfies `fits`. -/
 
 namespace XRPL.Model
 
@@ -45,7 +45,7 @@ theorem Lending.payment_share_value_attained :
       l'.vault.toRawVault.shareValue < l.vault.toRawVault.shareValue :=
   LendingLedger.payment_share_value_falls_reachable
 
-/-- Loan paid off -> Σ (AssetsAvailable' − AssetsAvailable) over its payments ≥ PrincipalRequested. The run from `l`
+/-- Loan paid off -> Σ amountToPool over its payments ≥ PrincipalRequested. The run from `l`
 never defaults the loan, and PrincipalOutstanding is PrincipalRequested until the first payment. -/
 theorem Lending.Reachable.payoff_returns_principal (hr : l.Reachable) (i : Nat) (loan : Loan)
     (hat : l.LoanAt i loan) (l' : LendingLedger) (paid : ℚ)
@@ -56,7 +56,7 @@ theorem Lending.Reachable.payoff_returns_principal (hr : l.Reachable) (i : Nat) 
   LendingLedger.payoff_returns_principal_proof l hr i loan hat l' paid hrun hoff
 
 /-- Witness: a run where the sum < PrincipalRequested. On a coarsened vault loan D of 3 is paid off with two
-instalments of 1.5 that are each credited as 1. -/
+instalments of 1.5, of which the vault receives 1 each. -/
 theorem Lending.Reachable.payoff_returns_principal_attained :
     ∃ (l : LendingLedger) (i : Nat) (loan : Loan) (l' : LendingLedger) (paid : ℚ),
       l.Reachable ∧ l.LoanAt i loan ∧ l.PaysLoan i (fun _ _ _ => True) l' paid ∧

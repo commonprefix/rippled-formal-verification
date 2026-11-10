@@ -54,6 +54,22 @@ lemma LendingLedger.payment_fees_lower_bound_proof (l : LendingLedger) (hr : l.R
   obtain ⟨r, hok, rfl, -⟩ := LendingLedger.loanPay_loans h hat hat'
   exact Loan.payment_fees_lower_bound_proof loan amount paymentType r l hr i hat payment hcover hpay hok hroom
 
+/-- Proof body of the amountToBroker line of `Lending.payment_fees`. -/
+lemma LendingLedger.payment_cover_amountToBroker_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)
+    (i : Nat) (paymentType : LoanPaymentType) (amount : Number)
+    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)
+    (hat' : l'.LoanAt i loan') (payment : UnsettledPayment Vault)
+    (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok false)
+    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
+    (r : LoanWithAmounts Vault) (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
+    (hroom : loan.broker.coverAvailable.toRat + payment.amounts.feePaid.toRat ≤
+      (10 : ℚ) ^ (16 + l.vault.baseExponent) - 10 ^ l.vault.baseExponent) :
+    loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat = r.amountToBroker.toRat := by
+  obtain ⟨r₂, hok₂, rfl, -⟩ := LendingLedger.loanPay_loans h hat hat'
+  rw [hok] at hok₂
+  obtain rfl := Except.ok.inj (Except.ok.inj hok₂)
+  exact Loan.payment_cover_amountToBroker_proof loan amount paymentType r l hr i hat payment hcover hpay hok hroom
+
 /-- Proof body of `Lending.regularPayment_split`. -/
 lemma LendingLedger.regularPayment_split_proof (l : LendingLedger) (hr : l.Reachable) (l₁ : LendingLedger) (i : Nat)
     (amount : Number) (h : (l.apply (.loanPay i .regular amount)).run = .ok (.ok l₁)) (loan loan₁ : Loan)
@@ -124,6 +140,23 @@ lemma LendingLedger.payment_vault_upper_bound_proof (l : LendingLedger) (hr : l.
   obtain ⟨r, hok, -, hv⟩ := LendingLedger.loanPay_pay h hat
   rw [hv]
   exact Loan.payment_vault_upper_bound_reachable_proof loan amount paymentType r l hr i hat payment hpay hok
+
+/-- Proof body of the amountToPool line of `Lending.Reachable.payment_vault_credit`. -/
+lemma LendingLedger.payment_vault_amountToPool_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)
+    (i : Nat) (paymentType : LoanPaymentType) (amount : Number)
+    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)
+    (payment : UnsettledPayment Vault)
+    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
+    (r : LoanWithAmounts Vault) (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
+    (htotal : l.vault.assetsAvailable.toRat +
+      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
+        10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
+    l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat = r.amountToPool.toRat := by
+  obtain ⟨r₂, hok₂, -, hv⟩ := LendingLedger.loanPay_pay h hat
+  rw [hok] at hok₂
+  obtain rfl := Except.ok.inj (Except.ok.inj hok₂)
+  rw [hv]
+  exact Loan.payment_vault_amountToPool_proof loan amount paymentType r l hr i hat payment hpay hok htotal
 
 /-- Proof body of `Lending.payment_vault_lower_bound`. -/
 lemma LendingLedger.payment_vault_lower_bound_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)

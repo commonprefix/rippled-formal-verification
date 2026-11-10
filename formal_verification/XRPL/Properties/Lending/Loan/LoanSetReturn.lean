@@ -221,6 +221,9 @@ theorem Loan.create_not_lawful :
       ((∃ fee ∈ fees.amountFields, Number.zero.operator_le fee = false) →
         (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
           .error .notLawful) ∧
+      (fees.originationFee.operator_le principalRequested = false →
+        (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
+          .error .notLawful) ∧
       (schedule.paymentInterval < minPaymentInterval →
         (Loan.create broker v principalRequested rates fees schedule allowsOverpayment pending).run =
           .error .notLawful) ∧
@@ -235,6 +238,9 @@ theorem Loan.create_not_lawful :
         hbroker hcount hdue,
       Loan.create_fee_negative_proof broker v principalRequested rates fees schedule allowsOverpayment pending
         properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
+      Loan.create_originationFee_above_principal_proof broker v principalRequested rates fees schedule
+        allowsOverpayment pending properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv'
+        hbroker hcount hdue,
       Loan.create_interval_too_short_proof broker v principalRequested rates fees schedule allowsOverpayment pending
         properties loanState debtTotal' principal' raw v' broker' hchecks hround hadj hv' hbroker hcount hdue,
       Loan.create_grace_out_of_range_proof broker v principalRequested rates fees schedule allowsOverpayment pending

@@ -1,4 +1,5 @@
 import XRPL.Properties.Lending.Loan.Common.AcceptDeleteLedger
+import XRPL.Properties.Lending.Loan.Common.AcceptCoverWitness
 
 /-! # `LoanAccept` properties
 
@@ -42,5 +43,25 @@ theorem Lending.createPending_accept (l : LendingLedger) (hr : l.Reachable) (l�
       allowsOverpayment)).run = .ok (.ok lA) ∧
       lA.vault = l₂.vault ∧ lA.brokers = l₂.brokers ∧ lA.loans = l₂.loans :=
   LendingLedger.createPending_accept_proof hr hset haccept hclose
+
+/-- LoanAccept from a broker at or above minCover -> the broker after it is still at or above minCover. -/
+theorem Lending.accept_keeps_minimum_cover (l l' : LendingLedger) (i : Nat)
+    (h : (l.apply (.loanAccept i)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)
+    (hat' : l'.LoanAt i loan') (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok true) :
+    loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok true := by
+  obtain ⟨-, loan₀, r, -, hat₀, -, hacc, -, hv, hat₁, -, -⟩ := LendingLedger.loanAccept_ok h
+  obtain rfl := hat.eq hat₀
+  obtain rfl := hat'.eq hat₁
+  rw [Loan.accept_broker loan _ r hacc, hv, (Loan.accept_keepsSettings loan _ r hacc).baseExponent_eq]
+  exact hcover
+
+/-- Witness: a run where LoanAccept succeeds from a broker below minCover. A broker at 10% minimum cover holds 100 for
+loan A of 600 and pending loan B of 400, the default of A takes all 100, then B is accepted with minCover 40. -/
+theorem Lending.accept_keeps_minimum_cover_attained :
+    ∃ (l l' : LendingLedger) (i : Nat) (loan loan' : Loan),
+      l.Reachable ∧ (l.apply (.loanAccept i)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧ l'.LoanAt i loan' ∧
+      loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
+      loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok false :=
+  LendingLedger.accept_keeps_minimum_cover_witness
 
 end XRPL.Model

@@ -590,71 +590,47 @@ private lemma Loan.pay_minimumCover (loan : Loan) (v : Vault) (pt : LoanPaymentT
   · rw [hb, hbe] at h1; exact Or.inl h1
   · rw [hb, hbe] at h1; exact Or.inr h1
 
-/-- A payment below the minimum cover adds its whole fee to CoverAvailable while the cover plus the fee stays below
+/-- A payment below the minimum cover adds amountToBroker to CoverAvailable while the cover plus it stays below
 `10^16` base units. -/
-private lemma LendingLedger.pay_fee_cover {l : LendingLedger} (hr : l.Reachable) {i : Nat} {loan : Loan}
+private lemma LendingLedger.pay_toBroker_cover {l : LendingLedger} (hr : l.Reachable) {i : Nat} {loan : Loan}
     (hat : l.LoanAt i loan) {pt : LoanPaymentType} {amount : Number} {r : LoanWithAmounts Vault}
-    (hok : (loan.pay l.vault pt amount l.now).run = .ok (.ok r)) {p : UnsettledPayment Vault}
-    (hp : (loan.payInstalments l.vault pt amount l.now).run = .ok (.ok p))
+    (hok : (loan.pay l.vault pt amount l.now).run = .ok (.ok r))
     (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok false)
-    (hlt : loan.broker.coverAvailable.toRat + p.amounts.feePaid.toRat < 10 ^ 16 * 10 ^ l.vault.baseExponent) :
-    r.loan'.broker.coverAvailable.toRat = loan.broker.coverAvailable.toRat + p.amounts.feePaid.toRat := by
-  obtain ⟨p', fc, tb, hp', hfc, htb, -, hcov⟩ := Loan.pay_cover_sums loan l.vault amount l.now pt r hcover hok
-  rw [show p' = p from Except.ok.inj (Except.ok.inj (hp'.symm.trans hp))] at hfc
+    (hlt : loan.broker.coverAvailable.toRat + r.amountToBroker.toRat < 10 ^ 16 * 10 ^ l.vault.baseExponent) :
+    r.loan'.broker.coverAvailable.toRat = loan.broker.coverAvailable.toRat + r.amountToBroker.toRat := by
+  obtain ⟨p, fc, tb, -, hfc, htb, htob, hcov⟩ := Loan.pay_cover_sums loan l.vault amount l.now pt r hcover hok
+  rw [htob] at hlt ⊢
   obtain ⟨hblo, hbhi, hbint⟩ := l.vault.baseExponent_bounds
   have hs := (Vault.baseExponent_grid l.vault).2
   have hpw : (0 : ℚ) < 10 ^ l.vault.baseExponent := zpow_pos (by norm_num) _
-  obtain ⟨e, he, hbk, -⟩ := hat.stored
-  obtain ⟨hcn, a, ha⟩ := hr.cover_onGrid hbk
-  have hfee0 := (Loan.pay_parts_nonneg loan amount pt r l.vault l.now p hp hok).2.2
-  obtain ⟨t, -, hreach⟩ := hr.loanAt_reachable hat
-  obtain ⟨gs, gl, -⟩ := Loan.Reachable.fees_onGrid hreach
-  have gfee := Loan.payInstalments_fee_onGrid loan l.vault pt amount l.now p (hr.loanScale_range hat) gs gl hp
-  rw [(hr.loanAt_scale hat).1] at gfee
-  obtain ⟨hfn, f, hf⟩ := gfee
-  have hnt := (hr.loanAt_scale hat).2
-  have ha0 : 0 ≤ a := by
-    have : (0 : ℚ) ≤ (a : ℚ) * 10 ^ l.vault.baseExponent := ha ▸ loan.broker.exact.coverAvailable_nonneg
-    exact_mod_cast nonneg_of_mul_nonneg_left this hpw
-  have hf0 : 0 ≤ f := by
-    have : (0 : ℚ) ≤ (f : ℚ) * 10 ^ l.vault.baseExponent := hf ▸ hfee0
-    exact_mod_cast nonneg_of_mul_nonneg_left this hpw
-  have haf : a + f < 10 ^ 16 := by
-    have : ((a + f : ℤ) : ℚ) * 10 ^ l.vault.baseExponent < ((10 ^ 16 : ℤ) : ℚ) * 10 ^ l.vault.baseExponent := by
-      push_cast; rw [add_mul, ← ha, ← hf]; exact hlt
-    exact_mod_cast lt_of_mul_lt_mul_right this hpw.le
-  -- the fee joins the cover whole: it is whole base units and the sum stays at the base exponent
-  obtain ⟨-, htbv⟩ := sumRoundAndSubtract_downward_le _ _ _ _ fc loan.broker.wf.coverAvailable_norm
-    loan.broker.exact.coverAvailable_nonneg hfn hfee0 (Vault.baseExponent_range l.vault) hfc
-  have hfcv : fc.toRat = p.amounts.feePaid.toRat := by
-    cases hint : loan.broker.numericType.isIntegral
-    · have hfr := NumericType.eq_fractional_of_not_integral hint
-      rw [hfr] at hfc
-      have hroom : loan.broker.coverAvailable.toRat + p.amounts.feePaid.toRat ≤
-          (10 : ℚ) ^ (16 + l.vault.baseExponent) - 10 ^ l.vault.baseExponent := by
-        rw [zpow_add₀ (by norm_num), ha, hf]
-        have : ((a + f : ℤ) : ℚ) ≤ 10 ^ 16 - 1 := by exact_mod_cast (by omega : a + f ≤ 10 ^ 16 - 1)
-        push_cast at this
-        norm_num
-        nlinarith
-      rw [sumRoundAndSubtract_at_base _ _ _ fc a.toNat loan.broker.wf.coverAvailable_norm
-        (by rw [ha, show ((a.toNat : ℕ) : ℚ) = (a : ℚ) by exact_mod_cast Int.toNat_of_nonneg ha0])
-        hfn hfee0 ⟨by omega, hbhi⟩ hroom hfc, floor_units_self _ _ f hf]
-    · unfold sumRoundAndSubtract at hfc
-      rw [if_pos hint] at hfc
-      obtain ⟨x, hofn, hx⟩ := bind_ok_peel _ _ _ hfc
-      simp only [pure, Except.pure, Except.ok.injEq] at hx
-      subst hx
-      refine STAmount.ofNumber_integral_exact _ _ _ _ hint hfn ?_ hofn
-      have hb0 : l.vault.baseExponent = 0 := hbint (by rw [← hnt]; exact hint)
-      rw [hf, hb0, zpow_zero, mul_one]
-      exact Rat.den_intCast f
-  obtain ⟨htbq, htbn⟩ := htbv tb htb
-  rw [hfcv] at htbq
-  have hv := Number.operator_add_toRat_of_grid _ _ _ a f _ hcn htbn ha (by rw [htbq, hf])
-    ⟨by omega, lt_trans haf (by norm_num)⟩ hs hcov
-  rw [hv, ha, hf]
-  push_cast; ring
+  obtain ⟨e, -, hbk, -⟩ := hat.stored
+  have hcg := hr.cover_onGrid hbk
+  -- the amount is floored onto the grid of the cover after the payment, which is whole base units
+  obtain ⟨htn, t, ht⟩ := sumRoundAndSubtract_onGrid _ _ _ _ _ fc tb hcg ⟨hblo, hbhi⟩
+    (fun hi => hbint (by rw [← (hr.loanAt_scale hat).2]; exact hi)) hfc htb
+  obtain ⟨hcn, a, ha⟩ := hcg
+  -- the cover after the payment is at least zero, so the sum is too
+  have hsum0 : 0 ≤ a + t := by
+    by_contra hneg
+    obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-1) l.vault.baseExponent
+      (by constructor <;> norm_num) hs
+    have hwle : loan.broker.coverAvailable.toRat + tb.toRat ≤ w.toRat := by
+      rw [hwv, ha, ht]
+      have : ((a + t : ℤ) : ℚ) ≤ -1 := by exact_mod_cast (by omega : a + t ≤ -1)
+      push_cast at this ⊢; nlinarith
+    have hle := Number.RoundsToRepresentable.le_of_ge (operator_add_rounded_to_nearest _ _ _ hcn htn hcov)
+      (Or.inl rfl) w hw hwle
+    have h0 : (0 : ℚ) ≤ r.loan'.broker.coverAvailable.toRat := r.loan'.broker.exact.coverAvailable_nonneg
+    rw [hwv] at hle
+    push_cast at hle
+    linarith
+  have hsum : a + t < 2 ^ 63 := by
+    have : ((a + t : ℤ) : ℚ) * 10 ^ l.vault.baseExponent < ((10 ^ 16 : ℤ) : ℚ) * 10 ^ l.vault.baseExponent := by
+      push_cast; rw [add_mul, ← ha, ← ht]; exact hlt
+    have : a + t < 10 ^ 16 := by exact_mod_cast lt_of_mul_lt_mul_right this hpw.le
+    exact lt_trans this (by norm_num)
+  obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (a + t) l.vault.baseExponent ⟨by omega, hsum⟩ hs
+  exact Number.operator_add_exact_of_fits hcn htn hcov ⟨w, hw, by rw [hwv, ha, ht]; push_cast; ring⟩
 
 /-- A default takes its cover off CoverAvailable exactly while what it leaves stays below `10^16` base units. -/
 private lemma LendingLedger.default_cover {l : LendingLedger} (hr : l.Reachable) {i : Nat} {loan : Loan}
@@ -1084,15 +1060,14 @@ private lemma LendingLedger.cover_accounting_step {l l' : LendingLedger} {tx : L
     have hdc : l.brokerDefaultCoveredOf e₀.brokerIndex (.loanPay i pt amount) = 0 := by
       simp [LendingLedger.brokerDefaultCoveredOf, LendingLedger.defaultCoveredOf]
     rw [hdc, sub_zero]
-    obtain ⟨p, hp⟩ := LendingLedger.loanPay_instalments hok hat
     rcases Loan.pay_minimumCover loan l.vault pt amount l.now r hpay with hmc | hmc
     · have hfee : l.feesToCoverOf e₀.brokerIndex (.loanPay i pt amount) = 0 := by
         simp [LendingLedger.feesToCoverOf, hon, hat.read, hmc]
       rw [hfee, add_zero, LendingLedger.payment_fees_proof l l' i pt amount hok loan r.loan' hat hat' hmc]
-    · have hfee : l.feesToCoverOf e₀.brokerIndex (.loanPay i pt amount) = p.amounts.feePaid.toRat := by
-        simp [LendingLedger.feesToCoverOf, hon, hat.read, hmc, hp]
+    · have hfee : l.feesToCoverOf e₀.brokerIndex (.loanPay i pt amount) = r.amountToBroker.toRat := by
+        simp [LendingLedger.feesToCoverOf, hon, hat.read, hmc, hpay]
       rw [hfee] at hin ⊢
-      exact LendingLedger.pay_fee_cover hr hat hpay hp hmc hin
+      exact LendingLedger.pay_toBroker_cover hr hat hpay hmc hin
   | _ => simp only [LendingTx.isLoan, Bool.false_eq_true] at hl
 
 /-- The broker slots along a sequence never shrink. -/

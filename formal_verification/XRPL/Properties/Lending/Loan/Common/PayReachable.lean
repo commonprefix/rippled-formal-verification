@@ -202,6 +202,16 @@ lemma Loan.payment_vault_upper_bound_proof (l : LendingLedger) (hr : l.Reachable
   exact Loan.payment_vault_upper_bound_of_fits loan l.vault amount l.now paymentType r payment
     (hr.loanAt_scale hat).2 (hr.storesAvailable hr.holdsAsset.maxValue_le) hpay hok ⟨w, hw, by rw [hwv]; linarith, hwv⟩
 
+/-- The cover of a stored loan's broker is whole base units. -/
+private lemma LendingLedger.Reachable.loan_cover_units {l : LendingLedger} (hr : l.Reachable) {i : Nat} {loan : Loan}
+    (hat : l.LoanAt i loan) : ∃ c : ℕ, loan.broker.coverAvailable.toRat = (c : ℚ) * 10 ^ l.vault.baseExponent := by
+  obtain ⟨e, b, -, hb, hlb, -⟩ := hat.parts
+  rw [hlb]
+  cases hnt : l.vault.numericType.isIntegral
+  · have hfr := NumericType.eq_fractional_of_not_integral (by simpa using hnt)
+    exact (hr.coverGridInv.cover hfr _ b hb).nat b.exact.coverAvailable_nonneg
+  · exact (hr.integralCover hnt _ b hb).nat b.exact.coverAvailable_nonneg
+
 /-- Proof body of `payment_fees_lower_bound`. -/
 lemma Loan.payment_fees_lower_bound_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) (hat : l.LoanAt i loan)
     (payment : UnsettledPayment Vault) (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok false)
@@ -212,20 +222,29 @@ lemma Loan.payment_fees_lower_bound_proof (l : LendingLedger) (hr : l.Reachable)
     ∀ e, numberExponent r.loan'.broker.coverAvailable l.vault.baseExponent loan.broker.numericType = .ok e →
       loan.broker.coverAvailable.toRat + payment.amounts.feePaid.toRat - r.loan'.broker.coverAvailable.toRat <
         10 ^ e := by
-  have hcv : ∃ c : ℕ, loan.broker.coverAvailable.toRat = (c : ℚ) * 10 ^ l.vault.baseExponent := by
-    obtain ⟨e, b, -, hb, hlb, -⟩ := hat.parts
-    rw [hlb]
-    cases hnt : l.vault.numericType.isIntegral
-    · have hfr := NumericType.eq_fractional_of_not_integral (by simpa using hnt)
-      exact (hr.coverGridInv.cover hfr _ b hb).nat b.exact.coverAvailable_nonneg
-    · exact (hr.integralCover hnt _ b hb).nat b.exact.coverAvailable_nonneg
-  obtain ⟨c, hc⟩ := hcv
-  obtain ⟨h1, h2⟩ := Loan.payment_fees_lower_bound_at_base loan l.vault amount l.now paymentType r payment c
+  obtain ⟨c, hc⟩ := hr.loan_cover_units hat
+  obtain ⟨h1, h2, -⟩ := Loan.payment_fees_lower_bound_at_base loan l.vault amount l.now paymentType r payment c
     (hr.loanAt_scale hat).2 hcover hpay hok (Loan.pay_parts_nonneg loan amount paymentType r l.vault l.now payment
       hpay hok).2.2 hc hroom
   intro e he
   rw [h2 e he]
   exact h1
+
+/-- Proof body of the amountToBroker line of `payment_fees`. Below the minimum cover, a cover that is not coarsened
+gains exactly what the payment sends the broker. -/
+lemma Loan.payment_cover_amountToBroker_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat)
+    (hat : l.LoanAt i loan) (payment : UnsettledPayment Vault)
+    (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok false)
+    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
+    (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
+    (hroom : loan.broker.coverAvailable.toRat + payment.amounts.feePaid.toRat ≤
+      (10 : ℚ) ^ (16 + l.vault.baseExponent) - 10 ^ l.vault.baseExponent) :
+    r.loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat = r.amountToBroker.toRat := by
+  obtain ⟨c, hc⟩ := hr.loan_cover_units hat
+  obtain ⟨-, -, h⟩ := Loan.payment_fees_lower_bound_at_base loan l.vault amount l.now paymentType r payment c
+    (hr.loanAt_scale hat).2 hcover hpay hok (Loan.pay_parts_nonneg loan amount paymentType r l.vault l.now payment
+      hpay hok).2.2 hc hroom
+  linarith
 
 /-- A lawful loan's interestDue in LoanScale units: at least minus one, at least zero for an XRP or MPT loan, and
 below the asset's mantissa bound. -/
@@ -426,6 +445,29 @@ lemma Loan.regularPayment_yield_proof (l : LendingLedger) (hr : l.Reachable) (i 
   show r.pool'.assetsAvailable.toRat + r.pool'.assetsDeployed.toRat -
     (l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat) = _
   rw [hAA, ← hsumv]
+  linarith
+
+/-- Proof body of the amountToPool line of `payment_vault_credit`. A vault that is not coarsened gains exactly
+what the payment sends it. -/
+lemma Loan.payment_vault_amountToPool_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) (hat : l.LoanAt i loan)
+    (payment : UnsettledPayment Vault)
+    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
+    (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
+    (htotal : l.vault.assetsAvailable.toRat +
+      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
+        10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
+    r.pool'.assetsAvailable.toRat - l.vault.assetsAvailable.toRat = r.amountToPool.toRat := by
+  obtain ⟨a, ha⟩ := hr.assetsAvailable_units hr.holdsAsset
+  obtain ⟨pp, ip, hpp, hip⟩ := Loan.pay_units loan amount paymentType r hr hat payment hpay hok
+  have hsumv : payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat =
+      ((pp + ip : ℕ) : ℚ) * 10 ^ l.vault.baseExponent := by rw [hpp, hip]; push_cast; ring
+  have hsum := LendingLedger.sum_number (l := l) _ _ pp ip hpp hip (by
+    have := l.vault.exact.assetsAvailable_nonneg
+    change 0 ≤ l.vault.assetsAvailable.toRat at this
+    linarith)
+  have hroom := LendingLedger.room_of_lt (l := l) _ _ a (pp + ip) ha hsumv htotal
+  obtain ⟨-, -, h⟩ := Loan.payment_vault_at_base loan l.vault amount l.now paymentType r payment a
+    (hr.loanAt_scale hat).2 (hr.storesAvailable hr.holdsAsset.maxValue_le) hpay hok hsum ha hroom
   linarith
 
 end XRPL.Model.Lending

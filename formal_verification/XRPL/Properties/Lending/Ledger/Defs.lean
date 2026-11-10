@@ -310,6 +310,8 @@ def LendingLedger.applyBroker (l : LendingLedger) : LendingTx → TerExcept Brok
     let some broker := l.broker? i | throw .tecNO_ENTRY
     let ter ← broker.canDelete l.vault
     if !ter.isTesSuccess then throw ter
+    -- C++ sends the cover back to the owner as an amount of the asset, which throws above the asset's maximum
+    let _ ← broker.roundedCoverAvailable
     return { index := i, broker := none }
   | _ => throw .temMALFORMED
 
