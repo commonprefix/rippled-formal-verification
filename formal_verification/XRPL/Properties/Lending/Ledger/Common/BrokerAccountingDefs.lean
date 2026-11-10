@@ -110,16 +110,16 @@ def LendingLedger.coverClawbacksOf (l : LendingLedger) (j : Nat) : LendingTx →
     else 0
   | _ => 0
 
-/-- feePaid of a LoanPay on a loan of broker `j` while the broker's cover is below its minimum. The payment adds
-that fee to the cover. -/
+/-- amountToBroker of a LoanPay on a loan of broker `j` while the broker's cover is below its minimum: the fee the
+payment sends into the cover. -/
 def LendingLedger.feesToCoverOf (l : LendingLedger) (j : Nat) (tx : LendingTx) : ℚ :=
   if l.onBroker j tx then
     match tx with
     | .loanPay i pt amount =>
       match l.loanRead i with
       | some loan =>
-        match loan.broker.hasMinimumCover l.vault.baseExponent, (loan.payInstalments l.vault pt amount l.now).run with
-        | .ok false, .ok (.ok p) => p.amounts.feePaid.toRat
+        match loan.broker.hasMinimumCover l.vault.baseExponent, (loan.pay l.vault pt amount l.now).run with
+        | .ok false, .ok (.ok r) => r.amountToBroker.toRat
         | _, _ => 0
       | none => 0
     | _ => 0

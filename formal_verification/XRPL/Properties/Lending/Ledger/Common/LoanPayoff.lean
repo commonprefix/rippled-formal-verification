@@ -1,10 +1,11 @@
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareValue
+import XRPL.Properties.Lending.Loan.Common.RegularPayoffSplit
 
 /-! # A loan's payments until it is paid off
 
 Along a run that pays the loan at `i` and never defaults it, every other transaction keeps its PrincipalOutstanding,
-and a payment that keeps AssetsAvailable plus what it pays below `10^16` base units adds at least the principal it
-pays to AssetsAvailable. So once the payments pay the loan off they have added at least the principal it had. -/
+and a payment that keeps AssetsAvailable plus what it pays below `10^16` base units sends the vault (amountToPool) at
+least the principal it pays. So once the payments pay the loan off they have sent at least the principal it had. -/
 
 namespace XRPL.Model.Lending
 
@@ -22,16 +23,17 @@ def LendingLedger.PaymentFits (l : LendingLedger) (i : Nat) (paymentType : LoanP
     l.vault.assetsAvailable.toRat + (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
       10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent
 
-/-- A run from `start` that never defaults the loan at `i`, with `paid` the sum of AssetsAvailable' −
-AssetsAvailable over the LoanPay steps of that loan. Each of those steps satisfies `fits`. -/
+/-- A run from `start` that never defaults the loan at `i`, with `paid` the sum of amountToPool, what the vault
+receives, over the LoanPay steps of that loan. Each of those steps satisfies `fits`. -/
 inductive LendingLedger.PaysLoan (i : Nat) (fits : LendingLedger → LoanPaymentType → Number → Prop)
     (start : LendingLedger) : LendingLedger → ℚ → Prop where
   | refl : LendingLedger.PaysLoan i fits start start 0
-  | pay {l l' : LendingLedger} {paid : ℚ} (paymentType : LoanPaymentType) (amount : Number) :
-      LendingLedger.PaysLoan i fits start l paid → fits l paymentType amount →
+  | pay {l l' : LendingLedger} {paid : ℚ} (paymentType : LoanPaymentType) (amount : Number) (loan : Loan)
+      (r : LoanWithAmounts Vault) :
+      LendingLedger.PaysLoan i fits start l paid → fits l paymentType amount → l.LoanAt i loan →
+      (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r) →
       (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') →
-      LendingLedger.PaysLoan i fits start l'
-        (paid + (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat))
+      LendingLedger.PaysLoan i fits start l' (paid + r.amountToPool.toRat)
   | other {l l' : LendingLedger} {paid : ℚ} (tx : LendingTx) :
       LendingLedger.PaysLoan i fits start l paid → (∀ paymentType amount, tx ≠ .loanPay i paymentType amount) →
       tx ≠ .loanManage i .default → (l.apply tx).run = .ok (.ok l') → LendingLedger.PaysLoan i fits start l' paid
@@ -145,51 +147,36 @@ private lemma LendingLedger.slot_other {l l' : LendingLedger} {tx : LendingTx} {
       cases hc
       exact hsame rfl
 
-/-- A payment of the loan at `i` that keeps AssetsAvailable plus what it pays below `10^16` base units adds at least
-the principal it pays to AssetsAvailable. -/
+/-- A payment of the loan at `i` that keeps AssetsAvailable plus what it pays below `10^16` base units sends the
+vault at least the principal it pays. The vault receives the principal and the interest paid. -/
 private lemma LendingLedger.slot_pay {l l' : LendingLedger} (hr : l.Reachable) {i : Nat}
-    {paymentType : LoanPaymentType} {amount : Number}
+    {paymentType : LoanPaymentType} {amount : Number} {loan : Loan} {r : LoanWithAmounts Vault}
+    (hat : l.LoanAt i loan) (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
     (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (hfits : l.PaymentFits i paymentType amount) :
     i < l'.loans.length ∧ ∀ e', l'.loan? i = some e' → ∃ e, l.loan? i = some e ∧
-      e.loan.principalOutstanding.toRat - e'.loan.principalOutstanding.toRat ≤
-        l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat := by
-  have hge := LendingLedger.pay_assetsTotal_le hr h
-  obtain ⟨e, loan, r, he, hat, hw, hok, rfl, -⟩ := LendingLedger.loanPay_parts h
-  obtain ⟨p, hp, -⟩ := Loan.pay_ok loan l.vault paymentType amount l.now r hok
-  have hge := hge loan hat p hp (hfits loan p hat hp)
-  change l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat ≤
-    r.pool'.assetsAvailable.toRat + r.pool'.assetsDeployed.toRat at hge
-
+      e.loan.principalOutstanding.toRat - e'.loan.principalOutstanding.toRat ≤ r.amountToPool.toRat := by
+  obtain ⟨e, loan₂, r₂, he, ⟨e₂, b₂, he₂, hb₂, hw₂⟩, hw, hok₂, rfl, -⟩ := LendingLedger.loanPay_parts h
+  obtain rfl : loan = loan₂ := (hat.unique he₂ hb₂ hw₂).symm
+  rw [hok] at hok₂
+  obtain rfl := Except.ok.inj (Except.ok.inj hok₂)
+  obtain ⟨p, hp, hs⟩ := Loan.pay_ok loan l.vault paymentType amount l.now r hok
+  have hex := Loan.pay_amountToPool_exact loan l hr i hat paymentType amount p r hp hok (hfits loan p hat hp)
+  obtain ⟨-, h2, -⟩ := Loan.pay_parts_nonneg loan amount paymentType r l.vault l.now p hp hok
   obtain ⟨hls, -⟩ := hr.loanAt_scale hat
   obtain ⟨hblo, hbhi, -⟩ := Vault.baseExponent_bounds l.vault
-  obtain ⟨paid, hpg, hp0, hpo, -, had⟩ := Loan.pay_principal loan l.vault paymentType amount l.now r
-    (by rw [hls]; omega) hok
-  rw [hls] at hpg
-  obtain ⟨q, hq⟩ := hpg.nat hp0
-  obtain ⟨d, hd, hdv⟩ := hr.deployed_units
-  have hqd : q ≤ d := by
-    obtain ⟨-, -, -, hpad, -⟩ := hr.loanAt_principal hat
-    have h0 : (0 : ℚ) ≤ r.loan'.principalOutstanding.toRat := r.loan'.exact.principalOutstanding_nonneg
-    have hp10 : (0 : ℚ) < 10 ^ l.vault.baseExponent := zpow_pos (by norm_num) _
-    have : (q : ℚ) * 10 ^ l.vault.baseExponent ≤ (d : ℚ) * 10 ^ l.vault.baseExponent := by
-      rw [← hq, ← hdv]; linarith
-    exact_mod_cast le_of_mul_le_mul_right this hp10
-  have hd' := Number.operator_add_toRat_of_grid _ _ _ d (-(q : ℤ)) l.vault.baseExponent
-    l.vault.wf.assetsDeployed_norm (Number.operator_neg_isNormalized _ hpg.1) (by rw [hdv]; norm_cast)
-    (by rw [Number.toRat_neg, hq]; push_cast; ring) (by omega) (by unfold minExponent maxExponent; omega) had
-  have hdq : r.pool'.assetsDeployed.toRat = l.vault.assetsDeployed.toRat - paid.toRat := by
-    rw [hd', hdv, hq]; push_cast; ring
-
+  obtain ⟨-, -, hpe⟩ := Loan.payInstalments_paidOn loan l.vault paymentType amount l.now p (by rw [hls]; omega) hp
+  obtain ⟨_, _, _, _, _, _, _, -, -, -, -, hloan, -, -⟩ := UnsettledPayment.settle_ok p r hs
+  have hpo : r.loan'.principalOutstanding = p.loan.principalOutstanding :=
+    (congrArg RawLoan.principalOutstanding (RawLoan.to_lawful_ok hloan).1 :)
   refine ⟨lt_of_lt_of_le (LendingLedger.loan?_lt he) (storeSlot_length _ _ _), fun e' he' => ?_⟩
   rw [LendingLedger.loan?_commit_ofLoan l he, if_pos rfl] at he'
   obtain rfl := Option.some.inj he'
   refine ⟨e, he, ?_⟩
-  show e.loan.principalOutstanding.toRat - r.loan'.principalOutstanding.toRat ≤
-    r.pool'.assetsAvailable.toRat - l.vault.assetsAvailable.toRat
-  rw [← Loan.withBroker_principal hw]
+  show e.loan.principalOutstanding.toRat - r.loan'.principalOutstanding.toRat ≤ r.amountToPool.toRat
+  rw [← Loan.withBroker_principal hw, hpo]
   linarith
 
-/-- Along the run, every loan in the slot has added back the principal it lost. -/
+/-- Along the run, the vault has received at least the principal every loan in the slot lost. -/
 private lemma LendingLedger.PaysLoan.bound {i : Nat} {l₀ l : LendingLedger} {paid : ℚ} (hr : l₀.Reachable)
     {e₀ : LoanEntry} (he₀ : l₀.loan? i = some e₀)
     (hrun : l₀.PaysLoan i (fun l paymentType amount => l.PaymentFits i paymentType amount) l paid) :
@@ -201,9 +188,9 @@ private lemma LendingLedger.PaysLoan.bound {i : Nat} {l₀ l : LendingLedger} {p
     rw [he₀] at he
     obtain rfl := Option.some.inj he
     simp
-  | pay paymentType amount _ hfits hstep ih =>
+  | pay paymentType amount loan r _ hfits hat hok hstep ih =>
     obtain ⟨hrl, hil, hb⟩ := ih
-    obtain ⟨hil', hslot⟩ := LendingLedger.slot_pay hrl hstep hfits
+    obtain ⟨hil', hslot⟩ := LendingLedger.slot_pay hrl hat hok hstep hfits
     refine ⟨hrl.apply hstep, hil', fun e' he' => ?_⟩
     obtain ⟨e, he, hle⟩ := hslot e' he'
     have := hb e he

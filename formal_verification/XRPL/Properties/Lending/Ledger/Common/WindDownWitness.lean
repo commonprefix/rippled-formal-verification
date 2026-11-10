@@ -273,7 +273,8 @@ lemma LendingLedger.wind_down_dust_witness :
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened) ∧
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
         e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
-      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat < 10 ^ 96) ∧
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
       l.SharesSum ∧
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
         (∀ tx ∈ txs, tx.isWindDown = true) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') := by
