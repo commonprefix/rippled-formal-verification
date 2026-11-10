@@ -1295,11 +1295,7 @@ private:
         testDivisionRounding();
         testMultiplicationRounding();
         testCuspRounding();
-
-        // Known discrepancy, fails until the model is fixed.
-        // clang-format off
-        // testSumOverflowSweep();  // same-sign add at exponent 32768 with a mantissa sum above kMaxRepUp: C++ throws "normalize 1.5", Lean drops a digit without the exponent check and returns 922337203685477581e32769 (all modes but upward)
-        // clang-format on
+        testSumOverflowSweep();
     }
 };
 

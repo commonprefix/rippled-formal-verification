@@ -96,7 +96,7 @@ class LeanLoanManage_test : public LeanSuite
             result = leanLoanManage(loan, pool, action, now);
 
         TER const cppTer =
-            applyOn(env, view, f.owner, loan::manage(f.owner, loanKeylet.key, flagsOf(action)));
+            applyOn(env, view, loan::manage(f.owner, loanKeylet.key, flagsOf(action)));
 
         BEAST_EXPECTS(!can.leanError.has_value(), at + "lean canManage error");
         if (result)
@@ -157,20 +157,19 @@ class LeanLoanManage_test : public LeanSuite
                 applyOn(
                     env,
                     view,
-                    f.borrower,
                     loan::pay(f.borrower, loanKeylet.key, f.asset(1'000)),
                     Fee(env.current()->fees().base * 101)) == tesSUCCESS);
         }
         if (impairFirst)
         {
             BEAST_EXPECT(
-                applyOn(env, view, f.owner, loan::manage(f.owner, loanKeylet.key, tfLoanImpair)) ==
+                applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanImpair)) ==
                 tesSUCCESS);
         }
         if (kind == LoanKind::defaulted)
         {
             BEAST_EXPECT(
-                applyOn(env, view, f.owner, loan::manage(f.owner, loanKeylet.key, tfLoanDefault)) ==
+                applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanDefault)) ==
                 tesSUCCESS);
         }
         TER const cpp = checkManage(env, view, f, loanKeylet, p.paymentTotal, action);
@@ -206,31 +205,32 @@ class LeanLoanManage_test : public LeanSuite
         return f;
     }
 
+    // A default needs the parent close time past due date + grace period (exclusive), else
+    // tecTOO_SOON. Rows put that deadline exactly on the parent close time.
     void
     testDefaultSweep(SweepFixtures const& fixtures)
     {
         for (auto const& [env, f] : fixtures)
         {
-            sweepDefault(env, f);
+            beginCase(("LoanManage " + assetName(f) + " default deadline-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            runAroundCusp(kDefaultCases, [&](DefaultCusp const& c) {
+                OpenView view{*env.current()};
+                LoanParams const p{
+                    .paymentInterval = c.interval,
+                    .gracePeriod = static_cast<std::uint32_t>(c.grace)};
+                auto const loan = createLoan(env, view, f, p);
+                dueAt(view, loan, now, c.dueOffset - c.cuspGrace);
+                return checkManage(
+                    env,
+                    view,
+                    f,
+                    loan,
+                    p.paymentTotal,
+                    ManageAction::defaultLoan,
+                    describe(c) + ": ");
+            });
         }
-    }
-
-    // A default needs the parent close time past due date + grace period (exclusive), else
-    // tecTOO_SOON. Rows put that deadline exactly on the parent close time.
-    void
-    sweepDefault(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanManage " + assetName(f) + " default deadline-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kDefaultCases, [&](DefaultCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{
-                .paymentInterval = c.interval, .gracePeriod = static_cast<std::uint32_t>(c.grace)};
-            auto const loan = createLoan(env, view, f, p);
-            dueAt(view, loan, now, c.dueOffset - c.cuspGrace);
-            return checkManage(
-                env, view, f, loan, p.paymentTotal, ManageAction::defaultLoan, describe(c) + ": ");
-        });
     }
 
     void

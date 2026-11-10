@@ -468,7 +468,7 @@ private lemma LendingLedger.total_lt_step (l l' : LendingLedger) (tx : LendingTx
       obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
       exact hS
-    | vaultSet m b ub =>
+    | vaultSet m b =>
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok

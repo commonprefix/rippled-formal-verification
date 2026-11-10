@@ -198,14 +198,14 @@ lemma Vault.burnShares_ne_wrap (v : Vault) (held : STAmount) (hh : held.mValue.t
     | exact RawVault.to_lawful_ne_wrap _ ‹_›
     | close_wrap [STAmount.toNumber_ne_wrap, Number.operator_sub_ne_wrap]
 
-lemma Vault.canVaultUpdate_ne_wrap (v : Vault) (am : Option Number) (bd ud : Bool) :
-    v.canVaultUpdate am bd ud ≠ .error .wrap := by
+lemma Vault.canVaultUpdate_ne_wrap (v : Vault) (am : Option Number) (bd : Option Bool) :
+    v.canVaultUpdate am bd ≠ .error .wrap := by
   unfold Vault.canVaultUpdate
   simp only [bind, Except.bind, pure, Except.pure]
   split_ne_wrap [RawVault.assetsTotal_ne_wrap, Number.isOnExponentGrid_ne_wrap]
 
-lemma Vault.update_ne_wrap (v : Vault) (am : Option Number) (bd ud : Bool) :
-    v.update am bd ud ≠ .error .wrap := by
+lemma Vault.update_ne_wrap (v : Vault) (am : Option Number) (bd : Option Bool) :
+    v.update am bd ≠ .error .wrap := by
   unfold Vault.update
   exact RawVault.to_lawful_ne_wrap _
 

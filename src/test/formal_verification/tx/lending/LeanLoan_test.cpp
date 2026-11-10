@@ -138,7 +138,7 @@ class LeanLoan_test : public LeanSuite
             .closePaymentFee = Number{3},
             .paymentTotal = 3};
         auto const loanKeylet = submitLoanSet(env, f, p);
-        Loan const baseline = readLoanState(env, loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const baseline = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
         Number const grid{1, -6};
 
         runLawful(baseline, true, "a loan read from the ledger");

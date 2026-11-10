@@ -135,6 +135,21 @@ class LeanVaultSet_test : public LeanSuite
                 " cpp=" + (cpp.depositBlocked ? "1" : "0"));
     }
 
+    // Both deposit flags fail C++ preflight; the model's single optional flag cannot express them.
+    void
+    testBothDepositFlags(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
+    {
+        testcase("block and unblock deposits together");
+        Vault const state = readVaultState(env, vault, xrpIssue());
+        auto const lean = leanCanVaultUpdate(state, std::nullopt, true, true);
+        env(jtx::Vault::set(
+                {.owner = owner,
+                 .id = vault.key,
+                 .flags = tfVaultDepositBlock | tfVaultDepositUnblock}),
+            jtx::Ter(temINVALID_FLAG));
+        BEAST_EXPECTS(lean.leanError == LeanError::badInput, "lean: expected badInput");
+    }
+
     // An IOU cap below the vault grid is rejected on both sides. Covered by testMaximumGridSweep.
     void
     testCapOffGrid(jtx::Env& env, Keylet const& iouVault, jtx::Account const& owner)
@@ -316,6 +331,7 @@ class LeanVaultSet_test : public LeanSuite
         runBlockDeposit(true, false, tesSUCCESS);
         runBlockDeposit(false, true, tecNO_PERMISSION);
         runBlockDeposit(false, false, tecNO_PERMISSION);
+        testBothDepositFlags(env, xrpVault, owner);
 
         SweepVaults const ious{iouScale0Vault, iouScale6Vault, iouScale10Vault};
         SweepVaults const all{xrpVault, mptVault, iouScale0Vault, iouScale6Vault, iouScale10Vault};

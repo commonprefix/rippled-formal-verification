@@ -90,14 +90,6 @@ struct Factors
     int eb;
 };
 
-// A value and a uint32 ratio, for mulRatio.
-struct Ratio
-{
-    std::int64_t value;
-    std::int64_t num;
-    std::int64_t den;
-};
-
 // A (mantissa, exponent) pair before normalization.
 struct Scaled
 {
@@ -175,18 +167,6 @@ inline constexpr MantissaPair kIouSumOverflowCusps[] = {
     {kIouMaxMantissa - kIouMinMantissa, kIouMinMantissa, kIouMaxExponent},
     {5'000'000'000'000'000, 4'999'999'999'999'999, kIouMaxExponent},
 };
-inline constexpr MantissaPair kIouDifferenceUnderflowCusps[] = {
-    {2 * kIouMinMantissa, kIouMinMantissa, kIouMinExponent},
-    {kIouMaxMantissa, kIouMaxMantissa - kIouMinMantissa, kIouMinExponent},
-    {6'000'000'000'000'000, 5'000'000'000'000'000, kIouMinExponent},
-};
-
-// mulRatio at the largest exponent: value * num / den == the largest mantissa.
-inline constexpr Ratio kIouMulRatioCusps[] = {
-    {1'111'111'111'111'111, 900'000'000, 100'000'000},
-    {3'333'333'333'333'333, 3'000'000'000, 1'000'000'000},
-    {kIouMaxMantissa, 1'000'000'000, 1'000'000'000},
-};
 
 // ---- IntAmount ----
 
@@ -195,14 +175,6 @@ inline constexpr Scaled kIntOfNumberCusps[] = {
     {922'337'203'685'477'580, 1},
     {9'223'372'036, 9},
     {9, 18},
-};
-
-// mulRatio: value * num / den == int64 max (or the last value under it).
-inline constexpr Ratio kIntMulRatioCusps[] = {
-    {2'147'483'648, 4'294'967'295, 1},
-    {188'232'082'384'791'343, 490'000'000, 10'000'000},
-    {1'317'624'576'693'539'401, 700'000'000, 100'000'000},
-    {kMaxRep - 2, 1'000'000'000, 1'000'000'000},
 };
 
 // ---- STAmount ----
@@ -267,13 +239,6 @@ static_assert(allOf(kToRepHalfMantissas, [](std::int64_t m) { return m % 10 == 5
 static_assert(allOf(kIouSumOverflowCusps, [](MantissaPair r) {
     return r.a + r.b == kIouMaxMantissa && iouMantissa(r.a) && iouMantissa(r.b);
 }));
-static_assert(allOf(kIouDifferenceUnderflowCusps, [](MantissaPair r) {
-    return r.a - r.b == kIouMinMantissa && iouMantissa(r.a) && iouMantissa(r.b);
-}));
-static_assert(allOf(kIouMulRatioCusps, [](Ratio r) {
-    return Wide{r.value} * r.num == Wide{kIouMaxMantissa} * r.den && iouMantissa(r.value) &&
-        r.num <= std::numeric_limits<std::uint32_t>::max();
-}));
 // int64 max fits, the largest move does not.
 static_assert(allOf(kIntOfNumberCusps, [](Scaled r) {
     return Wide{r.mantissa} * pow10(r.exponent) <= kMaxRep &&
@@ -285,11 +250,6 @@ static_assert(allOf(kMptCheckedCusps, [](Scaled r) {
 }));
 static_assert(allOf(kXrpCheckedCusps, [](Scaled r) {
     return Wide{r.mantissa} * pow10(r.exponent) == kXrpMaxDrops;
-}));
-static_assert(allOf(kIntMulRatioCusps, [](Ratio r) {
-    return Wide{r.value} * r.num <= Wide{kMaxRep} * r.den &&
-        Wide{r.value + 2} * (r.num + 2) > Wide{kMaxRep} * r.den &&
-        r.num <= std::numeric_limits<std::uint32_t>::max();
 }));
 
 // ---- Generated cases ----
@@ -341,16 +301,6 @@ scaledCases(Scaled const (&rows)[N])
     });
 }
 
-template <std::size_t N>
-std::vector<AroundCusp<Ratio>>
-ratioCases(Ratio const (&rows)[N], bool iou)
-{
-    return aroundCusp(rows, &Ratio::value, &Ratio::num, [iou](Ratio const& r) {
-        return (iou ? iouMantissa(r.value) : r.value >= 0) && r.num >= 0 &&
-            r.num <= std::numeric_limits<std::uint32_t>::max();
-    });
-}
-
 inline std::vector<AroundCusp<MantissaPair>> const kSumOverflowCases =
     numberPairCases(kSumOverflowCusps);
 inline std::vector<AroundCusp<MantissaPair>> const kSumRoundingCases =
@@ -366,12 +316,7 @@ inline std::vector<AroundCusp<std::int64_t>> const kToRepHalfCases =
 inline std::vector<AroundCusp<Scaled>> const kIouRangeCases = scaledCases(kIouRangeCusps);
 inline std::vector<AroundCusp<MantissaPair>> const kIouSumOverflowCases =
     iouPairCases(kIouSumOverflowCusps);
-inline std::vector<AroundCusp<MantissaPair>> const kIouDifferenceUnderflowCases =
-    iouPairCases(kIouDifferenceUnderflowCusps);
-inline std::vector<AroundCusp<Ratio>> const kIouMulRatioCases = ratioCases(kIouMulRatioCusps, true);
 inline std::vector<AroundCusp<Scaled>> const kIntOfNumberCases = scaledCases(kIntOfNumberCusps);
-inline std::vector<AroundCusp<Ratio>> const kIntMulRatioCases =
-    ratioCases(kIntMulRatioCusps, false);
 inline std::vector<AroundCusp<Scaled>> const kXrpCheckedCases = scaledCases(kXrpCheckedCusps);
 inline std::vector<AroundCusp<Scaled>> const kMptCheckedCases = scaledCases(kMptCheckedCusps);
 
@@ -388,13 +333,6 @@ describe(Factors const& r)
 {
     return "a " + std::to_string(r.a) + "e" + std::to_string(r.ea) + ", b " + std::to_string(r.b) +
         "e" + std::to_string(r.eb);
-}
-
-inline std::string
-describe(Ratio const& r)
-{
-    return "value " + std::to_string(r.value) + ", ratio " + std::to_string(r.num) + "/" +
-        std::to_string(r.den);
 }
 
 inline std::string

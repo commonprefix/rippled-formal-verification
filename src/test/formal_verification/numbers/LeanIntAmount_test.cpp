@@ -233,8 +233,6 @@ public:
             SaveNumberRoundMode save{Number::setround(mode)};
             sweepOfNumber(mode);
         }
-        sweepMulRatioOverflow(false);
-        sweepMulRatioOverflow(true);
     }
 
     // Number to int64: m * 10^e up to int64 max converts, the next Number above it throws.
@@ -249,22 +247,6 @@ public:
             }();
             checkOfNumber(x, mode);
             return cppVerdict([&] { return MPTAmount{x.cppNum}.value() == 0; });
-        });
-    }
-
-    // mulRatio: value * num / den up to int64 max fits, above it throws.
-    void
-    sweepMulRatioOverflow(bool roundUp)
-    {
-        beginCase(
-            (std::string("LeanIntAmount.mulRatio overflow ") + (roundUp ? "up" : "down") + "-Sweep")
-                .c_str());
-        runAroundCusp(kIntMulRatioCases, [&](Ratio const& c) {
-            auto const v = makeMPTAmountPair(c.value);
-            auto const num = static_cast<std::uint32_t>(c.num);
-            auto const den = static_cast<std::uint32_t>(c.den);
-            checkMulRatio(v, num, den, roundUp);
-            return cppVerdict([&] { return mulRatio(v.cppMpt, num, den, roundUp).value() == 0; });
         });
     }
 

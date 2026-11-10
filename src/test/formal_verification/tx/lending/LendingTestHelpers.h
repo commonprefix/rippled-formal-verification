@@ -12,6 +12,7 @@
 #include <test/jtx/flags.h>
 #include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
+#include <test/jtx/seq.h>
 #include <test/jtx/sig.h>
 #include <test/jtx/ter.h>
 #include <test/jtx/trust.h>
@@ -20,8 +21,12 @@
 #include <xrpl/basics/Number.h>
 #include <xrpl/basics/chrono.h>
 #include <xrpl/beast/unit_test/suite.h>
+#include <xrpl/ledger/OpenView.h>
+#include <xrpl/ledger/Sandbox.h>
+#include <xrpl/ledger/helpers/VaultHelpers.h>
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/Keylet.h>
+#include <xrpl/protocol/MPTIssue.h>
 #include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STAmount.h>
@@ -29,22 +34,25 @@
 #include <xrpl/protocol/SeqProxy.h>
 #include <xrpl/protocol/TER.h>
 #include <xrpl/protocol/TxFlags.h>
+#include <xrpl/tx/apply.h>
 
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace xrpl::test::formal_verification {
 
-// Snapshot the on-ledger loan broker into the model's LoanBroker DTO.
-inline LoanBroker
-readLoanBrokerState(jtx::Env& env, Keylet const& brokerKeylet, Asset const& asset)
+// Snapshot the loan broker on `view` into the model's LoanBroker DTO.
+[[nodiscard]] inline LoanBroker
+readBroker(ReadView const& view, Keylet const& brokerKeylet, Asset const& asset)
 {
-    auto const sle = env.le(brokerKeylet);
+    auto const sle = view.read(brokerKeylet);
     if (!sle)
-        throw std::runtime_error("readLoanBrokerState: no loan broker on the ledger");
+        throw std::runtime_error("readBroker: no loan broker on the view");
     return LoanBroker{
         .numericType = NumericTypeFFI::tagOf(asset),
         .managementFeeRate = sle->at(sfManagementFeeRate),
@@ -237,20 +245,20 @@ closeAt(jtx::Env& env, std::uint32_t at)
     env.close(NetClock::time_point{NetClock::duration{at}});
 }
 
-// Snapshot the on-ledger loan (and its broker) into the model's Loan DTO. The payment total is
+// Snapshot the loan on `view` (and its broker) into the model's Loan DTO. The payment total is
 // not stored on the loan, so the caller supplies the one it submitted.
-inline Loan
-readLoanState(
-    jtx::Env& env,
+[[nodiscard]] inline Loan
+readLoan(
+    ReadView const& view,
     Keylet const& loanKeylet,
     Asset const& asset,
     std::uint32_t paymentTotal)
 {
-    auto const sle = env.le(loanKeylet);
+    auto const sle = view.read(loanKeylet);
     if (!sle)
-        throw std::runtime_error("readLoanState: no loan on the ledger");
+        throw std::runtime_error("readLoan: no loan on the view");
     return Loan{
-        .broker = readLoanBrokerState(env, keylet::loanBroker(sle->at(sfLoanBrokerID)), asset),
+        .broker = readBroker(view, keylet::loanBroker(sle->at(sfLoanBrokerID)), asset),
         .interestRate = sle->at(sfInterestRate),
         .lateInterestRate = sle->at(sfLateInterestRate),
         .closeInterestRate = sle->at(sfCloseInterestRate),
@@ -342,16 +350,6 @@ loanTemplate(LoanBroker const& broker, LoanParams const& p, std::uint32_t startD
         .allowsOverpayment = p.allowsOverpayment};
 }
 
-// The keylet the broker's next loan gets.
-[[nodiscard]] inline Keylet
-nextLoanKeylet(jtx::Env& env, BrokerFixture const& f)
-{
-    auto const sleBroker = env.le(f.brokerKeylet);
-    if (!sleBroker)
-        throw std::runtime_error("nextLoanKeylet: no loan broker on the ledger");
-    return keylet::loan(f.brokerKeylet.key, SeqProxy::rawSequence(sleBroker->at(sfLoanSequence)));
-}
-
 // The LoanSet transaction for `p`. A one-step loan is submitted by the borrower and must be sent
 // with the owner's counterparty signature and a double fee (see submitLoanSet).
 [[nodiscard]] inline json::Value
@@ -394,12 +392,20 @@ loanSetTx(BrokerFixture const& f, LoanParams const& p)
     return tx;
 }
 
+// The keylet of the broker's next loan on the view.
+[[nodiscard]] inline Keylet
+nextLoan(ReadView const& view, BrokerFixture const& f)
+{
+    return keylet::loan(
+        f.brokerKeylet.key, SeqProxy::rawSequence(view.read(f.brokerKeylet)->at(sfLoanSequence)));
+}
+
 // Submit the LoanSet for `p`, expecting success, and return the loan's keylet.
 inline Keylet
 submitLoanSet(jtx::Env& env, BrokerFixture const& f, LoanParams const& p)
 {
     using namespace jtx;
-    auto const loanKeylet = nextLoanKeylet(env, f);
+    auto const loanKeylet = nextLoan(*env.current(), f);
     auto const tx = loanSetTx(f, p);
     if (p.startDate)
         env(tx, jtx::Ter(tesSUCCESS));
@@ -419,6 +425,242 @@ inline Keylet
 issueLoan(jtx::Env& env, BrokerFixture const& f, Number const& principal)
 {
     return submitLoanSet(env, f, LoanParams{.principal = principal});
+}
+
+// ---- Staging on a throwaway view ------------------------------------------------------------
+
+[[nodiscard]] inline LoanBroker
+readBroker(ReadView const& view, BrokerFixture const& f)
+{
+    return readBroker(view, f.brokerKeylet, f.asset.raw());
+}
+
+// Apply `tx` on `view`, with the sender's sequence read from the view (several transactions of
+// one account can be applied to the same view).
+template <class... Fn>
+TER
+applyOn(jtx::Env& env, OpenView& view, json::Value tx, Fn const&... fn)
+{
+    auto const sender = parseBase58<AccountID>(tx[jss::Account].asString());
+    auto const account = view.read(keylet::account(*sender));
+    auto const jt = env.jt(tx, jtx::Seq(account->at(sfSequence)), fn...);
+    return xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
+}
+
+// Apply a LoanSet for `p` on the view: one-step (borrower, with the owner's signature) or, with a
+// start date, two-step (owner).
+inline TER
+applyLoanSet(jtx::Env& env, OpenView& view, BrokerFixture const& f, LoanParams const& p)
+{
+    if (p.startDate)
+        return applyOn(env, view, loanSetTx(f, p));
+    return applyOn(
+        env,
+        view,
+        loanSetTx(f, p),
+        jtx::Sig(sfCounterpartySignature, f.owner),
+        jtx::Fee(env.current()->fees().base * 2));
+}
+
+// n units of the fixture's grid: one MPT unit, or 1e-6 for the scale-6 IOU vault.
+[[nodiscard]] inline Number
+units(BrokerFixture const& f, std::int64_t n)
+{
+    return f.asset.raw().holds<MPTIssue>() ? Number{n} : Number{n, -6};
+}
+
+[[nodiscard]] inline std::string
+assetName(BrokerFixture const& f)
+{
+    return f.asset.raw().holds<MPTIssue>() ? "MPT" : "IOU";
+}
+
+// What a non-issuer account holds of the fixture asset on `view`.
+[[nodiscard]] inline Number
+holding(ReadView const& view, jtx::Account const& account, Asset const& asset)
+{
+    if (asset.holds<MPTIssue>())
+    {
+        auto const token =
+            view.read(keylet::mptoken(asset.get<MPTIssue>().getMptID(), account.id()));
+        return token ? Number{static_cast<std::int64_t>(token->getFieldU64(sfMPTAmount))}
+                     : Number{};
+    }
+    Issue const issue = asset.get<Issue>();
+    auto const line = view.read(keylet::trustLine(account.id(), issue));
+    if (!line)
+        return Number{};
+    Number const balance = line->getFieldAmount(sfBalance);
+    return account.id() > issue.account ? -balance : balance;
+}
+
+// The loan LoanSet creates on `view` for `p`; it must succeed.
+inline Keylet
+createLoan(jtx::Env& env, OpenView& view, BrokerFixture const& f, LoanParams const& p)
+{
+    Keylet const loan = nextLoan(view, f);
+    TER const ter = applyLoanSet(env, view, f, p);
+    if (!isTesSuccess(ter))
+        throw std::runtime_error("createLoan: LoanSet failed with " + transToken(ter));
+    return loan;
+}
+
+// Move the loan's dates back by `seconds`, as if that much time had passed for it.
+inline void
+ageLoan(OpenView& view, Keylet const& loan, std::int64_t seconds)
+{
+    Sandbox sb(&view, TapNone);
+    auto const sle = sb.peek(loan);
+    for (SF_UINT32 const* field : {&sfStartDate, &sfPreviousPaymentDueDate, &sfNextPaymentDueDate})
+    {
+        if (sle->isFieldPresent(*field) && sle->getFieldU32(*field) != 0)
+            sle->setFieldU32(
+                *field, static_cast<std::uint32_t>(sle->getFieldU32(*field) - seconds));
+    }
+    sb.update(sle);
+    sb.apply(view);
+}
+
+// The loan started `age` seconds before the parent close time `now`.
+inline void
+startedAgo(OpenView& view, Keylet const& loan, std::uint32_t now, std::int64_t age)
+{
+    ageLoan(view, loan, std::int64_t{view.read(loan)->at(sfStartDate)} - (now - age));
+}
+
+// The loan's next payment falls due `offset` seconds after the parent close time `now`.
+inline void
+dueAt(OpenView& view, Keylet const& loan, std::uint32_t now, std::int64_t offset)
+{
+    ageLoan(view, loan, std::int64_t{view.read(loan)->at(sfNextPaymentDueDate)} - (now + offset));
+}
+
+// Stage the vault's deployed assets and unrealized loss (assets total follows, Downward).
+inline void
+stageDeployed(OpenView& view, Keylet const& vault, Number const& deployed, Number const& loss)
+{
+    Sandbox sb(&view, TapNone);
+    auto const v = sb.peek(vault);
+    v->at(sfAssetsDeployed) = deployed;
+    v->at(sfLossUnrealized) = loss;
+    {
+        NumberRoundModeGuard const rg(Number::RoundingMode::Downward);
+        v->at(sfAssetsTotal) = STAmount{Asset{v->at(sfAsset)}, getAssetsTotal(v)};
+    }
+    sb.update(v);
+    sb.apply(view);
+}
+
+// State reached before the swept transaction, on the throwaway view.
+struct LendingStage
+{
+    // A zero-interest one-payment loan of this many units, taken first (the broker's debt).
+    std::int64_t debt = 0;
+    // First-loss cover deposited by the owner (real transaction), in units.
+    std::int64_t cover = 0;
+    std::uint16_t managementFeeRate = 0;
+    // Minimum cover rate; a non-zero rate also gets the fixture's 20% liquidation rate.
+    std::uint32_t coverRate = 0;
+    std::optional<std::int64_t> debtMaximum;  // in units
+    // Vault fields: closed-ended dates (seconds since the epoch) and unrealized yield in units.
+    std::optional<std::uint32_t> subscriptionDate;
+    std::optional<std::uint32_t> redemptionDate;
+    std::int64_t yield = 0;
+};
+
+inline std::string
+stageText(LendingStage const& s)
+{
+    std::string t = "debt " + std::to_string(s.debt) + " cover " + std::to_string(s.cover);
+    if (s.coverRate)
+        t += " rate " + std::to_string(s.coverRate);
+    if (s.debtMaximum)
+        t += " maximum " + std::to_string(*s.debtMaximum);
+    if (s.yield)
+        t += " yield " + std::to_string(s.yield);
+    if (s.subscriptionDate)
+        t += " sub " + std::to_string(*s.subscriptionDate) + " red " +
+            std::to_string(*s.redemptionDate);
+    return t;
+}
+
+// Reach `s` on `view`. Dates, yield, rates and the debt maximum are staged fields; the debt loan
+// and the cover deposit are real transactions, applied after the dates and before the rates (so
+// the debt loan needs no cover). Throws when a real transaction fails.
+inline void
+stageLending(jtx::Env& env, OpenView& view, BrokerFixture const& f, LendingStage const& s)
+{
+    {
+        Sandbox sb(&view, TapNone);
+        auto vault = sb.peek(f.vaultKeylet);
+        if (s.subscriptionDate && s.redemptionDate)
+        {
+            vault->at(sfSubscriptionDate) = *s.subscriptionDate;
+            vault->at(sfRedemptionDate) = *s.redemptionDate;
+        }
+        if (s.yield)
+        {
+            vault->at(sfYieldUnrealized) = units(f, s.yield);
+            NumberRoundModeGuard const rg(Number::RoundingMode::Downward);
+            vault->at(sfAssetsTotal) = STAmount{f.asset.raw(), getAssetsTotal(vault)};
+        }
+        sb.update(vault);
+        sb.apply(view);
+    }
+    if (s.debt > 0)
+    {
+        TER const ter = applyLoanSet(
+            env, view, f, LoanParams{.principal = units(f, s.debt), .paymentTotal = 1});
+        if (ter != tesSUCCESS)
+            throw std::runtime_error("stageLending: debt loan " + transToken(ter));
+    }
+    if (s.cover > 0)
+    {
+        TER const ter = applyOn(
+            env,
+            view,
+            jtx::loan_broker::coverDeposit(
+                f.owner, f.brokerKeylet.key, f.asset(units(f, s.cover))));
+        if (ter != tesSUCCESS)
+            throw std::runtime_error("stageLending: cover deposit " + transToken(ter));
+    }
+    Sandbox sb(&view, TapNone);
+    auto broker = sb.peek(f.brokerKeylet);
+    if (s.managementFeeRate)
+        broker->at(sfManagementFeeRate) = s.managementFeeRate;
+    if (s.coverRate)
+    {
+        broker->at(sfCoverRateMinimum) = s.coverRate;
+        broker->at(sfCoverRateLiquidation) = 20'000;
+    }
+    if (s.debtMaximum)
+        broker->at(sfDebtMaximum) = units(f, *s.debtMaximum);
+    sb.update(broker);
+    sb.apply(view);
+}
+
+// Investment phase from 1'000 s before the parent close time until far after it.
+[[nodiscard]] inline LendingStage
+investment(ReadView const& view)
+{
+    std::uint32_t const pct = view.parentCloseTime().time_since_epoch().count();
+    return {.subscriptionDate = pct - 1'000, .redemptionDate = pct + 900'000'000};
+}
+
+// The sweep fixture: a broker without cover rates or management fee on a closed-ended vault
+// holding `seedUnits`. The clock then moves 1e8 s on, so staged dates never wrap; the vault's own
+// dates are past, so every check stages its phase dates.
+inline BrokerFixture
+setUpSweepBroker(jtx::Env& env, LendingAsset kind, std::int64_t seedUnits)
+{
+    BrokerConfig const config{
+        .managementFeeRate = std::nullopt,
+        .coverRateMinimum = std::nullopt,
+        .coverRateLiquidation = std::nullopt};
+    Number const seed = kind == LendingAsset::iou ? Number{seedUnits, -6} : Number{seedUnits};
+    BrokerFixture f = setUpBrokerVault(env, config, seed, false, true, kind);
+    env.close(env.now() + std::chrono::seconds{100'000'000});
+    return f;
 }
 
 // The model's verdict on a transaction: its preclaim TER, or its doApply TER when preclaim

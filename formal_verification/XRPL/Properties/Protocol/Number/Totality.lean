@@ -561,7 +561,9 @@ lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.2 mode
       (by omega) hy_b.2 (by omega) (by rw [he]; exact hye_min) (by rw [he]; exact hye)
-    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show
+      (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1 < maxExponent by
+        rw [he]; omega), ok_bind] using hr⟩
   by_cases hgt : x.exponent_ > y.exponent_
   · rw [if_neg hlt, if_pos hgt]
     set g₀ : Guard := if y.negative_ then Guard.new.set_negative else Guard.new
@@ -572,12 +574,14 @@ lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
       (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).1 x.exponent_
       (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).2.2 mode
       hx_b.2 (by omega) (by omega) hxe_min hxe
-    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
+      ok_bind] using hr⟩
   · rw [if_neg hlt, if_neg hgt]
     obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_ y.mantissa_ x.exponent_
       (if x.negative_ then Guard.new.set_negative else Guard.new) mode
       hx_b.2 hy_b.2 (by omega) hxe_min hxe
-    exact ⟨r, by simpa only [hsn, if_true] using hr⟩
+    exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
+      ok_bind] using hr⟩
 
 /-- `operator_add` succeeds on two normalized operands with exponent headroom. Either operand may be zero, and the
 signs may differ. -/

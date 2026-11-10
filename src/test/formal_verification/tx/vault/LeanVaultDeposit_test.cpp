@@ -511,15 +511,6 @@ class LeanVaultDeposit_test : public LeanSuite
     // The vaults a sweep runs on, each with the account that deposits into it.
     using SweepVaults = std::vector<std::pair<Keylet, jtx::Account>>;
 
-    // The values of one sample, prefixed to every failure message.
-    static std::string
-    sampleText(StagedVault const& s, STAmount const& amount)
-    {
-        return "amount " + amount.getText() + ", available " + s.available.getText() + ", yield " +
-            s.yield.getText() + ", maximum " + (s.maximum ? s.maximum->getText() : "none") +
-            ", sharesTotal " + std::to_string(s.sharesTotal) + ": ";
-    }
-
     // One sample: C++ (on a throwaway view) and the model run on the same staged vault; they must
     // agree, and a deposit never charges more than offered. Returns the C++ verdict.
     TER
@@ -535,22 +526,8 @@ class LeanVaultDeposit_test : public LeanSuite
         LeanVaultResult const lean =
             leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
         std::string const at = sampleText(staged, amount);
-        BEAST_EXPECTS(
-            lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
-
-        TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
-        BEAST_EXPECTS(
-            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
-        if (cpp.ter != tesSUCCESS || leanTer != tesSUCCESS)
+        if (expectAgree(*this, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
             return cpp.ter;
-
-        auto const same = [&](char const* field, Number const& l, Number const& c) {
-            BEAST_EXPECTS(l == c, at + field + " lean=" + to_string(l) + " cpp=" + to_string(c));
-        };
-        same("assetsTotal", lean.vault.assetsTotal, cpp.post.assetsTotal);
-        same("assetsAvailable", lean.vault.assetsAvailable, cpp.post.assetsAvailable);
-        same("sharesTotal", lean.vault.sharesTotal, cpp.post.sharesTotal);
-        same("lossUnrealized", lean.vault.lossUnrealized, cpp.post.lossUnrealized);
         Number const charged = cpp.post.assetsTotal - cpp.pre.assetsTotal;
         BEAST_EXPECTS(charged <= Number{amount}, at + "cpp charged " + to_string(charged));
         BEAST_EXPECTS(
@@ -573,82 +550,55 @@ class LeanVaultDeposit_test : public LeanSuite
         return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
     }
 
+    // Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets total +
+    // charge exceeds 9e15 grid units. kOpenLimitCases stage price 1, so the charge is the amount.
     void
     testOpenLimitSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepOpenLimit(env, vault, depositor);
-        }
-    }
-
-    // Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets total +
-    // charge exceeds 9e15 grid units. kOpenLimitCases stage price 1, so the charge is the amount.
-    void
-    sweepOpenLimit(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " open limit-Sweep").c_str());
-        runAroundCusp(kOpenLimitCases, [&](OpenLimitCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.total),
-                .yield = gridUnits(env, vault, c.yield),
-                .sharesTotal = static_cast<std::uint64_t>(c.total)};
-            return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
-        });
-    }
-
-    void
-    testAssetsMaximumSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            sweepAssetsMaximum(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " open limit-Sweep").c_str());
+            runAroundCusp(kOpenLimitCases, [&](OpenLimitCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.total),
+                    .yield = gridUnits(env, vault, c.yield),
+                    .sharesTotal = static_cast<std::uint64_t>(c.total)};
+                return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
+            });
         }
     }
 
     // Assets maximum: a deposit is rejected (tecLIMIT_EXCEEDED) once assets total + charge exceeds
     // a non-zero AssetsMaximum. kAssetsMaximumCases stage price 1, so the charge is the amount.
     void
-    sweepAssetsMaximum(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " assets maximum-Sweep").c_str());
-        // std::int64_t const assetsTotal = 1'000'000;
-        // std::int64_t const assetsMaximum = 1'001'000;
-        runAroundCusp(kAssetsMaximumCases, [&](AssetsMaximumCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.total),
-                .maximum = gridUnits(env, vault, c.maximum),
-                .sharesTotal = static_cast<std::uint64_t>(c.total)};
-            return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
-        });
-    }
-
-    void
-    testZeroSharesSweep(jtx::Env& env, SweepVaults const& vaults)
+    testAssetsMaximumSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepZeroShares(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " assets maximum-Sweep").c_str());
+            // std::int64_t const assetsTotal = 1'000'000;
+            // std::int64_t const assetsMaximum = 1'001'000;
+            runAroundCusp(kAssetsMaximumCases, [&](AssetsMaximumCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.total),
+                    .maximum = gridUnits(env, vault, c.maximum),
+                    .sharesTotal = static_cast<std::uint64_t>(c.total)};
+                return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
+            });
         }
     }
 
     // Zero shares: a deposit buying trunc(shares total * amount / assets total) = 0 shares is
     // rejected (tecPRECISION_LOSS). Each row of kZeroSharesCases buys exactly one share.
     void
-    sweepZeroShares(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " zero shares-Sweep").c_str());
-        runAroundCusp(kZeroSharesCases, [&](PriceCusp const& c) {
-            return checkPriceCase(env, vault, depositor, c);
-        });
-    }
-
-    void
-    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
+    testZeroSharesSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepClampToZero(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " zero shares-Sweep").c_str());
+            runAroundCusp(kZeroSharesCases, [&](PriceCusp const& c) {
+                return checkPriceCase(env, vault, depositor, c);
+            });
         }
     }
 
@@ -656,20 +606,14 @@ class LeanVaultDeposit_test : public LeanSuite
     // zero and the deposit is rejected (tecPRECISION_LOSS). Each row of kClampToZeroCases charges
     // exactly one unit.
     void
-    sweepClampToZero(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
-        runAroundCusp(kClampToZeroCases, [&](PriceCusp const& c) {
-            return checkPriceCase(env, vault, depositor, c);
-        });
-    }
-
-    void
-    testChargeRoundingSweep(jtx::Env& env, SweepVaults const& vaults)
+    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepChargeRounding(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
+            runAroundCusp(kClampToZeroCases, [&](PriceCusp const& c) {
+                return checkPriceCase(env, vault, depositor, c);
+            });
         }
     }
 
@@ -677,41 +621,29 @@ class LeanVaultDeposit_test : public LeanSuite
     // unit, half to even. Each row of kChargeRoundingCases is an exact half; both sides succeed
     // there, so the cusp shows only in the post-state totals.
     void
-    sweepChargeRounding(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " charge rounding-Sweep").c_str());
-        runAroundCusp(
-            kChargeRoundingCases,
-            [&](PriceCusp const& c) { return checkPriceCase(env, vault, depositor, c); },
-            false);
-    }
-
-    void
-    testShareMintCapSweep(jtx::Env& env, SweepVaults const& vaults)
+    testChargeRoundingSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepShareMintCap(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " charge rounding-Sweep").c_str());
+            runAroundCusp(
+                kChargeRoundingCases,
+                [&](PriceCusp const& c) { return checkPriceCase(env, vault, depositor, c); },
+                false);
         }
     }
 
     // Share mint cap: minting past 2^63 - 1 outstanding shares fails the share send
     // (tecPATH_DRY). Each row of kShareMintCapCases mints up to exactly the cap.
     void
-    sweepShareMintCap(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " share mint cap-Sweep").c_str());
-        runAroundCusp(kShareMintCapCases, [&](PriceCusp const& c) {
-            return checkPriceCase(env, vault, depositor, c);
-        });
-    }
-
-    void
-    testSubGridAmountSweep(jtx::Env& env, SweepVaults const& vaults)
+    testShareMintCapSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepSubGridAmount(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " share mint cap-Sweep").c_str());
+            runAroundCusp(kShareMintCapCases, [&](PriceCusp const& c) {
+                return checkPriceCase(env, vault, depositor, c);
+            });
         }
     }
 
@@ -719,26 +651,20 @@ class LeanVaultDeposit_test : public LeanSuite
     // (tecPRECISION_LOSS). kOneGridStepCases are mantissas at exponent -(scale + 15), where
     // kOneGridStepMantissa is exactly one grid step.
     void
-    sweepSubGridAmount(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
-    {
-        beginCase(("deposit " + vaultName(env, vault) + " sub-grid amount-Sweep").c_str());
-        auto const sle = env.le(vault);
-        Asset const asset = sle->at(sfAsset);
-        int const scale = sle->at(sfScale);
-        StagedVault const staged{
-            .available = gridUnits(env, vault, 1'000'000), .sharesTotal = 1'000'000};
-        runAroundCusp(kOneGridStepCases, [&](std::int64_t mantissa) {
-            STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), -(scale + 15)};
-            return checkDeposit(env, vault, depositor, staged, amount);
-        });
-    }
-
-    void
-    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
+    testSubGridAmountSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, depositor] : vaults)
         {
-            sweepShareOverflow(env, vault, depositor);
+            beginCase(("deposit " + vaultName(env, vault) + " sub-grid amount-Sweep").c_str());
+            auto const sle = env.le(vault);
+            Asset const asset = sle->at(sfAsset);
+            int const scale = sle->at(sfScale);
+            StagedVault const staged{
+                .available = gridUnits(env, vault, 1'000'000), .sharesTotal = 1'000'000};
+            runAroundCusp(kOneGridStepCases, [&](std::int64_t mantissa) {
+                STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), -(scale + 15)};
+                return checkDeposit(env, vault, depositor, staged, amount);
+            });
         }
     }
 
@@ -746,17 +672,20 @@ class LeanVaultDeposit_test : public LeanSuite
     // overflows (tecPATH_DRY), just below it the amount is past the open limit (tecLIMIT_EXCEEDED).
     // kShareOverflowCases are mantissas at exponent 3 - scale.
     void
-    sweepShareOverflow(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
+    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
     {
-        beginCase(("deposit " + vaultName(env, vault) + " share overflow-Sweep").c_str());
-        auto const sle = env.le(vault);
-        Asset const asset = sle->at(sfAsset);
-        int const scale = sle->at(sfScale);
-        StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
-        runAroundCusp(kShareOverflowCases, [&](std::int64_t mantissa) {
-            STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), 3 - scale};
-            return checkDeposit(env, vault, depositor, empty, amount);
-        });
+        for (auto const& [vault, depositor] : vaults)
+        {
+            beginCase(("deposit " + vaultName(env, vault) + " share overflow-Sweep").c_str());
+            auto const sle = env.le(vault);
+            Asset const asset = sle->at(sfAsset);
+            int const scale = sle->at(sfScale);
+            StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
+            runAroundCusp(kShareOverflowCases, [&](std::int64_t mantissa) {
+                STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), 3 - scale};
+                return checkDeposit(env, vault, depositor, empty, amount);
+            });
+        }
     }
 
     void

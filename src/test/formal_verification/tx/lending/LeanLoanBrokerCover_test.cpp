@@ -93,7 +93,7 @@ class LeanLoanBrokerCover_test : public LeanSuite
         std::string const& at)
     {
         using namespace jtx;
-        LoanBroker const before = loan_set_sweep::readBroker(view, f);
+        LoanBroker const before = readBroker(view, f);
         Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
         std::optional<STAmount> const stAmount =
             amount ? std::optional<STAmount>{f.asset(*amount)} : std::nullopt;
@@ -138,8 +138,8 @@ class LeanLoanBrokerCover_test : public LeanSuite
                     tx[sfAmount] = stAmount->getJson(JsonOptions::Values::None);
                 break;
         }
-        TER const cppTer = loan_set_sweep::applyOn(env, view, tx);
-        LoanBroker const cpp = loan_set_sweep::readBroker(view, f);
+        TER const cppTer = applyOn(env, view, tx);
+        LoanBroker const cpp = readBroker(view, f);
 
         TER lean = can.ter;
         if (can.leanError || (can.ter == tesSUCCESS && (!result || result->leanError)))
@@ -180,21 +180,21 @@ class LeanLoanBrokerCover_test : public LeanSuite
     TER
     checkStagedCover(
         SweepLedger& l,
-        loan_set_sweep::LendingStage s,
+        LendingStage s,
         Op op,
         std::optional<Number> const& amount,
         std::optional<TER> expected = std::nullopt,
         std::optional<Number> const& expectedMoved = std::nullopt)
     {
-        std::string const at = opName(op) + " " + loan_set_sweep::stageText(s) + " amount " +
+        std::string const at = opName(op) + " " + stageText(s) + " amount " +
             (amount ? to_string(*amount) : std::string{"none"});
         OpenView view{*l.env->current()};
-        auto const phase = loan_set_sweep::investment(view);
+        auto const phase = investment(view);
         s.subscriptionDate = phase.subscriptionDate;
         s.redemptionDate = phase.redemptionDate;
         try
         {
-            loan_set_sweep::stageLending(*l.env, view, l.f, s);
+            stageLending(*l.env, view, l.f, s);
         }
         catch (std::exception const& e)
         {
@@ -228,8 +228,7 @@ class LeanLoanBrokerCover_test : public LeanSuite
     {
         testcase(opName(op) + ": " + label);
         SweepLedger& l = ledger(assetKind);
-        loan_set_sweep::LendingStage s{
-            .cover = toUnits(l, cover), .managementFeeRate = 1'000, .coverRate = 10'000};
+        LendingStage s{.cover = toUnits(l, cover), .managementFeeRate = 1'000, .coverRate = 10'000};
         if (withLoan)
             s.debt = toUnits(l, Number{1'000});
         checkStagedCover(l, s, op, amount, expected, expectedMoved);
@@ -241,7 +240,7 @@ class LeanLoanBrokerCover_test : public LeanSuite
     static Number
     units(SweepLedger const& l, std::int64_t n)
     {
-        return loan_set_sweep::units(*l.env->current(), l.f, n);
+        return formal_verification::units(l.f, n);
     }
 
     // A cover deposit that truncates to zero grid units is tecPRECISION_LOSS. One grid step is
@@ -358,10 +357,12 @@ class LeanLoanBrokerCover_test : public LeanSuite
     {
         jtx::Env iouEnv(*this);
         iou_ = SweepLedger{
-            .env = &iouEnv, .f = loan_set_sweep::setUpSweepBroker(iouEnv, LendingAsset::iou)};
+            .env = &iouEnv,
+            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits)};
         jtx::Env mptEnv(*this);
         mpt_ = SweepLedger{
-            .env = &mptEnv, .f = loan_set_sweep::setUpSweepBroker(mptEnv, LendingAsset::mpt)};
+            .env = &mptEnv,
+            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits)};
 
         // The IOU vault has scale 6, so the cover grid is 1e-6 and the open limit 9e9.
         Number const grid{1, -6};

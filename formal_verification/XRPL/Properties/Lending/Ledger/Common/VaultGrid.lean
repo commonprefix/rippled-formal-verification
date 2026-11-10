@@ -397,7 +397,7 @@ private lemma LendingLedger.applyVault_onGrid (l : LendingLedger) (tx : LendingT
     obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
     rw [(congrArg RawVault.assetsAvailable hf :)]
     exact hv
-  | vaultSet m b ub =>
+  | vaultSet m b =>
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok

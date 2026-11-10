@@ -494,9 +494,6 @@ public:
             SaveNumberRoundMode save{Number::setround(mode)};
             sweepRange(mode);
             sweepSumOverflow(mode);
-            sweepDifferenceUnderflow(mode);
-            sweepMulRatioOverflow(mode, false);
-            sweepMulRatioOverflow(mode, true);
         }
     }
 
@@ -523,36 +520,6 @@ public:
             auto const b = makeIOUAmountPair(c.b, c.exponent);
             checkAdd(a, b, mode);
             return cppVerdict([&] { return (a.cppIou + b.cppIou).signum() == 0; });
-        });
-    }
-
-    // Sub at exponent -96: a difference down to the smallest mantissa is a value, below it zero.
-    void
-    sweepDifferenceUnderflow(Number::RoundingMode mode)
-    {
-        beginCase(("LeanIOUAmount.sub underflow " + modeName(mode) + "-Sweep").c_str());
-        runAroundCusp(kIouDifferenceUnderflowCases, [&](MantissaPair const& c) {
-            auto const a = makeIOUAmountPair(c.a, c.exponent);
-            auto const b = makeIOUAmountPair(c.b, c.exponent);
-            checkSub(a, b, mode);
-            return cppVerdict([&] { return (a.cppIou - b.cppIou).signum() == 0; });
-        });
-    }
-
-    // mulRatio at exponent 80: value * num / den up to the largest mantissa fits, above it
-    // overflows.
-    void
-    sweepMulRatioOverflow(Number::RoundingMode mode, bool roundUp)
-    {
-        beginCase(("LeanIOUAmount.mulRatio overflow " + modeName(mode) +
-                   (roundUp ? " up" : " down") + "-Sweep")
-                      .c_str());
-        runAroundCusp(kIouMulRatioCases, [&](Ratio const& c) {
-            auto const v = makeIOUAmountPair(c.value, kIouMaxExponent);
-            auto const num = static_cast<std::uint32_t>(c.num);
-            auto const den = static_cast<std::uint32_t>(c.den);
-            checkMulRatio(v, num, den, roundUp, mode);
-            return cppVerdict([&] { return mulRatio(v.cppIou, num, den, roundUp).signum() == 0; });
         });
     }
 

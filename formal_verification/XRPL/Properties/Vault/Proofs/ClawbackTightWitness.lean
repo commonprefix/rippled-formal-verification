@@ -56,8 +56,8 @@ def aC : STAmount := int64Amount 6564364663
 def aO : STAmount := int64Amount 2
 def aBig : STAmount := int64Amount 2
 
-/-- The holder's balance: one share is enough, a positive clawback amount sets the shares. -/
-def hold : STAmount := int64Amount 1
+/-- The holder's balance: enough to cover the shares a positive clawback amount burns. -/
+def hold : STAmount := int64Amount 9223372036854775807
 
 /-- A clawback's result, computed by the model. -/
 def run (v : Vault) (a : STAmount) (h : 0 ≤ a.toRat) : VaultWithAmounts :=

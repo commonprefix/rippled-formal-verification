@@ -90,7 +90,7 @@ class LeanLoanPay_test : public LeanSuite
         TER expected)
     {
         using namespace jtx;
-        Loan const loan = readLoanState(env, loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const loan = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
         Vault const pool = readVaultState(env, f.vaultKeylet, f.asset.raw());
         std::uint32_t const now = parentCloseTime(env);
 
@@ -106,7 +106,7 @@ class LeanLoanPay_test : public LeanSuite
             Fee(env.current()->fees().base * 101),
             jtx::Ter(std::ignore));
         TER const cppTer = env.ter();
-        Loan const cppLoan = readLoanState(env, loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const cppLoan = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
         Vault const cppPool = readVaultState(env, f.vaultKeylet, f.asset.raw());
         Number const ownerAfter = assetBalance(env, f.owner, f.asset);
         env.close();
@@ -169,7 +169,6 @@ class LeanLoanPay_test : public LeanSuite
         TER const cppTer = applyOn(
             env,
             view,
-            f.borrower,
             loan::pay(f.borrower, loanKeylet.key, f.asset(amount), flagsOf(type)),
             Fee(env.current()->fees().base * 101));
 
@@ -256,7 +255,6 @@ class LeanLoanPay_test : public LeanSuite
                 applyOn(
                     env,
                     view,
-                    f.borrower,
                     loan::pay(f.borrower, loanKeylet.key, f.asset(1'000)),
                     Fee(env.current()->fees().base * 101)) == tesSUCCESS);
         }
@@ -290,8 +288,7 @@ class LeanLoanPay_test : public LeanSuite
         auto const loanKeylet = createLoan(env, view, f, p);
         dueAt(view, loanKeylet, parentCloseTime(env), -1);
         BEAST_EXPECT(
-            applyOn(env, view, f.owner, loan::manage(f.owner, loanKeylet.key, tfLoanImpair)) ==
-            tesSUCCESS);
+            applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanImpair)) == tesSUCCESS);
         BEAST_EXPECT(view.read(loanKeylet)->isFlag(lsfLoanImpaired));
         expectPay(env, view, f, loanKeylet, p, PaymentType::late, Number{600}, tesSUCCESS);
         BEAST_EXPECT(!view.read(loanKeylet)->isFlag(lsfLoanImpaired));
@@ -417,140 +414,123 @@ class LeanLoanPay_test : public LeanSuite
         return f;
     }
 
+    // Lateness: regular, full and overpayments are tecEXPIRED once the parent close time passes
+    // the due date, a late payment is tecTOO_SOON until then. The amount is the exact amount due.
     void
     testDueDateSweep(SweepFixtures const& fixtures)
     {
         for (auto const& [env, f] : fixtures)
         {
-            sweepDueDate(env, f);
-        }
-    }
-
-    // Lateness: regular, full and overpayments are tecEXPIRED once the parent close time passes
-    // the due date, a late payment is tecTOO_SOON until then. The amount is the exact amount due.
-    void
-    sweepDueDate(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanPay " + assetName(f) + " due date-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kDueDateCases, [&](DueDateCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{
-                .principal = units(f, c.principal),
-                .allowsOverpayment = c.type == PaymentType::overpayment};
-            auto const loan = createLoan(env, view, f, p);
-            dueAt(view, loan, now, c.dueOffset);
-            return checkPay(
-                env, view, f, loan, p.paymentTotal, c.type, units(f, c.amount), describe(c) + ": ");
-        });
-    }
-
-    void
-    testLateInterestSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [env, f] : fixtures)
-        {
-            sweepLateInterest(env, f);
+            beginCase(("LoanPay " + assetName(f) + " due date-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            runAroundCusp(kDueDateCases, [&](DueDateCusp const& c) {
+                OpenView view{*env.current()};
+                LoanParams const p{
+                    .principal = units(f, c.principal),
+                    .allowsOverpayment = c.type == PaymentType::overpayment};
+                auto const loan = createLoan(env, view, f, p);
+                dueAt(view, loan, now, c.dueOffset);
+                return checkPay(
+                    env,
+                    view,
+                    f,
+                    loan,
+                    p.paymentTotal,
+                    c.type,
+                    units(f, c.amount),
+                    describe(c) + ": ");
+            });
         }
     }
 
     // Late amount due: one installment, its fees and the late interest (exactly k units per second
     // late at these principals). Below it is tecINSUFFICIENT_PAYMENT; not late is tecTOO_SOON.
     void
-    sweepLateInterest(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanPay " + assetName(f) + " late interest-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kLateInterestCases, [&](LateInterestCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{
-                .principal = units(f, kSecondsPerYear * c.k),
-                .lateInterestRate = static_cast<std::uint32_t>(kRateCap),
-                .serviceFee = units(f, c.serviceFee),
-                .latePaymentFee = units(f, c.lateFee),
-                .paymentTotal = c.installments};
-            auto const loan = createLoan(env, view, f, p);
-            dueAt(view, loan, now, -c.lateBy);
-            return checkPay(
-                env,
-                view,
-                f,
-                loan,
-                p.paymentTotal,
-                PaymentType::late,
-                units(f, c.amount),
-                describe(c) + ": ");
-        });
-    }
-
-    void
-    testServiceFeeSweep(SweepFixtures const& fixtures)
+    testLateInterestSweep(SweepFixtures const& fixtures)
     {
         for (auto const& [env, f] : fixtures)
         {
-            sweepServiceFee(env, f);
+            beginCase(("LoanPay " + assetName(f) + " late interest-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            runAroundCusp(kLateInterestCases, [&](LateInterestCusp const& c) {
+                OpenView view{*env.current()};
+                LoanParams const p{
+                    .principal = units(f, kSecondsPerYear * c.k),
+                    .lateInterestRate = static_cast<std::uint32_t>(kRateCap),
+                    .serviceFee = units(f, c.serviceFee),
+                    .latePaymentFee = units(f, c.lateFee),
+                    .paymentTotal = c.installments};
+                auto const loan = createLoan(env, view, f, p);
+                dueAt(view, loan, now, -c.lateBy);
+                return checkPay(
+                    env,
+                    view,
+                    f,
+                    loan,
+                    p.paymentTotal,
+                    PaymentType::late,
+                    units(f, c.amount),
+                    describe(c) + ": ");
+            });
         }
     }
 
     // A regular payment must cover one installment and its service fee, else
     // tecINSUFFICIENT_PAYMENT.
     void
-    sweepServiceFee(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanPay " + assetName(f) + " service fee-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kServiceFeeCases, [&](ServiceFeeCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{
-                .principal = units(f, 2 * c.installment), .serviceFee = units(f, c.serviceFee)};
-            auto const loan = createLoan(env, view, f, p);
-            startedAgo(view, loan, now, 0);
-            return checkPay(
-                env,
-                view,
-                f,
-                loan,
-                p.paymentTotal,
-                PaymentType::regular,
-                units(f, c.amount),
-                describe(c) + ": ");
-        });
-    }
-
-    void
-    testFullPaymentSweep(SweepFixtures const& fixtures)
+    testServiceFeeSweep(SweepFixtures const& fixtures)
     {
         for (auto const& [env, f] : fixtures)
         {
-            sweepFullPayment(env, f);
+            beginCase(("LoanPay " + assetName(f) + " service fee-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            runAroundCusp(kServiceFeeCases, [&](ServiceFeeCusp const& c) {
+                OpenView view{*env.current()};
+                LoanParams const p{
+                    .principal = units(f, 2 * c.installment), .serviceFee = units(f, c.serviceFee)};
+                auto const loan = createLoan(env, view, f, p);
+                startedAgo(view, loan, now, 0);
+                return checkPay(
+                    env,
+                    view,
+                    f,
+                    loan,
+                    p.paymentTotal,
+                    PaymentType::regular,
+                    units(f, c.amount),
+                    describe(c) + ": ");
+            });
         }
     }
 
     // A full payment must cover the principal, the close interest and the close payment fee, else
     // tecINSUFFICIENT_PAYMENT.
     void
-    sweepFullPayment(jtx::Env& env, BrokerFixture const& f)
+    testFullPaymentSweep(SweepFixtures const& fixtures)
     {
-        beginCase(("LoanPay " + assetName(f) + " full payment-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kFullPaymentCases, [&](FullPaymentCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{
-                .principal = units(f, c.principal),
-                .closeInterestRate = c.closeRate,
-                .closePaymentFee = units(f, c.closeFee)};
-            auto const loan = createLoan(env, view, f, p);
-            startedAgo(view, loan, now, 0);
-            return checkPay(
-                env,
-                view,
-                f,
-                loan,
-                p.paymentTotal,
-                PaymentType::full,
-                units(f, c.amount),
-                describe(c) + ": ");
-        });
+        for (auto const& [env, f] : fixtures)
+        {
+            beginCase(("LoanPay " + assetName(f) + " full payment-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            runAroundCusp(kFullPaymentCases, [&](FullPaymentCusp const& c) {
+                OpenView view{*env.current()};
+                LoanParams const p{
+                    .principal = units(f, c.principal),
+                    .closeInterestRate = c.closeRate,
+                    .closePaymentFee = units(f, c.closeFee)};
+                auto const loan = createLoan(env, view, f, p);
+                startedAgo(view, loan, now, 0);
+                return checkPay(
+                    env,
+                    view,
+                    f,
+                    loan,
+                    p.paymentTotal,
+                    PaymentType::full,
+                    units(f, c.amount),
+                    describe(c) + ": ");
+            });
+        }
     }
 
     void

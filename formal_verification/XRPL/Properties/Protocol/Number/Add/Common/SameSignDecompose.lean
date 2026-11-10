@@ -493,6 +493,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                     = .ok result := by
       have h := hok
       simp only [h_xneqyn, if_true] at h
+      replace h := checkSumAtTop_bind_ok h
       exact h
     have h_g_aln_sbit : g_aln.sbit_ = x.negative_ := by
       rw [hg_aln_def, haln_def, alignDown_sbit_preserved, hg₀_def]
@@ -567,6 +568,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                       = .ok result := by
         have h := hok
         simp only [h_xneqyn, if_true] at h
+        replace h := checkSumAtTop_bind_ok h
         rw [he_common_eq]
         exact h
       have h_g_aln_sbit : g_aln.sbit_ = x.negative_ := by
@@ -615,6 +617,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                       = .ok result := by
         have h := hok
         simp only [h_xneqyn, if_true] at h
+        replace h := checkSumAtTop_bind_ok h
         exact h
       have hxm_a_lt : xm_a.toNat < 10 ^ 19 := by rw [hxm_a_def]; exact hx_mant_bound
       have hym_a_lt : ym_a.toNat < 10 ^ 19 := by rw [hym_a_def]; exact hy_mant_bound

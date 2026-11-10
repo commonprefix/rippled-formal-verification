@@ -47,6 +47,7 @@ lemma Number.operator_add_tail_ne_wrap (xn yn : Bool) (xm ym : UInt64) (xe : Int
     (mode : rounding_mode) (hg : allNibblesAtMost9 g.digits_) (hpos : xn ≠ yn → g.empty = true ∨ xm ≠ ym) :
     (if xn == yn then do
       let zm128 ← (toUInt128 xm).addChecked (toUInt128 ym)
+      checkSumAtTop zm128 xe
       let (zm, xe, g) ←
         (if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then do
           let (g', zm128', xe') ← g.doDropDigit128 zm128 xe
@@ -76,6 +77,7 @@ lemma Number.operator_add_tail_ne_wrap (xn yn : Bool) (xm ym : UInt64) (xe : Int
   · rw [BitVec.addChecked_of_lt (by rw [toNat_toUInt128, toNat_toUInt128]; omega), ok_bind]
     have hs : (toUInt128 xm + toUInt128 ym).toNat = xm.toNat + ym.toNat := by
       rw [BitVec.toNat_add, toNat_toUInt128, toNat_toUInt128, Nat.mod_eq_of_lt (by omega)]
+    refine bind_ne_error (by unfold checkSumAtTop; split_ifs <;> exact nofun) fun _ => ?_
     refine bind_ne_error ?_ fun p => ?_
     · split
       · rw [Guard.doDropDigit128_eq_spec, ok_bind]

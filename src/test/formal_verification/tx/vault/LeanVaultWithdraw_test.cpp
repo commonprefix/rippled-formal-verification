@@ -108,67 +108,6 @@ class LeanVaultWithdraw_test : public LeanSuite
                 " cpp=" + to_string(cppLossUnrealized));
     }
 
-    // The withdraw's sample values, prefixed to every failure message.
-    static std::string
-    sampleText(StagedVault const& s, STAmount const& amount)
-    {
-        return "amount " + amount.getText() + ", available " + s.available.getText() +
-            ", deployed " + s.deployed.getText() + ", loss " + s.loss.getText() + ", sharesTotal " +
-            std::to_string(s.sharesTotal) + ", holderShares " +
-            std::to_string(s.holderShares.value_or(0)) +
-            (s.earlyExitFeeRate ? ", fee rate " + std::to_string(*s.earlyExitFeeRate) : "") + ": ";
-    }
-
-    // One sample: C++ (on a throwaway view) and the model run on the same staged vault, whose
-    // pseudo-account holds the available assets and whose holder holds `holderShares` (all shares
-    // when unset). Verdicts, post-states and payouts must agree.
-    AppliedVaultTx
-    checkWithdraw(
-        jtx::Env& env,
-        Keylet const& vault,
-        jtx::Account const& holder,
-        StagedVault staged,
-        STAmount const& amount)
-    {
-        staged.pseudoHolding = true;
-        if (!staged.holderShares)
-            staged.holderShares = staged.sharesTotal;
-        std::uint64_t const held = *staged.holderShares;
-        bool const byShares = amount.asset() != Asset{env.le(vault)->at(sfAsset)};
-        AppliedVaultTx const cpp = applyStaged(
-            env,
-            vault,
-            holder,
-            staged,
-            jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}));
-        LeanVaultResult const lean = leanVaultWithdraw(
-            cpp.pre,
-            amount,
-            byShares,
-            parentCloseTime(env),
-            held != 0 && held == staged.sharesTotal,
-            Number{static_cast<std::int64_t>(held)});
-        std::string const at = sampleText(staged, amount);
-        BEAST_EXPECTS(
-            lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
-
-        TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
-        BEAST_EXPECTS(
-            leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
-        if (cpp.ter != tesSUCCESS || leanTer != tesSUCCESS)
-            return cpp;
-
-        auto const same = [&](char const* field, Number const& l, Number const& c) {
-            BEAST_EXPECTS(l == c, at + field + " lean=" + to_string(l) + " cpp=" + to_string(c));
-        };
-        same("assetsTotal", lean.vault.assetsTotal, cpp.post.assetsTotal);
-        same("assetsAvailable", lean.vault.assetsAvailable, cpp.post.assetsAvailable);
-        same("sharesTotal", lean.vault.sharesTotal, cpp.post.sharesTotal);
-        same("lossUnrealized", lean.vault.lossUnrealized, cpp.post.lossUnrealized);
-        same("payout", Number{lean.assets}, cpp.pre.assetsAvailable - cpp.post.assetsAvailable);
-        return cpp;
-    }
-
     void
     expectStagedWithdraw(
         jtx::Env& env,
@@ -178,7 +117,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         STAmount const& amount,
         TER expected)
     {
-        TER const ter = checkWithdraw(env, vault, holder, staged, amount).ter;
+        TER const ter = checkWithdraw(*this, env, vault, holder, staged, amount).ter;
         BEAST_EXPECTS(
             ter == expected, "cpp=" + transToken(ter) + " expected " + transToken(expected));
     }
@@ -292,7 +231,7 @@ class LeanVaultWithdraw_test : public LeanSuite
         StagedVault staged = seededVault(env, vault, STAmount{asset, seed});
         staged.available = STAmount{asset, seed + donation};
         STAmount const shares{shareIssue(env, vault), shareCount};
-        AppliedVaultTx const cpp = checkWithdraw(env, vault, holder, staged, shares);
+        AppliedVaultTx const cpp = checkWithdraw(*this, env, vault, holder, staged, shares);
         BEAST_EXPECTS(cpp.ter == tesSUCCESS, "cpp=" + transToken(cpp.ter));
         Number const paid = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
 
@@ -805,80 +744,57 @@ class LeanVaultWithdraw_test : public LeanSuite
             .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
         if (feeRate)
             staged = inInvestment(env, staged, *feeRate);
-        return checkWithdraw(env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
+        return checkWithdraw(
+                   *this, env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
             .ter;
-    }
-
-    void
-    testZeroSharesByAssetsSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, holder] : vaults)
-        {
-            sweepZeroSharesByAssets(env, vault, holder);
-        }
     }
 
     // Zero shares by assets: an amount worth trunc(shares total * amount / assets total) = 0
     // shares is rejected (tecPRECISION_LOSS). Each row (the deposit zero-shares rows) burns
     // exactly one share.
     void
-    sweepZeroSharesByAssets(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " zero shares by assets-Sweep").c_str());
-        runAroundCusp(kZeroSharesByAssetsCases, [&](PriceCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.total),
-                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
-            return checkWithdraw(env, vault, holder, staged, gridUnits(env, vault, c.amount)).ter;
-        });
-    }
-
-    void
-    testZeroPayoutSweep(jtx::Env& env, SweepVaults const& vaults)
+    testZeroSharesByAssetsSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepZeroPayout(env, vault, holder);
+            beginCase(
+                ("withdraw " + vaultName(env, vault) + " zero shares by assets-Sweep").c_str());
+            runAroundCusp(kZeroSharesByAssetsCases, [&](PriceCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.total),
+                    .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
+                return checkWithdraw(
+                           *this, env, vault, holder, staged, gridUnits(env, vault, c.amount))
+                    .ter;
+            });
         }
     }
 
     // Zero payout: a by-shares redemption paying round(nav * shares / shares total) = 0 units is
     // rejected (tecPRECISION_LOSS). Each row pays exactly half a unit, which rounds to even (0).
     void
-    sweepZeroPayout(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " zero payout-Sweep").c_str());
-        runAroundCusp(kZeroPayoutCases, [&](RedeemCusp const& c) {
-            return checkRedeemCase(env, vault, holder, c);
-        });
-    }
-
-    void
-    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
+    testZeroPayoutSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepClampToZero(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " zero payout-Sweep").c_str());
+            runAroundCusp(kZeroPayoutCases, [&](RedeemCusp const& c) {
+                return checkRedeemCase(env, vault, holder, c);
+            });
         }
     }
 
     // Clamp to zero: a by-shares payout below one grid step floors to zero and is rejected
     // (tecPRECISION_LOSS). Each row pays exactly one grid step.
     void
-    sweepClampToZero(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
-        runAroundCusp(kClampToZeroBySharesCases, [&](RedeemCusp const& c) {
-            return checkRedeemCase(env, vault, holder, c);
-        });
-    }
-
-    void
-    testPayoutRangeSweep(jtx::Env& env, SweepVaults const& vaults)
+    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepPayoutRange(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
+            runAroundCusp(kClampToZeroBySharesCases, [&](RedeemCusp const& c) {
+                return checkRedeemCase(env, vault, holder, c);
+            });
         }
     }
 
@@ -887,21 +803,15 @@ class LeanVaultWithdraw_test : public LeanSuite
     // row pays exactly the largest amount (then fails on the holder's shares). XRP: C++
     // tefEXCEPTION (an uncaught runtime_error), the model outOfRange; both reject.
     void
-    sweepPayoutRange(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " payout range-Sweep").c_str());
-        bool const native = Asset{env.le(vault)->at(sfAsset)}.native();
-        runAroundCusp(
-            native ? kXrpPayoutRangeCases : kMptPayoutRangeCases,
-            [&](RedeemCusp const& c) { return checkRedeemCase(env, vault, holder, c); });
-    }
-
-    void
-    testToNearestSweep(jtx::Env& env, SweepVaults const& vaults)
+    testPayoutRangeSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepToNearest(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " payout range-Sweep").c_str());
+            bool const native = Asset{env.le(vault)->at(sfAsset)}.native();
+            runAroundCusp(
+                native ? kXrpPayoutRangeCases : kMptPayoutRangeCases,
+                [&](RedeemCusp const& c) { return checkRedeemCase(env, vault, holder, c); });
         }
     }
 
@@ -909,21 +819,15 @@ class LeanVaultWithdraw_test : public LeanSuite
     // from there, where the payout amount itself rounds to the grid. Both sides succeed at every
     // row; the post-state and payout are compared.
     void
-    sweepToNearest(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " to nearest-Sweep").c_str());
-        runAroundCusp(
-            kToNearestCases,
-            [&](RedeemCusp const& c) { return checkRedeemCase(env, vault, holder, c); },
-            false);
-    }
-
-    void
-    testFullFeeDustSweep(jtx::Env& env, SweepVaults const& vaults)
+    testToNearestSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepFullFeeDust(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " to nearest-Sweep").c_str());
+            runAroundCusp(
+                kToNearestCases,
+                [&](RedeemCusp const& c) { return checkRedeemCase(env, vault, holder, c); },
+                false);
         }
     }
 
@@ -931,46 +835,36 @@ class LeanVaultWithdraw_test : public LeanSuite
     // rejected (tecPRECISION_LOSS); with a 100% fee no clamp runs, so this check alone decides.
     // Each row debits exactly half the last stored digit.
     void
-    sweepFullFeeDust(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " full fee dust-Sweep").c_str());
-        runAroundCusp(kFullFeeDustCases, [&](RedeemCusp const& c) {
-            return checkRedeemCase(env, vault, holder, c, kFeeRateMaximum);
-        });
-    }
-
-    void
-    testAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
+    testFullFeeDustSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepAvailable(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " full fee dust-Sweep").c_str());
+            runAroundCusp(kFullFeeDustCases, [&](RedeemCusp const& c) {
+                return checkRedeemCase(env, vault, holder, c, kFeeRateMaximum);
+            });
         }
     }
 
     // Available assets: with assets deployed, a withdrawal above the available assets is rejected
     // (tecINSUFFICIENT_FUNDS). Each row withdraws exactly the available assets, at price 1.
     void
-    sweepAvailable(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " available-Sweep").c_str());
-        runAroundCusp(kAvailableCases, [&](AvailableCusp const& c) {
-            auto const sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed);
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .sharesTotal = sharesTotal,
-                .holderShares = sharesTotal - 1};
-            return checkWithdraw(env, vault, holder, staged, gridUnits(env, vault, c.amount)).ter;
-        });
-    }
-
-    void
-    testFeeConsumesPayoutSweep(jtx::Env& env, SweepVaults const& vaults)
+    testAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepFeeConsumesPayout(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " available-Sweep").c_str());
+            runAroundCusp(kAvailableCases, [&](AvailableCusp const& c) {
+                auto const sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed);
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.available),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .sharesTotal = sharesTotal,
+                    .holderShares = sharesTotal - 1};
+                return checkWithdraw(
+                           *this, env, vault, holder, staged, gridUnits(env, vault, c.amount))
+                    .ter;
+            });
         }
     }
 
@@ -978,62 +872,52 @@ class LeanVaultWithdraw_test : public LeanSuite
     // must be at least one unit (tecPRECISION_LOSS below); a 100% rate pays nothing and succeeds.
     // Each row pays exactly one unit.
     void
-    sweepFeeConsumesPayout(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " fee consumes payout-Sweep").c_str());
-        runAroundCusp(kFeeConsumesPayoutCases, [&](FeeCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, 1'000'000),
-                .sharesTotal = 1'000'000,
-                .holderShares = 999'999};
-            return checkWithdraw(
-                       env,
-                       vault,
-                       holder,
-                       inInvestment(env, staged, c.rate),
-                       gridUnits(env, vault, c.gross))
-                .ter;
-        });
-    }
-
-    void
-    testNetOverAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
+    testFeeConsumesPayoutSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepNetOverAvailable(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " fee consumes payout-Sweep").c_str());
+            runAroundCusp(kFeeConsumesPayoutCases, [&](FeeCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, 1'000'000),
+                    .sharesTotal = 1'000'000,
+                    .holderShares = 999'999};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           inInvestment(env, staged, c.rate),
+                           gridUnits(env, vault, c.gross))
+                    .ter;
+            });
         }
     }
 
     // Net payout over available: with a fee only the net payout must be available
     // (tecINSUFFICIENT_FUNDS above). Each row nets exactly the available assets, at price 1.
     void
-    sweepNetOverAvailable(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " net over available-Sweep").c_str());
-        runAroundCusp(kNetOverAvailableCases, [&](NetOverAvailableCusp const& c) {
-            auto const sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed);
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .sharesTotal = sharesTotal,
-                .holderShares = sharesTotal - 1};
-            return checkWithdraw(
-                       env,
-                       vault,
-                       holder,
-                       inInvestment(env, staged, c.rate),
-                       gridUnits(env, vault, c.gross))
-                .ter;
-        });
-    }
-
-    void
-    testFinalSweep(jtx::Env& env, SweepVaults const& vaults)
+    testNetOverAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepFinal(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " net over available-Sweep").c_str());
+            runAroundCusp(kNetOverAvailableCases, [&](NetOverAvailableCusp const& c) {
+                auto const sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed);
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.available),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .sharesTotal = sharesTotal,
+                    .holderShares = sharesTotal - 1};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           inInvestment(env, staged, c.rate),
+                           gridUnits(env, vault, c.gross))
+                    .ter;
+            });
         }
     }
 
@@ -1041,26 +925,25 @@ class LeanVaultWithdraw_test : public LeanSuite
     // assets are deployed (tecHAS_OBLIGATIONS). Each row redeems every share of a vault with
     // nothing deployed, at price 1.
     void
-    sweepFinal(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " final-Sweep").c_str());
-        runAroundCusp(kFinalCases, [&](FinalCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed)};
-            return checkWithdraw(
-                       env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
-                .ter;
-        });
-    }
-
-    void
-    testImpairedSweep(jtx::Env& env, SweepVaults const& vaults)
+    testFinalSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepImpaired(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " final-Sweep").c_str());
+            runAroundCusp(kFinalCases, [&](FinalCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.available),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed)};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           staged,
+                           STAmount{shareIssue(env, vault), c.shares})
+                    .ter;
+            });
         }
     }
 
@@ -1068,28 +951,27 @@ class LeanVaultWithdraw_test : public LeanSuite
     // for nothing (tesSUCCESS); one unit of net asset value makes the payout non-zero, which fails
     // (tecPRECISION_LOSS or tecINSUFFICIENT_FUNDS). Each row has the whole deployed total lost.
     void
-    sweepImpaired(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " fully impaired-Sweep").c_str());
-        runAroundCusp(kImpairedCases, [&](ImpairedCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, 0),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .loss = gridUnits(env, vault, c.loss),
-                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
-                .holderShares = static_cast<std::uint64_t>(c.sharesTotal - 1)};
-            return checkWithdraw(
-                       env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
-                .ter;
-        });
-    }
-
-    void
-    testSubGridOverAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
+    testImpairedSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepSubGridOverAvailable(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " fully impaired-Sweep").c_str());
+            runAroundCusp(kImpairedCases, [&](ImpairedCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, 0),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .loss = gridUnits(env, vault, c.loss),
+                    .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
+                    .holderShares = static_cast<std::uint64_t>(c.sharesTotal - 1)};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           staged,
+                           STAmount{shareIssue(env, vault), c.shares})
+                    .ter;
+            });
         }
     }
 
@@ -1097,27 +979,27 @@ class LeanVaultWithdraw_test : public LeanSuite
     // rejected (tecINSUFFICIENT_FUNDS) by the check on the unclamped payout, which the clamp would
     // otherwise floor back to the available assets. Each row pays exactly the available assets.
     void
-    sweepSubGridOverAvailable(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " sub-grid over available-Sweep").c_str());
-        runAroundCusp(kSubGridOverAvailableCases, [&](SubGridCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
-                .holderShares = static_cast<std::uint64_t>(c.sharesTotal - 1)};
-            return checkWithdraw(
-                       env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
-                .ter;
-        });
-    }
-
-    void
-    testDecadeSweep(jtx::Env& env, SweepVaults const& vaults)
+    testSubGridOverAvailableSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepDecade(env, vault, holder);
+            beginCase(
+                ("withdraw " + vaultName(env, vault) + " sub-grid over available-Sweep").c_str());
+            runAroundCusp(kSubGridOverAvailableCases, [&](SubGridCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.available),
+                    .deployed = gridUnits(env, vault, c.deployed),
+                    .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal),
+                    .holderShares = static_cast<std::uint64_t>(c.sharesTotal - 1)};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           staged,
+                           STAmount{shareIssue(env, vault), c.shares})
+                    .ter;
+            });
         }
     }
 
@@ -1125,29 +1007,25 @@ class LeanVaultWithdraw_test : public LeanSuite
     // units from 10^16 units up, so there a one-unit withdrawal truncates to zero
     // (tecPRECISION_LOSS). Each row leaves exactly 10^16 - 1 or 10^16 units, at price 1.
     void
-    sweepDecade(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " decade crossing-Sweep").c_str());
-        auto const sle = env.le(vault);
-        Asset const asset = sle->at(sfAsset);
-        int const scale = sle->at(sfScale);
-        runAroundCusp(kDecadeCases, [&](DecadeCusp const& c) {
-            auto const sharesTotal = static_cast<std::uint64_t>(c.availableMantissa * 10);
-            StagedVault const staged{
-                .available =
-                    STAmount{asset, static_cast<std::uint64_t>(c.availableMantissa), 1 - scale},
-                .sharesTotal = sharesTotal,
-                .holderShares = sharesTotal - 1};
-            return checkWithdraw(env, vault, holder, staged, gridUnits(env, vault, c.amount)).ter;
-        });
-    }
-
-    void
-    testHolderSharesSweep(jtx::Env& env, SweepVaults const& vaults)
+    testDecadeSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepHolderShares(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " decade crossing-Sweep").c_str());
+            auto const sle = env.le(vault);
+            Asset const asset = sle->at(sfAsset);
+            int const scale = sle->at(sfScale);
+            runAroundCusp(kDecadeCases, [&](DecadeCusp const& c) {
+                auto const sharesTotal = static_cast<std::uint64_t>(c.availableMantissa * 10);
+                StagedVault const staged{
+                    .available =
+                        STAmount{asset, static_cast<std::uint64_t>(c.availableMantissa), 1 - scale},
+                    .sharesTotal = sharesTotal,
+                    .holderShares = sharesTotal - 1};
+                return checkWithdraw(
+                           *this, env, vault, holder, staged, gridUnits(env, vault, c.amount))
+                    .ter;
+            });
         }
     }
 
@@ -1155,26 +1033,25 @@ class LeanVaultWithdraw_test : public LeanSuite
     // (tecINSUFFICIENT_FUNDS). Each row redeems exactly the shares held; one more share is held by
     // someone else.
     void
-    sweepHolderShares(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " holder shares-Sweep").c_str());
-        runAroundCusp(kHolderSharesCases, [&](HolderCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.holderShares + 1),
-                .sharesTotal = static_cast<std::uint64_t>(c.holderShares + 1),
-                .holderShares = static_cast<std::uint64_t>(c.holderShares)};
-            return checkWithdraw(
-                       env, vault, holder, staged, STAmount{shareIssue(env, vault), c.shares})
-                .ter;
-        });
-    }
-
-    void
-    testWaiverSweep(jtx::Env& env, SweepVaults const& vaults)
+    testHolderSharesSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepWaiver(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " holder shares-Sweep").c_str());
+            runAroundCusp(kHolderSharesCases, [&](HolderCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.holderShares + 1),
+                    .sharesTotal = static_cast<std::uint64_t>(c.holderShares + 1),
+                    .holderShares = static_cast<std::uint64_t>(c.holderShares)};
+                return checkWithdraw(
+                           *this,
+                           env,
+                           vault,
+                           holder,
+                           staged,
+                           STAmount{shareIssue(env, vault), c.shares})
+                    .ter;
+            });
         }
     }
 
@@ -1182,46 +1059,50 @@ class LeanVaultWithdraw_test : public LeanSuite
     // assets total - loss unrealized. Both sides succeed; the post-state and payout are compared
     // for a 1000-share redemption.
     void
-    sweepWaiver(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
-    {
-        beginCase(("withdraw " + vaultName(env, vault) + " loss waiver-Sweep").c_str());
-        runAroundCusp(
-            kWaiverCases,
-            [&](WaiverCusp const& c) {
-                StagedVault const staged{
-                    .available = gridUnits(env, vault, c.total - c.deployed),
-                    .deployed = gridUnits(env, vault, c.deployed),
-                    .loss = gridUnits(env, vault, c.loss),
-                    .sharesTotal = static_cast<std::uint64_t>(c.total),
-                    .holderShares = static_cast<std::uint64_t>(c.holderShares)};
-                return checkWithdraw(
-                           env, vault, holder, staged, STAmount{shareIssue(env, vault), 1'000})
-                    .ter;
-            },
-            false);
-    }
-
-    void
-    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
+    testWaiverSweep(jtx::Env& env, SweepVaults const& vaults)
     {
         for (auto const& [vault, holder] : vaults)
         {
-            sweepShareOverflow(env, vault, holder);
+            beginCase(("withdraw " + vaultName(env, vault) + " loss waiver-Sweep").c_str());
+            runAroundCusp(
+                kWaiverCases,
+                [&](WaiverCusp const& c) {
+                    StagedVault const staged{
+                        .available = gridUnits(env, vault, c.total - c.deployed),
+                        .deployed = gridUnits(env, vault, c.deployed),
+                        .loss = gridUnits(env, vault, c.loss),
+                        .sharesTotal = static_cast<std::uint64_t>(c.total),
+                        .holderShares = static_cast<std::uint64_t>(c.holderShares)};
+                    return checkWithdraw(
+                               *this,
+                               env,
+                               vault,
+                               holder,
+                               staged,
+                               STAmount{shareIssue(env, vault), 1'000})
+                        .ter;
+                },
+                false);
         }
     }
 
     // By-assets share overflow: an amount worth more than 2^63 - 1 shares fails the share
     // computation (tecPATH_DRY). Each row converts to exactly 2^63 - 1 shares.
     void
-    sweepShareOverflow(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
+    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
     {
-        beginCase(("withdraw " + vaultName(env, vault) + " share overflow-Sweep").c_str());
-        runAroundCusp(kAssetsShareOverflowCases, [&](ShareOverflowCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.nav),
-                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
-            return checkWithdraw(env, vault, holder, staged, gridUnits(env, vault, c.amount)).ter;
-        });
+        for (auto const& [vault, holder] : vaults)
+        {
+            beginCase(("withdraw " + vaultName(env, vault) + " share overflow-Sweep").c_str());
+            runAroundCusp(kAssetsShareOverflowCases, [&](ShareOverflowCusp const& c) {
+                StagedVault const staged{
+                    .available = gridUnits(env, vault, c.nav),
+                    .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
+                return checkWithdraw(
+                           *this, env, vault, holder, staged, gridUnits(env, vault, c.amount))
+                    .ter;
+            });
+        }
     }
 
     void

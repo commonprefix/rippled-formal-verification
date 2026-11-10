@@ -166,18 +166,14 @@ class LeanLoanBroker_test : public LeanSuite
     // A throwaway view of the shared ledger with `s` staged (the vault always in its investment
     // phase).
     bool
-    stagedView(
-        SweepLedger& l,
-        OpenView& view,
-        loan_set_sweep::LendingStage s,
-        std::string const& at)
+    stagedView(SweepLedger& l, OpenView& view, LendingStage s, std::string const& at)
     {
-        auto const phase = loan_set_sweep::investment(view);
+        auto const phase = investment(view);
         s.subscriptionDate = phase.subscriptionDate;
         s.redemptionDate = phase.redemptionDate;
         try
         {
-            loan_set_sweep::stageLending(*l.env, view, l.f, s);
+            stageLending(*l.env, view, l.f, s);
         }
         catch (std::exception const& e)
         {
@@ -222,7 +218,7 @@ class LeanLoanBroker_test : public LeanSuite
             tx[sfCoverRateMinimum] = *config.coverRateMinimum;
         if (config.coverRateLiquidation)
             tx[sfCoverRateLiquidation] = *config.coverRateLiquidation;
-        TER const cppTer = loan_set_sweep::applyOn(env, view, tx);
+        TER const cppTer = applyOn(env, view, tx);
 
         if (expected)
             BEAST_EXPECTS(
@@ -243,8 +239,7 @@ class LeanLoanBroker_test : public LeanSuite
             return cppTer;
 
         BEAST_EXPECTS(!created.leanError.has_value(), at + ": lean create error");
-        expectSameBroker(
-            created.broker, loan_set_sweep::readBroker(view, brokerKeylet, f.asset.raw()));
+        expectSameBroker(created.broker, readBroker(view, brokerKeylet, f.asset.raw()));
         return cppTer;
     }
 
@@ -280,7 +275,7 @@ class LeanLoanBroker_test : public LeanSuite
         std::string const& at)
     {
         using namespace jtx;
-        LoanBroker const broker = loan_set_sweep::readBroker(view, f);
+        LoanBroker const broker = readBroker(view, f);
         Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
         LawfulTerResult const canUpdate = leanCanLoanBrokerUpdate(broker, pool, cap);
         expectLawful(canUpdate);
@@ -290,7 +285,7 @@ class LeanLoanBroker_test : public LeanSuite
         tx[sfLoanBrokerID] = to_string(f.brokerKeylet.key);
         if (cap)
             tx[sfDebtMaximum] = *cap;
-        TER const cppTer = loan_set_sweep::applyOn(env, view, tx);
+        TER const cppTer = applyOn(env, view, tx);
 
         if (expected)
             BEAST_EXPECTS(
@@ -303,7 +298,7 @@ class LeanLoanBroker_test : public LeanSuite
         if (cppTer != tesSUCCESS)
             return cppTer;
         BEAST_EXPECTS(!updated.leanError.has_value(), at + ": lean update error");
-        expectSameBroker(updated.broker, loan_set_sweep::readBroker(view, f));
+        expectSameBroker(updated.broker, readBroker(view, f));
         return cppTer;
     }
 
@@ -320,7 +315,7 @@ class LeanLoanBroker_test : public LeanSuite
         testcase(label);
         SweepLedger& l = *iou_;
         OpenView view{*l.env->current()};
-        loan_set_sweep::LendingStage s{
+        LendingStage s{
             .managementFeeRate = 1'000, .coverRate = 10'000, .debtMaximum = 5'000'000'000};
         if (withLoan)
         {
@@ -329,9 +324,8 @@ class LeanLoanBroker_test : public LeanSuite
         }
         if (!stagedView(l, view, s, label))
             return;
-        std::optional<Number> const cap = equalToDebt
-            ? std::optional<Number>{loan_set_sweep::readBroker(view, l.f).debtTotal}
-            : debtMaximum;
+        std::optional<Number> const cap =
+            equalToDebt ? std::optional<Number>{readBroker(view, l.f).debtTotal} : debtMaximum;
         checkUpdate(*l.env, l.f, view, cap, expected, label);
     }
 
@@ -425,13 +419,7 @@ class LeanLoanBroker_test : public LeanSuite
                 OpenView view{*l.env->current()};
                 if (!stagedView(l, view, {.debt = c.debt}, at))
                     return TER{tefINTERNAL};
-                return checkUpdate(
-                    *l.env,
-                    l.f,
-                    view,
-                    loan_set_sweep::units(view, l.f, c.maximum),
-                    std::nullopt,
-                    at);
+                return checkUpdate(*l.env, l.f, view, units(l.f, c.maximum), std::nullopt, at);
             });
     }
 
@@ -450,7 +438,7 @@ class LeanLoanBroker_test : public LeanSuite
         if (withLoan)
             issueLoan(env, f, Number{1'000});
 
-        LoanBroker const broker = readLoanBrokerState(env, f.brokerKeylet, f.asset.raw());
+        LoanBroker const broker = readBroker(*env.current(), f.brokerKeylet, f.asset.raw());
         Vault const pool = readVaultState(env, f.vaultKeylet, f.asset.raw());
         LawfulTerResult const canDelete = leanCanLoanBrokerDelete(broker, pool);
         expectLawful(canDelete);
@@ -484,10 +472,12 @@ class LeanLoanBroker_test : public LeanSuite
     {
         jtx::Env iouEnv(*this);
         iou_ = SweepLedger{
-            .env = &iouEnv, .f = loan_set_sweep::setUpSweepBroker(iouEnv, LendingAsset::iou)};
+            .env = &iouEnv,
+            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits)};
         jtx::Env mptEnv(*this);
         mpt_ = SweepLedger{
-            .env = &mptEnv, .f = loan_set_sweep::setUpSweepBroker(mptEnv, LendingAsset::mpt)};
+            .env = &mptEnv,
+            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits)};
 
         testLawful();
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
+#include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
@@ -12,6 +13,7 @@
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/basics/chrono.h>
+#include <xrpl/beast/unit_test/suite.h>
 #include <xrpl/ledger/OpenView.h>
 #include <xrpl/ledger/Sandbox.h>
 #include <xrpl/ledger/helpers/VaultHelpers.h>
@@ -573,6 +575,111 @@ applyDeposit(
     if (donate)
         args.flags = tfVaultDonate;
     return applyStaged(env, vault, depositor, staged, jtx::Vault::deposit(args));
+}
+
+// The staged sample, prefixed to every failure message.
+[[nodiscard]] inline std::string
+sampleText(StagedVault const& s, STAmount const& amount)
+{
+    std::string t = "amount " + amount.getText() + ", available " + s.available.getText() +
+        ", deployed " + s.deployed.getText() + ", yield " + s.yield.getText() + ", loss " +
+        s.loss.getText() + ", sharesTotal " + std::to_string(s.sharesTotal);
+    if (s.maximum)
+        t += ", maximum " + s.maximum->getText();
+    if (s.holderShares)
+        t += ", holderShares " + std::to_string(*s.holderShares);
+    if (s.subscriptionDate && s.redemptionDate)
+        t += ", subscription " + std::to_string(*s.subscriptionDate) + ", redemption " +
+            std::to_string(*s.redemptionDate);
+    if (s.earlyExitFeeRate)
+        t += ", fee rate " + std::to_string(*s.earlyExitFeeRate);
+    return t + ": ";
+}
+
+// The model's vault after the transaction equals C++'s.
+inline void
+expectSameVault(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    Vault const& lean,
+    Vault const& cpp)
+{
+    auto const same = [&](char const* field, Number const& l, Number const& c) {
+        suite.expect(l == c, at + field + " lean=" + to_string(l) + " cpp=" + to_string(c));
+    };
+    same("assetsTotal", lean.assetsTotal, cpp.assetsTotal);
+    same("assetsAvailable", lean.assetsAvailable, cpp.assetsAvailable);
+    same("assetsDeployed", lean.assetsDeployed, cpp.assetsDeployed);
+    same("assetsReserved", lean.assetsReserved, cpp.assetsReserved);
+    same("sharesTotal", lean.sharesTotal, cpp.sharesTotal);
+    same("lossUnrealized", lean.lossUnrealized, cpp.lossUnrealized);
+    same("yieldUnrealized", lean.yieldUnrealized, cpp.yieldUnrealized);
+}
+
+// The model accepts the staged state as lawful and agrees with C++ on the verdict and, when both
+// succeed, on the vault. Returns the C++ verdict.
+inline TER
+expectAgree(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    AppliedVaultTx const& cpp,
+    LeanVaultResult const& lean)
+{
+    suite.expect(lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
+    TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+    suite.expect(
+        leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
+    if (cpp.ter == tesSUCCESS && leanTer == tesSUCCESS)
+        expectSameVault(suite, at, lean.vault, cpp.post);
+    return cpp.ter;
+}
+
+// A withdrawal (by assets, or by shares when `amount` is in shares) from a staged vault whose
+// pseudo-account holds the available assets and whose holder holds `holderShares` (all shares
+// when unset). Both sides must agree, also on the payout: what left the vault (an early-exit fee
+// stays behind), equal to `expectedPayout` when given.
+inline AppliedVaultTx
+checkWithdraw(
+    beast::unit_test::Suite& suite,
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& holder,
+    StagedVault staged,
+    STAmount const& amount,
+    std::optional<Number> const& expectedPayout = std::nullopt)
+{
+    staged.pseudoHolding = true;
+    if (!staged.holderShares)
+        staged.holderShares = staged.sharesTotal;
+    std::uint64_t const held = *staged.holderShares;
+    bool const byShares = amount.asset() != Asset{env.le(vault)->at(sfAsset)};
+    AppliedVaultTx const cpp = applyStaged(
+        env,
+        vault,
+        holder,
+        staged,
+        jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}));
+    LeanVaultResult const lean = leanVaultWithdraw(
+        cpp.pre,
+        amount,
+        byShares,
+        parentCloseTime(env),
+        held != 0 && held == staged.sharesTotal,
+        Number{static_cast<std::int64_t>(held)});
+    std::string const at = sampleText(staged, amount);
+    if (expectAgree(suite, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
+        return cpp;
+    Number const cppPayout = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
+    suite.expect(
+        Number{lean.assets} == cppPayout,
+        at + "payout lean=" + to_string(Number{lean.assets}) + " cpp=" + to_string(cppPayout));
+    if (expectedPayout)
+    {
+        suite.expect(
+            cppPayout == *expectedPayout,
+            at + "payout " + to_string(cppPayout) + " expected " + to_string(*expectedPayout));
+    }
+    return cpp;
 }
 
 }  // namespace xrpl::test::formal_verification

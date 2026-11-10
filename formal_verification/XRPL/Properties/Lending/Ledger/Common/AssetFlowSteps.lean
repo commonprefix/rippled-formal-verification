@@ -629,7 +629,7 @@ lemma LendingLedger.flow_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Re
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
       show _ = _ + AssetFlows.net 0
       rw [AssetFlows.net_zero]; ring
-    | vaultSet m b ub =>
+    | vaultSet m b =>
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok

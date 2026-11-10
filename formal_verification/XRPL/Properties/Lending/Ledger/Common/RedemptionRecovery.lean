@@ -102,7 +102,7 @@ lemma LendingLedger.redemption_recovery_proof (l l' : LendingLedger) (tx : Lendi
     obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
     rw [show RawVault.assetsAvailable _ = _ from (congrArg RawVault.assetsAvailable hf :)] at hup
     exact lt_irrefl _ hup
-  | vaultSet m b ub =>
+  | vaultSet m b =>
     exfalso
     obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_vault rfl h
     rw [LendingLedger.commitVault_vault] at hup

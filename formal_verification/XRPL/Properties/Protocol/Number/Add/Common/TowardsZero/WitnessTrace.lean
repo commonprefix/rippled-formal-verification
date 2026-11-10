@@ -29,6 +29,7 @@ lemma operator_add_towards_zero_witness :
   have hsum : toUInt128 (5000000000000000004 : UInt64) + toUInt128 (5000000000000000005 : UInt64)
       = (10000000000000000009 : UInt128) := by decide
   rw [hsum]
+  rw [show checkSumAtTop (10000000000000000009 : UInt128) 0 = .ok () from by decide, ok_bind]
   rw [show (decide ((10000000000000000009 : UInt128) > toUInt128 largeRange.max) ||
            decide ((10000000000000000009 : UInt128) > toUInt128 maxRepUp)) = true from by decide]
   simp only [if_true]
