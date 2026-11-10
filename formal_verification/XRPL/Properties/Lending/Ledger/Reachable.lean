@@ -14,6 +14,8 @@ import XRPL.Properties.Lending.Ledger.Common.YieldSum
 import XRPL.Properties.Lending.Ledger.Common.CapacityMonotone
 import XRPL.Properties.Lending.Ledger.Common.CoverOpenZone
 import XRPL.Properties.Lending.Ledger.Common.CoverOpenZoneWitness
+import XRPL.Properties.Lending.Ledger.Common.PayUnimpair
+import XRPL.Properties.Lending.Ledger.Common.PayUnimpairWitness
 
 /-! # Lending ledger reachability
 
@@ -55,6 +57,32 @@ theorem Lending.Reachable.impaired_late (hr : l.Reachable) (j : Nat) (e : LoanEn
     (hi : e.loan.isImpaired = true) (hp : e.loan.paymentRemaining ≠ 0) :
     e.loan.isPaymentLate l.now = true :=
   LendingLedger.impaired_late_proof l hr j e he hi hp
+
+/-- Payment on an impaired loan with at most one instalment overdue -> the loan is not impaired, and not late when
+payments are left. -/
+theorem Lending.Reachable.pay_unimpairs_only_current (hr : l.Reachable) (i : Nat) (paymentType : LoanPaymentType)
+    (amount : Number) (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan)
+    (hat : l.LoanAt i loan) (hat' : l'.LoanAt i loan') (hi : loan.isImpaired = true)
+    (hp : loan'.paymentRemaining ≠ 0)
+    (hdue : l.now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.paymentInterval.toNat) :
+    loan'.isImpaired = false ∧ loan'.isPaymentLate l'.now = false :=
+  LendingLedger.pay_unimpairs_only_current_proof l l' hr i paymentType amount h loan loan' hat hat' hi hp hdue
+
+/-- Witness: a loan of 100 at 10% due every 30 days, impaired with three instalments overdue. One late payment of
+20.5 clears the LossUnrealized of 100, but NextPaymentDueDate moves only to the second missed due date. -/
+theorem Lending.Reachable.pay_unimpairs_only_current_attained :
+    ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan),
+      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧ loan.isImpaired = true ∧ loan'.paymentRemaining ≠ 0 ∧
+      loan.nextPaymentDueDate.toNat + 2 * loan.schedule.paymentInterval.toNat < l.now.toNat ∧
+      loan'.isImpaired = false ∧ loan'.isPaymentLate l'.now = true :=
+  LendingLedger.pay_unimpairs_only_current_witness
+
+/-- Unimpair -> the loan is not late. False as stated: every impaired loan with payments left is late
+(`impaired_late`), so every unimpair is on a late loan. -/
+def Lending.Reachable.unimpair_requires_current_claim : Prop :=
+  ∀ (l l' : LendingLedger) (i : Nat) (loan : Loan), l.Reachable →
+    (l.apply (.loanManage i .unimpair)).run = .ok (.ok l') → l.LoanAt i loan → loan.isPaymentLate l.now = false
 
 /-- AssetsTotal + YieldUnrealized ≤ the Open limit + extraInterest, where extraInterest = the interest payments
 collected beyond the schedule, such as late interest, close interest and overpayment interest. -/

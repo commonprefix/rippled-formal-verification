@@ -212,6 +212,31 @@ private lemma LendingLedger.lending_step {l l' : LendingLedger} {tx : LendingTx}
     exact ⟨by linarith, by ring, by ring, by ring⟩
   | _ => simp only [LendingTx.isLoan, Bool.false_eq_true] at hl
 
+/-- A payment on a reachable ledger whose vault is not coarsened before or after it sends the vault exactly the
+principal and the interest it pays. -/
+private lemma LendingLedger.amountToPool_step {l l' : LendingLedger} {tx : LendingTx} (hr : l.Reachable)
+    (h : (l.apply tx).run = .ok (.ok l')) (hnc : l.NotCoarsened) (hnc' : l'.NotCoarsened) :
+    l.amountToPoolOf tx = l.principalPaidOf tx + l.interestPaidOf tx := by
+  cases tx with
+  | loanPay i pt amount =>
+    obtain ⟨-, loan, r, -, hat, -, -, hok, -⟩ := LendingLedger.loanPay_ok h
+    obtain ⟨p, hp⟩ := LendingLedger.loanPay_instalments h hat
+    have hT : l'.vault.assetsAvailable.toRat + l'.vault.assetsDeployed.toRat = l.vault.assetsAvailable.toRat +
+        l.vault.assetsDeployed.toRat + ((0 : ℚ) - 0 - 0 + l.paidInterest i pt amount - 0) :=
+      LendingLedger.flow_step l l' _ hr h hnc (fun _ => hnc')
+    have hD := (LendingLedger.lending_step hr h).1
+    have hAD0 : 0 ≤ l'.vault.assetsDeployed.toRat := l'.vault.exact.assetsDeployed_nonneg
+    unfold LendingLedger.NotCoarsened at hnc'
+    rw [LendingLedger.apply_baseExponent h] at hnc'
+    simp only [LendingLedger.amountToPoolOf, LendingLedger.principalPaidOf, LendingLedger.interestPaidOf,
+      LendingLedger.paidInterest, LendingLedger.lentOf, LendingLedger.defaultedOf, LendingLedger.deletedPendingOf,
+      hat.loanRead, hp, hok] at hT hD ⊢
+    -- the vault after the payment holds AssetsAvailable + principalPaid + interestPaid, below `10^16` base units
+    have hAA := LendingLedger.payment_vault_amountToPool_proof l hr l' i pt amount h loan hat p hp r hok
+      (by linarith)
+    linarith
+  | _ => simp [LendingLedger.amountToPoolOf, LendingLedger.principalPaidOf, LendingLedger.interestPaidOf]
+
 /-- A sequence of successful transactions is a run that collects some interest beyond the schedule. -/
 private lemma LendingLedger.Reaches.reachableFromIn {start l : LendingLedger} {txs : List LendingTx}
     (h : LendingLedger.Reaches start txs l) : ∃ x, start.ReachableFromIn txs l x := by
@@ -289,8 +314,8 @@ lemma LendingLedger.vault_accounting_proof {start l : LendingLedger} {txs : List
         start.defaultCovered txs) ∧
     (start.NotCoarsenedAlong txs →
       l.vault.assetsAvailable.toRat = start.vault.assetsAvailable.toRat + start.deposits txs - start.withdrawals txs -
-        start.clawbacks txs - start.lent txs + start.principalPaid txs + start.interestPaid txs +
-        start.defaultCovered txs + start.deletedPending txs) ∧
+        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs +
+        start.deletedPending txs) ∧
     l.vault.assetsDeployed.toRat = start.vault.assetsDeployed.toRat + start.lent txs - start.principalPaid txs -
       start.defaulted txs - start.deletedPending txs ∧
     l.vault.assetsReserved.toRat = start.vault.assetsReserved.toRat + start.lentPending txs - start.accepted txs -
@@ -333,9 +358,18 @@ lemma LendingLedger.vault_accounting_proof {start l : LendingLedger} {txs : List
     obtain ⟨hdep, hpay, hclaw, hint, hdl⟩ := hrun.flows_eq
     rw [hT, hdep, hpay, hclaw, hint, hdl]
     ring
+  -- on such a run each payment sends the vault exactly the principal and the interest it pays
+  have hpool : start.NotCoarsenedAlong txs →
+      start.amountToPool txs = start.principalPaid txs + start.interestPaid txs := fun hnc => by
+    unfold LendingLedger.amountToPool LendingLedger.principalPaid LendingLedger.interestPaid
+    rw [← LendingLedger.runSum_add]
+    exact LendingLedger.runSum_congr hrun fun pre l₁ tx l₂ hp h₁ hok =>
+      LendingLedger.amountToPool_step (h₁.reachable hr) hok (hnc pre l₁ ((List.prefix_append pre [tx]).trans hp) h₁)
+        (hnc (pre ++ [tx]) l₂ hp (.step tx h₁ hok))
   refine ⟨hAT, fun hnc => ?_, hADl, ?_, ?_, ?_⟩
   · -- AssetsAvailable is AssetsTotal less AssetsDeployed
     have h1 := hAT hnc
+    have h2 := hpool hnc
     change l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat =
       start.vault.assetsAvailable.toRat + start.vault.assetsDeployed.toRat + _ - _ - _ + _ - _ + _ at h1
     linarith

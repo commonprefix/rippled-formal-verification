@@ -11,7 +11,7 @@ import XRPL.Properties.Lending.Ledger.Common.ExtraInterestSum
 
 Over any sequence of transactions every vault, broker and loan field moves only by the sums of what flowed in and out.
 While the vault is not coarsened, only a default, a VaultWithdraw or a VaultClawback lowers AssetsTotal. Witnesses
-for the claims that fail: a payment on a coarsened vault, a default on a coarsened cover. -/
+for the claims that fail: a payment and a pending delete on a coarsened vault, a default on a coarsened cover. -/
 
 namespace XRPL.Model
 
@@ -29,8 +29,8 @@ theorem Lending.Reachable.accounting (start l : LendingLedger) (txs : List Lendi
         start.defaultCovered txs) ∧
     (start.NotCoarsenedAlong txs →
       l.vault.assetsAvailable.toRat = start.vault.assetsAvailable.toRat + start.deposits txs - start.withdrawals txs -
-        start.clawbacks txs - start.lent txs + start.principalPaid txs + start.interestPaid txs +
-        start.defaultCovered txs + start.deletedPending txs) ∧
+        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs +
+        start.deletedPending txs) ∧
     l.vault.assetsDeployed.toRat = start.vault.assetsDeployed.toRat + start.lent txs - start.principalPaid txs -
       start.defaulted txs - start.deletedPending txs ∧
     l.vault.assetsReserved.toRat = start.vault.assetsReserved.toRat + start.lentPending txs - start.accepted txs -
@@ -72,14 +72,14 @@ theorem Lending.Reachable.accounting_assetsTotal_attained :
         start.defaultCovered txs :=
   LendingLedger.accounting_assetsTotal_witness
 
-/-- Witness: a sequence where AssetsAvailable' differs from the sums. On a coarsened vault a late instalment of 1.5
-is credited as 1, so AssetsAvailable ends 0.5 below. -/
+/-- Witness: a sequence where AssetsAvailable' differs from the sums. On a coarsened vault a LoanDelete of a pending
+loan of 0.6 credits 1, so AssetsAvailable ends 0.4 above. -/
 theorem Lending.Reachable.accounting_assetsAvailable_attained :
     ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger), start.Reachable ∧
       LendingLedger.Reaches start txs l ∧
       l.vault.assetsAvailable.toRat ≠ start.vault.assetsAvailable.toRat + start.deposits txs - start.withdrawals txs -
-        start.clawbacks txs - start.lent txs + start.principalPaid txs + start.interestPaid txs +
-        start.defaultCovered txs + start.deletedPending txs :=
+        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs +
+        start.deletedPending txs :=
   LendingLedger.accounting_assetsAvailable_witness
 
 /-- Witness: a sequence where CoverAvailable' differs from the sums. A default covering 1.0000000001 from a cover of

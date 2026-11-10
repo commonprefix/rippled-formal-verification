@@ -68,6 +68,17 @@ def LendingLedger.interestPaidOf (l : LendingLedger) : LendingTx → ℚ
   | .loanPay i pt amount => l.paidInterest i pt amount
   | _ => 0
 
+/-- amountToPool of a LoanPay: what the borrower sends the vault for the principal and the interest. -/
+def LendingLedger.amountToPoolOf (l : LendingLedger) : LendingTx → ℚ
+  | .loanPay i pt amount =>
+    match l.loanRead i with
+    | some loan =>
+      match (loan.pay l.vault pt amount l.now).run with
+      | .ok (.ok r) => r.amountToPool.toRat
+      | _ => 0
+    | none => 0
+  | _ => 0
+
 /-- PrincipalOutstanding of the loan a default writes off. -/
 def LendingLedger.defaultedOf (l : LendingLedger) : LendingTx → ℚ
   | .loanManage i .default =>
@@ -175,6 +186,10 @@ def LendingLedger.principalPaid (l : LendingLedger) (txs : List LendingTx) : ℚ
 /-- Σ interestPaid over the transactions `txs` applied in order from `l`. -/
 def LendingLedger.interestPaid (l : LendingLedger) (txs : List LendingTx) : ℚ :=
   l.runSum LendingLedger.interestPaidOf txs
+
+/-- Σ amountToPool over the transactions `txs` applied in order from `l`. -/
+def LendingLedger.amountToPool (l : LendingLedger) (txs : List LendingTx) : ℚ :=
+  l.runSum LendingLedger.amountToPoolOf txs
 
 /-- Σ defaulted over the transactions `txs` applied in order from `l`. -/
 def LendingLedger.defaulted (l : LendingLedger) (txs : List LendingTx) : ℚ := l.runSum LendingLedger.defaultedOf txs

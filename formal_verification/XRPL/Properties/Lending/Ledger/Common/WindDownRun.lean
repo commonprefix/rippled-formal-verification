@@ -611,22 +611,26 @@ private lemma LendingLedger.HolderPhase.redeem_all {start : LendingLedger}
         linarith
       exact hP.sole_exit hnt hbig hh hall
 
-/-- Every broker leaves. With no loan left each broker has no loans, and LoanBrokerDelete succeeds. -/
+/-- Every broker leaves. With no loan left each broker has no loans, and LoanBrokerDelete succeeds on a cover
+within the asset's maximum. -/
 private lemma LendingLedger.HolderPhase.delete_brokers :
     ∀ (n : Nat) (l : LendingLedger), l.HolderPhase → l.brokers.countP (·.isSome) = n →
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) →
       ∃ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' ∧ l'.HolderPhase ∧
         (∀ j, l'.broker? j = none) := by
   intro n
   induction n using Nat.strong_induction_on with
   | _ n ih =>
-    intro l hP hn
+    intro l hP hn hmax
     by_cases hex : ∃ j b, l.broker? j = some b
     · obtain ⟨j, b, hb⟩ := hex
       have h0 : b.loanCount = 0 := by
         have hc := hP.reachable.loanCountInv.counted j b hb
         rw [LendingLedger.loansOf_none hP.noLoans j] at hc
         exact UInt32.toNat_inj.mp (by simpa using hc)
-      have hok := LendingLedger.broker_delete_ok l hP.notDeleted j b hb h0
+      obtain ⟨c, hc⟩ := hP.reachable.roundedCoverAvailable_ok hb (hmax j b hb)
+      have hok := LendingLedger.broker_delete_ok l hP.notDeleted j b hb h0 c hc
       have hjl := LendingLedger.broker?_lt hb
       have hbr : (l.commitBroker { index := j, broker := none }).brokers = l.brokers.set j none := by
         show storeSlot l.brokers j none = _
@@ -635,6 +639,15 @@ private lemma LendingLedger.HolderPhase.delete_brokers :
       have hP' : (l.commitBroker { index := j, broker := none }).HolderPhase :=
         ⟨hP.reachable.apply hok, hP.notDeleted, hP.redemption, hP.noLoans,
           hP.sum.step_of_not_deposit hP.reachable (fun _ _ _ he => by cases he) hok⟩
+      -- the other brokers keep their cover
+      have hmax' : ∀ (k : Nat) (b' : LoanBroker), (l.commitBroker { index := j, broker := none }).broker? k = some b' →
+          b'.coverAvailable.toRat ≤ (l.commitBroker { index := j, broker := none }).vault.numericType.maxAmount := by
+        intro k b' hk
+        unfold LendingLedger.broker? at hk
+        rw [hbr, List.getElem?_set] at hk
+        split at hk
+        · simp at hk
+        · exact hmax k b' hk
       have hlt : (l.commitBroker { index := j, broker := none }).brokers.countP (·.isSome) < n := by
         rw [hbr, ← hn]
         unfold LendingLedger.broker? at hb
@@ -645,7 +658,7 @@ private lemma LendingLedger.HolderPhase.delete_brokers :
           cases o with
           | none => cases hb
           | some b' => exact List.countP_set_none_lt _ j b' hx
-      obtain ⟨txs, l', hw, hP'', hnone⟩ := ih _ hlt _ hP' rfl
+      obtain ⟨txs, l', hw, hP'', hnone⟩ := ih _ hlt _ hP' rfl hmax'
       have hstep := LendingLedger.WindsDownWhole.single (show l.WholeWindDownTx (.loanBrokerDelete j) from trivial) hok
       exact ⟨_, l', hstep.trans hw, hP'', hnone⟩
     · push Not at hex
@@ -718,7 +731,8 @@ lemma LendingLedger.wind_down_proof (l : LendingLedger) (hr : l.Reachable) (hnd 
     (hpending : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened)
     (hactive : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
       e.loan.paymentRemaining ≠ 0 → l.NotCoarsened)
-    (hca : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat < 10 ^ 96)
+    (hca : ∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+      b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount)
     (hsum : l.SharesSum)
     (hdust : ∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
       l'.NoDust) :
@@ -728,7 +742,7 @@ lemma LendingLedger.wind_down_proof (l : LendingLedger) (hr : l.Reachable) (hnd 
   obtain ⟨txs₁, l₁, hw₁, hP₁, hnone⟩ := LendingLedger.LoanPhase.close_all _ l hP rfl
   have hH₁ : l₁.HolderPhase := ⟨hP₁.reachable, hP₁.notDeleted,
     Vault.phase_past_redemption l₁.vault s hP₁.schedule l₁.now hP₁.past, hnone, hw₁.sharesSum hr hsum⟩
-  obtain ⟨txs₂, l₂, hw₂, hH₂, hb₂⟩ := LendingLedger.HolderPhase.delete_brokers _ l₁ hH₁ rfl
+  obtain ⟨txs₂, l₂, hw₂, hH₂, hb₂⟩ := LendingLedger.HolderPhase.delete_brokers _ l₁ hH₁ rfl hP₁.cover
   obtain ⟨txs₃, l₃, hw₃, hwt₃, hH₃, hS₃, hbr₃⟩ :=
     LendingLedger.HolderPhase.redeem_all hdust _ (txs₁ ++ txs₂) l₂ (hw₁.trans hw₂) hH₂ rfl
   have hw := hw₁.trans hw₂

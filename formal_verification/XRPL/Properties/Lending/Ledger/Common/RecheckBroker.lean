@@ -184,7 +184,9 @@ lemma LendingLedger.loanBrokerDelete_ne_notLawful (l : LendingLedger) (i : Nat) 
   simp only [LendingLedger.applyBroker] at hrun
   unfold_ter at hrun
   walk_ok'
-  exact LoanBroker.canDelete_ne_notLawful _ _ ‹_›
+  all_goals first
+    | exact LoanBroker.canDelete_ne_notLawful _ _ ‹_›
+    | exact STAmount.ofNumber_ne_notLawful _ _ _ ‹_›
 
 /-- A broker with only CoverAvailable replaced by a normalized amount at least zero is lawful. -/
 private lemma LoanBroker.withCover_ok (lb : LoanBroker) (c' : Number) (hn' : c'.isNormalized) (h0' : 0 ≤ c'.toRat) :

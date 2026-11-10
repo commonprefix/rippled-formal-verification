@@ -4,7 +4,7 @@ import XRPL.Properties.Lending.Ledger.Common.ShareValueWitness
 /-! # Payments of loan D on the coarsened vault
 
 The run `svTxs` coarsens the vault after loan D of 3 is created. Each instalment of 1.5 without interest is
-credited on the coarser grid as 1, so the share value falls and the payoff returns 2 of the 3. -/
+credited on the coarser grid as 1, so the share value falls and the payoff sends the vault 2 of the 3. -/
 
 set_option linter.style.nativeDecide false
 
@@ -65,7 +65,7 @@ lemma LendingLedger.payment_share_value_falls_reachable :
   exact ⟨l, l', 3, .late, pwInstalment, loan, payment, LendingLedger.Reachable.of_run cwGenesis_genesis hl, hl',
     ⟨e, b, he, hb, hw⟩, hpay, of_decide_eq_true h⟩
 
-/-- Loan D's two instalments of 1.5 on the coarsened run pay it off but add only 2 to AssetsAvailable. -/
+/-- Loan D's two instalments of 1.5 on the coarsened run pay it off but send the vault only 2. -/
 private def payoffCheck : Bool :=
   match cwGenesis.run svTxs with
   | .ok l₀ =>
@@ -75,16 +75,25 @@ private def payoffCheck : Bool :=
       | some b =>
         match e.loan.withBroker b with
         | .ok loan₀ =>
-          match (l₀.apply (.loanPay 3 .late pwInstalment)).run with
-          | .ok (.ok l₁) =>
-            match (l₁.apply (.loanPay 3 .regular pwInstalment)).run with
-            | .ok (.ok l₂) =>
-              (match l₂.loan? 3 with | some e₂ => e₂.loan.paymentRemaining == 0 | none => false) &&
-                decide (0 + (l₁.vault.assetsAvailable.toRat - l₀.vault.assetsAvailable.toRat) +
-                  (l₂.vault.assetsAvailable.toRat - l₁.vault.assetsAvailable.toRat) <
-                    loan₀.principalOutstanding.toRat)
-            | _ => false
-          | _ => false
+          match (loan₀.pay l₀.vault .late pwInstalment l₀.now).run,
+              (l₀.apply (.loanPay 3 .late pwInstalment)).run with
+          | .ok (.ok r₁), .ok (.ok l₁) =>
+            match l₁.loan? 3 with
+            | some e₁ =>
+              match l₁.broker? e₁.brokerIndex with
+              | some b₁ =>
+                match e₁.loan.withBroker b₁ with
+                | .ok loan₁ =>
+                  match (loan₁.pay l₁.vault .regular pwInstalment l₁.now).run,
+                      (l₁.apply (.loanPay 3 .regular pwInstalment)).run with
+                  | .ok (.ok r₂), .ok (.ok l₂) =>
+                    (match l₂.loan? 3 with | some e₂ => e₂.loan.paymentRemaining == 0 | none => false) &&
+                      decide (0 + r₁.amountToPool.toRat + r₂.amountToPool.toRat < loan₀.principalOutstanding.toRat)
+                  | _, _ => false
+                | .error _ => false
+              | none => false
+            | none => false
+          | _, _ => false
         | .error _ => false
       | none => false
     | none => false
@@ -92,8 +101,8 @@ private def payoffCheck : Bool :=
 
 private lemma payoffCheck_true : payoffCheck = true := by native_decide
 
-/-- A loan on a reachable coarsened vault whose payoff returns less than its principal. Loan D of 3 is paid off
-by two instalments of 1.5, each credited as 1. -/
+/-- A loan on a reachable coarsened vault whose payoff sends the vault less than its principal. Loan D of 3 is paid
+off by two instalments of 1.5, of which the vault receives 1 each. -/
 lemma LendingLedger.payoff_short_run_reachable :
     ∃ (l₀ : LendingLedger) (i : Nat) (loan₀ : Loan) (l : LendingLedger) (paid : ℚ),
       l₀.Reachable ∧ l₀.LoanAt i loan₀ ∧ l₀.PaysLoan i (fun _ _ _ => True) l paid ∧
@@ -114,14 +123,25 @@ lemma LendingLedger.payoff_short_run_reachable :
   rename_i loan₀ hw
   split at h
   case h_2 => cases h
-  rename_i l₁ hl₁
+  rename_i r₁ l₁ hr₁ hl₁
   split at h
   case h_2 => cases h
-  rename_i l₂ hl₂
+  rename_i e₁ he₁
+  split at h
+  case h_2 => cases h
+  rename_i b₁ hb₁
+  split at h
+  case h_2 => cases h
+  rename_i loan₁ hw₁
+  split at h
+  case h_2 => cases h
+  rename_i r₂ l₂ hr₂ hl₂
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h
   obtain ⟨hpaid, hsum⟩ := h
   refine ⟨l₀, 3, loan₀, l₂, _, LendingLedger.Reachable.of_run cwGenesis_genesis hl₀, ⟨e, b, he, hb, hw⟩,
-    .pay .regular pwInstalment (.pay .late pwInstalment .refl trivial hl₁) trivial hl₂, ?_, hsum⟩
+    .pay .regular pwInstalment loan₁ r₂
+      (.pay .late pwInstalment loan₀ r₁ .refl trivial ⟨e, b, he, hb, hw⟩ hr₁ hl₁) trivial
+      ⟨e₁, b₁, he₁, hb₁, hw₁⟩ hr₂ hl₂, ?_, hsum⟩
   split at hpaid
   · rename_i e₂ he₂; exact ⟨e₂, he₂, by simpa using hpaid⟩
   · cases hpaid

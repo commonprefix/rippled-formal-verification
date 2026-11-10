@@ -17,8 +17,8 @@ lemma LendingLedger.accounting_proof {start l : LendingLedger} {txs : List Lendi
         start.defaultCovered txs) ∧
     (start.NotCoarsenedAlong txs →
       l.vault.assetsAvailable.toRat = start.vault.assetsAvailable.toRat + start.deposits txs - start.withdrawals txs -
-        start.clawbacks txs - start.lent txs + start.principalPaid txs + start.interestPaid txs +
-        start.defaultCovered txs + start.deletedPending txs) ∧
+        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs +
+        start.deletedPending txs) ∧
     l.vault.assetsDeployed.toRat = start.vault.assetsDeployed.toRat + start.lent txs - start.principalPaid txs -
       start.defaulted txs - start.deletedPending txs ∧
     l.vault.assetsReserved.toRat = start.vault.assetsReserved.toRat + start.lentPending txs - start.accepted txs -
