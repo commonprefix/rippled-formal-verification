@@ -188,7 +188,7 @@ private lemma LendingLedger.room_of_lt {l : LendingLedger} (x y : ℚ) (a b : �
   push_cast at h1 ⊢
   linarith
 
-/-- Proof body of `payment_vault_upper_bound`, given that principalPaid + interestPaid is a `Number`. -/
+/-- Proof body of the first line of `Lending.payment_vault`, given that principalPaid + interestPaid is a `Number`. -/
 lemma Loan.payment_vault_upper_bound_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) (hat : l.LoanAt i loan)
     (payment : UnsettledPayment Vault)
     (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
@@ -447,7 +447,7 @@ lemma Loan.regularPayment_yield_proof (l : LendingLedger) (hr : l.Reachable) (i 
   rw [hAA, ← hsumv]
   linarith
 
-/-- Proof body of the amountToPool line of `payment_vault_credit`. A vault that is not coarsened gains exactly
+/-- Proof body of the amountToPool line of `Lending.payment_vault`. A vault that is not coarsened gains exactly
 what the payment sends it. -/
 lemma Loan.payment_vault_amountToPool_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) (hat : l.LoanAt i loan)
     (payment : UnsettledPayment Vault)

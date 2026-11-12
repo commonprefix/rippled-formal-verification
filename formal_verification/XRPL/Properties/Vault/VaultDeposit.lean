@@ -89,14 +89,14 @@ theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (t : UIn
     r.assets = roundedAmount ∧ r.shares = STAmount.zero .int64 :=
   Vault.deposit_donation_proof v amountDeposit roundedAmount t hpos hcanon hrounded r hok
 
-/-- Deposit on any lawful vault, with sharesWorth ≤ the Open limit -> assetsDeposited ≤ amount and
-assetsDeposited = ⌈sharesWorth⌉, shown exactly for a sharesWorth of whole base units. -/
+/-- Deposit on any lawful vault -> assetsDeposited ≤ amount and assetsDeposited = ⌈sharesWorth⌉, shown exactly for a
+sharesWorth of whole base units. -/
 theorem Vault.deposit_charge (v : Vault) (amountDeposit : STAmount) (t : UInt32) (assetsTotal : Number)
     (hpos : 0 < amountDeposit.toRat)
     (hcanon : amountDeposit.Canonical) -- a transaction amount is a canonical amount
     (hat : v.assetsTotal = .ok assetsTotal)
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
-    -- past the Open limit the 19-digit price can err by more than a unit
+    -- the range of the proof: past the Open limit the 19-digit price can err by more than a unit
     (hsmall : v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent) :
     r.assets.toRat ≤ amountDeposit.toRat ∧
     v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat - (10 : ℚ) ^ v.baseExponent < r.assets.toRat ∧

@@ -7,6 +7,8 @@ import XRPL.Properties.Lending.Ledger.Common.PayoffWitness
 import XRPL.Properties.Lending.Ledger.Common.DefaultCredit
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareBound
 import XRPL.Properties.Lending.Ledger.Common.PaymentShareLarge
+import XRPL.Properties.Lending.Ledger.Common.ShareValueRun
+import XRPL.Properties.Lending.Ledger.Common.ShareValueRunWitness
 
 /-! # Share value around payments and default
 
@@ -97,5 +99,37 @@ theorem Lending.lent_out_protected (l l' : LendingLedger) (tx : LendingTx) (hr :
     0 ≤ l'.vault.assetsAvailable.toRat ∧ l'.vault.assetsAvailable.toRat ≤ l.vault.assetsAvailable.toRat ∧
       l'.vault.assetsDeployed = l.vault.assetsDeployed :=
   LendingLedger.lent_out_protected_proof l l' tx hr hr.holdsAsset.maxValue_le htx h
+
+/-- Over any sequence of transactions from a reachable ledger, while SharesTotal > 0 -> shareValue decreases only
+through an impair, the default of a loan that isn't impaired, or a VaultWithdraw or VaultClawback of the only holder. -/
+theorem Lending.Reachable.no_dilution (start l : LendingLedger) (txs : List LendingTx)
+    (hr : start.Reachable) (hrun : LendingLedger.Reaches start txs l)
+    -- no impair, no default of a loan that is not impaired, no VaultWithdraw or VaultClawback of the only holder
+    (hkeep : start.KeepsShareValueAlong txs)
+    (hshares : start.SharesLeftAlong txs) -- SharesTotal is not zero before or after any step
+    -- the vault is not coarsened before or after any step of the sequence (FV_M4_25)
+    (hnc : start.NotCoarsenedAlong txs)
+    -- each VaultDeposit keeps SharesTotal within the share MPT maximum, which C++ accountSend enforces
+    (hfit : start.SharesFitAlong txs)
+    -- each deposit, withdrawal and clawback moves shares worth whole base units (FV_M2_3)
+    (hwhole : start.WholeWorthAlong txs) :
+    start.vault.toRawVault.shareValue ≤ l.vault.toRawVault.shareValue :=
+  LendingLedger.no_dilution_proof start l txs hr hrun hkeep hshares hnc hfit hwhole
+
+/-- Witness: a sequence where a VaultWithdraw price rounded to nearest lowers shareValue. One share of 2, worth
+`1.5`, is redeemed for `2`, and shareValue falls from `1.5` to `1`. -/
+theorem Lending.Reachable.no_dilution_withdraw_attained :
+    ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
+      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.NotCoarsenedAlong txs ∧
+      start.SharesFitAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
+  LendingLedger.no_dilution_withdraw_witness
+
+/-- Witness: a sequence where a payment on a coarsened vault lowers shareValue. An instalment of `1.5` without
+interest is credited as `1`. -/
+theorem Lending.Reachable.no_dilution_coarsened_attained :
+    ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
+      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.SharesFitAlong txs ∧
+      start.WholeWorthAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
+  LendingLedger.no_dilution_coarsened_witness
 
 end XRPL.Model

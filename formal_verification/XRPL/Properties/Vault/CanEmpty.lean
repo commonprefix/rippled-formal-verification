@@ -1,12 +1,10 @@
 import XRPL.Properties.Vault.Proofs.CanEmpty
-import XRPL.Properties.Vault.Proofs.UnprovableWitness
 import XRPL.Properties.Vault.Proofs.WithdrawFee
 import XRPL.Properties.Vault.Proofs.WithdrawUpdates
 
 /-! # Emptying a vault
 
-A reachable vault can always be emptied. A lawful vault outside any history cannot always be:
-the funds check runs on the priced payout before the final-withdrawal rule. -/
+A reachable vault can always be emptied. -/
 
 namespace XRPL.Model.SingleAssetVault
 
@@ -56,14 +54,5 @@ theorem Vault.Reachable.canEmpty (v : Vault) (t0 : UInt32) (hr : Vault.Reachable
           (Vault.Reachable.maxValue_fits v t0 hr
             (Vault.withdraw_sharesTotal_pos v amount waiveUnrealizedLoss t hpos hc hty r hok)) r hok hfinal).1,
         Vault.withdraw_final_iff_proof v amount waiveUnrealizedLoss t hpos hc hty r hok⟩⟩
-
-/-- Witness for `Reachable.canEmpty`: a lawful int64 vault with nothing deployed, `9223372036854775806` assets and `3`
-shares, outside the investment phase, prices a full withdrawal one unit above the cash and rejects it. -/
-theorem Vault.Reachable.canEmpty_attained :
-    ∃ (v : Vault) (t : UInt32) (shares : STAmount) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat),
-      v.assetsDeployed = Number.zero ∧ (v.earlyExitFeeRate.isSome = true ∨ v.phase t ≠ .investment) ∧
-      shares.Canonical ∧ shares.mNumericType = .int64 ∧ shares.toRat = v.toExact.sharesTotal ∧
-      (v.withdraw (.vaultShares shares) false t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS) :=
-  Vault.Reachable.canEmpty_witness
 
 end XRPL.Model.SingleAssetVault

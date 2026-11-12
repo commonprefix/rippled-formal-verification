@@ -350,6 +350,23 @@ lemma Number.OnGrid.units_le (c : Number) (b : Int) (hg : Number.OnGrid b c) (h0
   congr 1
   exact_mod_cast (Int.toNat_of_nonneg hj0).symm
 
+/-- A grid point of `10^b` between zero and `10^16` units is a whole number of units below `10^16`. -/
+lemma Number.OnGrid.units_lt (c : Number) (b : Int) (hg : Number.OnGrid b c) (h0 : 0 ≤ c.toRat)
+    (hlt : c.toRat < 10 ^ 16 * (10 : ℚ) ^ b) :
+    ∃ k : ℕ, k < 10 ^ 16 ∧ c.toRat = (k : ℚ) * (10 : ℚ) ^ b := by
+  obtain ⟨-, j, hj⟩ := hg
+  have hp : (0 : ℚ) < 10 ^ b := zpow_pos (by norm_num) _
+  have hj0 : 0 ≤ j := by
+    have : (0 : ℚ) ≤ (j : ℚ) * 10 ^ b := hj ▸ h0
+    exact_mod_cast nonneg_of_mul_nonneg_left this hp
+  have hjlt : j < 10 ^ 16 := by
+    have : (j : ℚ) * 10 ^ b < 10 ^ 16 * 10 ^ b := hj ▸ hlt
+    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
+  refine ⟨j.toNat, by omega, ?_⟩
+  rw [hj]
+  congr 1
+  exact_mod_cast (Int.toNat_of_nonneg hj0).symm
+
 /-- Up to `9 * 10^15` whole units of `10^b` are stored exactly, when an XRP or MPT asset admits offset `0`
 and the amount is within its maximum. -/
 lemma STAmount.isRounded_false_of_units (nt : NumericType) (c : Number) (b : Int) (k : ℕ)

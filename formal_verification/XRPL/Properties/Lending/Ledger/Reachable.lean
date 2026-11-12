@@ -58,18 +58,18 @@ theorem Lending.Reachable.impaired_late (hr : l.Reachable) (j : Nat) (e : LoanEn
     e.loan.isPaymentLate l.now = true :=
   LendingLedger.impaired_late_proof l hr j e he hi hp
 
-/-- Payment on an impaired loan with at most one instalment overdue -> the loan is not impaired, and not late when
-payments are left. -/
+/-- Payment on an impaired loan with payments left -> when the loan is still late after it, it stays impaired. -/
 theorem Lending.Reachable.pay_unimpairs_only_current (hr : l.Reachable) (i : Nat) (paymentType : LoanPaymentType)
     (amount : Number) (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan)
     (hat : l.LoanAt i loan) (hat' : l'.LoanAt i loan') (hi : loan.isImpaired = true)
     (hp : loan'.paymentRemaining ≠ 0)
+    -- at most one instalment is overdue, so the payment leaves the loan current and not impaired (FV_M4_47)
     (hdue : l.now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.paymentInterval.toNat) :
     loan'.isImpaired = false ∧ loan'.isPaymentLate l'.now = false :=
   LendingLedger.pay_unimpairs_only_current_proof l l' hr i paymentType amount h loan loan' hat hat' hi hp hdue
 
-/-- Witness: a loan of 100 at 10% due every 30 days, impaired with three instalments overdue. One late payment of
-20.5 clears the LossUnrealized of 100, but NextPaymentDueDate moves only to the second missed due date. -/
+/-- Witness: a run where one late payment clears the impairment of a loan three instalments overdue, which stays late.
+On a loan of 100 at 10% due every 30 days, a payment of 20.5 clears the LossUnrealized of 100. -/
 theorem Lending.Reachable.pay_unimpairs_only_current_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan),
       l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧

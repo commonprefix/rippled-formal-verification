@@ -8,6 +8,7 @@ import XRPL.Properties.Lending.Ledger.Common.IsolationWitness
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequence
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequenceReplay
 import XRPL.Properties.Lending.Ledger.Common.BrokerSubsequenceWitness
+import XRPL.Properties.Lending.Ledger.Common.CoverWithdrawDefault
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequence
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceReplay
 import XRPL.Properties.Lending.Ledger.Common.LoanSubsequenceWitness
@@ -306,5 +307,13 @@ theorem Lending.impair_default_same (l : LendingLedger) (hr : l.Reachable) (i : 
     (h : (loan.manageDefault l.vault).run = .ok (.ok r)) :
     r₂.pool' = r.pool' ∧ r₂.loan'.broker = r.loan'.broker :=
   Loan.impair_default_same_proof loan l.vault l.now r₁ r₂ r himp h₁ h₂ h hr.availableStored (hr.impair_fits hat)
+
+/-- LoanBrokerCoverWithdraw then default -> the same vault as a direct default. -/
+theorem Lending.coverWithdraw_default_same (l la lab lb : LendingLedger) (hr : l.Reachable) (k i : Nat)
+    (amount : STAmount) (ha : (l.apply (.loanBrokerCoverWithdraw k amount)).run = .ok (.ok la))
+    (hab : (la.apply (.loanManage i .default)).run = .ok (.ok lab))
+    (hb : (l.apply (.loanManage i .default)).run = .ok (.ok lb)) :
+    lab.vault = lb.vault :=
+  LendingLedger.coverWithdraw_default_same_proof l la lab lb hr k i amount ha hab hb
 
 end XRPL.Model

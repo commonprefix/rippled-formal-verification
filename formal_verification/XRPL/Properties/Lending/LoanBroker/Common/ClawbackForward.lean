@@ -6,14 +6,12 @@ import XRPL.Properties.Lending.Loan.Common.RoundTotal
 /-! # When a clawback succeeds
 
 On a broker in the Open zone that does not hold XRP and has cover above the minimum, a clawback of whole base units,
-or of all the excess, passes its checks and succeeds. Past its checks a clawback can only fail as notLawful. -/
+or of all the excess, passes its checks and succeeds. -/
 
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
-
-open private STAmount.ofNumber_integral_small from XRPL.Properties.Lending.Loan.Common.Grid
 
 variable {α : Type} [AssetPool α]
 
@@ -131,7 +129,7 @@ lemma LoanBroker.canCoverClawback_of_units (lb : LoanBroker) (v : Vault) (amount
   -- the cap is the cover above the minimum, exactly, a positive whole number of base units
   obtain ⟨mx, hsub⟩ := Number.operator_sub_ok_of_lt _ _ .downward hAn hmn hA0 (by linarith) hm0
     (by linarith)
-  obtain ⟨hmxv, km, -, hkm⟩ := LoanBroker.OpenZone.sub_downward_exact lb v hz _ _ hmg hm0 hroom'.le hsub
+  obtain ⟨hmxv, km, -, hkm⟩ := LoanBroker.CoverFits.sub_downward_exact lb v hz.coverFits _ _ hmg hm0 hroom'.le hsub
   have hmxn := Number.operator_sub_isNormalized_any _ _ _ _ hAn hmn hsub
   have hmx0 : 0 < mx.toRat := by rw [hmxv]; linarith
   have hsig : 0 < mx.signum := (signum_pos_iff mx).mpr ⟨Number.negative_false_of_nonneg mx hmxn hmx0.le,
@@ -174,77 +172,17 @@ lemma LoanBroker.canCoverClawback_of_units (lb : LoanBroker) (v : Vault) (amount
     (LoanBroker.roundedCoverClawback_rounded_proof lb v amount minimumCover mx claw claw' c hmin hsub hsig
       hclaw hof hcl hnz)
 
-/-- Proof body of the never-throws part of the clawback line of `LoanBroker.cover_total`. -/
-lemma LoanBroker.coverClawback_total_proof (lb : LoanBroker) (pool : α) (amount : Option STAmount)
-    (hcan : lb.canCoverClawback pool amount = .ok .tesSUCCESS)
-    -- CoverAvailable is an asset balance, and every IOU amount is below 10^96
-    (hcap : lb.toExact.coverAvailable < 10 ^ 96) :
-    (∃ res, (lb.coverClawback pool amount).run = .ok (.ok res)) ∨
-      (lb.coverClawback pool amount).run = .error .notLawful := by
-  obtain ⟨-, c, hrc⟩ := (LoanBroker.canCoverClawback_ok_iff lb pool amount).mp hcan
-  obtain ⟨_, _, claw, claw', _, _, _, _, hof, hcl, _⟩ := LoanBroker.roundedCoverClawback_ok lb pool amount c hrc
-  have hAn := lb.wf.coverAvailable_norm
-  have hAe := Number.exponent_headroom_of_lt _ hAn lb.exact.coverAvailable_nonneg hcap
-
-  -- the debit converts to a `Number` with room below the largest exponent
-  obtain ⟨cN, hcN, hcn, hce⟩ : ∃ cN, c.toNumber .to_nearest = .ok cN ∧ cN.isNormalized ∧
-      cN.exponent_ + 22 ≤ maxExponent := by
-    by_cases hi : lb.numericType.isIntegral = true
-    · -- an XRP or MPT debit is the magnitude of the clawed amount, a whole number below `2^63`
-      obtain ⟨hic, -⟩ := STAmount.ofNumber_integral_canonical _ _ _ claw' hi hof
-      have hsz := STAmount.ofNumber_integral_small _ _ _ claw' hi hof
-      obtain ⟨hnt, hno, hnv⟩ := STAmount.operator_neg_fields claw'
-      have hni : claw'.operator_neg.integral = true := (STAmount.operator_neg_integral claw').trans hic.is_integral
-      obtain ⟨ht, ho, hv⟩ := clampToSumExponent_integral_fields _ _ _ _ hni hcl
-      have hcic : c.IntegralCanonical :=
-        ⟨by rw [ht, hnt]; exact hic.is_integral, by rw [ho, hno]; exact hic.offset_zero,
-          by rw [hv, hnv, ht, hnt]; exact hic.in_range⟩
-      have hcsz : c.mValue.toNat ≤ 2 ^ 63 - 1 := by rw [hv, hnv]; exact hsz
-      obtain ⟨cN, hcN, hcv, hcn⟩ := STAmount.toNumber_integral_small_exact c _ hcic hcsz
-      have hc0 : 0 ≤ c.toRat := by
-        rw [clampToSumExponent_integral _ _ _ hni, Except.ok.injEq] at hcl
-        rw [← hcl, (clamp_magnitude _).2.2.2]
-        exact abs_nonneg _
-      have hclt : c.toRat < 10 ^ 96 := by
-        have habs := STAmount.abs_toRat c
-        rw [hcic.offset_zero, zpow_zero, mul_one] at habs
-        have h63 : (c.mValue.toNat : ℚ) < 2 ^ 63 := by exact_mod_cast (by omega : c.mValue.toNat < 2 ^ 63)
-        linarith [le_abs_self c.toRat, show (2 : ℚ) ^ 63 < 10 ^ 96 by norm_num]
-      exact ⟨cN, hcN, hcn,
-        Number.exponent_headroom_of_lt _ hcn (by rw [hcv]; exact hc0) (by rw [hcv]; exact hclt)⟩
-    · -- an IOU debit is canonical or zero
-      have hfr : lb.numericType = .fractional := NumericType.eq_fractional_of_not_integral (by simpa using hi)
-      rw [hfr] at hof
-      exact (clampToSumExponent_frac_shape _ _ _ _
-        (STAmount.operator_neg_fczr _ (STAmount.ofNumber_fractional_fczr _ _ _ hof)) hcl).toNumber_ok .to_nearest
-
-  -- the debit always computes, and the broker re-check fails only on a negative cover
-  obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_exp _ _ .to_nearest hAn hcn hAe hce
-  by_cases hneg : Number.zero.operator_le c' = true
-  · have hc'n := operator_sub_isNormalized_to_nearest_sz _ _ _ hAn hcn hsub
-    have hc'0 : 0 ≤ c'.toRat := by
-      have h := (operator_le_iff _ _ Number.zero_isNormalized hc'n).mp hneg
-      rwa [Number.toRat_zero] at h
-    obtain ⟨lb', htl, -⟩ := LoanBroker.withCover_lawful lb c' hc'n hc'0
-    left
-    refine ⟨⟨c, lb'⟩, ?_⟩
-    unfold LoanBroker.coverClawback LoanBroker.applyCoverTransaction
-    unfold_ter
-    rw [show lb.roundedCoverClawback pool amount = .ok (.ok c) from hrc]
-    simp [hcN, hsub, htl]
-  · exact Or.inr (LoanBroker.coverClawback_negative_cover_proof lb pool amount c cN c' hrc hcN hsub
-      (by simpa using hneg))
-
-/-- Proof body of the never-notLawful part of the clawback line of `LoanBroker.cover_total`. -/
+/-- Proof body of the clawback line of `LoanBroker.cover_total`. -/
 lemma LoanBroker.coverClawback_lawful_total_proof (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
-    (hz : lb.OpenZone v.baseExponent) (hnt : v.numericType = lb.numericType)
+    (hf : lb.CoverFits v.baseExponent) (hnt : v.numericType = lb.numericType)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (hreq : ∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat)
     (hcan : lb.canCoverClawback v amount = .ok .tesSUCCESS) :
-    ∃ res, (lb.coverClawback v amount).run = .ok (.ok res) := by
+    ∃ c res, (lb.roundedCoverClawback v amount).run = .ok (.ok c) ∧
+      (lb.coverClawback v amount).run = .ok (.ok res) ∧ res.amount' = c := by
   obtain ⟨-, c, hrc⟩ := (LoanBroker.canCoverClawback_ok_iff lb v amount).mp hcan
   obtain ⟨m, _, _, claw', hm, _, _, _, hof, hcl, hnz⟩ := LoanBroker.roundedCoverClawback_ok lb v amount c hrc
-  have hfl := LoanBroker.roundedCoverClawback_floor lb v amount c m hz hnt hmax hreq hm hrc
+  have hfl := LoanBroker.roundedCoverClawback_floor lb v amount c m hf hnt hmax hreq hm hrc
   have hm0 := LoanBroker.minimumCover_nonneg lb _ _ v.baseExponent_range.2 hm
 
   -- the debit is a canonical amount, at most the cover above the minimum
@@ -258,12 +196,15 @@ lemma LoanBroker.coverClawback_lawful_total_proof (lb : LoanBroker) (v : Vault) 
   have hcle : cN.toRat ≤ lb.coverAvailable.toRat := by rw [hcv]; linarith
 
   -- so the debit leaves a cover that is not negative
-  have hA9 := LoanBroker.OpenZone.cover_le lb _ hz v.baseExponent_bounds.2.1
+  have hA16 : lb.coverAvailable.toRat < 10 ^ 16 := by
+    have hL : lb.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ v.baseExponent := hf.coverLt
+    have h1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) v.baseExponent_bounds.2.1
+    linarith
   obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_lt _ _ .to_nearest lb.wf.coverAvailable_norm hcn
     lb.exact.coverAvailable_nonneg (by linarith) (by rw [hcv]; exact hc0) (by linarith)
   have hge : lb.coverAvailable.operator_lt cN = false :=
     (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hcn).mpr hcle
   obtain ⟨lb', hrun, -⟩ := LoanBroker.coverClawback_success_proof lb v amount c cN c' hrc hcN hge hsub
-  exact ⟨_, hrun⟩
+  exact ⟨c, _, hrc, hrun, rfl⟩
 
 end XRPL.Model.Lending

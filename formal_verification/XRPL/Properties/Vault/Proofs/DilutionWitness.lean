@@ -127,6 +127,22 @@ lemma Vault.clawback_no_dilution_zero_half_ulp_witness :
     fun _ => by native_decide, by native_decide, by native_decide, by native_decide,
     by native_decide⟩
 
+/-- The net asset value a vault's withdrawal or clawback prices at, as the model computes it. -/
+def navAt (v : Vault) : Number := (v.assetsTotalForWithdrawal false).toOption.getD Number.zero
+
+/-- Claw-all overshoot: a zero amount claws a one-share holding worth `1.5` and recovers `2`. -/
+lemma Vault.clawback_zero_overshoot_witness :
+    ∃ (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool) (t0 : UInt32)
+      (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts) (netAssetValue : Number),
+      Vault.Reachable v t0 ∧ holderShares.ShareBalance ∧ assets.isZero = true ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
+      r.shares.toRat = holderShares.toRat ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
+      v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat :=
+  ⟨vO, aZ, hold, false, 0, aZ_nn, clRun vO aZ aZ_nn, navAt vO, vO_reach, hold_balance, by native_decide,
+    fun _ => by native_decide, by native_decide, by native_decide, by native_decide, by native_decide⟩
+
 /-- Integral deposit: charged half a unit below the issued share's worth, the deposit lowers per-share value. -/
 lemma Vault.deposit_no_dilution_integral_witness :
     ∃ (v : Vault) (amountDeposit : STAmount) (t t0 : UInt32) (hpos : 0 < amountDeposit.toRat)

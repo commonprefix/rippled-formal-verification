@@ -1,12 +1,12 @@
 import XRPL.Properties.Lending.LoanBroker.Common.ClawbackAccuracy
 import XRPL.Properties.Lending.LoanBroker.Common.CoverPossible
-import XRPL.Properties.Lending.LoanBroker.Common.ClawbackWitness
 import XRPL.Properties.Lending.LoanBroker.Common.MaxValueFits
+import XRPL.Properties.Lending.LoanBroker.Common.ClawbackWitness
 
 /-! # `LoanBroker.roundedCoverClawback` and `LoanBroker.coverClawback`
 
-A clawback takes the request, or all cover above minCover when there is none, capped at that excess. In the Open
-zone it claws that amount floored to whole base units, and CoverAvailable drops by exactly that. -/
+A clawback takes the request, or all cover above minCover when there is none, capped at that excess. On a cover
+that is not coarsened it claws that amount floored to whole base units, and CoverAvailable drops by exactly that. -/
 
 namespace XRPL.Model.Lending
 
@@ -15,12 +15,12 @@ open XRPL.Model.SingleAssetVault (Vault)
 
 variable (lb : LoanBroker)
 
-/-- Cover clawback on any lawful broker in the Open zone, with no amount or amount = 0 -> clawAmount = CoverAvailable −
-minCover, and CoverAvailable' = minCover. -/
+/-- Cover clawback on any lawful broker, with no amount or amount = 0 -> clawAmount = CoverAvailable − minCover, and
+CoverAvailable' = minCover. -/
 theorem LoanBroker.roundedCoverClawback_all (v : Vault) (amount : Option STAmount)
     (res : LoanBrokerCoverResult) (minimumCover : Number)
-    -- CoverAvailable is whole base units within the Open limit, as on every reachable broker
-    (hz : lb.OpenZone v.baseExponent)
+    -- CoverAvailable is whole base units, as on every reachable broker, and is not coarsened
+    (hf : lb.CoverFits v.baseExponent)
     (hnt : v.numericType = lb.numericType)
     -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
@@ -31,42 +31,29 @@ theorem LoanBroker.roundedCoverClawback_all (v : Vault) (amount : Option STAmoun
     (hok : (lb.coverClawback v amount).run = .ok (.ok res)) :
     res.amount'.toRat = lb.toExact.coverAvailable - minimumCover.toRat ∧
       res.loanBroker'.toExact.coverAvailable = minimumCover.toRat :=
-  ⟨LoanBroker.roundedCoverClawback_all_proof lb v amount res minimumCover hz hnt hmax hreq hall hmin hok,
-    LoanBroker.coverClawback_all_leaves_minimum_proof lb v amount res minimumCover hz hnt hmax hreq hall hmin hok⟩
+  ⟨LoanBroker.roundedCoverClawback_all_proof lb v amount res minimumCover hf hnt hmax hreq hall hmin hok,
+    LoanBroker.coverClawback_all_leaves_minimum_proof lb v amount res minimumCover hf hnt hmax hreq hall hmin hok⟩
 
-/-- Witness: off the Open zone the checks pass and clawAmount ≠ CoverAvailable − minCover. On a cover of
-`1000000000000001.6` with minCover `1`, a full clawback rounds clawAmount up to `1000000000000001`. -/
+/-- Witness: a run on a coarsened cover where clawAmount > CoverAvailable − minCover and CoverAvailable' < minCover.
+A LoanPay fee takes the cover to `2000001` at the scale `10^-10`, and a full clawback leaves `500.1`. -/
 theorem LoanBroker.roundedCoverClawback_all_attained :
-    ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult)
+    ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount) (res : LoanBrokerCoverResult)
       (minimumCover : Number),
-      v.numericType = lb.numericType ∧
+      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
       (amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) ∧
-      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok minimumCover ∧
-      lb.canCoverClawback v amount = .ok .tesSUCCESS ∧ (lb.coverClawback v amount).run = .ok (.ok res) ∧
-      res.amount'.toRat ≠ lb.toExact.coverAvailable - minimumCover.toRat :=
+      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
+      (lb.coverClawback l.vault amount).run = .ok (.ok res) ∧
+      lb.toExact.coverAvailable - minimumCover.toRat < res.amount'.toRat ∧
+      res.loanBroker'.toExact.coverAvailable < minimumCover.toRat :=
   LoanBroker.roundedCoverClawback_all_witness
 
-/-- Witness: off the Open zone, a run where the checks pass and a full clawback leaves CoverAvailable' ≠
-minCover. On the broker of `roundedCoverClawback_all_attained` it leaves `0.6` with minCover `1`. -/
-theorem LoanBroker.roundedCoverClawback_all_leaves_minimum_attained :
-    ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult)
-      (minimumCover : Number),
-      v.numericType = lb.numericType ∧
-      (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
-      (amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) ∧
-      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok minimumCover ∧
-      lb.canCoverClawback v amount = .ok .tesSUCCESS ∧ (lb.coverClawback v amount).run = .ok (.ok res) ∧
-      res.loanBroker'.toExact.coverAvailable ≠ minimumCover.toRat :=
-  LoanBroker.coverClawback_all_leaves_minimum_witness
-
-/-- Cover clawback on any lawful broker in the Open zone, with amount ≠ 0 -> clawAmount =
-⌊min(amount, CoverAvailable − minCover)⌋ in whole base units, and a larger amount never lowers it. -/
+/-- Cover clawback on any lawful broker, with amount ≠ 0 -> clawAmount = ⌊min(amount, CoverAvailable − minCover)⌋ at
+the scale of CoverAvailable', whole base units when not coarsened, and a larger amount never lowers it. -/
 theorem LoanBroker.roundedCoverClawback_capped (v : Vault) (minimumCover : Number)
-    -- CoverAvailable is whole base units within the Open limit, as on every reachable broker
-    (hz : lb.OpenZone v.baseExponent)
+    -- CoverAvailable is whole base units, as on every reachable broker, and is not coarsened
+    (hf : lb.CoverFits v.baseExponent)
     (hnt : v.numericType = lb.numericType)
     (hmin : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent =
       .ok minimumCover) :
@@ -84,11 +71,24 @@ theorem LoanBroker.roundedCoverClawback_capped (v : Vault) (minimumCover : Numbe
       ra.amount'.toRat ≤ rb.amount'.toRat :=
   ⟨fun a res hreq hnz hok =>
       have hmax := LoanBroker.maxValue_fits_of_canonicalOrZero lb a hreq.1 hnz hreq.2.1
-      LoanBroker.roundedCoverClawback_capped_proof lb v a res minimumCover hz hnt hmax hreq hnz hmin hok,
+      LoanBroker.roundedCoverClawback_capped_proof lb v a res minimumCover hf hnt hmax hreq hnz hmin hok,
     fun a b ra rb ha hb hza hzb hab hoka hokb =>
       have hmax := LoanBroker.maxValue_fits_of_canonicalOrZero lb a ha.1 hza ha.2.1
-      LoanBroker.coverClawback_monotone_proof lb v minimumCover hz hnt hmax hmin a b ha hb hza hzb hab ra rb hoka
+      LoanBroker.coverClawback_monotone_proof lb v minimumCover hf hnt hmax hmin a b ha hb hza hzb hab ra rb hoka
         hokb⟩
+
+/-- Witness: a run on a coarsened cover where clawAmount > CoverAvailable − minCover. A LoanPay fee takes the cover
+to `2000001` at the scale `10^-10`, and a clawback of `2000000` claws `1999500.9`, not `1999500.8999999999`. -/
+theorem LoanBroker.roundedCoverClawback_capped_attained :
+    ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (minimumCover : Number) (a : STAmount)
+      (res : LoanBrokerCoverResult),
+      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
+      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
+      (a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧ a.isZero = false ∧
+      (lb.coverClawback l.vault (some a)).run = .ok (.ok res) ∧
+      (⌊min a.toRat (lb.toExact.coverAvailable - minimumCover.toRat) / 10 ^ l.vault.baseExponent⌋ : ℚ) *
+        10 ^ l.vault.baseExponent < res.amount'.toRat :=
+  LoanBroker.roundedCoverClawback_capped_witness
 
 /-- Cover clawback -> CoverAvailable drops by exactly clawAmount, at most the amount when it is ≠ 0, and the drop
 converts back to clawAmount. -/

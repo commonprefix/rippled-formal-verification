@@ -4,6 +4,7 @@ import XRPL.Properties.Lending.Ledger.Common.DustHolders
 import XRPL.Properties.Vault.Proofs.WithdrawFee
 import XRPL.Properties.Vault.Proofs.WithdrawUpdates
 import XRPL.Properties.Vault.Proofs.CanEmpty
+import XRPL.Properties.Lending.Ledger.Common.RedemptionDefaultWitness
 
 /-! # A vault that no wind-down deletes
 
@@ -145,6 +146,8 @@ open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault VaultSchedule VaultWithAmounts WithdrawAmount)
 
 open private dhGenesis dhTxs dhGenesis_genesis from XRPL.Properties.Lending.Ledger.Common.DustHolders
+open private niGenesis niGenesis_genesis from XRPL.Properties.Lending.Ledger.Common.NegativeInterestWitness
+open private rdTxs from XRPL.Properties.Lending.Ledger.Common.RedemptionDefaultWitness
 
 /-- A property every wind-down transaction keeps holds at the end of every run of them. -/
 private lemma LendingLedger.Reaches.keeps {P : LendingLedger → Prop} {start l : LendingLedger}
@@ -321,5 +324,196 @@ lemma LendingLedger.wind_down_dust_witness :
   subst hl'
   rw [hdel'] at hdel
   cases hdel
+
+/-- A LoanBrokerDelete of a broker with loans fails. -/
+private lemma LendingLedger.brokerDelete_with_loans {l l' : LendingLedger} {j : Nat} {b : LoanBroker}
+    (hb : l.broker? j = some b) (hc : b.loanCount ≠ 0) : (l.apply (.loanBrokerDelete j)).run ≠ .ok (.ok l') := by
+  intro h
+  obtain ⟨u, hu, -⟩ := LendingLedger.apply_broker rfl h
+  have hcan : b.canDelete l.vault = .ok .tecHAS_OBLIGATIONS := by
+    simp [LoanBroker.canDelete, hc]
+  simp only [LendingLedger.applyBroker, hb] at hu
+  unfold_ter at hu
+  rw [hcan] at hu
+  simp only at hu
+  rw [if_pos (show (!TER.tecHAS_OBLIGATIONS.isTesSuccess) = true from rfl)] at hu
+  simp at hu
+
+/-- A VaultDelete fails while a broker is left. -/
+private lemma LendingLedger.vaultDelete_with_broker {l l' : LendingLedger}
+    (hany : l.brokers.any Option.isSome = true) : (l.apply .vaultDelete).run ≠ .ok (.ok l') := by
+  intro h
+  rw [LendingLedger.apply_of_preflight rfl] at h
+  simp only [LendingLedger.applyChecked, LendingLedger.applyVaultDelete] at h
+  unfold_ter at h
+  simp only [hany, ite_true] at h
+  repeat' split at h
+  all_goals simp_all
+
+/-- After `rdTxs`, one second past RedemptionDate: one broker and one active loan whose grace period has not ended,
+whose default is too soon and which can't be deleted, a vault that is not coarsened, and holder shares that add up
+to SharesTotal. -/
+private def wdGraceCheck : Bool :=
+  match niGenesis.run rdTxs with
+  | .ok l =>
+    match l.vault.schedule, l.loan? 0, l.broker? 0 with
+    | some s, some e, some b =>
+      !l.vaultDeleted && decide (s.redemptionDate < l.now) &&
+        decide (l.now.toNat ≤ s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat) &&
+        l.loans.length == 1 && l.brokers.length == 1 && e.brokerIndex == 0 && b.loanCount != 0 &&
+        !e.loan.isPending &&
+        decide (l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat <
+          10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) &&
+        decide (b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) &&
+        decide ((l.shares.map Number.toRat).sum = l.vault.sharesTotal.toRat) &&
+        l.shares.all (fun x => x.toRat.den == 1) &&
+        (match e.loan.withBroker b with
+          | .ok loan =>
+            (match loan.canDelete with
+              | .tesSUCCESS => false
+              | _ => true) &&
+            (match loan.canManage .default l.now with
+              | .ok .tesSUCCESS => false
+              | _ => true)
+          | .error _ => true)
+    | _, _, _ => false
+  | .error _ => false
+
+private lemma wdGraceCheck_true : wdGraceCheck = true := by native_decide
+
+/-- No wind-down deletes the vault one second past RedemptionDate while a loan's grace period runs on. Its default
+is too soon and it can't be deleted, so its broker stays and VaultDelete fails. -/
+lemma LendingLedger.wind_down_grace_witness :
+    ∃ (l : LendingLedger) (s : VaultSchedule), l.Reachable ∧ l.vaultDeleted = false ∧ l.vault.schedule = some s ∧
+      s.redemptionDate < l.now ∧
+      (∃ (i : Nat) (e : LoanEntry), l.loan? i = some e ∧
+        l.now.toNat ≤ s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
+        e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
+      l.SharesSum ∧
+      (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
+        l'.NoDust) ∧
+      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
+        (∀ tx ∈ txs, tx.isWindDown = true) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') := by
+  have hc := wdGraceCheck_true
+  unfold wdGraceCheck at hc
+  split at hc
+  case h_2 => cases hc
+  rename_i l hl
+  split at hc
+  case h_2 => cases hc
+  rename_i s e0 b0 hs he0 hb0
+  simp only [Bool.and_eq_true, Bool.not_eq_true', decide_eq_true_eq, beq_iff_eq, bne_iff_ne, ne_eq] at hc
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨⟨hnd, hpast⟩, hgr⟩, hlen⟩, hblen⟩, hbi⟩, hcount⟩, hpend⟩, hnc⟩, hca⟩, hsum⟩, hwhole⟩,
+    hmatch⟩ := hc
+  have hr : l.Reachable := LendingLedger.Reachable.of_run niGenesis_genesis hl
+  -- the loan and the broker are the only ones, and the loan's default and deletion both fail
+  have hlone : ∀ (l₀ : LendingLedger) (i : Nat) (e : LoanEntry), l₀.loans = l.loans → l₀.loan? i = some e →
+      i = 0 ∧ e = e0 := by
+    intro l₀ i e hL he
+    unfold LendingLedger.loan? at he he0
+    rw [hL] at he
+    rcases Nat.eq_zero_or_pos i with rfl | hi
+    · rw [he0] at he
+      exact ⟨rfl, (Option.some.inj he).symm⟩
+    · simp [List.getElem?_eq_none (show l.loans.length ≤ i by omega)] at he
+  have hbone : ∀ (l₀ : LendingLedger) (j : Nat) (b : LoanBroker), l₀.brokers = l.brokers → l₀.broker? j = some b →
+      j = 0 ∧ b = b0 := by
+    intro l₀ j b hB hb
+    unfold LendingLedger.broker? at hb hb0
+    rw [hB] at hb
+    rcases Nat.eq_zero_or_pos j with rfl | hj
+    · rw [hb0] at hb
+      exact ⟨rfl, (Option.some.inj hb).symm⟩
+    · simp [List.getElem?_eq_none (show l.brokers.length ≤ j by omega)] at hb
+  have hbad : ∀ loan, e0.loan.withBroker b0 = .ok loan →
+      loan.canDelete ≠ .tesSUCCESS ∧ loan.canManage .default l.now ≠ .ok .tesSUCCESS := by
+    intro loan hw
+    rw [hw] at hmatch
+    simp only [Bool.and_eq_true] at hmatch
+    obtain ⟨h1, h2⟩ := hmatch
+    refine ⟨fun hd => ?_, fun hm => ?_⟩
+    · rw [hd] at h1
+      simp at h1
+    · rw [hm] at h2
+      simp at h2
+  -- every wind-down step keeps the loans, the brokers and the close time
+  have hstep : ∀ (l₀ : LendingLedger) (tx : LendingTx) (l₁ : LendingLedger),
+      (l₀.loans = l.loans ∧ l₀.brokers = l.brokers ∧ l₀.now = l.now) → tx.isWindDown = true →
+      (l₀.apply tx).run = .ok (.ok l₁) → (l₁.loans = l.loans ∧ l₁.brokers = l.brokers ∧ l₁.now = l.now) := by
+    rintro l₀ tx l₁ ⟨hL, hB, hN⟩ hw hok
+    cases tx with
+    | loanManage i a =>
+      exfalso
+      have ha : a = .default := by cases a <;> simp_all [LendingTx.isWindDown]
+      subst ha
+      obtain ⟨u, hu, -⟩ := LendingLedger.apply_loan rfl hok
+      obtain ⟨e, broker, loan, r, he, hb, hwb, hcan, -, -⟩ := l₀.applyLoan_manage_inv u i .default hu
+      obtain ⟨rfl, rfl⟩ := hlone l₀ i e hL he
+      obtain ⟨-, rfl⟩ := hbone l₀ 0 broker hB (by rw [hbi] at hb; exact hb)
+      rw [hN] at hcan
+      exact (hbad loan hwb).2 hcan
+    | loanDelete i =>
+      exfalso
+      obtain ⟨u, hu, -⟩ := LendingLedger.apply_loan rfl hok
+      obtain ⟨e, broker, loan, r, he, hb, hwb, hcan, -, -⟩ := l₀.applyLoan_delete_inv u i hu
+      obtain ⟨rfl, rfl⟩ := hlone l₀ i e hL he
+      obtain ⟨-, rfl⟩ := hbone l₀ 0 broker hB (by rw [hbi] at hb; exact hb)
+      exact (hbad loan hwb).1 hcan
+    | loanBrokerDelete j =>
+      exfalso
+      cases hbj : l₀.broker? j with
+      | none => exact LendingLedger.brokerDelete_empty hbj hok
+      | some b =>
+        obtain ⟨-, rfl⟩ := hbone l₀ j b hB hbj
+        exact LendingLedger.brokerDelete_with_loans hbj hcount hok
+    | vaultWithdraw h amount =>
+      obtain ⟨hL', hB'⟩ := LendingLedger.vault_ops_scope_proof l₀ l₁ _ rfl hok
+      obtain ⟨u, -, rfl⟩ := LendingLedger.apply_vault rfl hok
+      refine ⟨hL'.trans hL, hB'.trans hB, ?_⟩
+      rw [← hN]
+      unfold LendingLedger.commitVault
+      split <;> rfl
+    | _ => simp [LendingTx.isWindDown] at hw
+  have hkeep : ∀ (txs : List LendingTx) (l' : LendingLedger), LendingLedger.Reaches l txs l' →
+      (∀ tx ∈ txs, tx.isWindDown = true) → (l'.loans = l.loans ∧ l'.brokers = l.brokers ∧ l'.now = l.now) :=
+    fun txs l' hreach hw => LendingLedger.Reaches.keeps
+      (P := fun l₀ => l₀.loans = l.loans ∧ l₀.brokers = l.brokers ∧ l₀.now = l.now) hstep ⟨rfl, rfl, rfl⟩ hreach hw
+  refine ⟨l, s, hr, hnd, hs, hpast, ⟨0, e0, he0, hgr⟩,
+    fun i e he hp => absurd hp (by obtain ⟨-, rfl⟩ := hlone l i e rfl he; simp [hpend]),
+    fun _ _ _ _ _ => hnc, fun j b hb => by obtain ⟨-, rfl⟩ := hbone l j b rfl hb; exact hca,
+    ⟨hsum, fun x hx => by simpa using List.all_eq_true.mp hwhole x hx⟩, ?_, ?_⟩
+  · intro txs l' hw hnone
+    have hall : ∀ tx ∈ txs, tx.isWindDown = true := by
+      clear hnone
+      induction hw with
+      | refl => simp
+      | step tx _ hw' _ ih =>
+        intro t ht
+        rcases List.mem_append.mp ht with ht | ht
+        · exact ih t ht
+        · rw [List.mem_singleton.mp ht]
+          exact hw'.isWindDown
+    obtain ⟨hL, -, -⟩ := hkeep txs l' hw.reaches hall
+    have h0 := hnone 0
+    unfold LendingLedger.loan? at h0 he0
+    rw [hL, he0] at h0
+    cases h0
+  · intro txs l' l'' hreach hw hdel
+    obtain ⟨-, hB, -⟩ := hkeep txs l' hreach hw
+    have hany : l'.brokers.any Option.isSome = true := by
+      rw [hB]
+      unfold LendingLedger.broker? at hb0
+      cases hx : l.brokers[0]? with
+      | none => rw [hx] at hb0; cases hb0
+      | some x =>
+        rw [hx] at hb0
+        cases x with
+        | none => cases hb0
+        | some x => exact List.any_eq_true.mpr ⟨some x, List.mem_of_getElem? hx, rfl⟩
+    exact LendingLedger.vaultDelete_with_broker hany hdel
 
 end XRPL.Model.Lending

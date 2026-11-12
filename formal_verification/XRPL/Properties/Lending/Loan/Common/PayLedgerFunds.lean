@@ -129,7 +129,7 @@ lemma LendingLedger.fullPayment_broker_proof (l : LendingLedger) (hr : l.Reachab
   exact Loan.fullPayment_broker_reachable_proof loan l.vault amount l.now t hreach q rate tpo fullInterest
     fullInterest' managementFee hq hrate htpo hfi hfloor hfee hsum
 
-/-- Proof body of `Lending.payment_vault_upper_bound`. -/
+/-- Proof body of the first line of `Lending.payment_vault`. -/
 lemma LendingLedger.payment_vault_upper_bound_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)
     (i : Nat) (paymentType : LoanPaymentType) (amount : Number)
     (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)
@@ -141,7 +141,7 @@ lemma LendingLedger.payment_vault_upper_bound_proof (l : LendingLedger) (hr : l.
   rw [hv]
   exact Loan.payment_vault_upper_bound_reachable_proof loan amount paymentType r l hr i hat payment hpay hok
 
-/-- Proof body of the amountToPool line of `Lending.Reachable.payment_vault_credit`. -/
+/-- Proof body of the amountToPool line of `Lending.payment_vault`. -/
 lemma LendingLedger.payment_vault_amountToPool_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)
     (i : Nat) (paymentType : LoanPaymentType) (amount : Number)
     (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)
@@ -158,7 +158,7 @@ lemma LendingLedger.payment_vault_amountToPool_proof (l : LendingLedger) (hr : l
   rw [hv]
   exact Loan.payment_vault_amountToPool_proof loan amount paymentType r l hr i hat payment hpay hok htotal
 
-/-- Proof body of `Lending.payment_vault_lower_bound`. -/
+/-- Proof body of the second line of `Lending.payment_vault`. -/
 lemma LendingLedger.payment_vault_lower_bound_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger)
     (i : Nat) (paymentType : LoanPaymentType) (amount : Number)
     (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)

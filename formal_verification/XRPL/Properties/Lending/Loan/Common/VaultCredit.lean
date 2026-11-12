@@ -11,7 +11,7 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault)
 
-/-- Proof body of `Lending.Reachable.payment_vault_credit`. -/
+/-- Proof body of the amountToPool line of `Lending.payment_vault`. -/
 lemma LendingLedger.payment_vault_credit_proof (l : LendingLedger) (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
     (paymentType : LoanPaymentType) (amount : Number)
     (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)

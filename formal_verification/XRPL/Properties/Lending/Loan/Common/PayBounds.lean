@@ -690,8 +690,8 @@ private lemma Loan.pay_vault_le (pt : LoanPaymentType) (r : LoanWithAmounts Vaul
 
 variable (paymentType : LoanPaymentType) (r : LoanWithAmounts Vault)
 
-/-- `payment_vault_upper_bound` when the asset stores AssetsAvailable and principalPaid + interestPaid fits a
-`Number`. -/
+/-- The first line of `Lending.payment_vault` when the asset stores AssetsAvailable and principalPaid + interestPaid
+fits a `Number`. -/
 lemma Loan.payment_vault_upper_bound_of_fits (payment : UnsettledPayment Vault)
     (hnt : loan.broker.numericType = v.numericType)
     (hAA : STAmount.isRounded v.numericType v.assetsAvailable = false)

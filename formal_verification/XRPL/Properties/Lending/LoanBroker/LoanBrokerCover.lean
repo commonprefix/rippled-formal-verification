@@ -44,7 +44,7 @@ theorem LoanBroker.cover_direction (lb : LoanBroker) :
     fun pool amount res hok hmax hb => LoanBroker.coverClawback_decreases_cover_proof lb pool amount res hok hmax hb⟩
 
 /-- Cover transaction on any lawful broker -> CoverAvailable' ≥ minCover after a deposit from CoverAvailable ≥ minCover,
-after a withdrawal, and after a clawback in the Open zone. -/
+after a withdrawal, and after a clawback. -/
 theorem LoanBroker.cover_keeps_minimum (lb : LoanBroker) :
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount) (res : LoanBrokerCoverResult),
       (lb.coverDeposit pool amount).run = .ok (.ok res) →
@@ -57,8 +57,8 @@ theorem LoanBroker.cover_keeps_minimum (lb : LoanBroker) :
       lb.canCoverWithdraw pool amount = .ok .tesSUCCESS → (lb.coverWithdraw pool amount).run = .ok (.ok res) →
       res.loanBroker'.HasMinimumCover (AssetPool.baseExponent pool)) ∧
     ∀ (v : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult) (minimumCover : Number),
-      -- CoverAvailable is whole base units within the Open limit, as on every reachable broker
-      lb.OpenZone v.baseExponent →
+      -- CoverAvailable is whole base units, as on every reachable broker, and is not coarsened
+      lb.CoverFits v.baseExponent →
       v.numericType = lb.numericType →
       -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) →
@@ -69,24 +69,24 @@ theorem LoanBroker.cover_keeps_minimum (lb : LoanBroker) :
   ⟨fun pool amount res hok hc hnn hb e hmin =>
       LoanBroker.coverDeposit_keeps_minimum_proof lb pool amount res e hok hc hnn hb hmin,
     fun pool amount res hcan hok => LoanBroker.coverWithdraw_keeps_minimum_proof lb pool amount res hcan hok,
-    fun v amount res minimumCover hz hnt hmax hreq hmin hok =>
-      LoanBroker.coverClawback_keeps_minimum_proof lb v amount res minimumCover hz hnt hmax hreq hmin hok⟩
+    fun v amount res minimumCover hf hnt hmax hreq hmin hok =>
+      LoanBroker.coverClawback_keeps_minimum_proof lb v amount res minimumCover hf hnt hmax hreq hmin hok⟩
 
-/-- Witness: off the Open zone the checks pass and CoverAvailable' < minCover. On a cover of
-`1000000000000001.6` with minCover `1`, a full clawback takes `1000000000000001` and leaves `0.6`. -/
+/-- Witness: a run on a coarsened cover where a clawback leaves CoverAvailable' < minCover. A LoanPay fee takes the
+cover to `2000001` at the scale `10^-10`, and a full clawback leaves `500.1`, below minCover `500.1000000001`. -/
 theorem LoanBroker.cover_keeps_minimum_clawback_attained :
-    ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount) (res : LoanBrokerCoverResult)
+    ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount) (res : LoanBrokerCoverResult)
       (minimumCover : Number),
-      v.numericType = lb.numericType ∧
+      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
-      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum v.baseExponent = .ok minimumCover ∧
-      lb.canCoverClawback v amount = .ok .tesSUCCESS ∧ (lb.coverClawback v amount).run = .ok (.ok res) ∧
+      minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
+      (lb.coverClawback l.vault amount).run = .ok (.ok res) ∧
       res.loanBroker'.toExact.coverAvailable < minimumCover.toRat :=
   LoanBroker.coverClawback_keeps_minimum_witness
 
-/-- Cover transaction on any lawful broker that passes its checks -> deposit and withdrawal succeed with roundedAmount,
-clawback succeeds or returns notLawful, and in the Open zone it succeeds. -/
+/-- Cover transaction on any lawful broker that passes its checks -> it succeeds, deposit and withdrawal with
+roundedAmount, clawback with clawAmount. -/
 theorem LoanBroker.cover_total (lb : LoanBroker) :
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount),
       amount.Canonical → -- a transaction amount is a canonical amount
@@ -100,45 +100,40 @@ theorem LoanBroker.cover_total (lb : LoanBroker) :
       lb.canCoverWithdraw pool amount = .ok .tesSUCCESS →
       ∃ a res, clampToSumExponent lb.coverAvailable amount.operator_neg (AssetPool.baseExponent pool) = .ok a ∧
         (lb.coverWithdraw pool amount).run = .ok (.ok res) ∧ res.amount' = a) ∧
-    ∀ amount : Option STAmount,
-      -- CoverAvailable is an asset balance, and every IOU amount is below 10^96
-      (∀ {α : Type} [AssetPool α] (pool : α), lb.canCoverClawback pool amount = .ok .tesSUCCESS →
-        lb.toExact.coverAvailable < 10 ^ 96 →
-        (∃ res, (lb.coverClawback pool amount).run = .ok (.ok res)) ∨
-          (lb.coverClawback pool amount).run = .error .notLawful) ∧
-      -- CoverAvailable is whole base units within the Open limit, as on every reachable broker, and the asset's
-      -- maximum fits an int64 amount, as C++ caps every MPT maximum
-      ∀ v : Vault, lb.OpenZone v.baseExponent → v.numericType = lb.numericType →
-        (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) →
-        (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) →
-        lb.canCoverClawback v amount = .ok .tesSUCCESS →
-        ∃ res, (lb.coverClawback v amount).run = .ok (.ok res) :=
+    -- CoverAvailable is whole base units, as on every reachable broker, and is not coarsened, and the asset's
+    -- maximum fits an int64 amount, as C++ caps every MPT maximum
+    ∀ (v : Vault) (amount : Option STAmount), lb.CoverFits v.baseExponent → v.numericType = lb.numericType →
+      (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) →
+      (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) →
+      lb.canCoverClawback v amount = .ok .tesSUCCESS →
+      ∃ c res, (lb.roundedCoverClawback v amount).run = .ok (.ok c) ∧
+        (lb.coverClawback v amount).run = .ok (.ok res) ∧ res.amount' = c :=
   ⟨fun pool amount hc hnn hb hcan => LoanBroker.coverDeposit_total_proof lb pool amount hc hnn hb hcan,
     fun pool amount hcan => LoanBroker.coverWithdraw_total_proof lb pool amount hcan,
-    fun amount =>
-      ⟨fun pool hcan hcap => LoanBroker.coverClawback_total_proof lb pool amount hcan hcap,
-        fun v hz hnt hmax hreq hcan => LoanBroker.coverClawback_lawful_total_proof lb v amount hz hnt hmax hreq hcan⟩⟩
+    fun v amount hf hnt hmax hreq hcan => LoanBroker.coverClawback_lawful_total_proof lb v amount hf hnt hmax hreq hcan⟩
 
-/-- Witness: off the Open zone a run passes the checks but is notLawful. With no debt and a cover of
-`1000000000000000.6`, a full clawback takes `1000000000000001`, so the new cover is negative. -/
+/-- Witness: a run on a coarsened cover where a clawback that passes its checks fails. A default leaves no debt and
+a cover of `1999999.9999999999`, and a full clawback rounds the claw up to `2000000`, above the cover. -/
 theorem LoanBroker.cover_total_clawback_attained :
-    ∃ (lb : LoanBroker) (v : Vault) (amount : Option STAmount),
-      v.numericType = lb.numericType ∧
+    ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount),
+      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
-      lb.canCoverClawback v amount = .ok .tesSUCCESS ∧ (lb.coverClawback v amount).run = .error .notLawful :=
+      lb.canCoverClawback l.vault amount = .ok .tesSUCCESS ∧
+      (lb.coverClawback l.vault amount).run = .error .notLawful :=
   LoanBroker.coverClawback_lawful_total_witness
 
-/-- Every reachable broker -> with room for one more base unit a cover deposit can raise CoverAvailable, and with
-CoverAvailable ≠ 0 a withdrawal, or a clawback when it does not hold XRP, can take all of it. -/
+/-- Every reachable broker -> when CoverAvailable + 1 base unit ≤ the Open limit a deposit can give CoverAvailable' >
+CoverAvailable, and when CoverAvailable ≠ 0 a withdrawal, or a clawback of an IOU or MPT, can take all of it. -/
 theorem LoanBroker.cover_possible (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) :
     -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum. CoverAvailable + 1 base unit is within
-    -- the Open limit, and within the asset's maximum for XRP or MPT. The asset accepts whole amounts (offset 0), as
-    -- XRP, MPT and IOU do
+    -- the Open limit, and for MPT within MaximumAmount, so a holder can still have a unit to deposit. The asset
+    -- accepts whole amounts (offset 0), as XRP, MPT and IOU do
     ((lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) →
       lb.toExact.coverAvailable + 10 ^ base ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ base →
-      (lb.numericType.isIntegral = true → lb.toExact.coverAvailable + 1 ≤ lb.numericType.maxValue.toNat) →
+      (lb.numericType ≠ .native → lb.numericType.isIntegral = true →
+        lb.toExact.coverAvailable + 1 ≤ lb.numericType.maxValue.toNat) →
       (0 : Int) ≤ lb.numericType.maxOffset →
       ∃ (amount : STAmount) (res : LoanBrokerCoverResult),
         amount.Canonical ∧ amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
@@ -157,7 +152,20 @@ theorem LoanBroker.cover_possible (lb : LoanBroker) (base : Int) (hr : lb.Reacha
         s.Canonical ∧ s.mNumericType = lb.numericType ∧ s.toRat = lb.toExact.coverAvailable ∧
           lb.canCoverClawback v (some s) = .ok .tesSUCCESS ∧ (lb.coverClawback v (some s)).run = .ok (.ok res) ∧
           res.loanBroker'.toExact.coverAvailable = 0) :=
-  ⟨fun hmax hroom hone hmaxoff =>
+  ⟨fun hmax hroom hmpt hmaxoff =>
+      -- for XRP the Open limit, `9·10^15` drops, is below the `10^17` drops that exist
+      have hone : lb.numericType.isIntegral = true →
+          lb.toExact.coverAvailable + 1 ≤ lb.numericType.maxValue.toNat := by
+        intro hi
+        by_cases hx : lb.numericType = .native
+        · have h1 : (10 : ℚ) ^ base ≤ 1 :=
+            zpow_le_one_of_nonpos₀ (by norm_num) (by rw [← hvb]; exact v.baseExponent_bounds.2.1)
+          have h0 : (0 : ℚ) < 10 ^ base := zpow_pos (by norm_num) _
+          have hxrp : NumericType.native.maxValue.toNat = 100000000000000000 := rfl
+          rw [hx, hxrp]
+          push_cast
+          linarith
+        · exact hmpt hx hi
       LoanBroker.coverDeposit_increase_possible_proof lb base hr hmax v hvb hnt hroom hone hmaxoff,
     fun hnz =>
       have hpos : 0 < lb.toExact.coverAvailable := lt_of_le_of_ne lb.exact.coverAvailable_nonneg (Ne.symm hnz)
@@ -169,7 +177,7 @@ theorem LoanBroker.cover_possible (lb : LoanBroker) (base : Int) (hr : lb.Reacha
         hxrp hpos⟩
 
 /-- Cover transaction then the opposite one for its amount -> CoverAvailable is restored, and after a deposit the
-withdrawal, or the clawback with clawAmount = roundedAmount when the broker does not hold XRP, passes its checks. -/
+withdrawal, or the clawback of an IOU or MPT with clawAmount = roundedAmount, passes its checks. -/
 theorem LoanBroker.cover_restores (lb : LoanBroker) (base : Int) (hr : lb.Reachable base)
     (v : Vault) (hvb : v.baseExponent = base) (hnt : v.numericType = lb.numericType) :
     (∀ (amount : STAmount) (res : LoanBrokerCoverResult),
@@ -289,8 +297,8 @@ theorem LoanBroker.cover_split (lb : LoanBroker) (base : Int) (hr : lb.Reachable
       LoanBroker.coverClawback_split_proof lb base hr hmax v hvb hnt a b c hca hcb hcc hat hbt hct hpa hpb
         hsum hga hgb r1 r2 s hcan1 h1 hcan2 h2 hcan3 h3⟩
 
-/-- Witness: with parts that are not whole base units, all checks pass and CoverAvailable differs. Two
-deposits of `1.5` base units are credited one each, while one deposit of `3` is credited whole. -/
+/-- Witness: a run where two deposits of `1.5` base units give a different CoverAvailable' than one of `3`. Each of
+the two is credited one base unit, the single deposit all three. -/
 theorem LoanBroker.cover_split_deposit_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
       lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
@@ -310,8 +318,8 @@ theorem LoanBroker.cover_split_deposit_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_split_witness
 
-/-- Witness: with parts that are not whole base units, all checks pass and CoverAvailable differs. Two
-withdrawals of `1.5` base units pay out one each, while one withdrawal of `3` pays out three. -/
+/-- Witness: a run where two withdrawals of `1.5` base units give a different CoverAvailable' than one of `3`. Each
+of the two pays out one base unit, the single withdrawal all three. -/
 theorem LoanBroker.cover_split_withdraw_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
       lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
@@ -325,8 +333,8 @@ theorem LoanBroker.cover_split_withdraw_attained :
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_split_witness
 
-/-- Witness: with parts that are not whole base units, all checks pass and CoverAvailable differs. Two
-clawbacks of `1.5` base units take one each, while one clawback of `3` takes three. -/
+/-- Witness: a run where two clawbacks of `1.5` base units give a different CoverAvailable' than one of `3`. Each
+of the two takes one base unit, the single clawback all three. -/
 theorem LoanBroker.cover_split_clawback_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
       lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧

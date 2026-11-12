@@ -71,4 +71,34 @@ lemma LendingLedger.redemption_default_witness :
   rename_i hrej
   exact ⟨l, 0, e, s, LendingLedger.Reachable.of_run niGenesis_genesis hl, hred, he, hrem, hs, hpast, hdue, hrej⟩
 
+/-- After `rdTxs`, loan 0's last due date + GracePeriod is past RedemptionDate. -/
+private def rdGraceCheck : Bool :=
+  match niGenesis.run rdTxs with
+  | .ok l =>
+    match l.loan? 0, l.vault.schedule with
+    | some e, some s =>
+      decide (s.redemptionDate.toNat < e.loan.schedule.startDate.toNat +
+        e.loan.schedule.paymentInterval.toNat * e.loan.schedule.paymentTotal.toNat + e.loan.schedule.gracePeriod.toNat)
+    | _, _ => false
+  | .error _ => false
+
+private lemma rdGraceCheck_true : rdGraceCheck = true := by native_decide
+
+/-- A reachable ledger with a loan whose last due date + GracePeriod is past RedemptionDate. -/
+lemma LendingLedger.loans_mature_witness :
+    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule), l.Reachable ∧ l.vault.schedule = some s ∧
+      l.loan? j = some e ∧
+      s.redemptionDate.toNat < e.loan.schedule.startDate.toNat +
+        e.loan.schedule.paymentInterval.toNat * e.loan.schedule.paymentTotal.toNat +
+          e.loan.schedule.gracePeriod.toNat := by
+  have h := rdGraceCheck_true
+  unfold rdGraceCheck at h
+  split at h
+  case h_2 => cases h
+  rename_i l hl
+  split at h
+  case h_2 => cases h
+  rename_i e s he hs
+  exact ⟨l, 0, e, s, LendingLedger.Reachable.of_run niGenesis_genesis hl, hs, he, of_decide_eq_true h⟩
+
 end XRPL.Model.Lending
