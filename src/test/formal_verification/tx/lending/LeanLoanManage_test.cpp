@@ -60,17 +60,6 @@ class LeanLoanManage_test : public LeanSuite
         return "?";
     }
 
-    void
-    expectTer(TER lean, TER cpp, TER expected)
-    {
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
-        BEAST_EXPECTS(
-            lean == expected,
-            std::string("lean=") + transToken(lean) + " expected " + transToken(expected));
-    }
-
     // One LoanManage on `view`: C++ applies it there, the model runs on the same pre-state. The
     // verdicts must agree and, on success, so must the post-states. Returns the C++ verdict.
     TER
@@ -79,13 +68,13 @@ class LeanLoanManage_test : public LeanSuite
         OpenView& view,
         BrokerFixture const& f,
         Keylet const& loanKeylet,
-        std::uint32_t paymentTotal,
+        LoanParams const& p,
         ManageAction action,
         std::string const& at = {})
     {
         using namespace jtx;
         Asset const asset = f.asset.raw();
-        Loan const loan = readLoan(view, loanKeylet, asset, paymentTotal);
+        Loan const loan = readLoan(view, loanKeylet, f, p);
         Vault const pool = readVaultState(view, f.vaultKeylet, asset);
         std::uint32_t const now = parentCloseTime(env);
 
@@ -108,10 +97,10 @@ class LeanLoanManage_test : public LeanSuite
         if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
             return cppTer;
 
-        Loan const cppLoan = readLoan(view, loanKeylet, asset, paymentTotal);
+        Loan const cppLoan = readLoan(view, loanKeylet, f, p);
         Vault const cppPool = readVaultState(view, f.vaultKeylet, asset);
         expectLoanMatches(*this, result->loan, cppLoan);
-        expectVaultMatches(*this, result->pool, cppPool);
+        expectSameVault(*this, "vault ", result->pool, cppPool);
         expectBrokerMatches(*this, result->loan.broker, cppLoan.broker);
         // A default moves the cover it consumes into the vault.
         expectNumber(
@@ -125,8 +114,6 @@ class LeanLoanManage_test : public LeanSuite
     // A 1000 loan (two installments 600 s apart, 60 s grace) on a throwaway view of the fixture,
     // started `delay` seconds before the parent close time, and impaired first if `impairFirst`
     // (which needs the loan to be late).
-    enum class LoanKind : std::uint8_t { active, pending, defaulted, paidOff };
-
     void
     runManage(
         jtx::Env& env,
@@ -142,24 +129,13 @@ class LeanLoanManage_test : public LeanSuite
         testcase(actionName(action) + ": " + label);
 
         OpenView view{*env.current()};
-        std::uint32_t const now = parentCloseTime(env);
         LoanParams p;
-        if (kind == LoanKind::pending)
-            p.startDate = now + 1'000;
-        if (kind == LoanKind::paidOff)
-            p.paymentTotal = 1;
-        auto const loanKeylet = createLoan(env, view, f, p);
-        if (kind != LoanKind::pending)
-            startedAgo(view, loanKeylet, now, delay);
-        if (kind == LoanKind::paidOff)
-        {
-            BEAST_EXPECT(
-                applyOn(
-                    env,
-                    view,
-                    loan::pay(f.borrower, loanKeylet.key, f.asset(1'000)),
-                    Fee(env.current()->fees().base * 101)) == tesSUCCESS);
-        }
+        std::optional<Keylet> staged;
+        if (!tryStage(*this, label, [&] {
+                staged = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay);
+            }))
+            return;
+        Keylet const loanKeylet = *staged;
         if (impairFirst)
         {
             BEAST_EXPECT(
@@ -172,7 +148,7 @@ class LeanLoanManage_test : public LeanSuite
                 applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanDefault)) ==
                 tesSUCCESS);
         }
-        TER const cpp = checkManage(env, view, f, loanKeylet, p.paymentTotal, action);
+        TER const cpp = checkManage(env, view, f, loanKeylet, p, action);
         BEAST_EXPECTS(
             cpp == expected,
             std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
@@ -180,14 +156,9 @@ class LeanLoanManage_test : public LeanSuite
 
     // ---- Sweeps ----
 
-    struct SweepFixture
-    {
-        jtx::Env& env;
-        BrokerFixture f;
-    };
-    using SweepFixtures = std::vector<SweepFixture>;
+    using SweepFixtures = std::vector<SweepLedger>;
 
-    // No cover rates, 9e9 units in the vault, an investment window long enough for 30-day
+    // No cover rates, kSweepSeed units in the vault, an investment window long enough for 30-day
     // intervals, and a clock far enough from zero for due dates staged a month back.
     static BrokerFixture
     sweepFixture(jtx::Env& env, LendingAsset kind)
@@ -210,34 +181,37 @@ class LeanLoanManage_test : public LeanSuite
     void
     testDefaultSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             beginCase(("LoanManage " + assetName(f) + " default deadline-Sweep").c_str());
             std::uint32_t const now = parentCloseTime(env);
-            runAroundCusp(kDefaultCases, [&](DefaultCusp const& c) {
-                OpenView view{*env.current()};
-                LoanParams const p{
-                    .paymentInterval = c.interval,
-                    .gracePeriod = static_cast<std::uint32_t>(c.grace)};
-                auto const loan = createLoan(env, view, f, p);
-                dueAt(view, loan, now, c.dueOffset - c.cuspGrace);
-                return checkManage(
-                    env,
-                    view,
-                    f,
-                    loan,
-                    p.paymentTotal,
-                    ManageAction::defaultLoan,
-                    describe(c) + ": ");
-            });
+            for (auto const& [cusp, cases] : kDefaultCases)
+            {
+                std::set<TER> seen;
+                for (DefaultCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .paymentInterval = c.interval,
+                        .gracePeriod = static_cast<std::uint32_t>(c.grace),
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    dueAt(view, loan, now, c.dueOffset - c.cuspGrace);
+                    seen.insert(checkManage(
+                        env, view, f, loan, p, ManageAction::defaultLoan, describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecTOO_SOON});
+            }
         }
     }
 
     void
     testImpairSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             sweepImpairDue(env, f);
             sweepLossCap(env, f);
         }
@@ -249,20 +223,21 @@ class LeanLoanManage_test : public LeanSuite
     {
         beginCase(("LoanManage " + assetName(f) + " impair due date-Sweep").c_str());
         std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kImpairDueCases, [&](std::int64_t dueOffset) {
-            OpenView view{*env.current()};
-            LoanParams const p;
-            auto const loan = createLoan(env, view, f, p);
-            dueAt(view, loan, now, dueOffset);
-            return checkManage(
-                env,
-                view,
-                f,
-                loan,
-                p.paymentTotal,
-                ManageAction::impair,
-                describe(dueOffset) + ": ");
-        });
+        // The due date staged at now + offset.
+        for (auto const& [cusp, cases] : kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const dueOffset : cases)
+            {
+                OpenView view{*env.current()};
+                LoanParams const p;
+                auto const loan = createLoan(env, view, f, p);
+                dueAt(view, loan, now, dueOffset);
+                seen.insert(checkManage(
+                    env, view, f, loan, p, ManageAction::impair, describe(dueOffset) + ": "));
+            }
+            expectCrossed(cusp, seen, {tecTOO_SOON});
+        }
     }
 
     // An impairment adds the loan's principal to the unrealized loss; past the deployed assets it
@@ -272,15 +247,68 @@ class LeanLoanManage_test : public LeanSuite
     {
         beginCase(("LoanManage " + assetName(f) + " impair loss cap-Sweep").c_str());
         std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kLossCapCases, [&](LossCapCusp const& c) {
-            OpenView view{*env.current()};
-            LoanParams const p{.principal = units(f, c.principal), .paymentTotal = 1};
-            auto const loan = createLoan(env, view, f, p);
-            dueAt(view, loan, now, -1);
-            stageDeployed(view, f.vaultKeylet, units(f, c.deployed), units(f, c.loss));
-            return checkManage(
-                env, view, f, loan, p.paymentTotal, ManageAction::impair, describe(c) + ": ");
-        });
+        for (auto const& [cusp, cases] : kLossCapCases)
+        {
+            std::set<TER> seen;
+            for (LossCapCusp const& c : cases)
+            {
+                OpenView view{*env.current()};
+                LoanParams const p{.principal = units(f, c.principal), .paymentTotal = 1};
+                auto const loan = createLoan(env, view, f, p);
+                dueAt(view, loan, now, -1);
+                stageDeployed(view, f.vaultKeylet, units(f, c.deployed), units(f, c.loss));
+                seen.insert(
+                    checkManage(env, view, f, loan, p, ManageAction::impair, describe(c) + ": "));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
+    }
+
+    void
+    testDefaultCoverSweep(SweepFixtures const& fixtures)
+    {
+        for (auto const& [envPtr, f] : fixtures)
+        {
+            jtx::Env& env = *envPtr;
+            beginCase(
+                ("LoanManage " + assetName(f) + " default cover at the principal-Sweep").c_str());
+            for (auto const& [cusp, cases] : kDefaultPrincipalCases)
+            {
+                for (DefaultCoverCusp const& c : cases)
+                {
+                    checkDefaultCover(env, f, c);
+                }
+            }
+            beginCase(("LoanManage " + assetName(f) + " default cover at the cover available-Sweep")
+                          .c_str());
+            for (auto const& [cusp, cases] : kDefaultAvailableCases)
+            {
+                for (DefaultCoverCusp const& c : cases)
+                {
+                    checkDefaultCover(env, f, c);
+                }
+            }
+        }
+    }
+
+    // A default of a `principal` loan beside a `debt` loan, with `cover` deposited and the
+    // minimum cover rate set after both loans. The cover moved into the vault is
+    // min(min(minimum cover * 20%, principal), cover); the verdict does not change.
+    TER
+    checkDefaultCover(jtx::Env& env, BrokerFixture const& f, DefaultCoverCusp const& c)
+    {
+        std::string const at = describe(c) + ": ";
+        OpenView view{*env.current()};
+        LoanParams const p{.principal = units(f, c.principal)};
+        std::optional<Keylet> loan;
+        if (!tryStage(*this, at, [&] {
+                stageLending(env, view, f, {.debt = c.debt});
+                loan = createLoan(env, view, f, p);
+                stageLending(env, view, f, {.cover = c.cover, .coverRate = c.rate});
+                dueAt(view, *loan, parentCloseTime(env), -61);
+            }))
+            return tefINTERNAL;
+        return checkManage(env, view, f, *loan, p, ManageAction::defaultLoan, at);
     }
 
     void
@@ -394,9 +422,13 @@ class LeanLoanManage_test : public LeanSuite
             tecNO_PERMISSION,
             LoanKind::paidOff);
 
-        SweepFixtures const fixtures{{iouSweepEnv, iouSweep}, {mptSweepEnv, mptSweep}};
+        SweepFixtures const fixtures{
+            {.env = &iouSweepEnv, .f = iouSweep},
+            {.env = &mptSweepEnv, .f = mptSweep},
+        };
         testDefaultSweep(fixtures);
         testImpairSweep(fixtures);
+        testDefaultCoverSweep(fixtures);
     }
 };
 

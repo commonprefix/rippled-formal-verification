@@ -98,7 +98,7 @@ theorem Vault.clawback_error_codes (assets holderShares : STAmount) (waive : Boo
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (ter : TER) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) :
     ter = .tecNO_PERMISSION ∨ ter = .tecINTERNAL ∨ ter = .tecHAS_OBLIGATIONS ∨ ter = .tecPRECISION_LOSS ∨
-      ter = .tecPATH_DRY :=
+      ter = .tecPATH_DRY ∨ ter = .tecINSUFFICIENT_FUNDS :=
   Vault.clawback_error_codes_proof v assets holderShares waive hnn hc hhs hmax ter hok
 
 end XRPL.Model.SingleAssetVault

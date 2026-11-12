@@ -165,7 +165,7 @@ lemma Vault.clawback_ne_wrap (v : Vault) (assets held : STAmount) (waive : Bool)
     | (refine computeClawback_ne_wrap _ _ _ _ ?_ ?_ ?_ ‹_› <;> wrap_side)
     | (refine Vault.adjustAssetsAndShares_ne_wrap _ _ _ ?_ ?_ ‹_› <;> wrap_side)
     | exact RawVault.to_lawful_ne_wrap _ ‹_›
-    | close_wrap [STAmount.toNumber_ne_wrap, Vault.checkDebitNotDust_ne_wrap]
+    | close_wrap [STAmount.toNumber_ne_wrap, Vault.checkDebitNotDust_ne_wrap, STAmount.operator_lt_ne_wrap]
 
 lemma Vault.clawback_mValue_lt {v : Vault} {assets held : STAmount} {waive : Bool} {hnn : 0 ≤ assets.toRat}
     {r : VaultWithAmounts} (hnt : v.numericType.maxValue.toNat < 2 ^ 63) (hh : held.mValue.toNat < 2 ^ 63)

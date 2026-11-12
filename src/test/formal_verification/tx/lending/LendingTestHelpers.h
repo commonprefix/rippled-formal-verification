@@ -38,6 +38,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <exception>
 #include <initializer_list>
 #include <optional>
 #include <stdexcept>
@@ -64,10 +65,10 @@ readBroker(ReadView const& view, Keylet const& brokerKeylet, Asset const& asset)
         .loanCount = sle->at(sfOwnerCount)};
 }
 
-// A closed-ended IOU vault owned by `owner` with its loan broker. The holder is the vault's
-// lender, the owner funds the broker cover, the borrower takes loans.
 enum class LendingAsset : std::uint8_t { iou, mpt };
 
+// A closed-ended vault owned by `owner` with its loan broker. The holder is the vault's lender,
+// the owner funds the broker cover, the borrower takes loans.
 struct BrokerFixture
 {
     jtx::Account owner;
@@ -125,7 +126,8 @@ setUpBrokerVault(
             mptt.authorize({.account = holder});
             mptt.authorize({.account = borrower});
             env.close();
-            env(pay(issuer, owner, a(Number{1, 10})));
+            // The owner holds 1e16 units, as on the IOU vault, so cover reaches the open limit.
+            env(pay(issuer, owner, a(Number{1, 16})));
             env(pay(issuer, holder, a(Number{1, 10})));
             env(pay(issuer, borrower, a(Number{1, 10})));
             env.close();
@@ -245,47 +247,6 @@ closeAt(jtx::Env& env, std::uint32_t at)
     env.close(NetClock::time_point{NetClock::duration{at}});
 }
 
-// Snapshot the loan on `view` (and its broker) into the model's Loan DTO. The payment total is
-// not stored on the loan, so the caller supplies the one it submitted.
-[[nodiscard]] inline Loan
-readLoan(
-    ReadView const& view,
-    Keylet const& loanKeylet,
-    Asset const& asset,
-    std::uint32_t paymentTotal)
-{
-    auto const sle = view.read(loanKeylet);
-    if (!sle)
-        throw std::runtime_error("readLoan: no loan on the view");
-    return Loan{
-        .broker = readBroker(view, keylet::loanBroker(sle->at(sfLoanBrokerID)), asset),
-        .interestRate = sle->at(sfInterestRate),
-        .lateInterestRate = sle->at(sfLateInterestRate),
-        .closeInterestRate = sle->at(sfCloseInterestRate),
-        .overpaymentInterestRate = sle->at(sfOverpaymentInterestRate),
-        .overpaymentFee = sle->at(sfOverpaymentFee),
-        .originationFee = sle->at(sfLoanOriginationFee),
-        .serviceFee = sle->at(sfLoanServiceFee),
-        .latePaymentFee = sle->at(sfLatePaymentFee),
-        .closePaymentFee = sle->at(sfClosePaymentFee),
-        .paymentInterval = sle->at(sfPaymentInterval),
-        .paymentTotal = paymentTotal,
-        .gracePeriod = sle->at(sfGracePeriod),
-        .startDate = sle->at(sfStartDate),
-        .paymentRemaining = sle->at(sfPaymentRemaining),
-        .periodicPayment = sle->at(sfPeriodicPayment),
-        .principalOutstanding = sle->at(sfPrincipalOutstanding),
-        .totalValueOutstanding = sle->at(sfTotalValueOutstanding),
-        .managementFeeOutstanding = sle->at(sfManagementFeeOutstanding),
-        .loanScale = static_cast<std::int32_t>(sle->at(sfLoanScale)),
-        .previousPaymentDueDate = sle->at(sfPreviousPaymentDueDate),
-        .nextPaymentDueDate = sle->at(sfNextPaymentDueDate),
-        .isPending = sle->isFlag(lsfLoanPending),
-        .isImpaired = sle->isFlag(lsfLoanImpaired),
-        .isDefault = sle->isFlag(lsfLoanDefault),
-        .allowsOverpayment = sle->isFlag(lsfLoanOverpayment)};
-}
-
 // The LoanSet fields of a test loan: a 1000 principal in two installments 600 s apart, no interest
 // and no fees unless set. A start date makes it a two-step proposal submitted by the owner.
 struct LoanParams
@@ -306,6 +267,48 @@ struct LoanParams
     std::optional<std::uint32_t> startDate;
     bool allowsOverpayment = false;
 };
+
+// Snapshot the loan on `view` (and its broker) into the model's Loan DTO. The payment total and the
+// requested principal are not stored on the loan, so they come from the submitted `p`.
+[[nodiscard]] inline Loan
+readLoan(
+    ReadView const& view,
+    Keylet const& loanKeylet,
+    BrokerFixture const& f,
+    LoanParams const& p)
+{
+    auto const sle = view.read(loanKeylet);
+    if (!sle)
+        throw std::runtime_error("readLoan: no loan on the view");
+    return Loan{
+        .broker = readBroker(view, keylet::loanBroker(sle->at(sfLoanBrokerID)), f.asset.raw()),
+        .interestRate = sle->at(sfInterestRate),
+        .lateInterestRate = sle->at(sfLateInterestRate),
+        .closeInterestRate = sle->at(sfCloseInterestRate),
+        .overpaymentInterestRate = sle->at(sfOverpaymentInterestRate),
+        .overpaymentFee = sle->at(sfOverpaymentFee),
+        .originationFee = sle->at(sfLoanOriginationFee),
+        .serviceFee = sle->at(sfLoanServiceFee),
+        .latePaymentFee = sle->at(sfLatePaymentFee),
+        .closePaymentFee = sle->at(sfClosePaymentFee),
+        .paymentInterval = sle->at(sfPaymentInterval),
+        .paymentTotal = p.paymentTotal,
+        .gracePeriod = sle->at(sfGracePeriod),
+        .startDate = sle->at(sfStartDate),
+        .paymentRemaining = sle->at(sfPaymentRemaining),
+        .principalInitial = p.principal,
+        .periodicPayment = sle->at(sfPeriodicPayment),
+        .principalOutstanding = sle->at(sfPrincipalOutstanding),
+        .totalValueOutstanding = sle->at(sfTotalValueOutstanding),
+        .managementFeeOutstanding = sle->at(sfManagementFeeOutstanding),
+        .loanScale = static_cast<std::int32_t>(sle->at(sfLoanScale)),
+        .previousPaymentDueDate = sle->at(sfPreviousPaymentDueDate),
+        .nextPaymentDueDate = sle->at(sfNextPaymentDueDate),
+        .isPending = sle->isFlag(lsfLoanPending),
+        .isImpaired = sle->isFlag(lsfLoanImpaired),
+        .isDefault = sle->isFlag(lsfLoanDefault),
+        .allowsOverpayment = sle->isFlag(lsfLoanOverpayment)};
+}
 
 [[nodiscard]] inline LoanSetArgs
 loanSetArgs(LoanParams const& p)
@@ -347,6 +350,7 @@ loanTemplate(LoanBroker const& broker, LoanParams const& p, std::uint32_t startD
         .paymentTotal = p.paymentTotal,
         .gracePeriod = p.gracePeriod.value_or(60),
         .startDate = startDate,
+        .principalInitial = p.principal,
         .allowsOverpayment = p.allowsOverpayment};
 }
 
@@ -442,7 +446,11 @@ TER
 applyOn(jtx::Env& env, OpenView& view, json::Value tx, Fn const&... fn)
 {
     auto const sender = parseBase58<AccountID>(tx[jss::Account].asString());
+    if (!sender)
+        throw std::runtime_error("applyOn: no Account on the transaction");
     auto const account = view.read(keylet::account(*sender));
+    if (!account)
+        throw std::runtime_error("applyOn: no sender account on the view");
     auto const jt = env.jt(tx, jtx::Seq(account->at(sfSequence)), fn...);
     return xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
 }
@@ -469,29 +477,73 @@ units(BrokerFixture const& f, std::int64_t n)
     return f.asset.raw().holds<MPTIssue>() ? Number{n} : Number{n, -6};
 }
 
+// `n` (in asset units) as grid units of the fixture's vault.
+[[nodiscard]] inline std::int64_t
+toUnits(ReadView const& view, BrokerFixture const& f, Number const& n)
+{
+    return static_cast<std::int64_t>(
+        n * Number{1, static_cast<int>(view.read(f.vaultKeylet)->at(sfScale))});
+}
+
+// 10^level grid units written with a 16-digit mantissa (1e15 at exponent level - scale - 15), so
+// moving `mantissa` leaves the vault grid.
+[[nodiscard]] inline Number
+gridStep(ReadView const& view, BrokerFixture const& f, std::int64_t mantissa, int level)
+{
+    return Number{mantissa, level - static_cast<int>(view.read(f.vaultKeylet)->at(sfScale)) - 15};
+}
+
 [[nodiscard]] inline std::string
 assetName(BrokerFixture const& f)
 {
     return f.asset.raw().holds<MPTIssue>() ? "MPT" : "IOU";
 }
 
+// A shared ledger (one per asset) that the staged single-value tests and the sweeps run on.
+struct SweepLedger
+{
+    jtx::Env* env;
+    BrokerFixture f;
+};
+
 // What a non-issuer account holds of the fixture asset on `view`.
 [[nodiscard]] inline Number
-holding(ReadView const& view, jtx::Account const& account, Asset const& asset)
+holding(ReadView const& view, AccountID const& account, Asset const& asset)
 {
     if (asset.holds<MPTIssue>())
     {
-        auto const token =
-            view.read(keylet::mptoken(asset.get<MPTIssue>().getMptID(), account.id()));
+        auto const token = view.read(keylet::mptoken(asset.get<MPTIssue>().getMptID(), account));
         return token ? Number{static_cast<std::int64_t>(token->getFieldU64(sfMPTAmount))}
                      : Number{};
     }
     Issue const issue = asset.get<Issue>();
-    auto const line = view.read(keylet::trustLine(account.id(), issue));
+    auto const line = view.read(keylet::trustLine(account, issue));
     if (!line)
         return Number{};
     Number const balance = line->getFieldAmount(sfBalance);
-    return account.id() > issue.account ? -balance : balance;
+    return account > issue.account ? -balance : balance;
+}
+
+[[nodiscard]] inline Number
+holding(ReadView const& view, jtx::Account const& account, Asset const& asset)
+{
+    return holding(view, account.id(), asset);
+}
+
+// Zero `account`'s IOU balance on `view`, so the next change to it is exact (a 16-digit balance
+// rounds a small change away). MPT balances are exact integers and stay.
+inline void
+zeroIouBalance(OpenView& view, jtx::Account const& account, Asset const& asset)
+{
+    if (!asset.holds<Issue>())
+        return;
+    Sandbox sb(&view, TapNone);
+    auto const line = sb.peek(keylet::trustLine(account.id(), asset.get<Issue>()));
+    if (!line)
+        return;
+    line->setFieldAmount(sfBalance, line->getFieldAmount(sfBalance).zeroed());
+    sb.update(line);
+    sb.apply(view);
 }
 
 // The loan LoanSet creates on `view` for `p`; it must succeed.
@@ -514,8 +566,10 @@ ageLoan(OpenView& view, Keylet const& loan, std::int64_t seconds)
     for (SF_UINT32 const* field : {&sfStartDate, &sfPreviousPaymentDueDate, &sfNextPaymentDueDate})
     {
         if (sle->isFieldPresent(*field) && sle->getFieldU32(*field) != 0)
+        {
             sle->setFieldU32(
                 *field, static_cast<std::uint32_t>(sle->getFieldU32(*field) - seconds));
+        }
     }
     sb.update(sle);
     sb.apply(view);
@@ -572,15 +626,17 @@ inline std::string
 stageText(LendingStage const& s)
 {
     std::string t = "debt " + std::to_string(s.debt) + " cover " + std::to_string(s.cover);
-    if (s.coverRate)
+    if (s.coverRate != 0u)
         t += " rate " + std::to_string(s.coverRate);
     if (s.debtMaximum)
         t += " maximum " + std::to_string(*s.debtMaximum);
-    if (s.yield)
+    if (s.yield != 0)
         t += " yield " + std::to_string(s.yield);
-    if (s.subscriptionDate)
+    if (s.subscriptionDate && s.redemptionDate)
+    {
         t += " sub " + std::to_string(*s.subscriptionDate) + " red " +
             std::to_string(*s.redemptionDate);
+    }
     return t;
 }
 
@@ -592,13 +648,13 @@ stageLending(jtx::Env& env, OpenView& view, BrokerFixture const& f, LendingStage
 {
     {
         Sandbox sb(&view, TapNone);
-        auto vault = sb.peek(f.vaultKeylet);
+        auto const vault = sb.peek(f.vaultKeylet);
         if (s.subscriptionDate && s.redemptionDate)
         {
             vault->at(sfSubscriptionDate) = *s.subscriptionDate;
             vault->at(sfRedemptionDate) = *s.redemptionDate;
         }
-        if (s.yield)
+        if (s.yield != 0)
         {
             vault->at(sfYieldUnrealized) = units(f, s.yield);
             NumberRoundModeGuard const rg(Number::RoundingMode::Downward);
@@ -625,10 +681,10 @@ stageLending(jtx::Env& env, OpenView& view, BrokerFixture const& f, LendingStage
             throw std::runtime_error("stageLending: cover deposit " + transToken(ter));
     }
     Sandbox sb(&view, TapNone);
-    auto broker = sb.peek(f.brokerKeylet);
-    if (s.managementFeeRate)
+    auto const broker = sb.peek(f.brokerKeylet);
+    if (s.managementFeeRate != 0u)
         broker->at(sfManagementFeeRate) = s.managementFeeRate;
-    if (s.coverRate)
+    if (s.coverRate != 0u)
     {
         broker->at(sfCoverRateMinimum) = s.coverRate;
         broker->at(sfCoverRateLiquidation) = 20'000;
@@ -656,11 +712,97 @@ setUpSweepBroker(jtx::Env& env, LendingAsset kind, std::int64_t seedUnits)
     BrokerConfig const config{
         .managementFeeRate = std::nullopt,
         .coverRateMinimum = std::nullopt,
-        .coverRateLiquidation = std::nullopt};
+        .coverRateLiquidation = std::nullopt,
+    };
     Number const seed = kind == LendingAsset::iou ? Number{seedUnits, -6} : Number{seedUnits};
     BrokerFixture f = setUpBrokerVault(env, config, seed, false, true, kind);
     env.close(env.now() + std::chrono::seconds{100'000'000});
     return f;
+}
+
+// Run `stage` (staging on a throwaway view); a throw fails the case at `at`. Returns whether it
+// staged.
+template <class Stage>
+bool
+tryStage(beast::unit_test::Suite& suite, std::string const& at, Stage&& stage)
+{
+    try
+    {
+        stage();
+        return true;
+    }
+    catch (std::exception const& e)
+    {
+        suite.fail(at + ": " + e.what());
+        return false;
+    }
+}
+
+enum class LoanKind : std::uint8_t { active, pending, defaulted, paidOff };
+
+// A loan with `p` on `view`, started `delay` seconds before the parent close time `now`: a
+// proposal starting 1'000 s after `now` when pending, a one-payment loan paid off when paidOff.
+// `p` is updated to the submitted fields. A defaulted loan is left to the caller.
+inline Keylet
+stageLoan(
+    jtx::Env& env,
+    OpenView& view,
+    BrokerFixture const& f,
+    LoanParams& p,
+    LoanKind kind,
+    std::uint32_t now,
+    std::int64_t delay)
+{
+    if (kind == LoanKind::pending)
+        p.startDate = now + 1'000;
+    if (kind == LoanKind::paidOff)
+        p.paymentTotal = 1;
+    Keylet const loan = createLoan(env, view, f, p);
+    if (kind != LoanKind::pending)
+        startedAgo(view, loan, now, delay);
+    if (kind == LoanKind::paidOff)
+    {
+        TER const ter = applyOn(
+            env,
+            view,
+            jtx::loan::pay(f.borrower, loan.key, f.asset(p.principal)),
+            jtx::Fee(env.current()->fees().base * 101));
+        if (ter != tesSUCCESS)
+            throw std::runtime_error("stageLoan: paying off failed with " + transToken(ter));
+    }
+    return loan;
+}
+
+[[nodiscard]] inline std::string
+paymentTypeName(PaymentType type)
+{
+    switch (type)
+    {
+        case PaymentType::regular:
+            return "regular";
+        case PaymentType::late:
+            return "late";
+        case PaymentType::full:
+            return "full";
+        case PaymentType::overpayment:
+            return "overpayment";
+    }
+    return "?";
+}
+
+// Both sides return `expected`.
+inline void
+expectTer(
+    beast::unit_test::Suite& suite,
+    TER lean,
+    TER cpp,
+    TER expected,
+    std::string const& at = {})
+{
+    suite.expect(
+        cpp == expected, at + "cpp=" + transToken(cpp) + " expected " + transToken(expected));
+    suite.expect(
+        lean == expected, at + "lean=" + transToken(lean) + " expected " + transToken(expected));
 }
 
 // The model's verdict on a transaction: its preclaim TER, or its doApply TER when preclaim
@@ -683,18 +825,6 @@ expectNumber(
 }
 
 inline void
-expectVaultMatches(beast::unit_test::Suite& suite, Vault const& lean, Vault const& cpp)
-{
-    expectNumber(suite, "vault assetsTotal", lean.assetsTotal, cpp.assetsTotal);
-    expectNumber(suite, "vault assetsAvailable", lean.assetsAvailable, cpp.assetsAvailable);
-    expectNumber(suite, "vault assetsDeployed", lean.assetsDeployed, cpp.assetsDeployed);
-    expectNumber(suite, "vault assetsReserved", lean.assetsReserved, cpp.assetsReserved);
-    expectNumber(suite, "vault sharesTotal", lean.sharesTotal, cpp.sharesTotal);
-    expectNumber(suite, "vault lossUnrealized", lean.lossUnrealized, cpp.lossUnrealized);
-    expectNumber(suite, "vault yieldUnrealized", lean.yieldUnrealized, cpp.yieldUnrealized);
-}
-
-inline void
 expectBrokerMatches(beast::unit_test::Suite& suite, LoanBroker const& lean, LoanBroker const& cpp)
 {
     expectNumber(suite, "broker debtTotal", lean.debtTotal, cpp.debtTotal);
@@ -704,6 +834,11 @@ expectBrokerMatches(beast::unit_test::Suite& suite, LoanBroker const& lean, Loan
         lean.loanCount == cpp.loanCount,
         "broker loanCount lean=" + std::to_string(lean.loanCount) +
             " cpp=" + std::to_string(cpp.loanCount));
+    suite.expect(
+        lean.managementFeeRate == cpp.managementFeeRate &&
+            lean.coverRateMinimum == cpp.coverRateMinimum &&
+            lean.coverRateLiquidation == cpp.coverRateLiquidation,
+        "broker rates differ");
 }
 
 inline void

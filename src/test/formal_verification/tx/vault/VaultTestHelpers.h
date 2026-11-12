@@ -1,5 +1,6 @@
 #pragma once
 
+#include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
 #include <test/jtx/Account.h>
@@ -21,6 +22,7 @@
 #include <xrpl/protocol/Indexes.h>
 #include <xrpl/protocol/LedgerFormats.h>
 #include <xrpl/protocol/MPTIssue.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STAmount.h>
 #include <xrpl/protocol/STLedgerEntry.h>
@@ -34,6 +36,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 namespace xrpl::test::formal_verification {
@@ -42,11 +45,21 @@ namespace xrpl::test::formal_verification {
 // or MPT units, 9e9 for an IOU at the default scale 6.
 constexpr std::int64_t kOpenLimitUnits = 9'000'000'000'000'000LL;
 
+// The smallest IOU vault scale; the protocol names only the default and the maximum.
+constexpr std::uint8_t kVaultMinimumIouScale = 0;
+
+// A vault on grid scale `scale` (IOU only; none keeps the default), with no deposit.
 inline Keylet
-createVault(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
+createVault(
+    jtx::Env& env,
+    jtx::Account const& owner,
+    Asset const& asset,
+    std::optional<std::uint8_t> scale = std::nullopt)
 {
     jtx::Vault vault{env};
-    auto const [jv, keylet] = vault.create({.owner = owner, .asset = asset});
+    auto [jv, keylet] = vault.create({.owner = owner, .asset = asset});
+    if (scale)
+        jv[sfScale] = *scale;
     env(jv);
     env.close();
     return keylet;
@@ -82,7 +95,7 @@ readVaultState(ReadView const& view, Keylet const& vaultKeylet, Asset const& ass
 }
 
 inline Vault
-readVaultState(jtx::Env& env, Keylet const& vaultKeylet, Asset const& asset)
+readVaultState(jtx::Env const& env, Keylet const& vaultKeylet, Asset const& asset)
 {
     return readVaultState(*env.current(), vaultKeylet, asset);
 }
@@ -292,36 +305,6 @@ iouBalance(jtx::Env& env, jtx::Account const& account, jtx::PrettyAsset const& a
     return env.balance(account, asset.raw().get<Issue>()).value();
 }
 
-// Overwrite the IOU balance the vault's pseudo-account holds on its trust line, so a staged total
-// is backed by real funds. Returns false if the vault or trust line is missing.
-[[nodiscard]] inline bool
-stageVaultHolding(
-    jtx::Env& env,
-    Keylet const& vaultKeylet,
-    Issue const& issue,
-    Number const& amount)
-{
-    return env.app().getOpenLedger().modify(  //
-        [&](OpenView& view, beast::Journal) -> bool {
-            Sandbox sb(&view, TapNone);
-            auto const vaultSle = sb.read(vaultKeylet);
-            if (!vaultSle)
-                return false;
-            AccountID const pseudo = vaultSle->at(sfAccount);
-            auto line = sb.peek(keylet::trustLine(pseudo, issue));
-            if (!line)
-                return false;
-            // The balance is held by the low account when positive.
-            STAmount balance{Issue{issue.currency, noAccount()}, amount};
-            if (pseudo > issue.account)
-                balance.negate();
-            line->setFieldAmount(sfBalance, balance);
-            sb.update(line);
-            sb.apply(view);
-            return true;
-        });
-}
-
 // Round the magnitude of `delta` toward zero to the grid `reference` has after adding it: the vault
 // base grid 10^-scale, or the coarser grid of a sum past 16 digits.
 [[nodiscard]] inline STAmount
@@ -376,22 +359,30 @@ stageSoleHolderVault(
         });
 }
 
-// n steps of the vault's grid 10^-scale, built from (mantissa, exponent) so it stays on the grid.
+// The vault's share MPT.
+[[nodiscard]] inline MPTIssue
+shareIssue(jtx::Env const& env, Keylet const& vault)
+{
+    return MPTIssue{env.le(vault)->at(sfShareMPTID)};
+}
+
+// n * 10^exponent of the vault's smallest unit: drops, MPT units, or 10^-scale of an IOU. Built
+// from (mantissa, exponent), not through Number, so large values are not rounded.
 [[nodiscard]] inline STAmount
-gridUnits(jtx::Env& env, Keylet const& vault, std::int64_t n)
+vaultUnits(jtx::Env const& env, Keylet const& vault, std::int64_t n, int exponent = 0)
 {
     auto const sle = env.le(vault);
     if (!sle)
-        throw std::runtime_error("gridUnits: no vault on the ledger");
+        throw std::runtime_error("vaultUnits: no vault on the ledger");
     return STAmount{
         Asset{sle->at(sfAsset)},
         static_cast<std::uint64_t>(n),
-        -static_cast<int>(sle->at(sfScale))};
+        exponent - static_cast<int>(sle->at(sfScale))};
 }
 
 // The vault's asset and scale as a testcase label: "XRP", "MPT" or "IOU scale 6".
 [[nodiscard]] inline std::string
-vaultName(jtx::Env& env, Keylet const& vault)
+vaultName(jtx::Env const& env, Keylet const& vault)
 {
     auto const sle = env.le(vault);
     if (!sle)
@@ -404,31 +395,8 @@ vaultName(jtx::Env& env, Keylet const& vault)
     return "IOU scale " + std::to_string(sle->at(sfScale));
 }
 
-// A vault for deposit sweeps: created on grid scale `scale` (IOU only; none keeps the default),
-// then one 1-unit deposit so the depositor holds the share MPToken (and, for an IOU, the
-// pseudo-account trust line exists) before any state is staged on it.
-[[nodiscard]] inline Keylet
-createSweepVault(
-    jtx::Env& env,
-    jtx::Account const& owner,
-    jtx::Account const& depositor,
-    jtx::PrettyAsset const& asset,
-    std::optional<std::uint8_t> scale = std::nullopt)
-{
-    jtx::Vault v{env};
-    auto [tx, keylet] = v.create({.owner = owner, .asset = asset.raw()});
-    if (scale)
-        tx[sfScale] = *scale;
-    env(tx);
-    env.close();
-    env(jtx::Vault::deposit(
-        {.depositor = depositor, .id = keylet.key, .amount = gridUnits(env, keylet, 1)}));
-    env.close();
-    return keylet;
-}
-
 // Vault fields to stage, as canonical amounts. AssetsTotal is derived (Downward, as C++ stores it).
-struct StagedVault
+struct StagedAmounts
 {
     STAmount available;
     STAmount deployed{};
@@ -451,19 +419,62 @@ struct StagedVault
     bool pseudoHolding = false;
 };
 
-struct AppliedDeposit
+// StagedAmounts with every amount in the vault's smallest unit (see vaultUnits).
+struct StagedVault
+{
+    std::int64_t available{};
+    std::int64_t deployed{};
+    std::int64_t yield{};
+    std::int64_t loss{};
+    std::optional<std::int64_t> maximum{};
+    std::uint64_t sharesTotal{};
+    bool depositBlocked = false;
+    std::optional<std::int64_t> depositorBalance{};
+    std::optional<std::uint64_t> holderShares{};
+    std::optional<std::uint32_t> subscriptionDate{};
+    std::optional<std::uint32_t> redemptionDate{};
+    std::optional<std::uint32_t> earlyExitFeeRate{};
+    bool pseudoHolding = false;
+};
+
+[[nodiscard]] inline StagedAmounts
+stagedAmounts(jtx::Env const& env, Keylet const& vault, StagedVault const& s)
+{
+    auto const units = [&](std::optional<std::int64_t> n) {
+        return n ? std::optional<STAmount>{vaultUnits(env, vault, *n)} : std::nullopt;
+    };
+    return {
+        .available = vaultUnits(env, vault, s.available),
+        .deployed = vaultUnits(env, vault, s.deployed),
+        .yield = vaultUnits(env, vault, s.yield),
+        .loss = vaultUnits(env, vault, s.loss),
+        .maximum = units(s.maximum),
+        .sharesTotal = s.sharesTotal,
+        .depositBlocked = s.depositBlocked,
+        .depositorBalance = units(s.depositorBalance),
+        .holderShares = s.holderShares,
+        .subscriptionDate = s.subscriptionDate,
+        .redemptionDate = s.redemptionDate,
+        .earlyExitFeeRate = s.earlyExitFeeRate,
+        .pseudoHolding = s.pseudoHolding,
+    };
+}
+
+struct AppliedVaultTx
 {
     Vault pre;
     TER ter;
     Vault post;
+    // What C++ moved, when the transaction reports it: compared with the model's assets / shares.
+    std::optional<Number> assets{};
+    std::optional<Number> shares{};
 };
-using AppliedVaultTx = AppliedDeposit;
 
 // Set `balance` on `account`'s trust line for `issue` (held by the low account when positive).
 inline void
 stageTrustLine(Sandbox& sb, AccountID const& account, Issue const& issue, Number const& balance)
 {
-    auto line = sb.peek(keylet::trustLine(account, issue));
+    auto const line = sb.peek(keylet::trustLine(account, issue));
     if (!line)
         throw std::runtime_error("stageTrustLine: no trust line");
     STAmount held{Issue{issue.currency, noAccount()}, balance};
@@ -479,14 +490,14 @@ stageVault(
     OpenView& view,
     Keylet const& vault,
     jtx::Account const& holder,
-    StagedVault const& staged)
+    StagedAmounts const& staged)
 {
     Sandbox sb(&view, TapNone);
-    auto v = sb.peek(vault);
+    auto const v = sb.peek(vault);
     if (!v)
         throw std::runtime_error("stageVault: no vault on the ledger");
     Asset const asset = v->at(sfAsset);
-    auto issuance = sb.peek(keylet::mptokenIssuance(v->at(sfShareMPTID)));
+    auto const issuance = sb.peek(keylet::mptokenIssuance(v->at(sfShareMPTID)));
     v->at(sfAssetsAvailable) = Number{staged.available};
     v->at(sfAssetsDeployed) = Number{staged.deployed};
     v->at(sfYieldUnrealized) = Number{staged.yield};
@@ -509,27 +520,29 @@ stageVault(
     issuance->setFieldU64(sfOutstandingAmount, staged.sharesTotal);
     if (staged.holderShares)
     {
-        auto token = sb.peek(keylet::mptoken(v->at(sfShareMPTID), holder.id()));
+        auto const token = sb.peek(keylet::mptoken(v->at(sfShareMPTID), holder.id()));
         if (!token)
             throw std::runtime_error("stageVault: the holder has no share MPToken");
         token->setFieldU64(sfMPTAmount, *staged.holderShares);
         sb.update(token);
     }
     if (staged.depositorBalance)
+    {
         stageTrustLine(
             sb, holder.id(), staged.depositorBalance->get<Issue>(), *staged.depositorBalance);
+    }
     if (staged.pseudoHolding)
     {
         AccountID const pseudo = v->at(sfAccount);
         if (asset.native())
         {
-            auto account = sb.peek(keylet::account(pseudo));
+            auto const account = sb.peek(keylet::account(pseudo));
             account->setFieldAmount(sfBalance, staged.available);
             sb.update(account);
         }
         else if (asset.holds<MPTIssue>())
         {
-            auto token = sb.peek(keylet::mptoken(asset.get<MPTIssue>().getMptID(), pseudo));
+            auto const token = sb.peek(keylet::mptoken(asset.get<MPTIssue>().getMptID(), pseudo));
             token->setFieldU64(sfMPTAmount, staged.available.mantissa());
             sb.update(token);
         }
@@ -550,7 +563,7 @@ applyStaged(
     jtx::Env& env,
     Keylet const& vault,
     jtx::Account const& holder,
-    StagedVault const& staged,
+    StagedAmounts const& staged,
     json::Value const& tx)
 {
     OpenView view{*env.current()};
@@ -562,7 +575,25 @@ applyStaged(
     return {.pre = pre, .ter = ter, .post = readVaultState(view, vault, asset)};
 }
 
-[[nodiscard]] inline AppliedDeposit
+[[nodiscard]] inline AppliedVaultTx
+applyDeposit(
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& depositor,
+    StagedAmounts const& staged,
+    STAmount const& amount,
+    bool donate = false)
+{
+    jtx::Vault::DepositArgs args{.depositor = depositor, .id = vault.key, .amount = amount};
+    if (donate)
+        args.flags = tfVaultDonate;
+    AppliedVaultTx applied = applyStaged(env, vault, depositor, staged, jtx::Vault::deposit(args));
+    applied.assets = applied.post.assetsTotal - applied.pre.assetsTotal;
+    applied.shares = applied.post.sharesTotal - applied.pre.sharesTotal;
+    return applied;
+}
+
+[[nodiscard]] inline AppliedVaultTx
 applyDeposit(
     jtx::Env& env,
     Keylet const& vault,
@@ -571,15 +602,12 @@ applyDeposit(
     STAmount const& amount,
     bool donate = false)
 {
-    jtx::Vault::DepositArgs args{.depositor = depositor, .id = vault.key, .amount = amount};
-    if (donate)
-        args.flags = tfVaultDonate;
-    return applyStaged(env, vault, depositor, staged, jtx::Vault::deposit(args));
+    return applyDeposit(env, vault, depositor, stagedAmounts(env, vault, staged), amount, donate);
 }
 
 // The staged sample, prefixed to every failure message.
 [[nodiscard]] inline std::string
-sampleText(StagedVault const& s, STAmount const& amount)
+sampleText(StagedAmounts const& s, STAmount const& amount)
 {
     std::string t = "amount " + amount.getText() + ", available " + s.available.getText() +
         ", deployed " + s.deployed.getText() + ", yield " + s.yield.getText() + ", loss " +
@@ -589,8 +617,32 @@ sampleText(StagedVault const& s, STAmount const& amount)
     if (s.holderShares)
         t += ", holderShares " + std::to_string(*s.holderShares);
     if (s.subscriptionDate && s.redemptionDate)
+    {
         t += ", subscription " + std::to_string(*s.subscriptionDate) + ", redemption " +
             std::to_string(*s.redemptionDate);
+    }
+    if (s.earlyExitFeeRate)
+        t += ", fee rate " + std::to_string(*s.earlyExitFeeRate);
+    return t + ": ";
+}
+
+// The staged sample in vault units, prefixed to every failure message.
+[[nodiscard]] inline std::string
+sampleText(StagedVault const& s, STAmount const& amount)
+{
+    std::string t = "amount " + amount.getText() + ", in vault units: available " +
+        std::to_string(s.available) + ", deployed " + std::to_string(s.deployed) + ", yield " +
+        std::to_string(s.yield) + ", loss " + std::to_string(s.loss) + ", sharesTotal " +
+        std::to_string(s.sharesTotal);
+    if (s.maximum)
+        t += ", maximum " + std::to_string(*s.maximum);
+    if (s.holderShares)
+        t += ", holderShares " + std::to_string(*s.holderShares);
+    if (s.subscriptionDate && s.redemptionDate)
+    {
+        t += ", subscription " + std::to_string(*s.subscriptionDate) + ", redemption " +
+            std::to_string(*s.redemptionDate);
+    }
     if (s.earlyExitFeeRate)
         t += ", fee rate " + std::to_string(*s.earlyExitFeeRate);
     return t + ": ";
@@ -634,6 +686,88 @@ expectAgree(
     return cpp.ter;
 }
 
+// A deposit (or donation) on a throwaway view of `staged` and the model on the same state must
+// agree, and a deposit never charges more than offered. Returns the C++ verdict.
+inline TER
+checkDeposit(
+    beast::unit_test::Suite& suite,
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& depositor,
+    StagedAmounts const& staged,
+    STAmount const& amount,
+    bool donate = false)
+{
+    AppliedVaultTx const cpp = applyDeposit(env, vault, depositor, staged, amount, donate);
+    LeanVaultResult const lean = leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
+    std::string const at = sampleText(staged, amount);
+    if (expectAgree(suite, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
+        return cpp.ter;
+    Number const charged = cpp.post.assetsTotal - cpp.pre.assetsTotal;
+    suite.expect(charged <= Number{amount}, at + "cpp charged " + to_string(charged));
+    suite.expect(
+        Number{lean.assets} <= Number{amount},
+        at + "lean charged " + to_string(Number{lean.assets}));
+    return cpp.ter;
+}
+
+// Both sides of one transaction return `expected`; when both succeed, every vault field is equal,
+// and so are the assets and shares the model returns and what C++ moved, when the C++ side set it.
+inline void
+expectSame(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    AppliedVaultTx const& cpp,
+    LeanVaultResult const& lean,
+    TER expected)
+{
+    TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+    suite.expect(
+        leanTer == expected && cpp.ter == expected,
+        at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter) +
+            " expected=" + transToken(expected));
+    if (leanTer != tesSUCCESS || cpp.ter != tesSUCCESS)
+        return;
+
+    auto const text = [](auto const& v) {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, Number>)
+            return to_string(v);
+        else if constexpr (std::is_same_v<T, bool>)
+            return std::string{v ? "true" : "false"};
+        else
+            return std::to_string(v);
+    };
+    auto const same = [&](char const* field, auto const& l, auto const& c) {
+        suite.expect(l == c, at + field + " lean=" + text(l) + " cpp=" + text(c));
+    };
+    auto const sameOptional = [&](char const* field, auto const& l, auto const& c) {
+        auto const show = [&](auto const& o) { return o ? text(*o) : std::string{"none"}; };
+        suite.expect(l == c, at + field + " lean=" + show(l) + " cpp=" + show(c));
+    };
+    Vault const& lv = lean.vault;
+    Vault const& cv = cpp.post;
+    same("assetsTotal", lv.assetsTotal, cv.assetsTotal);
+    same("assetsAvailable", lv.assetsAvailable, cv.assetsAvailable);
+    same("assetsDeployed", lv.assetsDeployed, cv.assetsDeployed);
+    same("assetsReserved", lv.assetsReserved, cv.assetsReserved);
+    sameOptional("assetsMaximum", lv.assetsMaximum, cv.assetsMaximum);
+    same("numericType", int{lv.numericType}, int{cv.numericType});
+    same("scale", int{lv.scale}, int{cv.scale});
+    same("sharesTotal", lv.sharesTotal, cv.sharesTotal);
+    same("lossUnrealized", lv.lossUnrealized, cv.lossUnrealized);
+    same("yieldUnrealized", lv.yieldUnrealized, cv.yieldUnrealized);
+    sameOptional("subscriptionDate", lv.subscriptionDate, cv.subscriptionDate);
+    sameOptional("redemptionDate", lv.redemptionDate, cv.redemptionDate);
+    sameOptional("earlyExitFeeRate", lv.earlyExitFeeRate, cv.earlyExitFeeRate);
+    same("ownerCanBlockDeposit", lv.ownerCanBlockDeposit, cv.ownerCanBlockDeposit);
+    same("depositBlocked", lv.depositBlocked, cv.depositBlocked);
+    if (cpp.assets)
+        same("assets", Number{lean.assets}, *cpp.assets);
+    if (cpp.shares)
+        same("shares", Number{lean.shares}, *cpp.shares);
+}
+
 // A withdrawal (by assets, or by shares when `amount` is in shares) from a staged vault whose
 // pseudo-account holds the available assets and whose holder holds `holderShares` (all shares
 // when unset). Both sides must agree, also on the payout: what left the vault (an early-exit fee
@@ -644,7 +778,7 @@ checkWithdraw(
     jtx::Env& env,
     Keylet const& vault,
     jtx::Account const& holder,
-    StagedVault staged,
+    StagedAmounts staged,
     STAmount const& amount,
     std::optional<Number> const& expectedPayout = std::nullopt)
 {

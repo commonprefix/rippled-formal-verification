@@ -8,6 +8,7 @@
 
 #include <lean/lean.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -15,6 +16,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 extern "C" void
 lean_initialize_runtime_module(void);
@@ -95,28 +97,21 @@ protected:
             r.leanError != LeanError::notLawful, "model rejected the staged state as not lawful");
     }
 
-    // Runs every case of every row through `check` (which returns the C++ verdict); unless
-    // `crosses` is false, the verdicts of each row's cases must differ, or the row missed its cusp.
-    // `describe(row)` labels the row in the failure message.
-    template <class Row, class Check>
+    // Around its cusp a row must reach one of the `across` verdicts next to another one, or it
+    // missed the cusp. `describe(cusp)` labels the row in the failure message.
+    template <class Cusp>
     void
-    runAroundCusp(std::vector<AroundCusp<Row>> const& rows, Check check, bool crosses = true)
+    expectCrossed(Cusp const& cusp, std::set<TER> const& seen, std::vector<TER> const& across)
     {
-        for (auto const& [cusp, cases] : rows)
-        {
-            std::set<TER> seen;
-            for (Row const& c : cases)
-            {
-                seen.insert(check(c));
-            }
-            if (crosses)
-            {
-                BEAST_EXPECTS(
-                    seen.size() > 1,
-                    describe(cusp) + ": the row never crossed its cusp, always " +
-                        (seen.empty() ? std::string{"nothing run"} : transToken(*seen.begin())));
-            }
-        }
+        bool const crossed =
+            seen.size() > 1 && std::ranges::any_of(across, [&](TER t) { return seen.contains(t); });
+        std::string verdicts;
+        for (TER const t : seen)
+            verdicts += " " + transToken(t);
+        BEAST_EXPECTS(
+            crossed,
+            describe(cusp) + ": the row never crossed to " + transToken(across.front()) + ", saw" +
+                (seen.empty() ? std::string{" nothing"} : verdicts));
     }
 
 public:

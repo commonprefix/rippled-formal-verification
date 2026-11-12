@@ -127,41 +127,8 @@ class LeanLoanBroker_test : public LeanSuite
         }
     }
 
-    void
-    expectSameBroker(LoanBroker const& lean, LoanBroker const& cpp)
-    {
-        auto const check = [&](char const* name, Number const& l, Number const& c) {
-            BEAST_EXPECTS(
-                l == c, std::string(name) + " lean=" + to_string(l) + " cpp=" + to_string(c));
-        };
-        check("debtTotal", lean.debtTotal, cpp.debtTotal);
-        check("debtMaximum", lean.debtMaximum, cpp.debtMaximum);
-        check("coverAvailable", lean.coverAvailable, cpp.coverAvailable);
-        BEAST_EXPECTS(
-            lean.loanCount == cpp.loanCount,
-            "loanCount lean=" + std::to_string(lean.loanCount) +
-                " cpp=" + std::to_string(cpp.loanCount));
-        BEAST_EXPECTS(
-            lean.managementFeeRate == cpp.managementFeeRate &&
-                lean.coverRateMinimum == cpp.coverRateMinimum &&
-                lean.coverRateLiquidation == cpp.coverRateLiquidation,
-            "rates differ");
-    }
-
-    // The shared ledgers (one per asset) the staged single-value tests and the sweeps run on.
-    struct SweepLedger
-    {
-        jtx::Env* env;
-        BrokerFixture f;
-    };
     std::optional<SweepLedger> iou_;
     std::optional<SweepLedger> mpt_;
-
-    static std::string
-    assetName(SweepLedger const& l)
-    {
-        return l.f.asset.raw().holds<MPTIssue>() ? "MPT" : "IOU";
-    }
 
     // A throwaway view of the shared ledger with `s` staged (the vault always in its investment
     // phase).
@@ -171,16 +138,7 @@ class LeanLoanBroker_test : public LeanSuite
         auto const phase = investment(view);
         s.subscriptionDate = phase.subscriptionDate;
         s.redemptionDate = phase.redemptionDate;
-        try
-        {
-            stageLending(*l.env, view, l.f, s);
-        }
-        catch (std::exception const& e)
-        {
-            fail(at + ": " + e.what());
-            return false;
-        }
-        return true;
+        return tryStage(*this, at, [&] { stageLending(*l.env, view, l.f, s); });
     }
 
     // Model of LoanBrokerSet creating a broker on `view`: canCreate is preclaim, create is
@@ -221,9 +179,11 @@ class LeanLoanBroker_test : public LeanSuite
         TER const cppTer = applyOn(env, view, tx);
 
         if (expected)
+        {
             BEAST_EXPECTS(
                 cppTer == *expected,
                 at + ": cpp=" + transToken(cppTer) + " expected " + transToken(*expected));
+        }
         BEAST_EXPECTS(!canCreate.leanError.has_value(), at + ": lean canCreate error");
         if (isTemMalformed(cppTer))
         {
@@ -239,7 +199,7 @@ class LeanLoanBroker_test : public LeanSuite
             return cppTer;
 
         BEAST_EXPECTS(!created.leanError.has_value(), at + ": lean create error");
-        expectSameBroker(created.broker, readBroker(view, brokerKeylet, f.asset.raw()));
+        expectBrokerMatches(*this, created.broker, readBroker(view, brokerKeylet, f.asset.raw()));
         return cppTer;
     }
 
@@ -288,17 +248,26 @@ class LeanLoanBroker_test : public LeanSuite
         TER const cppTer = applyOn(env, view, tx);
 
         if (expected)
+        {
             BEAST_EXPECTS(
                 cppTer == *expected,
                 at + ": cpp=" + transToken(cppTer) + " expected " + transToken(*expected));
+        }
         BEAST_EXPECTS(!canUpdate.leanError.has_value(), at + ": lean canUpdate error");
+        if (isTemMalformed(cppTer))
+        {
+            BEAST_EXPECTS(
+                updated.leanError == LeanError::notLawful,
+                at + ": preflight rejects the update but the model updates the broker");
+            return cppTer;
+        }
         BEAST_EXPECTS(
             canUpdate.ter == cppTer,
             at + ": lean=" + transToken(canUpdate.ter) + " cpp=" + transToken(cppTer));
         if (cppTer != tesSUCCESS)
             return cppTer;
         BEAST_EXPECTS(!updated.leanError.has_value(), at + ": lean update error");
-        expectSameBroker(updated.broker, readBroker(view, f));
+        expectBrokerMatches(*this, updated.broker, readBroker(view, f));
         return cppTer;
     }
 
@@ -316,7 +285,10 @@ class LeanLoanBroker_test : public LeanSuite
         SweepLedger& l = *iou_;
         OpenView view{*l.env->current()};
         LendingStage s{
-            .managementFeeRate = 1'000, .coverRate = 10'000, .debtMaximum = 5'000'000'000};
+            .managementFeeRate = 1'000,
+            .coverRate = 10'000,
+            .debtMaximum = 5'000'000'000,
+        };
         if (withLoan)
         {
             s.debt = 1'000'000'000;
@@ -338,21 +310,50 @@ class LeanLoanBroker_test : public LeanSuite
         sweepDebtMaximumGrid(*mpt_);
     }
 
-    // A debt maximum off the vault grid is tecPRECISION_LOSS. One grid step is written with a
-    // 16-digit mantissa (1e15 at exponent level - scale - 15), so a moved mantissa leaves the grid.
+    // A debt maximum off the vault grid is tecPRECISION_LOSS, on create and on update. A moved
+    // one-step mantissa (gridStep) leaves the grid.
     void
     sweepDebtMaximumGrid(SweepLedger& l)
     {
-        int const scale = l.env->le(l.f.vaultKeylet)->at(sfScale);
         for (int const level : loan_set_sweep::kBrokerGridLevels)
         {
-            beginCase(("LoanBrokerSet " + assetName(l) + " debt maximum grid at 1e" +
+            beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum grid at 1e" +
                        std::to_string(level) + "-Sweep")
                           .c_str());
-            runAroundCusp(loan_set_sweep::kOneStepCases, [&](std::int64_t mantissa) {
-                return checkStagedCreate(l, Number{mantissa, level - scale - 15});
-            });
+            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const mantissa : cases)
+                {
+                    seen.insert(
+                        checkStagedCreate(l, gridStep(*l.env->current(), l.f, mantissa, level)));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
+            beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum update grid at 1e" +
+                       std::to_string(level) + "-Sweep")
+                          .c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const mantissa : cases)
+                {
+                    seen.insert(checkStagedUpdate(
+                        l, {}, gridStep(*l.env->current(), l.f, mantissa, level)));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
         }
+    }
+
+    TER
+    checkStagedUpdate(SweepLedger& l, LendingStage const& s, Number const& debtMaximum)
+    {
+        std::string const at = "update to debt maximum " + to_string(debtMaximum);
+        OpenView view{*l.env->current()};
+        if (!stagedView(l, view, s, at))
+            return tefINTERNAL;
+        return checkUpdate(*l.env, l.f, view, debtMaximum, std::nullopt, at);
     }
 
     // A debt maximum that a 16-digit IOU mantissa cannot hold is tecPRECISION_LOSS: 1e16 units
@@ -361,10 +362,16 @@ class LeanLoanBroker_test : public LeanSuite
     testDebtMaximumDigitsSweep()
     {
         SweepLedger& l = *iou_;
-        beginCase(("LoanBrokerSet " + assetName(l) + " debt maximum digits-Sweep").c_str());
-        runAroundCusp(loan_set_sweep::kSixteenDigitCases, [&](std::int64_t mantissa) {
-            return checkStagedCreate(l, Number{mantissa, -6});
-        });
+        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum digits-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kSixteenDigitCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const mantissa : cases)
+            {
+                seen.insert(checkStagedCreate(l, Number{mantissa, -6}));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
     }
 
     void
@@ -379,25 +386,121 @@ class LeanLoanBroker_test : public LeanSuite
     void
     sweepDebtMaximumCap(SweepLedger& l)
     {
-        beginCase(("LoanBrokerSet " + assetName(l) + " debt maximum cap-Sweep").c_str());
-        runAroundCusp(loan_set_sweep::kDebtCapCases, [&](std::int64_t mantissa) {
-            return checkStagedCreate(l, Number{mantissa, 3});
-        });
+        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum cap-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kDebtCapCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const mantissa : cases)
+            {
+                seen.insert(checkStagedCreate(l, Number{mantissa, 3}));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
     }
 
     TER
     checkStagedCreate(SweepLedger& l, Number const& debtMaximum)
     {
-        std::string const at = "create with debt maximum " + to_string(debtMaximum);
+        return checkStagedCreate(
+            l,
+            BrokerConfig{
+                .debtMaximum = debtMaximum,
+                .managementFeeRate = std::nullopt,
+                .coverRateMinimum = std::nullopt,
+                .coverRateLiquidation = std::nullopt,
+            });
+    }
+
+    TER
+    checkStagedCreate(SweepLedger& l, BrokerConfig const& config)
+    {
+        std::string const at = "create with debt maximum " +
+            (config.debtMaximum ? to_string(*config.debtMaximum) : std::string{"none"}) + ", fee " +
+            std::to_string(config.managementFeeRate.value_or(0)) + ", rates " +
+            std::to_string(config.coverRateMinimum.value_or(0)) + "/" +
+            std::to_string(config.coverRateLiquidation.value_or(0));
         OpenView view{*l.env->current()};
         if (!stagedView(l, view, {}, at))
             return tefINTERNAL;
-        BrokerConfig const config{
-            .debtMaximum = debtMaximum,
-            .managementFeeRate = std::nullopt,
-            .coverRateMinimum = std::nullopt,
-            .coverRateLiquidation = std::nullopt};
         return checkCreate(*l.env, l.f, view, config, std::nullopt, at);
+    }
+
+    // A negative debt maximum is temINVALID (the model rejects the broker as not lawful); zero
+    // means no maximum. Swept on create and on update.
+    void
+    testDebtMaximumZeroSweep()
+    {
+        for (SweepLedger* l : {&*iou_, &*mpt_})
+        {
+            beginCase(("LoanBrokerSet " + assetName(l->f) + " debt maximum zero-Sweep").c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const maximum : cases)
+                {
+                    seen.insert(checkStagedCreate(*l, units(l->f, maximum)));
+                }
+                expectCrossed(cusp, seen, {temINVALID});
+            }
+            beginCase(
+                ("LoanBrokerSet " + assetName(l->f) + " debt maximum update zero-Sweep").c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const maximum : cases)
+                {
+                    seen.insert(checkStagedUpdate(*l, {}, units(l->f, maximum)));
+                }
+                expectCrossed(cusp, seen, {temINVALID});
+            }
+        }
+    }
+
+    // A management fee above 10% or a cover rate above 100% is temINVALID. The cover rates are
+    // swept one at a time with the other at the cap (both must be set together).
+    void
+    testRateCapSweep()
+    {
+        SweepLedger& l = *iou_;
+        auto const config = [](std::int64_t fee, std::int64_t minimum, std::int64_t liquidation) {
+            return BrokerConfig{
+                .managementFeeRate = static_cast<std::uint16_t>(fee),
+                .coverRateMinimum = static_cast<std::uint32_t>(minimum),
+                .coverRateLiquidation = static_cast<std::uint32_t>(liquidation),
+            };
+        };
+        auto constexpr cap = loan_set_sweep::kRateScale;
+        beginCase(("LoanBrokerSet " + assetName(l.f) + " management fee cap-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kManagementFeeCapCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const fee : cases)
+            {
+                seen.insert(checkStagedCreate(l, config(fee, cap, cap)));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
+        beginCase(("LoanBrokerSet " + assetName(l.f) + " minimum cover rate cap-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kCoverRateCapCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const rate : cases)
+            {
+                seen.insert(checkStagedCreate(l, config(0, rate, cap)));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
+        beginCase(
+            ("LoanBrokerSet " + assetName(l.f) + " liquidation cover rate cap-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kCoverRateCapCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const rate : cases)
+            {
+                seen.insert(checkStagedCreate(l, config(0, cap, rate)));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
     }
 
     void
@@ -412,15 +515,16 @@ class LeanLoanBroker_test : public LeanSuite
     void
     sweepDebtUpdate(SweepLedger& l)
     {
-        beginCase(("LoanBrokerSet " + assetName(l) + " debt maximum update-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kDebtUpdateCases, [&](loan_set_sweep::DebtUpdateCusp const& c) {
-                std::string const at = loan_set_sweep::describe(c);
-                OpenView view{*l.env->current()};
-                if (!stagedView(l, view, {.debt = c.debt}, at))
-                    return TER{tefINTERNAL};
-                return checkUpdate(*l.env, l.f, view, units(l.f, c.maximum), std::nullopt, at);
-            });
+        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum update-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kDebtUpdateCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::DebtUpdateCusp const& c : cases)
+            {
+                seen.insert(checkStagedUpdate(l, {.debt = c.debt}, units(l.f, c.maximum)));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
     }
 
     // Model of LoanBrokerDelete: canDelete is preclaim; the cover returned to the owner is the
@@ -473,11 +577,13 @@ class LeanLoanBroker_test : public LeanSuite
         jtx::Env iouEnv(*this);
         iou_ = SweepLedger{
             .env = &iouEnv,
-            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits),
+        };
         jtx::Env mptEnv(*this);
         mpt_ = SweepLedger{
             .env = &mptEnv,
-            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits),
+        };
 
         testLawful();
 
@@ -549,6 +655,8 @@ class LeanLoanBroker_test : public LeanSuite
         testDebtMaximumDigitsSweep();
         testDebtMaximumCapSweep();
         testDebtUpdateSweep();
+        testDebtMaximumZeroSweep();
+        testRateCapSweep();
     }
 };
 

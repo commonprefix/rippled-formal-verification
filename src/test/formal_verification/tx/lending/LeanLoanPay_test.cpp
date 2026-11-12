@@ -51,93 +51,6 @@ class LeanLoanPay_test : public LeanSuite
         return 0;
     }
 
-    static std::string
-    typeName(PaymentType type)
-    {
-        switch (type)
-        {
-            case PaymentType::regular:
-                return "regular";
-            case PaymentType::late:
-                return "late";
-            case PaymentType::full:
-                return "full";
-            case PaymentType::overpayment:
-                return "overpayment";
-        }
-        return "?";
-    }
-
-    void
-    expectTer(TER lean, TER cpp, TER expected)
-    {
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
-        BEAST_EXPECTS(
-            lean == expected,
-            std::string("lean=") + transToken(lean) + " expected " + transToken(expected));
-    }
-
-    void
-    comparePay(
-        jtx::Env& env,
-        BrokerFixture const& f,
-        Keylet const& loanKeylet,
-        LoanParams const& p,
-        PaymentType type,
-        Number const& amount,
-        TER expected)
-    {
-        using namespace jtx;
-        Loan const loan = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
-        Vault const pool = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        std::uint32_t const now = parentCloseTime(env);
-
-        LawfulTerResult const can = leanCanLoanPay(loan, type);
-        expectLawful(can);
-        std::optional<LeanLoanResult> result;
-        if (can.ter == tesSUCCESS)
-            result = leanLoanPay(loan, pool, type, amount, now);
-
-        Number const ownerBefore = assetBalance(env, f.owner, f.asset);
-        // LoanPay's fee grows with the instalments one transaction may settle (up to 100).
-        env(loan::pay(f.borrower, loanKeylet.key, f.asset(amount), flagsOf(type)),
-            Fee(env.current()->fees().base * 101),
-            jtx::Ter(std::ignore));
-        TER const cppTer = env.ter();
-        Loan const cppLoan = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
-        Vault const cppPool = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        Number const ownerAfter = assetBalance(env, f.owner, f.asset);
-        env.close();
-
-        BEAST_EXPECTS(!can.leanError.has_value(), "lean canPay error");
-        if (result)
-            BEAST_EXPECTS(!result->leanError.has_value(), "lean pay error");
-        TER const lean =
-            modelVerdict(can, result && !result->leanError ? result->error : std::nullopt);
-        expectTer(lean, cppTer, expected);
-        if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
-            return;
-
-        expectLoanMatches(*this, result->loan, cppLoan);
-        expectVaultMatches(*this, result->pool, cppPool);
-        expectBrokerMatches(*this, result->loan.broker, cppLoan.broker);
-        // The pool receives principal and interest; the broker's fee goes to its cover or, once
-        // the cover meets its minimum, to the owner.
-        expectNumber(
-            *this,
-            "amount to pool",
-            result->amountToPool,
-            cppPool.assetsAvailable - pool.assetsAvailable);
-        expectNumber(
-            *this,
-            "amount to broker",
-            result->amountToBroker,
-            (cppLoan.broker.coverAvailable - loan.broker.coverAvailable) +
-                (ownerAfter - ownerBefore));
-    }
-
     // One payment on `view`: C++ applies it there, the model runs on the same pre-state. The
     // verdicts must agree and, on success, so must the post-states and the amounts moved.
     // Returns the C++ verdict.
@@ -147,14 +60,14 @@ class LeanLoanPay_test : public LeanSuite
         OpenView& view,
         BrokerFixture const& f,
         Keylet const& loanKeylet,
-        std::uint32_t paymentTotal,
+        LoanParams const& p,
         PaymentType type,
         Number const& amount,
         std::string const& at = {})
     {
         using namespace jtx;
         Asset const asset = f.asset.raw();
-        Loan const loan = readLoan(view, loanKeylet, asset, paymentTotal);
+        Loan const loan = readLoan(view, loanKeylet, f, p);
         Vault const pool = readVaultState(view, f.vaultKeylet, asset);
         std::uint32_t const now = parentCloseTime(env);
 
@@ -182,10 +95,10 @@ class LeanLoanPay_test : public LeanSuite
         if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
             return cppTer;
 
-        Loan const cppLoan = readLoan(view, loanKeylet, asset, paymentTotal);
+        Loan const cppLoan = readLoan(view, loanKeylet, f, p);
         Vault const cppPool = readVaultState(view, f.vaultKeylet, asset);
         expectLoanMatches(*this, result->loan, cppLoan);
-        expectVaultMatches(*this, result->pool, cppPool);
+        expectSameVault(*this, "vault ", result->pool, cppPool);
         expectBrokerMatches(*this, result->loan.broker, cppLoan.broker);
         expectNumber(
             *this,
@@ -212,21 +125,40 @@ class LeanLoanPay_test : public LeanSuite
         Number const& amount,
         TER expected)
     {
-        TER const cpp = checkPay(env, view, f, loanKeylet, p.paymentTotal, type, amount);
+        TER const cpp = checkPay(env, view, f, loanKeylet, p, type, amount);
         BEAST_EXPECTS(
             cpp == expected,
             std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
     }
 
+    // One payment checked on a throwaway view of `env`, then applied to `env` itself and the
+    // ledger closed, so the next payment comes later.
+    void
+    comparePay(
+        jtx::Env& env,
+        BrokerFixture const& f,
+        Keylet const& loanKeylet,
+        LoanParams const& p,
+        PaymentType type,
+        Number const& amount,
+        TER expected)
+    {
+        using namespace jtx;
+        OpenView view{*env.current()};
+        expectPay(env, view, f, loanKeylet, p, type, amount, expected);
+        env(loan::pay(f.borrower, loanKeylet.key, f.asset(amount), flagsOf(type)),
+            Fee(env.current()->fees().base * 101),
+            jtx::Ter(expected));
+        env.close();
+    }
+
     // A loan with `p` on a throwaway view of the fixture (broker cover 500), started `delay`
     // seconds before the parent close time, then paid.
-    enum class LoanKind : std::uint8_t { active, pending, paidOff };
-
     void
     runPay(
         jtx::Env& env,
         BrokerFixture const& f,
-        std::string const& label,
+        std::string const& what,
         LoanParams const& p0,
         std::uint32_t delay,
         PaymentType type,
@@ -235,30 +167,18 @@ class LeanLoanPay_test : public LeanSuite
         LoanKind kind = LoanKind::active)
     {
         using namespace jtx;
-        testcase(
-            typeName(type) + " payment: " + label +
-            (f.asset.raw().holds<MPTIssue>() ? " (MPT)" : ""));
+        std::string const label = paymentTypeName(type) + " payment: " + what +
+            (f.asset.raw().holds<MPTIssue>() ? " (MPT)" : "");
+        testcase(label);
 
         OpenView view{*env.current()};
-        std::uint32_t const now = parentCloseTime(env);
         LoanParams p = p0;
-        if (kind == LoanKind::pending)
-            p.startDate = now + 1'000;
-        if (kind == LoanKind::paidOff)
-            p.paymentTotal = 1;
-        auto const loanKeylet = createLoan(env, view, f, p);
-        if (kind != LoanKind::pending)
-            startedAgo(view, loanKeylet, now, delay);
-        if (kind == LoanKind::paidOff)
-        {
-            BEAST_EXPECT(
-                applyOn(
-                    env,
-                    view,
-                    loan::pay(f.borrower, loanKeylet.key, f.asset(1'000)),
-                    Fee(env.current()->fees().base * 101)) == tesSUCCESS);
-        }
-        expectPay(env, view, f, loanKeylet, p, type, amount, expected);
+        std::optional<Keylet> loanKeylet;
+        if (!tryStage(*this, label, [&] {
+                loanKeylet = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay);
+            }))
+            return;
+        expectPay(env, view, f, *loanKeylet, p, type, amount, expected);
     }
 
     // Two regular installments paid in two transactions: the second one closes the loan.
@@ -372,7 +292,8 @@ class LeanLoanPay_test : public LeanSuite
             BrokerConfig{
                 .managementFeeRate = managementFeeRate,
                 .coverRateMinimum = std::nullopt,
-                .coverRateLiquidation = std::nullopt},
+                .coverRateLiquidation = std::nullopt,
+            },
             Number{1, 9},
             false,
             true,
@@ -388,12 +309,7 @@ class LeanLoanPay_test : public LeanSuite
 
     // ---- Sweeps ----
 
-    struct SweepFixture
-    {
-        jtx::Env& env;
-        BrokerFixture f;
-    };
-    using SweepFixtures = std::vector<SweepFixture>;
+    using SweepFixtures = std::vector<SweepLedger>;
 
     static BrokerFixture
     sweepFixture(jtx::Env& env, LendingAsset kind)
@@ -419,27 +335,28 @@ class LeanLoanPay_test : public LeanSuite
     void
     testDueDateSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             beginCase(("LoanPay " + assetName(f) + " due date-Sweep").c_str());
             std::uint32_t const now = parentCloseTime(env);
-            runAroundCusp(kDueDateCases, [&](DueDateCusp const& c) {
-                OpenView view{*env.current()};
-                LoanParams const p{
-                    .principal = units(f, c.principal),
-                    .allowsOverpayment = c.type == PaymentType::overpayment};
-                auto const loan = createLoan(env, view, f, p);
-                dueAt(view, loan, now, c.dueOffset);
-                return checkPay(
-                    env,
-                    view,
-                    f,
-                    loan,
-                    p.paymentTotal,
-                    c.type,
-                    units(f, c.amount),
-                    describe(c) + ": ");
-            });
+            for (auto const& [cusp, cases] : kDueDateCases)
+            {
+                std::set<TER> seen;
+                for (DueDateCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, c.principal),
+                        .allowsOverpayment = c.type == PaymentType::overpayment,
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    dueAt(view, loan, now, c.dueOffset);
+                    seen.insert(checkPay(
+                        env, view, f, loan, p, c.type, units(f, c.amount), describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecTOO_SOON, tecEXPIRED, tecINSUFFICIENT_PAYMENT});
+            }
         }
     }
 
@@ -448,30 +365,38 @@ class LeanLoanPay_test : public LeanSuite
     void
     testLateInterestSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             beginCase(("LoanPay " + assetName(f) + " late interest-Sweep").c_str());
             std::uint32_t const now = parentCloseTime(env);
-            runAroundCusp(kLateInterestCases, [&](LateInterestCusp const& c) {
-                OpenView view{*env.current()};
-                LoanParams const p{
-                    .principal = units(f, kSecondsPerYear * c.k),
-                    .lateInterestRate = static_cast<std::uint32_t>(kRateCap),
-                    .serviceFee = units(f, c.serviceFee),
-                    .latePaymentFee = units(f, c.lateFee),
-                    .paymentTotal = c.installments};
-                auto const loan = createLoan(env, view, f, p);
-                dueAt(view, loan, now, -c.lateBy);
-                return checkPay(
-                    env,
-                    view,
-                    f,
-                    loan,
-                    p.paymentTotal,
-                    PaymentType::late,
-                    units(f, c.amount),
-                    describe(c) + ": ");
-            });
+            for (auto const& [cusp, cases] : kLateInterestCases)
+            {
+                std::set<TER> seen;
+                for (LateInterestCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, kSecondsPerYear * c.k),
+                        .lateInterestRate = static_cast<std::uint32_t>(kRateCap),
+                        .serviceFee = units(f, c.serviceFee),
+                        .latePaymentFee = units(f, c.lateFee),
+                        .paymentTotal = c.installments,
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    dueAt(view, loan, now, -c.lateBy);
+                    seen.insert(checkPay(
+                        env,
+                        view,
+                        f,
+                        loan,
+                        p,
+                        PaymentType::late,
+                        units(f, c.amount),
+                        describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
+            }
         }
     }
 
@@ -480,26 +405,35 @@ class LeanLoanPay_test : public LeanSuite
     void
     testServiceFeeSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             beginCase(("LoanPay " + assetName(f) + " service fee-Sweep").c_str());
             std::uint32_t const now = parentCloseTime(env);
-            runAroundCusp(kServiceFeeCases, [&](ServiceFeeCusp const& c) {
-                OpenView view{*env.current()};
-                LoanParams const p{
-                    .principal = units(f, 2 * c.installment), .serviceFee = units(f, c.serviceFee)};
-                auto const loan = createLoan(env, view, f, p);
-                startedAgo(view, loan, now, 0);
-                return checkPay(
-                    env,
-                    view,
-                    f,
-                    loan,
-                    p.paymentTotal,
-                    PaymentType::regular,
-                    units(f, c.amount),
-                    describe(c) + ": ");
-            });
+            for (auto const& [cusp, cases] : kServiceFeeCases)
+            {
+                std::set<TER> seen;
+                for (ServiceFeeCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, 2 * c.installment),
+                        .serviceFee = units(f, c.serviceFee),
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    startedAgo(view, loan, now, 0);
+                    seen.insert(checkPay(
+                        env,
+                        view,
+                        f,
+                        loan,
+                        p,
+                        PaymentType::regular,
+                        units(f, c.amount),
+                        describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
+            }
         }
     }
 
@@ -508,28 +442,115 @@ class LeanLoanPay_test : public LeanSuite
     void
     testFullPaymentSweep(SweepFixtures const& fixtures)
     {
-        for (auto const& [env, f] : fixtures)
+        for (auto const& [envPtr, f] : fixtures)
         {
+            jtx::Env& env = *envPtr;
             beginCase(("LoanPay " + assetName(f) + " full payment-Sweep").c_str());
             std::uint32_t const now = parentCloseTime(env);
-            runAroundCusp(kFullPaymentCases, [&](FullPaymentCusp const& c) {
-                OpenView view{*env.current()};
-                LoanParams const p{
-                    .principal = units(f, c.principal),
-                    .closeInterestRate = c.closeRate,
-                    .closePaymentFee = units(f, c.closeFee)};
-                auto const loan = createLoan(env, view, f, p);
-                startedAgo(view, loan, now, 0);
-                return checkPay(
-                    env,
-                    view,
-                    f,
-                    loan,
-                    p.paymentTotal,
-                    PaymentType::full,
-                    units(f, c.amount),
-                    describe(c) + ": ");
-            });
+            for (auto const& [cusp, cases] : kFullPaymentCases)
+            {
+                std::set<TER> seen;
+                for (FullPaymentCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, c.principal),
+                        .closeInterestRate = c.closeRate,
+                        .closePaymentFee = units(f, c.closeFee),
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    startedAgo(view, loan, now, 0);
+                    seen.insert(checkPay(
+                        env,
+                        view,
+                        f,
+                        loan,
+                        p,
+                        PaymentType::full,
+                        units(f, c.amount),
+                        describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
+            }
+        }
+    }
+
+    // A full payment with one installment left is tecKILLED. Rows have exactly one installment.
+    void
+    testFullPaymentRemainingSweep(SweepFixtures const& fixtures)
+    {
+        for (auto const& [envPtr, f] : fixtures)
+        {
+            jtx::Env& env = *envPtr;
+            beginCase(("LoanPay " + assetName(f) + " full payment of the last installment-Sweep")
+                          .c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            for (auto const& [cusp, cases] : kFullPaymentRemainingCases)
+            {
+                std::set<TER> seen;
+                for (InstallmentsCusp const& c : cases)
+                {
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, c.principal),
+                        .paymentTotal = static_cast<std::uint32_t>(c.total),
+                    };
+                    auto const loan = createLoan(env, view, f, p);
+                    startedAgo(view, loan, now, 0);
+                    seen.insert(checkPay(
+                        env,
+                        view,
+                        f,
+                        loan,
+                        p,
+                        PaymentType::full,
+                        units(f, c.principal),
+                        describe(c) + ": "));
+                }
+                expectCrossed(cusp, seen, {tecKILLED});
+            }
+        }
+    }
+
+    // A regular payment with a one-unit service fee: the fee goes to the owner once the cover
+    // reaches the minimum cover, else into the cover. The cover and rate are staged after the
+    // loan; the verdict does not cross, the amounts to the broker must agree.
+    void
+    testFeeRoutingSweep(SweepFixtures const& fixtures)
+    {
+        for (auto const& [envPtr, f] : fixtures)
+        {
+            jtx::Env& env = *envPtr;
+            beginCase(("LoanPay " + assetName(f) + " fee routing-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            for (auto const& [cusp, cases] : kFeeRoutingCases)
+            {
+                for (FeeRoutingCusp const& c : cases)
+                {
+                    std::string const at = describe(c) + ": ";
+                    OpenView view{*env.current()};
+                    LoanParams const p{
+                        .principal = units(f, c.principal),
+                        .serviceFee = units(f, 1),
+                    };
+                    std::optional<Keylet> loan;
+                    if (!tryStage(*this, at, [&] {
+                            loan = createLoan(env, view, f, p);
+                            startedAgo(view, *loan, now, 0);
+                            stageLending(env, view, f, {.cover = c.cover, .coverRate = c.rate});
+                        }))
+                        continue;
+                    checkPay(
+                        env,
+                        view,
+                        f,
+                        *loan,
+                        p,
+                        PaymentType::regular,
+                        units(f, (c.principal / 2) + 1),
+                        at);
+                }
+            }
         }
     }
 
@@ -756,7 +777,8 @@ class LeanLoanPay_test : public LeanSuite
                 .overpaymentFee = 70'236,
                 .paymentInterval = 1'455'452,
                 .paymentTotal = 365,
-                .allowsOverpayment = true},
+                .allowsOverpayment = true,
+            },
             4'157,
             {Number{198'638'654'596'208LL, -15}});
         replayOverpayments(
@@ -768,7 +790,8 @@ class LeanLoanPay_test : public LeanSuite
                 .overpaymentFee = 1'310,
                 .paymentInterval = 82'174,
                 .paymentTotal = 53,
-                .allowsOverpayment = true},
+                .allowsOverpayment = true,
+            },
             4'962,
             {Number{398'774'831'464'331LL, -11}, Number{1'329'242'358'868'834LL, -12}});
         replayOverpayments(
@@ -780,7 +803,8 @@ class LeanLoanPay_test : public LeanSuite
                 .overpaymentFee = 69'802,
                 .paymentInterval = 4'646,
                 .paymentTotal = 169,
-                .allowsOverpayment = true},
+                .allowsOverpayment = true,
+            },
             9'451,
             {Number{3'117'013'163'787'732LL, -14}});
 
@@ -866,16 +890,19 @@ class LeanLoanPay_test : public LeanSuite
             Number{600},
             tecNO_PERMISSION);
 
-        // Sweeps: one fixture per asset, no cover rates, 9e9 units in the vault.
+        // Sweeps: one fixture per asset, no cover rates, kSweepSeed units in the vault.
         jtx::Env iouSweepEnv(*this);
         jtx::Env mptSweepEnv(*this);
         SweepFixtures const fixtures{
-            {iouSweepEnv, sweepFixture(iouSweepEnv, LendingAsset::iou)},
-            {mptSweepEnv, sweepFixture(mptSweepEnv, LendingAsset::mpt)}};
+            {.env = &iouSweepEnv, .f = sweepFixture(iouSweepEnv, LendingAsset::iou)},
+            {.env = &mptSweepEnv, .f = sweepFixture(mptSweepEnv, LendingAsset::mpt)},
+        };
         testDueDateSweep(fixtures);
         testLateInterestSweep(fixtures);
         testServiceFeeSweep(fixtures);
         testFullPaymentSweep(fixtures);
+        testFullPaymentRemainingSweep(fixtures);
+        testFeeRoutingSweep(fixtures);
     }
 };
 

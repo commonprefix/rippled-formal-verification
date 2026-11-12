@@ -28,14 +28,14 @@ class LeanLoan_test : public LeanSuite
 
     // The model's lawfulness of a loan with `value` in one field against C++ LoanSet's preflight
     // for the same field: a lawful loan must be one C++ creates. Returns the C++ verdict.
-    template <class Field>
+    template <class Param, class Field>
     TER
     checkField(
         jtx::Env& env,
         BrokerFixture const& f,
         LoanParams p,
         Loan s,
-        Field LoanParams::* param,
+        Param LoanParams::* param,
         Field Loan::* field,
         std::int64_t value)
     {
@@ -96,9 +96,15 @@ class LeanLoan_test : public LeanSuite
         std::uint32_t Loan::* field)
     {
         beginCase(("loan " + name + " cap-Sweep").c_str());
-        runAroundCusp(kRateCapCases, [&](std::int64_t rate) {
-            return checkField(env, f, p, s, param, field, rate);
-        });
+        for (auto const& [cusp, cases] : kRateCapCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const rate : cases)
+            {
+                seen.insert(checkField(env, f, p, s, param, field, rate));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
     }
 
     // The grace period must lie in [60, payment interval] (600 here), else temINVALID / not
@@ -107,20 +113,47 @@ class LeanLoan_test : public LeanSuite
     testGracePeriodSweep(jtx::Env& env, BrokerFixture const& f, LoanParams const& p, Loan const& s)
     {
         beginCase("loan grace period-Sweep");
-        runAroundCusp(kGraceCases, [&](std::int64_t grace) {
-            LoanParams withGrace = p;
-            withGrace.gracePeriod = static_cast<std::uint32_t>(grace);
-            Loan loan = s;
-            loan.gracePeriod = static_cast<std::uint32_t>(grace);
-            OpenView view{*env.current()};
-            TER const cpp = applyLoanSet(env, view, f, withGrace);
-            bool const lawful = LoanFFI::build(loan).has_value();
-            BEAST_EXPECTS(
-                lawful == isTesSuccess(cpp),
-                describe(grace) + ": cpp=" + transToken(cpp) +
-                    (lawful ? " lean=lawful" : " lean=not lawful"));
-            return cpp;
-        });
+        for (auto const& [cusp, cases] : kGraceCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const grace : cases)
+            {
+                seen.insert(
+                    checkField(env, f, p, s, &LoanParams::gracePeriod, &Loan::gracePeriod, grace));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
+    }
+
+    // The payment interval must be at least 60 s, else temINVALID / not lawful (the stored grace
+    // period is 60).
+    void
+    testIntervalMinimumSweep(
+        jtx::Env& env,
+        BrokerFixture const& f,
+        LoanParams const& p,
+        Loan const& s)
+    {
+        beginCase("loan payment interval minimum-Sweep");
+        for (auto const& [cusp, cases] : kIntervalMinimumCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const interval : cases)
+            {
+                // The first due date follows the interval.
+                Loan moved = s;
+                moved.nextPaymentDueDate = s.startDate + static_cast<std::uint32_t>(interval);
+                seen.insert(checkField(
+                    env,
+                    f,
+                    p,
+                    moved,
+                    &LoanParams::paymentInterval,
+                    &Loan::paymentInterval,
+                    interval));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
     }
 
     void
@@ -138,7 +171,7 @@ class LeanLoan_test : public LeanSuite
             .closePaymentFee = Number{3},
             .paymentTotal = 3};
         auto const loanKeylet = submitLoanSet(env, f, p);
-        Loan const baseline = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const baseline = readLoan(*env.current(), loanKeylet, f, p);
         Number const grid{1, -6};
 
         runLawful(baseline, true, "a loan read from the ledger");
@@ -226,6 +259,7 @@ class LeanLoan_test : public LeanSuite
 
         testRateCapSweep(env, f, p, baseline);
         testGracePeriodSweep(env, f, p, baseline);
+        testIntervalMinimumSweep(env, f, p, baseline);
     }
 };
 

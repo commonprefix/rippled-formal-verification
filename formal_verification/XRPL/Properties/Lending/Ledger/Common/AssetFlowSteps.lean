@@ -633,7 +633,7 @@ lemma LendingLedger.flow_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.Re
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok
-      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
       show _ = _ + AssetFlows.net 0
       rw [AssetFlows.net_zero]; ring

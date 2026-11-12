@@ -15,6 +15,7 @@
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 // Lean IOUAmount ops (exported by xrpl-lean4/XRPL/IOUAmount/FFI.lean).
 extern "C" {
@@ -24,6 +25,8 @@ lean_object*
 lean_iou_of_mantissa_exp(int64_t, int64_t, uint8_t);
 lean_object*
 lean_iou_of_number(lean_object*, uint8_t);
+lean_object*
+lean_iou_from_number(lean_object*, uint8_t);
 lean_object*
 lean_iou_to_number(lean_object*, uint8_t);
 lean_object*
@@ -59,40 +62,41 @@ class LeanIOUAmount_test : public LeanSuite
         return fmtIOU(r.mantissa, r.exponent);
     }
 
-    // Compare a Lean IOUAmount result to a C++ outcome (which may throw).
-    bool
+    // Compare a Lean IOUAmount result to a C++ outcome (which may throw); returns the C++ verdict.
+    TER
     checkIOUResult(
         std::string const& label,
         LeanIOUResult const& lean,
         IOUAmount const& cpp,
         bool cppThrew)
     {
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp.signum() == 0);
         if (lean.ok == cppThrew)
         {
             std::stringstream ss;
             ss << label << ": error mismatch (lean." << (lean.ok ? "ok" : "error") << ", cpp."
                << (cppThrew ? "threw" : "ok") << ")";
             fail(ss.str());
-            return false;
+            return verdict;
         }
         if (!lean.ok)
         {
             pass();
-            return true;
+            return verdict;
         }
         if (lean.mantissa != cpp.mantissa() || lean.exponent != cpp.exponent())
         {
             std::stringstream ss;
             ss << label << ": result mismatch lean=" << fmtIOU(lean) << " cpp=" << fmtIOU(cpp);
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
     // ofMantissaExp ↔ IOUAmount{m, e}.
-    bool
+    TER
     checkOfMantissaExp(int64_t m, int64_t e, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
@@ -111,7 +115,7 @@ class LeanIOUAmount_test : public LeanSuite
     }
 
     // ofNumber ↔ IOUAmount{Number{...}}.
-    bool
+    TER
     checkOfNumber(NumberPair const& p, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
@@ -133,6 +137,46 @@ class LeanIOUAmount_test : public LeanSuite
         label << "ofNumber(" << (p.leanNum.negative ? "-" : "+") << p.leanNum.mantissa << "e"
               << p.cppNum.exponent() << ")";
         return checkIOUResult(label.str(), lean, cpp, cppThrew);
+    }
+
+    // fromNumber ↔ Number::normalizeToRange into the IOU mantissa range, which C++ IOUAmount uses
+    // before its exponent check.
+    TER
+    checkFromNumber(NumberPair const& p, Number::RoundingMode mode)
+    {
+        NumberRoundModeGuard mg(mode);
+        auto lean = IOUAmountFFI::fromExcept(lean_iou_from_number(
+            lean_number_build(
+                p.leanNum.negative, p.leanNum.mantissa, static_cast<int64_t>(p.leanNum.exponent)),
+            toLeanMode(mode)));
+        std::pair<std::int64_t, int> cpp{0, 0};
+        bool cppThrew = false;
+        try
+        {
+            cpp = p.cppNum.normalizeToRange<kIouMinMantissa, kIouMaxMantissa>();
+        }
+        catch (std::overflow_error const&)
+        {
+            cppThrew = true;
+        }
+        std::stringstream label;
+        label << "fromNumber(" << (p.leanNum.negative ? "-" : "+") << p.leanNum.mantissa << "e"
+              << p.cppNum.exponent() << ")";
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp.first == 0);
+        if (lean.ok == cppThrew)
+        {
+            fail(label.str() + ": error mismatch");
+            return verdict;
+        }
+        if (lean.ok && (lean.mantissa != cpp.first || lean.exponent != cpp.second))
+        {
+            fail(
+                label.str() + ": result mismatch lean=" + fmtIOU(lean) +
+                " cpp=" + fmtIOU(cpp.first, cpp.second));
+            return verdict;
+        }
+        pass();
+        return verdict;
     }
 
     // toNumber ↔ static_cast<Number>(IOUAmount).
@@ -215,7 +259,7 @@ class LeanIOUAmount_test : public LeanSuite
         return true;
     }
 
-    bool
+    TER
     checkAdd(IOUAmountPair const& a, IOUAmountPair const& b, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
@@ -265,11 +309,7 @@ public:
         constexpr int eMin = STAmount::kMinOffset;
         constexpr int eMax = STAmount::kMaxOffset;
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             // Zero handling (canonical IOU zero: m=0, e=-100).
             checkOfMantissaExp(0, 0, mode);
@@ -330,11 +370,7 @@ public:
         beginCase("LeanIOUAmount.fuzz_construction", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(20'000, [&] {
@@ -351,11 +387,7 @@ public:
         beginCase("LeanIOUAmount.fuzz_conversion", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(20'000, [&] { return checkToNumber(randomIOUAmountPair(rng), mode); });
@@ -371,11 +403,7 @@ public:
         constexpr int64_t kMinValue = static_cast<int64_t>(STAmount::kMinValue);
         constexpr int64_t kMaxValue = static_cast<int64_t>(STAmount::kMaxValue);
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             // add: identity with zero.
             checkAdd(makeIOUAmountPair(kMinValue, 0), makeIOUAmountPair(0, -100), mode);
@@ -408,11 +436,7 @@ public:
         beginCase("LeanIOUAmount.fuzz_arithmetic", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(20'000, [&] {
@@ -440,11 +464,7 @@ public:
         auto const posMin = makeIOUAmountPair(kMin, eMin);
         auto const negMin = makeIOUAmountPair(-kMin, eMin);
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
 
@@ -485,29 +505,52 @@ public:
 
     // ---- Cusp sweeps ----
 
-    void
-    testRangeSweep()
-    {
-        NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        for (auto const mode : kRoundingModes)
-        {
-            SaveNumberRoundMode save{Number::setround(mode)};
-            sweepRange(mode);
-            sweepSumOverflow(mode);
-        }
-    }
-
     // Normalizing (mantissa, exponent): past 16 digits at exponent 80 overflows, below 16 digits
     // at exponent -96 is zero.
     void
     sweepRange(Number::RoundingMode mode)
     {
         beginCase(("LeanIOUAmount.range " + modeName(mode) + "-Sweep").c_str());
-        runAroundCusp(kIouRangeCases, [&](Scaled const& c) {
-            checkOfMantissaExp(c.mantissa, c.exponent, mode);
-            return cppVerdict(
-                [&] { return IOUAmount{c.mantissa, static_cast<int>(c.exponent)}.signum() == 0; });
-        });
+        for (auto const& [cusp, cases] : kIouRangeCases)
+        {
+            std::set<TER> seen;
+            for (Scaled const& c : cases)
+            {
+                seen.insert(checkOfMantissaExp(c.mantissa, c.exponent, mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
+        }
+    }
+
+    // Number to IOU: 19 digits rounding into 16 at exponent 80 carry into an overflow; at -96 they
+    // round to zero or back into range.
+    void
+    sweepOfNumber(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.ofNumber " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIouOfNumberCases)
+        {
+            std::set<TER> seen;
+            for (Scaled const& c : cases)
+            {
+                seen.insert(checkOfNumber(storedNumber(c.mantissa, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
+        }
+    }
+
+    // The same rows before the exponent check: the rounding is compared, nothing throws.
+    void
+    sweepFromNumber(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.fromNumber " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIouOfNumberCases)
+        {
+            for (Scaled const& c : cases)
+            {
+                checkFromNumber(storedNumber(c.mantissa, c.exponent), mode);
+            }
+        }
     }
 
     // Add at exponent 80: a mantissa sum up to 16 digits fits, one more overflows.
@@ -515,12 +558,33 @@ public:
     sweepSumOverflow(Number::RoundingMode mode)
     {
         beginCase(("LeanIOUAmount.add overflow " + modeName(mode) + "-Sweep").c_str());
-        runAroundCusp(kIouSumOverflowCases, [&](MantissaPair const& c) {
-            auto const a = makeIOUAmountPair(c.a, c.exponent);
-            auto const b = makeIOUAmountPair(c.b, c.exponent);
-            checkAdd(a, b, mode);
-            return cppVerdict([&] { return (a.cppIou + b.cppIou).signum() == 0; });
-        });
+        for (auto const& [cusp, cases] : kIouSumOverflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkAdd(
+                    makeIOUAmountPair(c.a, c.exponent), makeIOUAmountPair(c.b, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+    }
+
+    // a + (-b) at exponent -96: a - b down to 16 digits is a value, one less is zero.
+    void
+    sweepDifferenceUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIOUAmount.add underflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIouDifferenceUnderflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkAdd(
+                    makeIOUAmountPair(c.a, c.exponent), makeIOUAmountPair(-c.b, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
     }
 
 private:
@@ -534,7 +598,18 @@ private:
         test_known_construction();
         test_known_arithmetic();
         test_extreme_values();
-        testRangeSweep();
+        forEachMode([&](Number::RoundingMode mode) {
+            sweepRange(mode);
+            sweepOfNumber(mode);
+            sweepFromNumber(mode);
+        });
+        // Every sum is exact, so one mode covers them.
+        forEachMode(
+            [&](Number::RoundingMode mode) {
+                sweepSumOverflow(mode);
+                sweepDifferenceUnderflow(mode);
+            },
+            kToNearestOnly);
     }
 };
 

@@ -616,7 +616,7 @@ lemma LendingLedger.openZone_step (l l' : LendingLedger) (tx : LendingTx) (hr : 
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok
-      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
       exact hkeep _ (by rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)])
         (by rw [(congrArg RawVault.yieldUnrealized hf :)])
     | _ => simp only [LendingTx.isVault] at hvt; cases hvt

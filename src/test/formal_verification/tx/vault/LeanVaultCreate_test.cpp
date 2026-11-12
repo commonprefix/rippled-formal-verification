@@ -185,47 +185,50 @@ class LeanVaultCreate_test : public LeanSuite
             .subscriptionDate = sub, .redemptionDate = sub + 1'000'000, .earlyExitFeeRate = fee};
     }
 
+    // A subscription date at or before the parent close time P is tecEXPIRED, and an investment
+    // period outside [kMinInvestmentPeriod, kMaxInvestmentPeriod) is malformed. Rows sit at P with
+    // the gap on each bound.
     void
     testScheduleSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
     {
         for (Asset const& asset : assets)
         {
-            sweepSchedule(env, owner, asset);
+            beginCase(("create " + assetName(asset) + " schedule-Sweep").c_str());
+            std::uint32_t const now = parentCloseTime(env);
+            for (auto const& [cusp, cases] : kScheduleCases)
+            {
+                std::set<TER> seen;
+                for (ScheduleCusp const& c : cases)
+                {
+                    std::uint32_t const sub = static_cast<std::uint32_t>(now + c.subscription);
+                    VaultCreateArgs const args{
+                        .subscriptionDate = sub,
+                        .redemptionDate = static_cast<std::uint32_t>(sub + c.gap)};
+                    seen.insert(checkCreate(env, owner, asset, args));
+                }
+                expectCrossed(cusp, seen, {tecEXPIRED});
+            }
         }
     }
 
-    // A subscription date at or before the parent close time P is tecEXPIRED, and an investment
-    // period outside [180, 946'708'560) is malformed. Rows sit at P with the gap on each bound.
-    void
-    sweepSchedule(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
-    {
-        beginCase(("create " + assetName(asset) + " schedule-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        runAroundCusp(kScheduleCases, [&](ScheduleCusp const& c) {
-            std::uint32_t const sub = static_cast<std::uint32_t>(now + c.subscription);
-            VaultCreateArgs const args{
-                .subscriptionDate = sub, .redemptionDate = static_cast<std::uint32_t>(sub + c.gap)};
-            return checkCreate(env, owner, asset, args);
-        });
-    }
-
+    // An early-exit fee rate above kMaxEarlyExitFeeRate (100%) is malformed.
     void
     testEarlyExitFeeSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
     {
         for (Asset const& asset : assets)
         {
-            sweepEarlyExitFee(env, owner, asset);
+            beginCase(("create " + assetName(asset) + " early-exit fee-Sweep").c_str());
+            for (auto const& [cusp, cases] : kEarlyExitFeeCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const rate : cases)
+                {
+                    seen.insert(checkCreate(
+                        env, owner, asset, scheduled(env, static_cast<std::uint32_t>(rate))));
+                }
+                expectCrossed(cusp, seen, {temMALFORMED});
+            }
         }
-    }
-
-    // An early-exit fee rate above 100'000 tenth-bips (100%) is malformed.
-    void
-    sweepEarlyExitFee(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
-    {
-        beginCase(("create " + assetName(asset) + " early-exit fee-Sweep").c_str());
-        runAroundCusp(kEarlyExitFeeCases, [&](std::int64_t rate) {
-            return checkCreate(env, owner, asset, scheduled(env, static_cast<std::uint32_t>(rate)));
-        });
     }
 
     // An IOU vault scale above 10 is malformed.
@@ -233,61 +236,82 @@ class LeanVaultCreate_test : public LeanSuite
     testScaleSweep(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
     {
         beginCase("create IOU scale-Sweep");
-        runAroundCusp(kScaleCases, [&](std::int64_t scale) {
-            return checkCreate(env, owner, iou, {.scale = static_cast<std::uint8_t>(scale)});
-        });
-    }
-
-    void
-    testMaximumSignSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
-    {
-        for (Asset const& asset : assets)
+        for (auto const& [cusp, cases] : kScaleCases)
         {
-            sweepMaximumSign(env, owner, asset);
+            std::set<TER> seen;
+            for (std::int64_t const scale : cases)
+            {
+                seen.insert(
+                    checkCreate(env, owner, iou, {.scale = static_cast<std::uint8_t>(scale)}));
+            }
+            expectCrossed(cusp, seen, {temMALFORMED});
         }
     }
 
     // A negative AssetsMaximum is malformed; 0 means no cap. Values in grid steps of the default
     // scale.
     void
-    sweepMaximumSign(jtx::Env& env, jtx::Account const& owner, Asset const& asset)
+    testMaximumSignSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
     {
-        beginCase(("create " + assetName(asset) + " maximum sign-Sweep").c_str());
-        int const exponent = asset.holds<Issue>() && !asset.native() ? -6 : 0;
-        runAroundCusp(kMaximumSignCases, [&](std::int64_t steps) {
-            return checkCreate(env, owner, asset, {.assetsMaximum = Number{steps, exponent}});
-        });
-    }
-
-    void
-    testMaximumGridSweep(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
-    {
-        for (std::uint8_t const scale : {0, 6, 10})
+        for (Asset const& asset : assets)
         {
-            sweepMaximumGrid(env, owner, iou, scale);
+            beginCase(("create " + assetName(asset) + " maximum sign-Sweep").c_str());
+            int const exponent = asset.holds<Issue>() && !asset.native() ? -6 : 0;
+            for (auto const& [cusp, cases] : kMaximumSignCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const steps : cases)
+                {
+                    seen.insert(
+                        checkCreate(env, owner, asset, {.assetsMaximum = Number{steps, exponent}}));
+                }
+                expectCrossed(cusp, seen, {temMALFORMED});
+            }
         }
     }
 
     // An IOU AssetsMaximum off the vault grid 10^-scale, or with more than 16 digits, is
     // tecPRECISION_LOSS. Rows are on the grid; moving the mantissa leaves it.
     void
-    sweepMaximumGrid(jtx::Env& env, jtx::Account const& owner, Asset const& iou, std::uint8_t scale)
+    testMaximumGridSweep(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
     {
-        beginCase(("create IOU scale " + std::to_string(scale) + " maximum grid-Sweep").c_str());
-        runAroundCusp(kMaximumGridCases, [&](MaximumGridCusp const& c) {
-            Number const maximum{c.mantissa, static_cast<int>(c.exponent) - scale};
-            return checkCreate(env, owner, iou, {.scale = scale, .assetsMaximum = maximum});
-        });
+        for (std::uint8_t const scale : {0, 6, 10})
+        {
+            beginCase(
+                ("create IOU scale " + std::to_string(scale) + " maximum grid-Sweep").c_str());
+            for (auto const& [cusp, cases] : kMaximumGridCases)
+            {
+                std::set<TER> seen;
+                for (MaximumGridCusp const& c : cases)
+                {
+                    Number const maximum{c.mantissa, static_cast<int>(c.exponent) - scale};
+                    seen.insert(
+                        checkCreate(env, owner, iou, {.scale = scale, .assetsMaximum = maximum}));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
+        }
     }
 
-    // An XRP AssetsMaximum above 1e17 drops is not representable: C++ preflight is temMALFORMED.
+    // An AssetsMaximum the asset cannot represent (XRP above 1e17 drops, MPT above 2^63 - 1, IOU
+    // past the 16-digit mantissa at exponent 80) is temMALFORMED in C++ preflight.
     void
-    testXrpMaximumSweep(jtx::Env& env, jtx::Account const& owner, Asset const& xrp)
+    testMaximumRangeSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
     {
-        beginCase("create XRP maximum range-Sweep");
-        runAroundCusp(kXrpMaximumCases, [&](std::int64_t drops) {
-            return checkCreate(env, owner, xrp, {.assetsMaximum = Number{drops}});
-        });
+        for (Asset const& asset : assets)
+        {
+            beginCase(("create " + assetName(asset) + " maximum range-Sweep").c_str());
+            for (auto const& [cusp, cases] : maximumRangeCases(asset))
+            {
+                std::set<TER> seen;
+                for (MaximumRangeCusp const& c : cases)
+                {
+                    Number const maximum{c.mantissa, static_cast<int>(c.exponent)};
+                    seen.insert(checkCreate(env, owner, asset, {.assetsMaximum = maximum}));
+                }
+                expectCrossed(cusp, seen, {temMALFORMED});
+            }
+        }
     }
 
     void
@@ -499,7 +523,7 @@ class LeanVaultCreate_test : public LeanSuite
 
         // Acknowledged gap, disabled.
         // clang-format off
-        // testXrpMaximumSweep(env, owner, assets.xrp);  // XRP maximum > 1e17: C++ temMALFORMED, model canCreate tecPRECISION_LOSS but create builds a lawful vault
+        // testMaximumRangeSweep(env, owner, all);  // maximum past the asset's range (XRP 1e17, MPT 2^63-1, IOU 9999999999999999e80): C++ temMALFORMED, model canCreate tecPRECISION_LOSS but create builds a lawful vault
         // clang-format on
     }
 };

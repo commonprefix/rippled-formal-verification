@@ -3,21 +3,17 @@
 // "cpp=... lean=..."; a failure is a disagreement.
 
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/ffi/lending/LoanFFI.h>
 #include <test/formal_verification/ffi/vault/VaultClawbackFFI.h>
 #include <test/formal_verification/ffi/vault/VaultCreateFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
-#include <test/formal_verification/tx/lending/LendingTestHelpers.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/amount.h>
-#include <test/jtx/fee.h>
 #include <test/jtx/flags.h>
 #include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
-#include <test/jtx/sig.h>
 #include <test/jtx/ter.h>
 #include <test/jtx/trust.h>
 #include <test/jtx/vault.h>
@@ -44,11 +40,7 @@ class LeanCuspScratch_test : public LeanSuite
     leanText(std::optional<LeanError> const& error, std::optional<TER> const& ter)
     {
         if (error)
-            return "model error " + std::to_string(static_cast<int>(*error)) +
-                (*error == LeanError::outOfRange      ? " (outOfRange)"
-                     : *error == LeanError::notLawful ? " (notLawful)"
-                     : *error == LeanError::overflow  ? " (overflow)"
-                                                      : "");
+            return "model error " + std::to_string(static_cast<int>(*error));
         return transToken(ter.value_or(tesSUCCESS));
     }
 
@@ -68,7 +60,7 @@ class LeanCuspScratch_test : public LeanSuite
             label + ": cpp=" + transToken(cpp) + " lean=" + leanText(leanError, leanTer));
     }
 
-    // Gap 1: an XRP withdraw by shares whose payout converts to more than 1e17 drops.
+    // Gap 16: an XRP withdraw by shares whose payout converts to more than 1e17 drops.
     void
     gapWithdrawSharesOutOfRange(std::int64_t shares)
     {
@@ -102,7 +94,7 @@ class LeanCuspScratch_test : public LeanSuite
             lean.error);
     }
 
-    // Gap 2: clawing back more than one of two holders' shares are worth.
+    // Gap 1: clawing back more than one of two holders' shares are worth.
     void
     gapClawbackOverHolderValue(std::int64_t amount)
     {
@@ -124,7 +116,7 @@ class LeanCuspScratch_test : public LeanSuite
         env(pay(issuer, bob, iou(10'000)));
         env.close();
 
-        jtx::Vault v{env};
+        jtx::Vault const v{env};
         auto [tx, vault] = v.create({.owner = owner, .asset = iou.raw()});
         tx[sfScale] = 0;
         env(tx);
@@ -163,10 +155,10 @@ class LeanCuspScratch_test : public LeanSuite
         env.fund(XRP(1'000'000), owner);
         env.close();
 
-        VaultCreateArgs args{.assetsMaximum = maximum, .numericType = 0};
+        VaultCreateArgs const args{.assetsMaximum = maximum, .numericType = 0};
         LawfulTerResult const can = leanCanVaultCreate(args, parentCloseTime(env));
         LeanCreateResult const created = leanVaultCreate(args);
-        jtx::Vault v{env};
+        jtx::Vault const v{env};
         auto [tx, vault] = v.create({.owner = owner, .asset = xrpIssue()});
         tx[sfAssetsMaximum] = maximum;
         env(tx, jtx::Ter(std::ignore));
@@ -182,42 +174,6 @@ class LeanCuspScratch_test : public LeanSuite
             << std::endl;
         BEAST_EXPECTS(
             agree, "create XRP maximum " + to_string(maximum) + ": cpp=" + transToken(cpp));
-    }
-
-    // Gap 4: a loan whose origination fee exceeds the principal.
-    void
-    gapLoanOriginationFee(Number const& fee)
-    {
-        using namespace jtx;
-        testcase("gap: LoanSet origination fee " + to_string(fee) + " on principal 1000");
-        Env env(*this);
-        auto const f = setUpBrokerVault(
-            env,
-            BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt},
-            Number{10'000});
-        depositCover(env, f, Number{500});
-        LoanParams const p{.principal = Number{1'000}, .originationFee = fee};
-
-        LoanBroker const broker = readBroker(*env.current(), f.brokerKeylet, f.asset.raw());
-        Vault const pool = readVaultState(env, f.vaultKeylet, f.asset.raw());
-        LoanSetArgs const args = loanSetArgs(p);
-        std::uint32_t const closeTime = ledgerCloseTime(env);
-        LawfulTerResult const can =
-            leanCanLoanCreate(broker, pool, args, closeTime, parentCloseTime(env));
-        std::optional<LeanLoanResult> result;
-        if (can.ter == tesSUCCESS && !can.leanError)
-            result =
-                leanLoanCreate(broker, pool, args, closeTime, loanTemplate(broker, p, closeTime));
-        env(loanSetTx(f, p),
-            Sig(sfCounterpartySignature, f.owner),
-            Fee(env.current()->fees().base * 2),
-            jtx::Ter(std::ignore));
-        TER const cpp = env.ter();
-        std::optional<LeanError> const leanError =
-            can.leanError ? can.leanError : (result ? result->leanError : std::nullopt);
-        TER const lean =
-            modelVerdict(can, result && !result->leanError ? result->error : std::nullopt);
-        report("LoanSet fee " + to_string(fee) + " principal 1000", cpp, leanError, lean);
     }
 
     void
@@ -237,9 +193,6 @@ class LeanCuspScratch_test : public LeanSuite
         gapCreateXrpMaximum(Number{100'000'000'000'000'000});
         gapCreateXrpMaximum(Number{100'000'000'000'000'001});
         gapCreateXrpMaximum(Number{200'000'000'000'000'000});
-
-        gapLoanOriginationFee(Number{1'000});
-        gapLoanOriginationFee(Number{1'001});
     }
 };
 

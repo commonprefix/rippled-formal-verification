@@ -3,6 +3,10 @@
 #include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 
+#include <xrpl/protocol/Protocol.h>
+#include <xrpl/protocol/STAmount.h>
+#include <xrpl/protocol/TER.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -12,7 +16,7 @@
 
 namespace xrpl::test::formal_verification {
 
-// Hardcoded rows for the VaultDeposit sweeps, in vault grid units. Each row sits exactly on its
+// Hardcoded rows shared by the vault sweeps, in vault grid units. Each row sits exactly on its
 // cusp; a sweep moves two of its values by kAroundCusp so every row crosses. The levels are the
 // smallest value, an ordinary one and the largest that still reaches the cusp, and each level is
 // split as (smallest, largest), (largest, smallest) and (balanced). A table has no large level when
@@ -20,52 +24,16 @@ namespace xrpl::test::formal_verification {
 
 // The ordinary level shared by the tables.
 constexpr std::int64_t kOrdinaryUnits = 1'000'000'000;
-// Large level of the withdraw, clawback and create tables.
-constexpr std::int64_t kLargeUnits = 4'000'000'000'000'000;
 
-// Open limit: yield unrealized + assets total + amount == kOpenLimitUnits, the last deposit that
-// fits. The sweep moves the total and the amount.
-struct OpenLimitCusp
-{
-    std::int64_t yield;
-    std::int64_t total;
-    std::int64_t amount;
-};
+// Bounds the large levels sit at: the largest 16-digit IOU mantissa (a one-unit difference past it
+// is lost), the XRP range in drops, and the 2^63 - 1 share (and MPT) cap.
+constexpr auto kIouMaxMantissa = static_cast<std::int64_t>(STAmount::kMaxValue);
+constexpr auto kMaxNativeDrops = static_cast<std::int64_t>(STAmount::kMaxNativeN);
+constexpr std::int64_t kShareCap = std::numeric_limits<std::int64_t>::max();
+static_assert(kShareCap == static_cast<std::int64_t>(kMaxMpTokenAmount));
 
-constexpr OpenLimitCusp kOpenLimitCusps[] = {
-    {.yield = 0, .total = 1, .amount = kOpenLimitUnits - 1},
-    {.yield = 0, .total = kOpenLimitUnits - 1, .amount = 1},
-    {.yield = 0, .total = kOpenLimitUnits / 2, .amount = kOpenLimitUnits / 2},
-    {.yield = kOrdinaryUnits, .total = 1, .amount = kOpenLimitUnits - kOrdinaryUnits - 1},
-    {.yield = kOrdinaryUnits, .total = kOpenLimitUnits - kOrdinaryUnits - 1, .amount = 1},
-    {.yield = kOpenLimitUnits - 2, .total = 1, .amount = 1},
-};
-static_assert(std::ranges::all_of(kOpenLimitCusps, [](OpenLimitCusp const& c) {
-    return c.yield + c.total + c.amount == kOpenLimitUnits;
-}));
-
-// Assets maximum: assets total + amount == maximum, the last deposit that fits. No row near the
-// open limit: there the open limit rejects too, with the same verdict. The sweep moves the total
-// and the amount.
-struct AssetsMaximumCusp
-{
-    std::int64_t maximum;
-    std::int64_t total;
-    std::int64_t amount;
-};
-
-constexpr AssetsMaximumCusp kAssetsMaximumCusps[] = {
-    {.maximum = 2, .total = 1, .amount = 1},
-    {.maximum = kOrdinaryUnits, .total = 1, .amount = kOrdinaryUnits - 1},
-    {.maximum = kOrdinaryUnits, .total = kOrdinaryUnits - 1, .amount = 1},
-    {.maximum = kOrdinaryUnits, .total = kOrdinaryUnits / 2, .amount = kOrdinaryUnits / 2},
-};
-static_assert(std::ranges::all_of(kAssetsMaximumCusps, [](AssetsMaximumCusp const& c) {
-    return c.total + c.amount == c.maximum;
-}));
-
-// A deposit into a vault whose share price is not 1: shared by the zero shares, clamp to zero,
-// charge rounding and share mint cap tables. Those sweeps move the shares total and the amount.
+// A deposit into a vault whose share price is not 1: shared by the zero shares and clamp to zero
+// tables. Those sweeps move the shares total and the amount.
 struct PriceCusp
 {
     std::int64_t total;
@@ -110,72 +78,37 @@ static_assert(std::ranges::all_of(kClampToZeroCusps, [](PriceCusp const& c) {
         c.sharesTotal + 2 < 10'000'000'000'000'000;
 }));
 
-// Every moved row of a price table mints under the 2^63 cap, so only the share mint cap sweep
-// reaches it.
-constexpr bool
-underMintCap(PriceCusp const& c)
+// Available assets at price 1 (withdraw, clawback): an amount of exactly the available assets with
+// `deployed` assets still in the vault. Each table says what lies past it.
+struct AvailableCusp
 {
-    PriceCusp const top{.total = c.total, .sharesTotal = c.sharesTotal + 2, .amount = c.amount + 2};
-    return top.sharesTotal + sharesBought(top) <= std::numeric_limits<std::int64_t>::max();
-}
-
-// Charge rounding: an odd assets total T, shares total 2N (N < T) and amount (T + 1) / 2 buy N
-// shares charged exactly T / 2, a half-unit tie. Both sides succeed at the row itself.
-constexpr PriceCusp kChargeRoundingCusps[] = {
-    {.total = 3, .sharesTotal = 2, .amount = 2},
-    {.total = 3, .sharesTotal = 4, .amount = 2},
-    {.total = kOrdinaryUnits + 1, .sharesTotal = 2, .amount = kOrdinaryUnits / 2 + 1},
-    {.total = kOrdinaryUnits + 1,
-     .sharesTotal = 2 * kOrdinaryUnits,
-     .amount = kOrdinaryUnits / 2 + 1},
-    {.total = kOrdinaryUnits + 1, .sharesTotal = kOrdinaryUnits, .amount = kOrdinaryUnits / 2 + 1},
+    std::int64_t available;
+    std::int64_t deployed;
+    std::int64_t amount;
 };
-static_assert(std::ranges::all_of(kChargeRoundingCusps, [](PriceCusp const& c) {
-    return 2 * (__int128{c.total} * sharesBought(c) % c.sharesTotal) == c.sharesTotal;
-}));
 
-static_assert(std::ranges::all_of(kZeroSharesCusps, underMintCap));
-static_assert(std::ranges::all_of(kClampToZeroCusps, underMintCap));
-static_assert(std::ranges::all_of(kChargeRoundingCusps, underMintCap));
-
-// Share mint cap: shares total + shares bought == 2^63 - 1, the last mint that fits.
-constexpr PriceCusp kShareMintCapCusps[] = {
-    {.total = 8'000'000'000'000'000,
-     .sharesTotal = std::numeric_limits<std::int64_t>::max() - 1'152,
-     .amount = 1},
+// Decade-crossing outflow (IOU, withdraw and clawback): the outflow is truncated to the grid of
+// available - amount, which is 10 units from 10^16 units up. Available assets are
+// availableMantissa * 10 units (one mantissa step); each row leaves exactly 10^16 - 1 or 10^16, at
+// price 1 and with the account holding all shares but one. The sweep moves both values.
+struct DecadeCusp
+{
+    std::int64_t availableMantissa;
+    std::int64_t amount;
 };
-static_assert(std::ranges::all_of(kShareMintCapCusps, [](PriceCusp const& c) {
-    return c.sharesTotal + sharesBought(c) == std::numeric_limits<std::int64_t>::max();
+
+constexpr std::int64_t kSeventeenDigits = 10'000'000'000'000'000;
+constexpr DecadeCusp kDecadeCusps[] = {
+    {.availableMantissa = 1'000'000'000'000'000, .amount = 1},
+    {.availableMantissa = 1'000'000'000'000'001, .amount = 10},
+};
+static_assert(std::ranges::all_of(kDecadeCusps, [](DecadeCusp const& c) {
+    std::int64_t const left = (c.availableMantissa * 10) - c.amount;
+    return left == kSeventeenDigits - 1 || left == kSeventeenDigits;
 }));
-
-// Sub-grid amount: mantissa 10^15 at exponent -(scale + 15) is exactly one grid step, the
-// smallest amount that does not round to zero. The sweep moves the mantissa.
-constexpr std::int64_t kOneGridStepMantissa = 1'000'000'000'000'000;
-
-// Share overflow: on a first IOU deposit this mantissa at exponent 3 - scale mints
-// 9'223'372'036'854'775'000 shares, the last 16-digit amount below 2^63. The sweep moves it.
-constexpr std::int64_t kShareOverflowMantissa = 9'223'372'036'854'775;
-static_assert(
-    __int128{kShareOverflowMantissa} * 1'000 <= std::numeric_limits<std::int64_t>::max() &&
-    __int128{kShareOverflowMantissa + 1} * 1'000 > std::numeric_limits<std::int64_t>::max());
 
 // Every case the sweeps run: each row above with its two moved values offset by kAroundCusp,
 // grouped by row. A moved value below 1 is not a deposit (or an empty vault) and is dropped.
-
-inline std::vector<AroundCusp<OpenLimitCusp>> const kOpenLimitCases = aroundCusp(
-    kOpenLimitCusps,
-    &OpenLimitCusp::total,
-    &OpenLimitCusp::amount,
-    [](OpenLimitCusp const& c) { return c.total >= 1 && c.amount >= 1; });
-
-// Also dropped: a vault that already holds more than its maximum.
-inline std::vector<AroundCusp<AssetsMaximumCusp>> const kAssetsMaximumCases = aroundCusp(
-    kAssetsMaximumCusps,
-    &AssetsMaximumCusp::total,
-    &AssetsMaximumCusp::amount,
-    [](AssetsMaximumCusp const& c) {
-        return c.total >= 1 && c.amount >= 1 && c.total <= c.maximum;
-    });
 
 // Price rows move the shares total and the amount.
 template <std::size_t N>
@@ -189,34 +122,32 @@ priceCases(PriceCusp const (&rows)[N])
 
 inline std::vector<AroundCusp<PriceCusp>> const kZeroSharesCases = priceCases(kZeroSharesCusps);
 inline std::vector<AroundCusp<PriceCusp>> const kClampToZeroCases = priceCases(kClampToZeroCusps);
-inline std::vector<AroundCusp<PriceCusp>> const kChargeRoundingCases =
-    priceCases(kChargeRoundingCusps);
-inline std::vector<AroundCusp<PriceCusp>> const kShareMintCapCases = priceCases(kShareMintCapCusps);
-inline std::vector<AroundCusp<std::int64_t>> const kOneGridStepCases =
-    aroundCusp(kOneGridStepMantissa);
-inline std::vector<AroundCusp<std::int64_t>> const kShareOverflowCases =
-    aroundCusp(kShareOverflowMantissa);
+inline std::vector<AroundCusp<DecadeCusp>> const kDecadeCases = aroundCusp(
+    kDecadeCusps,
+    &DecadeCusp::availableMantissa,
+    &DecadeCusp::amount,
+    [](DecadeCusp const& c) { return c.amount >= 1; });
 
 // A row as it appears in failure messages.
-inline std::string
-describe(OpenLimitCusp const& c)
-{
-    return "yield " + std::to_string(c.yield) + ", total " + std::to_string(c.total) + ", amount " +
-        std::to_string(c.amount);
-}
-
-inline std::string
-describe(AssetsMaximumCusp const& c)
-{
-    return "maximum " + std::to_string(c.maximum) + ", total " + std::to_string(c.total) +
-        ", amount " + std::to_string(c.amount);
-}
-
 inline std::string
 describe(PriceCusp const& c)
 {
     return "total " + std::to_string(c.total) + ", sharesTotal " + std::to_string(c.sharesTotal) +
         ", amount " + std::to_string(c.amount);
+}
+
+inline std::string
+describe(AvailableCusp const& c)
+{
+    return "available " + std::to_string(c.available) + ", deployed " + std::to_string(c.deployed) +
+        ", amount " + std::to_string(c.amount);
+}
+
+inline std::string
+describe(DecadeCusp const& c)
+{
+    return "availableMantissa " + std::to_string(c.availableMantissa) + ", amount " +
+        std::to_string(c.amount);
 }
 
 }  // namespace xrpl::test::formal_verification

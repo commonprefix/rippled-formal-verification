@@ -34,11 +34,35 @@ aroundCusp(Row const (&rows)[N], std::int64_t Row::* first, std::int64_t Row::* 
             for (std::int64_t const dSecond : kAroundCusp)
             {
                 Row moved = row;
-                moved.*first += dFirst;
-                moved.*second += dSecond;
+                // A row at the int64 bound has no case past it.
+                if (__builtin_add_overflow(row.*first, dFirst, &(moved.*first)) ||
+                    __builtin_add_overflow(row.*second, dSecond, &(moved.*second)))
+                    continue;
                 if (valid(moved))
                     group.cases.push_back(moved);
             }
+        }
+        groups.push_back(group);
+    }
+    return groups;
+}
+
+// Each row with its single member `value` moved by every offset in kAroundCusp.
+template <class Row, std::size_t N, class Valid>
+std::vector<AroundCusp<Row>>
+aroundCusp(Row const (&rows)[N], std::int64_t Row::* value, Valid valid)
+{
+    std::vector<AroundCusp<Row>> groups;
+    for (Row const& row : rows)
+    {
+        AroundCusp<Row> group{.cusp = row, .cases = {}};
+        for (std::int64_t const d : kAroundCusp)
+        {
+            Row moved = row;
+            if (__builtin_add_overflow(row.*value, d, &(moved.*value)))
+                continue;
+            if (valid(moved))
+                group.cases.push_back(moved);
         }
         groups.push_back(group);
     }

@@ -2,97 +2,71 @@
 
 #include <test/formal_verification/common/Sweep.h>
 
-#include <cstddef>
+#include <xrpl/protocol/Protocol.h>
+
+#include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace xrpl::test::formal_verification::closed_ended_sweep {
 
-// Lawful investment periods (redemption date - subscription date), in seconds.
-inline constexpr std::int64_t kSmallestGap = 180;
-inline constexpr std::int64_t kOrdinaryGap = 1'000'000;
-inline constexpr std::int64_t kLargestGap = 946'708'559;
-
 // A phase boundary date placed at P + offset (P: the parent close time), the other date `gap`
-// away. On the cusp (offset 0) the boundary still lets the transaction through.
+// away, on a vault with an early-exit fee `rate` (tenth-bips) or no fee field. On the cusp
+// (offset 0) the boundary still lets the transaction through. Only the offset moves: the gap and
+// rate do not decide the phase.
 struct PhaseDateCusp
 {
+    std::optional<std::uint32_t> rate;
     std::int64_t gap;
     std::int64_t offset;
 };
+
+// Lawful investment periods: kMinInvestmentPeriod, an ordinary one and kMaxInvestmentPeriod - 1
+// (the maximum is exclusive).
+inline constexpr std::int64_t kOrdinaryGap = 1'000'000;
 
 inline constexpr PhaseDateCusp kPhaseDateCusps[] = {
-    {.gap = kSmallestGap, .offset = 0},
-    {.gap = kOrdinaryGap, .offset = 0},
-    {.gap = kLargestGap, .offset = 0},
+    {.rate = std::nullopt, .gap = kMinInvestmentPeriod, .offset = 0},
+    {.rate = std::nullopt, .gap = kOrdinaryGap, .offset = 0},
+    {.rate = std::nullopt, .gap = kMaxInvestmentPeriod - 1, .offset = 0},
 };
 
-// The same boundaries for a vault with an early-exit fee rate (tenth-bips): the smallest, an
-// ordinary one and 100%.
-struct FeePhaseCusp
-{
-    std::uint32_t rate;
-    std::int64_t gap;
-    std::int64_t offset;
-};
-
-inline constexpr FeePhaseCusp kFeePhaseCusps[] = {
-    {.rate = 1, .gap = kSmallestGap, .offset = 0},
+// The same boundaries with an early-exit fee rate: the smallest, an ordinary one and 100%.
+inline constexpr PhaseDateCusp kFeePhaseCusps[] = {
+    {.rate = 1, .gap = kMinInvestmentPeriod, .offset = 0},
     {.rate = 1, .gap = kOrdinaryGap, .offset = 0},
-    {.rate = 1, .gap = kLargestGap, .offset = 0},
-    {.rate = 5'000, .gap = kSmallestGap, .offset = 0},
+    {.rate = 1, .gap = kMaxInvestmentPeriod - 1, .offset = 0},
+    {.rate = 5'000, .gap = kMinInvestmentPeriod, .offset = 0},
     {.rate = 5'000, .gap = kOrdinaryGap, .offset = 0},
-    {.rate = 5'000, .gap = kLargestGap, .offset = 0},
-    {.rate = 100'000, .gap = kSmallestGap, .offset = 0},
-    {.rate = 100'000, .gap = kOrdinaryGap, .offset = 0},
-    {.rate = 100'000, .gap = kLargestGap, .offset = 0},
+    {.rate = 5'000, .gap = kMaxInvestmentPeriod - 1, .offset = 0},
+    {.rate = kMaxEarlyExitFeeRate.value(), .gap = kMinInvestmentPeriod, .offset = 0},
+    {.rate = kMaxEarlyExitFeeRate.value(), .gap = kOrdinaryGap, .offset = 0},
+    {.rate = kMaxEarlyExitFeeRate.value(), .gap = kMaxInvestmentPeriod - 1, .offset = 0},
 };
 
-template <class Row>
 constexpr bool
-lawfulGap(Row const& c)
+onCusp(PhaseDateCusp const& c)
 {
-    return c.gap >= kSmallestGap && c.gap <= kLargestGap;
+    return c.offset == 0 && c.gap >= kMinInvestmentPeriod && c.gap < kMaxInvestmentPeriod;
 }
 
-template <class Row, std::size_t N>
-constexpr bool
-onCusp(Row const (&rows)[N])
-{
-    for (Row const& c : rows)
-    {
-        if (c.offset != 0 || !lawfulGap(c))
-            return false;
-    }
-    return true;
-}
+static_assert(std::ranges::all_of(kPhaseDateCusps, onCusp));
+static_assert(std::ranges::all_of(kFeePhaseCusps, onCusp));
 
-static_assert(onCusp(kPhaseDateCusps));
-static_assert(onCusp(kFeePhaseCusps));
-static_assert(kLargestGap + 1 == 946'708'560, "one below the 30-year investment period maximum");
-
-// Every case tested: the boundary moved by kAroundCusp, and the gap too while it stays lawful.
-inline std::vector<AroundCusp<PhaseDateCusp>> const kPhaseDateCases = aroundCusp(
-    kPhaseDateCusps,
-    &PhaseDateCusp::offset,
-    &PhaseDateCusp::gap,
-    lawfulGap<PhaseDateCusp>);
-inline std::vector<AroundCusp<FeePhaseCusp>> const kFeePhaseCases =
-    aroundCusp(kFeePhaseCusps, &FeePhaseCusp::offset, &FeePhaseCusp::gap, lawfulGap<FeePhaseCusp>);
+// Every case tested: the boundary moved by kAroundCusp.
+inline std::vector<AroundCusp<PhaseDateCusp>> const kPhaseDateCases =
+    aroundCusp(kPhaseDateCusps, &PhaseDateCusp::offset, [](PhaseDateCusp const&) { return true; });
+inline std::vector<AroundCusp<PhaseDateCusp>> const kFeePhaseCases =
+    aroundCusp(kFeePhaseCusps, &PhaseDateCusp::offset, [](PhaseDateCusp const&) { return true; });
 
 // A row as it appears in failure messages.
 inline std::string
 describe(PhaseDateCusp const& c)
 {
-    return "gap " + std::to_string(c.gap) + ", offset " + std::to_string(c.offset);
-}
-
-inline std::string
-describe(FeePhaseCusp const& c)
-{
-    return "rate " + std::to_string(c.rate) + ", gap " + std::to_string(c.gap) + ", offset " +
-        std::to_string(c.offset);
+    return (c.rate ? "rate " + std::to_string(*c.rate) + ", " : std::string{}) + "gap " +
+        std::to_string(c.gap) + ", offset " + std::to_string(c.offset);
 }
 
 }  // namespace xrpl::test::formal_verification::closed_ended_sweep

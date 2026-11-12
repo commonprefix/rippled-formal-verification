@@ -34,12 +34,6 @@ namespace xrpl::test::formal_verification {
 // vault and broker post-states.
 class LeanLoanSet_test : public LeanSuite
 {
-    // The shared ledgers (one per asset) the staged single-value tests and the sweeps run on.
-    struct SweepLedger
-    {
-        jtx::Env* env;
-        BrokerFixture f;
-    };
     std::optional<SweepLedger> iou_;
     std::optional<SweepLedger> mpt_;
 
@@ -47,17 +41,6 @@ class LeanLoanSet_test : public LeanSuite
     ledger(LendingAsset kind)
     {
         return kind == LendingAsset::mpt ? *mpt_ : *iou_;
-    }
-
-    void
-    expectTer(TER lean, TER cpp, TER expected)
-    {
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
-        BEAST_EXPECTS(
-            lean == expected,
-            std::string("lean=") + transToken(lean) + " expected " + transToken(expected));
     }
 
     static TER
@@ -69,7 +52,8 @@ class LeanLoanSet_test : public LeanSuite
     }
 
     // LoanSet for `p` on `view` (already staged) and in the model on the same pre-state: equal
-    // verdicts (and `expected`, when given), and on success equal loan, vault and broker.
+    // verdicts (and `expected`, when given), and on success equal loan, vault, broker and amount to
+    // the borrower.
     TER
     checkLoanSet(
         jtx::Env& env,
@@ -79,7 +63,6 @@ class LeanLoanSet_test : public LeanSuite
         std::optional<TER> expected,
         std::string const& at)
     {
-        using namespace loan_set_sweep;
         LoanBroker const broker = readBroker(view, f);
         Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
         LoanSetArgs const args = loanSetArgs(p);
@@ -95,18 +78,34 @@ class LeanLoanSet_test : public LeanSuite
             result = leanLoanCreate(broker, pool, args, closeTime, like);
 
         Keylet const loanKeylet = nextLoan(view, f);
+        zeroIouBalance(view, f.borrower, f.asset.raw());
+        Number const borrowerBefore = holding(view, f.borrower, f.asset.raw());
         TER const cppTer = applyLoanSet(env, view, f, p);
+        if (isTemMalformed(cppTer))
+        {
+            // A preflight-only rule is a loan invariant in the model: the create is not lawful.
+            BEAST_EXPECTS(
+                leanLoanCreate(broker, pool, args, closeTime, like).leanError ==
+                    LeanError::notLawful,
+                at + ": cpp=" + transToken(cppTer) + " but the model creates the loan");
+            return cppTer;
+        }
         TER const lean = leanVerdict(can, result);
         BEAST_EXPECTS(
             lean == cppTer, at + ": cpp=" + transToken(cppTer) + " lean=" + transToken(lean));
         if (expected)
-            expectTer(lean, cppTer, *expected);
+            expectTer(*this, lean, cppTer, *expected);
         if (cppTer != tesSUCCESS || lean != tesSUCCESS)
             return cppTer;
-        expectLoanMatches(
-            *this, result->loan, readLoan(view, loanKeylet, f.asset.raw(), p.paymentTotal));
-        expectVaultMatches(*this, result->pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
+        expectLoanMatches(*this, result->loan, readLoan(view, loanKeylet, f, p));
+        expectSameVault(
+            *this, "vault ", result->pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
         expectBrokerMatches(*this, result->loan.broker, readBroker(view, f));
+        expectNumber(
+            *this,
+            "amount to borrower",
+            result->amountToBorrower,
+            holding(view, f.borrower, f.asset.raw()) - borrowerBefore);
         return cppTer;
     }
 
@@ -122,24 +121,9 @@ class LeanLoanSet_test : public LeanSuite
         std::string const at = stageText(s) + " P " + to_string(p.principal) + " N " +
             std::to_string(p.paymentTotal) + " I " + std::to_string(p.paymentInterval);
         OpenView view{*env.current()};
-        try
-        {
-            stageLending(env, view, f, s);
-        }
-        catch (std::exception const& e)
-        {
-            fail(at + ": " + e.what());
+        if (!tryStage(*this, at, [&] { stageLending(env, view, f, s); }))
             return tefINTERNAL;
-        }
         return checkLoanSet(env, f, view, p, expected, at);
-    }
-
-    // `n` (in asset units) as grid units of the fixture's vault.
-    static std::int64_t
-    toUnits(ReadView const& view, BrokerFixture const& f, Number const& n)
-    {
-        return static_cast<std::int64_t>(
-            n * Number{1, static_cast<int>(view.read(f.vaultKeylet)->at(sfScale))});
     }
 
     // The state the single-value tests ran on (a fresh fixture with the default broker and
@@ -165,7 +149,8 @@ class LeanLoanSet_test : public LeanSuite
             .managementFeeRate = 1'000,
             .coverRate = 10'000,
             .subscriptionDate = sub,
-            .redemptionDate = sub + 1'000'000};
+            .redemptionDate = sub + 1'000'000,
+        };
         if (debtMaximum)
             s.debtMaximum = toUnits(view, f, *debtMaximum);
         return s;
@@ -185,7 +170,7 @@ class LeanLoanSet_test : public LeanSuite
         LendingAsset assetKind = LendingAsset::iou)
     {
         testcase("LoanSet: " + label + (assetKind == LendingAsset::mpt ? " (MPT)" : ""));
-        SweepLedger& l = ledger(assetKind);
+        SweepLedger const& l = ledger(assetKind);
         checkLoanSet(
             *l.env,
             l.f,
@@ -201,7 +186,7 @@ class LeanLoanSet_test : public LeanSuite
     runTwoStep(std::string const& label, std::int64_t startOffset, TER expected)
     {
         testcase("LoanSet: " + label);
-        SweepLedger& l = ledger(LendingAsset::iou);
+        SweepLedger const& l = ledger(LendingAsset::iou);
         std::uint32_t const pct = parentCloseTime(*l.env);
         checkLoanSet(
             *l.env,
@@ -223,7 +208,7 @@ class LeanLoanSet_test : public LeanSuite
         std::string const& at)
     {
         using namespace jtx;
-        Loan const loan = readLoan(view, loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const loan = readLoan(view, loanKeylet, f, p);
         Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
         LawfulTerResult const can =
             leanCanLoanAccept(loan, pool, view.parentCloseTime().time_since_epoch().count());
@@ -232,17 +217,26 @@ class LeanLoanSet_test : public LeanSuite
         if (can.ter == tesSUCCESS && !can.leanError)
             result = leanLoanAccept(loan, pool);
 
+        zeroIouBalance(view, f.borrower, f.asset.raw());
+        Number const borrowerBefore = holding(view, f.borrower, f.asset.raw());
         TER const cppTer = applyOn(env, view, loan::accept(f.borrower, loanKeylet.key));
         TER const lean = leanVerdict(can, result);
         BEAST_EXPECTS(
             lean == cppTer, at + ": cpp=" + transToken(cppTer) + " lean=" + transToken(lean));
         if (expected)
-            expectTer(lean, cppTer, *expected);
+            expectTer(*this, lean, cppTer, *expected);
         if (cppTer != tesSUCCESS || lean != tesSUCCESS)
             return cppTer;
-        expectLoanMatches(
-            *this, result->loan, readLoan(view, loanKeylet, f.asset.raw(), p.paymentTotal));
-        expectVaultMatches(*this, result->pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
+        expectLoanMatches(*this, result->loan, readLoan(view, loanKeylet, f, p));
+        expectSameVault(
+            *this, "vault ", result->pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
+        // C++ only reads the broker on accept: the model must leave it as it was.
+        expectBrokerMatches(*this, result->loan.broker, readBroker(view, f));
+        expectNumber(
+            *this,
+            "amount to borrower",
+            result->amountToBorrower,
+            holding(view, f.borrower, f.asset.raw()) - borrowerBefore);
         return cppTer;
     }
 
@@ -276,7 +270,7 @@ class LeanLoanSet_test : public LeanSuite
         TER expected)
     {
         using namespace jtx;
-        Loan const loan = readLoan(*env.current(), loanKeylet, f.asset.raw(), p.paymentTotal);
+        Loan const loan = readLoan(*env.current(), loanKeylet, f, p);
         Vault const pool = readVaultState(env, f.vaultKeylet, f.asset.raw());
 
         LawfulTerResult const can = leanCanLoanDelete(loan);
@@ -296,11 +290,11 @@ class LeanLoanSet_test : public LeanSuite
             BEAST_EXPECTS(!result->leanError.has_value(), "lean delete error");
         TER const lean =
             modelVerdict(can, result && !result->leanError ? result->error : std::nullopt);
-        expectTer(lean, cppTer, expected);
+        expectTer(*this, lean, cppTer, expected);
         if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
             return;
         BEAST_EXPECT(!env.le(loanKeylet));
-        expectVaultMatches(*this, result->pool, cppPool);
+        expectSameVault(*this, "vault ", result->pool, cppPool);
         expectBrokerMatches(*this, result->broker, cppBroker);
     }
 
@@ -425,22 +419,40 @@ class LeanLoanSet_test : public LeanSuite
     void
     testDebtMaximumSweep()
     {
-        sweepDebtMaximum(ledger(LendingAsset::iou));
-        sweepDebtMaximum(ledger(LendingAsset::mpt));
+        for (bool const withInterest : {false, true})
+        {
+            sweepDebtMaximum(ledger(LendingAsset::iou), withInterest);
+            sweepDebtMaximum(ledger(LendingAsset::mpt), withInterest);
+        }
     }
 
     // A loan is tecLIMIT_EXCEEDED once the broker's debt plus the principal passes its debt
-    // maximum. Rows put debt + principal exactly on the maximum.
+    // maximum. Rows put debt + principal exactly on the maximum. The debt counts the principal
+    // only, so the cusp stays put for the exact-interest loan.
     void
-    sweepDebtMaximum(SweepLedger& l)
+    sweepDebtMaximum(SweepLedger& l, bool withInterest)
     {
-        beginCase(("LoanSet " + assetName(l) + " debt maximum-Sweep").c_str());
-        runAroundCusp(loan_set_sweep::kDebtMaximumCases, [&](loan_set_sweep::DebtCusp const& c) {
-            auto s = investment(*l.env->current());
-            s.debt = c.debt;
-            s.debtMaximum = c.limit;
-            return checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, c.principal));
-        });
+        beginCase(("LoanSet " + assetName(l.f) + " debt maximum" +
+                   (withInterest ? " with interest" : "") + "-Sweep")
+                      .c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kDebtMaximumCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::DebtCusp const& c : cases)
+            {
+                auto s = investment(*l.env->current());
+                s.debt = c.debt;
+                s.debtMaximum = c.limit;
+                LoanParams p = oneUnitLoan(l, c.principal);
+                if (withInterest)
+                {
+                    p.interestRate = loan_set_sweep::kExactInterestRate;
+                    p.paymentInterval = loan_set_sweep::kExactInterestInterval;
+                }
+                seen.insert(checkLoanSet(*l.env, l.f, s, p));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
     }
 
     void
@@ -455,13 +467,18 @@ class LeanLoanSet_test : public LeanSuite
     void
     sweepAssetsAvailable(SweepLedger& l)
     {
-        beginCase(("LoanSet " + assetName(l) + " assets available-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kAssetsAvailableCases, [&](loan_set_sweep::DebtCusp const& c) {
+        beginCase(("LoanSet " + assetName(l.f) + " assets available-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kAssetsAvailableCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::DebtCusp const& c : cases)
+            {
                 auto s = investment(*l.env->current());
                 s.debt = c.debt;
-                return checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, c.principal));
-            });
+                seen.insert(checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, c.principal)));
+            }
+            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
+        }
     }
 
     void
@@ -476,33 +493,50 @@ class LeanLoanSet_test : public LeanSuite
     void
     sweepOriginationCover(SweepLedger& l)
     {
-        beginCase(("LoanSet " + assetName(l) + " cover at origination-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kOriginationCoverCases, [&](loan_set_sweep::CoverCusp const& c) {
+        beginCase(("LoanSet " + assetName(l.f) + " cover at origination-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kOriginationCoverCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::CoverCusp const& c : cases)
+            {
                 auto s = investment(*l.env->current());
                 s.debt = c.debt;
                 s.cover = c.cover;
                 s.coverRate = c.rate;
-                return checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, c.principal));
-            });
+                seen.insert(checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, c.principal)));
+            }
+            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
+        }
     }
 
-    // A zero-interest loan with installments 60 s apart is tecPRECISION_LOSS when its rounded-up
-    // installment repays it in fewer payments: it passes iff P > (N - 1) * ceil(P / N). Rows sit
-    // on a passing P next to a failing one (MPT; the guard never fires for an IOU).
     void
     testPaymentCountSweep()
     {
-        SweepLedger& l = ledger(LendingAsset::mpt);
-        beginCase(("LoanSet " + assetName(l) + " payment count-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kPaymentCountCases, [&](loan_set_sweep::PaymentCountCusp const& c) {
+        sweepPaymentCount(ledger(LendingAsset::iou));
+        sweepPaymentCount(ledger(LendingAsset::mpt));
+    }
+
+    // A zero-interest loan with installments 60 s apart is tecPRECISION_LOSS when its rounded-up
+    // installment repays it in fewer payments: it passes iff P > (N - 1) * ceil(P / N), in grid
+    // units for either asset. Rows sit on a passing P next to a failing one.
+    void
+    sweepPaymentCount(SweepLedger& l)
+    {
+        beginCase(("LoanSet " + assetName(l.f) + " payment count-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kPaymentCountCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::PaymentCountCusp const& c : cases)
+            {
                 LoanParams const p{
                     .principal = units(l.f, c.principal),
                     .paymentInterval = 60,
-                    .paymentTotal = static_cast<std::uint32_t>(c.count)};
-                return checkLoanSet(*l.env, l.f, investment(*l.env->current()), p);
-            });
+                    .paymentTotal = static_cast<std::uint32_t>(c.count),
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
     }
 
     // The last payment of a two-step loan must fall 60 s before the vault's redemption date, else
@@ -512,22 +546,28 @@ class LeanLoanSet_test : public LeanSuite
     testRedemptionBufferSweep()
     {
         SweepLedger& l = ledger(LendingAsset::iou);
-        beginCase(("LoanSet " + assetName(l) + " redemption buffer-Sweep").c_str());
+        beginCase(("LoanSet " + assetName(l.f) + " redemption buffer-Sweep").c_str());
         std::uint32_t const pct = parentCloseTime(*l.env);
         std::uint32_t const start = pct + loan_set_sweep::kBufferStart;
-        runAroundCusp(
-            loan_set_sweep::kRedemptionBufferCases,
-            [&](loan_set_sweep::RedemptionBufferCusp const& c) {
+        for (auto const& [cusp, cases] : loan_set_sweep::kRedemptionBufferCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::RedemptionBufferCusp const& c : cases)
+            {
                 LendingStage const s{
                     .subscriptionDate = pct - loan_set_sweep::kBufferStart,
-                    .redemptionDate = static_cast<std::uint32_t>(start + c.redemption)};
+                    .redemptionDate = static_cast<std::uint32_t>(start + c.redemption),
+                };
                 LoanParams const p{
                     .principal = units(l.f, c.count * loan_set_sweep::kBufferInstallment),
                     .paymentInterval = static_cast<std::uint32_t>(c.interval),
                     .paymentTotal = static_cast<std::uint32_t>(c.count),
-                    .startDate = start};
-                return checkLoanSet(*l.env, l.f, s, p);
-            });
+                    .startDate = start,
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, s, p));
+            }
+            expectCrossed(cusp, seen, {tecNO_PERMISSION});
+        }
     }
 
     void
@@ -543,17 +583,24 @@ class LeanLoanSet_test : public LeanSuite
     void
     sweepOpenZone(SweepLedger& l)
     {
-        beginCase(("LoanSet " + assetName(l) + " open zone-Sweep").c_str());
-        runAroundCusp(loan_set_sweep::kOpenZoneCases, [&](loan_set_sweep::OpenZoneCusp const& c) {
-            auto s = investment(*l.env->current());
-            s.yield = c.yield;
-            LoanParams const p{
-                .principal = units(l.f, c.principal),
-                .interestRate = loan_set_sweep::kExactInterestRate,
-                .paymentInterval = loan_set_sweep::kExactInterestInterval,
-                .paymentTotal = 1};
-            return checkLoanSet(*l.env, l.f, s, p);
-        });
+        beginCase(("LoanSet " + assetName(l.f) + " open zone-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kOpenZoneCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::OpenZoneCusp const& c : cases)
+            {
+                auto s = investment(*l.env->current());
+                s.yield = c.yield;
+                LoanParams const p{
+                    .principal = units(l.f, c.principal),
+                    .interestRate = loan_set_sweep::kExactInterestRate,
+                    .paymentInterval = loan_set_sweep::kExactInterestInterval,
+                    .paymentTotal = 1,
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, s, p));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
     }
 
     // C++ preflight refuses an origination fee above the principal (temINVALID). Rows put the
@@ -568,37 +615,155 @@ class LeanLoanSet_test : public LeanSuite
     void
     sweepOriginationFee(SweepLedger& l)
     {
-        beginCase(("LoanSet " + assetName(l) + " origination fee-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kOriginationFeeCases, [&](loan_set_sweep::OriginationFeeCusp const& c) {
+        beginCase(("LoanSet " + assetName(l.f) + " origination fee-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kOriginationFeeCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::OriginationFeeCusp const& c : cases)
+            {
                 LoanParams p = oneUnitLoan(l, c.principal);
                 p.originationFee = units(l.f, c.fee);
-                return checkLoanSet(*l.env, l.f, investment(*l.env->current()), p);
-            });
+                seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+            }
+            expectCrossed(cusp, seen, {temINVALID});
+        }
     }
 
-    // A principal or fee off the vault grid is tecPRECISION_LOSS. One grid step is written with a
-    // 16-digit mantissa (1e15 at exponent level - 21), so a moved mantissa leaves the grid (IOU).
+    // The LoanSet value fields, each checked against the vault grid and the asset's range.
+    static constexpr Number LoanParams::* kValueFields[] = {
+        &LoanParams::principal,
+        &LoanParams::originationFee,
+        &LoanParams::serviceFee,
+        &LoanParams::latePaymentFee,
+        &LoanParams::closePaymentFee,
+    };
+
+    static std::string
+    fieldName(Number LoanParams::* field)
+    {
+        if (field == &LoanParams::principal)
+            return "principal";
+        if (field == &LoanParams::originationFee)
+            return "origination fee";
+        if (field == &LoanParams::serviceFee)
+            return "service fee";
+        if (field == &LoanParams::latePaymentFee)
+            return "late fee";
+        return "close fee";
+    }
+
     void
     testGridSweep()
     {
-        SweepLedger& l = ledger(LendingAsset::iou);
-        for (int const level : loan_set_sweep::kGridLevels)
+        sweepGrid(ledger(LendingAsset::iou));
+        sweepGrid(ledger(LendingAsset::mpt));
+    }
+
+    // A value field off the vault grid is tecPRECISION_LOSS (for an MPT, a fractional amount). A
+    // moved one-step mantissa leaves the grid. Fees ride on a 2e9-unit loan, above any fee level.
+    void
+    sweepGrid(SweepLedger& l)
+    {
+        for (Number LoanParams::* field : kValueFields)
         {
-            beginCase(("LoanSet " + assetName(l) + " grid at 1e" + std::to_string(level) + "-Sweep")
-                          .c_str());
-            auto const atLevel = [&](std::int64_t mantissa) {
-                return Number{mantissa, level - 21};
-            };
-            runAroundCusp(loan_set_sweep::kOneStepCases, [&](std::int64_t mantissa) {
-                LoanParams const p{.principal = atLevel(mantissa), .paymentTotal = 1};
-                return checkLoanSet(*l.env, l.f, investment(*l.env->current()), p);
-            });
-            runAroundCusp(loan_set_sweep::kOneStepCases, [&](std::int64_t mantissa) {
-                LoanParams p = oneUnitLoan(l, loan_set_sweep::kLargeUnits);
-                p.originationFee = atLevel(mantissa);
-                return checkLoanSet(*l.env, l.f, investment(*l.env->current()), p);
-            });
+            for (int const level : loan_set_sweep::kGridLevels)
+            {
+                beginCase(("LoanSet " + assetName(l.f) + " " + fieldName(field) + " grid at 1e" +
+                           std::to_string(level) + "-Sweep")
+                              .c_str());
+                for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
+                {
+                    std::set<TER> seen;
+                    for (std::int64_t const mantissa : cases)
+                    {
+                        LoanParams p = oneUnitLoan(l, 2 * loan_set_sweep::kOrdinaryUnits);
+                        p.*field = gridStep(*l.env->current(), l.f, mantissa, level);
+                        seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+                    }
+                    expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+                }
+            }
+        }
+    }
+
+    // A value field above the MPT maximum 2^63 - 1 is tecPRECISION_LOSS. The row is the largest
+    // 16-digit mantissa at exponent 3 under the cap. The origination fee is bounded by the
+    // principal, so it never reaches the cap alone.
+    void
+    testMptCapSweep()
+    {
+        SweepLedger& l = ledger(LendingAsset::mpt);
+        for (Number LoanParams::* field : kValueFields)
+        {
+            if (field == &LoanParams::originationFee)
+                continue;
+            beginCase(
+                ("LoanSet " + assetName(l.f) + " " + fieldName(field) + " cap-Sweep").c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kDebtCapCases)
+            {
+                std::set<TER> seen;
+                for (std::int64_t const mantissa : cases)
+                {
+                    LoanParams p = oneUnitLoan(l, loan_set_sweep::kOrdinaryUnits);
+                    p.*field = Number{mantissa, 3};
+                    seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
+        }
+    }
+
+    // A negative service, late or close fee is temINVALID; zero is the minimum.
+    void
+    testFeeMinimumSweep()
+    {
+        for (LendingAsset const kind : {LendingAsset::iou, LendingAsset::mpt})
+        {
+            SweepLedger& l = ledger(kind);
+            for (Number LoanParams::* field : kValueFields)
+            {
+                if (field == &LoanParams::principal || field == &LoanParams::originationFee)
+                    continue;
+                beginCase(("LoanSet " + assetName(l.f) + " " + fieldName(field) + " minimum-Sweep")
+                              .c_str());
+                for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+                {
+                    std::set<TER> seen;
+                    for (std::int64_t const fee : cases)
+                    {
+                        LoanParams p = oneUnitLoan(l, loan_set_sweep::kOrdinaryUnits);
+                        p.*field = units(l.f, fee);
+                        seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+                    }
+                    expectCrossed(cusp, seen, {temINVALID});
+                }
+            }
+        }
+    }
+
+    // A schedule whose last grace period ends past 2^32 - 1 is tecKILLED, checked first. Rows end
+    // it exactly there; below it the proposal fails the redemption buffer (no investment window
+    // reaches 2^32 - 1) or, starting at 0, has expired.
+    void
+    testTimeLimitSweep()
+    {
+        SweepLedger& l = ledger(LendingAsset::iou);
+        beginCase(("LoanSet " + assetName(l.f) + " protocol time limit-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kTimeLimitCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::TimeLimitCusp const& c : cases)
+            {
+                LoanParams const p{
+                    .principal = units(l.f, loan_set_sweep::kTimeLimitPrincipal),
+                    .paymentInterval = static_cast<std::uint32_t>(c.interval),
+                    .paymentTotal = static_cast<std::uint32_t>(c.total),
+                    .gracePeriod = static_cast<std::uint32_t>(c.grace),
+                    .startDate = static_cast<std::uint32_t>(c.start),
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+            }
+            expectCrossed(cusp, seen, {tecKILLED});
         }
     }
 
@@ -608,20 +773,34 @@ class LeanLoanSet_test : public LeanSuite
     testPhaseSweep()
     {
         SweepLedger& l = ledger(LendingAsset::iou);
-        beginCase(("LoanSet " + assetName(l) + " phase dates-Sweep").c_str());
+        beginCase(("LoanSet " + assetName(l.f) + " phase dates-Sweep").c_str());
         std::uint32_t const pct = parentCloseTime(*l.env);
-        runAroundCusp(loan_set_sweep::kDateCases, [&](std::int64_t d) {
-            LendingStage const s{
-                .subscriptionDate = static_cast<std::uint32_t>(pct + d),
-                .redemptionDate = pct + 900'000'000};
-            return checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, 1'000));
-        });
-        runAroundCusp(loan_set_sweep::kDateCases, [&](std::int64_t d) {
-            LendingStage const s{
-                .subscriptionDate = static_cast<std::uint32_t>(pct + d - 1'000'000),
-                .redemptionDate = static_cast<std::uint32_t>(pct + d)};
-            return checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, 1'000));
-        });
+        for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const d : cases)
+            {
+                LendingStage const s{
+                    .subscriptionDate = static_cast<std::uint32_t>(pct + d),
+                    .redemptionDate = pct + 900'000'000,
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, 1'000)));
+            }
+            expectCrossed(cusp, seen, {tecTOO_SOON});
+        }
+        for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const d : cases)
+            {
+                LendingStage const s{
+                    .subscriptionDate = static_cast<std::uint32_t>(pct + d - 1'000'000),
+                    .redemptionDate = static_cast<std::uint32_t>(pct + d),
+                };
+                seen.insert(checkLoanSet(*l.env, l.f, s, oneUnitLoan(l, 1'000)));
+            }
+            expectCrossed(cusp, seen, {tecEXPIRED});
+        }
     }
 
     // A two-step proposal starting at or before the parent close time is tecEXPIRED.
@@ -630,13 +809,19 @@ class LeanLoanSet_test : public LeanSuite
     testStartDateSweep()
     {
         SweepLedger& l = ledger(LendingAsset::iou);
-        beginCase(("LoanSet " + assetName(l) + " start date-Sweep").c_str());
+        beginCase(("LoanSet " + assetName(l.f) + " start date-Sweep").c_str());
         std::uint32_t const pct = parentCloseTime(*l.env);
-        runAroundCusp(loan_set_sweep::kDateCases, [&](std::int64_t d) {
-            LoanParams p = oneUnitLoan(l, 1'000);
-            p.startDate = static_cast<std::uint32_t>(pct + d);
-            return checkLoanSet(*l.env, l.f, investment(*l.env->current()), p);
-        });
+        for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const d : cases)
+            {
+                LoanParams p = oneUnitLoan(l, 1'000);
+                p.startDate = static_cast<std::uint32_t>(pct + d);
+                seen.insert(checkLoanSet(*l.env, l.f, investment(*l.env->current()), p));
+            }
+            expectCrossed(cusp, seen, {tecEXPIRED});
+        }
     }
 
     // Accepting a proposal whose start date is at or before the parent close time is tecEXPIRED;
@@ -646,61 +831,110 @@ class LeanLoanSet_test : public LeanSuite
     testAcceptSweep()
     {
         SweepLedger& l = ledger(LendingAsset::iou);
-        beginCase(("LoanAccept " + assetName(l) + " start date-Sweep").c_str());
+        beginCase(("LoanAccept " + assetName(l.f) + " start date-Sweep").c_str());
         std::uint32_t const pct = parentCloseTime(*l.env);
-        runAroundCusp(loan_set_sweep::kDateCases, [&](std::int64_t d) {
-            return checkStagedAccept(
-                l,
-                static_cast<std::uint32_t>(pct + d),
-                std::nullopt,
-                "start P + " + std::to_string(d));
-        });
-        beginCase(("LoanAccept " + assetName(l) + " redemption date-Sweep").c_str());
-        runAroundCusp(loan_set_sweep::kDateCases, [&](std::int64_t d) {
-            return checkStagedAccept(
-                l,
-                std::nullopt,
-                static_cast<std::uint32_t>(pct + d),
-                "redemption P + " + std::to_string(d));
-        });
+        for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const d : cases)
+            {
+                seen.insert(checkStagedAccept(
+                    l,
+                    oneUnitLoan(l, 1'000),
+                    {},
+                    static_cast<std::uint32_t>(pct + d),
+                    std::nullopt,
+                    "start P + " + std::to_string(d)));
+            }
+            expectCrossed(cusp, seen, {tecEXPIRED});
+        }
+        beginCase(("LoanAccept " + assetName(l.f) + " redemption date-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
+        {
+            std::set<TER> seen;
+            for (std::int64_t const d : cases)
+            {
+                seen.insert(checkStagedAccept(
+                    l,
+                    oneUnitLoan(l, 1'000),
+                    {},
+                    std::nullopt,
+                    static_cast<std::uint32_t>(pct + d),
+                    "redemption P + " + std::to_string(d)));
+            }
+            expectCrossed(cusp, seen, {tecEXPIRED});
+        }
     }
 
-    // A two-step proposal created on a throwaway view, then its start date or the vault's
-    // redemption date restaged before the borrower accepts.
+    void
+    testAcceptOpenZoneSweep()
+    {
+        sweepAcceptOpenZone(ledger(LendingAsset::iou));
+        sweepAcceptOpenZone(ledger(LendingAsset::mpt));
+    }
+
+    // Accepting a proposal whose interest would take the vault past the open limit is
+    // tecLIMIT_EXCEEDED. The open zone rows of LoanSet, with the yield staged after the proposal.
+    void
+    sweepAcceptOpenZone(SweepLedger& l)
+    {
+        beginCase(("LoanAccept " + assetName(l.f) + " open zone-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kOpenZoneCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::OpenZoneCusp const& c : cases)
+            {
+                LoanParams const p{
+                    .principal = units(l.f, c.principal),
+                    .interestRate = loan_set_sweep::kExactInterestRate,
+                    .paymentInterval = loan_set_sweep::kExactInterestInterval,
+                    .paymentTotal = 1,
+                };
+                seen.insert(checkStagedAccept(
+                    l,
+                    p,
+                    {.yield = c.yield},
+                    std::nullopt,
+                    std::nullopt,
+                    loan_set_sweep::describe(c)));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
+    }
+
+    // A two-step proposal of `p` created on a throwaway view, then `after` staged (with its start
+    // date or the vault's redemption date restaged) before the borrower accepts.
     TER
     checkStagedAccept(
         SweepLedger& l,
+        LoanParams p,
+        LendingStage const& after,
         std::optional<std::uint32_t> startDate,
         std::optional<std::uint32_t> redemptionDate,
         std::string const& at)
     {
         jtx::Env& env = *l.env;
         OpenView view{*env.current()};
-        LoanParams p = oneUnitLoan(l, 1'000);
         p.startDate = parentCloseTime(env) + loan_set_sweep::kBufferStart;
         Keylet const loanKeylet = nextLoan(view, l.f);
-        try
-        {
-            stageLending(env, view, l.f, investment(view));
-            TER const proposed = applyLoanSet(env, view, l.f, p);
-            if (proposed != tesSUCCESS)
-                throw std::runtime_error("proposal " + transToken(proposed));
-        }
-        catch (std::exception const& e)
-        {
-            fail(at + ": " + e.what());
+        if (!tryStage(*this, at, [&] {
+                stageLending(env, view, l.f, investment(view));
+                TER const proposed = applyLoanSet(env, view, l.f, p);
+                if (proposed != tesSUCCESS)
+                    throw std::runtime_error("proposal " + transToken(proposed));
+                stageLending(env, view, l.f, after);
+            }))
             return tefINTERNAL;
-        }
         Sandbox sb(&view, TapNone);
         if (startDate)
         {
-            auto loan = sb.peek(loanKeylet);
+            auto const loan = sb.peek(loanKeylet);
             loan->at(sfStartDate) = *startDate;
             sb.update(loan);
         }
         if (redemptionDate)
         {
-            auto vault = sb.peek(l.f.vaultKeylet);
+            auto const vault = sb.peek(l.f.vaultKeylet);
             vault->at(sfSubscriptionDate) = *redemptionDate - 1'000'000;
             vault->at(sfRedemptionDate) = *redemptionDate;
             sb.update(vault);
@@ -715,14 +949,6 @@ class LeanLoanSet_test : public LeanSuite
     {
         return LoanParams{.principal = units(l.f, principal), .paymentTotal = 1};
     }
-
-    static std::string
-    assetName(SweepLedger const& l)
-    {
-        return l.f.asset.raw().holds<MPTIssue>() ? "MPT" : "IOU";
-    }
-
-    enum class LoanKind : std::uint8_t { active, pending, paidOff };
 
     void
     runDelete(std::string const& label, LoanKind kind, TER expected, bool withOtherLoan = false)
@@ -755,11 +981,13 @@ class LeanLoanSet_test : public LeanSuite
         jtx::Env iouEnv(*this);
         iou_ = SweepLedger{
             .env = &iouEnv,
-            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits),
+        };
         jtx::Env mptEnv(*this);
         mpt_ = SweepLedger{
             .env = &mptEnv,
-            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits),
+        };
 
         // One-step loans
         runLoanSet("one-step loan without interest", LoanParams{}, tesSUCCESS);
@@ -817,7 +1045,7 @@ class LeanLoanSet_test : public LeanSuite
             tecPRECISION_LOSS);
         // One grid unit in three installments: the rounded-up installment covers the whole loan in
         // one payment, so the schedule cannot be honoured.
-        // covered by testPaymentCountSweep (MPT)
+        // covered by testPaymentCountSweep
         runLoanSet(
             "principal too small for its installments",
             LoanParams{.principal = Number{1, -6}, .paymentTotal = 3},
@@ -940,12 +1168,11 @@ class LeanLoanSet_test : public LeanSuite
         testPhaseSweep();
         testStartDateSweep();
         testAcceptSweep();
-
-        // Open discrepancy, disabled until the model is fixed.
-        // The model has no LoanOriginationFee <= principal rule (a C++ preflight check): a fee
-        // one unit above the principal is temINVALID in C++ and tesSUCCESS in the model (every
-        // row, IOU and MPT, 23 of 62 cases each).
-        // testOriginationFeeSweep();
+        testOriginationFeeSweep();
+        testMptCapSweep();
+        testFeeMinimumSweep();
+        testTimeLimitSweep();
+        testAcceptOpenZoneSweep();
     }
 };
 

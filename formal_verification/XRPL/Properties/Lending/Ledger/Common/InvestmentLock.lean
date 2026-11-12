@@ -101,14 +101,14 @@ lemma LendingLedger.investment_lock_proof (l l' : LendingLedger) (tx : LendingTx
     obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
     rw [show RawVault.assetsAvailable _ = _ from (congrArg RawVault.assetsAvailable hf :)] at hdec
     exact lt_irrefl _ hdec
-  | vaultSet m b ub =>
+  | vaultSet m b =>
     exfalso
     obtain ⟨u, hu, rfl⟩ := LendingLedger.apply_vault rfl h
     rw [LendingLedger.commitVault_vault'] at hdec
     simp only [LendingLedger.applyVault] at hu
     unfold_ter at hu
     walk_ok
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     rw [show RawVault.assetsAvailable _ = _ from (congrArg RawVault.assetsAvailable hf :)] at hdec
     exact lt_irrefl _ hdec
   | vaultDelete =>

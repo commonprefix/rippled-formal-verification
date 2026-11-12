@@ -15,8 +15,8 @@
 
 namespace xrpl::test::formal_verification {
 
-// The model's loan, with the broker it belongs to. The schedule's payment total is a LoanSet
-// field only, so the test carries it.
+// The model's loan, with the broker it belongs to. The schedule's payment total and the requested
+// principal are LoanSet fields only, so the test carries them.
 struct Loan
 {
     LoanBroker broker;
@@ -34,6 +34,7 @@ struct Loan
     std::uint32_t gracePeriod{};
     std::uint32_t startDate{};
     std::uint32_t paymentRemaining{};
+    Number principalInitial{};
     Number periodicPayment{};
     Number principalOutstanding{};
     Number totalValueOutstanding{};
@@ -88,6 +89,7 @@ lean_loan_build(
     uint32_t gracePeriod,
     uint32_t startDate,
     uint32_t paymentRemaining,
+    lean_object* principalInitial,
     lean_object* periodicPayment,
     lean_object* principalOutstanding,
     lean_object* totalValueOutstanding,
@@ -198,6 +200,8 @@ lean_loan_amounts_to_pool(lean_object* r);
 lean_object*
 lean_loan_amounts_to_broker(lean_object* r);
 lean_object*
+lean_loan_amounts_to_borrower(lean_object* r);
+lean_object*
 lean_ter_broker_pool_code(lean_object* r);
 lean_object*
 lean_ter_broker_pool_value(lean_object* r);
@@ -237,6 +241,7 @@ public:
             s.gracePeriod,
             s.startDate,
             s.paymentRemaining,
+            NumberFFI::build(s.principalInitial),
             NumberFFI::build(s.periodicPayment),
             NumberFFI::build(s.principalOutstanding),
             NumberFFI::build(s.totalValueOutstanding),
@@ -284,6 +289,7 @@ struct LeanLoanResult
     Vault pool;
     Number amountToPool{};
     Number amountToBroker{};
+    Number amountToBorrower{};
 };
 
 class LoanAmountsFFI : public LeanObjectFFI
@@ -298,11 +304,13 @@ public:
             .loan = leanGetWrapped<LoanFFI>(lean_loan_amounts_loan).read(like),
             .pool = leanGetObj<VaultFFI>(lean_loan_amounts_pool),
             .amountToPool = leanGetObj<NumberFFI>(lean_loan_amounts_to_pool),
-            .amountToBroker = leanGetObj<NumberFFI>(lean_loan_amounts_to_broker)};
+            .amountToBroker = leanGetObj<NumberFFI>(lean_loan_amounts_to_broker),
+            .amountToBorrower = leanGetObj<NumberFFI>(lean_loan_amounts_to_borrower),
+        };
     }
 };
 
-// Unpack an owned `Except Error (Except TER (LoanWithAmounts Vault))`.
+// Unpack an owned `Except Error (Except TER LoanResult)`.
 inline LeanLoanResult
 readLoanResult(lean_object* owned, Loan const& like)
 {

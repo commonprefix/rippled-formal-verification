@@ -69,13 +69,13 @@ private lemma LendingLedger.applyVault_storesMaximum (l : LendingLedger) (tx : L
     unfold_ter at h
     walk_ok
     have hcan := Vault.canVaultUpdate_success ‹_› ‹_›
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     intro m' hm'
     rw [(congrArg RawVault.numericType hf :)]
-    rcases Vault.update_assetsMaximum_mem _ _ _ _ _ ‹_› m' hm' with h' | h'
+    rcases Vault.update_assetsMaximum_mem _ _ _ _ ‹_› m' hm' with h' | h'
     · exact hst m' h'
     · subst h'
-      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum _ m' _ _ hcan)
+      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum _ m' _ hcan)
   | _ => simp only [LendingLedger.applyVault] at h; cases h
 
 /-- Every transaction keeps AssetsMaximum stored exactly. -/

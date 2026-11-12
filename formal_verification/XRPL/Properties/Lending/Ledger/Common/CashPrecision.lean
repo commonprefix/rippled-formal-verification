@@ -257,7 +257,7 @@ private lemma LendingLedger.applyVault_keepsStored (l : LendingLedger) (tx : Len
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     rw [(congrArg RawVault.assetsAvailable hf :)]
     exact hst hmax
   | _ => simp only [LendingLedger.applyVault] at h; cases h

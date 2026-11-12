@@ -46,23 +46,6 @@ class LeanLoanBrokerCover_test : public LeanSuite
         return "?";
     }
 
-    void
-    expectTer(TER lean, TER cpp, TER expected, char const* what)
-    {
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string(what) + " cpp=" + transToken(cpp) + " expected " + transToken(expected));
-        BEAST_EXPECTS(
-            lean == expected,
-            std::string(what) + " lean=" + transToken(lean) + " expected " + transToken(expected));
-    }
-
-    // The shared ledgers (one per asset) the staged single-value tests and the sweeps run on.
-    struct SweepLedger
-    {
-        jtx::Env* env;
-        BrokerFixture f;
-    };
     std::optional<SweepLedger> iou_;
     std::optional<SweepLedger> mpt_;
 
@@ -72,15 +55,11 @@ class LeanLoanBrokerCover_test : public LeanSuite
         return kind == LendingAsset::mpt ? *mpt_ : *iou_;
     }
 
-    static std::string
-    assetName(SweepLedger const& l)
-    {
-        return l.f.asset.raw().holds<MPTIssue>() ? "MPT" : "IOU";
-    }
-
     // Run one cover transaction on `view` (already staged). `amount` is the transaction amount;
     // for a clawback `nullopt` omits sfAmount (claw everything above the minimum cover).
-    // `expectedMoved` is the cover movement both sides must agree on. Returns the C++ verdict.
+    // `expectedMoved` is the cover movement both sides must agree on. The tokens the broker's
+    // pseudo-account gains or loses must be the cover booked, and the vault must not change.
+    // Returns the C++ verdict.
     TER
     checkCover(
         jtx::Env& env,
@@ -95,6 +74,8 @@ class LeanLoanBrokerCover_test : public LeanSuite
         using namespace jtx;
         LoanBroker const before = readBroker(view, f);
         Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
+        AccountID const pseudo = view.read(f.brokerKeylet)->at(sfAccount);
+        Number const heldBefore = holding(view, pseudo, f.asset.raw());
         std::optional<STAmount> const stAmount =
             amount ? std::optional<STAmount>{f.asset(*amount)} : std::nullopt;
 
@@ -143,13 +124,17 @@ class LeanLoanBrokerCover_test : public LeanSuite
 
         TER lean = can.ter;
         if (can.leanError || (can.ter == tesSUCCESS && (!result || result->leanError)))
+        {
             lean = tefEXCEPTION;
+        }
         else if (can.ter == tesSUCCESS)
+        {
             lean = result->error.value_or(tesSUCCESS);
+        }
         BEAST_EXPECTS(
             lean == cppTer, at + ": lean=" + transToken(lean) + " cpp=" + transToken(cppTer));
         if (expected)
-            expectTer(lean, cppTer, *expected, "cover");
+            expectTer(*this, lean, cppTer, *expected, at + ": ");
         if (cppTer != tesSUCCESS || lean != tesSUCCESS)
             return cppTer;
 
@@ -162,10 +147,19 @@ class LeanLoanBrokerCover_test : public LeanSuite
             at + ": debt or loan count changed");
         Number const cppMoved = op == Op::deposit ? cpp.coverAvailable - before.coverAvailable
                                                   : before.coverAvailable - cpp.coverAvailable;
+        Number const heldAfter = holding(view, pseudo, f.asset.raw());
+        Number const tokensMoved =
+            op == Op::deposit ? heldAfter - heldBefore : heldBefore - heldAfter;
         BEAST_EXPECTS(
-            Number{result->amount} == cppMoved,
+            tokensMoved == cppMoved,
+            at + ": tokens moved " + to_string(tokensMoved) + " but cover booked " +
+                to_string(cppMoved));
+        BEAST_EXPECTS(
+            Number{result->amount} == tokensMoved,
             at + ": moved lean=" + to_string(Number{result->amount}) +
-                " cpp=" + to_string(cppMoved));
+                " cpp=" + to_string(tokensMoved));
+        expectSameVault(
+            *this, at + ": vault ", pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
         if (expectedMoved)
         {
             BEAST_EXPECTS(
@@ -192,24 +186,9 @@ class LeanLoanBrokerCover_test : public LeanSuite
         auto const phase = investment(view);
         s.subscriptionDate = phase.subscriptionDate;
         s.redemptionDate = phase.redemptionDate;
-        try
-        {
-            stageLending(*l.env, view, l.f, s);
-        }
-        catch (std::exception const& e)
-        {
-            fail(at + ": " + e.what());
+        if (!tryStage(*this, at, [&] { stageLending(*l.env, view, l.f, s); }))
             return tefINTERNAL;
-        }
         return checkCover(*l.env, l.f, view, op, amount, expected, expectedMoved, at);
-    }
-
-    // `n` (in asset units) as grid units of the shared ledger's vault.
-    static std::int64_t
-    toUnits(SweepLedger const& l, Number const& n)
-    {
-        return static_cast<std::int64_t>(
-            n * Number{1, static_cast<int>(l.env->le(l.f.vaultKeylet)->at(sfScale))});
     }
 
     // A broker with `cover` deposited and, with `withLoan`, a loan of 1000 (minimum cover 100 at
@@ -228,47 +207,88 @@ class LeanLoanBrokerCover_test : public LeanSuite
     {
         testcase(opName(op) + ": " + label);
         SweepLedger& l = ledger(assetKind);
-        LendingStage s{.cover = toUnits(l, cover), .managementFeeRate = 1'000, .coverRate = 10'000};
+        ReadView const& view = *l.env->current();
+        LendingStage s{
+            .cover = toUnits(view, l.f, cover), .managementFeeRate = 1'000, .coverRate = 10'000};
         if (withLoan)
-            s.debt = toUnits(l, Number{1'000});
+            s.debt = toUnits(view, l.f, Number{1'000});
         checkStagedCover(l, s, op, amount, expected, expectedMoved);
     }
 
     // ---- Sweeps ---------------------------------------------------------------------------------
 
-    // Grid units of the shared ledger's vault, as a transaction amount.
+    // One grid step of the shared ledger's vault at 10^level units, mantissa moved (gridStep).
     static Number
-    units(SweepLedger const& l, std::int64_t n)
+    step(SweepLedger const& l, std::int64_t mantissa, int level = 0)
     {
-        return formal_verification::units(l.f, n);
+        return gridStep(*l.env->current(), l.f, mantissa, level);
     }
 
-    // A cover deposit that truncates to zero grid units is tecPRECISION_LOSS. One grid step is
-    // written with a 16-digit mantissa (1e15 at exponent -21), so a smaller mantissa truncates
-    // to nothing (IOU).
+    // A cover deposit that truncates to zero grid units is tecPRECISION_LOSS: a mantissa below
+    // one grid step truncates to nothing (IOU; an MPT amount is integral).
     void
     testCoverDepositSubGridSweep()
     {
         SweepLedger& l = *iou_;
-        beginCase(("cover deposit " + assetName(l) + " sub-grid-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kSubGridDepositCases, [&](loan_set_sweep::SubGridCusp const& c) {
-                return checkStagedCover(
-                    l, {.cover = c.cover}, Op::deposit, Number{c.mantissa, -21});
-            });
+        beginCase(("cover deposit " + assetName(l.f) + " sub-grid-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kSubGridDepositCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::SubGridCusp const& c : cases)
+            {
+                seen.insert(
+                    checkStagedCover(l, {.cover = c.cover}, Op::deposit, step(l, c.mantissa)));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
     }
 
-    // A cover deposit past the open limit (cover + amount > 9e15 units) is tecLIMIT_EXCEEDED.
-    // Rows put cover + amount exactly on the limit (IOU: the owner holds 1e16 units).
+    // Above one grid unit an off-grid deposit is truncated to the grid: 10^level units, or one
+    // unit less below it. The verdict does not change; both sides must book the same cover.
+    void
+    testCoverDepositTruncationSweep()
+    {
+        SweepLedger& l = *iou_;
+        for (int const level : loan_set_sweep::kGridLevels)
+        {
+            if (level == 0)
+                continue;
+            beginCase(("cover deposit " + assetName(l.f) + " truncation at 1e" +
+                       std::to_string(level) + "-Sweep")
+                          .c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
+            {
+                for (std::int64_t const mantissa : cases)
+                {
+                    checkStagedCover(l, {}, Op::deposit, step(l, mantissa, level));
+                }
+            }
+        }
+    }
+
     void
     testCoverOpenLimitSweep()
     {
-        SweepLedger& l = *iou_;
-        beginCase(("cover deposit " + assetName(l) + " open limit-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kCoverOpenLimitCases, [&](loan_set_sweep::CoverAmountCusp const& c) {
-                return checkStagedCover(l, {.cover = c.cover}, Op::deposit, units(l, c.amount));
-            });
+        sweepCoverOpenLimit(*iou_);
+        sweepCoverOpenLimit(*mpt_);
+    }
+
+    // A cover deposit past the open limit (cover + amount > 9e15 units) is tecLIMIT_EXCEEDED.
+    // Rows put cover + amount exactly on the limit (the owner holds 1e16 units).
+    void
+    sweepCoverOpenLimit(SweepLedger& l)
+    {
+        beginCase(("cover deposit " + assetName(l.f) + " open limit-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kCoverOpenLimitCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::CoverAmountCusp const& c : cases)
+            {
+                seen.insert(
+                    checkStagedCover(l, {.cover = c.cover}, Op::deposit, units(l.f, c.amount)));
+            }
+            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+        }
     }
 
     // A cover withdrawal or clawback that truncates to zero grid units is tecPRECISION_LOSS
@@ -279,11 +299,16 @@ class LeanLoanBrokerCover_test : public LeanSuite
         SweepLedger& l = *iou_;
         for (Op const op : {Op::withdraw, Op::clawback})
         {
-            beginCase((opName(op) + " " + assetName(l) + " sub-grid-Sweep").c_str());
-            runAroundCusp(
-                loan_set_sweep::kSubGridTakeCases, [&](loan_set_sweep::SubGridCusp const& c) {
-                    return checkStagedCover(l, {.cover = c.cover}, op, Number{c.mantissa, -21});
-                });
+            beginCase((opName(op) + " " + assetName(l.f) + " sub-grid-Sweep").c_str());
+            for (auto const& [cusp, cases] : loan_set_sweep::kSubGridTakeCases)
+            {
+                std::set<TER> seen;
+                for (loan_set_sweep::SubGridCusp const& c : cases)
+                {
+                    seen.insert(checkStagedCover(l, {.cover = c.cover}, op, step(l, c.mantissa)));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
         }
     }
 
@@ -299,11 +324,17 @@ class LeanLoanBrokerCover_test : public LeanSuite
     void
     sweepCoverWithdrawAll(SweepLedger& l)
     {
-        beginCase(("cover withdraw " + assetName(l) + " whole cover-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kCoverWithdrawAllCases, [&](loan_set_sweep::CoverAmountCusp const& c) {
-                return checkStagedCover(l, {.cover = c.cover}, Op::withdraw, units(l, c.amount));
-            });
+        beginCase(("cover withdraw " + assetName(l.f) + " whole cover-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kCoverWithdrawAllCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::CoverAmountCusp const& c : cases)
+            {
+                seen.insert(
+                    checkStagedCover(l, {.cover = c.cover}, Op::withdraw, units(l.f, c.amount)));
+            }
+            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
+        }
     }
 
     void
@@ -318,15 +349,20 @@ class LeanLoanBrokerCover_test : public LeanSuite
     void
     sweepMinimumCover(SweepLedger& l)
     {
-        beginCase(("cover withdraw " + assetName(l) + " minimum cover-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kMinimumCoverCases, [&](loan_set_sweep::MinimumCoverCusp const& c) {
-                return checkStagedCover(
+        beginCase(("cover withdraw " + assetName(l.f) + " minimum cover-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kMinimumCoverCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::MinimumCoverCusp const& c : cases)
+            {
+                seen.insert(checkStagedCover(
                     l,
                     {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
                     Op::withdraw,
-                    units(l, c.amount));
-            });
+                    units(l.f, c.amount)));
+            }
+            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
+        }
     }
 
     void
@@ -341,15 +377,47 @@ class LeanLoanBrokerCover_test : public LeanSuite
     void
     sweepNoExcess(SweepLedger& l)
     {
-        beginCase(("cover clawback " + assetName(l) + " no excess-Sweep").c_str());
-        runAroundCusp(
-            loan_set_sweep::kNoExcessCases, [&](loan_set_sweep::MinimumCoverCusp const& c) {
-                return checkStagedCover(
+        beginCase(("cover clawback " + assetName(l.f) + " no excess-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kNoExcessCases)
+        {
+            std::set<TER> seen;
+            for (loan_set_sweep::NoExcessCusp const& c : cases)
+            {
+                seen.insert(checkStagedCover(
                     l,
                     {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
                     Op::clawback,
-                    std::nullopt);
-            });
+                    std::nullopt));
+            }
+            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
+        }
+    }
+
+    void
+    testClawbackClampSweep()
+    {
+        sweepClawbackClamp(*iou_);
+        sweepClawbackClamp(*mpt_);
+    }
+
+    // A clawback above the excess over the minimum cover is clamped to it. The minimum cover rows,
+    // whose amount is exactly the excess; the verdict only changes where the cover moves below
+    // the minimum.
+    void
+    sweepClawbackClamp(SweepLedger& l)
+    {
+        beginCase(("cover clawback " + assetName(l.f) + " clamp-Sweep").c_str());
+        for (auto const& [cusp, cases] : loan_set_sweep::kMinimumCoverCases)
+        {
+            for (loan_set_sweep::MinimumCoverCusp const& c : cases)
+            {
+                checkStagedCover(
+                    l,
+                    {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
+                    Op::clawback,
+                    units(l.f, c.amount));
+            }
+        }
     }
 
     void
@@ -358,15 +426,17 @@ class LeanLoanBrokerCover_test : public LeanSuite
         jtx::Env iouEnv(*this);
         iou_ = SweepLedger{
             .env = &iouEnv,
-            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits),
+        };
         jtx::Env mptEnv(*this);
         mpt_ = SweepLedger{
             .env = &mptEnv,
-            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits)};
+            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits),
+        };
 
         // The IOU vault has scale 6, so the cover grid is 1e-6 and the open limit 9e9.
         Number const grid{1, -6};
-        Number const openLimit{kOpenLimitUnits, -6};
+        Number const openLimit = units(iou_->f, kOpenLimitUnits);
 
         // Deposits
         runCover(
@@ -511,6 +581,8 @@ class LeanLoanBrokerCover_test : public LeanSuite
         testCoverWithdrawAllSweep();
         testMinimumCoverSweep();
         testNoExcessSweep();
+        testCoverDepositTruncationSweep();
+        testClawbackClampSweep();
     }
 };
 

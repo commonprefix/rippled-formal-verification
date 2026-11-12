@@ -10,6 +10,7 @@
 #include <test/jtx/vault.h>
 
 #include <xrpl/basics/Number.h>
+#include <xrpl/protocol/Protocol.h>
 #include <xrpl/protocol/SField.h>
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
@@ -30,7 +31,7 @@ class LeanVaultSet_test : public LeanSuite
         jtx::Env& env,
         Keylet const& vault,
         jtx::Account const& owner,
-        StagedVault const& staged,
+        StagedAmounts const& staged,
         Number const& cap)
     {
         auto tx = jtx::Vault::set({.owner = owner, .id = vault.key});
@@ -66,8 +67,8 @@ class LeanVaultSet_test : public LeanSuite
     {
         testcase(
             "set max=" + std::to_string(assetsMaximum) + " total=" + std::to_string(assetsTotal));
-        StagedVault const staged{
-            .available = gridUnits(env, xrpVault, assetsTotal),
+        StagedAmounts const staged{
+            .available = vaultUnits(env, xrpVault, assetsTotal),
             .sharesTotal = static_cast<std::uint64_t>(assetsTotal)};
         TER const cppTer = checkSet(env, xrpVault, owner, staged, Number{assetsMaximum});
         BEAST_EXPECTS(
@@ -156,53 +157,8 @@ class LeanVaultSet_test : public LeanSuite
     {
         testcase("set an IOU cap off the vault grid");
         TER const cppTer = checkSet(
-            env, iouVault, owner, {.available = gridUnits(env, iouVault, 0)}, Number{1, -7});
+            env, iouVault, owner, {.available = vaultUnits(env, iouVault, 0)}, Number{1, -7});
         BEAST_EXPECTS(cppTer == tecPRECISION_LOSS, std::string("cpp=") + transToken(cppTer));
-    }
-
-    void
-    testEmptyVaultUnlimited(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 0, 0, tesSUCCESS);
-    }
-
-    void
-    testEmptyVaultWithCap(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 0, 100, tesSUCCESS);
-    }
-
-    void
-    testUnlimitedCap(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 100, 0, tesSUCCESS);
-    }
-
-    // Covered by testMaximumBelowTotalSweep (with testCapEqualsTotal, testCapAboveTotal).
-    void
-    testCapBelowTotal(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 100, 99, tecLIMIT_EXCEEDED);
-    }
-
-    void
-    testCapEqualsTotal(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 100, 100, tesSUCCESS);
-    }
-
-    void
-    testCapAboveTotal(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 100, 101, tesSUCCESS);
-    }
-
-    // An XRP cap above the native maximum is not representable as an amount. Covered by
-    // testXrpMaximumSweep.
-    void
-    testCapNotRepresentable(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
-    {
-        runVaultSet(env, xrpVault, owner, 0, 1'000'000'000'000'000'000, tecPRECISION_LOSS);
     }
 
     // Finding (FV_M2_19, c++): VaultSet rounds an AssetsMaximum over 16 digits to the STAmount
@@ -241,61 +197,88 @@ class LeanVaultSet_test : public LeanSuite
 
     using SweepVaults = std::vector<Keylet>;
 
+    // A non-zero maximum below the assets total is tecLIMIT_EXCEEDED; 0 removes the cap. Rows set
+    // the maximum to the total, split between available and deployed assets, up to the largest
+    // total the vault's asset can hold.
     void
     testMaximumBelowTotalSweep(jtx::Env& env, jtx::Account const& owner, SweepVaults const& vaults)
     {
         for (Keylet const& vault : vaults)
         {
-            sweepMaximumBelowTotal(env, vault, owner);
-        }
-    }
-
-    // A non-zero maximum below the assets total is tecLIMIT_EXCEEDED; 0 removes the cap. Rows set
-    // the maximum to the total, split between available and deployed assets.
-    void
-    sweepMaximumBelowTotal(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
-    {
-        beginCase(("set " + vaultName(env, vault) + " maximum below total-Sweep").c_str());
-        runAroundCusp(kSetMaximumCases, [&](SetMaximumCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .deployed = gridUnits(env, vault, c.deployed),
-                .sharesTotal = static_cast<std::uint64_t>(c.available + c.deployed)};
-            return checkSet(env, vault, owner, staged, Number{gridUnits(env, vault, c.maximum)});
-        });
-    }
-
-    void
-    testMaximumGridSweep(jtx::Env& env, jtx::Account const& owner, SweepVaults const& ious)
-    {
-        for (Keylet const& vault : ious)
-        {
-            sweepMaximumGrid(env, vault, owner);
+            auto const units = [&](std::int64_t n) { return vaultUnits(env, vault, n); };
+            auto const shares = [](std::int64_t n) { return static_cast<std::uint64_t>(n); };
+            beginCase(("set " + vaultName(env, vault) + " maximum below total-Sweep").c_str());
+            auto const check = [&](SetMaximumCusp const& c) {
+                StagedAmounts const staged{
+                    .available = units(c.available),
+                    .deployed = units(c.deployed),
+                    .sharesTotal = shares(c.available + c.deployed)};
+                return checkSet(env, vault, owner, staged, Number{units(c.maximum)});
+            };
+            for (auto const& [cusp, cases] : kSetMaximumCases)
+            {
+                std::set<TER> seen;
+                for (SetMaximumCusp const& c : cases)
+                {
+                    seen.insert(check(c));
+                }
+                expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+            }
+            for (auto const& [cusp, cases] : setMaximumLargeCases(env.le(vault)->at(sfAsset)))
+            {
+                std::set<TER> seen;
+                for (SetMaximumCusp const& c : cases)
+                {
+                    seen.insert(check(c));
+                }
+                expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
+            }
         }
     }
 
     // An IOU maximum off the vault grid 10^-scale, or with more than 16 digits, is
     // tecPRECISION_LOSS. Rows are on the grid of an empty vault; moving the mantissa leaves it.
     void
-    sweepMaximumGrid(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
+    testMaximumGridSweep(jtx::Env& env, jtx::Account const& owner, SweepVaults const& ious)
     {
-        beginCase(("set " + vaultName(env, vault) + " maximum grid-Sweep").c_str());
-        int const scale = env.le(vault)->at(sfScale);
-        runAroundCusp(kMaximumGridCases, [&](MaximumGridCusp const& c) {
-            Number const cap{c.mantissa, static_cast<int>(c.exponent) - scale};
-            return checkSet(env, vault, owner, {.available = gridUnits(env, vault, 0)}, cap);
-        });
+        for (Keylet const& vault : ious)
+        {
+            beginCase(("set " + vaultName(env, vault) + " maximum grid-Sweep").c_str());
+            int const scale = env.le(vault)->at(sfScale);
+            for (auto const& [cusp, cases] : kMaximumGridCases)
+            {
+                std::set<TER> seen;
+                for (MaximumGridCusp const& c : cases)
+                {
+                    Number const cap{c.mantissa, static_cast<int>(c.exponent) - scale};
+                    seen.insert(
+                        checkSet(env, vault, owner, {.available = vaultUnits(env, vault, 0)}, cap));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
+        }
     }
 
-    // An XRP maximum above 1e17 drops is not representable (tecPRECISION_LOSS on both sides).
+    // A maximum the asset cannot represent (XRP above 1e17 drops, MPT above 2^63 - 1, IOU past the
+    // 16-digit mantissa at exponent 80) is tecPRECISION_LOSS on both sides.
     void
-    testXrpMaximumSweep(jtx::Env& env, Keylet const& xrpVault, jtx::Account const& owner)
+    testMaximumRangeSweep(jtx::Env& env, jtx::Account const& owner, SweepVaults const& vaults)
     {
-        beginCase("set XRP maximum range-Sweep");
-        runAroundCusp(kXrpMaximumCases, [&](std::int64_t drops) {
-            return checkSet(
-                env, xrpVault, owner, {.available = gridUnits(env, xrpVault, 0)}, Number{drops});
-        });
+        for (Keylet const& vault : vaults)
+        {
+            beginCase(("set " + vaultName(env, vault) + " maximum range-Sweep").c_str());
+            for (auto const& [cusp, cases] : maximumRangeCases(env.le(vault)->at(sfAsset)))
+            {
+                std::set<TER> seen;
+                for (MaximumRangeCusp const& c : cases)
+                {
+                    Number const cap{c.mantissa, static_cast<int>(c.exponent)};
+                    seen.insert(
+                        checkSet(env, vault, owner, {.available = vaultUnits(env, vault, 0)}, cap));
+                }
+                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            }
+        }
     }
 
     void
@@ -312,20 +295,24 @@ class LeanVaultSet_test : public LeanSuite
         mptt.create({.flags = tfMPTCanTransfer});
         env.close();
         Asset const iou = issuer["USD"].asset();
-        Keylet const xrpVault = create_set_sweep::createVaultAt(env, owner, xrpIssue());
-        Keylet const mptVault = create_set_sweep::createVaultAt(env, owner, mptt.issuanceID());
-        Keylet const iouScale0Vault = create_set_sweep::createVaultAt(env, owner, iou, 0);
-        Keylet const iouScale6Vault = create_set_sweep::createVaultAt(env, owner, iou, 6);
-        Keylet const iouScale10Vault = create_set_sweep::createVaultAt(env, owner, iou, 10);
+        Keylet const xrpVault = createVault(env, owner, xrpIssue());
+        Keylet const mptVault = createVault(env, owner, mptt.issuanceID());
+        Keylet const iouMinScaleVault = createVault(env, owner, iou, kVaultMinimumIouScale);
+        Keylet const iouDefaultScaleVault = createVault(env, owner, iou, kVaultDefaultIouScale);
+        Keylet const iouMaxScaleVault =
+            createVault(env, owner, iou, kFixedPrecisionVaultMaximumIouScale);
 
-        testEmptyVaultUnlimited(env, xrpVault, owner);
-        testEmptyVaultWithCap(env, xrpVault, owner);
-        testUnlimitedCap(env, xrpVault, owner);
-        testCapBelowTotal(env, xrpVault, owner);
-        testCapEqualsTotal(env, xrpVault, owner);
-        testCapAboveTotal(env, xrpVault, owner);
-        testCapNotRepresentable(env, xrpVault, owner);
-        testCapOffGrid(env, iouScale6Vault, owner);
+        runVaultSet(env, xrpVault, owner, 0, 0, tesSUCCESS);
+        runVaultSet(env, xrpVault, owner, 0, 100, tesSUCCESS);
+        runVaultSet(env, xrpVault, owner, 100, 0, tesSUCCESS);
+        // Covered by testMaximumBelowTotalSweep (with the next two).
+        runVaultSet(env, xrpVault, owner, 100, 99, tecLIMIT_EXCEEDED);
+        runVaultSet(env, xrpVault, owner, 100, 100, tesSUCCESS);
+        runVaultSet(env, xrpVault, owner, 100, 101, tesSUCCESS);
+        // An XRP cap above the native maximum is not representable as an amount. Covered by
+        // testMaximumRangeSweep.
+        runVaultSet(env, xrpVault, owner, 0, 1'000'000'000'000'000'000, tecPRECISION_LOSS);
+        testCapOffGrid(env, iouDefaultScaleVault, owner);
 
         runBlockDeposit(true, true, tesSUCCESS);
         runBlockDeposit(true, false, tesSUCCESS);
@@ -333,11 +320,12 @@ class LeanVaultSet_test : public LeanSuite
         runBlockDeposit(false, false, tecNO_PERMISSION);
         testBothDepositFlags(env, xrpVault, owner);
 
-        SweepVaults const ious{iouScale0Vault, iouScale6Vault, iouScale10Vault};
-        SweepVaults const all{xrpVault, mptVault, iouScale0Vault, iouScale6Vault, iouScale10Vault};
+        SweepVaults const ious{iouMinScaleVault, iouDefaultScaleVault, iouMaxScaleVault};
+        SweepVaults const all{
+            xrpVault, mptVault, iouMinScaleVault, iouDefaultScaleVault, iouMaxScaleVault};
         testMaximumBelowTotalSweep(env, owner, all);
         testMaximumGridSweep(env, owner, ious);
-        testXrpMaximumSweep(env, xrpVault, owner);
+        testMaximumRangeSweep(env, owner, all);
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off

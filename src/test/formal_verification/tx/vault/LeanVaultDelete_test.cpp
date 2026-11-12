@@ -27,7 +27,7 @@ class LeanVaultDelete_test : public LeanSuite
         jtx::Env& env,
         Keylet const& vault,
         jtx::Account const& owner,
-        StagedVault const& staged)
+        StagedAmounts const& staged)
     {
         // Not applyStaged: a deleted vault has no post-state to read.
         OpenView view{*env.current()};
@@ -57,9 +57,9 @@ class LeanVaultDelete_test : public LeanSuite
         testcase(
             "delete available=" + std::to_string(available) + " total=" + std::to_string(total) +
             " shares=" + std::to_string(shares));
-        StagedVault const staged{
-            .available = gridUnits(env, xrpVault, available),
-            .deployed = gridUnits(env, xrpVault, total - available),
+        StagedAmounts const staged{
+            .available = vaultUnits(env, xrpVault, available),
+            .deployed = vaultUnits(env, xrpVault, total - available),
             .sharesTotal = static_cast<std::uint64_t>(shares)};
         TER const cppTer = checkDelete(env, xrpVault, owner, staged);
         BEAST_EXPECTS(
@@ -67,6 +67,7 @@ class LeanVaultDelete_test : public LeanSuite
             std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
     }
 
+    // A vault with assets or shares left is tecHAS_OBLIGATIONS; the row is the empty vault.
     void
     testObligationsSweep(
         jtx::Env& env,
@@ -75,21 +76,20 @@ class LeanVaultDelete_test : public LeanSuite
     {
         for (Keylet const& vault : vaults)
         {
-            sweepObligations(env, vault, owner);
+            beginCase(("delete " + vaultName(env, vault) + " obligations-Sweep").c_str());
+            for (auto const& [cusp, cases] : kDeleteCases)
+            {
+                std::set<TER> seen;
+                for (DeleteCusp const& c : cases)
+                {
+                    StagedAmounts const staged{
+                        .available = vaultUnits(env, vault, c.available),
+                        .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
+                    seen.insert(checkDelete(env, vault, owner, staged));
+                }
+                expectCrossed(cusp, seen, {tecHAS_OBLIGATIONS});
+            }
         }
-    }
-
-    // A vault with assets or shares left is tecHAS_OBLIGATIONS; the row is the empty vault.
-    void
-    sweepObligations(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
-    {
-        beginCase(("delete " + vaultName(env, vault) + " obligations-Sweep").c_str());
-        runAroundCusp(kDeleteCases, [&](DeleteCusp const& c) {
-            StagedVault const staged{
-                .available = gridUnits(env, vault, c.available),
-                .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
-            return checkDelete(env, vault, owner, staged);
-        });
     }
 
     void
@@ -106,13 +106,13 @@ class LeanVaultDelete_test : public LeanSuite
         mptt.create({.flags = tfMPTCanTransfer});
         env.close();
         Asset const iou = issuer["USD"].asset();
-        Keylet const xrpVault = create_set_sweep::createVaultAt(env, owner, xrpIssue());
+        Keylet const xrpVault = createVault(env, owner, xrpIssue());
         std::vector<Keylet> const all{
             xrpVault,
-            create_set_sweep::createVaultAt(env, owner, mptt.issuanceID()),
-            create_set_sweep::createVaultAt(env, owner, iou, 0),
-            create_set_sweep::createVaultAt(env, owner, iou, 6),
-            create_set_sweep::createVaultAt(env, owner, iou, 10)};
+            createVault(env, owner, mptt.issuanceID()),
+            createVault(env, owner, iou, 0),
+            createVault(env, owner, iou, 6),
+            createVault(env, owner, iou, 10)};
 
         // Covered by testObligationsSweep.
         runVaultDelete(env, xrpVault, owner, 0, 0, 0, tesSUCCESS);

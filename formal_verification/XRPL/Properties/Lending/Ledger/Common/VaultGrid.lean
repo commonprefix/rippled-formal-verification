@@ -401,7 +401,7 @@ private lemma LendingLedger.applyVault_onGrid (l : LendingLedger) (tx : LendingT
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     rw [(congrArg RawVault.assetsAvailable hf :)]
     exact hv
   | _ => simp only [LendingLedger.applyVault] at h; cases h

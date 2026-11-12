@@ -1,5 +1,4 @@
 #include <test/formal_verification/common/LeanSuite.h>
-#include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/vault/DepositSweepCases.h>
@@ -25,7 +24,6 @@
 #include <initializer_list>
 #include <limits>
 #include <optional>
-#include <set>
 #include <span>
 #include <string>
 #include <utility>
@@ -41,19 +39,20 @@ class LeanVaultDeposit_test : public LeanSuite
 
     // A seed deposit of `seed` into an empty vault: the vault holds it and has minted seed *
     // 10^scale shares.
-    static StagedVault
+    static StagedAmounts
     seededVault(jtx::Env& env, Keylet const& vault, STAmount const& seed)
     {
         int const scale = env.le(vault)->at(sfScale);
         Number const shares = Number{seed} * Number{1, scale};
-        return StagedVault{
+        return StagedAmounts{
             .available = seed,
-            .sharesTotal = static_cast<std::uint64_t>(static_cast<std::int64_t>(shares))};
+            .sharesTotal = static_cast<std::uint64_t>(static_cast<std::int64_t>(shares)),
+        };
     }
 
     // A holder other than the asset's issuer holds exactly the amount it deposits.
-    static StagedVault
-    fundDepositor(StagedVault staged, jtx::Account const& depositor, STAmount const& amount)
+    static StagedAmounts
+    fundDepositor(StagedAmounts staged, jtx::Account const& depositor, STAmount const& amount)
     {
         if (!amount.native() && amount.holds<Issue>() && depositor.id() != amount.getIssuer())
             staged.depositorBalance = amount;
@@ -65,12 +64,12 @@ class LeanVaultDeposit_test : public LeanSuite
         jtx::Env& env,
         Keylet const& vault,
         jtx::Account const& depositor,
-        StagedVault const& staged,
+        StagedAmounts const& staged,
         STAmount const& amount,
         TER expected,
         bool donate = false)
     {
-        TER const cpp = checkDeposit(env, vault, depositor, staged, amount, donate);
+        TER const cpp = checkDeposit(*this, env, vault, depositor, staged, amount, donate);
         BEAST_EXPECTS(
             cpp == expected,
             std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
@@ -83,11 +82,11 @@ class LeanVaultDeposit_test : public LeanSuite
         jtx::Env& env,
         Keylet const& vault,
         jtx::Account const& depositor,
-        StagedVault const& staged,
+        StagedAmounts const& staged,
         STAmount const& amount,
         TER expected)
     {
-        AppliedDeposit const cpp = applyDeposit(env, vault, depositor, staged, amount);
+        AppliedVaultTx const cpp = applyDeposit(env, vault, depositor, staged, amount);
         LeanAmountResult const rounded = leanRoundedDepositAmount(cpp.pre, amount);
         expectLawful(rounded);
         BEAST_EXPECTS(
@@ -116,6 +115,7 @@ class LeanVaultDeposit_test : public LeanSuite
                 " expected " + (expectedAmount ? to_string(*expectedAmount) : "none"));
     }
 
+    // XRP: scale 0, no share overflow within the XRP domain.
     void
     testVaultDepositXRP(
         jtx::Env& env,
@@ -136,6 +136,7 @@ class LeanVaultDeposit_test : public LeanSuite
             expected);
     }
 
+    // IOU: default vault scale 6, so shares ~ amount * 1e6.
     void
     testVaultDepositIOU(
         jtx::Env& env,
@@ -151,11 +152,12 @@ class LeanVaultDeposit_test : public LeanSuite
             "deposit IOU " + to_string(amount) + " into " + to_string(vaultBalanceBeforeDeposit) +
             (depositorIsIssuer ? " (issuer)" : ""));
         STAmount const a{asset, amount};
-        StagedVault const staged = fundDepositor(
+        StagedAmounts const staged = fundDepositor(
             seededVault(env, vault, STAmount{asset, vaultBalanceBeforeDeposit}), depositor, a);
         expectStagedDeposit(env, vault, depositor, staged, a, expected);
     }
 
+    // MPT: scale 0, sfMPTAmount and shares are int64.
     void
     testVaultDepositMPT(
         jtx::Env& env,
@@ -172,8 +174,8 @@ class LeanVaultDeposit_test : public LeanSuite
             env,
             vault,
             depositor,
-            seededVault(env, vault, gridUnits(env, vault, vaultBalanceBeforeDeposit)),
-            gridUnits(env, vault, amount),
+            seededVault(env, vault, vaultUnits(env, vault, vaultBalanceBeforeDeposit)),
+            vaultUnits(env, vault, amount),
             expected);
     }
 
@@ -186,7 +188,7 @@ class LeanVaultDeposit_test : public LeanSuite
         Asset const asset = env.le(vault)->at(sfAsset);
         // Seed 1 + donate 2 -> NAV 3, shareTotal 1e6 (ratio 1e6/3); deposit 100 -> 33'333'333
         // shares.
-        StagedVault staged = seededVault(env, vault, STAmount{asset, Number{1}});
+        StagedAmounts staged = seededVault(env, vault, STAmount{asset, Number{1}});
         staged.available = STAmount{asset, Number{3}};
         expectStagedDeposit(env, vault, issuer, staged, STAmount{asset, Number{100}}, tesSUCCESS);
     }
@@ -209,11 +211,13 @@ class LeanVaultDeposit_test : public LeanSuite
             to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) +
             ", yield=" + to_string(yieldUnrealized) + ")");
         Asset const asset = env.le(vault)->at(sfAsset);
-        StagedVault const staged{
+        StagedAmounts const staged{
             .available = STAmount{asset, assetsTotal},
             .yield = STAmount{asset, yieldUnrealized},
-            .sharesTotal = sharesTotal};
-        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, amount), expected);
+            .sharesTotal = sharesTotal,
+        };
+        expectStagedDeposit(
+            env, vault, depositor, staged, vaultUnits(env, vault, amount), expected);
     }
 
     // The owner blocked deposits (VaultSet), so a deposit is tecLOCKED on both sides.
@@ -221,10 +225,10 @@ class LeanVaultDeposit_test : public LeanSuite
     testVaultDepositBlocked(jtx::Env& env, Keylet const& vault, jtx::Account const& depositor)
     {
         testcase("deposit into a vault with deposits blocked");
-        StagedVault staged = seededVault(env, vault, gridUnits(env, vault, 1'000'000'000));
+        StagedAmounts staged = seededVault(env, vault, vaultUnits(env, vault, 1'000'000'000));
         staged.depositBlocked = true;
         expectStagedDeposit(
-            env, vault, depositor, staged, gridUnits(env, vault, 100'000'000), tecLOCKED);
+            env, vault, depositor, staged, vaultUnits(env, vault, 100'000'000), tecLOCKED);
     }
 
     // Stage an IOU vault with a share price below the grid: the shares a deposit buys are worth
@@ -243,8 +247,10 @@ class LeanVaultDeposit_test : public LeanSuite
             "updated-state IOU deposit " + to_string(amount) + " (assetsTotal=" +
             to_string(assetsTotal) + ", sharesTotal=" + std::to_string(sharesTotal) + ")");
         Asset const asset = env.le(vault)->at(sfAsset);
-        StagedVault const staged{
-            .available = STAmount{asset, assetsTotal}, .sharesTotal = sharesTotal};
+        StagedAmounts const staged{
+            .available = STAmount{asset, assetsTotal},
+            .sharesTotal = sharesTotal,
+        };
         expectStagedDeposit(env, vault, issuer, staged, STAmount{asset, amount}, expected);
     }
 
@@ -264,8 +270,10 @@ class LeanVaultDeposit_test : public LeanSuite
             " (assetsTotal=" + to_string(assetsTotal) + ")");
         Asset const asset = env.le(vault)->at(sfAsset);
         // Shares so the vault is not zero-sized, the deposit still rejects on rounding.
-        StagedVault const staged{
-            .available = STAmount{asset, assetsTotal}, .sharesTotal = 1'000'000};
+        StagedAmounts const staged{
+            .available = STAmount{asset, assetsTotal},
+            .sharesTotal = 1'000'000,
+        };
         expectRoundedDeposit(env, vault, issuer, staged, STAmount{asset, amount}, expected);
     }
 
@@ -285,7 +293,8 @@ class LeanVaultDeposit_test : public LeanSuite
             tesSUCCESS);
     }
 
-    // A deposit below the vault's 1e-6 grid: preclaim rounds it to zero
+    // A deposit below the vault's 1e-6 grid: preclaim rounds it to zero. Covered by
+    // testDepositCases.
     void
     testRoundedDepositBelowVaultScale(
         jtx::Env& env,
@@ -320,7 +329,8 @@ class LeanVaultDeposit_test : public LeanSuite
     }
 
     // Finding (C++ bug): a deposit charges round-to-nearest, so a deposit into a vault
-    // can be undercharged, overvaluing the new shares and diluting existing holders.
+    // can be undercharged, overvaluing the new shares and diluting existing holders (FV_M2_3).
+    // Covered by the charge rounding cases of testDepositCases.
     void
     testVaultDepositOvervaluedShares(
         jtx::Env& env,
@@ -330,23 +340,24 @@ class LeanVaultDeposit_test : public LeanSuite
         testcase("deposit overvalued shares");
         // A 3-drop seed and a 2-drop donation: 1 share = 1.667 drops. A 4-drop deposit buys 2
         // shares: C++ charges round(3.33) = 3, the model charges ceil = 4.
-        StagedVault staged = seededVault(env, vault, gridUnits(env, vault, 3));
-        staged.available = gridUnits(env, vault, 5);
-        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, 4), tesSUCCESS);
+        StagedAmounts staged = seededVault(env, vault, vaultUnits(env, vault, 3));
+        staged.available = vaultUnits(env, vault, 5);
+        expectStagedDeposit(env, vault, depositor, staged, vaultUnits(env, vault, 4), tesSUCCESS);
     }
 
-    // Donating to a vault with no outstanding shares is rejected
+    // Donating to a vault with no outstanding shares is rejected (tecNO_PERMISSION).
     void
     testVaultDonationEmptyVault(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
     {
         testcase("donation to empty vault");
-        StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
+        StagedAmounts const empty{.available = vaultUnits(env, vault, 0), .sharesTotal = 0};
         expectStagedDeposit(
-            env, vault, owner, empty, gridUnits(env, vault, 100'000'000), tecNO_PERMISSION, true);
+            env, vault, owner, empty, vaultUnits(env, vault, 100'000'000), tecNO_PERMISSION, true);
     }
 
     // A deposit of 1000 into a vault holding 1000 under the AssetsMaximum `cap`: rejected with
     // tecLIMIT_EXCEEDED when the total would pass a non-zero cap (a zero maximum means unlimited).
+    // Covered by testDepositCases.
     void
     testVaultDepositCap(
         jtx::Env& env,
@@ -357,22 +368,25 @@ class LeanVaultDeposit_test : public LeanSuite
     {
         testcase("deposit under assetsMaximum " + to_string(cap));
         Asset const asset = env.le(vault)->at(sfAsset);
-        StagedVault const staged{
-            .available = gridUnits(env, vault, 1'000),
+        StagedAmounts const staged{
+            .available = vaultUnits(env, vault, 1'000),
             .maximum = STAmount{asset, cap},
-            .sharesTotal = 1'000};
-        expectStagedDeposit(env, vault, depositor, staged, gridUnits(env, vault, 1'000), expected);
+            .sharesTotal = 1'000,
+        };
+        expectStagedDeposit(env, vault, depositor, staged, vaultUnits(env, vault, 1'000), expected);
     }
 
-    // A donation to an insolvent vault (assetsTotal=0, sharesTotal>0) is NOT blocked
+    // FV_M2_7: a donation to an insolvent vault (assetsTotal=0, sharesTotal>0) is NOT blocked
     void
     testVaultDonationInsolvent(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
     {
         testcase("donation to insolvent vault");
-        StagedVault const insolvent{
-            .available = gridUnits(env, vault, 0), .sharesTotal = 1'000'000};
+        StagedAmounts const insolvent{
+            .available = vaultUnits(env, vault, 0),
+            .sharesTotal = 1'000'000,
+        };
         expectStagedDeposit(
-            env, vault, owner, insolvent, gridUnits(env, vault, 1'000), tesSUCCESS, true);
+            env, vault, owner, insolvent, vaultUnits(env, vault, 1'000), tesSUCCESS, true);
     }
 
     // FV_M2_8 (both sides): the sfAssetsTotal += update re-rounds, dropping the sum's low
@@ -508,194 +522,32 @@ class LeanVaultDeposit_test : public LeanSuite
                 (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
     }
 
-    // The vaults a sweep runs on, each with the account that deposits into it.
+    // The vaults a case list runs on, each with the account that deposits into it.
     using SweepVaults = std::vector<std::pair<Keylet, jtx::Account>>;
 
-    // One sample: C++ (on a throwaway view) and the model run on the same staged vault; they must
-    // agree, and a deposit never charges more than offered. Returns the C++ verdict.
-    TER
-    checkDeposit(
-        jtx::Env& env,
-        Keylet const& vault,
-        jtx::Account const& depositor,
-        StagedVault const& staged,
-        STAmount const& amount,
-        bool donate = false)
+    // What every test runs on: the accounts and a vault per asset. Every staged deposit runs on a
+    // throwaway view of this one ledger.
+    struct Setup
     {
-        AppliedDeposit const cpp = applyDeposit(env, vault, depositor, staged, amount, donate);
-        LeanVaultResult const lean =
-            leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
-        std::string const at = sampleText(staged, amount);
-        if (expectAgree(*this, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
-            return cpp.ter;
-        Number const charged = cpp.post.assetsTotal - cpp.pre.assetsTotal;
-        BEAST_EXPECTS(charged <= Number{amount}, at + "cpp charged " + to_string(charged));
-        BEAST_EXPECTS(
-            Number{lean.assets} <= Number{amount},
-            at + "lean charged " + to_string(Number{lean.assets}));
-        return cpp.ter;
-    }
+        jtx::Account owner;
+        jtx::Account issuer;
+        jtx::Account depositor;
+        // An IOU holder that is not the issuer; its balance is staged per test.
+        jtx::Account holder;
+        Keylet xrpVault;
+        Keylet mptVault;
+        Keylet iouDefaultScaleVault;
+        Keylet iouMaxScaleVault;
+        SweepVaults ious;
+        SweepVaults integral;
+        SweepVaults all;
+    };
 
-    // One price case: the row's amount deposited into its assets total and shares total.
-    TER
-    checkPriceCase(
-        jtx::Env& env,
-        Keylet const& vault,
-        jtx::Account const& depositor,
-        PriceCusp const& c)
-    {
-        StagedVault const staged{
-            .available = gridUnits(env, vault, c.total),
-            .sharesTotal = static_cast<std::uint64_t>(c.sharesTotal)};
-        return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
-    }
-
-    // Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets total +
-    // charge exceeds 9e15 grid units. kOpenLimitCases stage price 1, so the charge is the amount.
-    void
-    testOpenLimitSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " open limit-Sweep").c_str());
-            runAroundCusp(kOpenLimitCases, [&](OpenLimitCusp const& c) {
-                StagedVault const staged{
-                    .available = gridUnits(env, vault, c.total),
-                    .yield = gridUnits(env, vault, c.yield),
-                    .sharesTotal = static_cast<std::uint64_t>(c.total)};
-                return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
-            });
-        }
-    }
-
-    // Assets maximum: a deposit is rejected (tecLIMIT_EXCEEDED) once assets total + charge exceeds
-    // a non-zero AssetsMaximum. kAssetsMaximumCases stage price 1, so the charge is the amount.
-    void
-    testAssetsMaximumSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " assets maximum-Sweep").c_str());
-            // std::int64_t const assetsTotal = 1'000'000;
-            // std::int64_t const assetsMaximum = 1'001'000;
-            runAroundCusp(kAssetsMaximumCases, [&](AssetsMaximumCusp const& c) {
-                StagedVault const staged{
-                    .available = gridUnits(env, vault, c.total),
-                    .maximum = gridUnits(env, vault, c.maximum),
-                    .sharesTotal = static_cast<std::uint64_t>(c.total)};
-                return checkDeposit(env, vault, depositor, staged, gridUnits(env, vault, c.amount));
-            });
-        }
-    }
-
-    // Zero shares: a deposit buying trunc(shares total * amount / assets total) = 0 shares is
-    // rejected (tecPRECISION_LOSS). Each row of kZeroSharesCases buys exactly one share.
-    void
-    testZeroSharesSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " zero shares-Sweep").c_str());
-            runAroundCusp(kZeroSharesCases, [&](PriceCusp const& c) {
-                return checkPriceCase(env, vault, depositor, c);
-            });
-        }
-    }
-
-    // Clamp to zero: when the shares bought are worth less than a grid step, the charge floors to
-    // zero and the deposit is rejected (tecPRECISION_LOSS). Each row of kClampToZeroCases charges
-    // exactly one unit.
-    void
-    testClampToZeroSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " clamp to zero-Sweep").c_str());
-            runAroundCusp(kClampToZeroCases, [&](PriceCusp const& c) {
-                return checkPriceCase(env, vault, depositor, c);
-            });
-        }
-    }
-
-    // Charge rounding: the charge assets total * shares bought / shares total rounds to the nearest
-    // unit, half to even. Each row of kChargeRoundingCases is an exact half; both sides succeed
-    // there, so the cusp shows only in the post-state totals.
-    void
-    testChargeRoundingSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " charge rounding-Sweep").c_str());
-            runAroundCusp(
-                kChargeRoundingCases,
-                [&](PriceCusp const& c) { return checkPriceCase(env, vault, depositor, c); },
-                false);
-        }
-    }
-
-    // Share mint cap: minting past 2^63 - 1 outstanding shares fails the share send
-    // (tecPATH_DRY). Each row of kShareMintCapCases mints up to exactly the cap.
-    void
-    testShareMintCapSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " share mint cap-Sweep").c_str());
-            runAroundCusp(kShareMintCapCases, [&](PriceCusp const& c) {
-                return checkPriceCase(env, vault, depositor, c);
-            });
-        }
-    }
-
-    // Sub-grid amount: an IOU amount below one grid step rounds to zero in preclaim
-    // (tecPRECISION_LOSS). kOneGridStepCases are mantissas at exponent -(scale + 15), where
-    // kOneGridStepMantissa is exactly one grid step.
-    void
-    testSubGridAmountSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " sub-grid amount-Sweep").c_str());
-            auto const sle = env.le(vault);
-            Asset const asset = sle->at(sfAsset);
-            int const scale = sle->at(sfScale);
-            StagedVault const staged{
-                .available = gridUnits(env, vault, 1'000'000), .sharesTotal = 1'000'000};
-            runAroundCusp(kOneGridStepCases, [&](std::int64_t mantissa) {
-                STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), -(scale + 15)};
-                return checkDeposit(env, vault, depositor, staged, amount);
-            });
-        }
-    }
-
-    // Share overflow: a first IOU deposit mints amount * 10^scale shares; at 2^63 the count
-    // overflows (tecPATH_DRY), just below it the amount is past the open limit (tecLIMIT_EXCEEDED).
-    // kShareOverflowCases are mantissas at exponent 3 - scale.
-    void
-    testShareOverflowSweep(jtx::Env& env, SweepVaults const& vaults)
-    {
-        for (auto const& [vault, depositor] : vaults)
-        {
-            beginCase(("deposit " + vaultName(env, vault) + " share overflow-Sweep").c_str());
-            auto const sle = env.le(vault);
-            Asset const asset = sle->at(sfAsset);
-            int const scale = sle->at(sfScale);
-            StagedVault const empty{.available = gridUnits(env, vault, 0), .sharesTotal = 0};
-            runAroundCusp(kShareOverflowCases, [&](std::int64_t mantissa) {
-                STAmount const amount{asset, static_cast<std::uint64_t>(mantissa), 3 - scale};
-                return checkDeposit(env, vault, depositor, empty, amount);
-            });
-        }
-    }
-
-    void
-    runTests() override
+    Setup
+    setup(jtx::Env& env)
     {
         using namespace jtx;
 
-        // One ledger holding a vault per asset; every staged deposit (old tests and sweeps) runs
-        // on a throwaway view of it.
-        Env env{*this};
         Account const owner{"owner"};
         Account const issuer{"issuer"};
         Account const depositor{"depositor"};
@@ -706,7 +558,6 @@ class LeanVaultDeposit_test : public LeanSuite
 
         PrettyAsset const xrp = xrpIssue();
         PrettyAsset const iou = issuer["USD"];
-        // An IOU holder that is not the issuer; its balance is staged per test.
         env(trust(holder, iou(10'000'000'000'000'000LL)));
         MPTTester mptt{env, issuer, kMptInitNoFund};
         mptt.create({.flags = tfMPTCanTransfer});
@@ -718,114 +569,780 @@ class LeanVaultDeposit_test : public LeanSuite
         env.close();
 
         // The IOU depositor is the issuer, which skips the C++-only trust-line precision checks.
-        Keylet const xrpVault = createSweepVault(env, owner, depositor, xrp);
-        Keylet const mptVault = createSweepVault(env, owner, depositor, mpt);
+        Keylet const xrpVault = createVault(env, owner, xrp);
+        Keylet const mptVault = createVault(env, owner, mpt);
         // IOU at the smallest, the default and the largest vault scale.
-        Keylet const iouScale0Vault = createSweepVault(env, owner, issuer, iou, 0);
-        Keylet const iouScale6Vault = createSweepVault(env, owner, issuer, iou, 6);
-        Keylet const iouScale10Vault = createSweepVault(env, owner, issuer, iou, 10);
+        Keylet const iouMinScaleVault = createVault(env, owner, iou, kVaultMinimumIouScale);
+        Keylet const iouDefaultScaleVault = createVault(env, owner, iou, kVaultDefaultIouScale);
+        Keylet const iouMaxScaleVault =
+            createVault(env, owner, iou, kFixedPrecisionVaultMaximumIouScale);
+        SweepVaults const ious{
+            {iouMinScaleVault, issuer},
+            {iouDefaultScaleVault, issuer},
+            {iouMaxScaleVault, issuer},
+        };
+        SweepVaults const integral{{xrpVault, depositor}, {mptVault, depositor}};
+        SweepVaults all = integral;
+        all.insert(all.end(), ious.begin(), ious.end());
+        // One unit each: the holder gets its share MPToken and an IOU vault its pseudo-account
+        // trust line, which staging state on the vault needs.
+        for (auto const& [vault, account] : all)
+        {
+            env(jtx::Vault::deposit(
+                {.depositor = account, .id = vault.key, .amount = vaultUnits(env, vault, 1)}));
+        }
+        env.close();
+        return {
+            .owner = owner,
+            .issuer = issuer,
+            .depositor = depositor,
+            .holder = holder,
+            .xrpVault = xrpVault,
+            .mptVault = mptVault,
+            .iouDefaultScaleVault = iouDefaultScaleVault,
+            .iouMaxScaleVault = iouMaxScaleVault,
+            .ious = ious,
+            .integral = integral,
+            .all = all,
+        };
+    }
 
-        // XRP: scale 0, no share overflow within the XRP domain.
+    // Each case stages its vault, deposits `amount` * 10^`exponent` units and expects its verdict
+    // on both sides. Rows are grouped by the cusp they sit around.
+    // - Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets
+    //   total + charge exceeds 9e15 grid units.
+    // - Assets maximum: a deposit is rejected (tecLIMIT_EXCEEDED) once assets total + charge
+    //   exceeds a non-zero AssetsMaximum. The rows stage price 1, so the charge is the amount.
+    // - Zero shares: a deposit buying trunc(shares total * amount / assets total) = 0 shares is
+    //   rejected (tecPRECISION_LOSS). Each cusp buys exactly one share.
+    // - Charge rounding: the charge assets total * shares bought / shares total rounds to the
+    //   nearest unit, half to even. Each cusp is an exact half and succeeds, so it shows only in
+    //   the post-state totals.
+    // - Clamp to zero: when the shares bought are worth less than a grid step, the charge floors to
+    //   zero and the deposit is rejected (tecPRECISION_LOSS). Each cusp charges exactly one unit.
+    // - Share mint cap: minting past 2^63 - 1 outstanding shares fails the share send
+    //   (tecPATH_DRY). Each cusp mints up to exactly the cap.
+    // - Sub-grid amount: an IOU amount below one grid step rounds to zero in preclaim
+    //   (tecPRECISION_LOSS). Mantissa 10^15 at exponent -15 is exactly one grid step.
+    // - Share overflow: a first IOU deposit mints amount * 10^scale shares; at 2^63 the count
+    //   overflows (tecPATH_DRY), just below it the amount is past the open limit
+    //   (tecLIMIT_EXCEEDED).
+    void
+    testDepositCases(jtx::Env& env, Setup const& s)
+    {
+        struct DepositCase
+        {
+            StagedVault vault;
+            std::int64_t amount;
+            TER expected;
+            int exponent{};
+        };
+        // clang-format off
+        static constexpr DepositCase kOpenLimit[] = {
+            // yield 0, total 1, amount 8'999'999'999'999'999
+            {.vault = {.available = 1, .sharesTotal = 1}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .sharesTotal = 1}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .sharesTotal = 1}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .sharesTotal = 1}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1, .sharesTotal = 1}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 8'999'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 8'999'999'999'999'998, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 8'999'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            // yield 0, total 8'999'999'999'999'999, amount 1
+            {.vault = {.available = 8'999'999'999'999'997, .sharesTotal = 8'999'999'999'999'997}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'997, .sharesTotal = 8'999'999'999'999'997}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'997, .sharesTotal = 8'999'999'999'999'997}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'998, .sharesTotal = 8'999'999'999'999'998}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'998, .sharesTotal = 8'999'999'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'998, .sharesTotal = 8'999'999'999'999'998}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'999'999'999, .sharesTotal = 8'999'999'999'999'999}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'999'999'999'999, .sharesTotal = 8'999'999'999'999'999}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'999'999'999, .sharesTotal = 8'999'999'999'999'999}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'000, .sharesTotal = 9'000'000'000'000'000}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'000, .sharesTotal = 9'000'000'000'000'000}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'000, .sharesTotal = 9'000'000'000'000'000}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'001, .sharesTotal = 9'000'000'000'000'001}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'001, .sharesTotal = 9'000'000'000'000'001}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 9'000'000'000'000'001, .sharesTotal = 9'000'000'000'000'001}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            // yield 0, total 4'500'000'000'000'000, amount 4'500'000'000'000'000
+            {.vault = {.available = 4'499'999'999'999'998, .sharesTotal = 4'499'999'999'999'998}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'998, .sharesTotal = 4'499'999'999'999'998}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'998, .sharesTotal = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'998, .sharesTotal = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'998, .sharesTotal = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'999, .sharesTotal = 4'499'999'999'999'999}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'999, .sharesTotal = 4'499'999'999'999'999}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'999, .sharesTotal = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'999, .sharesTotal = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 4'499'999'999'999'999, .sharesTotal = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'000, .sharesTotal = 4'500'000'000'000'000}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'000, .sharesTotal = 4'500'000'000'000'000}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'000, .sharesTotal = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'000, .sharesTotal = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'000, .sharesTotal = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'001, .sharesTotal = 4'500'000'000'000'001}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'001, .sharesTotal = 4'500'000'000'000'001}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'001, .sharesTotal = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'001, .sharesTotal = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'001, .sharesTotal = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'002, .sharesTotal = 4'500'000'000'000'002}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 4'500'000'000'000'002, .sharesTotal = 4'500'000'000'000'002}, .amount = 4'499'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'002, .sharesTotal = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'002, .sharesTotal = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 4'500'000'000'000'002, .sharesTotal = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+            // yield 1'000'000'000, total 1, amount 8'999'998'999'999'999
+            {.vault = {.available = 1, .yield = 1'000'000'000, .sharesTotal = 1}, .amount = 8'999'998'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .yield = 1'000'000'000, .sharesTotal = 1}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .yield = 1'000'000'000, .sharesTotal = 1}, .amount = 8'999'998'999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .yield = 1'000'000'000, .sharesTotal = 1}, .amount = 8'999'999'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1, .yield = 1'000'000'000, .sharesTotal = 1}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 1'000'000'000, .sharesTotal = 2}, .amount = 8'999'998'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .yield = 1'000'000'000, .sharesTotal = 2}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .yield = 1'000'000'000, .sharesTotal = 2}, .amount = 8'999'998'999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 1'000'000'000, .sharesTotal = 2}, .amount = 8'999'999'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 1'000'000'000, .sharesTotal = 2}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 1'000'000'000, .sharesTotal = 3}, .amount = 8'999'998'999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .yield = 1'000'000'000, .sharesTotal = 3}, .amount = 8'999'998'999'999'998, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 1'000'000'000, .sharesTotal = 3}, .amount = 8'999'998'999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 1'000'000'000, .sharesTotal = 3}, .amount = 8'999'999'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 1'000'000'000, .sharesTotal = 3}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            // yield 1'000'000'000, total 8'999'998'999'999'999, amount 1
+            {.vault = {.available = 8'999'998'999'999'997, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'997}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'997, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'997}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'997, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'997}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'998, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'998}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'998, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'998, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'998}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'998'999'999'999, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'999}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'999'998'999'999'999, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'999}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'998'999'999'999, .yield = 1'000'000'000, .sharesTotal = 8'999'998'999'999'999}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'000, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'000}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'000, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'000}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'000, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'000}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'001, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'001}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'001, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'001}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 8'999'999'000'000'001, .yield = 1'000'000'000, .sharesTotal = 8'999'999'000'000'001}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            // yield 8'999'999'999'999'998, total 1, amount 1
+            {.vault = {.available = 1, .yield = 8'999'999'999'999'998, .sharesTotal = 1}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .yield = 8'999'999'999'999'998, .sharesTotal = 1}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1, .yield = 8'999'999'999'999'998, .sharesTotal = 1}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 8'999'999'999'999'998, .sharesTotal = 2}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 8'999'999'999'999'998, .sharesTotal = 2}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .yield = 8'999'999'999'999'998, .sharesTotal = 2}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 8'999'999'999'999'998, .sharesTotal = 3}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 8'999'999'999'999'998, .sharesTotal = 3}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .yield = 8'999'999'999'999'998, .sharesTotal = 3}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+        };
+        static constexpr DepositCase kAssetsMaximum[] = {
+            // maximum 2, total 1, amount 1
+            {.vault = {.available = 1, .maximum = 2, .sharesTotal = 1}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .maximum = 2, .sharesTotal = 1}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1, .maximum = 2, .sharesTotal = 1}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 2, .sharesTotal = 2}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 2, .sharesTotal = 2}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 2, .sharesTotal = 2}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            // maximum 1'000'000'000, total 1, amount 999'999'999
+            {.vault = {.available = 1, .maximum = 1'000'000'000, .sharesTotal = 1}, .amount = 999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .maximum = 1'000'000'000, .sharesTotal = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .maximum = 1'000'000'000, .sharesTotal = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1, .maximum = 1'000'000'000, .sharesTotal = 1}, .amount = 1'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1, .maximum = 1'000'000'000, .sharesTotal = 1}, .amount = 1'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 1'000'000'000, .sharesTotal = 2}, .amount = 999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .maximum = 1'000'000'000, .sharesTotal = 2}, .amount = 999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .maximum = 1'000'000'000, .sharesTotal = 2}, .amount = 999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 1'000'000'000, .sharesTotal = 2}, .amount = 1'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 2, .maximum = 1'000'000'000, .sharesTotal = 2}, .amount = 1'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .maximum = 1'000'000'000, .sharesTotal = 3}, .amount = 999'999'997, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .maximum = 1'000'000'000, .sharesTotal = 3}, .amount = 999'999'998, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .maximum = 1'000'000'000, .sharesTotal = 3}, .amount = 999'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .maximum = 1'000'000'000, .sharesTotal = 3}, .amount = 1'000'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 3, .maximum = 1'000'000'000, .sharesTotal = 3}, .amount = 1'000'000'001, .expected = tecLIMIT_EXCEEDED},
+            // maximum 1'000'000'000, total 999'999'999, amount 1
+            {.vault = {.available = 999'999'997, .maximum = 1'000'000'000, .sharesTotal = 999'999'997}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'997, .maximum = 1'000'000'000, .sharesTotal = 999'999'997}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'997, .maximum = 1'000'000'000, .sharesTotal = 999'999'997}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'998, .maximum = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'998, .maximum = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'998, .maximum = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 999'999'999, .maximum = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 999'999'999, .maximum = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 999'999'999, .maximum = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1'000'000'000, .maximum = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1'000'000'000, .maximum = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 1'000'000'000, .maximum = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+            // maximum 1'000'000'000, total 500'000'000, amount 500'000'000
+            {.vault = {.available = 499'999'998, .maximum = 1'000'000'000, .sharesTotal = 499'999'998}, .amount = 499'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'998, .maximum = 1'000'000'000, .sharesTotal = 499'999'998}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'998, .maximum = 1'000'000'000, .sharesTotal = 499'999'998}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'998, .maximum = 1'000'000'000, .sharesTotal = 499'999'998}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'998, .maximum = 1'000'000'000, .sharesTotal = 499'999'998}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'999, .maximum = 1'000'000'000, .sharesTotal = 499'999'999}, .amount = 499'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'999, .maximum = 1'000'000'000, .sharesTotal = 499'999'999}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'999, .maximum = 1'000'000'000, .sharesTotal = 499'999'999}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'999, .maximum = 1'000'000'000, .sharesTotal = 499'999'999}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 499'999'999, .maximum = 1'000'000'000, .sharesTotal = 499'999'999}, .amount = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'000, .maximum = 1'000'000'000, .sharesTotal = 500'000'000}, .amount = 499'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'000, .maximum = 1'000'000'000, .sharesTotal = 500'000'000}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'000, .maximum = 1'000'000'000, .sharesTotal = 500'000'000}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'000, .maximum = 1'000'000'000, .sharesTotal = 500'000'000}, .amount = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'000, .maximum = 1'000'000'000, .sharesTotal = 500'000'000}, .amount = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'001, .maximum = 1'000'000'000, .sharesTotal = 500'000'001}, .amount = 499'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'001, .maximum = 1'000'000'000, .sharesTotal = 500'000'001}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'001, .maximum = 1'000'000'000, .sharesTotal = 500'000'001}, .amount = 500'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'001, .maximum = 1'000'000'000, .sharesTotal = 500'000'001}, .amount = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'001, .maximum = 1'000'000'000, .sharesTotal = 500'000'001}, .amount = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'002, .maximum = 1'000'000'000, .sharesTotal = 500'000'002}, .amount = 499'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 500'000'002, .maximum = 1'000'000'000, .sharesTotal = 500'000'002}, .amount = 499'999'999, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'002, .maximum = 1'000'000'000, .sharesTotal = 500'000'002}, .amount = 500'000'000, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'002, .maximum = 1'000'000'000, .sharesTotal = 500'000'002}, .amount = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+            {.vault = {.available = 500'000'002, .maximum = 1'000'000'000, .sharesTotal = 500'000'002}, .amount = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+        };
+        static constexpr DepositCase kZeroShares[] = {
+            // total 2, sharesTotal 1, amount 2
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 4, .expected = tesSUCCESS},
+            // total 2, sharesTotal 2, amount 1
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 3, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 1, amount 1'000'000'000
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1}, .amount = 999'999'998, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1}, .amount = 999'999'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 2}, .amount = 999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 2}, .amount = 999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 2}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 2}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 2}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 3}, .amount = 999'999'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 3}, .amount = 999'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 3}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 3}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 3}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 1'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 3, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 31'250, amount 32'000
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'248}, .amount = 31'998, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'248}, .amount = 31'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'248}, .amount = 32'000, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'248}, .amount = 32'001, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'248}, .amount = 32'002, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'249}, .amount = 31'998, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'249}, .amount = 31'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'249}, .amount = 32'000, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'249}, .amount = 32'001, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'249}, .amount = 32'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'250}, .amount = 31'998, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'250}, .amount = 31'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'250}, .amount = 32'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'250}, .amount = 32'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'250}, .amount = 32'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'251}, .amount = 31'998, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'251}, .amount = 31'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'251}, .amount = 32'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'251}, .amount = 32'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'251}, .amount = 32'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'252}, .amount = 31'998, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'252}, .amount = 31'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'252}, .amount = 32'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'252}, .amount = 32'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 31'252}, .amount = 32'002, .expected = tesSUCCESS},
+        };
+        static constexpr DepositCase kZeroSharesIntegral[] = {
+            // total 2, sharesTotal 1, amount 2
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS},
+            // total 2, sharesTotal 2, amount 1
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 1'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 1, .expected = tesSUCCESS},
+        };
+        static constexpr DepositCase kZeroSharesIou[] = {
+            // total 2, sharesTotal 1, amount 2
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 1, .expected = tecPRECISION_LOSS},
+            // total 2, sharesTotal 2, amount 1
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 1, .expected = tecPRECISION_LOSS},
+            // total 1'000'000'000, sharesTotal 1'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 1, .expected = tecPRECISION_LOSS},
+        };
+        static constexpr DepositCase kChargeRounding[] = {
+            // total 3, sharesTotal 2, amount 2
+            {.vault = {.available = 3, .sharesTotal = 1}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 3, .sharesTotal = 1}, .amount = 2, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 3, .sharesTotal = 1}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 1}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 4, .expected = tesSUCCESS},
+            // total 3, sharesTotal 4, amount 2
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 2}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 3}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 4}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 5}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 5}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 5}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 5}, .amount = 4, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 6}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 6}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 6}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 3, .sharesTotal = 6}, .amount = 4, .expected = tesSUCCESS},
+            // total 1'000'000'001, sharesTotal 2, amount 500'000'001
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1}, .amount = 499'999'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1}, .amount = 500'000'000, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1}, .amount = 500'000'001, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1}, .amount = 500'000'002, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1}, .amount = 500'000'003, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2}, .amount = 499'999'999, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2}, .amount = 500'000'000, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 3}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 3}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 3}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 3}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 3}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 4}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 4}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 4}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 4}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 4}, .amount = 500'000'003, .expected = tesSUCCESS},
+            // total 1'000'000'001, sharesTotal 2'000'000'000, amount 500'000'001
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'998}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'998}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'998}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'998}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'998}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'999}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'999}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'999}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'999}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'999'999'999}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'000}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'000}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'000}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'000}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'000}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'001}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'001}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'001}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'001}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'001}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'002}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'002}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'002}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'002}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 2'000'000'002}, .amount = 500'000'003, .expected = tesSUCCESS},
+            // total 1'000'000'001, sharesTotal 1'000'000'000, amount 500'000'001
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'998}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'998}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'998}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'998}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'998}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'999}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'999}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'999}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'999}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 999'999'999}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'000}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'000}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'000}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'000}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'000}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'001}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'001}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'001}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'001}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'001}, .amount = 500'000'003, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 499'999'999, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'000, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'001, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'002, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'003, .expected = tesSUCCESS},
+        };
+        static constexpr DepositCase kClampToZero[] = {
+            // total 2, sharesTotal 2, amount 1
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 4}, .amount = 3, .expected = tesSUCCESS},
+            // total 2, sharesTotal 2'000, amount 1
+            {.vault = {.available = 2, .sharesTotal = 1'998}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1'998}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1'999}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 1'999}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 1'999}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'000}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'000}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'000}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'001}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 2'001}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'001}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'002}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'002}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 2'002}, .amount = 3, .expected = tesSUCCESS},
+            // total 2, sharesTotal 9'999'999'999'999'996, amount 1
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'994}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'994}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'994}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'995}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'995}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'995}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'996}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'996}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'996}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'997}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'997}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'997}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'998}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 2, .sharesTotal = 9'999'999'999'999'998}, .amount = 3, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 1'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'998}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 3, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 1'000'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'998}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'998}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'999}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'999}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 999'999'999'999}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'000}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'000}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'000}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'001}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'001}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'001}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'002}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'002}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'000'002}, .amount = 3, .expected = tesSUCCESS},
+            // total 1'000'000'000, sharesTotal 9'999'999'000'000'000, amount 1
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'998}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'998}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'999}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'999}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'998'999'999'999}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'000}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'000}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'000}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'001}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'001}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'001}, .amount = 3, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'002}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'002}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 1'000'000'000, .sharesTotal = 9'999'999'000'000'002}, .amount = 3, .expected = tesSUCCESS},
+        };
+        static constexpr DepositCase kShareMintCap[] = {
+            // total 8'000'000'000'000'000, sharesTotal 9'223'372'036'854'774'655, amount 1
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'653}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'653}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'654}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'654}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'655}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'655}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'656}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'656}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'657}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'657}, .amount = 3, .expected = tecPATH_DRY},
+        };
+        static constexpr DepositCase kShareMintCapIntegral[] = {
+            // total 8'000'000'000'000'000, sharesTotal 9'223'372'036'854'774'655, amount 1
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'653}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'654}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'655}, .amount = 1, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'656}, .amount = 1, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'657}, .amount = 1, .expected = tecPATH_DRY},
+        };
+        static constexpr DepositCase kShareMintCapIou[] = {
+            // total 8'000'000'000'000'000, sharesTotal 9'223'372'036'854'774'655, amount 1
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'653}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'654}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'655}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'656}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'774'657}, .amount = 1, .expected = tecPRECISION_LOSS},
+            // total 8'000'000'000'000'000, sharesTotal 9'223'372'036'854'773'502, amount 2: a one-unit charge mints up to exactly the cap
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'500}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'500}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'500}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'500}, .amount = 4, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'501}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'501}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'501}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'501}, .amount = 4, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'502}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'502}, .amount = 2, .expected = tesSUCCESS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'502}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'502}, .amount = 4, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'503}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'503}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'503}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'503}, .amount = 4, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'504}, .amount = 1, .expected = tecPRECISION_LOSS},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'504}, .amount = 2, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'504}, .amount = 3, .expected = tecPATH_DRY},
+            {.vault = {.available = 8'000'000'000'000'000, .sharesTotal = 9'223'372'036'854'773'504}, .amount = 4, .expected = tecPATH_DRY},
+        };
+        static constexpr DepositCase kSubGridAmount[] = {
+            // mantissa 1'000'000'000'000'000
+            {.vault = {.available = 1'000'000, .sharesTotal = 1'000'000}, .amount = 999'999'999'999'998, .expected = tecPRECISION_LOSS, .exponent = -15},
+            {.vault = {.available = 1'000'000, .sharesTotal = 1'000'000}, .amount = 999'999'999'999'999, .expected = tecPRECISION_LOSS, .exponent = -15},
+            {.vault = {.available = 1'000'000, .sharesTotal = 1'000'000}, .amount = 1'000'000'000'000'000, .expected = tesSUCCESS, .exponent = -15},
+            {.vault = {.available = 1'000'000, .sharesTotal = 1'000'000}, .amount = 1'000'000'000'000'001, .expected = tesSUCCESS, .exponent = -15},
+            {.vault = {.available = 1'000'000, .sharesTotal = 1'000'000}, .amount = 1'000'000'000'000'002, .expected = tesSUCCESS, .exponent = -15},
+        };
+        static constexpr DepositCase kShareOverflow[] = {
+            // mantissa 9'223'372'036'854'775
+            {.vault = {}, .amount = 9'223'372'036'854'773, .expected = tecLIMIT_EXCEEDED, .exponent = 3},
+            {.vault = {}, .amount = 9'223'372'036'854'774, .expected = tecLIMIT_EXCEEDED, .exponent = 3},
+            {.vault = {}, .amount = 9'223'372'036'854'775, .expected = tecLIMIT_EXCEEDED, .exponent = 3},
+            {.vault = {}, .amount = 9'223'372'036'854'776, .expected = tecPATH_DRY, .exponent = 3},
+            {.vault = {}, .amount = 9'223'372'036'854'777, .expected = tecPATH_DRY, .exponent = 3},
+        };
+        // clang-format on
+
+        struct List
+        {
+            char const* name;
+            SweepVaults const& vaults;
+            std::span<DepositCase const> cases;
+        };
+        // An IOU charge below one unit floors to zero where XRP and MPT round it up to one, so the
+        // rows that hit it are split by vault set.
+        List const lists[] = {
+            {"open limit", s.all, kOpenLimit},
+            {"assets maximum", s.all, kAssetsMaximum},
+            {"zero shares", s.all, kZeroShares},
+            {"zero shares, charge rounds up", s.integral, kZeroSharesIntegral},
+            {"zero shares, charge floors", s.ious, kZeroSharesIou},
+            {"charge rounding", s.integral, kChargeRounding},
+            {"sub-grid amount", s.ious, kSubGridAmount},
+            {"share overflow", s.ious, kShareOverflow},
+            {"clamp to zero", s.ious, kClampToZero},
+            {"share mint cap", s.all, kShareMintCap},
+            {"share mint cap, charge rounds up", s.integral, kShareMintCapIntegral},
+            {"share mint cap, charge floors", s.ious, kShareMintCapIou},
+        };
+        for (auto const& [name, vaults, cases] : lists)
+        {
+            for (auto const& [vault, depositor] : vaults)
+            {
+                beginCase(("deposit " + vaultName(env, vault) + " " + name).c_str());
+                for (auto const& [staged, amount, expected, exponent] : cases)
+                {
+                    STAmount const deposit = vaultUnits(env, vault, amount, exponent);
+                    AppliedVaultTx const cpp = applyDeposit(env, vault, depositor, staged, deposit);
+                    LeanVaultResult const lean =
+                        leanVaultDeposit(cpp.pre, deposit, false, parentCloseTime(env));
+                    expectSame(*this, sampleText(staged, deposit), cpp, lean, expected);
+                }
+            }
+        }
+    }
+
+    void
+    runTests() override
+    {
+        using namespace jtx;
+
+        Env env{*this};
+        Setup const s = setup(env);
+
         testVaultDepositXRP(
-            env, xrpVault, depositor, XRP(0), drops(1), tesSUCCESS);  // minimum deposit
-        testVaultDepositXRP(env, xrpVault, depositor, XRP(0), XRP(1'000), tesSUCCESS);
-        // Open limit: 9e15 drops. Covered by testOpenLimitSweep.
-        testVaultDepositXRP(env, xrpVault, depositor, XRP(0), drops(kOpenLimitUnits), tesSUCCESS);
+            env, s.xrpVault, s.depositor, XRP(0), drops(1), tesSUCCESS);  // minimum deposit
+        testVaultDepositXRP(env, s.xrpVault, s.depositor, XRP(0), XRP(1'000), tesSUCCESS);
+        // Open limit: 9e15 drops. Covered by testDepositCases.
         testVaultDepositXRP(
-            env, xrpVault, depositor, XRP(0), drops(kOpenLimitUnits + 1), tecLIMIT_EXCEEDED);
+            env, s.xrpVault, s.depositor, XRP(0), drops(kOpenLimitUnits), tesSUCCESS);
         testVaultDepositXRP(
-            env, xrpVault, depositor, XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
+            env, s.xrpVault, s.depositor, XRP(0), drops(kOpenLimitUnits + 1), tecLIMIT_EXCEEDED);
+        testVaultDepositXRP(
+            env, s.xrpVault, s.depositor, XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
         testVaultDepositXRP(
             env,
-            xrpVault,
-            depositor,
+            s.xrpVault,
+            s.depositor,
             XRP(1'000),
             drops(1),
             tesSUCCESS);  // minimum deposit, non-empty
 
-        // IOU: default vault scale 6, so shares ~ amount * 1e6.
-        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, Number{1}, tesSUCCESS);
-        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, Number{1'000}, tesSUCCESS);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1}, tesSUCCESS);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1'000}, tesSUCCESS);
         // Open limit at scale 6: 9e9. It keeps the shares (amount * 1e6) far below INT64_MAX.
-        // Covered by testOpenLimitSweep.
+        // Covered by testDepositCases.
         Number const iouOpenLimit{kOpenLimitUnits, -6};
-        testVaultDepositIOU(env, iouScale6Vault, holder, Number{0}, iouOpenLimit, tesSUCCESS);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.holder, Number{0}, iouOpenLimit, tesSUCCESS);
         testVaultDepositIOU(
             env,
-            iouScale6Vault,
-            holder,
+            s.iouDefaultScaleVault,
+            s.holder,
             Number{0},
             iouOpenLimit + Number{1, -6},
             tecLIMIT_EXCEEDED);
         // 1e10 at scale 6 needs 17 digits: the total would leave the base exponent.
         testVaultDepositIOU(
-            env, iouScale6Vault, holder, Number{0}, Number{1, 10}, tecLIMIT_EXCEEDED);
-        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, Number{1}, tesSUCCESS);
-        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, iouOpenLimit, tesSUCCESS);
+            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1, 10}, tecLIMIT_EXCEEDED);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{1}, tesSUCCESS);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.issuer, Number{0}, iouOpenLimit, tesSUCCESS);
         testVaultDepositIOU(
             env,
-            iouScale6Vault,
-            issuer,
+            s.iouDefaultScaleVault,
+            s.issuer,
             Number{0},
             iouOpenLimit + Number{1, -6},
             tecLIMIT_EXCEEDED);
 
-        // covered by testShareOverflowSweep
+        // covered by testDepositCases
         testVaultDepositIOU(
             env,
-            iouScale6Vault,
-            issuer,
+            s.iouDefaultScaleVault,
+            s.issuer,
             Number{0},
             Number{9'999'999'999'999'999LL, 80},
             tecPATH_DRY);
         testVaultDepositIOU(
-            env, iouScale6Vault, issuer, Number{0}, Number{1, -80}, tecPRECISION_LOSS);
+            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{1, -80}, tecPRECISION_LOSS);
 
-        // roundedDepositAmount
-        testRoundedDepositSuccess(env, iouScale6Vault, issuer);
-        // covered by testSubGridAmountSweep
-        testRoundedDepositBelowVaultScale(env, iouScale6Vault, holder);
-        testRoundedDepositBelowVaultScale(env, iouScale6Vault, issuer);
+        testRoundedDepositSuccess(env, s.iouDefaultScaleVault, s.issuer);
+        testRoundedDepositBelowVaultScale(env, s.iouDefaultScaleVault, s.holder);
+        testRoundedDepositBelowVaultScale(env, s.iouDefaultScaleVault, s.issuer);
         // sanity: a normal deposit into the same non-empty vault still succeeds
-        testVaultDepositIOU(env, iouScale6Vault, holder, Number{1, 9}, Number{1'000}, tesSUCCESS);
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.holder, Number{1, 9}, Number{1'000}, tesSUCCESS);
 
-        // MPT: scale 0, sfMPTAmount and shares are int64.
-        testVaultDepositMPT(env, mptVault, depositor, 0, 1, tesSUCCESS);
-        testVaultDepositMPT(env, mptVault, depositor, 0, 1'000, tesSUCCESS);
+        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, 1, tesSUCCESS);
+        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, 1'000, tesSUCCESS);
         // Open limit: 9e15 units, far below the share type maximum INT64_MAX. Covered by
-        // testOpenLimitSweep.
-        testVaultDepositMPT(env, mptVault, depositor, 0, kOpenLimitUnits, tesSUCCESS);
-        testVaultDepositMPT(env, mptVault, depositor, 1'000, 1'000, tesSUCCESS);  // non-empty vault
-        testVaultDepositMPT(env, mptVault, depositor, 1, kOpenLimitUnits - 1, tesSUCCESS);
-        testVaultDepositMPT(env, mptVault, depositor, kOpenLimitUnits - 1, 1, tesSUCCESS);
-        testVaultDepositMPT(env, mptVault, depositor, kOpenLimitUnits - 1, 2, tecLIMIT_EXCEEDED);
+        // testDepositCases.
+        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, kOpenLimitUnits, tesSUCCESS);
+        testVaultDepositMPT(
+            env, s.mptVault, s.depositor, 1'000, 1'000, tesSUCCESS);  // non-empty vault
+        testVaultDepositMPT(env, s.mptVault, s.depositor, 1, kOpenLimitUnits - 1, tesSUCCESS);
+        testVaultDepositMPT(env, s.mptVault, s.depositor, kOpenLimitUnits - 1, 1, tesSUCCESS);
+        testVaultDepositMPT(
+            env, s.mptVault, s.depositor, kOpenLimitUnits - 1, 2, tecLIMIT_EXCEEDED);
 
-        // Truncated to the 1e-6 grid on both sides. Covered by testSubGridAmountSweep.
+        // Truncated to the 1e-6 grid on both sides. Covered by testDepositCases.
         testVaultDepositIOU(
-            env, iouScale6Vault, holder, Number{1, 9}, Number{100'000'006, -7}, tesSUCCESS);
+            env,
+            s.iouDefaultScaleVault,
+            s.holder,
+            Number{1, 9},
+            Number{100'000'006, -7},
+            tesSUCCESS);
         testVaultDepositIOU(
-            env, iouScale6Vault, holder, Number{1, 9}, Number{100'000'001, -7}, tesSUCCESS);
+            env,
+            s.iouDefaultScaleVault,
+            s.holder,
+            Number{1, 9},
+            Number{100'000'001, -7},
+            tesSUCCESS);
 
         // Empty-vault share truncation (C++ truncates toward zero, not to-nearest):
         // 1.5e-6 USD * 1e6 scale = 1.5 shares -> 1.
-        testVaultDepositIOU(env, iouScale6Vault, issuer, Number{0}, Number{15, -7}, tesSUCCESS);
-        // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 -> tecPRECISION_LOSS.
-        // covered by testSubGridAmountSweep (preclaim rounds it to zero first)
         testVaultDepositIOU(
-            env, iouScale6Vault, issuer, Number{0}, Number{6, -7}, tecPRECISION_LOSS);
+            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{15, -7}, tesSUCCESS);
+        // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 -> tecPRECISION_LOSS.
+        // covered by testDepositCases (preclaim rounds it to zero first)
+        testVaultDepositIOU(
+            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{6, -7}, tecPRECISION_LOSS);
 
-        testVaultDepositExchangeRate(env, iouScale6Vault, issuer);
+        testVaultDepositExchangeRate(env, s.iouDefaultScaleVault, s.issuer);
 
         // Extreme NAV ratio AssetsTotal >> SharesTotal: a unit deposit buys zero shares.
-        // covered by testZeroSharesSweep
+        // covered by the zero shares cases of testDepositCases
         testVaultDepositUpdatedStateMPT(
-            env, mptVault, depositor, Number{1, 18}, 1, 1, tecPRECISION_LOSS);
+            env, s.mptVault, s.depositor, Number{1, 18}, 1, 1, tecPRECISION_LOSS);
         // Share price 3e-7: one grid unit buys 3 shares worth 9e-7, which clamps to nothing.
-        // covered by testClampToZeroSweep
+        // covered by the clamp to zero cases of testDepositCases
         testVaultDepositUpdatedStateIOU(
             env,
-            iouScale6Vault,
-            issuer,
+            s.iouDefaultScaleVault,
+            s.issuer,
             Number{1'000},
             3'333'333'333ULL,
             Number{1, -6},
@@ -833,26 +1350,24 @@ class LeanVaultDeposit_test : public LeanSuite
         // AssetsTotal near the STAmount exponent ceiling: a small IOU deposit rounds to zero.
         testRoundedDepositUpdatedStateIOU(
             env,
-            iouScale6Vault,
-            issuer,
+            s.iouDefaultScaleVault,
+            s.issuer,
             Number{9'999'999'999'999'999LL, 80},
             Number{1},
             tecPRECISION_LOSS);
-        // IOU AssetsTotal + amount overflows
-        testRoundedDepositOverflow(env, iouScale6Vault, issuer);
+        testRoundedDepositOverflow(env, s.iouDefaultScaleVault, s.issuer);
 
         // Insolvent vault (assetsTotal=0, sharesTotal>0): deposits are blocked with tecLOCKED.
         testVaultDepositUpdatedStateMPT(
-            env, mptVault, depositor, Number{0}, 1'000'000, 1'000, tecLOCKED);
-        // Deposits blocked by the owner.
-        testVaultDepositBlocked(env, xrpVault, depositor);
+            env, s.mptVault, s.depositor, Number{0}, 1'000'000, 1'000, tecLOCKED);
+        testVaultDepositBlocked(env, s.xrpVault, s.depositor);
         // Unrealized yield counts toward the open-limit capacity: 10 under the limit (one share
         // per unit) with 10 of yield rejects one unit, with 9 of yield it fits exactly.
-        // covered by testOpenLimitSweep
+        // covered by testDepositCases
         testVaultDepositUpdatedStateMPT(
             env,
-            mptVault,
-            depositor,
+            s.mptVault,
+            s.depositor,
             Number{kOpenLimitUnits - 10},
             static_cast<std::uint64_t>(kOpenLimitUnits - 10),
             1,
@@ -860,51 +1375,32 @@ class LeanVaultDeposit_test : public LeanSuite
             Number{10});
         testVaultDepositUpdatedStateMPT(
             env,
-            mptVault,
-            depositor,
+            s.mptVault,
+            s.depositor,
             Number{kOpenLimitUnits - 10},
             static_cast<std::uint64_t>(kOpenLimitUnits - 10),
             1,
             tesSUCCESS,
             Number{9});
-        // Donation to an empty vault is blocked with tecNO_PERMISSION
-        testVaultDonationEmptyVault(env, xrpVault, owner);
-        // Deposit over a non-zero maximum is blocked with tecLIMIT_EXCEEDED
-        // covered by testAssetsMaximumSweep
-        testVaultDepositCap(env, mptVault, depositor, Number{1'000}, tecLIMIT_EXCEEDED);
-        testVaultDepositCap(env, mptVault, depositor, Number{2'000}, tesSUCCESS);
+        testVaultDonationEmptyVault(env, s.xrpVault, s.owner);
+        testVaultDepositCap(env, s.mptVault, s.depositor, Number{1'000}, tecLIMIT_EXCEEDED);
+        testVaultDepositCap(env, s.mptVault, s.depositor, Number{2'000}, tesSUCCESS);
 
         // Open discrepancies, disabled until the C++ code is fixed.
         // clang-format off
         // testDepositDilution();          // FV_M2_8_c: deposit lowers the share price (both)
-        // testDepositPastOpenLimit(env, iouScale6Vault, issuer, Number{9'999'999'999'999'999LL, -6}, Number{1, -5});  // FV_M2_15_b
+        // testDepositPastOpenLimit(env, s.iouDefaultScaleVault, s.issuer, Number{9'999'999'999'999'999LL, -6}, Number{1, -5});  // FV_M2_15_b
 
         // Properties both sides now satisfy, kept as regression tests.
-        // covered by testChargeRoundingSweep
-        testVaultDepositOvervaluedShares(env, xrpVault, depositor);  // FV_M2_3: the share charge rounds up
-        testDepositAppliedDelta();                                   // totals move by exactly the amount paid
-        testVaultDonationInsolvent(env, mptVault, owner);            // FV_M2_7: a donation passes the insolvency check
+        testVaultDepositOvervaluedShares(env, s.xrpVault, s.depositor);
+        testDepositAppliedDelta();
+        testVaultDonationInsolvent(env, s.mptVault, s.owner);
         // FV_M2_15: 899999.9999999999 is at the scale-10 open limit (9e5); +5 passes it.
-        // covered by testOpenLimitSweep
-        testDepositPastOpenLimit(env, iouScale10Vault, issuer, Number{8'999'999'999'999'999LL, -10}, Number{5});
+        // covered by testDepositCases
+        testDepositPastOpenLimit(env, s.iouMaxScaleVault, s.issuer, Number{8'999'999'999'999'999LL, -10}, Number{5});
         // clang-format on
 
-        // Sweeps.
-        SweepVaults const ious{
-            {iouScale0Vault, issuer}, {iouScale6Vault, issuer}, {iouScale10Vault, issuer}};
-        SweepVaults const integral{{xrpVault, depositor}, {mptVault, depositor}};
-        SweepVaults all = integral;
-        all.insert(all.end(), ious.begin(), ious.end());
-
-        testOpenLimitSweep(env, all);
-        testAssetsMaximumSweep(env, all);
-        testZeroSharesSweep(env, all);
-        testChargeRoundingSweep(env, integral);
-        testSubGridAmountSweep(env, ious);
-        testShareOverflowSweep(env, ious);
-        testClampToZeroSweep(env, ious);
-
-        testShareMintCapSweep(env, all);
+        testDepositCases(env, s);
     }
 };
 
