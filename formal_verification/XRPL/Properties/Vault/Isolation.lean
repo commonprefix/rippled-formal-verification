@@ -14,7 +14,7 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 /-- Vault transaction by another holder or the owner, at the same time -> a withdrawal by shares that would have
-succeeded still succeeds, with 0 < feeRate < 100% when the shares priced are worth whole base units. -/
+succeeded still succeeds. -/
 theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0)
     (ht : t0 ≤ t) -- close times only move forward
     (shares : STAmount) (waive : Bool) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat)
@@ -34,7 +34,7 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
       (waiveX = true ↔ v.IsSoleShareholder holderShares) →
       (v.withdraw amount waiveX t hposX).run = .ok (.ok r) → r.shares.toRat ≤ holderShares.toRat →
       r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal →
-      -- on an IOU vault under a partial fee, the withdrawn shares are worth whole base units
+      -- on an IOU vault under a partial fee, the withdrawn shares are worth whole base units (FV_M2_3)
       (v.earlyExitFeeRateAt t ≠ 0 → v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate →
         v.numericType.isIntegral = false →
         ∃ k : ℤ, v.idealAssetsWithdraw waive shares.toRat = k * 10 ^ v.baseExponent) →
@@ -46,7 +46,7 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
       (waiveX = true ↔ v.IsSoleShareholder holderShares) →
       (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) → r.shares.toRat ≤ holderShares.toRat →
       r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal →
-      -- under a partial fee, the clawed-back shares and the withdrawn shares are worth whole base units
+      -- under a partial fee, the clawed-back shares and the withdrawn shares are worth whole base units (FV_M2_3)
       (v.earlyExitFeeRateAt t ≠ 0 → v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate →
         (∃ k : ℤ, v.idealAssetsWithdraw waiveX r.shares.toRat = k * 10 ^ v.baseExponent) ∧
         ∃ k : ℤ, v.idealAssetsWithdraw waive shares.toRat = k * 10 ^ v.baseExponent) →

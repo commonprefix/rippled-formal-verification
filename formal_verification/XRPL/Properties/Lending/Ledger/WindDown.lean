@@ -8,7 +8,7 @@ import XRPL.Properties.Lending.Ledger.Common.WindDownWitness
 /-! # Winding down a vault
 
 Once no broker has a loan, the vault holds only cash. Witnesses for the claims that fail: two holders whose shares
-are each worth less than one base unit. -/
+are each worth less than one base unit, and a loan whose grace period runs past RedemptionDate. -/
 
 namespace XRPL.Model
 
@@ -48,12 +48,13 @@ theorem Lending.payoff_exit_attained :
         (l.apply (.vaultWithdraw h (.vaultShares shares))).run ≠ .ok (.ok l') :=
   LendingLedger.payoff_exit_mpt_witness
 
-/-- Now > RedemptionDate + max GracePeriod -> the vault can be deleted by defaulting loans, deleting loans and brokers,
-and withdrawing shares. No VaultDeposit or VaultClawback is needed before VaultDelete succeeds. -/
+/-- Now > RedemptionDate -> the vault can be deleted by defaulting loans, deleting loans and brokers, and withdrawing
+shares. No VaultDeposit or VaultClawback is needed before VaultDelete succeeds. -/
 theorem Lending.Reachable.wind_down (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)
     (s : SingleAssetVault.VaultSchedule) (hs : l.vault.schedule = some s)
-    -- the close time is past RedemptionDate, and past RedemptionDate + GracePeriod of every loan
+    -- the close time is past RedemptionDate
     (hpast : s.redemptionDate < l.now)
+    -- and past RedemptionDate + GracePeriod of every loan, which the LoanSet schedule check leaves out (FV_M4_49)
     (hgrace : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e →
       s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat < l.now.toNat)
     -- with a pending loan the vault is not coarsened. C++ ValidVault rejects its LoanDelete otherwise (FV_M4_22)
@@ -92,5 +93,24 @@ theorem Lending.Reachable.wind_down_attained :
       ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
         (∀ tx ∈ txs, tx.isWindDown) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
   LendingLedger.wind_down_dust_witness
+
+/-- Witness: a run where no wind-down deletes the vault one second past RedemptionDate. A loan's payment is due 60
+seconds before RedemptionDate and its GracePeriod runs on, so it can't be defaulted or deleted and its broker stays. -/
+theorem Lending.Reachable.wind_down_grace_attained :
+    ∃ (l : LendingLedger) (s : SingleAssetVault.VaultSchedule), l.Reachable ∧ l.vaultDeleted = false ∧
+      l.vault.schedule = some s ∧ s.redemptionDate < l.now ∧
+      (∃ (i : Nat) (e : LoanEntry), l.loan? i = some e ∧
+        l.now.toNat ≤ s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
+        e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
+        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
+      l.SharesSum ∧
+      (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
+        l'.NoDust) ∧
+      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
+        (∀ tx ∈ txs, tx.isWindDown) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
+  LendingLedger.wind_down_grace_witness
 
 end XRPL.Model

@@ -61,6 +61,12 @@ structure LoanBroker.OpenZone (lb : LoanBroker) (base : Int) : Prop where
   coverExact : STAmount.isRounded lb.numericType lb.coverAvailable = false
   debtMaximum : lb.debtMaximum.isOnExponentGrid base lb.numericType = .ok true
 
+/-- CoverAvailable is a whole number of base units below `10^16` base units, as in the Open zone and on a cover
+that is not coarsened. -/
+structure LoanBroker.CoverFits (lb : LoanBroker) (base : Int) : Prop where
+  cover : Number.OnGrid base lb.coverAvailable
+  coverLt : lb.toExact.coverAvailable < 10 ^ 16 * (10 : ℚ) ^ base
+
 /-- Brokers reachable from a successful `LoanBroker.create` in the asset of a vault with base
 exponent `base`, after `canCreate` passed on that vault. -/
 def LoanBroker.Reachable (lb : LoanBroker) (base : Int) : Prop :=

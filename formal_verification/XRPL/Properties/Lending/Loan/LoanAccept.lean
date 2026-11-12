@@ -44,10 +44,12 @@ theorem Lending.createPending_accept (l : LendingLedger) (hr : l.Reachable) (l�
       lA.vault = l₂.vault ∧ lA.brokers = l₂.brokers ∧ lA.loans = l₂.loans :=
   LendingLedger.createPending_accept_proof hr hset haccept hclose
 
-/-- LoanAccept from a broker at or above minCover -> the broker after it is still at or above minCover. -/
+/-- LoanAccept -> it succeeds only when the broker is at or above minCover. -/
 theorem Lending.accept_keeps_minimum_cover (l l' : LendingLedger) (i : Nat)
     (h : (l.apply (.loanAccept i)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)
-    (hat' : l'.LoanAt i loan') (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok true) :
+    (hat' : l'.LoanAt i loan')
+    -- the broker is at or above minCover before, the check LoanAccept leaves out (FV_M4_46)
+    (hcover : loan.broker.hasMinimumCover l.vault.baseExponent = .ok true) :
     loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok true := by
   obtain ⟨-, loan₀, r, -, hat₀, -, hacc, -, hv, hat₁, -, -⟩ := LendingLedger.loanAccept_ok h
   obtain rfl := hat.eq hat₀

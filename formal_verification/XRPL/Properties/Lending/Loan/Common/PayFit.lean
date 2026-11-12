@@ -42,7 +42,7 @@ lemma Loan.payment_sum_fits (l : LendingLedger) (hr : l.Reachable) (i : Nat) (ha
     (by constructor <;> omega) (by unfold minExponent maxExponent; omega)
   exact ⟨w, hw, by rw [hwv, hpp, hip]; push_cast; ring⟩
 
-/-- Proof body of `payment_vault_upper_bound`, on any reachable ledger. -/
+/-- Proof body of the first line of `Lending.payment_vault`, on any reachable ledger. -/
 lemma Loan.payment_vault_upper_bound_reachable_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat)
     (hat : l.LoanAt i loan) (payment : UnsettledPayment Vault)
     (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))

@@ -12,7 +12,7 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 
 variable (loan : Loan) (amount : Number) (paymentType : LoanPaymentType) (r : LoanWithAmounts Vault)
 
-/-- Proof body of `payment_vault_lower_bound`. -/
+/-- Proof body of the second line of `Lending.payment_vault`. -/
 lemma Loan.payment_vault_lower_bound_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) (hat : l.LoanAt i loan)
     (payment : UnsettledPayment Vault)
     (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))

@@ -9,6 +9,7 @@ import XRPL.Properties.Vault.Proofs.ClawbackTightWitness
 import XRPL.Properties.Vault.Proofs.MaxValueFits
 import XRPL.Properties.Vault.Proofs.ShareFloor
 import XRPL.Properties.Vault.Proofs.ClawbackShareFloor
+import XRPL.Properties.Vault.Proofs.DilutionWitness
 
 /-! # `Vault.clawback` accuracy
 
@@ -72,8 +73,8 @@ theorem Vault.clawback_sharesDestroyed (v : Vault) :
         hgt hclamped hznz hnn r hok) hgap
     shares_eq_floor _ _ h.1 h.2.2.1 h.2.2.2⟩
 
-/-- A zero clawback amount whose recovery fits the cash claws back the holder's whole balance, which is nonzero:
-exactly `holderShares` are destroyed, and the recovery is the priced one snapped to the grid of the cash it leaves. -/
+/-- Clawback on any lawful vault, with amount = 0 -> sharesDestroyed = the holder's whole balance ≠ 0, and
+assetsRecovered − sharesWorth ≤ 0. -/
 theorem Vault.clawback_zero_all_shares (v : Vault)
     (assets holderShares assetsRecovered reported : STAmount) (waiveUnrealizedLoss : Bool)
     (assetsRecoveredNumber : Number)
@@ -82,14 +83,38 @@ theorem Vault.clawback_zero_all_shares (v : Vault)
     (hz : assets.isZero = true)
     (hassets : v.sharesToAssetsWithdraw holderShares waiveUnrealizedLoss = .ok assetsRecovered)
     (hnum : assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber)
+    -- the holding, priced to nearest, fits AssetsAvailable
     (hle : assetsRecoveredNumber.operator_gt v.assetsAvailable = false)
     (hclamp : clampToSumExponent v.assetsAvailable assetsRecovered.operator_neg v.baseExponent = .ok reported)
     (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts)
     (hok : (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r)) :
     r.shares = holderShares ∧ r.assets.toRat = reported.toRat ∧
-    holderShares.isZero = false :=
-  Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered reported waiveUnrealizedLoss
+    holderShares.isZero = false ∧
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum. Priced to nearest, the upper side
+    -- needs a worth of whole base units, within the Open limit (FV_M2_3)
+    ((v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
+      ∀ netAssetValue : Number, v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
+        (∃ k : ℤ, v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat = k * 10 ^ v.baseExponent) →
+        v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent →
+        r.assets.toRat ≤ v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat) :=
+  have h := Vault.clawback_zero_all_shares_proof v assets holderShares assetsRecovered reported waiveUnrealizedLoss
     assetsRecoveredNumber hhs hsole hz hassets hnum hle hclamp hnn r hok
+  ⟨h.1, h.2.1, h.2.2, fun hmax netAssetValue hnav hk hlim =>
+    (Vault.clawback_assetsRecovered_intended_total_proof v assets holderShares waiveUnrealizedLoss netAssetValue hnav
+      (Or.inr hz) hhs hnn hmax r hok).2.2 hk hlim⟩
+
+/-- Witness: a run where a clawback with amount = 0 recovers more than sharesWorth. A one-share holding worth `1.5`
+recovers `2`. -/
+theorem Vault.clawback_zero_all_shares_attained :
+    ∃ (v : Vault) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool) (t0 : UInt32)
+      (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts) (netAssetValue : Number),
+      Vault.Reachable v t0 ∧ holderShares.ShareBalance ∧ assets.isZero = true ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
+      r.shares.toRat = holderShares.toRat ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
+      v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat :=
+  Vault.clawback_zero_overshoot_witness
 
 /-- Clawback -> the recovery never exceeds the cash nor the destroyed shares' worth, and for a nonzero clawed amount on
 a reachable vault falls short of it by less than one base unit. -/

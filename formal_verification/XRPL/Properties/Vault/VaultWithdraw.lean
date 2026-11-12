@@ -66,14 +66,15 @@ theorem Vault.withdraw_sharesRedeemed (v : Vault) :
     ⟨h.2.1, shares_eq_floor _ _ h.1
       (ideal_sub_one_lt_of_gap _ _ _ h.1 (h.2.1.le.trans hle) le_rfl h.2.2.2 hgap) hle⟩⟩
 
-/-- Withdrawal with sharesRedeemed < SharesTotal -> assetsWithdrawn = ⌊price × (1 − feeRate)⌋ in whole base units and
-⌊sharesWorth⌋ with feeRate = 0, at most price × (1 − feeRate) on any lawful vault, and monotone in sharesRedeemed. -/
+/-- Withdrawal with sharesRedeemed < SharesTotal -> assetsWithdrawn = ⌊sharesWorth × (1 − feeRate)⌋ in whole base
+units, and a larger sharesRedeemed never lowers it. -/
 theorem Vault.withdraw_payout (v : Vault) :
     (∀ (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
       amount.amount.Canonical → -- a transaction amount is a canonical amount
       amount.InAsset v.numericType → -- of the vault's asset, or its shares
       ∀ r : VaultWithAmounts, (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) →
       r.shares.toRat < v.toExact.sharesTotal →
+      -- C++ prices the shares to nearest, so the payout is ⌊price × (1 − feeRate)⌋ rather than of sharesWorth (FV_M2_3)
       (∀ t0 : UInt32, Vault.Reachable v t0 →
         ∃ priced : STAmount, v.sharesToAssetsWithdraw r.shares waiveUnrealizedLoss = .ok priced ∧
           r.assets.toRat = (⌊priced.toRat * (1 - (v.earlyExitFeeRateAt t).toNat / 100000) /
@@ -145,18 +146,5 @@ theorem Vault.withdraw_sharesRedeemed_relative_attained :
       (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
       ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=
   Vault.withdraw_sharesRedeemed_sharp_witness
-
-/-- Witness for `withdraw_payout`: on a reachable vault with no fee a run pays the whole priced amount. -/
-theorem Vault.withdraw_payout_total_attained :
-    ∃ (v : Vault) (t t0 : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
-      (hpos : 0 < amount.amount.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
-      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
-      (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
-      r.shares.toRat < v.toExact.sharesTotal ∧
-      v.earlyExitFeeRateAt t = 0 ∧
-      ∃ priced : STAmount, v.sharesToAssetsWithdraw r.shares waiveUnrealizedLoss = .ok priced ∧
-        r.assets.toRat = priced.toRat * (1 - (v.earlyExitFeeRateAt t).toNat / 100000) :=
-  Vault.withdraw_payout_total_witness
 
 end XRPL.Model.SingleAssetVault

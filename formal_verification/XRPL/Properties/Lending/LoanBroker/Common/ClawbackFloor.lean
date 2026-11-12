@@ -3,8 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.MinimumCoverProofs
 
 /-! # A clawback debits the request floored to whole base units
 
-On a broker in the Open zone a clawback debits the request, capped at the cover above the minimum
-cover, floored to whole base units of the vault. -/
+On a cover of whole base units below `10^16` of them, as in the Open zone, a clawback debits the request,
+capped at the cover above the minimum cover, floored to whole base units of the vault. -/
 
 namespace XRPL.Model.Lending
 
@@ -32,17 +32,17 @@ lemma LoanBroker.clawTarget_le (lb : LoanBroker) (minimumCover : ℚ) (amount : 
     · exact le_rfl
     · exact min_le_right _ _
 
-/-- In the Open zone, the cover minus a grid amount between zero and the cover, rounded down, is exact and
-a whole number of base units. -/
-lemma LoanBroker.OpenZone.sub_downward_exact (lb : LoanBroker) (v : Vault) (hz : lb.OpenZone v.baseExponent)
+/-- On a cover that fits, the cover minus a grid amount between zero and the cover, rounded down, is exact
+and a whole number of base units. -/
+lemma LoanBroker.CoverFits.sub_downward_exact (lb : LoanBroker) (v : Vault) (hf : lb.CoverFits v.baseExponent)
     (m mx : Number) (hmg : Number.OnGrid v.baseExponent m) (hm0 : 0 ≤ m.toRat)
     (hle : m.toRat ≤ lb.coverAvailable.toRat) (hsub : lb.coverAvailable.operator_sub m .downward = .ok mx) :
     mx.toRat = lb.coverAvailable.toRat - m.toRat ∧
-      ∃ k : ℕ, k ≤ 9 * 10 ^ 15 ∧ mx.toRat = (k : ℚ) * 10 ^ v.baseExponent := by
+      ∃ k : ℕ, k < 10 ^ 16 ∧ mx.toRat = (k : ℚ) * 10 ^ v.baseExponent := by
   have hA0 : 0 ≤ lb.coverAvailable.toRat := lb.exact.coverAvailable_nonneg
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  obtain ⟨kA, hkA, hkAv⟩ := Number.OnGrid.units_le _ _ hz.cover hA0 hz.coverLimit
-  obtain ⟨km, -, hkmv⟩ := Number.OnGrid.units_le _ _ hmg hm0 (hle.trans hz.coverLimit)
+  obtain ⟨kA, hkA, hkAv⟩ := Number.OnGrid.units_lt _ _ hf.cover hA0 hf.coverLt
+  obtain ⟨km, -, hkmv⟩ := Number.OnGrid.units_lt _ _ hmg hm0 (hle.trans_lt hf.coverLt)
   have hkm : km ≤ kA := by
     have : (km : ℚ) * 10 ^ v.baseExponent ≤ kA * 10 ^ v.baseExponent := hkmv ▸ hkAv ▸ hle
     exact_mod_cast le_of_mul_le_mul_right this hp
@@ -54,10 +54,10 @@ lemma LoanBroker.OpenZone.sub_downward_exact (lb : LoanBroker) (v : Vault) (hz :
     (by rw [hwv, hd, Int.cast_natCast])
   exact ⟨hmxv, kA - km, by omega, by rw [hmxv, hd]⟩
 
-/-- The rounding of a clawback in the Open zone returns the capped request floored to whole base
+/-- The rounding of a clawback on a cover that fits returns the capped request floored to whole base
 units. -/
 lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
-    (c : STAmount) (minimumCover : Number) (hz : lb.OpenZone v.baseExponent)
+    (c : STAmount) (minimumCover : Number) (hf : lb.CoverFits v.baseExponent)
     (hnt : v.numericType = lb.numericType)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (hreq : ∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat)
@@ -85,7 +85,7 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
     obtain ⟨n, hn, hdn⟩ := operator_sub_rounded_downward _ _ _ lb.wf.coverAvailable_norm hmn hsub hmxm
     have := Number.lower_le _ n hn
     linarith
-  obtain ⟨hmxv, k, hkle, hk⟩ := LoanBroker.OpenZone.sub_downward_exact lb v hz _ _ hmg hm0 hmle hsub
+  obtain ⟨hmxv, k, hkle, hk⟩ := LoanBroker.CoverFits.sub_downward_exact lb v hf _ _ hmg hm0 hmle hsub
 
   have hmxc : ∀ st, STAmount.ofNumber lb.numericType mx .to_nearest = .ok st → st.toRat = mx.toRat := by
     intro st hst
@@ -156,7 +156,7 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
     obtain ⟨iv, -, hiv⟩ := STAmount.ofNumber_integral_toRat _ claw _ claw' hi
       (Number.negative_false_of_nonneg claw hclawn hclaw0) hof
     rw [hmag, hiv, hint hi, zpow_zero, div_one, mul_one, Int.floor_intCast]
-  · -- an IOU clamp floors onto the grid of the cover it leaves, the base grid in the Open zone
+  · -- an IOU clamp floors onto the grid of the cover it leaves, the base grid on a cover that fits
     have hfr : claw'.integral = false := by
       unfold STAmount.integral; rw [hty]; simpa using hi
     obtain ⟨dN, e, hdN, hps, -, hfl⟩ := clampToSumExponent_debit_floor _ _ _ _ hcz hfr hclaw'0
@@ -177,11 +177,11 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
     rw [hnt'] at hne'
     -- so the sum stays below `10^(16 + b)` and keeps the base exponent
     exact numberExponent_at_base s _ .fractional e hsn hs0 (by omega) (fun h => absurd h (by decide))
-      (LoanBroker.OpenZone.lt_pow_sixteen lb _ hz _ hsle) hne'
+      (LoanBroker.CoverFits.lt_pow_sixteen lb _ hf _ hsle) hne'
 
-/-- A clawback in the Open zone debits the capped request floored to whole base units. -/
+/-- A clawback on a cover that fits debits the capped request floored to whole base units. -/
 lemma LoanBroker.coverClawback_floor (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
-    (res : LoanBrokerCoverResult) (minimumCover : Number) (hz : lb.OpenZone v.baseExponent)
+    (res : LoanBrokerCoverResult) (minimumCover : Number) (hf : lb.CoverFits v.baseExponent)
     (hnt : v.numericType = lb.numericType)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (hreq : ∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat)
@@ -189,7 +189,7 @@ lemma LoanBroker.coverClawback_floor (lb : LoanBroker) (v : Vault) (amount : Opt
     (hok : (lb.coverClawback v amount).run = .ok (.ok res)) :
     res.amount'.toRat =
       (⌊lb.clawTarget minimumCover.toRat amount / 10 ^ v.baseExponent⌋ : ℚ) * 10 ^ v.baseExponent :=
-  LoanBroker.roundedCoverClawback_floor lb v amount _ minimumCover hz hnt hmax hreq hmin
-    (LoanBroker.coverClawback_exact lb v amount res hz hmax hok).1
+  LoanBroker.roundedCoverClawback_floor lb v amount _ minimumCover hf hnt hmax hreq hmin
+    (LoanBroker.coverClawback_exact lb v amount res hf hmax hok).1
 
 end XRPL.Model.Lending

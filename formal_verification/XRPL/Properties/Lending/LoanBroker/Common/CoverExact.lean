@@ -3,7 +3,8 @@ import XRPL.Properties.Lending.LoanBroker.Common.OpenZone
 /-! # Exact cover updates in the Open zone
 
 On a broker in the Open zone every cover operation moves CoverAvailable by whole base units and the `Number`
-arithmetic is exact: a deposit credits at most the amount, and a withdrawal or a clawback debits at most the cover. -/
+arithmetic is exact: a deposit credits at most the amount, and a withdrawal or a clawback debits at most the cover.
+A clawback only needs the cover to be whole base units below `10^16` of them. -/
 
 namespace XRPL.Model.Lending
 
@@ -40,10 +41,10 @@ private lemma grid_add_exact (x y d : Number) (s : Int) (hx : Number.OnGrid s x)
     nlinarith
 
 /-- A to-nearest difference of two amounts on a grid, the second between zero and the first, the first
-at most the Open limit, is exact. -/
+below `10^16` units, is exact. -/
 lemma grid_sub_exact (x y d : Number) (s : Int) (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
     (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hy0 : 0 ≤ y.toRat) (hyx : y.toRat ≤ x.toRat)
-    (hxL : x.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ s)
+    (hxL : x.toRat < 10 ^ 16 * (10 : ℚ) ^ s)
     (hok : x.operator_sub y .to_nearest = .ok d) : d.toRat = x.toRat - y.toRat := by
   obtain ⟨hxn, jx, hjx⟩ := hx
   obtain ⟨hyn, jy, hjy⟩ := hy
@@ -54,11 +55,27 @@ lemma grid_sub_exact (x y d : Number) (s : Int) (hx : Number.OnGrid s x) (hy : N
   have hjyx : jy ≤ jx := by
     have : (jy : ℚ) * 10 ^ s ≤ (jx : ℚ) * 10 ^ s := hjy ▸ hjx ▸ hyx
     exact_mod_cast le_of_mul_le_mul_right this hp
-  have hjxL : jx ≤ 9 * 10 ^ 15 := by
-    have : (jx : ℚ) * 10 ^ s ≤ 9 * 10 ^ 15 * 10 ^ s := hjx ▸ hxL
-    exact_mod_cast le_of_mul_le_mul_right this hp
+  have hjxL : jx < 10 ^ 16 := by
+    have : (jx : ℚ) * 10 ^ s < 10 ^ 16 * 10 ^ s := hjx ▸ hxL
+    exact_mod_cast lt_of_mul_lt_mul_right this hp.le
   rw [Number.operator_sub_toRat_of_grid x y d jx jy s hxn hyn hjx hjy ⟨by omega, by omega⟩ hs hok, hjx, hjy]
   push_cast; ring
+
+/-- A broker in the Open zone has a cover that fits: whole base units below `10^16` of them. -/
+lemma LoanBroker.OpenZone.coverFits {lb : LoanBroker} {b : Int} (hz : lb.OpenZone b) : lb.CoverFits b where
+  cover := hz.cover
+  coverLt := by
+    have hp : (0 : ℚ) < 10 ^ b := zpow_pos (by norm_num) _
+    have := hz.coverLimit
+    nlinarith
+
+/-- A value at most a cover that fits is below `10^(16 + b)`. -/
+lemma LoanBroker.CoverFits.lt_pow_sixteen (lb : LoanBroker) (b : Int) (hf : lb.CoverFits b) (x : ℚ)
+    (hx : x ≤ lb.coverAvailable.toRat) : x < 10 ^ (16 + b) := by
+  have hL : lb.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ b := hf.coverLt
+  rw [zpow_add₀ (by norm_num)]
+  norm_num
+  linarith
 
 /-- A value at most a cover in the Open zone is below `10^(16 + b)`. -/
 lemma LoanBroker.OpenZone.lt_pow_sixteen (lb : LoanBroker) (b : Int) (hz : lb.OpenZone b) (x : ℚ)
@@ -135,15 +152,15 @@ lemma LoanBroker.coverWithdraw_exact (lb : LoanBroker) (v : Vault) (amount : STA
   have hle : aN.toRat ≤ lb.coverAvailable.toRat :=
     (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hng.1).mp hge
   have hexact := grid_sub_exact _ _ _ _ hz.cover hng (Vault.baseExponent_grid v).2 (by rw [hav]; exact ha0) hle
-    hz.coverLimit hsub
+    hz.coverFits.coverLt hsub
   refine ⟨hcl, ⟨j, hj⟩, (STAmount.isZero_eq_false_iff_pos a ha0).mp hnz, hale, by rw [← hav]; exact hle, ?_⟩
   show res.loanBroker'.coverAvailable.toRat = lb.coverAvailable.toRat - a.toRat
   rw [hcv, hexact, hav]
 
-/-- A clawback in the Open zone debits whole base units exactly: the debit is positive and at most
+/-- A clawback on a cover that fits debits whole base units exactly: the debit is positive and at most
 the cover, and CoverAvailable drops by exactly the debit. -/
 lemma LoanBroker.coverClawback_exact (lb : LoanBroker) (v : Vault) (amount : Option STAmount)
-    (res : LoanBrokerCoverResult) (hz : lb.OpenZone v.baseExponent)
+    (res : LoanBrokerCoverResult) (hf : lb.CoverFits v.baseExponent)
     (hmax : lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat)
     (hok : (lb.coverClawback v amount).run = .ok (.ok res)) :
     (lb.roundedCoverClawback v amount).run = .ok (.ok res.amount') ∧
@@ -166,7 +183,7 @@ lemma LoanBroker.coverClawback_exact (lb : LoanBroker) (v : Vault) (amount : Opt
   have hle : m.toRat ≤ lb.coverAvailable.toRat := by
     by_contra hgt
     push Not at hgt
-    obtain ⟨-, jc, hjc⟩ := hz.cover
+    obtain ⟨-, jc, hjc⟩ := hf.cover
     obtain ⟨hmn, jm, hjm⟩ := hng
     have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
     have hj : jc < jm := by
@@ -183,9 +200,9 @@ lemma LoanBroker.coverClawback_exact (lb : LoanBroker) (v : Vault) (amount : Opt
     rw [hwv] at this
     push_cast at this
     linarith
-  have hexact := grid_sub_exact _ _ _ _ hz.cover hng (Vault.baseExponent_grid v).2 (by rw [hmv]; exact hc0) hle
-    hz.coverLimit hsub
-  obtain ⟨j, -, hj⟩ := Number.OnGrid.units_le m _ hng (by rw [hmv]; exact hc0) (hle.trans hz.coverLimit)
+  have hexact := grid_sub_exact _ _ _ _ hf.cover hng (Vault.baseExponent_grid v).2 (by rw [hmv]; exact hc0) hle
+    hf.coverLt hsub
+  obtain ⟨j, -, hj⟩ := Number.OnGrid.units_lt m _ hng (by rw [hmv]; exact hc0) (hle.trans_lt hf.coverLt)
   refine ⟨hc, ⟨j, by rw [← hmv, hj]⟩, (STAmount.isZero_eq_false_iff_pos c hc0).mp hnz,
     by rw [← hmv]; exact hle, ?_⟩
   show res.loanBroker'.coverAvailable.toRat = lb.coverAvailable.toRat - c.toRat

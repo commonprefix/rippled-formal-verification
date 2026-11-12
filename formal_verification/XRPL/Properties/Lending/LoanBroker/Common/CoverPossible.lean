@@ -32,7 +32,7 @@ private lemma LoanBroker.debit_delta (lb lb' : LoanBroker) (v : Vault) (hz : lb.
     lb'.exact.coverAvailable_nonneg (by rw [hC]; linarith)
   -- the two covers are on the base grid, so their difference is exact
   have hd := grid_sub_exact _ _ _ _ hz.cover hg (Vault.baseExponent_grid v).2 lb'.exact.coverAvailable_nonneg
-    (by rw [hC]; linarith) hz.coverLimit hsub
+    (by rw [hC]; linarith) hz.coverFits.coverLt hsub
   have hdv : deltaCover.toRat = d := by rw [hd, hC]; ring
   have hdn := Number.operator_sub_isNormalized_any _ _ _ _ lb.wf.coverAvailable_norm lb'.wf.coverAvailable_norm hsub
   -- a whole number of base units at most the cover converts exactly
@@ -136,7 +136,7 @@ lemma LoanBroker.coverClawback_applied_delta_proof (lb : LoanBroker) (base : Int
       deltaAmount.toRat = res.amount'.toRat := by
   subst hvb
   obtain ⟨hz, -⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  obtain ⟨-, ⟨j, hj⟩, -, hle, hcov⟩ := LoanBroker.coverClawback_exact lb v amount res hz hmax hok
+  obtain ⟨-, ⟨j, hj⟩, -, hle, hcov⟩ := LoanBroker.coverClawback_exact lb v amount res hz.coverFits hmax hok
   exact LoanBroker.debit_delta lb _ v hz hnt (LoanBroker.coverClawback_openZone lb v amount res hz hnt hmax hok).cover
     _ j hj hle hcov
 
@@ -241,25 +241,28 @@ lemma LoanBroker.coverClawback_all_proof (lb : LoanBroker) (base : Int) (hr : lb
       cases ha
     have hcan := LoanBroker.canCoverClawback_of_units lb v none _ hz hnt hxrp hmax hreq (fun a ha => by cases ha) hm
       hroom
-    obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v none hz hnt hmax hreq hcan
+    obtain ⟨-, res, -, hres, -⟩ :=
+      LoanBroker.coverClawback_lawful_total_proof lb v none hz.coverFits hnt hmax hreq hcan
     -- clawing back with no amount takes all the cover above the minimum, which is zero
     refine ⟨hcan, res, hres, ?_⟩
-    rw [LoanBroker.coverClawback_all_leaves_minimum_proof lb v none res _ hz hnt hmax hreq (Or.inl rfl) hm hres,
-      Number.toRat_zero]
+    rw [LoanBroker.coverClawback_all_leaves_minimum_proof lb v none res _ hz.coverFits hnt hmax hreq (Or.inl rfl) hm
+      hres, Number.toRat_zero]
   · have hreq : ∀ a ∈ some s, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat := by
       intro a ha
       cases ha
       exact ⟨Or.inl hcs, hst, hspos.le⟩
     have hcan := LoanBroker.canCoverClawback_of_units lb v (some s) _ hz hnt hxrp hmax hreq
       (fun a ha => by cases ha; exact ⟨k, hk⟩) hm hroom
-    obtain ⟨res, hres⟩ := LoanBroker.coverClawback_lawful_total_proof lb v (some s) hz hnt hmax hreq hcan
-    obtain ⟨-, -, -, -, hcov⟩ := LoanBroker.coverClawback_exact lb v (some s) res hz hmax hres
+    obtain ⟨-, res, -, hres, -⟩ :=
+      LoanBroker.coverClawback_lawful_total_proof lb v (some s) hz.coverFits hnt hmax hreq hcan
+    obtain ⟨-, -, -, -, hcov⟩ := LoanBroker.coverClawback_exact lb v (some s) res hz.coverFits hmax hres
     have hmv : s.mValue ≠ 0 := fun h0 => by
       rw [STAmount.toRat_eq_zero_of_mValue_zero s h0] at hspos
       exact lt_irrefl _ hspos
     -- the request is the whole cover, already whole base units
-    have hfl := LoanBroker.roundedCoverClawback_capped_proof lb v s res _ hz hnt hmax ⟨Or.inl hcs, hst, hspos.le⟩
-      (by simp [STAmount.isZero, hmv]) hm hres
+    have hfl :=
+      LoanBroker.roundedCoverClawback_capped_proof lb v s res _ hz.coverFits hnt hmax ⟨Or.inl hcs, hst, hspos.le⟩
+        (by simp [STAmount.isZero, hmv]) hm hres
     rw [Number.toRat_zero, sub_zero, ← hv, min_self, floor_units_self _ _ (k : ℤ) (by rw [hk]; norm_cast)] at hfl
     exact ⟨s, res, hcs, hst, hv, hcan, hres, by rw [hcov, hfl, hv, sub_self]⟩
 

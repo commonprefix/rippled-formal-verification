@@ -11,12 +11,12 @@ namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
 
-/-- Vault transaction on a reachable vault -> no `tecINTERNAL`, a deposit when its XRP or MPT amount is at most
-`2.28·10^17` units, and no `tecPATH_DRY` within the Open limit. -/
+/-- Vault transaction on a reachable vault -> a deposit, a withdrawal or a clawback returns neither `tecINTERNAL` nor
+`tecPATH_DRY`. -/
 theorem Vault.Reachable.no_internal_errors (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) :
     (∀ (amount : STAmount) (isDonation : Bool) (t : UInt32) (hpos : 0 < amount.toRat),
       amount.Canonical → amount.mNumericType = v.numericType → -- a canonical amount of the vault's asset
-      -- past `2.28·10^17` units the 19-digit share price can round above the amount
+      -- past `2.28·10^17` units the 19-digit share price can round above the amount (FV_M2_22)
       (v.numericType.isIntegral = true → amount.toRat ≤ 228 * 10 ^ 15) →
       (v.deposit amount isDonation t hpos).run ≠ .ok (.error .tecINTERNAL)) ∧
     (∀ (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
@@ -25,7 +25,7 @@ theorem Vault.Reachable.no_internal_errors (v : Vault) (t0 : UInt32) (hr : Vault
       (v.clawback assets holderShares waive hnn).run ≠ .ok (.error .tecINTERNAL)) ∧
     (∀ (amount : STAmount) (isDonation : Bool) (t : UInt32) (hpos : 0 < amount.toRat),
       amount.Canonical → amount.mNumericType = v.numericType → -- a canonical amount of the vault's asset
-      amount.toRat ≤ 9 * 10 ^ (15 + v.baseExponent) → -- within the Open limit
+      amount.toRat ≤ 9 * 10 ^ (15 + v.baseExponent) → -- within the Open limit (FV_M2_23)
       (v.deposit amount isDonation t hpos).run ≠ .ok (.error .tecPATH_DRY)) ∧
     (∀ (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
       amount.amount.Canonical →

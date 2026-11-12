@@ -30,22 +30,33 @@ theorem Lending.Reachable.subscription_no_loans (hr : l.Reachable) (hsub : l.vau
       l.vault.yieldUnrealized = Number.zero :=
   LendingLedger.subscription_no_loans_proof l hr hsub
 
-/-- Every loan's last due date is at least 60 seconds before RedemptionDate. -/
+/-- Every loan's last due date + GracePeriod is at least 60 seconds before RedemptionDate. -/
 theorem Lending.Reachable.loans_mature (hr : l.Reachable) (s : VaultSchedule) (hs : l.vault.schedule = some s)
     (he : l.loan? j = some e) :
+    -- without GracePeriod, which the LoanSet schedule check leaves out (FV_M4_49)
     e.loan.schedule.startDate.toNat + e.loan.schedule.paymentInterval.toNat * e.loan.schedule.paymentTotal.toNat +
       loanRedemptionBuffer ≤ s.redemptionDate.toNat :=
   LendingLedger.loans_mature_proof l hr s hs j e he
 
-/-- Investment, on a vault that is not coarsened -> AssetsAvailable decreases only through a loan transaction, a
-withdrawal, which needs an early-exit fee rate, or a clawback. -/
+/-- Witness: a run where a loan's last due date + GracePeriod is after RedemptionDate. Its one payment is due 60
+seconds before RedemptionDate and its GracePeriod is as long as its PaymentInterval. -/
+theorem Lending.Reachable.loans_mature_attained :
+    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule), l.Reachable ∧ l.vault.schedule = some s ∧
+      l.loan? j = some e ∧
+      s.redemptionDate.toNat < e.loan.schedule.startDate.toNat +
+        e.loan.schedule.paymentInterval.toNat * e.loan.schedule.paymentTotal.toNat +
+          e.loan.schedule.gracePeriod.toNat :=
+  LendingLedger.loans_mature_witness
+
+/-- Investment -> AssetsAvailable decreases only through a loan transaction, a withdrawal, which needs an early-exit
+fee rate, or a clawback. -/
 theorem Lending.investment_lock (l' : LendingLedger) (tx : LendingTx) (hr : l.Reachable)
-    (hinv : l.vault.phase l.now = .investment) (hnc : l.NotCoarsened) (h : (l.apply tx).run = .ok (.ok l'))
+    (hinv : l.vault.phase l.now = .investment) (h : (l.apply tx).run = .ok (.ok l'))
     (hdec : l'.vault.assetsAvailable.toRat < l.vault.assetsAvailable.toRat) :
     tx.isLoan = true ∨
       (∃ holder amount, tx = .vaultWithdraw holder amount ∧ l.vault.earlyExitFeeRate.isSome = true) ∨
       ∃ holder assets, tx = .vaultClawback holder assets :=
-  LendingLedger.investment_lock_proof l l' tx hr hinv hnc h hdec
+  LendingLedger.investment_lock_proof l l' tx hr hinv h hdec
 
 /-- Redemption -> DebtTotal, LoanCount, AssetsDeployed, AssetsReserved, SharesTotal and YieldUnrealized never increase,
 and AssetsAvailable increases only through a loan payment, a default, deleting a pending loan, or a donation. -/
@@ -76,18 +87,19 @@ theorem Lending.redemption_recovery_attained :
   LendingLedger.redemption_yield_witness
 
 /-- Redemption, loan with payments left -> when NextPaymentDueDate < now, then only a late payment can pay it, and
-when now > RedemptionDate + GracePeriod, then now > NextPaymentDueDate + GracePeriod. -/
+now > NextPaymentDueDate + GracePeriod. -/
 theorem Lending.Reachable.redemption_loans_late (hr : l.Reachable) (hred : l.vault.phase l.now = .redemption)
     (he : l.loan? j = some e) (hp : e.loan.paymentRemaining ≠ 0) :
     e.loan.isPaymentLate l.now = true ∧
       ∀ s : VaultSchedule, l.vault.schedule = some s →
+        -- GracePeriod past RedemptionDate, because the LoanSet schedule check leaves it out (FV_M4_49)
         s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat < l.now.toNat →
         e.loan.nextPaymentDueDate.toNat + e.loan.schedule.gracePeriod.toNat < l.now.toNat :=
   ⟨LendingLedger.redemption_loans_late_proof l hr hred j e he hp,
     fun s hs ht => LendingLedger.redemption_defaultable_proof l hr s hs j e he hp ht⟩
 
-/-- Witness: a run where a loan with a payment left can't be defaulted yet in the redemption phase. Its payment is
-due 60 seconds before RedemptionDate and its GracePeriod is longer, so the default returns tecTOO_SOON. -/
+/-- Witness: a run in the redemption phase where now ≤ NextPaymentDueDate + GracePeriod. The payment is due 60
+seconds before RedemptionDate and its GracePeriod is longer, so the default returns tecTOO_SOON. -/
 theorem Lending.Reachable.redemption_loans_late_attained :
     ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule), l.Reachable ∧
       l.vault.phase l.now = .redemption ∧ l.loan? j = some e ∧ e.loan.paymentRemaining ≠ 0 ∧

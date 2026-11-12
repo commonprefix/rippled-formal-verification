@@ -1,6 +1,7 @@
 import XRPL.Properties.Lending.Ledger.Common.RedemptionRecovery
 import XRPL.Properties.Lending.Ledger.Common.AssetFlowSteps
 import XRPL.Properties.Vault.Proofs.DepositCharge
+import XRPL.Properties.Lending.Ledger.Common.YieldSum
 
 /-! # What can take AssetsAvailable down in the investment phase
 
@@ -50,9 +51,43 @@ private lemma LendingLedger.depositedAssets_nonneg (l : LendingLedger) (amount :
     · exact le_refl 0
   · exact le_refl 0
 
+open XRPL.Model.SingleAssetVault in
+/-- A donation that succeeds passed the Open-limit check, so the vault it went into was not coarsened. -/
+private lemma Vault.donation_notCoarsened (v : Vault) (amount : STAmount) (t : UInt32) (hpos : 0 < amount.toRat)
+    (hc : amount.Canonical) (hty : amount.mNumericType = v.numericType) (hasset : Vault.HoldsAsset v)
+    (hv : Vault.OnBaseGrid v) (hYg : Number.OnGrid v.baseExponent v.yieldUnrealized)
+    (r : VaultWithAmounts) (h : (v.deposit amount true t hpos).run = .ok (.ok r)) :
+    v.assetsAvailable.toRat + v.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ v.baseExponent := by
+  obtain ⟨ra, amounts, -, hra, hcomp, hin, -, -, -, -⟩ := Vault.deposit_ok_reduces v amount true t hpos r h
+  obtain ⟨hrac, hraty, -⟩ := Vault.roundedDepositAmount_form v amount ra hc hty hra
+  obtain ⟨hcf, -, hc0⟩ := computeDeposit_assets_form v ra true amounts hrac hraty hasset.maxValue_le hcomp
+  obtain ⟨assetsTotal, -, -, hcl, -⟩ := computeDeposit_donation_reduces v ra amounts hcomp
+  obtain ⟨k, hk⟩ := Vault.clamp_grid v _ _ _ hrac hcl
+  obtain ⟨x, hnum, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+  obtain ⟨hxv, hxn⟩ := hcf.toNumber_exact x hnum
+  have hb := Vault.exceedsOpenLimit_false_sum v x hv hYg ⟨hxn, k, by rw [hxv, hk]⟩ (by rw [hxv]; exact hc0) hex
+  have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
+  have hY0 : 0 ≤ v.yieldUnrealized.toRat := v.exact.yieldUnrealized_nonneg
+  have hx0 : 0 ≤ x.toRat := by rw [hxv]; exact hc0
+  linarith
+
+/-- A donation that succeeds on a reachable ledger was made to a vault that is not coarsened. -/
+private lemma LendingLedger.donation_notCoarsened (l l' : LendingLedger) (hr : l.Reachable) (holder : Nat)
+    (amount : STAmount) (h : (l.apply (.vaultDeposit holder amount true)).run = .ok (.ok l')) : l.NotCoarsened := by
+  obtain ⟨hc, hty⟩ := LendingTx.preflight_vaultDeposit' l holder amount true hr.holdsAsset
+    (LendingLedger.apply_checked h).1
+  obtain ⟨hAAg, hADg, -, -, hYg, -⟩ := LendingLedger.base_grid_proof l hr hr.holdsAsset.maxValue_le
+  obtain ⟨u, hu, -⟩ := LendingLedger.apply_vault rfl h
+  simp only [LendingLedger.applyVault] at hu
+  split at hu
+  · unfold_ter at hu
+    walk_ok
+    exact Vault.donation_notCoarsened _ _ _ _ hc hty hr.holdsAsset ⟨hAAg, hADg⟩ hYg _ ‹_›
+  · cases hu
+
 /-- Proof body of `Lending.investment_lock`. -/
 lemma LendingLedger.investment_lock_proof (l l' : LendingLedger) (tx : LendingTx) (hr : l.Reachable)
-    (hinv : l.vault.phase l.now = .investment) (hnc : l.NotCoarsened) (h : (l.apply tx).run = .ok (.ok l'))
+    (hinv : l.vault.phase l.now = .investment) (h : (l.apply tx).run = .ok (.ok l'))
     (hdec : l'.vault.assetsAvailable.toRat < l.vault.assetsAvailable.toRat) :
     tx.isLoan = true ∨
       (∃ holder amount, tx = .vaultWithdraw holder amount ∧ l.vault.earlyExitFeeRate.isSome = true) ∨
@@ -69,6 +104,7 @@ lemma LendingLedger.investment_lock_proof (l l' : LendingLedger) (tx : LendingTx
         exact Vault.deposit_not_investment _ _ _ _ hinv _ ‹_›
       · cases hu
     · -- a donation adds its charge to AssetsAvailable + AssetsDeployed and keeps AssetsDeployed
+      have hnc := LendingLedger.donation_notCoarsened l l' hr holder amount h
       have hflow : l'.vault.assetsAvailable.toRat + l'.vault.assetsDeployed.toRat =
           l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat +
             (l.depositedAssets amount true - 0 - 0 + 0 - 0) :=

@@ -73,8 +73,8 @@ theorem Vault.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) 
           (Vault.Reachable.clawback_sharesTotal_pos v t0 hr assets holderShares waiveUnrealizedLoss hhs hnn r hok))
         r hok hworth⟩
 
-/-- From a reachable vault, over any operations that leave shares, the per-share value never falls. `h` - `whole` gives
-each step the one-step `hworth`. -/
+/-- From a reachable vault, over any operations while SharesTotal > 0, the per-share value never falls.
+`h` - `whole` gives each step the one-step `hworth`. -/
 theorem Vault.ReachableFromIn.no_dilution (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (t : UInt32) (n : ℕ) (w : Vault) (h : Vault.ReachableFromIn true v t w n) :
     w.withdrawNav / (w.toExact.sharesTotal : ℚ) ≥ v.withdrawNav / (v.toExact.sharesTotal : ℚ) :=

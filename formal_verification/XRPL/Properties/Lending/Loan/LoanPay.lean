@@ -127,7 +127,7 @@ theorem Lending.payment_cover_unchanged (l' : LendingLedger) (i : Nat) (paymentT
   LendingLedger.payment_fees_proof l l' i paymentType amount h loan loan' hat hat' hcover
 
 /-- Payment when the broker is below minCover -> CoverAvailable' − CoverAvailable is at most feePaid and less than
-1 ULP below it at the scale of CoverAvailable', and on a cover that is not coarsened it is amountToBroker. -/
+1 ULP below it at the scale of CoverAvailable', and it is amountToBroker. -/
 theorem Lending.payment_fees (hr : l.Reachable) (l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType)
     (amount : Number) (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan)
     (hat : l.LoanAt i loan) (hat' : l'.LoanAt i loan') (payment : UnsettledPayment Vault)
@@ -167,8 +167,8 @@ theorem Lending.payment_fees_upper_bound_attained :
       (loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat) - payment.amounts.feePaid.toRat = 0 :=
   LendingLedger.payment_fees_upper_bound_witness
 
-/-- Witness: a run where feePaid − (CoverAvailable' − CoverAvailable) = 1 ULP. A 10% management fee on a loan paid
-32 years late lifts a cover of `0.5` to the scale `10^0`. -/
+/-- Witness: a run on a coarsened cover where feePaid − (CoverAvailable' − CoverAvailable) = 1 ULP. A 10% management
+fee on a loan paid 32 years late lifts a cover of `0.5` to the scale `10^0`, on a Scale 1 vault. -/
 theorem Lending.payment_fees_lower_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan)
       (payment : UnsettledPayment Vault) (e : Int),
@@ -363,6 +363,7 @@ theorem Lending.fullPayment_payoff (hr : l.Reachable) (l' : LendingLedger) (i : 
       loan'.principalOutstanding = Number.zero ∧ loan'.managementFeeOutstanding = Number.zero) ∧
     (∀ rate tpo fullInterest fullInterest' managementFee : Number, loan.periodicRate = .ok rate →
       loanPrincipalFromPeriodicPayment loan.periodicPayment rate loan.paymentRemaining = .ok tpo →
+      -- the interest since StartDate, when the principal is paid out unless LoanAccept comes before it (FV_M4_48)
       computeFullPaymentInterest tpo rate l.now loan.schedule.paymentInterval loan.previousPaymentDueDate
         loan.schedule.startDate loan.rates.closeInterestRate = .ok fullInterest →
       STAmount.roundToNumericType loan.broker.numericType fullInterest .downward (some loan.loanScale) =
@@ -376,8 +377,8 @@ theorem Lending.fullPayment_payoff (hr : l.Reachable) (l' : LendingLedger) (i : 
       LendingLedger.fullPayment_vault_proof l hr l' i amount h loan hat payment rate tpo fullInterest fullInterest'
         managementFee hpay⟩
 
-/-- Witness: a run where interest does not accrue from the moment the principal is paid out. A loan of 100 at 10%
-accepted on day 0 with StartDate on day 30 is paid in full on day 29 with interestPaid = 0. -/
+/-- Witness: a run where a loan accepted before StartDate is paid in full with interestPaid = 0. A loan of 100 at 10%
+accepted on day 0 with StartDate on day 30 is paid in full on day 29. -/
 theorem Lending.fullPayment_payoff_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (payment : UnsettledPayment Vault),
       l.Reachable ∧ (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
@@ -538,17 +539,40 @@ theorem Lending.overpayment_fees_attained :
       p.amounts.feePaid.toRat ≠ payment.amounts.feePaid.toRat + fee.toRat + managementFee.toRat :=
   LendingLedger.overpayment_fees_witness
 
-/-- Payment -> (AssetsAvailable' − AssetsAvailable) − (principalPaid + interestPaid) ≤ 0. -/
-theorem Lending.payment_vault_upper_bound (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
+/-- Payment -> AssetsAvailable' − AssetsAvailable is at most principalPaid + interestPaid and less than 1 ULP below it
+at the scale of AssetsAvailable', and it is amountToPool, for a regular payment the drop in TVO − drop in MFO. -/
+theorem Lending.payment_vault (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
     (paymentType : LoanPaymentType) (amount : Number)
-    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)
-    (payment : UnsettledPayment Vault)
-    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment)) :
+    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)
+    (hat' : l'.LoanAt i loan') (payment : UnsettledPayment Vault)
+    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
+    (r : LoanWithAmounts Vault) (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r)) :
     (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) -
-      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) ≤ 0 :=
-  LendingLedger.payment_vault_upper_bound_proof l hr l' i paymentType amount h loan hat payment hpay
+      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) ≤ 0 ∧
+    -- at most `10^16` base units paid, and the range of the proof: AssetsAvailable plus the payment below `2^63`
+    -- base units, within the XRP and MPT supply
+    (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat ≤
+        10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent →
+      l.vault.assetsAvailable.toRat + (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
+        2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent →
+      ∀ e, numberExponent l'.vault.assetsAvailable l.vault.baseExponent l.vault.numericType = .ok e →
+        payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat -
+          (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) < 10 ^ e) ∧
+    -- the vault is not coarsened: AssetsAvailable plus the payment stays below `10^16` base units (FV_M4_25)
+    (l.vault.assetsAvailable.toRat + (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
+        10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent →
+      l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat = r.amountToPool.toRat ∧
+        (paymentType = .regular → r.amountToPool.toRat =
+          (loan.totalValueOutstanding.toRat - loan'.totalValueOutstanding.toRat) -
+            (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat))) :=
+  ⟨LendingLedger.payment_vault_upper_bound_proof l hr l' i paymentType amount h loan hat payment hpay,
+    fun hpaid hfit =>
+      LendingLedger.payment_vault_lower_bound_proof l hr l' i paymentType amount h loan hat payment hpay hpaid hfit,
+    fun htotal => LendingLedger.payment_vault_credit_proof l hr l' i paymentType amount h loan loan' hat hat' payment
+      hpay r hok htotal⟩
 
-/-- Witness: a run where they are equal. The first payment of the loan of `603946999675283.3` at its due date. -/
+/-- Witness: a run where (AssetsAvailable' − AssetsAvailable) − (principalPaid + interestPaid) = 0. The first payment
+of the loan of `603946999675283.3` at its due date. -/
 theorem Lending.payment_vault_upper_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan : Loan)
       (payment : UnsettledPayment Vault),
@@ -557,54 +581,6 @@ theorem Lending.payment_vault_upper_bound_attained :
       (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) -
         (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) = 0 :=
   LendingLedger.payment_vault_upper_bound_witness
-
-/-- Payment on a vault that is not coarsened -> AssetsAvailable' − AssetsAvailable = amountToPool, and for a regular
-payment amountToPool = drop in TotalValueOutstanding − drop in ManagementFeeOutstanding. -/
-theorem Lending.Reachable.payment_vault_credit (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
-    (paymentType : LoanPaymentType) (amount : Number)
-    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan loan' : Loan) (hat : l.LoanAt i loan)
-    (hat' : l'.LoanAt i loan') (payment : UnsettledPayment Vault)
-    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
-    (r : LoanWithAmounts Vault) (hok : (loan.pay l.vault paymentType amount l.now).run = .ok (.ok r))
-    -- the vault is not coarsened: AssetsAvailable plus the payment stays below `10^16` base units (FV_M4_25)
-    (htotal : l.vault.assetsAvailable.toRat +
-      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
-        10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
-    l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat = r.amountToPool.toRat ∧
-      (paymentType = .regular → r.amountToPool.toRat =
-        (loan.totalValueOutstanding.toRat - loan'.totalValueOutstanding.toRat) -
-          (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat)) :=
-  LendingLedger.payment_vault_credit_proof l hr l' i paymentType amount h loan loan' hat hat' payment hpay r hok
-    htotal
-
-/-- Witness: a run where a regular payment on a coarsened vault credits less than that drop. Loan D's final
-instalment takes 1.9 off TotalValueOutstanding, but the vault holding about `1.87·10^15` gets 1. -/
-theorem Lending.Reachable.payment_vault_credit_coarsened_attained :
-    ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan loan' : Loan),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧
-      l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat <
-        (loan.totalValueOutstanding.toRat - loan'.totalValueOutstanding.toRat) -
-          (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat) :=
-  LendingLedger.payment_vault_credit_coarsened_witness
-
-/-- Payment -> principalPaid + interestPaid − (AssetsAvailable' − AssetsAvailable) < 1 ULP at the scale of
-AssetsAvailable'. `hpaid` - at most `10^16` base units paid -/
-theorem Lending.payment_vault_lower_bound (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
-    (paymentType : LoanPaymentType) (amount : Number)
-    (h : (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l')) (loan : Loan) (hat : l.LoanAt i loan)
-    (payment : UnsettledPayment Vault)
-    (hpay : (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment))
-    (hpaid : payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat ≤
-      10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
-    -- the range of the proof: AssetsAvailable plus the payment below `2^63` base units, within the XRP and MPT supply
-    (hfit : l.vault.assetsAvailable.toRat +
-      (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
-        2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) :
-    ∀ e, numberExponent l'.vault.assetsAvailable l.vault.baseExponent l.vault.numericType = .ok e →
-      payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat -
-        (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) < 10 ^ e :=
-  LendingLedger.payment_vault_lower_bound_proof l hr l' i paymentType amount h loan hat payment hpay hpaid hfit
 
 /-- Witness: a run where principalPaid + interestPaid − (AssetsAvailable' − AssetsAvailable) is 1.99 ULP at the
 scale of AssetsAvailable'. The loan of `603946999675283.3` paid 32 years late pays over `10^16` base units. -/
@@ -619,6 +595,17 @@ theorem Lending.payment_vault_lower_bound_attained :
       payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat -
         (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) = (199 / 100 : ℚ) * 10 ^ e :=
   LendingLedger.payment_vault_lower_bound_witness
+
+/-- Witness: a run on a coarsened vault where a regular payment credits less than that drop. Loan D's final
+instalment takes 1.9 off TotalValueOutstanding, but the vault holding about `1.87·10^15` gets 1. -/
+theorem Lending.payment_vault_coarsened_attained :
+    ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan loan' : Loan),
+      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat <
+        (loan.totalValueOutstanding.toRat - loan'.totalValueOutstanding.toRat) -
+          (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat) :=
+  LendingLedger.payment_vault_credit_coarsened_witness
 
 /-- Regular payment -> AssetsTotal' − AssetsTotal = YieldUnrealized − YieldUnrealized' = interestPaid. -/
 theorem Lending.regularPayment_yield (hr : l.Reachable) (l' : LendingLedger) (i : Nat) (amount : Number)

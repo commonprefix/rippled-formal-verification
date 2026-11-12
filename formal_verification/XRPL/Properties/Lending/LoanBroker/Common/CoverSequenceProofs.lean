@@ -101,12 +101,12 @@ lemma LoanBroker.Reachable.coverClawback_facts (lb : LoanBroker) (base : Int) (h
   have hr1 := LoanBroker.Reachable.coverClawback_step lb base hr v amount res hvb hnt hreq hcan hok
   subst hvb
   obtain ⟨hz, hm⟩ := LoanBroker.Reachable.zone_setup lb _ hr hmax v rfl
-  obtain ⟨hrc, hj, hpos', -, hcov⟩ := LoanBroker.coverClawback_exact lb v amount res hz hmax hok
+  obtain ⟨hrc, hj, hpos', -, hcov⟩ := LoanBroker.coverClawback_exact lb v amount res hz.coverFits hmax hok
   obtain ⟨_, _, claw, claw', _, _, _, _, hof, hcl, _⟩ := LoanBroker.roundedCoverClawback_ok lb v amount _ hrc
   have hcz := (STAmount.ofNumber_canonicalOrZero _ _ _ claw' hmax hof).1
   obtain ⟨hrz, hrt, -⟩ := clampToSumExponent_canonicalOrZero lb.coverAvailable _ _ _
     (STAmount.CanonicalOrZero.operator_neg hcz) v.baseExponent_range.1 v.baseExponent_range.2 hcl
-  have hfl := LoanBroker.coverClawback_floor lb v amount res _ hz hnt hmax hreq hm hok
+  have hfl := LoanBroker.coverClawback_floor lb v amount res _ hz.coverFits hnt hmax hreq hm hok
   rw [Number.toRat_zero] at hfl
   refine ⟨hr1, (LoanBroker.coverClawback_fixed_fields lb v amount res hok).numericType,
     hrz.resolve_right (by simp [(STAmount.isZero_eq_false_iff_pos _ hpos'.le).2 hpos']), ?_, hpos', hj, hfl, hcov⟩
@@ -182,9 +182,10 @@ lemma LoanBroker.coverDeposit_clawable_proof (lb : LoanBroker) (base : Int) (hr 
   subst hvb
   have hcan1 := LoanBroker.canCoverClawback_of_units _ v _ _ hz1 hnt' (by rw [hnt1]; exact hxrp) hmax1 hreq1
     (fun a ha => by cases ha; exact ⟨j, hj⟩) hm1 (by rw [Number.toRat_zero]; linarith)
-  obtain ⟨res2, hok2⟩ := LoanBroker.coverClawback_lawful_total_proof _ v _ hz1 hnt' hmax1 hreq1 hcan1
-  obtain ⟨hrc, -⟩ := LoanBroker.coverClawback_exact _ v _ res2 hz1 hmax1 hok2
-  have hfl := LoanBroker.coverClawback_floor _ v _ res2 _ hz1 hnt' hmax1 hreq1 hm1 hok2
+  obtain ⟨-, res2, -, hok2, -⟩ :=
+    LoanBroker.coverClawback_lawful_total_proof _ v _ hz1.coverFits hnt' hmax1 hreq1 hcan1
+  obtain ⟨hrc, -⟩ := LoanBroker.coverClawback_exact _ v _ res2 hz1.coverFits hmax1 hok2
+  have hfl := LoanBroker.coverClawback_floor _ v _ res2 _ hz1.coverFits hnt' hmax1 hreq1 hm1 hok2
   refine ⟨res2.amount', hrc, ?_, hcan1⟩
   rw [hfl]
   simp only [LoanBroker.clawTarget, (STAmount.isZero_eq_false_iff_pos _ hpos'.le).2 hpos', Bool.false_eq_true,
@@ -211,7 +212,7 @@ lemma LoanBroker.coverDeposit_coverClawback_restores_proof (lb : LoanBroker) (ba
       res.loanBroker'.numericType.maxValue.toNat ≤ maxRep.toNat := by rw [hnt1]; exact hmax
   obtain ⟨hz1, -⟩ := LoanBroker.Reachable.zone_setup _ base hr1 hmax1 v hvb
   subst hvb
-  obtain ⟨hrc, -, -, -, hcov'⟩ := LoanBroker.coverClawback_exact _ v _ res' hz1 hmax1 hclaw
+  obtain ⟨hrc, -, -, -, hcov'⟩ := LoanBroker.coverClawback_exact _ v _ res' hz1.coverFits hmax1 hclaw
   obtain ⟨claw, hrr, hamt, -⟩ :=
     LoanBroker.coverDeposit_clawable_proof lb _ hr hmax v rfl hnt hxrp amount hc hat hpos hcap hcan res hok
   rw [hrc, Except.ok.injEq, Except.ok.injEq] at hrr
