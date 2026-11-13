@@ -18,6 +18,7 @@
 #include <xrpl/protocol/TER.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -32,6 +33,7 @@ struct DepositCase
     StagedVault vault;
     std::int64_t amount;
     TER expected;
+    // The deposit is amount * 10^exponent vault grid units.
     int exponent{};
     bool donate{};
 };
@@ -648,14 +650,18 @@ class LeanVaultDeposit_test : public LeanSuite
         };
     }
 
-    // Each case stages its vault, deposits `amount` * 10^`exponent` units and expects its verdict
-    // on both sides. Rows are grouped by the cusp they sit around.
+    // Each case stages its vault, deposits `amount` * 10^`exponent` vault grid units and expects
+    // its verdict on both sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Open limit: a deposit is rejected (tecLIMIT_EXCEEDED) once yield unrealized + assets
     //   total + charge exceeds 9e15 grid units.
     // - Assets maximum: a deposit is rejected (tecLIMIT_EXCEEDED) once assets total + charge
     //   exceeds a non-zero AssetsMaximum. The rows stage price 1, so the charge is the amount.
     // - Zero shares: a deposit buying trunc(shares total * amount / assets total) = 0 shares is
     //   rejected (tecPRECISION_LOSS). Each cusp buys exactly one share.
+    // - Zero shares, by asset: the zero shares rows whose charge is below one unit. XRP and MPT
+    //   round that charge up to one unit and succeed (kZeroSharesIntegral); an IOU floors it to
+    //   zero (tecPRECISION_LOSS, kZeroSharesIou).
     // - Charge rounding: the charge assets total * shares bought / shares total rounds to the
     //   nearest unit, half to even. Each cusp is an exact half and succeeds, so it shows only in
     //   the post-state totals.
@@ -665,6 +671,9 @@ class LeanVaultDeposit_test : public LeanSuite
     //   zero and the deposit is rejected (tecPRECISION_LOSS). Each cusp charges exactly one unit.
     // - Share mint cap: minting past 2^63 - 1 outstanding shares fails the share send
     //   (tecPATH_DRY). Each cusp mints up to exactly the cap.
+    // - Share mint cap, by asset: the share mint cap rows whose charge is below one unit, split as
+    //   for zero shares (kShareMintCapIntegral, kShareMintCapIou); the IOU list adds a cusp where a
+    //   one-unit charge mints up to exactly the cap.
     // - Sub-grid amount: an IOU amount below one grid step rounds to zero in preclaim
     //   (tecPRECISION_LOSS). Mantissa 10^15 at exponent -15 is exactly one grid step.
     // - Share overflow: a first IOU deposit mints amount * 10^scale shares; at 2^63 the count
@@ -673,10 +682,12 @@ class LeanVaultDeposit_test : public LeanSuite
     // - Donation: the owner's donation mints no shares but meets the open limit, the assets
     //   maximum, the grid and the deposit block like a deposit. It needs shares outstanding
     //   (tecNO_PERMISSION) and may refill an insolvent vault.
+    // - Donation sub-grid: an IOU donation below one grid step is tecPRECISION_LOSS, as for the
+    //   sub-grid amount.
     // - Loss ignored: the price is assets total over shares total; the unrealized loss does not
     //   lower it.
-    // - Locked: a plain deposit into a blocked or insolvent vault is rejected (tecLOCKED).
     // - First deposit: a deposit into an empty vault mints amount * 10^scale shares.
+    // - Locked: a plain deposit into a blocked or insolvent vault is rejected (tecLOCKED).
     // clang-format off
     static constexpr DepositCase kOpenLimit[] = {
         // yield 0, total 1, amount 8'999'999'999'999'999
@@ -944,7 +955,8 @@ class LeanVaultDeposit_test : public LeanSuite
         {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'001}, .amount = 1, .expected = tecPRECISION_LOSS},
         {.vault = {.available = 1'000'000'000, .sharesTotal = 1'000'000'002}, .amount = 1, .expected = tecPRECISION_LOSS},
     };
-    // FV_M2_3 (C++ behaviour pinned as expected): the charge rounds to nearest.
+    // FV_M2_3 (C++ behaviour pinned as expected), here and in kChargeRoundingVerdict: the charge
+    // rounds to nearest.
     static constexpr DepositCase kChargeRounding[] = {
         // total 3, sharesTotal 2, amount 2
         {.vault = {.available = 3, .sharesTotal = 1}, .amount = 1, .expected = tecPRECISION_LOSS},
@@ -1058,7 +1070,6 @@ class LeanVaultDeposit_test : public LeanSuite
         {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'002, .expected = tesSUCCESS},
         {.vault = {.available = 1'000'000'001, .sharesTotal = 1'000'000'002}, .amount = 500'000'003, .expected = tesSUCCESS},
     };
-    // FV_M2_3 (C++ behaviour pinned as expected): the charge rounds to nearest.
     static constexpr DepositCase kChargeRoundingVerdict[] = {
         // charge 2.5 rounds to 2 and fits; half-up would charge 3, past the maximum
         {.vault = {.available = 5, .maximum = 7, .sharesTotal = 2}, .amount = 3, .expected = tesSUCCESS},
@@ -1282,19 +1293,15 @@ class LeanVaultDeposit_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestVaults const& vaults,
                              std::span<DepositCase const> cases) {
+            testcase("deposit " + name + (closed ? ", closed-ended" : ""));
             for (auto const& [vault, depositor] : vaults)
             {
-                beginCase(("deposit " + vaultName(env, vault) + " " + name +
-                           (closed ? ", closed-ended" : ""))
-                              .c_str());
-                for (auto const& [row, amount, expected, exponent, donate] : cases)
+                for (std::size_t i = 0;
+                     auto const& [row, amount, expected, exponent, donate] : cases)
                 {
                     StagedVault staged = row;
                     if (closed)
-                    {
-                        staged.subscriptionDate = p + 1'000;
-                        staged.redemptionDate = p + 1'001'000;
-                    }
+                        inSubscription(staged, p);
                     STAmount const deposit = vaultUnits(env, vault, amount, exponent);
                     // Only the owner may donate. An IOU owner or non-issuer depositor holds exactly
                     // the amount.
@@ -1304,7 +1311,12 @@ class LeanVaultDeposit_test : public LeanSuite
                     AppliedVaultTx const cpp =
                         applyDeposit(env, vault, from, amounts, deposit, donate);
                     LeanVaultResult const lean = leanVaultDeposit(cpp.pre, deposit, donate, p);
-                    expectSame(*this, sampleText(staged, deposit), cpp, lean, expected);
+                    expectSame(
+                        *this,
+                        rowText(i++, vaultName(env, vault)) + sampleText(staged, deposit),
+                        cpp,
+                        lean,
+                        expected);
                 }
             }
         };
@@ -1383,11 +1395,12 @@ class LeanVaultDeposit_test : public LeanSuite
         };
         // clang-format on
 
+        testcase("deposit subscription date");
         for (auto const& [vault, depositor] : s.all)
         {
-            beginCase(("deposit " + vaultName(env, vault) + " subscription date").c_str());
             std::uint32_t const p = parentCloseTime(env);
-            for (auto const& [row, subscription, redemption, amount, expected] : kSubscriptionDate)
+            for (std::size_t i = 0;
+                 auto const& [row, subscription, redemption, amount, expected] : kSubscriptionDate)
             {
                 StagedVault staged = row;
                 staged.subscriptionDate = static_cast<std::uint32_t>(p + subscription);
@@ -1395,7 +1408,12 @@ class LeanVaultDeposit_test : public LeanSuite
                 STAmount const deposit = vaultUnits(env, vault, amount);
                 AppliedVaultTx const cpp = applyDeposit(env, vault, depositor, staged, deposit);
                 LeanVaultResult const lean = leanVaultDeposit(cpp.pre, deposit, false, p);
-                expectSame(*this, sampleText(staged, deposit), cpp, lean, expected);
+                expectSame(
+                    *this,
+                    rowText(i++, vaultName(env, vault)) + sampleText(staged, deposit),
+                    cpp,
+                    lean,
+                    expected);
             }
         }
     }
@@ -1438,65 +1456,63 @@ class LeanVaultDeposit_test : public LeanSuite
         Env env{*this, vaultTestAmendments()};
         Setup const s = setup(env);
 
-        testVaultDepositXRP(
-            env, s.xrpVault, s.depositor, XRP(0), drops(1), tesSUCCESS);  // minimum deposit
-        testVaultDepositXRP(env, s.xrpVault, s.depositor, XRP(0), XRP(1'000), tesSUCCESS);
-        // Open limit: 9e15 drops. Covered by testDepositBoundaries.
-        testVaultDepositXRP(
-            env, s.xrpVault, s.depositor, XRP(0), drops(kOpenLimitUnits), tesSUCCESS);
-        testVaultDepositXRP(
-            env, s.xrpVault, s.depositor, XRP(0), drops(kOpenLimitUnits + 1), tecLIMIT_EXCEEDED);
-        testVaultDepositXRP(
-            env, s.xrpVault, s.depositor, XRP(1'000), XRP(1'000), tesSUCCESS);  // non-empty vault
-        testVaultDepositXRP(
-            env,
-            s.xrpVault,
-            s.depositor,
-            XRP(1'000),
-            drops(1),
-            tesSUCCESS);  // minimum deposit, non-empty
+        struct XrpDeposit
+        {
+            STAmount before;
+            STAmount amount;
+            TER expected;
+        };
+        // clang-format off
+        XrpDeposit const xrpDeposits[] = {
+            // minimum deposit
+            {.before = XRP(0), .amount = drops(1), .expected = tesSUCCESS},
+            {.before = XRP(0), .amount = XRP(1'000), .expected = tesSUCCESS},
+            // Open limit: 9e15 drops. Covered by testDepositBoundaries.
+            {.before = XRP(0), .amount = drops(kOpenLimitUnits), .expected = tesSUCCESS},
+            {.before = XRP(0), .amount = drops(kOpenLimitUnits + 1), .expected = tecLIMIT_EXCEEDED},
+            // non-empty vault
+            {.before = XRP(1'000), .amount = XRP(1'000), .expected = tesSUCCESS},
+            // minimum deposit, non-empty
+            {.before = XRP(1'000), .amount = drops(1), .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (XrpDeposit const& d : xrpDeposits)
+            testVaultDepositXRP(env, s.xrpVault, s.depositor, d.before, d.amount, d.expected);
 
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1}, tesSUCCESS);
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1'000}, tesSUCCESS);
+        // Into the default-scale IOU vault, by the holder unless `byIssuer`.
+        struct IouDeposit
+        {
+            bool byIssuer = false;
+            Number before{0};
+            Number amount;
+            TER expected;
+        };
+        auto const depositIOU = [&](IouDeposit const& d) {
+            jtx::Account const& depositor = d.byIssuer ? s.issuer : s.holder;
+            testVaultDepositIOU(
+                env, s.iouDefaultScaleVault, depositor, d.before, d.amount, d.expected);
+        };
         // Open limit at scale 6: 9e9. It keeps the shares (amount * 1e6) far below INT64_MAX.
         // Covered by testDepositBoundaries.
         Number const iouOpenLimit{kOpenLimitUnits, -6};
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.holder, Number{0}, iouOpenLimit, tesSUCCESS);
-        testVaultDepositIOU(
-            env,
-            s.iouDefaultScaleVault,
-            s.holder,
-            Number{0},
-            iouOpenLimit + Number{1, -6},
-            tecLIMIT_EXCEEDED);
-        // 1e10 at scale 6 needs 17 digits: the total would leave the base exponent.
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.holder, Number{0}, Number{1, 10}, tecLIMIT_EXCEEDED);
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{1}, tesSUCCESS);
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.issuer, Number{0}, iouOpenLimit, tesSUCCESS);
-        testVaultDepositIOU(
-            env,
-            s.iouDefaultScaleVault,
-            s.issuer,
-            Number{0},
-            iouOpenLimit + Number{1, -6},
-            tecLIMIT_EXCEEDED);
-
-        // covered by testDepositBoundaries
-        testVaultDepositIOU(
-            env,
-            s.iouDefaultScaleVault,
-            s.issuer,
-            Number{0},
-            Number{9'999'999'999'999'999LL, 80},
-            tecPATH_DRY);
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{1, -80}, tecPRECISION_LOSS);
+        // clang-format off
+        IouDeposit const iouDeposits[] = {
+            {.amount = Number{1}, .expected = tesSUCCESS},
+            {.amount = Number{1'000}, .expected = tesSUCCESS},
+            {.amount = iouOpenLimit, .expected = tesSUCCESS},
+            {.amount = iouOpenLimit + Number{1, -6}, .expected = tecLIMIT_EXCEEDED},
+            // 1e10 at scale 6 needs 17 digits: the total would leave the base exponent.
+            {.amount = Number{1, 10}, .expected = tecLIMIT_EXCEEDED},
+            {.byIssuer = true, .amount = Number{1}, .expected = tesSUCCESS},
+            {.byIssuer = true, .amount = iouOpenLimit, .expected = tesSUCCESS},
+            {.byIssuer = true, .amount = iouOpenLimit + Number{1, -6}, .expected = tecLIMIT_EXCEEDED},
+            // covered by testDepositBoundaries
+            {.byIssuer = true, .amount = Number{9'999'999'999'999'999LL, 80}, .expected = tecPATH_DRY},
+            {.byIssuer = true, .amount = Number{1, -80}, .expected = tecPRECISION_LOSS},
+        };
+        // clang-format on
+        for (IouDeposit const& d : iouDeposits)
+            depositIOU(d);
 
         testRoundedDepositSuccess(env, s.iouDefaultScaleVault, s.issuer);
         testRoundedDepositBelowVaultScale(env, s.iouDefaultScaleVault, s.holder);
@@ -1505,42 +1521,45 @@ class LeanVaultDeposit_test : public LeanSuite
         testVaultDepositIOU(
             env, s.iouDefaultScaleVault, s.holder, Number{1, 9}, Number{1'000}, tesSUCCESS);
 
-        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, 1, tesSUCCESS);
-        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, 1'000, tesSUCCESS);
-        // Open limit: 9e15 units, far below the share type maximum INT64_MAX. Covered by
-        // testDepositBoundaries.
-        testVaultDepositMPT(env, s.mptVault, s.depositor, 0, kOpenLimitUnits, tesSUCCESS);
-        testVaultDepositMPT(
-            env, s.mptVault, s.depositor, 1'000, 1'000, tesSUCCESS);  // non-empty vault
-        testVaultDepositMPT(env, s.mptVault, s.depositor, 1, kOpenLimitUnits - 1, tesSUCCESS);
-        testVaultDepositMPT(env, s.mptVault, s.depositor, kOpenLimitUnits - 1, 1, tesSUCCESS);
-        testVaultDepositMPT(
-            env, s.mptVault, s.depositor, kOpenLimitUnits - 1, 2, tecLIMIT_EXCEEDED);
+        struct MptDeposit
+        {
+            std::int64_t before{};
+            std::int64_t amount{};
+            TER expected;
+        };
+        // clang-format off
+        static MptDeposit const kMptDeposits[] = {
+            {.before = 0, .amount = 1, .expected = tesSUCCESS},
+            {.before = 0, .amount = 1'000, .expected = tesSUCCESS},
+            // Open limit: 9e15 units, far below the share type maximum INT64_MAX. Covered by
+            // testDepositBoundaries.
+            {.before = 0, .amount = kOpenLimitUnits, .expected = tesSUCCESS},
+            // non-empty vault
+            {.before = 1'000, .amount = 1'000, .expected = tesSUCCESS},
+            {.before = 1, .amount = kOpenLimitUnits - 1, .expected = tesSUCCESS},
+            {.before = kOpenLimitUnits - 1, .amount = 1, .expected = tesSUCCESS},
+            {.before = kOpenLimitUnits - 1, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+        };
+        // clang-format on
+        for (MptDeposit const& d : kMptDeposits)
+            testVaultDepositMPT(env, s.mptVault, s.depositor, d.before, d.amount, d.expected);
 
-        // Truncated to the 1e-6 grid on both sides. Covered by testDepositBoundaries.
-        testVaultDepositIOU(
-            env,
-            s.iouDefaultScaleVault,
-            s.holder,
-            Number{1, 9},
-            Number{100'000'006, -7},
-            tesSUCCESS);
-        testVaultDepositIOU(
-            env,
-            s.iouDefaultScaleVault,
-            s.holder,
-            Number{1, 9},
-            Number{100'000'001, -7},
-            tesSUCCESS);
-
-        // Empty-vault share truncation (C++ truncates toward zero, not to-nearest):
-        // 1.5e-6 USD * 1e6 scale = 1.5 shares -> 1.
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{15, -7}, tesSUCCESS);
-        // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 -> tecPRECISION_LOSS.
-        // covered by testDepositBoundaries (preclaim rounds it to zero first)
-        testVaultDepositIOU(
-            env, s.iouDefaultScaleVault, s.issuer, Number{0}, Number{6, -7}, tecPRECISION_LOSS);
+        // clang-format off
+        IouDeposit const iouGridDeposits[] = {
+            // Truncated to the 1e-6 grid on both sides. Covered by testDepositBoundaries.
+            {.before = Number{1, 9}, .amount = Number{100'000'006, -7}, .expected = tesSUCCESS},
+            {.before = Number{1, 9}, .amount = Number{100'000'001, -7}, .expected = tesSUCCESS},
+            // Empty-vault share truncation (C++ truncates toward zero, not to-nearest):
+            // 1.5e-6 USD * 1e6 scale = 1.5 shares -> 1.
+            {.byIssuer = true, .amount = Number{15, -7}, .expected = tesSUCCESS},
+            // Zero-share deposit is rejected: 0.6e-6 USD * 1e6 = 0.6 shares -> 0 ->
+            // tecPRECISION_LOSS. Covered by testDepositBoundaries (preclaim rounds it to zero
+            // first).
+            {.byIssuer = true, .amount = Number{6, -7}, .expected = tecPRECISION_LOSS},
+        };
+        // clang-format on
+        for (IouDeposit const& d : iouGridDeposits)
+            depositIOU(d);
 
         testVaultDepositExchangeRate(env, s.iouDefaultScaleVault, s.issuer);
 
@@ -1613,17 +1632,30 @@ class LeanVaultDeposit_test : public LeanSuite
 
         testDepositBoundaries(env, s);
 
-        testClosedEndedDeposit(env, s, VaultPhase::NoPhase, false, tesSUCCESS);
-        testClosedEndedDeposit(env, s, VaultPhase::Subscription, false, tesSUCCESS);
-        testClosedEndedDeposit(env, s, VaultPhase::Subscription, false, tesSUCCESS, kOnDate);
-        testClosedEndedDeposit(env, s, VaultPhase::Investment, false, tecEXPIRED);
-        testClosedEndedDeposit(env, s, VaultPhase::Redemption, false, tecEXPIRED, kOnDate);
-        testClosedEndedDeposit(env, s, VaultPhase::Redemption, false, tecEXPIRED);
-        // Donations are not subject to the phase check.
-        testClosedEndedDeposit(env, s, VaultPhase::NoPhase, true, tesSUCCESS);
-        testClosedEndedDeposit(env, s, VaultPhase::Subscription, true, tesSUCCESS);
-        testClosedEndedDeposit(env, s, VaultPhase::Investment, true, tesSUCCESS);
-        testClosedEndedDeposit(env, s, VaultPhase::Redemption, true, tesSUCCESS);
+        struct PhaseDeposit
+        {
+            VaultPhase phase{};
+            bool isDonation = false;
+            TER expected;
+            bool onDate = false;
+        };
+        // clang-format off
+        static PhaseDeposit const kPhaseDeposits[] = {
+            {.phase = VaultPhase::NoPhase, .expected = tesSUCCESS},
+            {.phase = VaultPhase::Subscription, .expected = tesSUCCESS},
+            {.phase = VaultPhase::Subscription, .expected = tesSUCCESS, .onDate = kOnDate},
+            {.phase = VaultPhase::Investment, .expected = tecEXPIRED},
+            {.phase = VaultPhase::Redemption, .expected = tecEXPIRED, .onDate = kOnDate},
+            {.phase = VaultPhase::Redemption, .expected = tecEXPIRED},
+            // Donations are not subject to the phase check.
+            {.phase = VaultPhase::NoPhase, .isDonation = true, .expected = tesSUCCESS},
+            {.phase = VaultPhase::Subscription, .isDonation = true, .expected = tesSUCCESS},
+            {.phase = VaultPhase::Investment, .isDonation = true, .expected = tesSUCCESS},
+            {.phase = VaultPhase::Redemption, .isDonation = true, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (PhaseDeposit const& d : kPhaseDeposits)
+            testClosedEndedDeposit(env, s, d.phase, d.isDonation, d.expected, d.onDate);
 
         testClosedEndedDepositBoundaries(env, s);
     }

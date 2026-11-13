@@ -34,6 +34,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -469,6 +470,25 @@ stagedAmounts(jtx::Env const& env, Keylet const& vault, StagedVault const& s)
     };
 }
 
+// A closed-ended vault in Subscription: subscription date 1'000 s after the parent close time,
+// redemption date 1'000'000 s after that.
+inline void
+inSubscription(StagedVault& s, std::uint32_t parentClose)
+{
+    s.subscriptionDate = parentClose + 1'000;
+    s.redemptionDate = parentClose + 1'001'000;
+}
+
+// A closed-ended vault in Investment: subscription date 1'000 s before the parent close time,
+// redemption date 1'000'000 s after it.
+inline void
+inInvestment(StagedVault& s, std::uint32_t parentClose, std::uint32_t feeRate)
+{
+    s.subscriptionDate = parentClose - 1'000;
+    s.redemptionDate = parentClose + 1'000'000;
+    s.earlyExitFeeRate = feeRate;
+}
+
 // `onDate` puts the parent close time exactly on the date bounding the phase: the subscription
 // date is the last instant of Subscription, the redemption date the first of Redemption.
 constexpr bool kOnDate = true;
@@ -738,6 +758,13 @@ applyDeposit(
     return applyDeposit(env, vault, depositor, stagedAmounts(env, vault, staged), amount, donate);
 }
 
+// A list row's index and the vault or asset it runs on, prefixed to its failure messages.
+[[nodiscard]] inline std::string
+rowText(std::size_t index, std::string const& on = {})
+{
+    return (on.empty() ? "" : on + " ") + "row " + std::to_string(index) + ": ";
+}
+
 // The staged sample, prefixed to every failure message.
 [[nodiscard]] inline std::string
 sampleText(StagedAmounts const& s, STAmount const& amount)
@@ -815,7 +842,8 @@ leanVerdictText(std::optional<LeanError> leanError, TER ter)
 
 // Both sides of one transaction return `expected`; when both succeed, every vault field is equal,
 // and so are the assets and shares the model returns and what C++ moved, when the C++ side set it.
-// A model error never matches: a row expecting tefEXCEPTION names its model error (overload below).
+// A model error never matches: a row expecting tefEXCEPTION names its model error
+// (expectCppOnlyRejection).
 inline void
 expectSame(
     beast::unit_test::Suite& suite,
@@ -889,12 +917,12 @@ expectSame(
         same("holder share balance", Number{lean.shares}, *cpp.heldShares);
 }
 
-// A C++ rejection with no model TER: a preflight rejection (tem), where the model answers
-// `leanError` (notLawful: the fields break a model invariant; badInput: it cannot express them) or
-// succeeds when `leanError` is none (it normalizes the field); or a C++ exception (tefEXCEPTION),
-// where the model answers `leanError`.
+// C++ returns `expected`, a TER the model has no counterpart for: a preflight rejection (tem) or
+// a C++ exception (tefEXCEPTION). With a `leanError` the model must fail with exactly that error
+// (notLawful: the fields break a model invariant; badInput: it cannot express them). With none
+// the model must SUCCEED: no model error and no model TER (it normalizes the field).
 inline void
-expectSame(
+expectCppOnlyRejection(
     beast::unit_test::Suite& suite,
     std::string const& at,
     AppliedVaultTx const& cpp,
@@ -907,6 +935,23 @@ expectSame(
         at + "lean=" + leanVerdictText(lean.leanError, lean.error.value_or(tesSUCCESS)) +
             " cpp=" + transToken(cpp.ter) + " expected=" + transToken(expected) +
             " with lean error " + leanErrorText(leanError));
+}
+
+// The check a list row asks for: a row naming a `leanError` is a C++-only rejection the model
+// answers with that error; a row without one expects `expected` on both sides.
+inline void
+expectRow(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    AppliedVaultTx const& cpp,
+    LeanVaultResult const& lean,
+    TER expected,
+    std::optional<LeanError> leanError)
+{
+    if (leanError)
+        expectCppOnlyRejection(suite, at, cpp, lean, expected, leanError);
+    else
+        expectSame(suite, at, cpp, lean, expected);
 }
 
 struct AppliedVaultDelete

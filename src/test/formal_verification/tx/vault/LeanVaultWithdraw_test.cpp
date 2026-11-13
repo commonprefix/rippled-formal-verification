@@ -23,6 +23,7 @@
 #include <xrpl/protocol/TER.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -39,9 +40,9 @@ struct WithdrawCase
     TER expected;
     // The amount is in shares, not vault assets.
     bool byShares{};
-    // Set: the available assets are vault.available * 10^availableExponent of the asset rather
-    // than vault units, to reach past the vault grid.
-    std::optional<int> availableExponent{};
+    // Set: the available assets are vault.available * 10^availableAssetExponent of the asset
+    // (not vault grid units), to reach past the vault grid.
+    std::optional<int> availableAssetExponent{};
     // The model error a tefEXCEPTION row expects.
     std::optional<LeanError> leanError{};
 };
@@ -297,8 +298,6 @@ class LeanVaultWithdraw_test : public LeanSuite
             expected);
     }
 
-    // Two holders: the holder redeems one share more than they own. The vault could pay it, the
-    // holder's balance cannot.
     // A vault nobody deposited into: no shares outstanding, so nobody is the sole holder.
     void
     testWithdrawFromEmptyVault(bool byShares, TER expected)
@@ -319,6 +318,8 @@ class LeanVaultWithdraw_test : public LeanSuite
         compareWithdraw(env, vaultKeylet, holder, xrpIssue(), amount, expected);
     }
 
+    // Two holders: the holder redeems one share more than they own. The vault could pay it, the
+    // holder's balance cannot.
     void
     testWithdrawMoreSharesThanHeld(jtx::Env& env, Keylet const& vault, jtx::Account const& holder)
     {
@@ -832,7 +833,8 @@ class LeanVaultWithdraw_test : public LeanSuite
 
     // Each case stages its vault (the holder owns every share unless the row sets holderShares),
     // withdraws `amount` vault units, or shares when byShares, and expects its verdict on both
-    // sides. Rows are grouped by the cusp they sit around.
+    // sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Zero shares by assets: an amount worth trunc(shares total * amount / assets total) = 0
     //   shares is rejected (tecPRECISION_LOSS). Each cusp burns exactly one share. Where that
     //   share is worth less than one unit, XRP and MPT round its payout up to one unit and an IOU
@@ -1321,67 +1323,67 @@ class LeanVaultWithdraw_test : public LeanSuite
     };
     static constexpr WithdrawCase kIouPayoutRange[] = {
         // nav 9'999'999'999'999'999, sharesTotal 1, shares 1, nav at exponent 80
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 2, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 3, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 3, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 2, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1}, .amount = 3, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 2, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 2}, .amount = 3, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 1, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 2, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 3}, .amount = 3, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
         // nav 9'999'999'999'999'999, sharesTotal 1'000'000'000, shares 1'000'000'000, nav at exponent 80
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'002, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'998}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 999'999'999}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'000}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'001}, .amount = 1'000'000'002, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 1'000'000'002}, .amount = 1'000'000'002, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
         // nav 9'999'999'999'999'999, sharesTotal 9'999'999'999'999'999, shares 9'999'999'999'999'999, nav at exponent 80
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'998, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 10'000'000'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 10'000'000'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
-        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 10'000'000'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'998, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 9'999'999'999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'997}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 9'999'999'999'999'999, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'998}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 10'000'000'000'000'000, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 9'999'999'999'999'999}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 10'000'000'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'000}, .amount = 10'000'000'000'000'001, .expected = tecPATH_DRY, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'997, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'998, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 9'999'999'999'999'999, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 10'000'000'000'000'000, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
+        {.vault = {.available = 9'999'999'999'999'999, .sharesTotal = 10'000'000'000'000'001}, .amount = 10'000'000'000'000'001, .expected = tesSUCCESS, .byShares = true, .availableAssetExponent = 80},
     };
     // FV_M2_3 (C++ behaviour pinned as expected): the payout rounds to nearest.
     static constexpr WithdrawCase kToNearest[] = {
@@ -1949,39 +1951,34 @@ class LeanVaultWithdraw_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestVaults const& vaults,
                              std::span<WithdrawCase const> cases) {
+            testcase("withdraw " + name + (closed ? ", closed-ended" : ""));
             for (auto const& [vault, holder] : vaults)
             {
-                beginCase(("withdraw " + vaultName(env, vault) + " " + name +
-                           (closed ? ", closed-ended" : ""))
-                              .c_str());
                 Asset const asset = env.le(vault)->at(sfAsset);
-                for (auto const& [row, amount, expected, byShares, availableExponent, leanError] :
+                for (std::size_t i = 0;
+                     auto const& [row, amount, expected, byShares, assetExponent, leanError] :
                      cases)
                 {
                     StagedVault staged = row;
                     if (closed)
-                    {
-                        staged.subscriptionDate = p + 1'000;
-                        staged.redemptionDate = p + 1'001'000;
-                    }
+                        inSubscription(staged, p);
                     STAmount const withdrawal = byShares ? STAmount{shareIssue(env, vault), amount}
                                                          : vaultUnits(env, vault, amount);
                     StagedAmounts amounts = stagedAmounts(env, vault, staged);
-                    std::string at = sampleText(staged, withdrawal);
-                    if (availableExponent)
+                    std::string at =
+                        rowText(i++, vaultName(env, vault)) + sampleText(staged, withdrawal);
+                    if (assetExponent)
                     {
                         amounts.available = STAmount{
-                            asset, static_cast<std::uint64_t>(row.available), *availableExponent};
-                        at += "available at exponent " + std::to_string(*availableExponent) + ": ";
+                            asset, static_cast<std::uint64_t>(row.available), *assetExponent};
+                        at +=
+                            "available at asset exponent " + std::to_string(*assetExponent) + ": ";
                     }
                     AppliedVaultTx const cpp =
                         applyWithdraw(env, vault, holder, amounts, withdrawal);
                     LeanVaultResult const lean =
                         leanWithdraw(cpp, amounts, withdrawal, byShares, p);
-                    if (leanError)
-                        expectSame(*this, at, cpp, lean, expected, leanError);
-                    else
-                        expectSame(*this, at, cpp, lean, expected);
+                    expectRow(*this, at, cpp, lean, expected, leanError);
                 }
             }
         };
@@ -1994,8 +1991,8 @@ class LeanVaultWithdraw_test : public LeanSuite
         };
 
         runIou("zero shares by assets", s.all, kZeroSharesByAssets);
-        run("zero shares by assets", s.integral, kZeroSharesByAssetsIntegral);
-        runIou("zero shares by assets", s.ious, kZeroSharesByAssetsIou);
+        run("zero shares by assets, payout rounds up", s.integral, kZeroSharesByAssetsIntegral);
+        runIou("zero shares by assets, payout floors", s.ious, kZeroSharesByAssetsIou);
         run("zero payout", s.integral, kZeroPayout);
         runIou("clamp to zero", s.ious, kClampToZero);
         run("payout range", s.xrp, kXrpPayoutRange);
@@ -2005,8 +2002,8 @@ class LeanVaultWithdraw_test : public LeanSuite
         runIou("available", s.all, kAvailable);
         runIou("final", s.all, kFinal);
         runIou("fully impaired", s.all, kImpaired);
-        run("fully impaired", s.integral, kImpairedIntegral);
-        runIou("fully impaired", s.ious, kImpairedIou);
+        run("fully impaired, payout rounds to zero", s.integral, kImpairedIntegral);
+        runIou("fully impaired, payout unavailable", s.ious, kImpairedIou);
         runIou("sub-grid over available", s.ious, kSubGridOverAvailable);
         runIou("decade crossing", s.ious, kDecade);
         runIou("holder shares", s.all, kHolderShares);
@@ -2465,10 +2462,11 @@ class LeanVaultWithdraw_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestVaults const& vaults,
                              std::span<DateCase const> cases) {
+            testcase("withdraw " + name);
             for (auto const& [vault, holder] : vaults)
             {
-                beginCase(("withdraw " + vaultName(env, vault) + " " + name).c_str());
-                for (auto const& [row, subscription, redemption, amount, expected, byShares] :
+                for (std::size_t i = 0;
+                     auto const& [row, subscription, redemption, amount, expected, byShares] :
                      cases)
                 {
                     StagedVault staged = row;
@@ -2481,7 +2479,12 @@ class LeanVaultWithdraw_test : public LeanSuite
                         applyWithdraw(env, vault, holder, amounts, withdrawal);
                     LeanVaultResult const lean =
                         leanWithdraw(cpp, amounts, withdrawal, byShares, p);
-                    expectSame(*this, sampleText(staged, withdrawal), cpp, lean, expected);
+                    expectSame(
+                        *this,
+                        rowText(i++, vaultName(env, vault)) + sampleText(staged, withdrawal),
+                        cpp,
+                        lean,
+                        expected);
                 }
             }
         };
@@ -2670,43 +2673,45 @@ class LeanVaultWithdraw_test : public LeanSuite
         // Staged extreme states (a 1000-asset seed mints 1e9 shares at scale 6). Each mixes an
         // extreme across a different field: AssetsTotal, AssetsAvailable, sharesTotal, shareAmount.
         Number const iouMax{9'999'999'999'999'999LL, 80};
-        // Extreme AssetsTotal, tiny available, full shareholder
-        testWithdrawUpdatedState(
-            env,
-            iouVault,
-            s.issuer,
-            iouMax,
-            Number{1},
-            1'000'000'000,
-            500'000'000,
-            tecINSUFFICIENT_FUNDS);
-        // Extreme AssetsTotal, mid available, minimal sharesTotal/shareAmount: a full exit while
-        // assets are deployed
-        // covered by testWithdrawBoundaries
-        testWithdrawUpdatedState(
-            env, iouVault, s.issuer, iouMax, Number{1, 50}, 1, 1, tecHAS_OBLIGATIONS);
-        // Most assets lent out: half the shares are worth more than is available
-        // covered by testWithdrawBoundaries
-        testWithdrawUpdatedState(
-            env,
-            iouVault,
-            s.issuer,
-            Number{1'000},
-            Number{100},
-            1'000'000'000,
-            500'000'000,
-            tecINSUFFICIENT_FUNDS);
-        // Extreme AssetsTotal, tiny available, extreme sharesTotal, minimal shareAmount
-        testWithdrawUpdatedState(
-            env, iouVault, s.issuer, iouMax, Number{1}, 1'000'000'000, 1, tecINSUFFICIENT_FUNDS);
-        // Overflow: NAV * shares / sharesTotal exceeds the IOU domain
-        // covered by testWithdrawBoundaries
-        testWithdrawUpdatedState(
-            env, iouVault, s.issuer, iouMax, iouMax, 1'000, 1'000'000'000, tecPATH_DRY);
-        // Overflow: minimal sharesTotal with a maximal shareAmount,
-        // covered by testWithdrawBoundaries
-        testWithdrawUpdatedState(
-            env, iouVault, s.issuer, iouMax, Number{1}, 1, 1'000'000'000, tecPATH_DRY);
+        struct StagedWithdraw
+        {
+            Number assetsTotal;
+            Number available;
+            std::uint64_t sharesTotal{};
+            std::int64_t shares{};
+            TER expected;
+        };
+        // clang-format off
+        StagedWithdraw const stagedWithdrawals[] = {
+            // Extreme AssetsTotal, tiny available, full shareholder
+            {.assetsTotal = iouMax, .available = Number{1}, .sharesTotal = 1'000'000'000, .shares = 500'000'000, .expected = tecINSUFFICIENT_FUNDS},
+            // Extreme AssetsTotal, mid available, minimal sharesTotal/shareAmount: a full exit while
+            // assets are deployed
+            // covered by testWithdrawBoundaries
+            {.assetsTotal = iouMax, .available = Number{1, 50}, .sharesTotal = 1, .shares = 1, .expected = tecHAS_OBLIGATIONS},
+            // Most assets lent out: half the shares are worth more than is available
+            // covered by testWithdrawBoundaries
+            {.assetsTotal = Number{1'000}, .available = Number{100}, .sharesTotal = 1'000'000'000, .shares = 500'000'000, .expected = tecINSUFFICIENT_FUNDS},
+            // Extreme AssetsTotal, tiny available, extreme sharesTotal, minimal shareAmount
+            {.assetsTotal = iouMax, .available = Number{1}, .sharesTotal = 1'000'000'000, .shares = 1, .expected = tecINSUFFICIENT_FUNDS},
+            // Overflow: NAV * shares / sharesTotal exceeds the IOU domain
+            // covered by testWithdrawBoundaries
+            {.assetsTotal = iouMax, .available = iouMax, .sharesTotal = 1'000, .shares = 1'000'000'000, .expected = tecPATH_DRY},
+            // Overflow: minimal sharesTotal with a maximal shareAmount,
+            // covered by testWithdrawBoundaries
+            {.assetsTotal = iouMax, .available = Number{1}, .sharesTotal = 1, .shares = 1'000'000'000, .expected = tecPATH_DRY},
+        };
+        // clang-format on
+        for (StagedWithdraw const& w : stagedWithdrawals)
+            testWithdrawUpdatedState(
+                env,
+                iouVault,
+                s.issuer,
+                w.assetsTotal,
+                w.available,
+                w.sharesTotal,
+                w.shares,
+                w.expected);
         // Overflow: sharesTotal * assets / NAV exceeds the MPT domain (by assets).
         // covered by testWithdrawBoundaries
         testWithdrawAssetsShareOverflow(env, iouVault, s.issuer, tecPATH_DRY);
@@ -2753,30 +2758,38 @@ class LeanVaultWithdraw_test : public LeanSuite
 
         testWithdrawBoundaries(env, s);
 
-        // Without an early-exit fee field only Investment is closed.
-        testClosedEndedWithdraw(env, s, VaultPhase::NoPhase, std::nullopt, tesSUCCESS, Number{400});
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Subscription, std::nullopt, tesSUCCESS, Number{400});
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Subscription, std::nullopt, tesSUCCESS, Number{400}, kOnDate);
-        testClosedEndedWithdraw(env, s, VaultPhase::Investment, std::nullopt, tecTOO_SOON);
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Redemption, std::nullopt, tesSUCCESS, Number{400}, kOnDate);
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Redemption, std::nullopt, tesSUCCESS, Number{400});
-        // A zero fee rate opens Investment without charging anything.
-        testClosedEndedWithdraw(env, s, VaultPhase::Investment, 0, tesSUCCESS, Number{400});
-        // A 5% fee applies in Investment only: 400 - 20 = 380.
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Subscription, kFee5Pct, tesSUCCESS, Number{400});
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Subscription, kFee5Pct, tesSUCCESS, Number{400}, kOnDate);
-        testClosedEndedWithdraw(env, s, VaultPhase::Investment, kFee5Pct, tesSUCCESS, Number{380});
-        testClosedEndedWithdraw(
-            env, s, VaultPhase::Redemption, kFee5Pct, tesSUCCESS, Number{400}, kOnDate);
-        testClosedEndedWithdraw(env, s, VaultPhase::Redemption, kFee5Pct, tesSUCCESS, Number{400});
-        // A 100% fee burns the shares and pays nothing.
-        testClosedEndedWithdraw(env, s, VaultPhase::Investment, kFee100Pct, tesSUCCESS, Number{0});
+        // `feeRate` unset: the vault has no early-exit fee field.
+        struct PhaseWithdraw
+        {
+            VaultPhase phase{};
+            std::optional<std::uint32_t> feeRate{};
+            TER expected;
+            std::optional<Number> payout{};
+            bool onDate = false;
+        };
+        // clang-format off
+        static PhaseWithdraw const kPhaseWithdrawals[] = {
+            // Without an early-exit fee field only Investment is closed.
+            {.phase = VaultPhase::NoPhase, .expected = tesSUCCESS, .payout = Number{400}},
+            {.phase = VaultPhase::Subscription, .expected = tesSUCCESS, .payout = Number{400}},
+            {.phase = VaultPhase::Subscription, .expected = tesSUCCESS, .payout = Number{400}, .onDate = kOnDate},
+            {.phase = VaultPhase::Investment, .expected = tecTOO_SOON},
+            {.phase = VaultPhase::Redemption, .expected = tesSUCCESS, .payout = Number{400}, .onDate = kOnDate},
+            {.phase = VaultPhase::Redemption, .expected = tesSUCCESS, .payout = Number{400}},
+            // A zero fee rate opens Investment without charging anything.
+            {.phase = VaultPhase::Investment, .feeRate = 0, .expected = tesSUCCESS, .payout = Number{400}},
+            // A 5% fee applies in Investment only: 400 - 20 = 380.
+            {.phase = VaultPhase::Subscription, .feeRate = kFee5Pct, .expected = tesSUCCESS, .payout = Number{400}},
+            {.phase = VaultPhase::Subscription, .feeRate = kFee5Pct, .expected = tesSUCCESS, .payout = Number{400}, .onDate = kOnDate},
+            {.phase = VaultPhase::Investment, .feeRate = kFee5Pct, .expected = tesSUCCESS, .payout = Number{380}},
+            {.phase = VaultPhase::Redemption, .feeRate = kFee5Pct, .expected = tesSUCCESS, .payout = Number{400}, .onDate = kOnDate},
+            {.phase = VaultPhase::Redemption, .feeRate = kFee5Pct, .expected = tesSUCCESS, .payout = Number{400}},
+            // A 100% fee burns the shares and pays nothing.
+            {.phase = VaultPhase::Investment, .feeRate = kFee100Pct, .expected = tesSUCCESS, .payout = Number{0}},
+        };
+        // clang-format on
+        for (PhaseWithdraw const& w : kPhaseWithdrawals)
+            testClosedEndedWithdraw(env, s, w.phase, w.feeRate, w.expected, w.payout, w.onDate);
 
         testWithdrawBySharesInInvestment(env, s);
         testWithdrawAllSharesInInvestment(env, s);

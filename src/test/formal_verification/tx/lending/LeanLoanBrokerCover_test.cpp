@@ -16,6 +16,7 @@
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/TER.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <optional>
@@ -31,6 +32,7 @@ struct LoanBrokerCoverDepositCase
 {
     LendingStage stage{};
     std::int64_t amount{};
+    // The amount is amount * 10^exponent vault grid units.
     int exponent{};
     TER expected;
 };
@@ -40,6 +42,7 @@ struct LoanBrokerCoverWithdrawCase
 {
     LendingStage stage{};
     std::int64_t amount{};
+    // The amount is amount * 10^exponent vault grid units.
     int exponent{};
     TER expected;
 };
@@ -50,6 +53,7 @@ struct LoanBrokerCoverClawbackCase
 {
     LendingStage stage{};
     std::optional<std::int64_t> amount{};
+    // The amount is amount * 10^exponent vault grid units.
     int exponent{};
     TER expected;
 };
@@ -85,11 +89,12 @@ class LeanLoanBrokerCover_test : public LeanSuite
         LendingStage const& stage,
         CoverOp op,
         std::optional<Number> const& amount,
-        TER expected)
+        TER expected,
+        std::string const& row = {})
     {
         std::optional<STAmount> const stAmount =
             amount ? std::optional<STAmount>{l.f.asset(*amount)} : std::nullopt;
-        std::string const at = opName(op) + " " + stageText(stage) + " amount " +
+        std::string const at = row + opName(op) + " " + stageText(stage) + " amount " +
             (amount ? to_string(*amount) : std::string{"none"}) + ": ";
         OpenView view{*l.env->current()};
         stageInvestment(*l.env, view, l.f, stage);
@@ -139,6 +144,7 @@ class LeanLoanBrokerCover_test : public LeanSuite
     // every broker field, the untouched vault and the cover moved equal when both succeed. Amounts
     // are in units of the vault grid (IOU scale 6: 1e-6, MPT: 1); a one-unit amount is written as
     // a 16-digit mantissa at exponent -15, so moving the mantissa leaves the grid.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Deposit sub-grid (IOU): a deposit that truncates to zero grid units is tecPRECISION_LOSS.
     // - Deposit truncation (IOU): above one unit an off-grid deposit is truncated to the grid
     //   (10^9 units, or one unit less below it); the verdict does not change.
@@ -153,7 +159,9 @@ class LeanLoanBrokerCover_test : public LeanSuite
     // - Clawback no excess: a clawback without an amount and no cover above the minimum cover is
     //   tecINSUFFICIENT_FUNDS; one unit of excess is clawed. Each cusp holds exactly the minimum.
     // - Clawback clamp: a clawback above the excess over the minimum cover is clamped to it. The
-    //   withdraw minimum cover rows, whose amount is exactly the excess.
+    //   list reruns the withdraw minimum cover rows: an amount above the excess, which a withdrawal
+    //   refuses, is clamped and succeeds, and with no excess the clawback is still
+    //   tecINSUFFICIENT_FUNDS. Each cusp claws exactly the excess.
     // clang-format off
     static constexpr LoanBrokerCoverDepositCase kCoverDepositSubGrid[] = {
         // cover 0, one unit
@@ -1010,12 +1018,18 @@ class LeanLoanBrokerCover_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanBrokerCoverDepositCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("cover deposit " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("cover deposit " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (auto const& [stage, amount, exponent, expected] : cases)
-                    checkCover(l, stage, CoverOp::Deposit, units(l.f, amount, exponent), expected);
+                BrokerFixture const& f = ledger.f;
+                for (std::size_t i = 0; auto const& [stage, amount, exponent, expected] : cases)
+                    checkCover(
+                        ledger,
+                        stage,
+                        CoverOp::Deposit,
+                        units(f, amount, exponent),
+                        expected,
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)));
             }
         };
 
@@ -1036,12 +1050,18 @@ class LeanLoanBrokerCover_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanBrokerCoverWithdrawCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("cover withdraw " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("cover withdraw " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (auto const& [stage, amount, exponent, expected] : cases)
-                    checkCover(l, stage, CoverOp::Withdraw, units(l.f, amount, exponent), expected);
+                BrokerFixture const& f = ledger.f;
+                for (std::size_t i = 0; auto const& [stage, amount, exponent, expected] : cases)
+                    checkCover(
+                        ledger,
+                        stage,
+                        CoverOp::Withdraw,
+                        units(f, amount, exponent),
+                        expected,
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)));
             }
         };
 
@@ -1062,18 +1082,18 @@ class LeanLoanBrokerCover_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanBrokerCoverClawbackCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("cover clawback " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("cover clawback " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (auto const& [stage, amount, exponent, expected] : cases)
+                for (std::size_t i = 0; auto const& [stage, amount, exponent, expected] : cases)
                 {
                     checkCover(
-                        l,
+                        ledger,
                         stage,
                         CoverOp::Clawback,
-                        amount ? std::optional{units(l.f, *amount, exponent)} : std::nullopt,
-                        expected);
+                        amount ? std::optional{units(ledger.f, *amount, exponent)} : std::nullopt,
+                        expected,
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)));
                 }
             }
         };

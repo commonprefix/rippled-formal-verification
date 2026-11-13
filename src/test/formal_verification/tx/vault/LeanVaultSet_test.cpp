@@ -18,6 +18,7 @@
 #include <xrpl/protocol/TxFlags.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -26,12 +27,14 @@
 
 namespace xrpl::test::formal_verification {
 
-// The VaultSet AssetsMaximum is assetsMaximum * 10^exponent vault units (10^-scale for an IOU).
+// The VaultSet AssetsMaximum is assetsMaximum * 10^exponent vault grid units (10^-scale for an
+// IOU).
 struct SetCase
 {
     StagedVault vault;
     std::int64_t assetsMaximum;
     TER expected;
+    // AssetsMaximum is assetsMaximum * 10^exponent vault grid units.
     int exponent{};
 };
 
@@ -170,7 +173,7 @@ class LeanVaultSet_test : public LeanSuite
                  .id = vault.key,
                  .flags = tfVaultDepositBlock | tfVaultDepositUnblock}),
             jtx::Ter(std::ignore));
-        expectSame(
+        expectCppOnlyRejection(
             *this,
             "",
             {.pre = state, .ter = env.ter(), .post = state},
@@ -316,6 +319,7 @@ class LeanVaultSet_test : public LeanSuite
     }
 
     // Each case stages its vault, sets its AssetsMaximum and expects its verdict on both sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Maximum below total: a non-zero maximum below the assets total (available + deployed) is
     //   tecLIMIT_EXCEEDED; equal to it is accepted and 0 removes the cap. Each cusp sets the
     //   maximum to the total, split between available and deployed assets.
@@ -326,7 +330,7 @@ class LeanVaultSet_test : public LeanSuite
     //   it, except where the move only drops a digit.
     // - Maximum range: a maximum the asset cannot represent (XRP above 1e17 drops, MPT above
     //   2^63 - 1, IOU past 9999999999999999e80) is tecPRECISION_LOSS. Each cusp is the largest
-    //   representable value; the IOU rows are per scale, as their exponent is in vault units.
+    //   representable value; the IOU rows are per scale, their exponent in vault grid units.
     // clang-format off
     static constexpr SetCase kMaximumBelowTotal[] = {
         // available 2, deployed 0, maximum 2
@@ -675,27 +679,23 @@ class LeanVaultSet_test : public LeanSuite
         std::uint32_t const p = parentCloseTime(env);
         auto const run =
             [&](std::string const& name, TestVaults const& vaults, std::span<SetCase const> cases) {
+                testcase("set " + name + (closed ? ", closed-ended" : ""));
                 for (Keylet const& vault : vaults)
                 {
-                    beginCase(("set " + vaultName(env, vault) + " " + name +
-                               (closed ? ", closed-ended" : ""))
-                                  .c_str());
                     int const scale = env.le(vault)->at(sfScale);
-                    for (auto const& [row, assetsMaximum, expected, exponent] : cases)
+                    for (std::size_t i = 0;
+                         auto const& [row, assetsMaximum, expected, exponent] : cases)
                     {
                         StagedVault staged = row;
                         if (closed)
-                        {
-                            staged.subscriptionDate = p + 1'000;
-                            staged.redemptionDate = p + 1'001'000;
-                        }
+                            inSubscription(staged, p);
                         expectSet(
                             env,
                             vault,
                             s.owner,
                             stagedAmounts(env, vault, staged),
                             Number{assetsMaximum, exponent - scale},
-                            sampleText(staged),
+                            rowText(i++, vaultName(env, vault)) + sampleText(staged),
                             expected);
                     }
                 }
@@ -731,20 +731,44 @@ class LeanVaultSet_test : public LeanSuite
         jtx::Env env{*this, vaultTestAmendments()};
         Setup const s = setup(env);
 
-        runVaultSet(env, s.xrpVault, s.owner, 0, 0, tesSUCCESS);
-        runVaultSet(env, s.xrpVault, s.owner, 0, 100, tesSUCCESS);
-        runVaultSet(env, s.xrpVault, s.owner, 100, 0, tesSUCCESS);
-        runVaultSet(env, s.xrpVault, s.owner, 100, 99, tecLIMIT_EXCEEDED);
-        runVaultSet(env, s.xrpVault, s.owner, 100, 100, tesSUCCESS);
-        runVaultSet(env, s.xrpVault, s.owner, 100, 101, tesSUCCESS);
-        // An XRP cap above the native maximum is not representable as an amount.
-        runVaultSet(env, s.xrpVault, s.owner, 0, 1'000'000'000'000'000'000, tecPRECISION_LOSS);
+        struct SetRow
+        {
+            std::int64_t assetsTotal{};
+            std::int64_t assetsMaximum{};
+            TER expected;
+        };
+        // clang-format off
+        static SetRow const kSetRows[] = {
+            {.assetsTotal = 0, .assetsMaximum = 0, .expected = tesSUCCESS},
+            {.assetsTotal = 0, .assetsMaximum = 100, .expected = tesSUCCESS},
+            {.assetsTotal = 100, .assetsMaximum = 0, .expected = tesSUCCESS},
+            {.assetsTotal = 100, .assetsMaximum = 99, .expected = tecLIMIT_EXCEEDED},
+            {.assetsTotal = 100, .assetsMaximum = 100, .expected = tesSUCCESS},
+            {.assetsTotal = 100, .assetsMaximum = 101, .expected = tesSUCCESS},
+            // An XRP cap above the native maximum is not representable as an amount.
+            {.assetsTotal = 0, .assetsMaximum = 1'000'000'000'000'000'000, .expected = tecPRECISION_LOSS},
+        };
+        // clang-format on
+        for (SetRow const& r : kSetRows)
+            runVaultSet(env, s.xrpVault, s.owner, r.assetsTotal, r.assetsMaximum, r.expected);
         testCapOffGrid(env, s.iouDefaultScaleVault, s.owner);
 
-        runBlockDeposit(true, true, tesSUCCESS);
-        runBlockDeposit(true, false, tesSUCCESS);
-        runBlockDeposit(false, true, tecNO_PERMISSION);
-        runBlockDeposit(false, false, tecNO_PERMISSION);
+        struct BlockRow
+        {
+            bool ownerCanBlock = false;
+            bool block = false;
+            TER expected;
+        };
+        // clang-format off
+        static BlockRow const kBlockRows[] = {
+            {.ownerCanBlock = true, .block = true, .expected = tesSUCCESS},
+            {.ownerCanBlock = true, .block = false, .expected = tesSUCCESS},
+            {.ownerCanBlock = false, .block = true, .expected = tecNO_PERMISSION},
+            {.ownerCanBlock = false, .block = false, .expected = tecNO_PERMISSION},
+        };
+        // clang-format on
+        for (BlockRow const& r : kBlockRows)
+            runBlockDeposit(r.ownerCanBlock, r.block, r.expected);
         testBothDepositFlags(env, s.xrpVault, s.owner);
 
         testSetBoundaries(env, s);

@@ -17,8 +17,10 @@
 #include <xrpl/protocol/SeqProxy.h>
 #include <xrpl/protocol/TER.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -27,12 +29,13 @@
 namespace xrpl::test::formal_verification {
 
 // A LoanBrokerSet on a broker staged as `stage` (vault grid units): a new broker of the vault or,
-// with `update`, an update of the staged one. DebtMaximum is debtMaximum * 10^exponent units. A C++
-// preflight rejection (tem) is paired with `leanError`, the model error that stands for it.
+// with `update`, an update of the staged one. A C++ preflight rejection (tem) is paired with
+// `leanError`, the model error that stands for it.
 struct LoanBrokerSetCase
 {
     LendingStage stage{};
     std::optional<std::int64_t> debtMaximum{};
+    // DebtMaximum is debtMaximum * 10^exponent vault grid units.
     int exponent{};
     std::optional<std::uint16_t> managementFeeRate{};
     std::optional<std::uint32_t> coverRateMinimum{};
@@ -64,87 +67,76 @@ class LeanLoanBroker_test : public LeanSuite
             .loanCount = 0};
     }
 
+    using Mutation = std::function<void(LoanBroker&)>;
+
+    // `mutate` applied to the baseline: build accepts the broker or rejects it.
     void
-    runLawful(LoanBroker const& s, bool shouldBeLawful, std::string const& label)
+    expectValid(std::string const& label, Mutation const& mutate = {})
     {
+        expectBuild(label, mutate, true);
+    }
+
+    void
+    expectInvalid(std::string const& label, Mutation const& mutate)
+    {
+        expectBuild(label, mutate, false);
+    }
+
+    void
+    expectBuild(std::string const& label, Mutation const& mutate, bool valid)
+    {
+        LoanBroker broker = baseline();
+        if (mutate)
+            mutate(broker);
         testcase(label);
-        BEAST_EXPECTS(LoanBrokerFFI::build(s).has_value() == shouldBeLawful, label);
+        BEAST_EXPECTS(LoanBrokerFFI::build(broker).has_value() == valid, label);
     }
 
     void
     testLawful()
     {
-        runLawful(baseline(), true, "valid baseline");
-        {
-            auto s = baseline();
-            s.loanCount = 1;
-            s.debtTotal = Number{500};
-            s.debtMaximum = Number{1'000};
-            runLawful(s, true, "broker with a loan under its cap");
-        }
-        {
-            auto s = baseline();
-            s.coverRateMinimum = 0;
-            s.coverRateLiquidation = 0;
-            runLawful(s, true, "broker without cover rates");
-        }
-        {
-            auto s = baseline();
-            s.debtTotal = Number{-1};
-            runLawful(s, false, "negative debtTotal");
-        }
-        {
-            auto s = baseline();
-            s.coverAvailable = Number{-1};
-            runLawful(s, false, "negative coverAvailable");
-        }
-        {
-            auto s = baseline();
-            s.loanCount = 1;
-            s.debtTotal = Number{500};
-            s.debtMaximum = Number{100};
-            runLawful(s, false, "debtTotal above debtMaximum");
-        }
-        {
-            auto s = baseline();
-            s.debtTotal = Number{500};
-            runLawful(s, false, "debt without a loan");
-        }
-        {
-            auto s = baseline();
-            s.debtMaximum = Number{-1};
-            runLawful(s, false, "negative debtMaximum");
-        }
-        {
-            auto s = baseline();
-            s.debtMaximum = Number{1, 19};
-            runLawful(s, false, "debtMaximum above 2^63-1");
-        }
-        {
-            auto s = baseline();
-            s.managementFeeRate = 10'001;
-            runLawful(s, false, "management fee above 10%");
-        }
-        {
-            auto s = baseline();
-            s.coverRateMinimum = 100'001;
-            runLawful(s, false, "minimum cover rate above 100%");
-        }
-        {
-            auto s = baseline();
-            s.coverRateLiquidation = 100'001;
-            runLawful(s, false, "liquidation cover rate above 100%");
-        }
-        {
-            auto s = baseline();
-            s.coverRateLiquidation = 0;
-            runLawful(s, false, "minimum cover rate without a liquidation rate");
-        }
-        {
-            auto s = baseline();
-            s.coverRateMinimum = 0;
-            runLawful(s, false, "liquidation cover rate without a minimum rate");
-        }
+        expectValid("valid baseline");
+        expectValid("broker with a loan under its cap", [](LoanBroker& broker) {
+            broker.loanCount = 1;
+            broker.debtTotal = Number{500};
+            broker.debtMaximum = Number{1'000};
+        });
+        expectValid("broker without cover rates", [](LoanBroker& broker) {
+            broker.coverRateMinimum = 0;
+            broker.coverRateLiquidation = 0;
+        });
+        expectInvalid(
+            "negative debtTotal", [](LoanBroker& broker) { broker.debtTotal = Number{-1}; });
+        expectInvalid("negative coverAvailable", [](LoanBroker& broker) {
+            broker.coverAvailable = Number{-1};
+        });
+        expectInvalid("debtTotal above debtMaximum", [](LoanBroker& broker) {
+            broker.loanCount = 1;
+            broker.debtTotal = Number{500};
+            broker.debtMaximum = Number{100};
+        });
+        expectInvalid(
+            "debt without a loan", [](LoanBroker& broker) { broker.debtTotal = Number{500}; });
+        expectInvalid(
+            "negative debtMaximum", [](LoanBroker& broker) { broker.debtMaximum = Number{-1}; });
+        expectInvalid("debtMaximum above 2^63-1", [](LoanBroker& broker) {
+            broker.debtMaximum = Number{1, 19};
+        });
+        expectInvalid("management fee above 10%", [](LoanBroker& broker) {
+            broker.managementFeeRate = 10'001;
+        });
+        expectInvalid("minimum cover rate above 100%", [](LoanBroker& broker) {
+            broker.coverRateMinimum = 100'001;
+        });
+        expectInvalid("liquidation cover rate above 100%", [](LoanBroker& broker) {
+            broker.coverRateLiquidation = 100'001;
+        });
+        expectInvalid("minimum cover rate without a liquidation rate", [](LoanBroker& broker) {
+            broker.coverRateLiquidation = 0;
+        });
+        expectInvalid("liquidation cover rate without a minimum rate", [](LoanBroker& broker) {
+            broker.coverRateMinimum = 0;
+        });
     }
 
     // LoanBrokerSet on `view` and the model on the same pre-state. A C++ preflight rejection (tem)
@@ -162,14 +154,7 @@ class LeanLoanBroker_test : public LeanSuite
     {
         AppliedBrokerTx const cpp = applyLoanBrokerSet(env, view, f, args, update);
         LeanBrokerTx const lean = leanLoanBrokerSet(cpp, args, update);
-        if (leanError)
-        {
-            expectSame(*this, at, cpp, lean, expected, leanError);
-        }
-        else
-        {
-            expectSame(*this, at, cpp, lean, expected);
-        }
+        expectRow(*this, at, cpp, lean, expected, leanError);
         return cpp;
     }
 
@@ -251,6 +236,7 @@ class LeanLoanBroker_test : public LeanSuite
     // Each row stages the asset's shared ledger on a throwaway view (the vault in its investment
     // phase), applies LoanBrokerSet there and expects its verdict on both sides, with every field
     // of the broker equal when both succeed. Debt maximum rows are in units of the vault grid.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Debt maximum grid: a debt maximum off the vault grid is tecPRECISION_LOSS, on create and on
     //   update. Each cusp is one step of 10^level units with a 16-digit mantissa; moving the
     //   mantissa leaves the grid.
@@ -424,31 +410,31 @@ class LeanLoanBroker_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanBrokerSetCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanBrokerSet " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("LoanBrokerSet " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanBrokerSetCase const& c : cases)
+                for (std::size_t i = 0; LoanBrokerSetCase const& c : cases)
                 {
                     LoanBrokerSetArgs const args{
                         .debtMaximum = c.debtMaximum
-                            ? std::optional{units(l.f, *c.debtMaximum, c.exponent)}
+                            ? std::optional{units(ledger.f, *c.debtMaximum, c.exponent)}
                             : std::nullopt,
                         .managementFeeRate = c.managementFeeRate,
                         .coverRateMinimum = c.coverRateMinimum,
                         .coverRateLiquidation = c.coverRateLiquidation,
                     };
-                    OpenView view{*l.env->current()};
-                    stageInvestment(*l.env, view, l.f, c.stage);
+                    OpenView view{*ledger.env->current()};
+                    stageInvestment(*ledger.env, view, ledger.f, c.stage);
                     checkLoanBrokerSet(
-                        *l.env,
-                        l.f,
+                        *ledger.env,
+                        ledger.f,
                         view,
                         args,
                         c.update,
                         c.expected,
                         c.leanError,
-                        setText(c.stage, args, c.update));
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) +
+                            setText(c.stage, args, c.update));
                 }
             }
         };
@@ -526,76 +512,55 @@ class LeanLoanBroker_test : public LeanSuite
         testLawful();
 
         // LoanBrokerSet: create
-        runCreate(s, "create a broker on a closed-ended vault", BrokerConfig{}, false, tesSUCCESS);
-        runCreate(
-            s,
-            "create a broker with a debt maximum",
-            BrokerConfig{.debtMaximum = Number{1'000'000}},
-            false,
-            tesSUCCESS);
-        runCreate(
-            s,
-            "create a broker without cover rates",
-            BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt},
-            false,
-            tesSUCCESS);
-        runCreate(
-            s, "create a broker on an open-ended vault", BrokerConfig{}, true, tecNO_PERMISSION);
-        runCreate(
-            s,
-            "create a broker with a debt maximum off the vault grid",
-            BrokerConfig{.debtMaximum = Number{1, -7}},
-            false,
-            tecPRECISION_LOSS);
-        runCreate(
-            s,
-            "create a broker with a debt maximum not representable as an amount",
-            BrokerConfig{.debtMaximum = Number{12'345'678'901'234'567LL, -10}},
-            false,
-            tecPRECISION_LOSS);
-        runCreate(
-            s,
-            "create a broker with a negative debt maximum",
-            BrokerConfig{.debtMaximum = Number{-1}},
-            false,
-            temINVALID,
-            LeanError::notLawful);
-        runCreate(
-            s,
-            "create a broker with a management fee above 10%",
-            BrokerConfig{.managementFeeRate = 10'001},
-            false,
-            temINVALID,
-            LeanError::notLawful);
-        runCreate(
-            s,
-            "create a broker with a cover rate above 100%",
-            BrokerConfig{.coverRateMinimum = 100'001},
-            false,
-            temINVALID,
-            LeanError::notLawful);
-        runCreate(
-            s,
-            "create a broker with a minimum cover rate but no liquidation rate",
-            BrokerConfig{.coverRateLiquidation = std::nullopt},
-            false,
-            temINVALID,
-            LeanError::notLawful);
+        struct CreateRow
+        {
+            char const* label;
+            BrokerConfig config{};
+            bool openEnded = false;
+            TER expected;
+            std::optional<LeanError> leanError{};
+        };
+        // clang-format off
+        static CreateRow const kCreateRows[] = {
+            {.label = "create a broker on a closed-ended vault", .expected = tesSUCCESS},
+            {.label = "create a broker with a debt maximum", .config = {.debtMaximum = Number{1'000'000}}, .expected = tesSUCCESS},
+            {.label = "create a broker without cover rates", .config = {.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt}, .expected = tesSUCCESS},
+            {.label = "create a broker on an open-ended vault", .openEnded = true, .expected = tecNO_PERMISSION},
+            {.label = "create a broker with a debt maximum off the vault grid", .config = {.debtMaximum = Number{1, -7}}, .expected = tecPRECISION_LOSS},
+            {.label = "create a broker with a debt maximum not representable as an amount", .config = {.debtMaximum = Number{12'345'678'901'234'567LL, -10}}, .expected = tecPRECISION_LOSS},
+            {.label = "create a broker with a negative debt maximum", .config = {.debtMaximum = Number{-1}}, .expected = temINVALID, .leanError = LeanError::notLawful},
+            {.label = "create a broker with a management fee above 10%", .config = {.managementFeeRate = 10'001}, .expected = temINVALID, .leanError = LeanError::notLawful},
+            {.label = "create a broker with a cover rate above 100%", .config = {.coverRateMinimum = 100'001}, .expected = temINVALID, .leanError = LeanError::notLawful},
+            {.label = "create a broker with a minimum cover rate but no liquidation rate", .config = {.coverRateLiquidation = std::nullopt}, .expected = temINVALID, .leanError = LeanError::notLawful},
+        };
+        // clang-format on
+        for (CreateRow const& r : kCreateRows)
+            runCreate(s, r.label, r.config, r.openEnded, r.expected, r.leanError);
 
-        // LoanBrokerSet: update
-        runUpdate(s, "raise the debt maximum", Number{8'000}, false, tesSUCCESS);
-        runUpdate(s, "lift the debt maximum", Number{0}, false, tesSUCCESS);
-        runUpdate(s, "update without a debt maximum", std::nullopt, false, tesSUCCESS);
-        runUpdate(s, "debt maximum off the vault grid", Number{1, -7}, false, tecPRECISION_LOSS);
-        runUpdate(
-            s,
-            "debt maximum not representable as an amount",
-            Number{12'345'678'901'234'567LL, -10},
-            false,
-            tecPRECISION_LOSS);
-        // Covered by testLoanBrokerSetBoundaries.
-        runUpdate(s, "debt maximum below the debt", Number{500}, true, tecLIMIT_EXCEEDED);
-        runUpdate(s, "debt maximum equal to the debt", std::nullopt, true, tesSUCCESS, true);
+        // LoanBrokerSet: update a broker with a debt maximum of 5000 and, `withLoan`, a debt of
+        // 1000.
+        struct UpdateRow
+        {
+            char const* label;
+            std::optional<Number> debtMaximum{};
+            bool withLoan = false;
+            TER expected;
+            bool equalToDebt = false;
+        };
+        // clang-format off
+        static UpdateRow const kUpdateRows[] = {
+            {.label = "raise the debt maximum", .debtMaximum = Number{8'000}, .expected = tesSUCCESS},
+            {.label = "lift the debt maximum", .debtMaximum = Number{0}, .expected = tesSUCCESS},
+            {.label = "update without a debt maximum", .expected = tesSUCCESS},
+            {.label = "debt maximum off the vault grid", .debtMaximum = Number{1, -7}, .expected = tecPRECISION_LOSS},
+            {.label = "debt maximum not representable as an amount", .debtMaximum = Number{12'345'678'901'234'567LL, -10}, .expected = tecPRECISION_LOSS},
+            // Covered by testLoanBrokerSetBoundaries.
+            {.label = "debt maximum below the debt", .debtMaximum = Number{500}, .withLoan = true, .expected = tecLIMIT_EXCEEDED},
+            {.label = "debt maximum equal to the debt", .withLoan = true, .expected = tesSUCCESS, .equalToDebt = true},
+        };
+        // clang-format on
+        for (UpdateRow const& r : kUpdateRows)
+            runUpdate(s, r.label, r.debtMaximum, r.withLoan, r.expected, r.equalToDebt);
 
         // LoanBrokerDelete
         runDelete("delete an empty broker", Number{0}, false, tesSUCCESS);

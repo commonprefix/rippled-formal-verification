@@ -17,6 +17,7 @@
 #include <xrpl/protocol/TxFlags.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -134,6 +135,7 @@ class LeanLoanManage_test : public LeanSuite
     // row's LoanManage must give its verdict on both sides, with every field of the loan, its
     // broker and the pool, and the amount moved into the pool, equal when both succeed. Amounts
     // are in units of the vault grid.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Default deadline: a default needs P past due date + grace period (exclusive), else
     //   tecTOO_SOON. Each cusp puts that deadline on P.
     // - Impair due date: an impairment needs P past the due date (exclusive), else tecTOO_SOON.
@@ -491,22 +493,22 @@ class LeanLoanManage_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanManageCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanManage " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("LoanManage " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanManageCase const& c : cases)
+                for (std::size_t i = 0; LoanManageCase const& c : cases)
                 {
-                    jtx::Env& env = *l.env;
-                    std::uint32_t const pct = parentCloseTime(env);
+                    jtx::Env& env = *ledger.env;
+                    std::uint32_t const parentClose = parentCloseTime(env);
                     LoanParams const p{
-                        .principal = units(l.f, c.principal),
+                        .principal = units(ledger.f, c.principal),
                         .interestRate = c.interestRate,
                         .paymentInterval = c.paymentInterval,
                         .paymentTotal = c.paymentTotal,
                         .gracePeriod = c.gracePeriod,
                     };
-                    std::string at = actionName(c.action) + " of" + loanText(p) + " due P + " +
+                    std::string at = rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) +
+                        actionName(c.action) + " of" + loanText(p) + " due P + " +
                         std::to_string(c.due) + " debt " + std::to_string(c.debt) + " cover " +
                         std::to_string(c.cover) + " rate " + std::to_string(c.coverRate);
                     if (c.deployed)
@@ -521,32 +523,33 @@ class LeanLoanManage_test : public LeanSuite
                     std::optional<Keylet> loan;
                     if (!tryStage(*this, at, [&] {
                             stageInvestment(
-                                env, view, l.f, {.debt = c.debt, .managementFeeRate = 1'000});
-                            loan = createLoan(env, view, l.f, p);
+                                env, view, ledger.f, {.debt = c.debt, .managementFeeRate = 1'000});
+                            loan = createLoan(env, view, ledger.f, p);
                             if (c.impaired)
                             {
-                                dueAt(view, *loan, pct, -1);
+                                dueAt(view, *loan, parentClose, -1);
                                 TER const ter = applyOn(
                                     env,
                                     view,
-                                    jtx::loan::manage(l.f.owner, loan->key, tfLoanImpair));
+                                    jtx::loan::manage(ledger.f.owner, loan->key, tfLoanImpair));
                                 if (ter != tesSUCCESS)
                                     throw std::runtime_error("impair " + transToken(ter));
                             }
-                            dueAt(view, *loan, pct, c.due);
+                            dueAt(view, *loan, parentClose, c.due);
                             stageLending(
-                                env, view, l.f, {.cover = c.cover, .coverRate = c.coverRate});
+                                env, view, ledger.f, {.cover = c.cover, .coverRate = c.coverRate});
                             if (c.deployed)
                             {
                                 stageDeployed(
                                     view,
-                                    l.f.vaultKeylet,
-                                    units(l.f, *c.deployed),
-                                    units(l.f, c.loss));
+                                    ledger.f.vaultKeylet,
+                                    units(ledger.f, *c.deployed),
+                                    units(ledger.f, c.loss));
                             }
                         }))
                         continue;
-                    AppliedLoanTx const cpp = applyLoanManage(env, view, l.f, *loan, p, c.action);
+                    AppliedLoanTx const cpp =
+                        applyLoanManage(env, view, ledger.f, *loan, p, c.action);
                     LeanLoanTx const lean = leanLoanManage(cpp, c.action);
                     expectSame(*this, at, cpp, lean, c.expected);
                 }

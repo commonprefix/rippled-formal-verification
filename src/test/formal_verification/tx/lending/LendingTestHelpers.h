@@ -1003,8 +1003,8 @@ stageLending(jtx::Env& env, OpenView& view, BrokerFixture const& f, LendingStage
 [[nodiscard]] inline LendingStage
 investment(ReadView const& view)
 {
-    std::uint32_t const pct = view.parentCloseTime().time_since_epoch().count();
-    return {.subscriptionDate = pct - 1'000, .redemptionDate = pct + 900'000'000};
+    std::uint32_t const parentClose = view.parentCloseTime().time_since_epoch().count();
+    return {.subscriptionDate = parentClose - 1'000, .redemptionDate = parentClose + 900'000'000};
 }
 
 // The case lists' fixture: a broker without cover rates or management fee on a closed-ended vault
@@ -1298,7 +1298,7 @@ leanLoanBrokerCover(AppliedBrokerTx const& cpp, CoverOp op, std::optional<STAmou
 // Both sides of a broker transaction return `expected`; when both succeed, every broker field is
 // equal, the pool is unchanged (the model does not touch it), and the cover the model moved is
 // what C++ moved and booked, when the C++ side set them. A model error never matches: a row
-// expecting tefEXCEPTION names its model error (overload below).
+// expecting tefEXCEPTION names its model error (expectCppOnlyRejection).
 inline void
 expectSame(
     beast::unit_test::Suite& suite,
@@ -1349,12 +1349,13 @@ expectSame(
         same("booked", lean.amount.value_or(Number{}), *cpp.booked);
 }
 
-// A C++ rejection with no model TER: a preflight rejection (tem), where the model's doApply answers
-// `leanError` (notLawful: the fields break a broker invariant) or succeeds when it is none (it
-// cannot express the field); or a C++ exception (tefEXCEPTION), where the model answers
-// `leanError`.
+// C++ returns `expected`, a TER the model has no counterpart for: a preflight rejection (tem) or
+// a C++ exception (tefEXCEPTION). Preclaim must not fail with a model error. With a `leanError` the
+// model's doApply must fail with exactly that error (notLawful: the fields break a broker
+// invariant). With none it must SUCCEED: no model error and no model TER (it cannot express the
+// field).
 inline void
-expectSame(
+expectCppOnlyRejection(
     beast::unit_test::Suite& suite,
     std::string const& at,
     AppliedBrokerTx const& cpp,
@@ -1417,7 +1418,7 @@ expectSameBroker(
 // Both sides of a loan transaction return `expected`; when both succeed, every field of the loan
 // and of its broker is equal, so is the pool, and so are the amounts the model returns and what
 // C++ moved, when the C++ side set them. A model error never matches: a row expecting
-// tefEXCEPTION names its model error (overload below).
+// tefEXCEPTION names its model error (expectCppOnlyRejection).
 inline void
 expectSame(
     beast::unit_test::Suite& suite,
@@ -1483,11 +1484,12 @@ expectSame(
         same("fromBroker", lean.result.amountToPool, *cpp.fromBroker);
 }
 
-// A C++ rejection with no model TER: a preflight rejection (tem), where the model's doApply answers
-// `leanError` (notLawful: the fields break a loan invariant) or succeeds when it is none; or a C++
-// exception (tefEXCEPTION), where the model answers `leanError`.
+// C++ returns `expected`, a TER the model has no counterpart for: a preflight rejection (tem) or
+// a C++ exception (tefEXCEPTION). Preclaim must not fail with a model error. With a `leanError` the
+// model's doApply must fail with exactly that error (notLawful: the fields break a loan
+// invariant). With none it must SUCCEED: no model error and no model TER.
 inline void
-expectSame(
+expectCppOnlyRejection(
     beast::unit_test::Suite& suite,
     std::string const& at,
     AppliedLoanTx const& cpp,
@@ -1502,6 +1504,24 @@ expectSame(
             leanVerdictText(lean.result.leanError, lean.result.error.value_or(tesSUCCESS)) +
             " preclaim error " + leanErrorText(lean.can.leanError) + " cpp=" + transToken(cpp.ter) +
             " expected=" + transToken(expected) + " with lean error " + leanErrorText(leanError));
+}
+
+// The check a list row asks for: a row naming a `leanError` is a C++-only rejection the model
+// answers with that error; a row without one expects `expected` on both sides.
+template <class Cpp, class Lean>
+void
+expectRow(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    Cpp const& cpp,
+    Lean const& lean,
+    TER expected,
+    std::optional<LeanError> leanError)
+{
+    if (leanError)
+        expectCppOnlyRejection(suite, at, cpp, lean, expected, leanError);
+    else
+        expectSame(suite, at, cpp, lean, expected);
 }
 
 // Both sides of a LoanDelete return `expected`; when both succeed, the loan is gone and every

@@ -19,6 +19,7 @@
 #include <xrpl/protocol/TxFlags.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -264,6 +265,7 @@ class LeanLoanPay_test : public LeanSuite
     // give its verdict on both sides, with every field of the loan, its broker and the pool, and
     // the amounts to the pool and to the broker, equal when both succeed. Amounts are in units of
     // the vault grid.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Due date: regular, full and overpayments of the exact amount due are tecEXPIRED once the
     //   due date is before P; a late payment is tecTOO_SOON until then, and an amount below the
     //   amount due is tecINSUFFICIENT_PAYMENT.
@@ -279,14 +281,14 @@ class LeanLoanPay_test : public LeanSuite
     //   tecKILLED; with two or three it pays the loan off.
     // - Fee routing: the one-unit service fee goes to the owner once the cover reaches the
     //   minimum cover ceil(debt * rate / 1e5), else into the cover; the verdict does not change.
-    // - With interest: at 100% a year over 31'536'000 s (periodic rate 1) a principal of
+    // - Regular with interest: at 100% a year over 31'536'000 s (periodic rate 1) a principal of
     //   3'153'600'000 in two installments pays 4'204'800'000 each; less is
     //   tecINSUFFICIENT_PAYMENT. Of the first installment's 3'153'600'000 interest the broker's 1%
     //   fee rounds to 31'535'999 (toBroker), the pool gets 4'173'264'001. For a principal of 3
     //   (installment 4) the fee rounds to nothing.
-    // - Late with interest: a 100% late rate on 3'153'600'000 accrues 100 units a second, so 1'000
-    // s
-    //   late the amount due is 4'204'900'000; 1% of the late interest also goes to the broker.
+    // - Late with interest: a 100% late rate on 3'153'600'000 accrues 100 units a second, so
+    //   1'000 s late the amount due is 4'204'900'000; 1% of the late interest also goes to the
+    //   broker.
     // - Full with interest: at the start the amount due is the principal plus 10% close interest,
     //   3'468'960'000 (the broker gets 1% of the close interest, the schedule's fee is not owed);
     //   half an interval in it adds 1'576'800'000 accrued interest, 5'045'760'000. For a principal
@@ -873,29 +875,31 @@ class LeanLoanPay_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanPayCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanPay " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(("LoanPay " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanPayCase const& c : cases)
+                for (std::size_t i = 0; LoanPayCase const& c : cases)
                 {
-                    jtx::Env& env = *l.env;
-                    std::uint32_t const pct = parentCloseTime(env);
+                    jtx::Env& env = *ledger.env;
+                    std::uint32_t const parentClose = parentCloseTime(env);
                     LoanParams const p{
-                        .principal = units(l.f, c.principal),
+                        .principal = units(ledger.f, c.principal),
                         .interestRate = c.interestRate,
                         .lateInterestRate = c.lateInterestRate,
                         .closeInterestRate = c.closeInterestRate,
                         .overpaymentInterestRate = c.overpaymentInterestRate,
                         .overpaymentFee = c.overpaymentFee,
-                        .serviceFee = units(l.f, c.serviceFee),
-                        .latePaymentFee = units(l.f, c.latePaymentFee),
-                        .closePaymentFee = units(l.f, c.closePaymentFee),
+                        .serviceFee = units(ledger.f, c.serviceFee),
+                        .latePaymentFee = units(ledger.f, c.latePaymentFee),
+                        .closePaymentFee = units(ledger.f, c.closePaymentFee),
                         .paymentInterval = c.paymentInterval,
                         .paymentTotal = c.paymentTotal,
                         .allowsOverpayment = c.type == PaymentType::overpayment,
                     };
-                    std::string const at = paymentTypeName(c.type) + " of " +
-                        std::to_string(c.amount) + " on" + loanText(p) +
+                    std::string const at =
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) +
+                        paymentTypeName(c.type) + " of " + std::to_string(c.amount) + " on" +
+                        loanText(p) +
                         (c.due ? " due P + " + std::to_string(*c.due) : std::string{}) + " " +
                         stageText(c.stage) +
                         (c.available ? " available " + std::to_string(*c.available)
@@ -904,25 +908,25 @@ class LeanLoanPay_test : public LeanSuite
                     OpenView view{*env.current()};
                     std::optional<Keylet> loan;
                     if (!tryStage(*this, at, [&] {
-                            stageInvestment(env, view, l.f, {.managementFeeRate = 1'000});
-                            loan = createLoan(env, view, l.f, p);
+                            stageInvestment(env, view, ledger.f, {.managementFeeRate = 1'000});
+                            loan = createLoan(env, view, ledger.f, p);
                             if (c.due)
                             {
-                                dueAt(view, *loan, pct, *c.due);
+                                dueAt(view, *loan, parentClose, *c.due);
                             }
                             else
                             {
-                                startedAgo(view, *loan, pct, 0);
+                                startedAgo(view, *loan, parentClose, 0);
                             }
-                            stageLending(env, view, l.f, c.stage);
+                            stageLending(env, view, ledger.f, c.stage);
                             if (c.available)
-                                stageAvailable(view, l.f, *c.available);
-                            zeroIouBalance(view, l.f.owner, l.f.asset.raw());
+                                stageAvailable(view, ledger.f, *c.available);
+                            zeroIouBalance(view, ledger.f.owner, ledger.f.asset.raw());
                         }))
                         continue;
-                    Number const amount = units(l.f, c.amount);
+                    Number const amount = units(ledger.f, c.amount);
                     AppliedLoanTx const cpp =
-                        applyLoanPay(env, view, l.f, *loan, p, c.type, amount);
+                        applyLoanPay(env, view, ledger.f, *loan, p, c.type, amount);
                     LeanLoanTx const lean = leanLoanPay(cpp, c.type, amount);
                     expectSame(*this, at, cpp, lean, c.expected);
                 }

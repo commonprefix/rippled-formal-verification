@@ -20,6 +20,7 @@
 #include <xrpl/protocol/TER.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
@@ -37,8 +38,8 @@ struct ClawbackCase
     // The vault owner burns the holder's shares (amount in shares); otherwise the asset issuer
     // claws back vault assets.
     bool burn{};
-    // Set: the available assets are vault.available * 10^availableExponent vault units, to reach
-    // past the vault grid.
+    // Set: the available assets are vault.available * 10^availableExponent vault grid units, to
+    // reach past the vault grid.
     std::optional<int> availableExponent{};
     // The transaction carries no amount (the model gets a zero amount).
     bool omitAmount{};
@@ -711,7 +712,8 @@ class LeanVaultClawback_test : public LeanSuite
     // Each case stages its vault (the holder owns every share unless the row sets holderShares) and
     // either has the asset issuer claw back `amount` vault units from the holder or, with `burn`,
     // has the vault owner burn `amount` of the holder's shares, and expects its verdict on both
-    // sides. Rows are grouped by the cusp they sit around.
+    // sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Owner burn: the owner may burn a holder's shares only in an insolvent vault (shares, no
     //   assets; else tecNO_PERMISSION) and only all of them (amount equal to the holder's shares,
     //   or 0; else tecLIMIT_EXCEEDED). Each cusp burns exactly the holder's shares.
@@ -1555,25 +1557,20 @@ class LeanVaultClawback_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestVaults const& vaults,
                              std::span<ClawbackCase const> cases) {
+            testcase("clawback " + name + (closed ? ", closed-ended" : ""));
             for (Keylet const& vault : vaults)
             {
-                beginCase(("clawback " + vaultName(env, vault) + " " + name +
-                           (closed ? ", closed-ended" : ""))
-                              .c_str());
-                for (auto const& [row, amount, expected, burn, availableExponent, omitAmount] :
+                for (std::size_t i = 0;
+                     auto const& [row, amount, expected, burn, availableExponent, omitAmount] :
                      cases)
                 {
                     StagedVault staged = row;
                     if (closed)
-                    {
-                        staged.subscriptionDate = p - 1'000;
-                        staged.redemptionDate = p + 1'000'000;
-                        staged.earlyExitFeeRate = kFee5Pct;
-                    }
+                        inInvestment(staged, p, kFee5Pct);
                     STAmount const claw = burn ? STAmount{shareIssue(env, vault), amount}
                                                : vaultUnits(env, vault, amount);
                     StagedAmounts amounts = stagedAmounts(env, vault, staged);
-                    std::string at = sampleText(staged, claw);
+                    std::string at = rowText(i++, vaultName(env, vault)) + sampleText(staged, claw);
                     if (availableExponent)
                     {
                         amounts.available =
@@ -1599,8 +1596,8 @@ class LeanVaultClawback_test : public LeanSuite
         run("owner burn", s.all, kBurn);
         run("owner burn, no shares", s.all, kBurnNoShares);
         run("zero shares", s.clawable, kZeroShares);
-        run("zero shares", s.mpt, kZeroSharesMpt);
-        run("zero shares", s.ious, kZeroSharesIou);
+        run("zero shares, recovery rounds up", s.mpt, kZeroSharesMpt);
+        run("zero shares, recovery floors", s.ious, kZeroSharesIou);
         run("clamp to zero", s.ious, kClampToZero);
         run("clamp to available", s.clawable, kAvailable);
         run("coarse claw-all", s.ious, kCoarseClawAll);
@@ -1642,30 +1639,66 @@ class LeanVaultClawback_test : public LeanSuite
         testClawbackAsset(env, mptVault, 1'000, 1'001, tesSUCCESS);
 
         // canBurnShares over VALID (assetsTotal, assetsAvailable, sharesTotal) states
-        // covered by testClawbackBoundaries
-        testCanBurnShares(env, iouVault, Number{0}, Number{0}, 0, tecNO_PERMISSION);
-        testCanBurnShares(env, iouVault, Number{0}, Number{0}, 1'000, tesSUCCESS);
-        testCanBurnShares(env, iouVault, Number{1'000}, Number{0}, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(env, iouVault, Number{1'000}, Number{1'000}, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(env, iouVault, Number{0}, Number{0}, kMaxMpTokenAmount, tesSUCCESS);
-        // Per-field extremes: huge assets deny
-        testCanBurnShares(env, iouVault, iouMax, iouMax, 1'000, tecNO_PERMISSION);
-        testCanBurnShares(env, iouVault, iouMax, Number{0}, 1'000, tecNO_PERMISSION);
+        struct CanBurnRow
+        {
+            Number assetsTotal;
+            Number available;
+            std::uint64_t sharesTotal{};
+            TER expected;
+        };
+        // clang-format off
+        CanBurnRow const canBurnRows[] = {
+            // covered by testClawbackBoundaries
+            {.assetsTotal = Number{0}, .available = Number{0}, .sharesTotal = 0, .expected = tecNO_PERMISSION},
+            {.assetsTotal = Number{0}, .available = Number{0}, .sharesTotal = 1'000, .expected = tesSUCCESS},
+            {.assetsTotal = Number{1'000}, .available = Number{0}, .sharesTotal = 1'000, .expected = tecNO_PERMISSION},
+            {.assetsTotal = Number{1'000}, .available = Number{1'000}, .sharesTotal = 1'000, .expected = tecNO_PERMISSION},
+            {.assetsTotal = Number{0}, .available = Number{0}, .sharesTotal = kMaxMpTokenAmount, .expected = tesSUCCESS},
+            // Per-field extremes: huge assets deny
+            {.assetsTotal = iouMax, .available = iouMax, .sharesTotal = 1'000, .expected = tecNO_PERMISSION},
+            {.assetsTotal = iouMax, .available = Number{0}, .sharesTotal = 1'000, .expected = tecNO_PERMISSION},
+        };
+        // clang-format on
+        for (CanBurnRow const& r : canBurnRows)
+            testCanBurnShares(env, iouVault, r.assetsTotal, r.available, r.sharesTotal, r.expected);
         testBurnSharesPartialAmount(env, iouVault);
 
-        // covered by testClawbackBoundaries
-        testBurnShares(env, mptVault, 1'000'000'000, 1'000'000'000);
-        testBurnShares(env, mptVault, 1'000'000'000, 2'000'000'000);
-        testBurnShares(env, mptVault, kOpenLimitUnits, kOpenLimitUnits);
-        testBurnShares(env, mptVault, 1, kMaxMpTokenAmount);
-        testBurnShares(env, mptVault, 1, 1);
+        // The holder's deposit, all of it burnt, against the staged outstanding shares.
+        struct BurnRow
+        {
+            std::int64_t held{};
+            std::uint64_t outstanding{};
+        };
+        // clang-format off
+        static constexpr BurnRow kBurnRows[] = {
+            // covered by testClawbackBoundaries
+            {.held = 1'000'000'000, .outstanding = 1'000'000'000},
+            {.held = 1'000'000'000, .outstanding = 2'000'000'000},
+            {.held = kOpenLimitUnits, .outstanding = kOpenLimitUnits},
+            {.held = 1, .outstanding = kMaxMpTokenAmount},
+            {.held = 1, .outstanding = 1},
+        };
+        // clang-format on
+        for (BurnRow const& r : kBurnRows)
+            testBurnShares(env, mptVault, r.held, r.outstanding);
 
-        testClawbackAsset(env, mptVault, kOpenLimitUnits, kOpenLimitUnits, tesSUCCESS);
-        testClawbackAsset(env, mptVault, kOpenLimitUnits, kOpenLimitUnits / 2, tesSUCCESS);
-        testClawbackAsset(env, mptVault, kOpenLimitUnits, 1, tesSUCCESS);
-        testClawbackAsset(env, mptVault, 1, 1, tesSUCCESS);
-
-        testClawbackAsset(env, mptVault, 1'000, 0, tesSUCCESS);
+        struct ClawbackRow
+        {
+            std::int64_t seed{};
+            std::int64_t amount{};
+            TER expected;
+        };
+        // clang-format off
+        static ClawbackRow const kClawbackRows[] = {
+            {.seed = kOpenLimitUnits, .amount = kOpenLimitUnits, .expected = tesSUCCESS},
+            {.seed = kOpenLimitUnits, .amount = kOpenLimitUnits / 2, .expected = tesSUCCESS},
+            {.seed = kOpenLimitUnits, .amount = 1, .expected = tesSUCCESS},
+            {.seed = 1, .amount = 1, .expected = tesSUCCESS},
+            {.seed = 1'000, .amount = 0, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (ClawbackRow const& r : kClawbackRows)
+            testClawbackAsset(env, mptVault, r.seed, r.amount, r.expected);
         testClawbackAllNotSole(env, mptVault, false);
         testClawbackAllNotSole(env, mptVault, true);
         testClawbackAllWhileDeployed(env, iouVault);

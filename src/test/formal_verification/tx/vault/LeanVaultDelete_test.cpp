@@ -14,6 +14,7 @@
 #include <xrpl/protocol/TER.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -146,6 +147,7 @@ class LeanVaultDelete_test : public LeanSuite
     }
 
     // Each case stages its vault, deletes it and expects its verdict on both sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Obligations: only an empty vault with no shares can be deleted; assets or shares left are
     //   tecHAS_OBLIGATIONS. A vault with shares holds assets or is insolvent; no shares means no
     //   assets.
@@ -175,23 +177,22 @@ class LeanVaultDelete_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestVaults const& vaults,
                              std::span<DeleteCase const> cases) {
+            testcase("delete " + name + (closed ? ", closed-ended" : ""));
             for (Keylet const& vault : vaults)
             {
-                beginCase(("delete " + vaultName(env, vault) + " " + name +
-                           (closed ? ", closed-ended" : ""))
-                              .c_str());
-                for (auto const& [row, expected] : cases)
+                for (std::size_t i = 0; auto const& [row, expected] : cases)
                 {
                     StagedVault staged = row;
                     if (closed)
-                    {
-                        staged.subscriptionDate = p + 1'000;
-                        staged.redemptionDate = p + 1'001'000;
-                    }
+                        inSubscription(staged, p);
                     AppliedVaultDelete const cpp =
                         applyDelete(env, vault, s.owner, stagedAmounts(env, vault, staged));
                     expectSame(
-                        *this, sampleText(staged), cpp, leanCanVaultDelete(cpp.pre), expected);
+                        *this,
+                        rowText(i++, vaultName(env, vault)) + sampleText(staged),
+                        cpp,
+                        leanCanVaultDelete(cpp.pre),
+                        expected);
                 }
             }
         };
@@ -217,10 +218,23 @@ class LeanVaultDelete_test : public LeanSuite
         jtx::Env env{*this, vaultTestAmendments()};
         Setup const s = setup(env);
 
-        runVaultDelete(env, s.xrpVault, s.owner, 0, 0, 0, tesSUCCESS);
-        runVaultDelete(env, s.xrpVault, s.owner, 0, 0, 5, tecHAS_OBLIGATIONS);
-        runVaultDelete(env, s.xrpVault, s.owner, 0, 5, 5, tecHAS_OBLIGATIONS);
-        runVaultDelete(env, s.xrpVault, s.owner, 5, 5, 5, tecHAS_OBLIGATIONS);
+        struct DeleteRow
+        {
+            std::int64_t available{};
+            std::int64_t total{};
+            std::int64_t shares{};
+            TER expected;
+        };
+        // clang-format off
+        static DeleteRow const kDeleteRows[] = {
+            {.available = 0, .total = 0, .shares = 0, .expected = tesSUCCESS},
+            {.available = 0, .total = 0, .shares = 5, .expected = tecHAS_OBLIGATIONS},
+            {.available = 0, .total = 5, .shares = 5, .expected = tecHAS_OBLIGATIONS},
+            {.available = 5, .total = 5, .shares = 5, .expected = tecHAS_OBLIGATIONS},
+        };
+        // clang-format on
+        for (DeleteRow const& r : kDeleteRows)
+            runVaultDelete(env, s.xrpVault, s.owner, r.available, r.total, r.shares, r.expected);
         testDeleteBoundaries(env, s);
 
         testDeleteInInvestment();

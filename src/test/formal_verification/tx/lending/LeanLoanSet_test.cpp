@@ -20,6 +20,7 @@
 #include <xrpl/protocol/TER.h>
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <optional>
@@ -32,20 +33,21 @@ namespace xrpl::test::formal_verification {
 
 // A LoanSet on a broker staged as `stage` (vault grid units), with the vault in its investment
 // phase unless `subscription` and `redemption` set its dates (offsets from the parent close time
-// P). The principal is principal * 10^principalExponent units, each fee fee * 10^feeExponent. A
-// start date, as an offset from P or as `startAt`, makes it a two-step proposal. A C++ preflight
-// rejection (tem) is paired with `leanError`, the model error that stands for it.
+// P). A start date, as an offset from P or as `startAt`, makes it a two-step proposal. A C++
+// preflight rejection (tem) is paired with `leanError`, the model error that stands for it.
 struct LoanSetCase
 {
     LendingStage stage{};
     std::optional<std::int64_t> subscription{};
     std::optional<std::int64_t> redemption{};
     std::int64_t principal{};
+    // The principal is principal * 10^principalExponent vault grid units.
     int principalExponent{};
     std::int64_t originationFee{};
     std::int64_t serviceFee{};
     std::int64_t latePaymentFee{};
     std::int64_t closePaymentFee{};
+    // Each fee is fee * 10^feeExponent vault grid units.
     int feeExponent{};
     std::uint32_t interestRate{};
     std::uint32_t paymentInterval{600};
@@ -117,14 +119,7 @@ class LeanLoanSet_test : public LeanSuite
         zeroIouBalance(view, f.owner, f.asset.raw());
         AppliedLoanTx const cpp = applyLoanSet(env, view, f, p);
         LeanLoanTx const lean = leanLoanSet(cpp, p);
-        if (leanError)
-        {
-            expectSame(*this, at, cpp, lean, expected, leanError);
-        }
-        else
-        {
-            expectSame(*this, at, cpp, lean, expected);
-        }
+        expectRow(*this, at, cpp, lean, expected, leanError);
     }
 
     // Stage `s` on a throwaway view of `env`, then check the LoanSet there.
@@ -155,12 +150,12 @@ class LeanLoanSet_test : public LeanSuite
         bool toInvestment,
         bool toRedemption)
     {
-        std::uint32_t const pct = view.parentCloseTime().time_since_epoch().count();
-        std::uint32_t sub = pct - 30;
+        std::uint32_t const parentClose = view.parentCloseTime().time_since_epoch().count();
+        std::uint32_t sub = parentClose - 30;
         if (!toInvestment)
-            sub = pct + 600;
+            sub = parentClose + 600;
         if (toRedemption)
-            sub = pct - 1'000'001;
+            sub = parentClose - 1'000'001;
         LendingStage s{
             .cover = toUnits(view, f, cover),
             .managementFeeRate = 1'000,
@@ -209,12 +204,12 @@ class LeanLoanSet_test : public LeanSuite
     {
         testcase("LoanSet: " + label);
         TestLedger const& l = s.iouLedger;
-        std::uint32_t const pct = parentCloseTime(*l.env);
+        std::uint32_t const parentClose = parentCloseTime(*l.env);
         checkLoanSet(
             *l.env,
             l.f,
             singleValueStage(*l.env->current(), l.f, Number{500}, std::nullopt, true, false),
-            LoanParams{.startDate = static_cast<std::uint32_t>(pct + startOffset)},
+            LoanParams{.startDate = static_cast<std::uint32_t>(parentClose + startOffset)},
             expected);
     }
 
@@ -380,20 +375,22 @@ class LeanLoanSet_test : public LeanSuite
     // on both sides, with every field of the loan, its broker and the pool, and the amount sent to
     // the borrower, equal when both succeed. Amounts are in units of the vault grid; loans have one
     // payment 600 s apart unless the row says otherwise.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // LoanSet:
     // - Debt maximum: debt + principal above the broker's debt maximum is tecLIMIT_EXCEEDED. Each
     //   cusp puts it exactly on the maximum; with interest (100% over 3'153'600 s, interest
-    //   ceil(P / 10)) the cusp stays put, as the debt counts the principal only.
+    //   ceil(principal / 10)) the cusp stays put, as the debt counts the principal only.
     // - Assets available: a principal above the vault's available assets (1e10 less the debt) is
     //   tecINSUFFICIENT_FUNDS.
     // - Cover at origination: cover below ceil((debt + principal) * rate / 1e5) is
     //   tecINSUFFICIENT_FUNDS. Each cusp deposits exactly that cover.
     // - Payment count: a zero-interest loan with installments 60 s apart is tecPRECISION_LOSS
-    //   unless P > (N - 1) * ceil(P / N), in grid units for either asset.
+    //   unless principal > (payments - 1) * ceil(principal / payments), in grid units for either
+    //   asset.
     // - Redemption buffer (IOU): the last payment of a two-step loan starting at P + 1'000 must
     //   fall 60 s before the vault's redemption date, else tecNO_PERMISSION.
-    // - Open zone: a loan whose interest takes assets total + yield + ceil(P / 10) past the open
-    //   limit (9e15 units) is tecLIMIT_EXCEEDED. Each cusp lands exactly on it.
+    // - Open zone: a loan whose interest takes assets total + yield + ceil(principal / 10) past
+    //   the open limit (9e15 units) is tecLIMIT_EXCEEDED. Each cusp lands exactly on it.
     // - Grid: a principal or fee off the vault grid is tecPRECISION_LOSS (for an MPT, a fractional
     //   amount). Each cusp is one step of 10^level units with a 16-digit mantissa; fees ride on a
     //   2e9-unit loan.
@@ -1623,49 +1620,52 @@ class LeanLoanSet_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanSetCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanSet " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(("LoanSet " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanSetCase const& c : cases)
+                for (std::size_t i = 0; LoanSetCase const& c : cases)
                 {
-                    jtx::Env& env = *l.env;
-                    std::uint32_t const pct = parentCloseTime(env);
+                    jtx::Env& env = *ledger.env;
+                    std::uint32_t const parentClose = parentCloseTime(env);
                     LoanParams p{
-                        .principal = units(l.f, c.principal, c.principalExponent),
+                        .principal = units(ledger.f, c.principal, c.principalExponent),
                         .interestRate = c.interestRate,
-                        .originationFee = units(l.f, c.originationFee, c.feeExponent),
-                        .serviceFee = units(l.f, c.serviceFee, c.feeExponent),
-                        .latePaymentFee = units(l.f, c.latePaymentFee, c.feeExponent),
-                        .closePaymentFee = units(l.f, c.closePaymentFee, c.feeExponent),
+                        .originationFee = units(ledger.f, c.originationFee, c.feeExponent),
+                        .serviceFee = units(ledger.f, c.serviceFee, c.feeExponent),
+                        .latePaymentFee = units(ledger.f, c.latePaymentFee, c.feeExponent),
+                        .closePaymentFee = units(ledger.f, c.closePaymentFee, c.feeExponent),
                         .paymentInterval = c.paymentInterval,
                         .paymentTotal = c.paymentTotal,
                         .gracePeriod = c.gracePeriod,
                     };
                     if (c.start)
-                        p.startDate = static_cast<std::uint32_t>(pct + *c.start);
+                        p.startDate = static_cast<std::uint32_t>(parentClose + *c.start);
                     if (c.startAt)
                         p.startDate = c.startAt;
                     LendingStage stage = c.stage;
                     if (c.subscription)
                     {
-                        stage.subscriptionDate = static_cast<std::uint32_t>(pct + *c.subscription);
+                        stage.subscriptionDate =
+                            static_cast<std::uint32_t>(parentClose + *c.subscription);
                         stage.redemptionDate =
-                            static_cast<std::uint32_t>(pct + c.redemption.value());
+                            static_cast<std::uint32_t>(parentClose + c.redemption.value());
                     }
-                    std::string const at = stageText(stage) + loanText(p) + ": ";
+                    std::string const at =
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) +
+                        stageText(stage) + loanText(p) + ": ";
                     OpenView view{*env.current()};
                     if (!tryStage(*this, at, [&] {
                             if (c.subscription)
                             {
-                                stageLending(env, view, l.f, stage);
+                                stageLending(env, view, ledger.f, stage);
                             }
                             else
                             {
-                                stageInvestment(env, view, l.f, stage);
+                                stageInvestment(env, view, ledger.f, stage);
                             }
                         }))
                         continue;
-                    checkLoanSet(env, l.f, view, p, c.expected, c.leanError, at);
+                    checkLoanSet(env, ledger.f, view, p, c.expected, c.leanError, at);
                 }
             }
         };
@@ -1709,58 +1709,59 @@ class LeanLoanSet_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanAcceptCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanAccept " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("LoanAccept " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanAcceptCase const& c : cases)
+                for (std::size_t i = 0; LoanAcceptCase const& c : cases)
                 {
-                    jtx::Env& env = *l.env;
-                    std::uint32_t const pct = parentCloseTime(env);
+                    jtx::Env& env = *ledger.env;
+                    std::uint32_t const parentClose = parentCloseTime(env);
                     LoanParams const p{
-                        .principal = units(l.f, c.principal),
+                        .principal = units(ledger.f, c.principal),
                         .interestRate = c.interestRate,
                         .paymentInterval = c.paymentInterval,
                         .paymentTotal = 1,
-                        .startDate = pct + 1'000,
+                        .startDate = parentClose + 1'000,
                     };
                     auto const at = [&](char const* what, std::optional<std::int64_t> d) {
                         return d ? std::string{what} + std::to_string(*d) : std::string{};
                     };
-                    std::string const text = stageText(c.stage) + loanText(p) +
-                        at(" restaged start P + ", c.start) + at(" sub P + ", c.subscription) +
-                        at(" red P + ", c.redemption) + ": ";
+                    std::string const text =
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) +
+                        stageText(c.stage) + loanText(p) + at(" restaged start P + ", c.start) +
+                        at(" sub P + ", c.subscription) + at(" red P + ", c.redemption) + ": ";
                     OpenView view{*env.current()};
-                    Keylet const loan = nextLoan(view, l.f);
+                    Keylet const loan = nextLoan(view, ledger.f);
                     if (!tryStage(*this, text, [&] {
-                            stageInvestment(env, view, l.f, {});
-                            TER const proposed = applyLoanSet(env, view, l.f, p).ter;
+                            stageInvestment(env, view, ledger.f, {});
+                            TER const proposed = applyLoanSet(env, view, ledger.f, p).ter;
                             if (proposed != tesSUCCESS)
                                 throw std::runtime_error("proposal " + transToken(proposed));
-                            stageLending(env, view, l.f, c.stage);
+                            stageLending(env, view, ledger.f, c.stage);
                             Sandbox sb(&view, TapNone);
                             if (c.start)
                             {
                                 auto const sle = sb.peek(loan);
-                                sle->at(sfStartDate) = static_cast<std::uint32_t>(pct + *c.start);
+                                sle->at(sfStartDate) =
+                                    static_cast<std::uint32_t>(parentClose + *c.start);
                                 sle->at(sfNextPaymentDueDate) =
-                                    static_cast<std::uint32_t>(pct + *c.start) +
+                                    static_cast<std::uint32_t>(parentClose + *c.start) +
                                     sle->at(sfPaymentInterval);
                                 sb.update(sle);
                             }
                             if (c.subscription)
                             {
-                                auto const vault = sb.peek(l.f.vaultKeylet);
+                                auto const vault = sb.peek(ledger.f.vaultKeylet);
                                 vault->at(sfSubscriptionDate) =
-                                    static_cast<std::uint32_t>(pct + *c.subscription);
+                                    static_cast<std::uint32_t>(parentClose + *c.subscription);
                                 vault->at(sfRedemptionDate) =
-                                    static_cast<std::uint32_t>(pct + c.redemption.value());
+                                    static_cast<std::uint32_t>(parentClose + c.redemption.value());
                                 sb.update(vault);
                             }
                             sb.apply(view);
                         }))
                         continue;
-                    checkAccept(env, l.f, view, loan, p, c.expected, text);
+                    checkAccept(env, ledger.f, view, loan, p, c.expected, text);
                 }
             }
         };
@@ -1812,66 +1813,68 @@ class LeanLoanSet_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              std::vector<TestLedger> const& ledgers,
                              std::span<LoanDeleteCase const> cases) {
-            for (TestLedger const& l : ledgers)
+            testcase("LoanDelete " + name);
+            for (TestLedger const& ledger : ledgers)
             {
-                beginCase(
-                    ("LoanDelete " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
-                for (LoanDeleteCase const& c : cases)
+                for (std::size_t i = 0; LoanDeleteCase const& c : cases)
                 {
-                    jtx::Env& env = *l.env;
-                    std::uint32_t const pct = parentCloseTime(env);
+                    jtx::Env& env = *ledger.env;
+                    std::uint32_t const parentClose = parentCloseTime(env);
                     LoanParams p{
-                        .principal = units(l.f, c.principal),
+                        .principal = units(ledger.f, c.principal),
                         .interestRate = c.interestRate,
                         .paymentTotal = c.paymentTotal,
                     };
                     if (c.pending)
-                        p.startDate = pct + 1'000;
-                    jtx::Account const& by = c.by == DeleteParty::Owner ? l.f.owner
-                        : c.by == DeleteParty::Other                    ? l.f.holder
-                                                                        : l.f.borrower;
-                    std::string const at = by.name() + " deletes" + loanText(p) + " debt " +
-                        std::to_string(c.debt) + " paid " + std::to_string(c.paid) +
-                        (c.impaired ? " impaired" : "") + (c.defaulted ? " defaulted" : "") + ": ";
+                        p.startDate = parentClose + 1'000;
+                    jtx::Account const& by = c.by == DeleteParty::Owner ? ledger.f.owner
+                        : c.by == DeleteParty::Other                    ? ledger.f.holder
+                                                                        : ledger.f.borrower;
+                    std::string const at =
+                        rowText(i++, vaultName(*ledger.env, ledger.f.vaultKeylet)) + by.name() +
+                        " deletes" + loanText(p) + " debt " + std::to_string(c.debt) + " paid " +
+                        std::to_string(c.paid) + (c.impaired ? " impaired" : "") +
+                        (c.defaulted ? " defaulted" : "") + ": ";
                     OpenView view{*env.current()};
                     std::optional<Keylet> loan;
                     if (!tryStage(*this, at, [&] {
-                            stageInvestment(env, view, l.f, {.debt = c.debt});
-                            loan = createLoan(env, view, l.f, p);
+                            stageInvestment(env, view, ledger.f, {.debt = c.debt});
+                            loan = createLoan(env, view, ledger.f, p);
                             for (std::uint32_t i = 0; i < c.paid; ++i)
                             {
                                 Number const installment = view.read(*loan)->at(sfPeriodicPayment);
                                 TER const ter = applyOn(
                                     env,
                                     view,
-                                    jtx::loan::pay(l.f.borrower, loan->key, l.f.asset(installment)),
+                                    jtx::loan::pay(
+                                        ledger.f.borrower, loan->key, ledger.f.asset(installment)),
                                     jtx::Fee(env.current()->fees().base * 101));
                                 if (ter != tesSUCCESS)
                                     throw std::runtime_error("payment " + transToken(ter));
                             }
                             if (c.impaired)
                             {
-                                dueAt(view, *loan, pct, -1);
+                                dueAt(view, *loan, parentClose, -1);
                                 TER const ter = applyOn(
                                     env,
                                     view,
-                                    jtx::loan::manage(l.f.owner, loan->key, tfLoanImpair));
+                                    jtx::loan::manage(ledger.f.owner, loan->key, tfLoanImpair));
                                 if (ter != tesSUCCESS)
                                     throw std::runtime_error("impair " + transToken(ter));
                             }
                             if (c.defaulted)
                             {
-                                dueAt(view, *loan, pct, -61);
+                                dueAt(view, *loan, parentClose, -61);
                                 TER const ter = applyOn(
                                     env,
                                     view,
-                                    jtx::loan::manage(l.f.owner, loan->key, tfLoanDefault));
+                                    jtx::loan::manage(ledger.f.owner, loan->key, tfLoanDefault));
                                 if (ter != tesSUCCESS)
                                     throw std::runtime_error("default " + transToken(ter));
                             }
                         }))
                         continue;
-                    AppliedLoanTx const cpp = applyLoanDelete(env, view, l.f, *loan, p, by);
+                    AppliedLoanTx const cpp = applyLoanDelete(env, view, ledger.f, *loan, p, by);
                     LeanDeleteTx const lean = leanLoanDelete(cpp);
                     expectSame(*this, at, cpp, lean, c.expected);
                 }
@@ -1897,167 +1900,81 @@ class LeanLoanSet_test : public LeanSuite
         jtx::Env mptEnv{*this, lendingTestAmendments()};
         LendingSetup const s = setUpLending(iouEnv, mptEnv);
 
+        // A broker with `cover`, the vault staged into investment (and redemption).
+        struct LoanSetRow
+        {
+            char const* label;
+            LoanParams loan{};
+            TER expected;
+            Number cover{500};
+            std::optional<Number> debtMaximum{};
+            bool toInvestment = true;
+            bool toRedemption = false;
+            LendingAsset asset = LendingAsset::iou;
+        };
+        auto const loanSet = [&](LoanSetRow const& r) {
+            runLoanSet(
+                s,
+                r.label,
+                r.loan,
+                r.expected,
+                r.cover,
+                r.debtMaximum,
+                r.toInvestment,
+                r.toRedemption,
+                r.asset);
+        };
+
         // One-step loans
-        runLoanSet(s, "one-step loan without interest", LoanParams{}, tesSUCCESS);
-        runLoanSet(
-            s,
-            "one-step loan with interest",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            tesSUCCESS);
-        runLoanSet(
-            s,
-            "one-step loan with fees",
-            LoanParams{
-                .interestRate = 10'000,
-                .originationFee = Number{5},
-                .serviceFee = Number{1},
-                .latePaymentFee = Number{2},
-                .closePaymentFee = Number{3}},
-            tesSUCCESS);
-        runLoanSet(
-            s,
-            "vault in the subscription phase",
-            LoanParams{},
-            tecTOO_SOON,
-            Number{500},
-            std::nullopt,
-            false);
-        runLoanSet(
-            s,
-            "vault in the redemption phase",
-            LoanParams{},
-            tecEXPIRED,
-            Number{500},
-            std::nullopt,
-            true,
-            true);
-        // Covered by testLoanSetBoundaries.
-        runLoanSet(
-            s,
-            "final payment too close to the redemption date",
-            LoanParams{.paymentInterval = 500'000},
-            tecNO_PERMISSION);
-        // Covered by testLoanSetBoundaries.
-        runLoanSet(
-            s,
-            "principal above the vault's available assets",
-            LoanParams{.principal = Number{20'000}},
-            tecINSUFFICIENT_FUNDS,
-            Number{5'000});
-        // Covered by testLoanSetBoundaries.
-        runLoanSet(
-            s,
-            "principal above the debt maximum",
-            LoanParams{},
-            tecLIMIT_EXCEEDED,
-            Number{500},
-            Number{500});
-        // Covered by testLoanSetBoundaries.
-        runLoanSet(s, "not enough cover", LoanParams{}, tecINSUFFICIENT_FUNDS, Number{0});
-        runLoanSet(
-            s,
-            "fee off the vault grid",
-            LoanParams{.originationFee = Number{1, -7}},
-            tecPRECISION_LOSS);
-        // One grid unit in three installments: the rounded-up installment covers the whole loan in
-        // one payment, so the schedule cannot be honoured. Covered by testLoanSetBoundaries.
-        runLoanSet(
-            s,
-            "principal too small for its installments",
-            LoanParams{.principal = Number{1, -6}, .paymentTotal = 3},
-            tecPRECISION_LOSS);
-        runLoanSet(
-            s,
-            "schedule past the protocol time limit",
-            LoanParams{.paymentInterval = 4'000'000'000},
-            tecKILLED);
-        runLoanSet(
-            s,
-            "grace period past the protocol time limit",
-            LoanParams{.paymentInterval = 0xFFFF'FFFF, .gracePeriod = 0xFFFF'FFFF},
-            tecKILLED);
-        runLoanSet(
-            s,
-            "interval past the protocol time limit",
-            LoanParams{.paymentInterval = 0xFFFF'FFFF},
-            tecKILLED);
-        runLoanSet(
-            s,
-            "installment count past the protocol time limit",
-            LoanParams{.paymentTotal = 0xFFFF'FFFF},
-            tecKILLED);
-        runLoanSet(
-            s,
-            "fee not representable as an amount",
-            LoanParams{.originationFee = Number{12'345'678'901'234'567LL, -16}},
-            tecPRECISION_LOSS);
-        // A per-period rate below 1e-9 takes the binomial series.
-        runLoanSet(
-            s,
-            "tiny interest rate",
-            LoanParams{.principal = Number{5'000}, .interestRate = 10, .paymentInterval = 60},
-            tesSUCCESS);
-        // A tiny rate over many installments (rate times count still below 1e-9): the binomial
-        // series converges before its last term.
-        runLoanSet(
-            s,
-            "tiny interest rate over 50 installments",
-            LoanParams{
-                .principal = Number{5'000},
-                .interestRate = 1,
-                .paymentInterval = 60,
-                .paymentTotal = 50},
-            tesSUCCESS);
+        // clang-format off
+        static LoanSetRow const kOneStepRows[] = {
+            {.label = "one-step loan without interest", .expected = tesSUCCESS},
+            {.label = "one-step loan with interest", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .expected = tesSUCCESS},
+            {.label = "one-step loan with fees", .loan = {.interestRate = 10'000, .originationFee = Number{5}, .serviceFee = Number{1}, .latePaymentFee = Number{2}, .closePaymentFee = Number{3}}, .expected = tesSUCCESS},
+            {.label = "vault in the subscription phase", .expected = tecTOO_SOON, .toInvestment = false},
+            {.label = "vault in the redemption phase", .expected = tecEXPIRED, .toRedemption = true},
+            // Covered by testLoanSetBoundaries.
+            {.label = "final payment too close to the redemption date", .loan = {.paymentInterval = 500'000}, .expected = tecNO_PERMISSION},
+            // Covered by testLoanSetBoundaries.
+            {.label = "principal above the vault's available assets", .loan = {.principal = Number{20'000}}, .expected = tecINSUFFICIENT_FUNDS, .cover = Number{5'000}},
+            // Covered by testLoanSetBoundaries.
+            {.label = "principal above the debt maximum", .expected = tecLIMIT_EXCEEDED, .debtMaximum = Number{500}},
+            // Covered by testLoanSetBoundaries.
+            {.label = "not enough cover", .expected = tecINSUFFICIENT_FUNDS, .cover = Number{0}},
+            {.label = "fee off the vault grid", .loan = {.originationFee = Number{1, -7}}, .expected = tecPRECISION_LOSS},
+            // One grid unit in three installments: the rounded-up installment covers the whole
+            // loan in one payment, so the schedule cannot be honoured. Covered by
+            // testLoanSetBoundaries.
+            {.label = "principal too small for its installments", .loan = {.principal = Number{1, -6}, .paymentTotal = 3}, .expected = tecPRECISION_LOSS},
+            {.label = "schedule past the protocol time limit", .loan = {.paymentInterval = 4'000'000'000}, .expected = tecKILLED},
+            {.label = "grace period past the protocol time limit", .loan = {.paymentInterval = 0xFFFF'FFFF, .gracePeriod = 0xFFFF'FFFF}, .expected = tecKILLED},
+            {.label = "interval past the protocol time limit", .loan = {.paymentInterval = 0xFFFF'FFFF}, .expected = tecKILLED},
+            {.label = "installment count past the protocol time limit", .loan = {.paymentTotal = 0xFFFF'FFFF}, .expected = tecKILLED},
+            {.label = "fee not representable as an amount", .loan = {.originationFee = Number{12'345'678'901'234'567LL, -16}}, .expected = tecPRECISION_LOSS},
+            // A per-period rate below 1e-9 takes the binomial series.
+            {.label = "tiny interest rate", .loan = {.principal = Number{5'000}, .interestRate = 10, .paymentInterval = 60}, .expected = tesSUCCESS},
+            // A tiny rate over many installments (rate times count still below 1e-9): the binomial
+            // series converges before its last term.
+            {.label = "tiny interest rate over 50 installments", .loan = {.principal = Number{5'000}, .interestRate = 1, .paymentInterval = 60, .paymentTotal = 50}, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (LoanSetRow const& r : kOneStepRows)
+            loanSet(r);
         testLoanInterestPastOpenLimit();
         testAcceptPastOpenLimit();
         testCoarsenedVaultRefusesLoan();
 
         // MPT vault
-        runLoanSet(
-            s,
-            "one-step loan with interest",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            tesSUCCESS,
-            Number{500},
-            std::nullopt,
-            true,
-            false,
-            LendingAsset::mpt);
-        runLoanSet(
-            s,
-            "one-step loan with fees",
-            LoanParams{
-                .interestRate = 10'000,
-                .originationFee = Number{5},
-                .serviceFee = Number{1},
-                .latePaymentFee = Number{2},
-                .closePaymentFee = Number{3}},
-            tesSUCCESS,
-            Number{500},
-            std::nullopt,
-            true,
-            false,
-            LendingAsset::mpt);
-        runLoanSet(
-            s,
-            "fee off the vault grid",
-            LoanParams{.originationFee = Number{5, -1}},
-            tecPRECISION_LOSS,
-            Number{500},
-            std::nullopt,
-            true,
-            false,
-            LendingAsset::mpt);
-        runLoanSet(
-            s,
-            "principal above the MPT maximum",
-            LoanParams{.principal = Number{1, 19}},
-            tecPRECISION_LOSS,
-            Number{500},
-            std::nullopt,
-            true,
-            false,
-            LendingAsset::mpt);
+        // clang-format off
+        static LoanSetRow const kMptRows[] = {
+            {.label = "one-step loan with interest", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .expected = tesSUCCESS, .asset = LendingAsset::mpt},
+            {.label = "one-step loan with fees", .loan = {.interestRate = 10'000, .originationFee = Number{5}, .serviceFee = Number{1}, .latePaymentFee = Number{2}, .closePaymentFee = Number{3}}, .expected = tesSUCCESS, .asset = LendingAsset::mpt},
+            {.label = "fee off the vault grid", .loan = {.originationFee = Number{5, -1}}, .expected = tecPRECISION_LOSS, .asset = LendingAsset::mpt},
+            {.label = "principal above the MPT maximum", .loan = {.principal = Number{1, 19}}, .expected = tecPRECISION_LOSS, .asset = LendingAsset::mpt},
+        };
+        // clang-format on
+        for (LoanSetRow const& r : kMptRows)
+            loanSet(r);
 
         // Two-step proposals
         runTwoStep(s, "two-step proposal", 1'000, tesSUCCESS);

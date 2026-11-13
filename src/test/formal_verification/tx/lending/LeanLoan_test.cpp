@@ -7,7 +7,9 @@
 #include <xrpl/ledger/OpenView.h>
 #include <xrpl/protocol/TER.h>
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -30,16 +32,22 @@ struct LoanFieldCase
 // a lawfulness verdict is not a claim that the loan is reachable.
 class LeanLoan_test : public LeanSuite
 {
+    using Mutation = std::function<void(Loan&)>;
+
+    // `mutate` applied to `loan`: build accepts the loan or rejects it.
     void
-    runLawful(Loan const& s, bool shouldBeLawful, std::string const& label)
+    expectBuild(std::string const& label, Mutation const& mutate, Loan loan, bool valid)
     {
+        if (mutate)
+            mutate(loan);
         testcase(label);
-        BEAST_EXPECTS(LoanFFI::build(s).has_value() == shouldBeLawful, label);
+        BEAST_EXPECTS(LoanFFI::build(loan).has_value() == valid, label);
     }
 
     // Each row sets one field, on the LoanSet of the ledger's loan (applied on a throwaway view)
     // and on that loan as the model reads it; C++ preflight and the model's lawfulness must give
     // the row's pair of verdicts.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Rate cap: every rate (interest, late, close, overpayment interest, overpayment fee) is
     //   capped at 100% (100'000); above it temINVALID / not lawful.
     // - Grace period: the grace period must lie in [60, payment interval] (600 here).
@@ -89,8 +97,8 @@ class LeanLoan_test : public LeanSuite
         Field Loan::* field,
         std::span<LoanFieldCase const> cases)
     {
-        beginCase(("loan " + name).c_str());
-        for (LoanFieldCase const& c : cases)
+        testcase("loan " + name);
+        for (std::size_t i = 0; LoanFieldCase const& c : cases)
         {
             LoanParams q = p;
             Loan s = baseline;
@@ -104,9 +112,9 @@ class LeanLoan_test : public LeanSuite
                 .result = {
                     .leanError =
                         LoanFFI::build(s) ? std::nullopt : std::optional{LeanError::notLawful}}};
-            expectSame(
+            expectCppOnlyRejection(
                 *this,
-                name + " " + std::to_string(c.value) + ": ",
+                rowText(i++) + name + " " + std::to_string(c.value) + ": ",
                 cpp,
                 lean,
                 c.expected,
@@ -172,88 +180,54 @@ class LeanLoan_test : public LeanSuite
         auto const loanKeylet = submitLoanSet(env, f, p);
         Loan const baseline = readLoan(*env.current(), loanKeylet, f, p);
 
-        runLawful(baseline, true, "a loan read from the ledger");
-        {
-            auto s = baseline;
-            s.paymentRemaining = 0;
-            runLawful(s, false, "no payments left with value outstanding");
-        }
-        {
-            auto s = baseline;
-            s.paymentRemaining = 0;
-            s.totalValueOutstanding = s.principalOutstanding = s.managementFeeOutstanding =
+        auto const expectValid = [&](std::string const& label, Mutation const& mutate = {}) {
+            expectBuild(label, mutate, baseline, true);
+        };
+        auto const expectInvalid = [&](std::string const& label, Mutation const& mutate) {
+            expectBuild(label, mutate, baseline, false);
+        };
+        expectValid("a loan read from the ledger");
+        expectInvalid("no payments left with value outstanding", [](Loan& loan) {
+            loan.paymentRemaining = 0;
+        });
+        expectInvalid("paid off but a due date remains", [](Loan& loan) {
+            loan.paymentRemaining = 0;
+            loan.totalValueOutstanding = loan.principalOutstanding = loan.managementFeeOutstanding =
                 Number{0};
-            runLawful(s, false, "paid off but a due date remains");
-        }
-        {
-            auto s = baseline;
-            s.paymentRemaining = 0;
-            s.totalValueOutstanding = s.principalOutstanding = s.managementFeeOutstanding =
+        });
+        expectValid("paid off", [](Loan& loan) {
+            loan.paymentRemaining = 0;
+            loan.totalValueOutstanding = loan.principalOutstanding = loan.managementFeeOutstanding =
                 Number{0};
-            s.nextPaymentDueDate = 0;
-            runLawful(s, true, "paid off");
-        }
-        {
-            auto s = baseline;
-            s.principalOutstanding = Number{-1};
-            runLawful(s, false, "negative principal");
-        }
-        {
-            auto s = baseline;
-            s.serviceFee = Number{-1};
-            runLawful(s, false, "negative service fee");
-        }
-        {
-            auto s = baseline;
-            s.periodicPayment = Number{0};
-            runLawful(s, false, "zero periodic payment");
-        }
-        {
-            auto s = baseline;
-            s.totalValueOutstanding = s.principalOutstanding;
-            runLawful(s, false, "interest below the tolerance");
-        }
-        {
-            auto s = baseline;
-            s.interestRate = 100'001;
-            runLawful(s, false, "interest rate above 100%");
-        }
-        {
-            auto s = baseline;
-            s.gracePeriod = s.paymentInterval + 1;
-            runLawful(s, false, "grace period above the payment interval");
-        }
-        {
-            auto s = baseline;
-            s.loanScale = 100;
-            runLawful(s, false, "loan scale out of range");
-        }
-        {
-            auto s = baseline;
-            s.paymentRemaining = s.paymentTotal + 1;
-            runLawful(s, false, "more payments left than scheduled");
-        }
-        {
-            auto s = baseline;
-            s.previousPaymentDueDate = s.nextPaymentDueDate;
-            runLawful(s, true, "due dates out of order (not an invariant)");
-        }
-        {
-            auto s = baseline;
-            s.nextPaymentDueDate += 7;
-            runLawful(s, false, "next due date off the schedule");
-        }
-        {
-            auto s = baseline;
-            s.principalOutstanding = s.principalOutstanding + Number{1, -9};
-            s.totalValueOutstanding = s.totalValueOutstanding + Number{1, -9};
-            runLawful(s, false, "amounts below the loan scale");
-        }
-        {
-            auto s = baseline;
-            s.broker.managementFeeRate = 10'001;
-            runLawful(s, false, "unlawful broker");
-        }
+            loan.nextPaymentDueDate = 0;
+        });
+        expectInvalid(
+            "negative principal", [](Loan& loan) { loan.principalOutstanding = Number{-1}; });
+        expectInvalid("negative service fee", [](Loan& loan) { loan.serviceFee = Number{-1}; });
+        expectInvalid(
+            "zero periodic payment", [](Loan& loan) { loan.periodicPayment = Number{0}; });
+        expectInvalid("interest below the tolerance", [](Loan& loan) {
+            loan.totalValueOutstanding = loan.principalOutstanding;
+        });
+        expectInvalid("interest rate above 100%", [](Loan& loan) { loan.interestRate = 100'001; });
+        expectInvalid("grace period above the payment interval", [](Loan& loan) {
+            loan.gracePeriod = loan.paymentInterval + 1;
+        });
+        expectInvalid("loan scale out of range", [](Loan& loan) { loan.loanScale = 100; });
+        expectInvalid("more payments left than scheduled", [](Loan& loan) {
+            loan.paymentRemaining = loan.paymentTotal + 1;
+        });
+        expectValid("due dates out of order (not an invariant)", [](Loan& loan) {
+            loan.previousPaymentDueDate = loan.nextPaymentDueDate;
+        });
+        expectInvalid(
+            "next due date off the schedule", [](Loan& loan) { loan.nextPaymentDueDate += 7; });
+        expectInvalid("amounts below the loan scale", [](Loan& loan) {
+            loan.principalOutstanding = loan.principalOutstanding + Number{1, -9};
+            loan.totalValueOutstanding = loan.totalValueOutstanding + Number{1, -9};
+        });
+        expectInvalid(
+            "unlawful broker", [](Loan& loan) { loan.broker.managementFeeRate = 10'001; });
         testLoanFieldBoundaries(env, f, p, baseline);
     }
 };

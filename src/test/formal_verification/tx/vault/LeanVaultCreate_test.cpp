@@ -19,6 +19,7 @@
 #include <xrpl/protocol/TxFlags.h>
 #include <xrpl/tx/apply.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -28,14 +29,15 @@
 
 namespace xrpl::test::formal_verification {
 
-// A VaultCreate's fields: AssetsMaximum is maximum * 10^exponent of the asset, the dates are
-// offsets from the parent close time P. A C++ preflight rejection (tem) is paired with `leanError`,
-// the model error that stands for it.
+// A VaultCreate's fields: AssetsMaximum is maximum * 10^assetExponent of the asset, the dates
+// are offsets from the parent close time P. A C++ preflight rejection (tem) is paired with
+// `leanError`, the model error that stands for it.
 struct CreateCase
 {
     std::optional<std::uint8_t> scale{};
     std::optional<std::int64_t> maximum{};
-    int exponent{};
+    // AssetsMaximum is maximum * 10^assetExponent of the asset (not vault grid units).
+    int assetExponent{};
     std::optional<std::int64_t> subscription{};
     std::optional<std::int64_t> redemption{};
     std::optional<std::uint32_t> earlyExitFeeRate{};
@@ -171,14 +173,7 @@ class LeanVaultCreate_test : public LeanSuite
         }
         auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
         std::string const at = argsText(asset, args, parentCloseTime(env));
-        if (leanError)
-        {
-            expectSame(*this, at, cpp, lean, expected, leanError);
-        }
-        else
-        {
-            expectSame(*this, at, cpp, lean, expected);
-        }
+        expectRow(*this, at, cpp, lean, expected, leanError);
         if (cpp.ter == tesSUCCESS)
         {
             BEAST_EXPECTS(
@@ -194,7 +189,7 @@ class LeanVaultCreate_test : public LeanSuite
         testcase(assetName(asset) + " vault with a scale");
         VaultCreateArgs const args{.scale = 3};
         auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
-        expectSame(
+        expectCppOnlyRejection(
             *this,
             argsText(asset, args, parentCloseTime(env)),
             cpp,
@@ -231,6 +226,7 @@ class LeanVaultCreate_test : public LeanSuite
     }
 
     // Each case creates a vault from its fields and expects its verdict on both sides.
+    // A group comment names a boundary value (the cusp); its rows step those values around it.
     // - Scale: an IOU vault scale above 10 is temMALFORMED.
     // - Maximum sign: a negative AssetsMaximum is temMALFORMED; 0 means no cap. The IOU rows are
     //   in steps of the default scale 6.
@@ -264,103 +260,103 @@ class LeanVaultCreate_test : public LeanSuite
     };
     static constexpr CreateCase kMaximumSignIou[] = {
         // maximum 0 (no cap)
-        {.maximum = -2, .exponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
-        {.maximum = -1, .exponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
-        {.maximum = 0, .exponent = -6, .expected = tesSUCCESS},
-        {.maximum = 1, .exponent = -6, .expected = tesSUCCESS},
-        {.maximum = 2, .exponent = -6, .expected = tesSUCCESS},
+        {.maximum = -2, .assetExponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = -1, .assetExponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = 0, .assetExponent = -6, .expected = tesSUCCESS},
+        {.maximum = 1, .assetExponent = -6, .expected = tesSUCCESS},
+        {.maximum = 2, .assetExponent = -6, .expected = tesSUCCESS},
     };
     static constexpr CreateCase kMaximumGrid[] = {
         // scale 0, 1'000'000'000'000'000e-15 grid steps
-        {.scale = 0, .maximum = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 1'000'000'000'000'001, .exponent = -15, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 1'000'000'000'000'002, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'998, .assetExponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'999, .assetExponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'000, .assetExponent = -15, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 1'000'000'000'000'001, .assetExponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'002, .assetExponent = -15, .expected = tecPRECISION_LOSS},
         // scale 0, 1'000'000'000'000'000e-6 grid steps
-        {.scale = 0, .maximum = 999'999'999'999'998, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 999'999'999'999'999, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 1'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 1'000'000'000'000'001, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 1'000'000'000'000'002, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'998, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'999, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'000, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 1'000'000'000'000'001, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'002, .assetExponent = -6, .expected = tecPRECISION_LOSS},
         // scale 0, 9'999'999'999'999'999e0 grid steps
-        {.scale = 0, .maximum = 9'999'999'999'999'997, .exponent = 0, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 9'999'999'999'999'998, .exponent = 0, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 9'999'999'999'999'999, .exponent = 0, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 10'000'000'000'000'000, .exponent = 0, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 10'000'000'000'000'001, .exponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 9'999'999'999'999'997, .assetExponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'998, .assetExponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'999, .assetExponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'000, .assetExponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'001, .assetExponent = 0, .expected = tecPRECISION_LOSS},
         // scale 0, 10'000'000'000'000'010e0 grid steps
-        {.scale = 0, .maximum = 10'000'000'000'000'008, .exponent = 0, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 10'000'000'000'000'009, .exponent = 0, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 10'000'000'000'000'010, .exponent = 0, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 10'000'000'000'000'011, .exponent = 0, .expected = tecPRECISION_LOSS},
-        {.scale = 0, .maximum = 10'000'000'000'000'012, .exponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'008, .assetExponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'009, .assetExponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'010, .assetExponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'011, .assetExponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'012, .assetExponent = 0, .expected = tecPRECISION_LOSS},
         // scale 0, 9'999'999'999'999'999e79 grid steps
-        {.scale = 0, .maximum = 9'999'999'999'999'997, .exponent = 79, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 9'999'999'999'999'998, .exponent = 79, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 9'999'999'999'999'999, .exponent = 79, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 10'000'000'000'000'000, .exponent = 79, .expected = tesSUCCESS},
-        {.scale = 0, .maximum = 10'000'000'000'000'001, .exponent = 79, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 9'999'999'999'999'997, .assetExponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'998, .assetExponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'999, .assetExponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'000, .assetExponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'001, .assetExponent = 79, .expected = tecPRECISION_LOSS},
         // scale 6, 1'000'000'000'000'000e-15 grid steps
-        {.scale = 6, .maximum = 999'999'999'999'998, .exponent = -21, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 999'999'999'999'999, .exponent = -21, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 1'000'000'000'000'000, .exponent = -21, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 1'000'000'000'000'001, .exponent = -21, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 1'000'000'000'000'002, .exponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'998, .assetExponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'999, .assetExponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'000, .assetExponent = -21, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 1'000'000'000'000'001, .assetExponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'002, .assetExponent = -21, .expected = tecPRECISION_LOSS},
         // scale 6, 1'000'000'000'000'000e-6 grid steps
-        {.scale = 6, .maximum = 999'999'999'999'998, .exponent = -12, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 999'999'999'999'999, .exponent = -12, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 1'000'000'000'000'000, .exponent = -12, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 1'000'000'000'000'001, .exponent = -12, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 1'000'000'000'000'002, .exponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'998, .assetExponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'999, .assetExponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'000, .assetExponent = -12, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 1'000'000'000'000'001, .assetExponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'002, .assetExponent = -12, .expected = tecPRECISION_LOSS},
         // scale 6, 9'999'999'999'999'999e0 grid steps
-        {.scale = 6, .maximum = 9'999'999'999'999'997, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 9'999'999'999'999'998, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 9'999'999'999'999'999, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 10'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 10'000'000'000'000'001, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 9'999'999'999'999'997, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'998, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'999, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'000, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'001, .assetExponent = -6, .expected = tecPRECISION_LOSS},
         // scale 6, 10'000'000'000'000'010e0 grid steps
-        {.scale = 6, .maximum = 10'000'000'000'000'008, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 10'000'000'000'000'009, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 10'000'000'000'000'010, .exponent = -6, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 10'000'000'000'000'011, .exponent = -6, .expected = tecPRECISION_LOSS},
-        {.scale = 6, .maximum = 10'000'000'000'000'012, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'008, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'009, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'010, .assetExponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'011, .assetExponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'012, .assetExponent = -6, .expected = tecPRECISION_LOSS},
         // scale 6, 9'999'999'999'999'999e79 grid steps
-        {.scale = 6, .maximum = 9'999'999'999'999'997, .exponent = 73, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 9'999'999'999'999'998, .exponent = 73, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 9'999'999'999'999'999, .exponent = 73, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 10'000'000'000'000'000, .exponent = 73, .expected = tesSUCCESS},
-        {.scale = 6, .maximum = 10'000'000'000'000'001, .exponent = 73, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 9'999'999'999'999'997, .assetExponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'998, .assetExponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'999, .assetExponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'000, .assetExponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'001, .assetExponent = 73, .expected = tecPRECISION_LOSS},
         // scale 10, 1'000'000'000'000'000e-15 grid steps
-        {.scale = 10, .maximum = 999'999'999'999'998, .exponent = -25, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 999'999'999'999'999, .exponent = -25, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 1'000'000'000'000'000, .exponent = -25, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 1'000'000'000'000'001, .exponent = -25, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 1'000'000'000'000'002, .exponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'998, .assetExponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'999, .assetExponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'000, .assetExponent = -25, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 1'000'000'000'000'001, .assetExponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'002, .assetExponent = -25, .expected = tecPRECISION_LOSS},
         // scale 10, 1'000'000'000'000'000e-6 grid steps
-        {.scale = 10, .maximum = 999'999'999'999'998, .exponent = -16, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 999'999'999'999'999, .exponent = -16, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 1'000'000'000'000'000, .exponent = -16, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 1'000'000'000'000'001, .exponent = -16, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 1'000'000'000'000'002, .exponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'998, .assetExponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'999, .assetExponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'000, .assetExponent = -16, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 1'000'000'000'000'001, .assetExponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'002, .assetExponent = -16, .expected = tecPRECISION_LOSS},
         // scale 10, 9'999'999'999'999'999e0 grid steps
-        {.scale = 10, .maximum = 9'999'999'999'999'997, .exponent = -10, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 9'999'999'999'999'998, .exponent = -10, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 9'999'999'999'999'999, .exponent = -10, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 10'000'000'000'000'000, .exponent = -10, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 10'000'000'000'000'001, .exponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 9'999'999'999'999'997, .assetExponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'998, .assetExponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'999, .assetExponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'000, .assetExponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'001, .assetExponent = -10, .expected = tecPRECISION_LOSS},
         // scale 10, 10'000'000'000'000'010e0 grid steps
-        {.scale = 10, .maximum = 10'000'000'000'000'008, .exponent = -10, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 10'000'000'000'000'009, .exponent = -10, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 10'000'000'000'000'010, .exponent = -10, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 10'000'000'000'000'011, .exponent = -10, .expected = tecPRECISION_LOSS},
-        {.scale = 10, .maximum = 10'000'000'000'000'012, .exponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'008, .assetExponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'009, .assetExponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'010, .assetExponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'011, .assetExponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'012, .assetExponent = -10, .expected = tecPRECISION_LOSS},
         // scale 10, 9'999'999'999'999'999e79 grid steps
-        {.scale = 10, .maximum = 9'999'999'999'999'997, .exponent = 69, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 9'999'999'999'999'998, .exponent = 69, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 9'999'999'999'999'999, .exponent = 69, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 10'000'000'000'000'000, .exponent = 69, .expected = tesSUCCESS},
-        {.scale = 10, .maximum = 10'000'000'000'000'001, .exponent = 69, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 9'999'999'999'999'997, .assetExponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'998, .assetExponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'999, .assetExponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'000, .assetExponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'001, .assetExponent = 69, .expected = tecPRECISION_LOSS},
     };
     static constexpr CreateCase kMaximumRangeXrp[] = {
         // 100'000'000'000'000'000e0
@@ -373,21 +369,21 @@ class LeanVaultCreate_test : public LeanSuite
     };
     static constexpr CreateCase kMaximumRangeMpt[] = {
         // 922'337'203'685'477'580e1
-        {.maximum = 922'337'203'685'477'578, .exponent = 1, .expected = tesSUCCESS},
-        {.maximum = 922'337'203'685'477'579, .exponent = 1, .expected = tesSUCCESS},
-        {.maximum = 922'337'203'685'477'580, .exponent = 1, .expected = tesSUCCESS},
+        {.maximum = 922'337'203'685'477'578, .assetExponent = 1, .expected = tesSUCCESS},
+        {.maximum = 922'337'203'685'477'579, .assetExponent = 1, .expected = tesSUCCESS},
+        {.maximum = 922'337'203'685'477'580, .assetExponent = 1, .expected = tesSUCCESS},
         // Accepted gap, out of the run: C++ temMALFORMED (preflight range check), model canCreate tecPRECISION_LOSS.
-        // {.maximum = 922'337'203'685'477'581, .exponent = 1, .expected = temMALFORMED},
-        // {.maximum = 922'337'203'685'477'582, .exponent = 1, .expected = temMALFORMED},
+        // {.maximum = 922'337'203'685'477'581, .assetExponent = 1, .expected = temMALFORMED},
+        // {.maximum = 922'337'203'685'477'582, .assetExponent = 1, .expected = temMALFORMED},
     };
     static constexpr CreateCase kMaximumRangeIou[] = {
         // 9'999'999'999'999'999e80
-        {.maximum = 9'999'999'999'999'997, .exponent = 80, .expected = tesSUCCESS},
-        {.maximum = 9'999'999'999'999'998, .exponent = 80, .expected = tesSUCCESS},
-        {.maximum = 9'999'999'999'999'999, .exponent = 80, .expected = tesSUCCESS},
+        {.maximum = 9'999'999'999'999'997, .assetExponent = 80, .expected = tesSUCCESS},
+        {.maximum = 9'999'999'999'999'998, .assetExponent = 80, .expected = tesSUCCESS},
+        {.maximum = 9'999'999'999'999'999, .assetExponent = 80, .expected = tesSUCCESS},
         // Accepted gap, out of the run: C++ temMALFORMED (preflight range check), model canCreate tecPRECISION_LOSS.
-        // {.maximum = 10'000'000'000'000'000, .exponent = 80, .expected = temMALFORMED},
-        // {.maximum = 10'000'000'000'000'001, .exponent = 80, .expected = temMALFORMED},
+        // {.maximum = 10'000'000'000'000'000, .assetExponent = 80, .expected = temMALFORMED},
+        // {.maximum = 10'000'000'000'000'001, .assetExponent = 80, .expected = temMALFORMED},
     };
     static constexpr CreateCase kSchedule[] = {
         // subscription P, gap 180
@@ -488,12 +484,10 @@ class LeanVaultCreate_test : public LeanSuite
         auto const run = [&](std::string const& name,
                              TestAssets const& assets,
                              std::span<CreateCase const> cases) {
+            testcase("create " + name + (closed ? ", closed-ended" : ""));
             for (Asset const& asset : assets)
             {
-                beginCase(
-                    ("create " + assetName(asset) + " " + name + (closed ? ", closed-ended" : ""))
-                        .c_str());
-                for (CreateCase const& c : cases)
+                for (std::size_t i = 0; CreateCase const& c : cases)
                 {
                     auto const date = [&](std::optional<std::int64_t> offset) {
                         return offset ? std::optional{static_cast<std::uint32_t>(p + *offset)}
@@ -501,22 +495,16 @@ class LeanVaultCreate_test : public LeanSuite
                     };
                     VaultCreateArgs const args{
                         .scale = c.scale,
-                        .assetsMaximum = c.maximum ? std::optional{Number{*c.maximum, c.exponent}}
-                                                   : std::nullopt,
+                        .assetsMaximum = c.maximum
+                            ? std::optional{Number{*c.maximum, c.assetExponent}}
+                            : std::nullopt,
                         .subscriptionDate = date(c.subscription),
                         .redemptionDate = date(c.redemption),
                         .earlyExitFeeRate = c.earlyExitFeeRate,
                     };
                     auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
-                    std::string const at = argsText(asset, args, p);
-                    if (c.leanError)
-                    {
-                        expectSame(*this, at, cpp, lean, c.expected, c.leanError);
-                    }
-                    else
-                    {
-                        expectSame(*this, at, cpp, lean, c.expected);
-                    }
+                    std::string const at = rowText(i++) + argsText(asset, args, p);
+                    expectRow(*this, at, cpp, lean, c.expected, c.leanError);
                 }
             }
         };
