@@ -104,6 +104,7 @@ test.core > xrpl.json
 test.core > xrpl.protocol
 test.core > xrpl.rdb
 test.core > xrpl.server
+test.formal_verification > xrpl.protocol
 test.json > test.jtx
 test.json > xrpl.json
 test.jtx > test.unit_test
