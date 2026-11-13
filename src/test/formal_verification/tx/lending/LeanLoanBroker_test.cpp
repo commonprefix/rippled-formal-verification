@@ -2,7 +2,6 @@
 #include <test/formal_verification/ffi/lending/LoanBrokerFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/lending/LendingTestHelpers.h>
-#include <test/formal_verification/tx/lending/LoanSetSweepCases.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
@@ -21,12 +20,33 @@
 #include <cstdint>
 #include <exception>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
 
 namespace xrpl::test::formal_verification {
 
+// A LoanBrokerSet on a broker staged as `stage` (vault grid units): a new broker of the vault or,
+// with `update`, an update of the staged one. DebtMaximum is debtMaximum * 10^exponent units. A C++
+// preflight rejection (tem) is paired with `leanError`, the model error that stands for it.
+struct LoanBrokerSetCase
+{
+    LendingStage stage{};
+    std::optional<std::int64_t> debtMaximum{};
+    int exponent{};
+    std::optional<std::uint16_t> managementFeeRate{};
+    std::optional<std::uint32_t> coverRateMinimum{};
+    std::optional<std::uint32_t> coverRateLiquidation{};
+    bool update{};
+    TER expected;
+    std::optional<LeanError> leanError{};
+};
+
 // Differential tests of the loan broker's lawful state and of LoanBrokerSet (create and update)
 // and LoanBrokerDelete against the model.
+// Rows stage ledger state on a throwaway view, including states no transaction sequence may
+// reach: a verdict compares model and C++ on the same pre-state, not a claim the state is
+// reachable (see stageLending).
 class LeanLoanBroker_test : public LeanSuite
 {
     // A valid broker: IOU asset, 1% management fee, 10% / 20% cover rates, some cover, no loans.
@@ -127,154 +147,80 @@ class LeanLoanBroker_test : public LeanSuite
         }
     }
 
-    std::optional<SweepLedger> iou_;
-    std::optional<SweepLedger> mpt_;
-
-    // A throwaway view of the shared ledger with `s` staged (the vault always in its investment
-    // phase).
-    bool
-    stagedView(SweepLedger& l, OpenView& view, LendingStage s, std::string const& at)
-    {
-        auto const phase = investment(view);
-        s.subscriptionDate = phase.subscriptionDate;
-        s.redemptionDate = phase.redemptionDate;
-        return tryStage(*this, at, [&] { stageLending(*l.env, view, l.f, s); });
-    }
-
-    // Model of LoanBrokerSet creating a broker on `view`: canCreate is preclaim, create is
-    // doApply. A preflight rejection (tem) is matched by create rejecting the fields as not
-    // lawful. Returns the C++ verdict.
-    TER
-    checkCreate(
+    // LoanBrokerSet on `view` and the model on the same pre-state. A C++ preflight rejection (tem)
+    // is paired with `leanError`, the model error that stands for it.
+    AppliedBrokerTx
+    checkLoanBrokerSet(
         jtx::Env& env,
         BrokerFixture const& f,
         OpenView& view,
-        BrokerConfig const& config,
-        std::optional<TER> expected,
+        LoanBrokerSetArgs const& args,
+        bool update,
+        TER expected,
+        std::optional<LeanError> leanError,
         std::string const& at)
     {
+        AppliedBrokerTx const cpp = applyLoanBrokerSet(env, view, f, args, update);
+        LeanBrokerTx const lean = leanLoanBrokerSet(cpp, args, update);
+        if (leanError)
+        {
+            expectSame(*this, at, cpp, lean, expected, leanError);
+        }
+        else
+        {
+            expectSame(*this, at, cpp, lean, expected);
+        }
+        return cpp;
+    }
+
+    static std::string
+    setText(LendingStage const& stage, LoanBrokerSetArgs const& args, bool update)
+    {
+        auto const opt = [](auto const& o) { return o ? std::to_string(*o) : std::string{"none"}; };
+        return std::string{update ? "update" : "create"} + " debt maximum " +
+            (args.debtMaximum ? to_string(*args.debtMaximum) : std::string{"none"}) + ", fee " +
+            opt(args.managementFeeRate) + ", rates " + opt(args.coverRateMinimum) + "/" +
+            opt(args.coverRateLiquidation) + ", " + stageText(stage) + ": ";
+    }
+
+    // Model of LoanBrokerSet creating a broker, on the shared IOU ledger (a second broker of its
+    // vault); `openEnded` needs its own ledger, without a broker.
+    void
+    runCreate(
+        LendingSetup const& s,
+        std::string const& label,
+        BrokerConfig const& config,
+        bool openEnded,
+        TER expected,
+        std::optional<LeanError> leanError = std::nullopt)
+    {
         using namespace jtx;
-        std::uint8_t const nt = NumericTypeFFI::tagOf(f.asset.raw());
-        Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
+        testcase(label);
         LoanBrokerSetArgs const args{
             .debtMaximum = config.debtMaximum,
             .managementFeeRate = config.managementFeeRate,
             .coverRateMinimum = config.coverRateMinimum,
-            .coverRateLiquidation = config.coverRateLiquidation};
-        LawfulTerResult const canCreate = leanCanLoanBrokerCreate(pool, config.debtMaximum, nt);
-        LeanBrokerResult const created = leanLoanBrokerCreate(args, nt);
-
-        auto const brokerKeylet = keylet::loanBroker(
-            f.owner.id(),
-            SeqProxy::rawSequence(view.read(keylet::account(f.owner.id()))->at(sfSequence)));
-        auto tx = loan_broker::set(f.owner, f.vaultKeylet.key);
-        if (config.debtMaximum)
-            tx[sfDebtMaximum] = *config.debtMaximum;
-        if (config.managementFeeRate)
-            tx[sfManagementFeeRate] = *config.managementFeeRate;
-        if (config.coverRateMinimum)
-            tx[sfCoverRateMinimum] = *config.coverRateMinimum;
-        if (config.coverRateLiquidation)
-            tx[sfCoverRateLiquidation] = *config.coverRateLiquidation;
-        TER const cppTer = applyOn(env, view, tx);
-
-        if (expected)
-        {
-            BEAST_EXPECTS(
-                cppTer == *expected,
-                at + ": cpp=" + transToken(cppTer) + " expected " + transToken(*expected));
-        }
-        BEAST_EXPECTS(!canCreate.leanError.has_value(), at + ": lean canCreate error");
-        if (isTemMalformed(cppTer))
-        {
-            BEAST_EXPECTS(
-                created.leanError == LeanError::notLawful,
-                at + ": preflight rejects the fields but the model creates the broker");
-            return cppTer;
-        }
-        BEAST_EXPECTS(
-            canCreate.ter == cppTer,
-            at + ": lean=" + transToken(canCreate.ter) + " cpp=" + transToken(cppTer));
-        if (cppTer != tesSUCCESS)
-            return cppTer;
-
-        BEAST_EXPECTS(!created.leanError.has_value(), at + ": lean create error");
-        expectBrokerMatches(*this, created.broker, readBroker(view, brokerKeylet, f.asset.raw()));
-        return cppTer;
-    }
-
-    // Model of LoanBrokerSet creating a broker, on the shared IOU ledger (a second broker of its
-    // vault); `openEnded` needs its own ledger.
-    void
-    runCreate(std::string const& label, BrokerConfig const& config, bool openEnded, TER expected)
-    {
-        using namespace jtx;
-        testcase(label);
+            .coverRateLiquidation = config.coverRateLiquidation,
+        };
         if (openEnded)
         {
-            Env env(*this);
+            Env env{*this, lendingTestAmendments()};
             auto const f = setUpBrokerVault(env, std::nullopt, Number{10'000}, openEnded, false);
             OpenView view{*env.current()};
-            checkCreate(env, f, view, config, expected, label);
+            checkLoanBrokerSet(env, f, view, args, false, expected, leanError, label + ": ");
             return;
         }
-        SweepLedger& l = *iou_;
+        TestLedger const& l = s.iouLedger;
         OpenView view{*l.env->current()};
-        if (stagedView(l, view, {}, label))
-            checkCreate(*l.env, l.f, view, config, expected, label);
-    }
-
-    // Model of LoanBrokerSet updating the debt maximum of the broker on `view` to `cap`.
-    TER
-    checkUpdate(
-        jtx::Env& env,
-        BrokerFixture const& f,
-        OpenView& view,
-        std::optional<Number> const& cap,
-        std::optional<TER> expected,
-        std::string const& at)
-    {
-        using namespace jtx;
-        LoanBroker const broker = readBroker(view, f);
-        Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
-        LawfulTerResult const canUpdate = leanCanLoanBrokerUpdate(broker, pool, cap);
-        expectLawful(canUpdate);
-        LeanBrokerResult const updated = leanLoanBrokerUpdate(broker, cap);
-
-        auto tx = loan_broker::set(f.owner, f.vaultKeylet.key);
-        tx[sfLoanBrokerID] = to_string(f.brokerKeylet.key);
-        if (cap)
-            tx[sfDebtMaximum] = *cap;
-        TER const cppTer = applyOn(env, view, tx);
-
-        if (expected)
-        {
-            BEAST_EXPECTS(
-                cppTer == *expected,
-                at + ": cpp=" + transToken(cppTer) + " expected " + transToken(*expected));
-        }
-        BEAST_EXPECTS(!canUpdate.leanError.has_value(), at + ": lean canUpdate error");
-        if (isTemMalformed(cppTer))
-        {
-            BEAST_EXPECTS(
-                updated.leanError == LeanError::notLawful,
-                at + ": preflight rejects the update but the model updates the broker");
-            return cppTer;
-        }
-        BEAST_EXPECTS(
-            canUpdate.ter == cppTer,
-            at + ": lean=" + transToken(canUpdate.ter) + " cpp=" + transToken(cppTer));
-        if (cppTer != tesSUCCESS)
-            return cppTer;
-        BEAST_EXPECTS(!updated.leanError.has_value(), at + ": lean update error");
-        expectBrokerMatches(*this, updated.broker, readBroker(view, f));
-        return cppTer;
+        stageInvestment(*l.env, view, l.f, {});
+        checkLoanBrokerSet(*l.env, l.f, view, args, false, expected, leanError, label + ": ");
     }
 
     // Model of LoanBrokerSet updating the debt maximum, staged on the shared IOU ledger: a broker
     // with a debt maximum of 5000 and, with `withLoan`, a loan of 1000 (so its debt is non-zero).
     void
     runUpdate(
+        LendingSetup const& s,
         std::string const& label,
         std::optional<Number> const& debtMaximum,
         bool withLoan,
@@ -282,249 +228,248 @@ class LeanLoanBroker_test : public LeanSuite
         bool equalToDebt = false)
     {
         testcase(label);
-        SweepLedger& l = *iou_;
+        TestLedger const& l = s.iouLedger;
         OpenView view{*l.env->current()};
-        LendingStage s{
+        LendingStage stage{
             .managementFeeRate = 1'000,
             .coverRate = 10'000,
             .debtMaximum = 5'000'000'000,
         };
         if (withLoan)
         {
-            s.debt = 1'000'000'000;
-            s.cover = 200'000'000;
+            stage.debt = 1'000'000'000;
+            stage.cover = 200'000'000;
         }
-        if (!stagedView(l, view, s, label))
-            return;
-        std::optional<Number> const cap =
-            equalToDebt ? std::optional<Number>{readBroker(view, l.f).debtTotal} : debtMaximum;
-        checkUpdate(*l.env, l.f, view, cap, expected, label);
-    }
-
-    // ---- Sweeps ---------------------------------------------------------------------------------
-
-    void
-    testDebtMaximumGridSweep()
-    {
-        sweepDebtMaximumGrid(*iou_);
-        sweepDebtMaximumGrid(*mpt_);
-    }
-
-    // A debt maximum off the vault grid is tecPRECISION_LOSS, on create and on update. A moved
-    // one-step mantissa (gridStep) leaves the grid.
-    void
-    sweepDebtMaximumGrid(SweepLedger& l)
-    {
-        for (int const level : loan_set_sweep::kBrokerGridLevels)
-        {
-            beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum grid at 1e" +
-                       std::to_string(level) + "-Sweep")
-                          .c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const mantissa : cases)
-                {
-                    seen.insert(
-                        checkStagedCreate(l, gridStep(*l.env->current(), l.f, mantissa, level)));
-                }
-                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-            }
-            beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum update grid at 1e" +
-                       std::to_string(level) + "-Sweep")
-                          .c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const mantissa : cases)
-                {
-                    seen.insert(checkStagedUpdate(
-                        l, {}, gridStep(*l.env->current(), l.f, mantissa, level)));
-                }
-                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-            }
-        }
-    }
-
-    TER
-    checkStagedUpdate(SweepLedger& l, LendingStage const& s, Number const& debtMaximum)
-    {
-        std::string const at = "update to debt maximum " + to_string(debtMaximum);
-        OpenView view{*l.env->current()};
-        if (!stagedView(l, view, s, at))
-            return tefINTERNAL;
-        return checkUpdate(*l.env, l.f, view, debtMaximum, std::nullopt, at);
-    }
-
-    // A debt maximum that a 16-digit IOU mantissa cannot hold is tecPRECISION_LOSS: 1e16 units
-    // is exact, one unit more is not.
-    void
-    testDebtMaximumDigitsSweep()
-    {
-        SweepLedger& l = *iou_;
-        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum digits-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kSixteenDigitCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const mantissa : cases)
-            {
-                seen.insert(checkStagedCreate(l, Number{mantissa, -6}));
-            }
-            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-        }
-    }
-
-    void
-    testDebtMaximumCapSweep()
-    {
-        sweepDebtMaximumCap(*iou_);
-        sweepDebtMaximumCap(*mpt_);
-    }
-
-    // A debt maximum above 2^63 - 1 is temINVALID (preflight; the model rejects the broker as
-    // not lawful). The row is the largest 16-digit mantissa at exponent 3 under the cap.
-    void
-    sweepDebtMaximumCap(SweepLedger& l)
-    {
-        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum cap-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kDebtCapCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const mantissa : cases)
-            {
-                seen.insert(checkStagedCreate(l, Number{mantissa, 3}));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
-    }
-
-    TER
-    checkStagedCreate(SweepLedger& l, Number const& debtMaximum)
-    {
-        return checkStagedCreate(
-            l,
-            BrokerConfig{
-                .debtMaximum = debtMaximum,
-                .managementFeeRate = std::nullopt,
-                .coverRateMinimum = std::nullopt,
-                .coverRateLiquidation = std::nullopt,
-            });
-    }
-
-    TER
-    checkStagedCreate(SweepLedger& l, BrokerConfig const& config)
-    {
-        std::string const at = "create with debt maximum " +
-            (config.debtMaximum ? to_string(*config.debtMaximum) : std::string{"none"}) + ", fee " +
-            std::to_string(config.managementFeeRate.value_or(0)) + ", rates " +
-            std::to_string(config.coverRateMinimum.value_or(0)) + "/" +
-            std::to_string(config.coverRateLiquidation.value_or(0));
-        OpenView view{*l.env->current()};
-        if (!stagedView(l, view, {}, at))
-            return tefINTERNAL;
-        return checkCreate(*l.env, l.f, view, config, std::nullopt, at);
-    }
-
-    // A negative debt maximum is temINVALID (the model rejects the broker as not lawful); zero
-    // means no maximum. Swept on create and on update.
-    void
-    testDebtMaximumZeroSweep()
-    {
-        for (SweepLedger* l : {&*iou_, &*mpt_})
-        {
-            beginCase(("LoanBrokerSet " + assetName(l->f) + " debt maximum zero-Sweep").c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const maximum : cases)
-                {
-                    seen.insert(checkStagedCreate(*l, units(l->f, maximum)));
-                }
-                expectCrossed(cusp, seen, {temINVALID});
-            }
-            beginCase(
-                ("LoanBrokerSet " + assetName(l->f) + " debt maximum update zero-Sweep").c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kZeroCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const maximum : cases)
-                {
-                    seen.insert(checkStagedUpdate(*l, {}, units(l->f, maximum)));
-                }
-                expectCrossed(cusp, seen, {temINVALID});
-            }
-        }
-    }
-
-    // A management fee above 10% or a cover rate above 100% is temINVALID. The cover rates are
-    // swept one at a time with the other at the cap (both must be set together).
-    void
-    testRateCapSweep()
-    {
-        SweepLedger& l = *iou_;
-        auto const config = [](std::int64_t fee, std::int64_t minimum, std::int64_t liquidation) {
-            return BrokerConfig{
-                .managementFeeRate = static_cast<std::uint16_t>(fee),
-                .coverRateMinimum = static_cast<std::uint32_t>(minimum),
-                .coverRateLiquidation = static_cast<std::uint32_t>(liquidation),
-            };
+        stageInvestment(*l.env, view, l.f, stage);
+        LoanBrokerSetArgs const args{
+            .debtMaximum =
+                equalToDebt ? std::optional<Number>{readBroker(view, l.f).debtTotal} : debtMaximum,
         };
-        auto constexpr cap = loan_set_sweep::kRateScale;
-        beginCase(("LoanBrokerSet " + assetName(l.f) + " management fee cap-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kManagementFeeCapCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const fee : cases)
+        checkLoanBrokerSet(*l.env, l.f, view, args, true, expected, std::nullopt, label + ": ");
+    }
+
+    // Each row stages the asset's shared ledger on a throwaway view (the vault in its investment
+    // phase), applies LoanBrokerSet there and expects its verdict on both sides, with every field
+    // of the broker equal when both succeed. Debt maximum rows are in units of the vault grid.
+    // - Debt maximum grid: a debt maximum off the vault grid is tecPRECISION_LOSS, on create and on
+    //   update. Each cusp is one step of 10^level units with a 16-digit mantissa; moving the
+    //   mantissa leaves the grid.
+    // - Debt maximum digits (IOU): a debt maximum a 16-digit mantissa cannot hold is
+    //   tecPRECISION_LOSS: 1e16 units is exact, one unit more is not.
+    // - Debt maximum cap: above 2^63 - 1 is temINVALID (the model: not lawful). The cusp is the
+    //   largest 16-digit mantissa at exponent 3 under the cap.
+    // - Debt maximum update: lowering the debt maximum below the broker's debt is
+    //   tecLIMIT_EXCEEDED (zero means no maximum). Each cusp sets it to exactly the debt.
+    // - Debt maximum zero: a negative debt maximum is temINVALID (not lawful); zero means no
+    //   maximum. On create and on update.
+    // - Rate caps (IOU): a management fee above 10% or a cover rate above 100% is temINVALID (not
+    //   lawful). The cover rates move one at a time with the other at the cap.
+    // Fixed fields on update (management fee, cover rates: temINVALID) are a preflight check
+    // outside the model, whose update takes only the debt maximum.
+    // clang-format off
+    static constexpr LoanBrokerSetCase kDebtMaximumGrid[] = {
+        // one step of 1e0 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -15, .expected = tecPRECISION_LOSS},
+        // one step of 1e9 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -6, .expected = tecPRECISION_LOSS},
+        // one step of 1e14 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -1, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -1, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -1, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -1, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -1, .expected = tecPRECISION_LOSS},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumUpdateGrid[] = {
+        // one step of 1e0 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -15, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -15, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -15, .update = true, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -15, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -15, .update = true, .expected = tecPRECISION_LOSS},
+        // one step of 1e9 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -6, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -6, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -6, .update = true, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -6, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -6, .update = true, .expected = tecPRECISION_LOSS},
+        // one step of 1e14 units
+        {.debtMaximum = 999'999'999'999'998, .exponent = -1, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 999'999'999'999'999, .exponent = -1, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'000, .exponent = -1, .update = true, .expected = tesSUCCESS},
+        {.debtMaximum = 1'000'000'000'000'001, .exponent = -1, .update = true, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 1'000'000'000'000'002, .exponent = -1, .update = true, .expected = tecPRECISION_LOSS},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumDigits[] = {
+        // 1e16 units
+        {.debtMaximum = 9'999'999'999'999'998, .expected = tesSUCCESS},
+        {.debtMaximum = 9'999'999'999'999'999, .expected = tesSUCCESS},
+        {.debtMaximum = 10'000'000'000'000'000, .expected = tesSUCCESS},
+        {.debtMaximum = 10'000'000'000'000'001, .expected = tecPRECISION_LOSS},
+        {.debtMaximum = 10'000'000'000'000'002, .expected = tecPRECISION_LOSS},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumCapIou[] = {
+        // 2^63 - 1 at exponent 3
+        {.debtMaximum = 9'223'372'036'854'773, .exponent = 9, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'774, .exponent = 9, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'775, .exponent = 9, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'776, .exponent = 9, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = 9'223'372'036'854'777, .exponent = 9, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumCapMpt[] = {
+        // 2^63 - 1 at exponent 3
+        {.debtMaximum = 9'223'372'036'854'773, .exponent = 3, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'774, .exponent = 3, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'775, .exponent = 3, .expected = tesSUCCESS},
+        {.debtMaximum = 9'223'372'036'854'776, .exponent = 3, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = 9'223'372'036'854'777, .exponent = 3, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumUpdate[] = {
+        // debt 1, maximum 1
+        {.stage = {}, .debtMaximum = 0, .update = true, .expected = tesSUCCESS},
+        {.stage = {}, .debtMaximum = 1, .update = true, .expected = tesSUCCESS},
+        {.stage = {}, .debtMaximum = 2, .update = true, .expected = tesSUCCESS},
+        {.stage = {}, .debtMaximum = 3, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1}, .debtMaximum = 0, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1}, .debtMaximum = 1, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1}, .debtMaximum = 2, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1}, .debtMaximum = 3, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 2}, .debtMaximum = 0, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 2}, .debtMaximum = 1, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 2}, .debtMaximum = 2, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 2}, .debtMaximum = 3, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 3}, .debtMaximum = 0, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 3}, .debtMaximum = 1, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 3}, .debtMaximum = 2, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 3}, .debtMaximum = 3, .update = true, .expected = tesSUCCESS},
+        // debt 1'000'000'000, maximum 1'000'000'000
+        {.stage = {.debt = 999'999'998}, .debtMaximum = 999'999'998, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'998}, .debtMaximum = 999'999'999, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'998}, .debtMaximum = 1'000'000'000, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'998}, .debtMaximum = 1'000'000'001, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'998}, .debtMaximum = 1'000'000'002, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999}, .debtMaximum = 999'999'998, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 999'999'999}, .debtMaximum = 999'999'999, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999}, .debtMaximum = 1'000'000'000, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999}, .debtMaximum = 1'000'000'001, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999}, .debtMaximum = 1'000'000'002, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000}, .debtMaximum = 999'999'998, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'000}, .debtMaximum = 999'999'999, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'000}, .debtMaximum = 1'000'000'000, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000}, .debtMaximum = 1'000'000'001, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000}, .debtMaximum = 1'000'000'002, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001}, .debtMaximum = 999'999'998, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'001}, .debtMaximum = 999'999'999, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'001}, .debtMaximum = 1'000'000'000, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'001}, .debtMaximum = 1'000'000'001, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001}, .debtMaximum = 1'000'000'002, .update = true, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'002}, .debtMaximum = 999'999'998, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'002}, .debtMaximum = 999'999'999, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'002}, .debtMaximum = 1'000'000'000, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'002}, .debtMaximum = 1'000'000'001, .update = true, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.debt = 1'000'000'002}, .debtMaximum = 1'000'000'002, .update = true, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumZero[] = {
+        // zero
+        {.debtMaximum = -2, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = -1, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = 0, .expected = tesSUCCESS},
+        {.debtMaximum = 1, .expected = tesSUCCESS},
+        {.debtMaximum = 2, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerSetCase kDebtMaximumUpdateZero[] = {
+        // zero
+        {.debtMaximum = -2, .update = true, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = -1, .update = true, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.debtMaximum = 0, .update = true, .expected = tesSUCCESS},
+        {.debtMaximum = 1, .update = true, .expected = tesSUCCESS},
+        {.debtMaximum = 2, .update = true, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerSetCase kManagementFeeCap[] = {
+        // 10%
+        {.managementFeeRate = 9'998, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 9'999, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 10'000, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 10'001, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.managementFeeRate = 10'002, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanBrokerSetCase kMinimumCoverRateCap[] = {
+        // 100%
+        {.managementFeeRate = 0, .coverRateMinimum = 99'998, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 99'999, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'001, .coverRateLiquidation = 100'000, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'002, .coverRateLiquidation = 100'000, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanBrokerSetCase kLiquidationCoverRateCap[] = {
+        // 100%
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 99'998, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 99'999, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'000, .expected = tesSUCCESS},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'001, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.managementFeeRate = 0, .coverRateMinimum = 100'000, .coverRateLiquidation = 100'002, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    // clang-format on
+
+    void
+    runLoanBrokerSetBoundaries(LendingSetup const& s)
+    {
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanBrokerSetCase const> cases) {
+            for (TestLedger const& l : ledgers)
             {
-                seen.insert(checkStagedCreate(l, config(fee, cap, cap)));
+                beginCase(
+                    ("LoanBrokerSet " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (LoanBrokerSetCase const& c : cases)
+                {
+                    LoanBrokerSetArgs const args{
+                        .debtMaximum = c.debtMaximum
+                            ? std::optional{units(l.f, *c.debtMaximum, c.exponent)}
+                            : std::nullopt,
+                        .managementFeeRate = c.managementFeeRate,
+                        .coverRateMinimum = c.coverRateMinimum,
+                        .coverRateLiquidation = c.coverRateLiquidation,
+                    };
+                    OpenView view{*l.env->current()};
+                    stageInvestment(*l.env, view, l.f, c.stage);
+                    checkLoanBrokerSet(
+                        *l.env,
+                        l.f,
+                        view,
+                        args,
+                        c.update,
+                        c.expected,
+                        c.leanError,
+                        setText(c.stage, args, c.update));
+                }
             }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
-        beginCase(("LoanBrokerSet " + assetName(l.f) + " minimum cover rate cap-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kCoverRateCapCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const rate : cases)
-            {
-                seen.insert(checkStagedCreate(l, config(0, rate, cap)));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
-        beginCase(
-            ("LoanBrokerSet " + assetName(l.f) + " liquidation cover rate cap-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kCoverRateCapCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const rate : cases)
-            {
-                seen.insert(checkStagedCreate(l, config(0, cap, rate)));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
+        };
+
+        run("debt maximum grid", s.all, kDebtMaximumGrid);
+        run("debt maximum update grid", s.all, kDebtMaximumUpdateGrid);
+        run("debt maximum digits", s.iou, kDebtMaximumDigits);
+        run("debt maximum cap", s.iou, kDebtMaximumCapIou);
+        run("debt maximum cap", s.mpt, kDebtMaximumCapMpt);
+        run("debt maximum update", s.all, kDebtMaximumUpdate);
+        run("debt maximum zero", s.all, kDebtMaximumZero);
+        run("debt maximum update zero", s.all, kDebtMaximumUpdateZero);
+        run("management fee cap", s.iou, kManagementFeeCap);
+        run("minimum cover rate cap", s.iou, kMinimumCoverRateCap);
+        run("liquidation cover rate cap", s.iou, kLiquidationCoverRateCap);
     }
 
     void
-    testDebtUpdateSweep()
+    testLoanBrokerSetBoundaries(LendingSetup const& s)
     {
-        sweepDebtUpdate(*iou_);
-        sweepDebtUpdate(*mpt_);
-    }
-
-    // Lowering the debt maximum below the broker's debt is tecLIMIT_EXCEEDED (zero means no
-    // maximum). Rows set it to exactly the debt.
-    void
-    sweepDebtUpdate(SweepLedger& l)
-    {
-        beginCase(("LoanBrokerSet " + assetName(l.f) + " debt maximum update-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kDebtUpdateCases)
-        {
-            std::set<TER> seen;
-            for (loan_set_sweep::DebtUpdateCusp const& c : cases)
-            {
-                seen.insert(checkStagedUpdate(l, {.debt = c.debt}, units(l.f, c.maximum)));
-            }
-            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
-        }
+        runLoanBrokerSetBoundaries(s);
     }
 
     // Model of LoanBrokerDelete: canDelete is preclaim; the cover returned to the owner is the
@@ -535,7 +480,7 @@ class LeanLoanBroker_test : public LeanSuite
         using namespace jtx;
         testcase(label);
 
-        Env env(*this);
+        Env env{*this, lendingTestAmendments()};
         auto const f = setUpBrokerVault(env, BrokerConfig{});
         if (cover != Number{0})
             depositCover(env, f, cover);
@@ -574,89 +519,90 @@ class LeanLoanBroker_test : public LeanSuite
     void
     runTests() override
     {
-        jtx::Env iouEnv(*this);
-        iou_ = SweepLedger{
-            .env = &iouEnv,
-            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits),
-        };
-        jtx::Env mptEnv(*this);
-        mpt_ = SweepLedger{
-            .env = &mptEnv,
-            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits),
-        };
+        jtx::Env iouEnv{*this, lendingTestAmendments()};
+        jtx::Env mptEnv{*this, lendingTestAmendments()};
+        LendingSetup const s = setUpLending(iouEnv, mptEnv);
 
         testLawful();
 
         // LoanBrokerSet: create
-        runCreate("create a broker on a closed-ended vault", BrokerConfig{}, false, tesSUCCESS);
+        runCreate(s, "create a broker on a closed-ended vault", BrokerConfig{}, false, tesSUCCESS);
         runCreate(
+            s,
             "create a broker with a debt maximum",
             BrokerConfig{.debtMaximum = Number{1'000'000}},
             false,
             tesSUCCESS);
         runCreate(
+            s,
             "create a broker without cover rates",
             BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt},
             false,
             tesSUCCESS);
-        runCreate("create a broker on an open-ended vault", BrokerConfig{}, true, tecNO_PERMISSION);
         runCreate(
+            s, "create a broker on an open-ended vault", BrokerConfig{}, true, tecNO_PERMISSION);
+        runCreate(
+            s,
             "create a broker with a debt maximum off the vault grid",
             BrokerConfig{.debtMaximum = Number{1, -7}},
             false,
             tecPRECISION_LOSS);
         runCreate(
+            s,
             "create a broker with a debt maximum not representable as an amount",
             BrokerConfig{.debtMaximum = Number{12'345'678'901'234'567LL, -10}},
             false,
             tecPRECISION_LOSS);
         runCreate(
+            s,
             "create a broker with a negative debt maximum",
             BrokerConfig{.debtMaximum = Number{-1}},
             false,
-            temINVALID);
+            temINVALID,
+            LeanError::notLawful);
         runCreate(
+            s,
             "create a broker with a management fee above 10%",
             BrokerConfig{.managementFeeRate = 10'001},
             false,
-            temINVALID);
+            temINVALID,
+            LeanError::notLawful);
         runCreate(
+            s,
             "create a broker with a cover rate above 100%",
             BrokerConfig{.coverRateMinimum = 100'001},
             false,
-            temINVALID);
+            temINVALID,
+            LeanError::notLawful);
         runCreate(
+            s,
             "create a broker with a minimum cover rate but no liquidation rate",
             BrokerConfig{.coverRateLiquidation = std::nullopt},
             false,
-            temINVALID);
+            temINVALID,
+            LeanError::notLawful);
 
         // LoanBrokerSet: update
-        // covered by testDebtUpdateSweep: "debt maximum below the debt", "equal to the debt"
-        runUpdate("raise the debt maximum", Number{8'000}, false, tesSUCCESS);
-        runUpdate("lift the debt maximum", Number{0}, false, tesSUCCESS);
-        runUpdate("update without a debt maximum", std::nullopt, false, tesSUCCESS);
-        runUpdate("debt maximum off the vault grid", Number{1, -7}, false, tecPRECISION_LOSS);
+        runUpdate(s, "raise the debt maximum", Number{8'000}, false, tesSUCCESS);
+        runUpdate(s, "lift the debt maximum", Number{0}, false, tesSUCCESS);
+        runUpdate(s, "update without a debt maximum", std::nullopt, false, tesSUCCESS);
+        runUpdate(s, "debt maximum off the vault grid", Number{1, -7}, false, tecPRECISION_LOSS);
         runUpdate(
+            s,
             "debt maximum not representable as an amount",
             Number{12'345'678'901'234'567LL, -10},
             false,
             tecPRECISION_LOSS);
-        runUpdate("debt maximum below the debt", Number{500}, true, tecLIMIT_EXCEEDED);
-        runUpdate("debt maximum equal to the debt", std::nullopt, true, tesSUCCESS, true);
+        // Covered by testLoanBrokerSetBoundaries.
+        runUpdate(s, "debt maximum below the debt", Number{500}, true, tecLIMIT_EXCEEDED);
+        runUpdate(s, "debt maximum equal to the debt", std::nullopt, true, tesSUCCESS, true);
 
         // LoanBrokerDelete
         runDelete("delete an empty broker", Number{0}, false, tesSUCCESS);
         runDelete("delete a broker with cover", Number{123'456'789, -6}, false, tesSUCCESS);
         runDelete("delete a broker with a loan", Number{200}, true, tecHAS_OBLIGATIONS);
 
-        // Sweeps
-        testDebtMaximumGridSweep();
-        testDebtMaximumDigitsSweep();
-        testDebtMaximumCapSweep();
-        testDebtUpdateSweep();
-        testDebtMaximumZeroSweep();
-        testRateCapSweep();
+        testLoanBrokerSetBoundaries(s);
     }
 };
 

@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <random>
 #include <set>
 #include <string>
@@ -32,6 +33,43 @@ nextRng()
 {
     thread_local std::mt19937_64 rng{0xBEEFCAFEDEADBEEFULL};
     return rng;
+}
+
+[[nodiscard]] inline std::string
+leanErrorText(LeanError e)
+{
+    switch (e)
+    {
+        case LeanError::overflow:
+            return "overflow";
+        case LeanError::divByZero:
+            return "divByZero";
+        case LeanError::outOfRange:
+            return "outOfRange";
+        case LeanError::normalize1:
+            return "normalize1";
+        case LeanError::normalize1_5:
+            return "normalize1_5";
+        case LeanError::normalize2:
+            return "normalize2";
+        case LeanError::notComparable:
+            return "notComparable";
+        case LeanError::cannotConvert:
+            return "cannotConvert";
+        case LeanError::notLawful:
+            return "notLawful";
+        case LeanError::badInput:
+            return "badInput";
+        case LeanError::wrap:
+            return "wrap";
+    }
+    return std::to_string(static_cast<int>(e));
+}
+
+[[nodiscard]] inline std::string
+leanErrorText(std::optional<LeanError> e)
+{
+    return e ? leanErrorText(*e) : std::string{"none"};
 }
 
 // Base for Lean-FFI test suites. run() guards Lean init + serializes all FFI

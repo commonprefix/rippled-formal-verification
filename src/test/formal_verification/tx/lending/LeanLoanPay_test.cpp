@@ -3,7 +3,6 @@
 #include <test/formal_verification/ffi/lending/LoanFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/lending/LendingTestHelpers.h>
-#include <test/formal_verification/tx/lending/LoanPaySweepCases.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
@@ -22,39 +21,48 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 namespace xrpl::test::formal_verification {
 
-using namespace loan_pay_sweep;
+// A LoanPay of `amount` units on a loan of `principal` units in `paymentTotal` installments
+// `paymentInterval` s apart, without interest unless a rate is set, with the vault in its
+// investment phase. The loan starts at the parent close time P, or its next payment falls due at
+// P + `due`. `stage` (cover and minimum cover rate), then the vault's `available` assets, are
+// staged after the loan. Overpayment rows allow overpayments.
+struct LoanPayCase
+{
+    PaymentType type{};
+    std::int64_t principal{};
+    std::uint32_t interestRate{};
+    std::uint32_t lateInterestRate{};
+    std::uint32_t closeInterestRate{};
+    std::uint32_t overpaymentInterestRate{};
+    std::uint32_t overpaymentFee{};
+    std::int64_t serviceFee{};
+    std::int64_t latePaymentFee{};
+    std::int64_t closePaymentFee{};
+    std::uint32_t paymentInterval{600};
+    std::uint32_t paymentTotal{2};
+    std::optional<std::int64_t> due{};
+    LendingStage stage{};
+    std::optional<std::int64_t> available{};
+    std::int64_t amount{};
+    TER expected;
+};
 
 // Differential tests of LoanPay: regular, late, full and overpayment payments. On success the
 // loan, vault and broker post-states must match, and the model's amounts to the pool and to the
 // broker must be what the ledger moved.
+// Rows stage ledger state on a throwaway view, including states no transaction sequence may
+// reach: a verdict compares model and C++ on the same pre-state, not a claim the state is
+// reachable (see stageLending).
 class LeanLoanPay_test : public LeanSuite
 {
-    static std::uint32_t
-    flagsOf(PaymentType type)
-    {
-        switch (type)
-        {
-            case PaymentType::regular:
-                return 0;
-            case PaymentType::late:
-                return tfLoanLatePayment;
-            case PaymentType::full:
-                return tfLoanFullPayment;
-            case PaymentType::overpayment:
-                return tfLoanOverpayment;
-        }
-        return 0;
-    }
-
-    // One payment on `view`: C++ applies it there, the model runs on the same pre-state. The
-    // verdicts must agree and, on success, so must the post-states and the amounts moved.
-    // Returns the C++ verdict.
-    TER
+    // One payment on `view`: C++ applies it there, the model runs on the same pre-state.
+    void
     checkPay(
         jtx::Env& env,
         OpenView& view,
@@ -63,72 +71,11 @@ class LeanLoanPay_test : public LeanSuite
         LoanParams const& p,
         PaymentType type,
         Number const& amount,
+        TER expected,
         std::string const& at = {})
     {
-        using namespace jtx;
-        Asset const asset = f.asset.raw();
-        Loan const loan = readLoan(view, loanKeylet, f, p);
-        Vault const pool = readVaultState(view, f.vaultKeylet, asset);
-        std::uint32_t const now = parentCloseTime(env);
-
-        LawfulTerResult const can = leanCanLoanPay(loan, type);
-        expectLawful(can);
-        std::optional<LeanLoanResult> result;
-        if (can.ter == tesSUCCESS && !can.leanError)
-            result = leanLoanPay(loan, pool, type, amount, now);
-
-        Number const ownerBefore = holding(view, f.owner, asset);
-        // LoanPay's fee grows with the instalments one transaction may settle (up to 100).
-        TER const cppTer = applyOn(
-            env,
-            view,
-            loan::pay(f.borrower, loanKeylet.key, f.asset(amount), flagsOf(type)),
-            Fee(env.current()->fees().base * 101));
-
-        BEAST_EXPECTS(!can.leanError.has_value(), at + "lean canPay error");
-        if (result)
-            BEAST_EXPECTS(!result->leanError.has_value(), at + "lean pay error");
-        TER const lean =
-            modelVerdict(can, result && !result->leanError ? result->error : std::nullopt);
-        BEAST_EXPECTS(
-            lean == cppTer, at + "cpp=" + transToken(cppTer) + " lean=" + transToken(lean));
-        if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
-            return cppTer;
-
-        Loan const cppLoan = readLoan(view, loanKeylet, f, p);
-        Vault const cppPool = readVaultState(view, f.vaultKeylet, asset);
-        expectLoanMatches(*this, result->loan, cppLoan);
-        expectSameVault(*this, "vault ", result->pool, cppPool);
-        expectBrokerMatches(*this, result->loan.broker, cppLoan.broker);
-        expectNumber(
-            *this,
-            "amount to pool",
-            result->amountToPool,
-            cppPool.assetsAvailable - pool.assetsAvailable);
-        expectNumber(
-            *this,
-            "amount to broker",
-            result->amountToBroker,
-            (cppLoan.broker.coverAvailable - loan.broker.coverAvailable) +
-                (holding(view, f.owner, asset) - ownerBefore));
-        return cppTer;
-    }
-
-    void
-    expectPay(
-        jtx::Env& env,
-        OpenView& view,
-        BrokerFixture const& f,
-        Keylet const& loanKeylet,
-        LoanParams const& p,
-        PaymentType type,
-        Number const& amount,
-        TER expected)
-    {
-        TER const cpp = checkPay(env, view, f, loanKeylet, p, type, amount);
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
+        AppliedLoanTx const cpp = applyLoanPay(env, view, f, loanKeylet, p, type, amount);
+        expectSame(*this, at, cpp, leanLoanPay(cpp, type, amount), expected);
     }
 
     // One payment checked on a throwaway view of `env`, then applied to `env` itself and the
@@ -145,8 +92,8 @@ class LeanLoanPay_test : public LeanSuite
     {
         using namespace jtx;
         OpenView view{*env.current()};
-        expectPay(env, view, f, loanKeylet, p, type, amount, expected);
-        env(loan::pay(f.borrower, loanKeylet.key, f.asset(amount), flagsOf(type)),
+        checkPay(env, view, f, loanKeylet, p, type, amount, expected);
+        env(loan::pay(f.borrower, loanKeylet.key, f.asset(amount), payFlags(type)),
             Fee(env.current()->fees().base * 101),
             jtx::Ter(expected));
         env.close();
@@ -174,11 +121,15 @@ class LeanLoanPay_test : public LeanSuite
         OpenView view{*env.current()};
         LoanParams p = p0;
         std::optional<Keylet> loanKeylet;
-        if (!tryStage(*this, label, [&] {
-                loanKeylet = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay);
-            }))
+        if (!tryStage(
+                *this,
+                label,
+                [&] {
+                    loanKeylet = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay);
+                }) ||
+            !loanKeylet)
             return;
-        expectPay(env, view, f, *loanKeylet, p, type, amount, expected);
+        checkPay(env, view, f, *loanKeylet, p, type, amount, expected);
     }
 
     // Two regular installments paid in two transactions: the second one closes the loan.
@@ -191,8 +142,8 @@ class LeanLoanPay_test : public LeanSuite
         LoanParams const p;
         auto const loanKeylet = createLoan(env, view, f, p);
         startedAgo(view, loanKeylet, parentCloseTime(env), 0);
-        expectPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{500}, tesSUCCESS);
-        expectPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{500}, tesSUCCESS);
+        checkPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{500}, tesSUCCESS);
+        checkPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{500}, tesSUCCESS);
     }
 
     // A payment on an impaired loan lifts the impairment. The loan must be late to be impaired,
@@ -210,7 +161,7 @@ class LeanLoanPay_test : public LeanSuite
         BEAST_EXPECT(
             applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanImpair)) == tesSUCCESS);
         BEAST_EXPECT(view.read(loanKeylet)->isFlag(lsfLoanImpaired));
-        expectPay(env, view, f, loanKeylet, p, PaymentType::late, Number{600}, tesSUCCESS);
+        checkPay(env, view, f, loanKeylet, p, PaymentType::late, Number{600}, tesSUCCESS);
         BEAST_EXPECT(!view.read(loanKeylet)->isFlag(lsfLoanImpaired));
     }
 
@@ -228,13 +179,13 @@ class LeanLoanPay_test : public LeanSuite
         LoanParams const p{.interestRate = 10'000, .paymentTotal = 3};
         auto const loanKeylet = createLoan(env, view, f, p);
         startedAgo(view, loanKeylet, now, 0);
-        expectPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{400}, tesSUCCESS);
+        checkPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{400}, tesSUCCESS);
         if (pastDueDate)
         {
             std::uint32_t const prevDue = view.read(loanKeylet)->at(sfPreviousPaymentDueDate);
             ageLoan(view, loanKeylet, std::int64_t{prevDue} - (now - 1));
         }
-        expectPay(env, view, f, loanKeylet, p, PaymentType::full, Number{800}, tesSUCCESS);
+        checkPay(env, view, f, loanKeylet, p, PaymentType::full, Number{800}, tesSUCCESS);
     }
 
     // Every installment of an interest-bearing loan paid one at a time.
@@ -248,7 +199,7 @@ class LeanLoanPay_test : public LeanSuite
         auto const loanKeylet = createLoan(env, view, f, p);
         startedAgo(view, loanKeylet, parentCloseTime(env), 0);
         for (int i = 0; i < 3; ++i)
-            expectPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{400}, tesSUCCESS);
+            checkPay(env, view, f, loanKeylet, p, PaymentType::regular, Number{400}, tesSUCCESS);
         BEAST_EXPECT(view.read(loanKeylet)->at(sfPaymentRemaining) == 0);
     }
 
@@ -260,7 +211,7 @@ class LeanLoanPay_test : public LeanSuite
         using namespace jtx;
         testcase("regular payment: fee tops up a drained cover");
 
-        Env env(*this);
+        Env env{*this, lendingTestAmendments()};
         auto const f = setUpBrokerVault(env, BrokerConfig{.coverRateLiquidation = 100'000});
         depositCover(env, f, Number{200});
         auto const defaulting = submitLoanSet(env, f, LoanParams{});
@@ -286,7 +237,7 @@ class LeanLoanPay_test : public LeanSuite
         using namespace jtx;
         testcase("overpayment payment: " + label);
 
-        Env env(*this);
+        Env env{*this, lendingTestAmendments()};
         auto const f = setUpBrokerVault(
             env,
             BrokerConfig{
@@ -307,461 +258,794 @@ class LeanLoanPay_test : public LeanSuite
             comparePay(env, f, loanKeylet, p, PaymentType::overpayment, amount, tesSUCCESS);
     }
 
-    // ---- Sweeps ----
-
-    using SweepFixtures = std::vector<SweepLedger>;
-
-    static BrokerFixture
-    sweepFixture(jtx::Env& env, LendingAsset kind)
-    {
-        Number const seed = kind == LendingAsset::mpt ? Number{kSweepSeed} : Number{kSweepSeed, -6};
-        auto const f = setUpBrokerVault(
-            env,
-            BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt},
-            seed,
-            false,
-            true,
-            kind);
-        // Keep the owner's IOU balance small, so its trust line records the exact fee it receives.
-        if (kind == LendingAsset::iou)
-            env(jtx::pay(f.owner, f.issuer, f.asset(Number{1, 10} - Number{1'000})));
-        // Staged due dates lie up to 1000 s before the parent close time.
-        env.close(env.now() + std::chrono::seconds{100'000});
-        return f;
-    }
-
-    // Lateness: regular, full and overpayments are tecEXPIRED once the parent close time passes
-    // the due date, a late payment is tecTOO_SOON until then. The amount is the exact amount due.
+    // Each row stages the asset's shared ledger on a throwaway view: the vault in its investment
+    // phase, the broker's management fee at 1% and no cover rate, the loan, then the row's stage;
+    // the owner's IOU balance is zeroed so the fee it receives is exact. The row's payment must
+    // give its verdict on both sides, with every field of the loan, its broker and the pool, and
+    // the amounts to the pool and to the broker, equal when both succeed. Amounts are in units of
+    // the vault grid.
+    // - Due date: regular, full and overpayments of the exact amount due are tecEXPIRED once the
+    //   due date is before P; a late payment is tecTOO_SOON until then, and an amount below the
+    //   amount due is tecINSUFFICIENT_PAYMENT.
+    // - Late interest: at a 100% late rate a principal of 31'536'000 * k accrues exactly k units
+    //   per second late, so a late payment below principal / installments + service fee + late
+    //   fee + k * seconds late is tecINSUFFICIENT_PAYMENT; not late (due at or after P) is
+    //   tecTOO_SOON.
+    // - Service fee: a regular payment below one installment plus its service fee is
+    //   tecINSUFFICIENT_PAYMENT.
+    // - Full payment: a full payment below the principal, the close interest
+    //   (principal * close rate / 1e5) and the close fee is tecINSUFFICIENT_PAYMENT.
+    // - Full payment of the last installment: a full payment with one installment left is
+    //   tecKILLED; with two or three it pays the loan off.
+    // - Fee routing: the one-unit service fee goes to the owner once the cover reaches the
+    //   minimum cover ceil(debt * rate / 1e5), else into the cover; the verdict does not change.
+    // - With interest: at 100% a year over 31'536'000 s (periodic rate 1) a principal of
+    //   3'153'600'000 in two installments pays 4'204'800'000 each; less is
+    //   tecINSUFFICIENT_PAYMENT. Of the first installment's 3'153'600'000 interest the broker's 1%
+    //   fee rounds to 31'535'999 (toBroker), the pool gets 4'173'264'001. For a principal of 3
+    //   (installment 4) the fee rounds to nothing.
+    // - Late with interest: a 100% late rate on 3'153'600'000 accrues 100 units a second, so 1'000
+    // s
+    //   late the amount due is 4'204'900'000; 1% of the late interest also goes to the broker.
+    // - Full with interest: at the start the amount due is the principal plus 10% close interest,
+    //   3'468'960'000 (the broker gets 1% of the close interest, the schedule's fee is not owed);
+    //   half an interval in it adds 1'576'800'000 accrued interest, 5'045'760'000. For a principal
+    //   of 3 the 0.3 close interest rounds away.
+    // - Overpayment with interest: 7'000'000'000 in three installments pays 7'999'999'999; an
+    //   extra goes to the principal (1% fee, 10% overpayment interest) or is dropped by the
+    //   re-amortization guards (only the 2-unit extra is applied here; for 7, extras 1, 2 and 4
+    //   are).
+    // - Credit below the vault grid (IOU): with 2e16 units available the vault's grid is 10 units,
+    //   so a payment that does not close the loan and credits less than 10 is tecPRECISION_LOSS.
+    // The due-date rules (late only once P is past the due date) are those of fixCleanup3_4_0.
+    // clang-format off
+    static constexpr LoanPayCase kDueDate[] = {
+        // regular, principal 2, amount 1 due at P
+        {.type = PaymentType::regular, .principal = 2, .due = -2, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = -2, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = -2, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = -1, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = -1, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = -1, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2, .due = 0, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 0, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 0, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 1, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 1, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 1, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 2, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 2, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .due = 2, .amount = 3, .expected = tesSUCCESS},
+        // regular, principal 2'000'000'000, amount 1'000'000'000 due at P
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -2, .amount = 999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -2, .amount = 999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -1, .amount = 999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -1, .amount = 999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 0, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 0, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 1, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 1, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 2, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 2, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // late, principal 2, amount 1 due at P
+        {.type = PaymentType::late, .principal = 2, .due = -2, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = -2, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = -2, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = -1, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = -1, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = -1, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2, .due = 0, .amount = 1, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 0, .amount = 2, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 0, .amount = 3, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 1, .amount = 1, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 1, .amount = 2, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 1, .amount = 3, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 2, .amount = 1, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 2, .amount = 2, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2, .due = 2, .amount = 3, .expected = tecTOO_SOON},
+        // late, principal 2'000'000'000, amount 1'000'000'000 due at P
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -2, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -2, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -1, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -1, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 0, .amount = 999'999'998, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 0, .amount = 999'999'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 1, .amount = 999'999'998, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 1, .amount = 999'999'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 2, .amount = 999'999'998, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 2, .amount = 999'999'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'002, .expected = tecTOO_SOON},
+        // full, principal 2, amount 2 due at P
+        {.type = PaymentType::full, .principal = 2, .due = -2, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -2, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -2, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -2, .amount = 4, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -1, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -1, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -1, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = -1, .amount = 4, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2, .due = 0, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .due = 0, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 0, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 0, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 1, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .due = 1, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 1, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 1, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 2, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .due = 2, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 2, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .due = 2, .amount = 4, .expected = tesSUCCESS},
+        // full, principal 2'000'000'000, amount 2'000'000'000 due at P
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -2, .amount = 1'999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -2, .amount = 1'999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -2, .amount = 2'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -2, .amount = 2'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -2, .amount = 2'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -1, .amount = 1'999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -1, .amount = 1'999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -1, .amount = 2'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -1, .amount = 2'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = -1, .amount = 2'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 0, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 0, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 0, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 0, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 0, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 1, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 1, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 1, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 1, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 1, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 2, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 2, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 2, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 2, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .due = 2, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        // overpayment, principal 2, amount 1 due at P
+        {.type = PaymentType::overpayment, .principal = 2, .due = -2, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = -2, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = -2, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = -1, .amount = 1, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = -1, .amount = 2, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = -1, .amount = 3, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 0, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 0, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 0, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 1, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 1, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 1, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 2, .amount = 1, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 2, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2, .due = 2, .amount = 3, .expected = tesSUCCESS},
+        // overpayment, principal 2'000'000'000, amount 1'000'000'000 due at P
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -2, .amount = 999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -2, .amount = 999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -2, .amount = 1'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -1, .amount = 999'999'998, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -1, .amount = 999'999'999, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'000, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'001, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = -1, .amount = 1'000'000'002, .expected = tecEXPIRED},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 0, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 0, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 0, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 1, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 1, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 1, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 2, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 2, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 2'000'000'000, .due = 2, .amount = 1'000'000'002, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kLateInterest[] = {
+        // principal 31'536'000 in 2, service fee 0, late fee 0, 1 s late: amount 15'768'001
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 1, .amount = 15'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 1, .amount = 15'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 1, .amount = 15'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 1, .amount = 15'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 1, .amount = 15'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 0, .amount = 15'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 0, .amount = 15'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 0, .amount = 15'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 0, .amount = 15'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = 0, .amount = 15'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -1, .amount = 15'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -1, .amount = 15'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -1, .amount = 15'768'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -1, .amount = 15'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -1, .amount = 15'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -2, .amount = 15'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -2, .amount = 15'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -2, .amount = 15'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -2, .amount = 15'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -2, .amount = 15'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -3, .amount = 15'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -3, .amount = 15'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -3, .amount = 15'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -3, .amount = 15'768'002, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .due = -3, .amount = 15'768'003, .expected = tesSUCCESS},
+        // principal 1'009'152'000 in 2, service fee 0, late fee 0, 1'000 s late: amount 504'608'000
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -998, .amount = 504'607'998, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -998, .amount = 504'607'999, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -998, .amount = 504'608'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -998, .amount = 504'608'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -998, .amount = 504'608'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -999, .amount = 504'607'998, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -999, .amount = 504'607'999, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -999, .amount = 504'608'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -999, .amount = 504'608'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -999, .amount = 504'608'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'000, .amount = 504'607'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'000, .amount = 504'607'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'000, .amount = 504'608'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'000, .amount = 504'608'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'000, .amount = 504'608'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'001, .amount = 504'607'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'001, .amount = 504'607'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'001, .amount = 504'608'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'001, .amount = 504'608'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'001, .amount = 504'608'002, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'002, .amount = 504'607'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'002, .amount = 504'607'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'002, .amount = 504'608'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'002, .amount = 504'608'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 1'009'152'000, .lateInterestRate = 100'000, .due = -1'002, .amount = 504'608'002, .expected = tecINSUFFICIENT_PAYMENT},
+        // principal 31'536'000 in 1, service fee 0, late fee 0, 1'000 s late: amount 31'537'000
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -998, .amount = 31'536'998, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -998, .amount = 31'536'999, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -998, .amount = 31'537'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -998, .amount = 31'537'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -998, .amount = 31'537'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -999, .amount = 31'536'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -999, .amount = 31'536'999, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -999, .amount = 31'537'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -999, .amount = 31'537'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -999, .amount = 31'537'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'000, .amount = 31'536'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'000, .amount = 31'536'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'000, .amount = 31'537'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'000, .amount = 31'537'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'000, .amount = 31'537'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'001, .amount = 31'536'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'001, .amount = 31'536'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'001, .amount = 31'537'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'001, .amount = 31'537'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'001, .amount = 31'537'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'002, .amount = 31'536'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'002, .amount = 31'536'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'002, .amount = 31'537'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'002, .amount = 31'537'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .paymentTotal = 1, .due = -1'002, .amount = 31'537'002, .expected = tesSUCCESS},
+        // principal 31'536'000 in 2, service fee 1'000'000'000, late fee 0, 1 s late: amount 1'015'768'001
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 1, .amount = 1'015'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 1, .amount = 1'015'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 1, .amount = 1'015'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 1, .amount = 1'015'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 1, .amount = 1'015'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 0, .amount = 1'015'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 0, .amount = 1'015'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 0, .amount = 1'015'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 0, .amount = 1'015'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = 0, .amount = 1'015'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -1, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -1, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -1, .amount = 1'015'768'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -1, .amount = 1'015'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -1, .amount = 1'015'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -2, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -2, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -2, .amount = 1'015'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -2, .amount = 1'015'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -2, .amount = 1'015'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -3, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -3, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -3, .amount = 1'015'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -3, .amount = 1'015'768'002, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .serviceFee = 1'000'000'000, .due = -3, .amount = 1'015'768'003, .expected = tesSUCCESS},
+        // principal 31'536'000 in 2, service fee 0, late fee 1'000'000'000, 1 s late: amount 1'015'768'001
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 1, .amount = 1'015'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 1, .amount = 1'015'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 1, .amount = 1'015'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 1, .amount = 1'015'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 1, .amount = 1'015'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 0, .amount = 1'015'767'999, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 0, .amount = 1'015'768'000, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 0, .amount = 1'015'768'001, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 0, .amount = 1'015'768'002, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = 0, .amount = 1'015'768'003, .expected = tecTOO_SOON},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -1, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -1, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -1, .amount = 1'015'768'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -1, .amount = 1'015'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -1, .amount = 1'015'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -2, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -2, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -2, .amount = 1'015'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -2, .amount = 1'015'768'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -2, .amount = 1'015'768'003, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -3, .amount = 1'015'767'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -3, .amount = 1'015'768'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -3, .amount = 1'015'768'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -3, .amount = 1'015'768'002, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 31'536'000, .lateInterestRate = 100'000, .latePaymentFee = 1'000'000'000, .due = -3, .amount = 1'015'768'003, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kServiceFee[] = {
+        // installment 1 + service fee 999'999'999
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'997, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'997, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'997, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'997, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'997, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'998, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'998, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'998, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'998, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'998, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'999, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'999, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'999, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'999, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 999'999'999, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'000, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'000, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'000, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'000, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'000, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'001, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'001, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'001, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'001, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1'000'000'001, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // installment 999'999'999 + service fee 1
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 1, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 1, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 1, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 1, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 1, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 2, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 2, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 2, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 2, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 2, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 3, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 3, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 3, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 3, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'999'999'998, .serviceFee = 3, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // installment 500'000'000 + service fee 500'000'000
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'998, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'998, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'998, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'998, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'998, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'999, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'999, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'999, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'999, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 499'999'999, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'000, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'000, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'000, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'000, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'000, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'001, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'001, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'001, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'001, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'001, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'002, .amount = 999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'002, .amount = 999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'002, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'002, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 1'000'000'000, .serviceFee = 500'000'002, .amount = 1'000'000'002, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kFullPayment[] = {
+        // principal 2, close rate 0, close fee 0: amount 2
+        {.type = PaymentType::full, .principal = 2, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 1, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 1, .amount = 2, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 1, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 1, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 2, .amount = 1, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 2, .amount = 2, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 2, .amount = 3, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 2, .closePaymentFee = 2, .amount = 4, .expected = tesSUCCESS},
+        // principal 1'000'000'000, close rate 10'000, close fee 0: amount 1'100'000'000
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .amount = 1'099'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .amount = 1'099'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .amount = 1'100'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .amount = 1'100'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .amount = 1'100'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 1, .amount = 1'099'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 1, .amount = 1'099'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 1, .amount = 1'100'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 1, .amount = 1'100'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 1, .amount = 1'100'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 2, .amount = 1'099'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 2, .amount = 1'099'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 2, .amount = 1'100'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 2, .amount = 1'100'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 10'000, .closePaymentFee = 2, .amount = 1'100'000'002, .expected = tesSUCCESS},
+        // principal 1'000'000'000, close rate 0, close fee 1'000'000'000: amount 2'000'000'000
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'998, .amount = 1'999'999'998, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'998, .amount = 1'999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'998, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'998, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'998, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'999, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'999, .amount = 1'999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'999, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'999, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 999'999'999, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'000, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'000, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'000, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'000, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'000, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'001, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'001, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'001, .amount = 2'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'001, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'001, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'002, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'002, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'002, .amount = 2'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'002, .amount = 2'000'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closePaymentFee = 1'000'000'002, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        // principal 1'000'000'000, close rate 100'000, close fee 0: amount 2'000'000'000
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 1, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 1, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 1, .amount = 2'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 1, .amount = 2'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 1, .amount = 2'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 2, .amount = 1'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 2, .amount = 1'999'999'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 2, .amount = 2'000'000'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 2, .amount = 2'000'000'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 1'000'000'000, .closeInterestRate = 100'000, .closePaymentFee = 2, .amount = 2'000'000'002, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kFullPaymentLastInstallment[] = {
+        // principal 6, one installment
+        {.type = PaymentType::full, .principal = 6, .paymentTotal = 1, .amount = 6, .expected = tecKILLED},
+        {.type = PaymentType::full, .principal = 6, .amount = 6, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 6, .paymentTotal = 3, .amount = 6, .expected = tesSUCCESS},
+        // principal 2'000'000'000, one installment
+        {.type = PaymentType::full, .principal = 2'000'000'000, .paymentTotal = 1, .amount = 2'000'000'000, .expected = tecKILLED},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .amount = 2'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 2'000'000'000, .paymentTotal = 3, .amount = 2'000'000'000, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kFeeRouting[] = {
+        // principal 2, rate 1: minimum cover 1
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1, .stage = {.coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1, .stage = {.cover = 1, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1, .stage = {.cover = 2, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2, .serviceFee = 1, .stage = {.cover = 3, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        // principal 2'000'000'000, rate 10'000: minimum cover 200'000'000
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .serviceFee = 1, .stage = {.cover = 199'999'998, .coverRate = 10'000}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .serviceFee = 1, .stage = {.cover = 199'999'999, .coverRate = 10'000}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .serviceFee = 1, .stage = {.cover = 200'000'000, .coverRate = 10'000}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .serviceFee = 1, .stage = {.cover = 200'000'001, .coverRate = 10'000}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'000, .serviceFee = 1, .stage = {.cover = 200'000'002, .coverRate = 10'000}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        // principal 2'000'000'002, rate 10'000: minimum cover 200'000'001
+        {.type = PaymentType::regular, .principal = 2'000'000'002, .serviceFee = 1, .stage = {.cover = 199'999'999, .coverRate = 10'000}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'002, .serviceFee = 1, .stage = {.cover = 200'000'000, .coverRate = 10'000}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'002, .serviceFee = 1, .stage = {.cover = 200'000'001, .coverRate = 10'000}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'002, .serviceFee = 1, .stage = {.cover = 200'000'002, .coverRate = 10'000}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 2'000'000'002, .serviceFee = 1, .stage = {.cover = 200'000'003, .coverRate = 10'000}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // principal 500'000'000, rate 100'000: minimum cover 500'000'000
+        {.type = PaymentType::regular, .principal = 500'000'000, .serviceFee = 1, .stage = {.cover = 499'999'998, .coverRate = 100'000}, .amount = 250'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 500'000'000, .serviceFee = 1, .stage = {.cover = 499'999'999, .coverRate = 100'000}, .amount = 250'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 500'000'000, .serviceFee = 1, .stage = {.cover = 500'000'000, .coverRate = 100'000}, .amount = 250'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 500'000'000, .serviceFee = 1, .stage = {.cover = 500'000'001, .coverRate = 100'000}, .amount = 250'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 500'000'000, .serviceFee = 1, .stage = {.cover = 500'000'002, .coverRate = 100'000}, .amount = 250'000'001, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kRegularWithInterest[] = {
+        // principal 3'153'600'000 at 100% a year in 2 x 31'536'000 s: installment 4'204'800'000
+        {.type = PaymentType::regular, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4'204'799'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4'204'799'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4'204'800'000, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4'204'800'001, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4'204'800'002, .expected = tesSUCCESS},
+        // principal 3 at the same rate: installment 4
+        {.type = PaymentType::regular, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 2, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 3, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::regular, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 5, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .amount = 6, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kLateWithInterest[] = {
+        // installment 4'204'800'000, 1'000 s late at 100% on 3'153'600'000: 100'000 late interest
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -999, .amount = 4'204'899'998, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -999, .amount = 4'204'899'999, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -999, .amount = 4'204'900'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -999, .amount = 4'204'900'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -999, .amount = 4'204'900'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1000, .amount = 4'204'899'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1000, .amount = 4'204'899'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1000, .amount = 4'204'900'000, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1000, .amount = 4'204'900'001, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1000, .amount = 4'204'900'002, .expected = tesSUCCESS},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1001, .amount = 4'204'899'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1001, .amount = 4'204'899'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1001, .amount = 4'204'900'000, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1001, .amount = 4'204'900'001, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::late, .principal = 3'153'600'000, .interestRate = 100'000, .lateInterestRate = 100'000, .paymentInterval = 31'536'000, .due = -1001, .amount = 4'204'900'002, .expected = tecINSUFFICIENT_PAYMENT},
+    };
+    static constexpr LoanPayCase kFullWithInterest[] = {
+        // at the start: principal 3'153'600'000 + close interest 10% 315'360'000
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3'468'959'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3'468'959'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3'468'960'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3'468'960'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3'468'960'002, .expected = tesSUCCESS},
+        // half an interval in: + accrued interest 1'576'800'000
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .due = 15'768'000, .amount = 5'045'759'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .due = 15'768'000, .amount = 5'045'759'999, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .due = 15'768'000, .amount = 5'045'760'000, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .due = 15'768'000, .amount = 5'045'760'001, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3'153'600'000, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .due = 15'768'000, .amount = 5'045'760'002, .expected = tesSUCCESS},
+        // principal 3 at the start: the close interest 0.3 rounds away, amount due 3
+        {.type = PaymentType::full, .principal = 3, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 2, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::full, .principal = 3, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 3, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 4, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 5, .expected = tesSUCCESS},
+        {.type = PaymentType::full, .principal = 3, .interestRate = 100'000, .closeInterestRate = 10'000, .paymentInterval = 31'536'000, .amount = 6, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kOverpaymentWithInterest[] = {
+        // principal 7'000'000'000 at 100% a year in 3 x 31'536'000 s: installment 7'999'999'999
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 7'999'999'998, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 7'999'999'999, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 8'000'000'000, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 8'000'000'001, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 8'000'000'002, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7'000'000'000, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 9'000'000'000, .expected = tesSUCCESS},
+        // principal 7: installment 8
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 6, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 7, .expected = tecINSUFFICIENT_PAYMENT},
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 8, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 9, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 10, .expected = tesSUCCESS},
+        {.type = PaymentType::overpayment, .principal = 7, .interestRate = 100'000, .overpaymentInterestRate = 10'000, .overpaymentFee = 1'000, .paymentInterval = 31'536'000, .paymentTotal = 3, .amount = 12, .expected = tesSUCCESS},
+    };
+    static constexpr LoanPayCase kCreditBelowGrid[] = {
+        // available 20'000'000'000'000'000 units: a credit rounds down to the 10-unit grid
+        {.type = PaymentType::regular, .principal = 2, .available = 20'000'000'000'000'000, .amount = 1, .expected = tecPRECISION_LOSS},
+        {.type = PaymentType::regular, .principal = 8, .available = 20'000'000'000'000'000, .amount = 4, .expected = tecPRECISION_LOSS},
+        {.type = PaymentType::regular, .principal = 10, .available = 20'000'000'000'000'000, .amount = 5, .expected = tecPRECISION_LOSS},
+        {.type = PaymentType::regular, .principal = 18, .available = 20'000'000'000'000'000, .amount = 9, .expected = tecPRECISION_LOSS},
+        {.type = PaymentType::regular, .principal = 20, .available = 20'000'000'000'000'000, .amount = 10, .expected = tesSUCCESS},
+        {.type = PaymentType::regular, .principal = 40, .available = 20'000'000'000'000'000, .amount = 20, .expected = tesSUCCESS},
+    };
+    // clang-format on
     void
-    testDueDateSweep(SweepFixtures const& fixtures)
+    runLoanPayBoundaries(LendingSetup const& s)
     {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " due date-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kDueDateCases)
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanPayCase const> cases) {
+            for (TestLedger const& l : ledgers)
             {
-                std::set<TER> seen;
-                for (DueDateCusp const& c : cases)
+                beginCase(("LoanPay " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (LoanPayCase const& c : cases)
                 {
-                    OpenView view{*env.current()};
+                    jtx::Env& env = *l.env;
+                    std::uint32_t const pct = parentCloseTime(env);
                     LoanParams const p{
-                        .principal = units(f, c.principal),
+                        .principal = units(l.f, c.principal),
+                        .interestRate = c.interestRate,
+                        .lateInterestRate = c.lateInterestRate,
+                        .closeInterestRate = c.closeInterestRate,
+                        .overpaymentInterestRate = c.overpaymentInterestRate,
+                        .overpaymentFee = c.overpaymentFee,
+                        .serviceFee = units(l.f, c.serviceFee),
+                        .latePaymentFee = units(l.f, c.latePaymentFee),
+                        .closePaymentFee = units(l.f, c.closePaymentFee),
+                        .paymentInterval = c.paymentInterval,
+                        .paymentTotal = c.paymentTotal,
                         .allowsOverpayment = c.type == PaymentType::overpayment,
                     };
-                    auto const loan = createLoan(env, view, f, p);
-                    dueAt(view, loan, now, c.dueOffset);
-                    seen.insert(checkPay(
-                        env, view, f, loan, p, c.type, units(f, c.amount), describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecTOO_SOON, tecEXPIRED, tecINSUFFICIENT_PAYMENT});
-            }
-        }
-    }
-
-    // Late amount due: one installment, its fees and the late interest (exactly k units per second
-    // late at these principals). Below it is tecINSUFFICIENT_PAYMENT; not late is tecTOO_SOON.
-    void
-    testLateInterestSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " late interest-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kLateInterestCases)
-            {
-                std::set<TER> seen;
-                for (LateInterestCusp const& c : cases)
-                {
+                    std::string const at = paymentTypeName(c.type) + " of " +
+                        std::to_string(c.amount) + " on" + loanText(p) +
+                        (c.due ? " due P + " + std::to_string(*c.due) : std::string{}) + " " +
+                        stageText(c.stage) +
+                        (c.available ? " available " + std::to_string(*c.available)
+                                     : std::string{}) +
+                        ": ";
                     OpenView view{*env.current()};
-                    LoanParams const p{
-                        .principal = units(f, kSecondsPerYear * c.k),
-                        .lateInterestRate = static_cast<std::uint32_t>(kRateCap),
-                        .serviceFee = units(f, c.serviceFee),
-                        .latePaymentFee = units(f, c.lateFee),
-                        .paymentTotal = c.installments,
-                    };
-                    auto const loan = createLoan(env, view, f, p);
-                    dueAt(view, loan, now, -c.lateBy);
-                    seen.insert(checkPay(
-                        env,
-                        view,
-                        f,
-                        loan,
-                        p,
-                        PaymentType::late,
-                        units(f, c.amount),
-                        describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
-            }
-        }
-    }
-
-    // A regular payment must cover one installment and its service fee, else
-    // tecINSUFFICIENT_PAYMENT.
-    void
-    testServiceFeeSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " service fee-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kServiceFeeCases)
-            {
-                std::set<TER> seen;
-                for (ServiceFeeCusp const& c : cases)
-                {
-                    OpenView view{*env.current()};
-                    LoanParams const p{
-                        .principal = units(f, 2 * c.installment),
-                        .serviceFee = units(f, c.serviceFee),
-                    };
-                    auto const loan = createLoan(env, view, f, p);
-                    startedAgo(view, loan, now, 0);
-                    seen.insert(checkPay(
-                        env,
-                        view,
-                        f,
-                        loan,
-                        p,
-                        PaymentType::regular,
-                        units(f, c.amount),
-                        describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
-            }
-        }
-    }
-
-    // A full payment must cover the principal, the close interest and the close payment fee, else
-    // tecINSUFFICIENT_PAYMENT.
-    void
-    testFullPaymentSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " full payment-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kFullPaymentCases)
-            {
-                std::set<TER> seen;
-                for (FullPaymentCusp const& c : cases)
-                {
-                    OpenView view{*env.current()};
-                    LoanParams const p{
-                        .principal = units(f, c.principal),
-                        .closeInterestRate = c.closeRate,
-                        .closePaymentFee = units(f, c.closeFee),
-                    };
-                    auto const loan = createLoan(env, view, f, p);
-                    startedAgo(view, loan, now, 0);
-                    seen.insert(checkPay(
-                        env,
-                        view,
-                        f,
-                        loan,
-                        p,
-                        PaymentType::full,
-                        units(f, c.amount),
-                        describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecINSUFFICIENT_PAYMENT});
-            }
-        }
-    }
-
-    // A full payment with one installment left is tecKILLED. Rows have exactly one installment.
-    void
-    testFullPaymentRemainingSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " full payment of the last installment-Sweep")
-                          .c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kFullPaymentRemainingCases)
-            {
-                std::set<TER> seen;
-                for (InstallmentsCusp const& c : cases)
-                {
-                    OpenView view{*env.current()};
-                    LoanParams const p{
-                        .principal = units(f, c.principal),
-                        .paymentTotal = static_cast<std::uint32_t>(c.total),
-                    };
-                    auto const loan = createLoan(env, view, f, p);
-                    startedAgo(view, loan, now, 0);
-                    seen.insert(checkPay(
-                        env,
-                        view,
-                        f,
-                        loan,
-                        p,
-                        PaymentType::full,
-                        units(f, c.principal),
-                        describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecKILLED});
-            }
-        }
-    }
-
-    // A regular payment with a one-unit service fee: the fee goes to the owner once the cover
-    // reaches the minimum cover, else into the cover. The cover and rate are staged after the
-    // loan; the verdict does not cross, the amounts to the broker must agree.
-    void
-    testFeeRoutingSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanPay " + assetName(f) + " fee routing-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kFeeRoutingCases)
-            {
-                for (FeeRoutingCusp const& c : cases)
-                {
-                    std::string const at = describe(c) + ": ";
-                    OpenView view{*env.current()};
-                    LoanParams const p{
-                        .principal = units(f, c.principal),
-                        .serviceFee = units(f, 1),
-                    };
                     std::optional<Keylet> loan;
                     if (!tryStage(*this, at, [&] {
-                            loan = createLoan(env, view, f, p);
-                            startedAgo(view, *loan, now, 0);
-                            stageLending(env, view, f, {.cover = c.cover, .coverRate = c.rate});
+                            stageInvestment(env, view, l.f, {.managementFeeRate = 1'000});
+                            loan = createLoan(env, view, l.f, p);
+                            if (c.due)
+                            {
+                                dueAt(view, *loan, pct, *c.due);
+                            }
+                            else
+                            {
+                                startedAgo(view, *loan, pct, 0);
+                            }
+                            stageLending(env, view, l.f, c.stage);
+                            if (c.available)
+                                stageAvailable(view, l.f, *c.available);
+                            zeroIouBalance(view, l.f.owner, l.f.asset.raw());
                         }))
                         continue;
-                    checkPay(
-                        env,
-                        view,
-                        f,
-                        *loan,
-                        p,
-                        PaymentType::regular,
-                        units(f, (c.principal / 2) + 1),
-                        at);
+                    Number const amount = units(l.f, c.amount);
+                    AppliedLoanTx const cpp =
+                        applyLoanPay(env, view, l.f, *loan, p, c.type, amount);
+                    LeanLoanTx const lean = leanLoanPay(cpp, c.type, amount);
+                    expectSame(*this, at, cpp, lean, c.expected);
                 }
             }
-        }
+        };
+
+        run("due date", s.all, kDueDate);
+        run("late interest", s.all, kLateInterest);
+        run("service fee", s.all, kServiceFee);
+        run("full payment", s.all, kFullPayment);
+        run("full payment of the last installment", s.all, kFullPaymentLastInstallment);
+        run("fee routing", s.all, kFeeRouting);
+        run("regular with interest", s.all, kRegularWithInterest);
+        run("late with interest", s.all, kLateWithInterest);
+        run("full with interest", s.all, kFullWithInterest);
+        run("overpayment with interest", s.all, kOverpaymentWithInterest);
+        run("credit below the vault grid", s.iou, kCreditBelowGrid);
     }
 
     void
-    runTests() override
+    testLoanPayBoundaries(LendingSetup const& s)
     {
-        // The single-value tests share one fixture per asset (broker cover 500); each test runs
-        // on a throwaway view of it.
-        jtx::Env env(*this);
+        runLoanPayBoundaries(s);
+    }
+
+    // The single-value tests' fixtures: the default broker with 500 of cover, one per asset. Each
+    // test runs on a throwaway view of it.
+    struct Setup
+    {
+        BrokerFixture iou;
+        BrokerFixture mpt;
+    };
+
+    static Setup
+    setup(jtx::Env& env, jtx::Env& mptEnv)
+    {
         auto const iou = setUpBrokerVault(env, BrokerConfig{});
         depositCover(env, iou, Number{500});
-        jtx::Env mptEnv(*this);
         auto const mpt = setUpBrokerVault(
             mptEnv, BrokerConfig{}, Number{10'000}, false, true, LendingAsset::mpt);
         depositCover(mptEnv, mpt, Number{500});
         // Loans are aged by moving their dates back; keep those dates well above zero.
         env.close(env.now() + std::chrono::seconds{10'000});
         mptEnv.close(mptEnv.now() + std::chrono::seconds{10'000});
+        return {.iou = iou, .mpt = mpt};
+    }
 
+    void
+    runTests() override
+    {
+        jtx::Env env{*this, lendingTestAmendments()};
+        jtx::Env mptEnv{*this, lendingTestAmendments()};
+        Setup const fx = setup(env, mptEnv);
+        BrokerFixture const& iou = fx.iou;
+        BrokerFixture const& mpt = fx.mpt;
+        jtx::Env iouLendingEnv{*this, lendingTestAmendments()};
+        jtx::Env mptLendingEnv{*this, lendingTestAmendments()};
+        LendingSetup const s = setUpLending(iouLendingEnv, mptLendingEnv);
+
+        struct PayTest
+        {
+            char const* name;
+            LoanParams loan{};
+            std::uint32_t loanAge{};
+            PaymentType type = PaymentType::regular;
+            Number amount;
+            TER expected;
+            LoanKind kind = LoanKind::active;
+        };
+        auto const pay = [&](jtx::Env& e, BrokerFixture const& f, PayTest const& t) {
+            runPay(e, f, t.name, t.loan, t.loanAge, t.type, t.amount, t.expected, t.kind);
+        };
+
+        // clang-format off
         // Regular payments on a 1000 loan in two installments of 500 (no interest).
-        runPay(
-            env,
-            iou,
-            "one installment",
-            LoanParams{},
-            0,
-            PaymentType::regular,
-            Number{500},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "both installments in one transaction",
-            LoanParams{},
-            0,
-            PaymentType::regular,
-            Number{1'000},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "amount below one installment",
-            LoanParams{},
-            0,
-            PaymentType::regular,
-            Number{499},
-            tecINSUFFICIENT_PAYMENT);
-        runPay(
-            env,
-            iou,
-            "one installment with interest",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            0,
-            PaymentType::regular,
-            Number{400},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "one installment with a service fee",
-            LoanParams{.serviceFee = Number{1}},
-            0,
-            PaymentType::regular,
-            Number{501},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "when late",
-            LoanParams{},
-            601,
-            PaymentType::regular,
-            Number{500},
-            tecEXPIRED);
-        runPay(
-            env,
-            iou,
-            "on a pending proposal",
-            LoanParams{},
-            0,
-            PaymentType::regular,
-            Number{500},
-            tecNO_PERMISSION,
-            LoanKind::pending);
-        runPay(
-            env,
-            iou,
-            "on a paid-off loan",
-            LoanParams{},
-            0,
-            PaymentType::regular,
-            Number{500},
-            tecKILLED,
-            LoanKind::paidOff);
+        static PayTest const kRegularTests[] = {
+            {.name = "one installment", .amount = 500, .expected = tesSUCCESS},
+            {.name = "both installments in one transaction", .amount = 1'000, .expected = tesSUCCESS},
+            {.name = "amount below one installment", .amount = 499, .expected = tecINSUFFICIENT_PAYMENT},
+            {.name = "one installment with interest", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .amount = 400, .expected = tesSUCCESS},
+            {.name = "one installment with a service fee", .loan = {.serviceFee = Number{1}}, .amount = 501, .expected = tesSUCCESS},
+            {.name = "when late", .loanAge = 601, .amount = 500, .expected = tecEXPIRED},
+            {.name = "on a pending proposal", .amount = 500, .expected = tecNO_PERMISSION, .kind = LoanKind::pending},
+            {.name = "on a paid-off loan", .amount = 500, .expected = tecKILLED, .kind = LoanKind::paidOff},
+        };
+        // clang-format on
+        for (PayTest const& t : kRegularTests)
+            pay(env, iou, t);
         testTwoInstallments(env, iou);
 
         // Late payments
-        runPay(
-            env,
-            iou,
-            "one installment",
-            LoanParams{.lateInterestRate = 10'000, .latePaymentFee = Number{2}},
-            601,
-            PaymentType::late,
-            Number{600},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "before the due date",
-            LoanParams{},
-            0,
-            PaymentType::late,
-            Number{600},
-            tecTOO_SOON);
-        runPay(
-            env,
-            iou,
-            "without a late rate or fee",
-            LoanParams{},
-            601,
-            PaymentType::late,
-            Number{500},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "amount below the installment",
-            LoanParams{},
-            601,
-            PaymentType::late,
-            Number{100},
-            tecINSUFFICIENT_PAYMENT);
+        // clang-format off
+        static PayTest const kLateTests[] = {
+            {.name = "one installment", .loan = {.lateInterestRate = 10'000, .latePaymentFee = Number{2}}, .loanAge = 601, .type = PaymentType::late, .amount = 600, .expected = tesSUCCESS},
+            {.name = "before the due date", .type = PaymentType::late, .amount = 600, .expected = tecTOO_SOON},
+            {.name = "without a late rate or fee", .loanAge = 601, .type = PaymentType::late, .amount = 500, .expected = tesSUCCESS},
+            {.name = "amount below the installment", .loanAge = 601, .type = PaymentType::late, .amount = 100, .expected = tecINSUFFICIENT_PAYMENT},
+        };
+        // clang-format on
+        for (PayTest const& t : kLateTests)
+            pay(env, iou, t);
         testPayImpairedLoan(env, iou);
-        // One transaction settles at most 100 installments.
-        runPay(
-            env,
-            iou,
-            "stops at 100 installments",
-            LoanParams{.principal = Number{1'500}, .paymentTotal = 150},
-            0,
-            PaymentType::regular,
-            Number{1'500},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "stops at 100 installments",
-            LoanParams{.principal = Number{1'500}, .paymentTotal = 150, .allowsOverpayment = true},
-            0,
-            PaymentType::overpayment,
-            Number{1'500},
-            tesSUCCESS);
 
-        // Full payments
-        runPay(
-            env,
-            iou,
-            "below the amount due",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            100,
-            PaymentType::full,
-            Number{900},
-            tecINSUFFICIENT_PAYMENT);
-        runPay(
-            env,
-            iou,
-            "pay off a three-installment loan",
-            LoanParams{.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3},
-            100,
-            PaymentType::full,
-            Number{1'100},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "without a close rate",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            100,
-            PaymentType::full,
-            Number{1'100},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "when late",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            601,
-            PaymentType::full,
-            Number{1'100},
-            tecEXPIRED);
-        runPay(
-            env,
-            iou,
-            "on a zero-interest loan",
-            LoanParams{.paymentTotal = 3},
-            100,
-            PaymentType::full,
-            Number{1'000},
-            tesSUCCESS);
+        // clang-format off
+        static PayTest const kInstallmentCapAndFullTests[] = {
+            // One transaction settles at most 100 installments.
+            {.name = "stops at 100 installments", .loan = {.principal = Number{1'500}, .paymentTotal = 150}, .amount = 1'500, .expected = tesSUCCESS},
+            {.name = "stops at 100 installments", .loan = {.principal = Number{1'500}, .paymentTotal = 150, .allowsOverpayment = true}, .type = PaymentType::overpayment, .amount = 1'500, .expected = tesSUCCESS},
+            // Full payments
+            {.name = "below the amount due", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .loanAge = 100, .type = PaymentType::full, .amount = 900, .expected = tecINSUFFICIENT_PAYMENT},
+            {.name = "pay off a three-installment loan", .loan = {.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3}, .loanAge = 100, .type = PaymentType::full, .amount = 1'100, .expected = tesSUCCESS},
+            {.name = "without a close rate", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .loanAge = 100, .type = PaymentType::full, .amount = 1'100, .expected = tesSUCCESS},
+            {.name = "when late", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .loanAge = 601, .type = PaymentType::full, .amount = 1'100, .expected = tecEXPIRED},
+            {.name = "on a zero-interest loan", .loan = {.paymentTotal = 3}, .loanAge = 100, .type = PaymentType::full, .amount = 1'000, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (PayTest const& t : kInstallmentCapAndFullTests)
+            pay(env, iou, t);
         testFullAfterInstallment(env, iou, false);
         testFullAfterInstallment(env, iou, true);
-        runPay(
-            env,
-            iou,
-            "with one installment left",
-            LoanParams{.paymentTotal = 1},
-            0,
-            PaymentType::full,
-            Number{1'100},
-            tecKILLED);
+        // clang-format off
+        pay(env, iou, {.name = "with one installment left", .loan = {.paymentTotal = 1}, .type = PaymentType::full, .amount = 1'100, .expected = tecKILLED});
+        // clang-format on
 
         testSequentialInstallments(env, iou);
         testFeeIntoCover();
@@ -809,100 +1093,30 @@ class LeanLoanPay_test : public LeanSuite
             {Number{3'117'013'163'787'732LL, -14}});
 
         // MPT vault
-        runPay(
-            mptEnv,
-            mpt,
-            "one installment with interest",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3},
-            0,
-            PaymentType::regular,
-            Number{400},
-            tesSUCCESS);
-        runPay(
-            mptEnv,
-            mpt,
-            "one installment",
-            LoanParams{.lateInterestRate = 10'000, .latePaymentFee = Number{2}},
-            601,
-            PaymentType::late,
-            Number{600},
-            tesSUCCESS);
-        runPay(
-            mptEnv,
-            mpt,
-            "pay off a three-installment loan",
-            LoanParams{.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3},
-            100,
-            PaymentType::full,
-            Number{1'100},
-            tesSUCCESS);
+        // clang-format off
+        static PayTest const kMptTests[] = {
+            {.name = "one installment with interest", .loan = {.interestRate = 10'000, .paymentTotal = 3}, .amount = 400, .expected = tesSUCCESS},
+            {.name = "one installment", .loan = {.lateInterestRate = 10'000, .latePaymentFee = Number{2}}, .loanAge = 601, .type = PaymentType::late, .amount = 600, .expected = tesSUCCESS},
+            {.name = "pay off a three-installment loan", .loan = {.interestRate = 10'000, .closeInterestRate = 1'000, .paymentTotal = 3}, .loanAge = 100, .type = PaymentType::full, .amount = 1'100, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (PayTest const& t : kMptTests)
+            pay(mptEnv, mpt, t);
 
         // Overpayments
-        runPay(
-            env,
-            iou,
-            "amount clears the whole loan",
-            LoanParams{.interestRate = 10'000, .paymentTotal = 3, .allowsOverpayment = true},
-            0,
-            PaymentType::overpayment,
-            Number{1'200},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "extra below one grid unit",
-            LoanParams{.allowsOverpayment = true},
-            0,
-            PaymentType::overpayment,
-            Number{5'000'000'005LL, -7},
-            tesSUCCESS);
-        // A 100% overpayment fee consumes the extra, so no principal is paid down.
-        runPay(
-            env,
-            iou,
-            "extra consumed by the overpayment fee",
-            LoanParams{.overpaymentFee = 100'000, .paymentTotal = 3, .allowsOverpayment = true},
-            0,
-            PaymentType::overpayment,
-            Number{600},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "one installment plus extra principal",
-            LoanParams{
-                .interestRate = 10'000,
-                .overpaymentInterestRate = 1'000,
-                .overpaymentFee = 500,
-                .paymentTotal = 4,
-                .allowsOverpayment = true},
-            0,
-            PaymentType::overpayment,
-            Number{500},
-            tesSUCCESS);
-        runPay(
-            env,
-            iou,
-            "on a loan that forbids it",
-            LoanParams{},
-            0,
-            PaymentType::overpayment,
-            Number{600},
-            tecNO_PERMISSION);
-
-        // Sweeps: one fixture per asset, no cover rates, kSweepSeed units in the vault.
-        jtx::Env iouSweepEnv(*this);
-        jtx::Env mptSweepEnv(*this);
-        SweepFixtures const fixtures{
-            {.env = &iouSweepEnv, .f = sweepFixture(iouSweepEnv, LendingAsset::iou)},
-            {.env = &mptSweepEnv, .f = sweepFixture(mptSweepEnv, LendingAsset::mpt)},
+        // clang-format off
+        static PayTest const kOverpaymentTests[] = {
+            {.name = "amount clears the whole loan", .loan = {.interestRate = 10'000, .paymentTotal = 3, .allowsOverpayment = true}, .type = PaymentType::overpayment, .amount = 1'200, .expected = tesSUCCESS},
+            {.name = "extra below one grid unit", .loan = {.allowsOverpayment = true}, .type = PaymentType::overpayment, .amount = Number{5'000'000'005LL, -7}, .expected = tesSUCCESS},
+            // A 100% overpayment fee consumes the extra, so no principal is paid down.
+            {.name = "extra consumed by the overpayment fee", .loan = {.overpaymentFee = 100'000, .paymentTotal = 3, .allowsOverpayment = true}, .type = PaymentType::overpayment, .amount = 600, .expected = tesSUCCESS},
+            {.name = "one installment plus extra principal", .loan = {.interestRate = 10'000, .overpaymentInterestRate = 1'000, .overpaymentFee = 500, .paymentTotal = 4, .allowsOverpayment = true}, .type = PaymentType::overpayment, .amount = 500, .expected = tesSUCCESS},
+            {.name = "on a loan that forbids it", .type = PaymentType::overpayment, .amount = 600, .expected = tecNO_PERMISSION},
         };
-        testDueDateSweep(fixtures);
-        testLateInterestSweep(fixtures);
-        testServiceFeeSweep(fixtures);
-        testFullPaymentSweep(fixtures);
-        testFullPaymentRemainingSweep(fixtures);
-        testFeeRoutingSweep(fixtures);
+        // clang-format on
+        for (PayTest const& t : kOverpaymentTests)
+            pay(env, iou, t);
+        testLoanPayBoundaries(s);
     }
 };
 

@@ -2,7 +2,6 @@
 #include <test/formal_verification/ffi/protocol/NumericTypeFFI.h>
 #include <test/formal_verification/ffi/vault/VaultCreateFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
-#include <test/formal_verification/tx/vault/CreateSetSweepCases.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -22,14 +21,33 @@
 
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace xrpl::test::formal_verification {
 
+// A VaultCreate's fields: AssetsMaximum is maximum * 10^exponent of the asset, the dates are
+// offsets from the parent close time P. A C++ preflight rejection (tem) is paired with `leanError`,
+// the model error that stands for it.
+struct CreateCase
+{
+    std::optional<std::uint8_t> scale{};
+    std::optional<std::int64_t> maximum{};
+    int exponent{};
+    std::optional<std::int64_t> subscription{};
+    std::optional<std::int64_t> redemption{};
+    std::optional<std::uint32_t> earlyExitFeeRate{};
+    TER expected;
+    std::optional<LeanError> leanError{};
+};
+
 class LeanVaultCreate_test : public LeanSuite
 {
+    // Every create applies on a throwaway view of one shared ledger and expects its verdict on both
+    // sides, with every field of the created vault equal when both succeed.
+
     enum class AssetKind { xrp, iou, mpt };
 
     // A closed-ended schedule, as offsets from the parent close time.
@@ -39,30 +57,47 @@ class LeanVaultCreate_test : public LeanSuite
         std::uint32_t investmentPeriod;
     };
 
-    // The shared ledger's assets: XRP, an IOU and an MPT.
-    struct CreateAssets
+    using TestAssets = std::vector<Asset>;
+
+    struct Setup
     {
-        Asset xrp;
-        Asset iou;
-        Asset mpt;
+        jtx::Account owner;
+        Asset xrpAsset;
+        Asset iouAsset;
+        Asset mptAsset;
+        TestAssets xrp;
+        TestAssets mpt;
+        TestAssets iou;
+        TestAssets integral;
+        TestAssets all;
     };
 
-    // Model of VaultCreate: canCreate is preclaim, create is the vault doApply writes. A preflight
-    // rejection (tem) is matched by create rejecting the fields as not lawful, unless the check is
-    // `outsideModel`: the model then normalizes the field instead of rejecting it. The C++ side
-    // applies on a throwaway copy of the open ledger; returns its verdict.
-    TER
-    checkCreate(
-        jtx::Env& env,
-        jtx::Account const& owner,
-        Asset const& asset,
-        VaultCreateArgs args,
-        bool outsideModel = false)
+    // VaultCreate of `args` on a throwaway copy of the open ledger, and the model on the same
+    // fields. The model has no preflight: fields that cannot form a lawful vault (create fails)
+    // stand for it, so that check comes before canCreate (preclaim).
+    static std::pair<AppliedVaultTx, LeanVaultResult>
+    applyCreate(jtx::Env& env, jtx::Account const& owner, Asset const& asset, VaultCreateArgs args)
     {
         args.numericType = NumericTypeFFI::tagOf(asset);
-        std::uint32_t const now = parentCloseTime(env);
-        LawfulTerResult const canCreate = leanCanVaultCreate(args, now);
         LeanCreateResult const created = leanVaultCreate(args);
+        LawfulTerResult const canCreate = leanCanVaultCreate(args, parentCloseTime(env));
+        LeanVaultResult lean;
+        if (created.leanError)
+        {
+            lean.leanError = created.leanError;
+        }
+        else if (canCreate.leanError)
+        {
+            lean.leanError = canCreate.leanError;
+        }
+        else if (canCreate.ter != tesSUCCESS)
+        {
+            lean.error = canCreate.ter;
+        }
+        else
+        {
+            lean.vault = created.vault;
+        }
 
         jtx::Vault vault{env};
         auto [tx, vaultKeylet] = vault.create(
@@ -83,92 +118,28 @@ class LeanVaultCreate_test : public LeanSuite
             tx[sfAssetsMaximum] = *args.assetsMaximum;
         OpenView view{*env.current()};
         auto const jt = env.jt(tx);
-        TER const cppTer = xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
-
-        std::string const at = argsText(args, now) + " cpp=" + transToken(cppTer) + ": ";
-        BEAST_EXPECTS(!canCreate.leanError.has_value(), at + "lean canCreate error");
-        if (isTemMalformed(cppTer))
-        {
-            if (outsideModel)
-                BEAST_EXPECTS(
-                    !created.leanError.has_value(), at + "the model does not normalize the field");
-            else
-                BEAST_EXPECTS(
-                    created.leanError == LeanError::notLawful,
-                    at +
-                        "preflight rejects the fields but the model creates the vault (canCreate " +
-                        transToken(canCreate.ter) + ")");
-            return cppTer;
-        }
-        BEAST_EXPECTS(canCreate.ter == cppTer, at + "lean=" + transToken(canCreate.ter));
-        if (cppTer != tesSUCCESS)
-            return cppTer;
-
-        BEAST_EXPECTS(!created.leanError.has_value(), at + "lean create error");
-        Vault const cpp = readVaultState(view, vaultKeylet, asset);
-        Vault const& lean = created.vault;
-        BEAST_EXPECTS(
-            lean.scale == cpp.scale,
-            at + "scale lean=" + std::to_string(lean.scale) + " cpp=" + std::to_string(cpp.scale));
-        BEAST_EXPECTS(
-            lean.assetsMaximum == cpp.assetsMaximum,
-            at + "assetsMaximum lean=" +
-                (lean.assetsMaximum ? to_string(*lean.assetsMaximum) : "none") +
-                " cpp=" + (cpp.assetsMaximum ? to_string(*cpp.assetsMaximum) : "none"));
-        BEAST_EXPECTS(lean.subscriptionDate == cpp.subscriptionDate, at + "subscription date");
-        BEAST_EXPECTS(lean.redemptionDate == cpp.redemptionDate, at + "redemption date");
-        BEAST_EXPECTS(lean.earlyExitFeeRate == cpp.earlyExitFeeRate, at + "early-exit fee rate");
-        BEAST_EXPECT(lean.ownerCanBlockDeposit == cpp.ownerCanBlockDeposit);
-        BEAST_EXPECT(lean.depositBlocked == cpp.depositBlocked);
-        BEAST_EXPECT(lean.assetsTotal == cpp.assetsTotal && cpp.assetsTotal == Number{0});
-        BEAST_EXPECT(lean.sharesTotal == cpp.sharesTotal && cpp.sharesTotal == Number{0});
-        return cppTer;
+        TER const ter = xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
+        AppliedVaultTx const cpp{
+            .pre = {},
+            .ter = ter,
+            .post = ter == tesSUCCESS ? readVaultState(view, vaultKeylet, asset) : Vault{},
+        };
+        return {cpp, lean};
     }
 
     static std::string
-    argsText(VaultCreateArgs const& args, std::uint32_t now)
+    argsText(Asset const& asset, VaultCreateArgs const& args, std::uint32_t now)
     {
-        std::string t = "scale " + (args.scale ? std::to_string(*args.scale) : "default") +
-            " maximum " + (args.assetsMaximum ? to_string(*args.assetsMaximum) : "none");
+        std::string t = assetName(asset) + " scale " +
+            (args.scale ? std::to_string(*args.scale) : "default") + " maximum " +
+            (args.assetsMaximum ? to_string(*args.assetsMaximum) : "none");
         if (args.subscriptionDate)
             t += " subscription P" + std::to_string(std::int64_t{*args.subscriptionDate} - now) +
                 " redemption P" + std::to_string(std::int64_t{*args.redemptionDate} - now);
         if (args.earlyExitFeeRate)
             t += " fee " + std::to_string(*args.earlyExitFeeRate);
-        return t;
+        return t + ": ";
     }
-
-    void
-    runVaultCreate(
-        jtx::Env& env,
-        jtx::Account const& owner,
-        CreateAssets const& assets,
-        std::string const& label,
-        AssetKind kind,
-        VaultCreateArgs args,
-        std::optional<ScheduleOffsets> schedule,
-        TER expected,
-        bool outsideModel = false)
-    {
-        testcase(label);
-        Asset const asset = kind == AssetKind::iou ? assets.iou
-            : kind == AssetKind::mpt               ? assets.mpt
-                                                   : assets.xrp;
-        if (schedule)
-        {
-            args.subscriptionDate =
-                static_cast<std::uint32_t>(parentCloseTime(env) + schedule->subscription);
-            args.redemptionDate = *args.subscriptionDate + schedule->investmentPeriod;
-        }
-        TER const cppTer = checkCreate(env, owner, asset, args, outsideModel);
-        BEAST_EXPECTS(
-            cppTer == expected,
-            std::string("cpp=") + transToken(cppTer) + " expected " + transToken(expected));
-    }
-
-    // ---- Sweeps --------------------------------------------------------------------------------
-
-    using SweepAssets = std::vector<Asset>;
 
     static std::string
     assetName(Asset const& asset)
@@ -176,150 +147,66 @@ class LeanVaultCreate_test : public LeanSuite
         return asset.native() ? "XRP" : asset.holds<MPTIssue>() ? "MPT" : "IOU";
     }
 
-    // A schedule closed-ended vault with fee field `fee`, subscribing 600 s from now.
-    static VaultCreateArgs
-    scheduled(jtx::Env& env, std::optional<std::uint32_t> fee = std::nullopt)
-    {
-        std::uint32_t const sub = parentCloseTime(env) + 600;
-        return {
-            .subscriptionDate = sub, .redemptionDate = sub + 1'000'000, .earlyExitFeeRate = fee};
-    }
-
-    // A subscription date at or before the parent close time P is tecEXPIRED, and an investment
-    // period outside [kMinInvestmentPeriod, kMaxInvestmentPeriod) is malformed. Rows sit at P with
-    // the gap on each bound.
+    // A C++ tem is paired with `leanError`, the model error that stands for it.
     void
-    testScheduleSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
+    runVaultCreate(
+        jtx::Env& env,
+        Setup const& s,
+        std::string const& label,
+        AssetKind kind,
+        VaultCreateArgs args,
+        std::optional<ScheduleOffsets> schedule,
+        TER expected,
+        std::optional<LeanError> leanError = std::nullopt)
     {
-        for (Asset const& asset : assets)
+        testcase(label);
+        Asset const asset = kind == AssetKind::iou ? s.iouAsset
+            : kind == AssetKind::mpt               ? s.mptAsset
+                                                   : s.xrpAsset;
+        if (schedule)
         {
-            beginCase(("create " + assetName(asset) + " schedule-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kScheduleCases)
-            {
-                std::set<TER> seen;
-                for (ScheduleCusp const& c : cases)
-                {
-                    std::uint32_t const sub = static_cast<std::uint32_t>(now + c.subscription);
-                    VaultCreateArgs const args{
-                        .subscriptionDate = sub,
-                        .redemptionDate = static_cast<std::uint32_t>(sub + c.gap)};
-                    seen.insert(checkCreate(env, owner, asset, args));
-                }
-                expectCrossed(cusp, seen, {tecEXPIRED});
-            }
+            args.subscriptionDate =
+                static_cast<std::uint32_t>(parentCloseTime(env) + schedule->subscription);
+            args.redemptionDate = *args.subscriptionDate + schedule->investmentPeriod;
+        }
+        auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
+        std::string const at = argsText(asset, args, parentCloseTime(env));
+        if (leanError)
+        {
+            expectSame(*this, at, cpp, lean, expected, leanError);
+        }
+        else
+        {
+            expectSame(*this, at, cpp, lean, expected);
+        }
+        if (cpp.ter == tesSUCCESS)
+        {
+            BEAST_EXPECTS(
+                cpp.post.assetsTotal == Number{0} && cpp.post.sharesTotal == Number{0},
+                at + "the created vault is not empty");
         }
     }
 
-    // An early-exit fee rate above kMaxEarlyExitFeeRate (100%) is malformed.
+    // A scale on an integral asset is a preflight error; the model forces the scale to 0.
     void
-    testEarlyExitFeeSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
+    testIntegralScale(jtx::Env& env, Setup const& s, Asset const& asset)
     {
-        for (Asset const& asset : assets)
-        {
-            beginCase(("create " + assetName(asset) + " early-exit fee-Sweep").c_str());
-            for (auto const& [cusp, cases] : kEarlyExitFeeCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const rate : cases)
-                {
-                    seen.insert(checkCreate(
-                        env, owner, asset, scheduled(env, static_cast<std::uint32_t>(rate))));
-                }
-                expectCrossed(cusp, seen, {temMALFORMED});
-            }
-        }
+        testcase(assetName(asset) + " vault with a scale");
+        VaultCreateArgs const args{.scale = 3};
+        auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
+        expectSame(
+            *this,
+            argsText(asset, args, parentCloseTime(env)),
+            cpp,
+            lean,
+            temMALFORMED,
+            std::nullopt);
     }
 
-    // An IOU vault scale above 10 is malformed.
-    void
-    testScaleSweep(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
-    {
-        beginCase("create IOU scale-Sweep");
-        for (auto const& [cusp, cases] : kScaleCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const scale : cases)
-            {
-                seen.insert(
-                    checkCreate(env, owner, iou, {.scale = static_cast<std::uint8_t>(scale)}));
-            }
-            expectCrossed(cusp, seen, {temMALFORMED});
-        }
-    }
-
-    // A negative AssetsMaximum is malformed; 0 means no cap. Values in grid steps of the default
-    // scale.
-    void
-    testMaximumSignSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
-    {
-        for (Asset const& asset : assets)
-        {
-            beginCase(("create " + assetName(asset) + " maximum sign-Sweep").c_str());
-            int const exponent = asset.holds<Issue>() && !asset.native() ? -6 : 0;
-            for (auto const& [cusp, cases] : kMaximumSignCases)
-            {
-                std::set<TER> seen;
-                for (std::int64_t const steps : cases)
-                {
-                    seen.insert(
-                        checkCreate(env, owner, asset, {.assetsMaximum = Number{steps, exponent}}));
-                }
-                expectCrossed(cusp, seen, {temMALFORMED});
-            }
-        }
-    }
-
-    // An IOU AssetsMaximum off the vault grid 10^-scale, or with more than 16 digits, is
-    // tecPRECISION_LOSS. Rows are on the grid; moving the mantissa leaves it.
-    void
-    testMaximumGridSweep(jtx::Env& env, jtx::Account const& owner, Asset const& iou)
-    {
-        for (std::uint8_t const scale : {0, 6, 10})
-        {
-            beginCase(
-                ("create IOU scale " + std::to_string(scale) + " maximum grid-Sweep").c_str());
-            for (auto const& [cusp, cases] : kMaximumGridCases)
-            {
-                std::set<TER> seen;
-                for (MaximumGridCusp const& c : cases)
-                {
-                    Number const maximum{c.mantissa, static_cast<int>(c.exponent) - scale};
-                    seen.insert(
-                        checkCreate(env, owner, iou, {.scale = scale, .assetsMaximum = maximum}));
-                }
-                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-            }
-        }
-    }
-
-    // An AssetsMaximum the asset cannot represent (XRP above 1e17 drops, MPT above 2^63 - 1, IOU
-    // past the 16-digit mantissa at exponent 80) is temMALFORMED in C++ preflight.
-    void
-    testMaximumRangeSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
-    {
-        for (Asset const& asset : assets)
-        {
-            beginCase(("create " + assetName(asset) + " maximum range-Sweep").c_str());
-            for (auto const& [cusp, cases] : maximumRangeCases(asset))
-            {
-                std::set<TER> seen;
-                for (MaximumRangeCusp const& c : cases)
-                {
-                    Number const maximum{c.mantissa, static_cast<int>(c.exponent)};
-                    seen.insert(checkCreate(env, owner, asset, {.assetsMaximum = maximum}));
-                }
-                expectCrossed(cusp, seen, {temMALFORMED});
-            }
-        }
-    }
-
-    void
-    runTests() override
+    static Setup
+    setup(jtx::Env& env)
     {
         using namespace jtx;
-        // One ledger; every create (old tests and sweeps) applies on a throwaway view of it.
-        Env env(*this);
         Account const owner{"owner"};
         Account const issuer{"issuer"};
         env.fund(XRP(1'000'000), owner, issuer);
@@ -327,204 +214,413 @@ class LeanVaultCreate_test : public LeanSuite
         MPTTester mptt{env, issuer, kMptInitNoFund};
         mptt.create({.flags = tfMPTCanTransfer});
         env.close();
-        CreateAssets const assets{
-            .xrp = xrpIssue(), .iou = issuer["USD"].asset(), .mpt = mptt.issuanceID()};
+        Asset const xrp = xrpIssue();
+        Asset const iou = issuer["USD"].asset();
+        Asset const mpt = mptt.issuanceID();
+        return {
+            .owner = owner,
+            .xrpAsset = xrp,
+            .iouAsset = iou,
+            .mptAsset = mpt,
+            .xrp = {xrp},
+            .mpt = {mpt},
+            .iou = {iou},
+            .integral = {xrp, mpt},
+            .all = {xrp, iou, mpt},
+        };
+    }
 
-        // Open-ended vaults: the scale defaults to 6 for an IOU and is 0 for XRP and MPT.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU vault, default scale",
-            AssetKind::iou,
-            {},
-            std::nullopt,
-            tesSUCCESS);
-        runVaultCreate(
-            env, owner, assets, "MPT vault", AssetKind::mpt, {}, std::nullopt, tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "XRP vault with a maximum",
-            AssetKind::xrp,
-            {.assetsMaximum = Number{1'000}},
-            std::nullopt,
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU vault, owner can block deposits",
-            AssetKind::iou,
-            {.ownerCanBlockDeposit = true},
-            std::nullopt,
-            tesSUCCESS);
+    // Each case creates a vault from its fields and expects its verdict on both sides.
+    // - Scale: an IOU vault scale above 10 is temMALFORMED.
+    // - Maximum sign: a negative AssetsMaximum is temMALFORMED; 0 means no cap. The IOU rows are
+    //   in steps of the default scale 6.
+    // - Maximum grid: an IOU AssetsMaximum off the vault grid 10^-scale, or with more than 16
+    //   digits, is tecPRECISION_LOSS. Each cusp is on the grid; moving the mantissa leaves it,
+    //   except where the move only drops a digit.
+    // - Maximum range: an AssetsMaximum the asset cannot represent (XRP above 1e17 drops, MPT above
+    //   2^63 - 1, IOU past 9999999999999999e80) is temMALFORMED. Each cusp is the largest
+    //   representable value.
+    // Closed-ended:
+    // - Schedule: a subscription date at or before P is tecEXPIRED, and an investment period
+    //   (redemption - subscription) outside [180 s, 30 years) is temMALFORMED. Each cusp puts the
+    //   subscription date on P with the period on a bound or in between.
+    // - Early-exit fee: a rate above 100% (100'000 tenth-bips) is temMALFORMED.
+    // clang-format off
+    static constexpr CreateCase kScale[] = {
+        // scale 10
+        {.scale = 8, .expected = tesSUCCESS},
+        {.scale = 9, .expected = tesSUCCESS},
+        {.scale = 10, .expected = tesSUCCESS},
+        {.scale = 11, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.scale = 12, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+    };
+    static constexpr CreateCase kMaximumSign[] = {
+        // maximum 0 (no cap)
+        {.maximum = -2, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = -1, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = 0, .expected = tesSUCCESS},
+        {.maximum = 1, .expected = tesSUCCESS},
+        {.maximum = 2, .expected = tesSUCCESS},
+    };
+    static constexpr CreateCase kMaximumSignIou[] = {
+        // maximum 0 (no cap)
+        {.maximum = -2, .exponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = -1, .exponent = -6, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.maximum = 0, .exponent = -6, .expected = tesSUCCESS},
+        {.maximum = 1, .exponent = -6, .expected = tesSUCCESS},
+        {.maximum = 2, .exponent = -6, .expected = tesSUCCESS},
+    };
+    static constexpr CreateCase kMaximumGrid[] = {
+        // scale 0, 1'000'000'000'000'000e-15 grid steps
+        {.scale = 0, .maximum = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 1'000'000'000'000'001, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'002, .exponent = -15, .expected = tecPRECISION_LOSS},
+        // scale 0, 1'000'000'000'000'000e-6 grid steps
+        {.scale = 0, .maximum = 999'999'999'999'998, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 999'999'999'999'999, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 1'000'000'000'000'001, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 1'000'000'000'000'002, .exponent = -6, .expected = tecPRECISION_LOSS},
+        // scale 0, 9'999'999'999'999'999e0 grid steps
+        {.scale = 0, .maximum = 9'999'999'999'999'997, .exponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'998, .exponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'999, .exponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'000, .exponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'001, .exponent = 0, .expected = tecPRECISION_LOSS},
+        // scale 0, 10'000'000'000'000'010e0 grid steps
+        {.scale = 0, .maximum = 10'000'000'000'000'008, .exponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'009, .exponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'010, .exponent = 0, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'011, .exponent = 0, .expected = tecPRECISION_LOSS},
+        {.scale = 0, .maximum = 10'000'000'000'000'012, .exponent = 0, .expected = tecPRECISION_LOSS},
+        // scale 0, 9'999'999'999'999'999e79 grid steps
+        {.scale = 0, .maximum = 9'999'999'999'999'997, .exponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'998, .exponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 9'999'999'999'999'999, .exponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'000, .exponent = 79, .expected = tesSUCCESS},
+        {.scale = 0, .maximum = 10'000'000'000'000'001, .exponent = 79, .expected = tecPRECISION_LOSS},
+        // scale 6, 1'000'000'000'000'000e-15 grid steps
+        {.scale = 6, .maximum = 999'999'999'999'998, .exponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'999, .exponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'000, .exponent = -21, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 1'000'000'000'000'001, .exponent = -21, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'002, .exponent = -21, .expected = tecPRECISION_LOSS},
+        // scale 6, 1'000'000'000'000'000e-6 grid steps
+        {.scale = 6, .maximum = 999'999'999'999'998, .exponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 999'999'999'999'999, .exponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'000, .exponent = -12, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 1'000'000'000'000'001, .exponent = -12, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 1'000'000'000'000'002, .exponent = -12, .expected = tecPRECISION_LOSS},
+        // scale 6, 9'999'999'999'999'999e0 grid steps
+        {.scale = 6, .maximum = 9'999'999'999'999'997, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'998, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'999, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'001, .exponent = -6, .expected = tecPRECISION_LOSS},
+        // scale 6, 10'000'000'000'000'010e0 grid steps
+        {.scale = 6, .maximum = 10'000'000'000'000'008, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'009, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'010, .exponent = -6, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'011, .exponent = -6, .expected = tecPRECISION_LOSS},
+        {.scale = 6, .maximum = 10'000'000'000'000'012, .exponent = -6, .expected = tecPRECISION_LOSS},
+        // scale 6, 9'999'999'999'999'999e79 grid steps
+        {.scale = 6, .maximum = 9'999'999'999'999'997, .exponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'998, .exponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 9'999'999'999'999'999, .exponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'000, .exponent = 73, .expected = tesSUCCESS},
+        {.scale = 6, .maximum = 10'000'000'000'000'001, .exponent = 73, .expected = tecPRECISION_LOSS},
+        // scale 10, 1'000'000'000'000'000e-15 grid steps
+        {.scale = 10, .maximum = 999'999'999'999'998, .exponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'999, .exponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'000, .exponent = -25, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 1'000'000'000'000'001, .exponent = -25, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'002, .exponent = -25, .expected = tecPRECISION_LOSS},
+        // scale 10, 1'000'000'000'000'000e-6 grid steps
+        {.scale = 10, .maximum = 999'999'999'999'998, .exponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 999'999'999'999'999, .exponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'000, .exponent = -16, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 1'000'000'000'000'001, .exponent = -16, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 1'000'000'000'000'002, .exponent = -16, .expected = tecPRECISION_LOSS},
+        // scale 10, 9'999'999'999'999'999e0 grid steps
+        {.scale = 10, .maximum = 9'999'999'999'999'997, .exponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'998, .exponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'999, .exponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'000, .exponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'001, .exponent = -10, .expected = tecPRECISION_LOSS},
+        // scale 10, 10'000'000'000'000'010e0 grid steps
+        {.scale = 10, .maximum = 10'000'000'000'000'008, .exponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'009, .exponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'010, .exponent = -10, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'011, .exponent = -10, .expected = tecPRECISION_LOSS},
+        {.scale = 10, .maximum = 10'000'000'000'000'012, .exponent = -10, .expected = tecPRECISION_LOSS},
+        // scale 10, 9'999'999'999'999'999e79 grid steps
+        {.scale = 10, .maximum = 9'999'999'999'999'997, .exponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'998, .exponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 9'999'999'999'999'999, .exponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'000, .exponent = 69, .expected = tesSUCCESS},
+        {.scale = 10, .maximum = 10'000'000'000'000'001, .exponent = 69, .expected = tecPRECISION_LOSS},
+    };
+    static constexpr CreateCase kMaximumRangeXrp[] = {
+        // 100'000'000'000'000'000e0
+        {.maximum = 99'999'999'999'999'998, .expected = tesSUCCESS},
+        {.maximum = 99'999'999'999'999'999, .expected = tesSUCCESS},
+        {.maximum = 100'000'000'000'000'000, .expected = tesSUCCESS},
+        // Accepted gap, out of the run: C++ temMALFORMED (preflight range check), model canCreate tecPRECISION_LOSS.
+        // {.maximum = 100'000'000'000'000'001, .expected = temMALFORMED},
+        // {.maximum = 100'000'000'000'000'002, .expected = temMALFORMED},
+    };
+    static constexpr CreateCase kMaximumRangeMpt[] = {
+        // 922'337'203'685'477'580e1
+        {.maximum = 922'337'203'685'477'578, .exponent = 1, .expected = tesSUCCESS},
+        {.maximum = 922'337'203'685'477'579, .exponent = 1, .expected = tesSUCCESS},
+        {.maximum = 922'337'203'685'477'580, .exponent = 1, .expected = tesSUCCESS},
+        // Accepted gap, out of the run: C++ temMALFORMED (preflight range check), model canCreate tecPRECISION_LOSS.
+        // {.maximum = 922'337'203'685'477'581, .exponent = 1, .expected = temMALFORMED},
+        // {.maximum = 922'337'203'685'477'582, .exponent = 1, .expected = temMALFORMED},
+    };
+    static constexpr CreateCase kMaximumRangeIou[] = {
+        // 9'999'999'999'999'999e80
+        {.maximum = 9'999'999'999'999'997, .exponent = 80, .expected = tesSUCCESS},
+        {.maximum = 9'999'999'999'999'998, .exponent = 80, .expected = tesSUCCESS},
+        {.maximum = 9'999'999'999'999'999, .exponent = 80, .expected = tesSUCCESS},
+        // Accepted gap, out of the run: C++ temMALFORMED (preflight range check), model canCreate tecPRECISION_LOSS.
+        // {.maximum = 10'000'000'000'000'000, .exponent = 80, .expected = temMALFORMED},
+        // {.maximum = 10'000'000'000'000'001, .exponent = 80, .expected = temMALFORMED},
+    };
+    static constexpr CreateCase kSchedule[] = {
+        // subscription P, gap 180
+        {.subscription = -2, .redemption = 176, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -2, .redemption = 177, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -2, .redemption = 178, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 179, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 180, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 177, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -1, .redemption = 178, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -1, .redemption = 179, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 180, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 181, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 178, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 0, .redemption = 179, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 0, .redemption = 180, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 181, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 182, .expected = tecEXPIRED},
+        {.subscription = 1, .redemption = 179, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 1, .redemption = 180, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 1, .redemption = 181, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 182, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 183, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 180, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 2, .redemption = 181, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 2, .redemption = 182, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 183, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 184, .expected = tesSUCCESS},
+        // subscription P, gap 1'000'000
+        {.subscription = -2, .redemption = 999'996, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 999'997, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 999'998, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 999'999, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 1'000'000, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 999'997, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 999'998, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 999'999, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 1'000'000, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 1'000'001, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 999'998, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 999'999, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 1'000'000, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 1'000'001, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 1'000'002, .expected = tecEXPIRED},
+        {.subscription = 1, .redemption = 999'999, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 1'000'000, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 1'000'001, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 1'000'002, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 1'000'003, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 1'000'000, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 1'000'001, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 1'000'002, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 1'000'003, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 1'000'004, .expected = tesSUCCESS},
+        // subscription P, gap 946'708'559
+        {.subscription = -2, .redemption = 946'708'555, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 946'708'556, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 946'708'557, .expected = tecEXPIRED},
+        {.subscription = -2, .redemption = 946'708'558, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -2, .redemption = 946'708'559, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -1, .redemption = 946'708'556, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 946'708'557, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 946'708'558, .expected = tecEXPIRED},
+        {.subscription = -1, .redemption = 946'708'559, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = -1, .redemption = 946'708'560, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 0, .redemption = 946'708'557, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 946'708'558, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 946'708'559, .expected = tecEXPIRED},
+        {.subscription = 0, .redemption = 946'708'560, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 0, .redemption = 946'708'561, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 1, .redemption = 946'708'558, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 946'708'559, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 946'708'560, .expected = tesSUCCESS},
+        {.subscription = 1, .redemption = 946'708'561, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 1, .redemption = 946'708'562, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 2, .redemption = 946'708'559, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 946'708'560, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 946'708'561, .expected = tesSUCCESS},
+        {.subscription = 2, .redemption = 946'708'562, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 2, .redemption = 946'708'563, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+    };
+    static constexpr CreateCase kEarlyExitFee[] = {
+        // rate 100'000 (100%)
+        {.subscription = 600, .redemption = 1'000'600, .earlyExitFeeRate = 99'998, .expected = tesSUCCESS},
+        {.subscription = 600, .redemption = 1'000'600, .earlyExitFeeRate = 99'999, .expected = tesSUCCESS},
+        {.subscription = 600, .redemption = 1'000'600, .earlyExitFeeRate = 100'000, .expected = tesSUCCESS},
+        {.subscription = 600, .redemption = 1'000'600, .earlyExitFeeRate = 100'001, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        {.subscription = 600, .redemption = 1'000'600, .earlyExitFeeRate = 100'002, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+    };
+    // clang-format on
 
-        // AssetsMaximum must lie on the 10^-scale grid.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU maximum on the scale-2 grid",
-            AssetKind::iou,
-            {.scale = 2, .assetsMaximum = Number{100'001, -2}},
-            std::nullopt,
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU maximum off the scale-2 grid",
-            AssetKind::iou,
-            {.scale = 2, .assetsMaximum = Number{1'001, -3}},
-            std::nullopt,
-            tecPRECISION_LOSS);
-        // FV_M2_19 (regression): a 17-digit AssetsMaximum used to be rounded to the STAmount grid
-        // on create, storing a different cap than submitted. It is now rejected upfront.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU maximum over 16 digits",
-            AssetKind::iou,
-            {.assetsMaximum = Number{12'345'678'901'234'567LL, -1}},
-            std::nullopt,
-            tecPRECISION_LOSS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU scale above 10",
-            AssetKind::iou,
-            {.scale = 11},
-            std::nullopt,
-            temMALFORMED);
-        // A scale on an integral asset is a preflight error; the model forces the scale to 0.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "XRP vault with a scale",
-            AssetKind::xrp,
-            {.scale = 3},
-            std::nullopt,
-            temMALFORMED,
-            true);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "MPT vault with a scale",
-            AssetKind::mpt,
-            {.scale = 3},
-            std::nullopt,
-            temMALFORMED,
-            true);
-        // A zero maximum means no cap; a negative one is rejected.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU vault with a zero maximum",
-            AssetKind::iou,
-            {.assetsMaximum = Number{0}},
-            std::nullopt,
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU vault with a negative maximum",
-            AssetKind::iou,
-            {.assetsMaximum = Number{-1}},
-            std::nullopt,
-            temMALFORMED);
+    // Runs the open-ended lists or, when `closed`, the closed-ended ones: a closed-ended vault is
+    // created from its own fields, not staged.
+    void
+    runCreateBoundaries(jtx::Env& env, Setup const& s, bool closed)
+    {
+        std::uint32_t const p = parentCloseTime(env);
+        auto const run = [&](std::string const& name,
+                             TestAssets const& assets,
+                             std::span<CreateCase const> cases) {
+            for (Asset const& asset : assets)
+            {
+                beginCase(
+                    ("create " + assetName(asset) + " " + name + (closed ? ", closed-ended" : ""))
+                        .c_str());
+                for (CreateCase const& c : cases)
+                {
+                    auto const date = [&](std::optional<std::int64_t> offset) {
+                        return offset ? std::optional{static_cast<std::uint32_t>(p + *offset)}
+                                      : std::nullopt;
+                    };
+                    VaultCreateArgs const args{
+                        .scale = c.scale,
+                        .assetsMaximum = c.maximum ? std::optional{Number{*c.maximum, c.exponent}}
+                                                   : std::nullopt,
+                        .subscriptionDate = date(c.subscription),
+                        .redemptionDate = date(c.redemption),
+                        .earlyExitFeeRate = c.earlyExitFeeRate,
+                    };
+                    auto const [cpp, lean] = applyCreate(env, s.owner, asset, args);
+                    std::string const at = argsText(asset, args, p);
+                    if (c.leanError)
+                    {
+                        expectSame(*this, at, cpp, lean, c.expected, c.leanError);
+                    }
+                    else
+                    {
+                        expectSame(*this, at, cpp, lean, c.expected);
+                    }
+                }
+            }
+        };
 
-        // Closed-ended vaults.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended IOU vault with an early-exit fee",
-            AssetKind::iou,
-            {.earlyExitFeeRate = 5'000},
-            ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000},
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended vault subscribing one second from now",
-            AssetKind::iou,
-            {},
-            ScheduleOffsets{.subscription = 1, .investmentPeriod = 180},
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended vault whose subscription date is now",
-            AssetKind::iou,
-            {},
-            ScheduleOffsets{.subscription = 0, .investmentPeriod = 180},
-            tecEXPIRED);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended investment period below 180 s",
-            AssetKind::iou,
-            {},
-            ScheduleOffsets{.subscription = 60, .investmentPeriod = 179},
-            temMALFORMED);
-        // The investment period must stay below 30 years (946'708'560 s).
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended investment period just below 30 years",
-            AssetKind::iou,
-            {},
-            ScheduleOffsets{.subscription = 60, .investmentPeriod = 946'708'559},
-            tesSUCCESS);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended investment period of 30 years",
-            AssetKind::iou,
-            {},
-            ScheduleOffsets{.subscription = 60, .investmentPeriod = 946'708'560},
-            temMALFORMED);
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "closed-ended early-exit fee above 100%",
-            AssetKind::iou,
-            {.earlyExitFeeRate = 100'001},
-            ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000},
-            temMALFORMED);
-        // Accepted divergence: an early-exit fee, even zero, on an open-ended vault. C++ preflight
-        // returns temMALFORMED; the model copies doApply, which drops the rate, and creates the
-        // vault.
+        if (!closed)
+        {
+            run("scale", s.iou, kScale);
+            run("maximum sign", s.integral, kMaximumSign);
+            run("maximum sign", s.iou, kMaximumSignIou);
+            run("maximum grid", s.iou, kMaximumGrid);
+            run("maximum range", s.xrp, kMaximumRangeXrp);
+            run("maximum range", s.mpt, kMaximumRangeMpt);
+            run("maximum range", s.iou, kMaximumRangeIou);
+            return;
+        }
+        run("schedule", s.all, kSchedule);
+        run("early-exit fee", s.all, kEarlyExitFee);
+    }
+
+    void
+    testCreateBoundaries(jtx::Env& env, Setup const& s)
+    {
+        runCreateBoundaries(env, s, false);
+    }
+
+    void
+    testClosedEndedCreateBoundaries(jtx::Env& env, Setup const& s)
+    {
+        runCreateBoundaries(env, s, true);
+    }
+
+    void
+    runTests() override
+    {
+        jtx::Env env{*this, vaultTestAmendments()};
+        Setup const s = setup(env);
+
+        struct CreateTest
+        {
+            char const* name;
+            AssetKind asset;
+            VaultCreateArgs args{};
+            std::optional<ScheduleOffsets> schedule{};
+            TER expected;
+            std::optional<LeanError> leanError{};
+        };
+        auto const create = [&](CreateTest const& t) {
+            runVaultCreate(env, s, t.name, t.asset, t.args, t.schedule, t.expected, t.leanError);
+        };
+
         // clang-format off
-        // runVaultCreate(env, owner, assets, "open-ended vault with an early-exit fee", AssetKind::iou, {.earlyExitFeeRate = 5'000}, std::nullopt, temMALFORMED);
-        // runVaultCreate(env, owner, assets, "open-ended vault with a zero early-exit fee", AssetKind::iou, {.earlyExitFeeRate = 0}, std::nullopt, temMALFORMED);
+        static CreateTest const kScaleAndMaximumTests[] = {
+            // Open-ended vaults: the scale defaults to 6 for an IOU and is 0 for XRP and MPT.
+            {.name = "IOU vault, default scale", .asset = AssetKind::iou, .expected = tesSUCCESS},
+            {.name = "MPT vault", .asset = AssetKind::mpt, .expected = tesSUCCESS},
+            {.name = "XRP vault with a maximum", .asset = AssetKind::xrp, .args = {.assetsMaximum = Number{1'000}}, .expected = tesSUCCESS},
+            {.name = "IOU vault, owner can block deposits", .asset = AssetKind::iou, .args = {.ownerCanBlockDeposit = true}, .expected = tesSUCCESS},
+
+            // AssetsMaximum must lie on the 10^-scale grid.
+            {.name = "IOU maximum on the scale-2 grid", .asset = AssetKind::iou, .args = {.scale = 2, .assetsMaximum = Number{100'001, -2}}, .expected = tesSUCCESS},
+            {.name = "IOU maximum off the scale-2 grid", .asset = AssetKind::iou, .args = {.scale = 2, .assetsMaximum = Number{1'001, -3}}, .expected = tecPRECISION_LOSS},
+            // FV_M2_19 (regression): a 17-digit AssetsMaximum used to be rounded to the STAmount grid
+            // on create, storing a different cap than submitted. It is now rejected upfront.
+            {.name = "IOU maximum over 16 digits", .asset = AssetKind::iou, .args = {.assetsMaximum = Number{12'345'678'901'234'567LL, -1}}, .expected = tecPRECISION_LOSS},
+            {.name = "IOU scale above 10", .asset = AssetKind::iou, .args = {.scale = 11}, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        };
         // clang-format on
+        for (CreateTest const& t : kScaleAndMaximumTests)
+            create(t);
+        testIntegralScale(env, s, s.xrpAsset);
+        testIntegralScale(env, s, s.mptAsset);
 
-        SweepAssets const all{assets.xrp, assets.iou, assets.mpt};
-        testScheduleSweep(env, owner, all);
-        testEarlyExitFeeSweep(env, owner, all);
-        testScaleSweep(env, owner, assets.iou);
-        testMaximumSignSweep(env, owner, all);
-        testMaximumGridSweep(env, owner, assets.iou);
-
-        // Acknowledged gap, disabled.
         // clang-format off
-        // testMaximumRangeSweep(env, owner, all);  // maximum past the asset's range (XRP 1e17, MPT 2^63-1, IOU 9999999999999999e80): C++ temMALFORMED, model canCreate tecPRECISION_LOSS but create builds a lawful vault
+        static CreateTest const kZeroAndNegativeMaximumTests[] = {
+            // A zero maximum means no cap; a negative one is rejected.
+            {.name = "IOU vault with a zero maximum", .asset = AssetKind::iou, .args = {.assetsMaximum = Number{0}}, .expected = tesSUCCESS},
+            {.name = "IOU vault with a negative maximum", .asset = AssetKind::iou, .args = {.assetsMaximum = Number{-1}}, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+        };
         // clang-format on
+        for (CreateTest const& t : kZeroAndNegativeMaximumTests)
+            create(t);
+        testCreateBoundaries(env, s);
+
+        // clang-format off
+        static CreateTest const kClosedEndedTests[] = {
+            // Closed-ended vaults.
+            {.name = "closed-ended IOU vault with an early-exit fee", .asset = AssetKind::iou, .args = {.earlyExitFeeRate = 5'000}, .schedule = ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000}, .expected = tesSUCCESS},
+            {.name = "closed-ended vault subscribing one second from now", .asset = AssetKind::iou, .schedule = ScheduleOffsets{.subscription = 1, .investmentPeriod = 180}, .expected = tesSUCCESS},
+            {.name = "closed-ended vault whose subscription date is now", .asset = AssetKind::iou, .schedule = ScheduleOffsets{.subscription = 0, .investmentPeriod = 180}, .expected = tecEXPIRED},
+            {.name = "closed-ended investment period below 180 s", .asset = AssetKind::iou, .schedule = ScheduleOffsets{.subscription = 60, .investmentPeriod = 179}, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+            // The investment period must stay below 30 years (946'708'560 s).
+            {.name = "closed-ended investment period just below 30 years", .asset = AssetKind::iou, .schedule = ScheduleOffsets{.subscription = 60, .investmentPeriod = 946'708'559}, .expected = tesSUCCESS},
+            {.name = "closed-ended investment period of 30 years", .asset = AssetKind::iou, .schedule = ScheduleOffsets{.subscription = 60, .investmentPeriod = 946'708'560}, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+            {.name = "closed-ended early-exit fee above 100%", .asset = AssetKind::iou, .args = {.earlyExitFeeRate = 100'001}, .schedule = ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000}, .expected = temMALFORMED, .leanError = LeanError::notLawful},
+            // Accepted divergence: an early-exit fee, even zero, on an open-ended vault. C++ preflight
+            // returns temMALFORMED; the model copies doApply, which drops the rate, and creates the
+            // vault.
+            // {.name = "open-ended vault with an early-exit fee", .asset = AssetKind::iou, .args = {.earlyExitFeeRate = 5'000}, .expected = temMALFORMED},
+            // {.name = "open-ended vault with a zero early-exit fee", .asset = AssetKind::iou, .args = {.earlyExitFeeRate = 0}, .expected = temMALFORMED},
+        };
+        // clang-format on
+        for (CreateTest const& t : kClosedEndedTests)
+            create(t);
+        testClosedEndedCreateBoundaries(env, s);
     }
 };
 

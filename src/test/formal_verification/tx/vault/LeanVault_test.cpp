@@ -174,6 +174,24 @@ class LeanVault_test : public LeanSuite
             s.assetsDeployed = Number{12'345'678'901'234'567LL};
             runLawful(s, false, "assetsDeployed not representable");
         }
+        // On the grid (a multiple of 10^0) but 17 digits.
+        {
+            auto s = baseline();
+            s.assetsAvailable = Number{12'345'678'901'234'567LL};
+            runLawful(s, false, "assetsAvailable not representable");
+        }
+        // Representable but below the scale-6 grid.
+        {
+            auto s = baseline();
+            s.assetsAvailable = Number{5, -7};
+            runLawful(s, false, "assetsAvailable off the vault grid");
+        }
+        // Exactly one grid step: lawful, so the row above fails on the grid clause alone.
+        {
+            auto s = baseline();
+            s.assetsAvailable = Number{5, -6};
+            runLawful(s, true, "assetsAvailable on the vault grid");
+        }
         {
             auto s = baseline();
             s.depositBlocked = true;

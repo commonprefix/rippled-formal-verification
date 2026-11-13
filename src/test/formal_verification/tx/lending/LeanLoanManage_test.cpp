@@ -3,7 +3,6 @@
 #include <test/formal_verification/ffi/lending/LoanFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/lending/LendingTestHelpers.h>
-#include <test/formal_verification/tx/lending/LoanPaySweepCases.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
@@ -20,31 +19,42 @@
 #include <chrono>
 #include <cstdint>
 #include <optional>
+#include <span>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace xrpl::test::formal_verification {
 
-using namespace loan_pay_sweep;
+// A LoanManage `action` on a loan of `principal` units in `paymentTotal` installments, without
+// interest unless `interestRate` is set, with the vault in its investment phase. A `debt` loan (one
+// payment) is taken first; an `impaired` loan is impaired while due at P - 1 (P: the parent close
+// time). The loan's next payment then falls due at P + `due`, and `cover` with the minimum cover
+// rate `coverRate`, and the vault's `deployed` assets and unrealized `loss`, are staged after it.
+struct LoanManageCase
+{
+    ManageAction action{};
+    std::int64_t debt{};
+    std::int64_t principal{};
+    std::uint32_t interestRate{};
+    std::uint32_t paymentInterval{600};
+    std::uint32_t paymentTotal{2};
+    std::optional<std::uint32_t> gracePeriod{};
+    std::int64_t due{};
+    std::int64_t cover{};
+    std::uint32_t coverRate{};
+    std::optional<std::int64_t> deployed{};
+    std::int64_t loss{};
+    TER expected;
+    bool impaired{};
+};
 
 // Differential tests of LoanManage: impair, unimpair and default.
+// Rows stage ledger state on a throwaway view, including states no transaction sequence may
+// reach: a verdict compares model and C++ on the same pre-state, not a claim the state is
+// reachable (see stageLending).
 class LeanLoanManage_test : public LeanSuite
 {
-    static std::uint32_t
-    flagsOf(ManageAction action)
-    {
-        switch (action)
-        {
-            case ManageAction::impair:
-                return tfLoanImpair;
-            case ManageAction::unimpair:
-                return tfLoanUnimpair;
-            case ManageAction::defaultLoan:
-                return tfLoanDefault;
-        }
-        return 0;
-    }
-
     static std::string
     actionName(ManageAction action)
     {
@@ -60,9 +70,8 @@ class LeanLoanManage_test : public LeanSuite
         return "?";
     }
 
-    // One LoanManage on `view`: C++ applies it there, the model runs on the same pre-state. The
-    // verdicts must agree and, on success, so must the post-states. Returns the C++ verdict.
-    TER
+    // One LoanManage on `view`: C++ applies it there, the model runs on the same pre-state.
+    void
     checkManage(
         jtx::Env& env,
         OpenView& view,
@@ -70,45 +79,11 @@ class LeanLoanManage_test : public LeanSuite
         Keylet const& loanKeylet,
         LoanParams const& p,
         ManageAction action,
+        TER expected,
         std::string const& at = {})
     {
-        using namespace jtx;
-        Asset const asset = f.asset.raw();
-        Loan const loan = readLoan(view, loanKeylet, f, p);
-        Vault const pool = readVaultState(view, f.vaultKeylet, asset);
-        std::uint32_t const now = parentCloseTime(env);
-
-        LawfulTerResult const can = leanCanLoanManage(loan, action, now);
-        expectLawful(can);
-        std::optional<LeanLoanResult> result;
-        if (can.ter == tesSUCCESS && !can.leanError)
-            result = leanLoanManage(loan, pool, action, now);
-
-        TER const cppTer =
-            applyOn(env, view, loan::manage(f.owner, loanKeylet.key, flagsOf(action)));
-
-        BEAST_EXPECTS(!can.leanError.has_value(), at + "lean canManage error");
-        if (result)
-            BEAST_EXPECTS(!result->leanError.has_value(), at + "lean manage error");
-        TER const lean =
-            modelVerdict(can, result && !result->leanError ? result->error : std::nullopt);
-        BEAST_EXPECTS(
-            lean == cppTer, at + "cpp=" + transToken(cppTer) + " lean=" + transToken(lean));
-        if (cppTer != tesSUCCESS || !result || result->leanError || result->error)
-            return cppTer;
-
-        Loan const cppLoan = readLoan(view, loanKeylet, f, p);
-        Vault const cppPool = readVaultState(view, f.vaultKeylet, asset);
-        expectLoanMatches(*this, result->loan, cppLoan);
-        expectSameVault(*this, "vault ", result->pool, cppPool);
-        expectBrokerMatches(*this, result->loan.broker, cppLoan.broker);
-        // A default moves the cover it consumes into the vault.
-        expectNumber(
-            *this,
-            "amount to pool",
-            result->amountToPool,
-            cppPool.assetsAvailable - pool.assetsAvailable);
-        return cppTer;
+        AppliedLoanTx const cpp = applyLoanManage(env, view, f, loanKeylet, p, action);
+        expectSame(*this, at, cpp, leanLoanManage(cpp, action), expected);
     }
 
     // A 1000 loan (two installments 600 s apart, 60 s grace) on a throwaway view of the fixture,
@@ -131,9 +106,11 @@ class LeanLoanManage_test : public LeanSuite
         OpenView view{*env.current()};
         LoanParams p;
         std::optional<Keylet> staged;
-        if (!tryStage(*this, label, [&] {
-                staged = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay);
-            }))
+        if (!tryStage(
+                *this,
+                label,
+                [&] { staged = stageLoan(env, view, f, p, kind, parentCloseTime(env), delay); }) ||
+            !staged)
             return;
         Keylet const loanKeylet = *staged;
         if (impairFirst)
@@ -148,287 +125,542 @@ class LeanLoanManage_test : public LeanSuite
                 applyOn(env, view, loan::manage(f.owner, loanKeylet.key, tfLoanDefault)) ==
                 tesSUCCESS);
         }
-        TER const cpp = checkManage(env, view, f, loanKeylet, p, action);
-        BEAST_EXPECTS(
-            cpp == expected,
-            std::string("cpp=") + transToken(cpp) + " expected " + transToken(expected));
+        checkManage(env, view, f, loanKeylet, p, action, expected);
     }
 
-    // ---- Sweeps ----
-
-    using SweepFixtures = std::vector<SweepLedger>;
-
-    // No cover rates, kSweepSeed units in the vault, an investment window long enough for 30-day
-    // intervals, and a clock far enough from zero for due dates staged a month back.
-    static BrokerFixture
-    sweepFixture(jtx::Env& env, LendingAsset kind)
-    {
-        Number const seed = kind == LendingAsset::mpt ? Number{kSweepSeed} : Number{kSweepSeed, -6};
-        auto const f = setUpBrokerVault(
-            env,
-            BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt},
-            seed,
-            false,
-            true,
-            kind,
-            std::chrono::seconds{200'000'000});
-        env.close(env.now() + std::chrono::seconds{10'000'000});
-        return f;
-    }
-
-    // A default needs the parent close time past due date + grace period (exclusive), else
-    // tecTOO_SOON. Rows put that deadline exactly on the parent close time.
+    // Each row stages the asset's shared ledger on a throwaway view: the vault in its investment
+    // phase, the broker's management fee at 1% and no cover rate, the row's debt loan, the loan,
+    // then its due date, cover, cover rate (with a 20% liquidation rate) and vault fields. The
+    // row's LoanManage must give its verdict on both sides, with every field of the loan, its
+    // broker and the pool, and the amount moved into the pool, equal when both succeed. Amounts
+    // are in units of the vault grid.
+    // - Default deadline: a default needs P past due date + grace period (exclusive), else
+    //   tecTOO_SOON. Each cusp puts that deadline on P.
+    // - Impair due date: an impairment needs P past the due date (exclusive), else tecTOO_SOON.
+    // - Impair loss cap: an impairment adds the principal to the vault's unrealized loss; past the
+    //   deployed assets it is tecLIMIT_EXCEEDED. Each cusp sits at loss + principal == deployed.
+    // - Default cover at the principal / at the cover available: a default moves
+    //   min(min(minimum cover * 20%, principal), cover) into the vault, with minimum cover
+    //   (debt + principal) * rate / 1e5. Each cusp puts the liquidation share exactly on the
+    //   principal, or on the cover; the verdict does not change.
+    // - Default with interest: at 100% a year over 31'536'000 s (periodic rate 1) a principal of
+    //   3'153'600'000 in two installments carries a total value of 8'409'600'000 and a 1%
+    //   management fee of 52'560'000; the default removes the scheduled interest 5'203'440'000
+    //   from the vault's yield and, on an impaired loan, releases the 3'153'600'000 loss.
+    // - Default cover with interest: 20% of the minimum cover 3'153'600'000 x 100%, 630'720'000,
+    //   leaves the broker's pseudo-account for the vault, or the whole cover when less; for a
+    //   principal of 3 the 0.6 share truncates to nothing.
+    // - Impair with interest: the loss booked is the principal 3'153'600'000, not the interest.
+    // - Unimpair: a loan that is not impaired is tecNO_PERMISSION; an impaired loan is unimpaired,
+    //   its loss released, whatever its due date.
+    // The date rules (exclusive deadlines, impairment only of a late loan, no due-date change on
+    // impair or unimpair) are those of fixCleanup3_4_0.
+    // clang-format off
+    static constexpr LoanManageCase kDefaultDeadline[] = {
+        // interval 600, grace 60 ends at P
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 60, .due = -62, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 60, .due = -61, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 60, .due = -60, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 60, .due = -59, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 60, .due = -58, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 61, .due = -62, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 61, .due = -61, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 61, .due = -60, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 61, .due = -59, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 61, .due = -58, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 62, .due = -62, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 62, .due = -61, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 62, .due = -60, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 62, .due = -59, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 62, .due = -58, .expected = tecTOO_SOON},
+        // interval 600, grace 600 ends at P
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 598, .due = -602, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 598, .due = -601, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 598, .due = -600, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 598, .due = -599, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 598, .due = -598, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 599, .due = -602, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 599, .due = -601, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 599, .due = -600, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 599, .due = -599, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 599, .due = -598, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 600, .due = -602, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 600, .due = -601, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 600, .due = -600, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 600, .due = -599, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .gracePeriod = 600, .due = -598, .expected = tecTOO_SOON},
+        // interval 2'592'000, grace 86'400 ends at P
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'398, .due = -86'402, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'398, .due = -86'401, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'398, .due = -86'400, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'398, .due = -86'399, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'398, .due = -86'398, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'399, .due = -86'402, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'399, .due = -86'401, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'399, .due = -86'400, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'399, .due = -86'399, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'399, .due = -86'398, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'400, .due = -86'402, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'400, .due = -86'401, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'400, .due = -86'400, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'400, .due = -86'399, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'400, .due = -86'398, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'401, .due = -86'402, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'401, .due = -86'401, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'401, .due = -86'400, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'401, .due = -86'399, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'401, .due = -86'398, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'402, .due = -86'402, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'402, .due = -86'401, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'402, .due = -86'400, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'402, .due = -86'399, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 86'402, .due = -86'398, .expected = tecTOO_SOON},
+        // interval 2'592'000, grace 2'592'000 ends at P
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'998, .due = -2'592'002, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'998, .due = -2'592'001, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'998, .due = -2'592'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'998, .due = -2'591'999, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'998, .due = -2'591'998, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'999, .due = -2'592'002, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'999, .due = -2'592'001, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'999, .due = -2'592'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'999, .due = -2'591'999, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'591'999, .due = -2'591'998, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'592'000, .due = -2'592'002, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'592'000, .due = -2'592'001, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'592'000, .due = -2'592'000, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'592'000, .due = -2'591'999, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 1'000'000'000, .paymentInterval = 2'592'000, .gracePeriod = 2'592'000, .due = -2'591'998, .expected = tecTOO_SOON},
+    };
+    static constexpr LoanManageCase kImpairDueDate[] = {
+        // due at P
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .due = -2, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .due = -1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .due = 0, .expected = tecTOO_SOON},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .due = 1, .expected = tecTOO_SOON},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .due = 2, .expected = tecTOO_SOON},
+    };
+    static constexpr LoanManageCase kImpairLossCap[] = {
+        // loss 0 + principal 1 = deployed 1
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 0, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 2, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 3, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1, .loss = 1, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 2, .loss = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 3, .loss = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 2, .loss = 2, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 3, .loss = 2, .expected = tesSUCCESS},
+        // loss 999'999'999 + principal 1 = deployed 1'000'000'000
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 999'999'997, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 999'999'997, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 999'999'997, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 999'999'997, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 999'999'997, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 999'999'998, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 999'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 999'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 999'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 999'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 999'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 999'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 999'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 1'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 1'000'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 1'000'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 1'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 1'000'000'001, .expected = tesSUCCESS},
+        // loss 0 + principal 1'000'000'000 = deployed 1'000'000'000
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 1, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 1, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 1, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 2, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 2, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 2, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 2, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 1'000'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 2, .expected = tesSUCCESS},
+        // loss 500'000'000 + principal 500'000'000 = deployed 1'000'000'000
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 499'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 499'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 499'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 499'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 499'999'998, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 499'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 499'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 499'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 499'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 499'999'999, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 500'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 500'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 500'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 500'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 500'000'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 500'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 500'000'001, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 500'000'001, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'998, .loss = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 999'999'999, .loss = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'000, .loss = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'001, .loss = 500'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 500'000'000, .paymentTotal = 1, .due = -1, .deployed = 1'000'000'002, .loss = 500'000'002, .expected = tesSUCCESS},
+    };
+    static constexpr LoanManageCase kDefaultCoverAtPrincipal[] = {
+        // (debt 16 + principal 4) x 100'000 / 5e5 = principal
+        {.action = ManageAction::defaultLoan, .debt = 14, .principal = 2, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 14, .principal = 3, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 14, .principal = 4, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 14, .principal = 5, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 14, .principal = 6, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 15, .principal = 2, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 15, .principal = 3, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 15, .principal = 4, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 15, .principal = 5, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 15, .principal = 6, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 16, .principal = 2, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 16, .principal = 3, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 16, .principal = 4, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 16, .principal = 5, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 16, .principal = 6, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 17, .principal = 2, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 17, .principal = 3, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 17, .principal = 4, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 17, .principal = 5, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 17, .principal = 6, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 18, .principal = 2, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 18, .principal = 3, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 18, .principal = 4, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 18, .principal = 5, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 18, .principal = 6, .due = -61, .cover = 20, .coverRate = 100'000, .expected = tesSUCCESS},
+        // (debt 400'000'000 + principal 100'000'000) x 100'000 / 5e5 = principal
+        {.action = ManageAction::defaultLoan, .debt = 399'999'998, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'998, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'998, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'998, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'998, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'999, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'999, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'999, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'999, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 399'999'999, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'000, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'000, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'000, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'000, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'000, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'001, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'001, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'001, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'001, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'001, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'002, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'002, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'002, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'002, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 400'000'002, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 100'000, .expected = tesSUCCESS},
+        // (debt 900'000'000 + principal 100'000'000) x 50'000 / 5e5 = principal
+        {.action = ManageAction::defaultLoan, .debt = 899'999'998, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'998, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'998, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'998, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'998, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'999, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'999, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'999, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'999, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 899'999'999, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'000, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'000, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'000, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'000, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'000, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'001, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'001, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'001, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'001, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'001, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'002, .principal = 99'999'998, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'002, .principal = 99'999'999, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'002, .principal = 100'000'000, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'002, .principal = 100'000'001, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 900'000'002, .principal = 100'000'002, .due = -61, .cover = 200'000'010, .coverRate = 50'000, .expected = tesSUCCESS},
+    };
+    static constexpr LoanManageCase kDefaultCoverAtAvailable[] = {
+        // (debt 0 + principal 5) x 100'000 / 5e5 = cover 1
+        {.action = ManageAction::defaultLoan, .principal = 5, .due = -61, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5, .due = -61, .cover = 1, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5, .due = -61, .cover = 2, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5, .due = -61, .cover = 3, .coverRate = 100'000, .expected = tesSUCCESS},
+        // (debt 0 + principal 500'000) x 1 / 5e5 = cover 1
+        {.action = ManageAction::defaultLoan, .principal = 500'000, .due = -61, .coverRate = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 500'000, .due = -61, .cover = 1, .coverRate = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 500'000, .due = -61, .cover = 2, .coverRate = 1, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 500'000, .due = -61, .cover = 3, .coverRate = 1, .expected = tesSUCCESS},
+        // (debt 0 + principal 5'000'000'000) x 10'000 / 5e5 = cover 100'000'000
+        {.action = ManageAction::defaultLoan, .principal = 5'000'000'000, .due = -61, .cover = 99'999'998, .coverRate = 10'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5'000'000'000, .due = -61, .cover = 99'999'999, .coverRate = 10'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5'000'000'000, .due = -61, .cover = 100'000'000, .coverRate = 10'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5'000'000'000, .due = -61, .cover = 100'000'001, .coverRate = 10'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 5'000'000'000, .due = -61, .cover = 100'000'002, .coverRate = 10'000, .expected = tesSUCCESS},
+        // (debt 1'000'000'000 + principal 1'000'000'000) x 100'000 / 5e5 = cover 400'000'000
+        {.action = ManageAction::defaultLoan, .debt = 1'000'000'000, .principal = 1'000'000'000, .due = -61, .cover = 399'999'998, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 1'000'000'000, .principal = 1'000'000'000, .due = -61, .cover = 399'999'999, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 1'000'000'000, .principal = 1'000'000'000, .due = -61, .cover = 400'000'000, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 1'000'000'000, .principal = 1'000'000'000, .due = -61, .cover = 400'000'001, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .debt = 1'000'000'000, .principal = 1'000'000'000, .due = -61, .cover = 400'000'002, .coverRate = 100'000, .expected = tesSUCCESS},
+    };
+    static constexpr LoanManageCase kDefaultWithInterest[] = {
+        // grace 60 ends at P, 100% a year over 31'536'000 s: interest 3'153'600'000 then 1'051'200'000
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -62, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -61, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -60, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -59, .expected = tecTOO_SOON},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -58, .expected = tecTOO_SOON},
+        // the same, impaired: the unrealized loss is released
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -62, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -61, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -60, .expected = tecTOO_SOON, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -59, .expected = tecTOO_SOON, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -58, .expected = tecTOO_SOON, .impaired = true},
+        // principal 3 at the same rate: interest 3 then 1
+        {.action = ManageAction::defaultLoan, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -61, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .gracePeriod = 60, .due = -60, .expected = tecTOO_SOON},
+    };
+    static constexpr LoanManageCase kDefaultCoverWithInterest[] = {
+        // (debt 0 + principal 3'153'600'000) x 100'000 / 5e5 = cover 630'720'000
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'719'998, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'719'999, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'000, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'001, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'002, .coverRate = 100'000, .expected = tesSUCCESS},
+        // the same, impaired
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'719'998, .coverRate = 100'000, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'719'999, .coverRate = 100'000, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'000, .coverRate = 100'000, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'001, .coverRate = 100'000, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::defaultLoan, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 630'720'002, .coverRate = 100'000, .expected = tesSUCCESS, .impaired = true},
+        // (debt 0 + principal 3) x 100'000 / 5e5 = cover 0.6
+        {.action = ManageAction::defaultLoan, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 1, .coverRate = 100'000, .expected = tesSUCCESS},
+        {.action = ManageAction::defaultLoan, .principal = 3, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -61, .cover = 2, .coverRate = 100'000, .expected = tesSUCCESS},
+    };
+    static constexpr LoanManageCase kImpairWithInterest[] = {
+        // due at P
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -2, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 0, .expected = tecTOO_SOON},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 1, .expected = tecTOO_SOON},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 2, .expected = tecTOO_SOON},
+        // loss 0 + principal 3'153'600'000 = deployed 3'153'600'000
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .deployed = 3'153'599'998, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .deployed = 3'153'599'999, .expected = tecLIMIT_EXCEEDED},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .deployed = 3'153'600'000, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .deployed = 3'153'600'001, .expected = tesSUCCESS},
+        {.action = ManageAction::impair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .deployed = 3'153'600'002, .expected = tesSUCCESS},
+    };
+    static constexpr LoanManageCase kUnimpair[] = {
+        // not impaired, due on either side of P
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = -1, .expected = tecNO_PERMISSION},
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = 1, .expected = tecNO_PERMISSION},
+        // impaired, then due at P
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = -2, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = -1, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = 0, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = 1, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 1'000'000'000, .due = 2, .expected = tesSUCCESS, .impaired = true},
+        // impaired with interest, then due at P
+        {.action = ManageAction::unimpair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -2, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = -1, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 0, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 1, .expected = tesSUCCESS, .impaired = true},
+        {.action = ManageAction::unimpair, .principal = 3'153'600'000, .interestRate = 100'000, .paymentInterval = 31'536'000, .due = 2, .expected = tesSUCCESS, .impaired = true},
+    };
+    // clang-format on
     void
-    testDefaultSweep(SweepFixtures const& fixtures)
+    runLoanManageBoundaries(LendingSetup const& s)
     {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(("LoanManage " + assetName(f) + " default deadline-Sweep").c_str());
-            std::uint32_t const now = parentCloseTime(env);
-            for (auto const& [cusp, cases] : kDefaultCases)
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanManageCase const> cases) {
+            for (TestLedger const& l : ledgers)
             {
-                std::set<TER> seen;
-                for (DefaultCusp const& c : cases)
+                beginCase(
+                    ("LoanManage " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (LoanManageCase const& c : cases)
                 {
-                    OpenView view{*env.current()};
+                    jtx::Env& env = *l.env;
+                    std::uint32_t const pct = parentCloseTime(env);
                     LoanParams const p{
-                        .paymentInterval = c.interval,
-                        .gracePeriod = static_cast<std::uint32_t>(c.grace),
+                        .principal = units(l.f, c.principal),
+                        .interestRate = c.interestRate,
+                        .paymentInterval = c.paymentInterval,
+                        .paymentTotal = c.paymentTotal,
+                        .gracePeriod = c.gracePeriod,
                     };
-                    auto const loan = createLoan(env, view, f, p);
-                    dueAt(view, loan, now, c.dueOffset - c.cuspGrace);
-                    seen.insert(checkManage(
-                        env, view, f, loan, p, ManageAction::defaultLoan, describe(c) + ": "));
-                }
-                expectCrossed(cusp, seen, {tecTOO_SOON});
-            }
-        }
-    }
-
-    void
-    testImpairSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            sweepImpairDue(env, f);
-            sweepLossCap(env, f);
-        }
-    }
-
-    // An impairment needs the parent close time past the due date (exclusive), else tecTOO_SOON.
-    void
-    sweepImpairDue(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanManage " + assetName(f) + " impair due date-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        // The due date staged at now + offset.
-        for (auto const& [cusp, cases] : kZeroCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const dueOffset : cases)
-            {
-                OpenView view{*env.current()};
-                LoanParams const p;
-                auto const loan = createLoan(env, view, f, p);
-                dueAt(view, loan, now, dueOffset);
-                seen.insert(checkManage(
-                    env, view, f, loan, p, ManageAction::impair, describe(dueOffset) + ": "));
-            }
-            expectCrossed(cusp, seen, {tecTOO_SOON});
-        }
-    }
-
-    // An impairment adds the loan's principal to the unrealized loss; past the deployed assets it
-    // is tecLIMIT_EXCEEDED. The vault's deployed assets and loss are staged after the loan.
-    void
-    sweepLossCap(jtx::Env& env, BrokerFixture const& f)
-    {
-        beginCase(("LoanManage " + assetName(f) + " impair loss cap-Sweep").c_str());
-        std::uint32_t const now = parentCloseTime(env);
-        for (auto const& [cusp, cases] : kLossCapCases)
-        {
-            std::set<TER> seen;
-            for (LossCapCusp const& c : cases)
-            {
-                OpenView view{*env.current()};
-                LoanParams const p{.principal = units(f, c.principal), .paymentTotal = 1};
-                auto const loan = createLoan(env, view, f, p);
-                dueAt(view, loan, now, -1);
-                stageDeployed(view, f.vaultKeylet, units(f, c.deployed), units(f, c.loss));
-                seen.insert(
-                    checkManage(env, view, f, loan, p, ManageAction::impair, describe(c) + ": "));
-            }
-            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
-        }
-    }
-
-    void
-    testDefaultCoverSweep(SweepFixtures const& fixtures)
-    {
-        for (auto const& [envPtr, f] : fixtures)
-        {
-            jtx::Env& env = *envPtr;
-            beginCase(
-                ("LoanManage " + assetName(f) + " default cover at the principal-Sweep").c_str());
-            for (auto const& [cusp, cases] : kDefaultPrincipalCases)
-            {
-                for (DefaultCoverCusp const& c : cases)
-                {
-                    checkDefaultCover(env, f, c);
+                    std::string at = actionName(c.action) + " of" + loanText(p) + " due P + " +
+                        std::to_string(c.due) + " debt " + std::to_string(c.debt) + " cover " +
+                        std::to_string(c.cover) + " rate " + std::to_string(c.coverRate);
+                    if (c.deployed)
+                    {
+                        at += " deployed " + std::to_string(*c.deployed) + " loss " +
+                            std::to_string(c.loss);
+                    }
+                    if (c.impaired)
+                        at += " impaired";
+                    at += ": ";
+                    OpenView view{*env.current()};
+                    std::optional<Keylet> loan;
+                    if (!tryStage(*this, at, [&] {
+                            stageInvestment(
+                                env, view, l.f, {.debt = c.debt, .managementFeeRate = 1'000});
+                            loan = createLoan(env, view, l.f, p);
+                            if (c.impaired)
+                            {
+                                dueAt(view, *loan, pct, -1);
+                                TER const ter = applyOn(
+                                    env,
+                                    view,
+                                    jtx::loan::manage(l.f.owner, loan->key, tfLoanImpair));
+                                if (ter != tesSUCCESS)
+                                    throw std::runtime_error("impair " + transToken(ter));
+                            }
+                            dueAt(view, *loan, pct, c.due);
+                            stageLending(
+                                env, view, l.f, {.cover = c.cover, .coverRate = c.coverRate});
+                            if (c.deployed)
+                            {
+                                stageDeployed(
+                                    view,
+                                    l.f.vaultKeylet,
+                                    units(l.f, *c.deployed),
+                                    units(l.f, c.loss));
+                            }
+                        }))
+                        continue;
+                    AppliedLoanTx const cpp = applyLoanManage(env, view, l.f, *loan, p, c.action);
+                    LeanLoanTx const lean = leanLoanManage(cpp, c.action);
+                    expectSame(*this, at, cpp, lean, c.expected);
                 }
             }
-            beginCase(("LoanManage " + assetName(f) + " default cover at the cover available-Sweep")
-                          .c_str());
-            for (auto const& [cusp, cases] : kDefaultAvailableCases)
-            {
-                for (DefaultCoverCusp const& c : cases)
-                {
-                    checkDefaultCover(env, f, c);
-                }
-            }
-        }
-    }
+        };
 
-    // A default of a `principal` loan beside a `debt` loan, with `cover` deposited and the
-    // minimum cover rate set after both loans. The cover moved into the vault is
-    // min(min(minimum cover * 20%, principal), cover); the verdict does not change.
-    TER
-    checkDefaultCover(jtx::Env& env, BrokerFixture const& f, DefaultCoverCusp const& c)
-    {
-        std::string const at = describe(c) + ": ";
-        OpenView view{*env.current()};
-        LoanParams const p{.principal = units(f, c.principal)};
-        std::optional<Keylet> loan;
-        if (!tryStage(*this, at, [&] {
-                stageLending(env, view, f, {.debt = c.debt});
-                loan = createLoan(env, view, f, p);
-                stageLending(env, view, f, {.cover = c.cover, .coverRate = c.rate});
-                dueAt(view, *loan, parentCloseTime(env), -61);
-            }))
-            return tefINTERNAL;
-        return checkManage(env, view, f, *loan, p, ManageAction::defaultLoan, at);
+        run("default deadline", s.all, kDefaultDeadline);
+        run("impair due date", s.all, kImpairDueDate);
+        run("impair loss cap", s.all, kImpairLossCap);
+        run("default cover at the principal", s.all, kDefaultCoverAtPrincipal);
+        run("default cover at the cover available", s.all, kDefaultCoverAtAvailable);
+        run("default with interest", s.all, kDefaultWithInterest);
+        run("default cover with interest", s.all, kDefaultCoverWithInterest);
+        run("impair with interest", s.all, kImpairWithInterest);
+        run("unimpair", s.all, kUnimpair);
     }
 
     void
-    runTests() override
+    testLoanManageBoundaries(LendingSetup const& s)
     {
-        // The single-value tests share one fixture per configuration (broker cover 500); each
-        // test runs on a throwaway view of it.
-        jtx::Env env(*this);
+        runLoanManageBoundaries(s);
+    }
+
+    // The single-value tests' fixtures: the default broker with 500 of cover, one per asset, and
+    // an IOU broker without cover rates or cover. Each test runs on a throwaway view of one.
+    struct Setup
+    {
+        BrokerFixture iou;
+        BrokerFixture mpt;
+        BrokerFixture uncovered;
+    };
+
+    static Setup
+    setup(jtx::Env& env, jtx::Env& mptEnv, jtx::Env& uncoveredEnv)
+    {
         auto const iou = setUpBrokerVault(env, BrokerConfig{});
         depositCover(env, iou, Number{500});
-        jtx::Env mptEnv(*this);
         auto const mpt = setUpBrokerVault(
             mptEnv, BrokerConfig{}, Number{10'000}, false, true, LendingAsset::mpt);
         depositCover(mptEnv, mpt, Number{500});
         // Loans are aged by moving their dates back; keep those dates well above zero.
         env.close(env.now() + std::chrono::seconds{10'000});
         mptEnv.close(mptEnv.now() + std::chrono::seconds{10'000});
-        // No cover rates and no cover: also the IOU sweep fixture.
-        jtx::Env iouSweepEnv(*this);
-        auto const iouSweep = sweepFixture(iouSweepEnv, LendingAsset::iou);
-        jtx::Env mptSweepEnv(*this);
-        auto const mptSweep = sweepFixture(mptSweepEnv, LendingAsset::mpt);
+        auto const uncovered = setUpBrokerVault(
+            uncoveredEnv,
+            BrokerConfig{.coverRateMinimum = std::nullopt, .coverRateLiquidation = std::nullopt});
+        uncoveredEnv.close(uncoveredEnv.now() + std::chrono::seconds{10'000});
+        return {.iou = iou, .mpt = mpt, .uncovered = uncovered};
+    }
 
-        // The first installment is due 600 s after the start, with a 60 s grace period.
-        runManage(env, iou, "a late loan", 601, false, ManageAction::impair, tesSUCCESS);
-        // covered by testImpairSweep
-        runManage(env, iou, "a loan that is not late", 0, false, ManageAction::impair, tecTOO_SOON);
-        runManage(env, iou, "an impaired loan", 601, true, ManageAction::impair, tecNO_PERMISSION);
+    void
+    runTests() override
+    {
+        jtx::Env env{*this, lendingTestAmendments()};
+        jtx::Env mptEnv{*this, lendingTestAmendments()};
+        jtx::Env uncoveredEnv{*this, lendingTestAmendments()};
+        Setup const fx = setup(env, mptEnv, uncoveredEnv);
+        BrokerFixture const& iou = fx.iou;
+        BrokerFixture const& mpt = fx.mpt;
+        jtx::Env iouLendingEnv{*this, lendingTestAmendments()};
+        jtx::Env mptLendingEnv{*this, lendingTestAmendments()};
+        LendingSetup const s = setUpLending(iouLendingEnv, mptLendingEnv);
 
-        runManage(env, iou, "an impaired loan", 601, true, ManageAction::unimpair, tesSUCCESS);
-        runManage(
-            env,
-            iou,
-            "a loan that is not impaired",
-            0,
-            false,
-            ManageAction::unimpair,
-            tecNO_PERMISSION);
+        struct ManageTest
+        {
+            char const* name;
+            std::uint32_t loanAge{};
+            bool impairFirst = false;
+            ManageAction action;
+            TER expected;
+            LoanKind kind = LoanKind::active;
+        };
+        auto const manage = [&](jtx::Env& e, BrokerFixture const& f, ManageTest const& t) {
+            runManage(e, f, t.name, t.loanAge, t.impairFirst, t.action, t.expected, t.kind);
+        };
 
-        // covered by testDefaultSweep
-        runManage(
-            env,
-            iou,
-            "before the grace period ends",
-            601,
-            false,
-            ManageAction::defaultLoan,
-            tecTOO_SOON);
-        runManage(
-            env, iou, "after the grace period", 700, false, ManageAction::defaultLoan, tesSUCCESS);
-        runManage(
-            env,
-            iou,
-            "an impaired loan after the grace period",
-            700,
-            true,
-            ManageAction::defaultLoan,
-            tesSUCCESS);
+        // clang-format off
+        static ManageTest const kIouTests[] = {
+            // The first installment is due 600 s after the start, with a 60 s grace period.
+            {.name = "a late loan", .loanAge = 601, .action = ManageAction::impair, .expected = tesSUCCESS},
+            // Covered by testLoanManageBoundaries.
+            {.name = "a loan that is not late", .action = ManageAction::impair, .expected = tecTOO_SOON},
+            {.name = "an impaired loan", .loanAge = 601, .impairFirst = true, .action = ManageAction::impair, .expected = tecNO_PERMISSION},
 
-        runManage(
-            mptEnv,
-            mpt,
-            "an MPT loan after the grace period",
-            700,
-            false,
-            ManageAction::defaultLoan,
-            tesSUCCESS);
-        runManage(
-            mptEnv,
-            mpt,
-            "an impaired MPT loan after the grace period",
-            700,
-            true,
-            ManageAction::defaultLoan,
-            tesSUCCESS);
-        runManage(
-            iouSweepEnv,
-            iouSweep,
-            "a broker without cover",
-            700,
-            false,
-            ManageAction::defaultLoan,
-            tesSUCCESS);
+            {.name = "an impaired loan", .loanAge = 601, .impairFirst = true, .action = ManageAction::unimpair, .expected = tesSUCCESS},
+            {.name = "a loan that is not impaired", .action = ManageAction::unimpair, .expected = tecNO_PERMISSION},
+
+            // Covered by testLoanManageBoundaries.
+            {.name = "before the grace period ends", .loanAge = 601, .action = ManageAction::defaultLoan, .expected = tecTOO_SOON},
+            {.name = "after the grace period", .loanAge = 700, .action = ManageAction::defaultLoan, .expected = tesSUCCESS},
+            {.name = "an impaired loan after the grace period", .loanAge = 700, .impairFirst = true, .action = ManageAction::defaultLoan, .expected = tesSUCCESS},
+        };
+        static ManageTest const kMptTests[] = {
+            {.name = "an MPT loan after the grace period", .loanAge = 700, .action = ManageAction::defaultLoan, .expected = tesSUCCESS},
+            {.name = "an impaired MPT loan after the grace period", .loanAge = 700, .impairFirst = true, .action = ManageAction::defaultLoan, .expected = tesSUCCESS},
+        };
+        // clang-format on
+        for (ManageTest const& t : kIouTests)
+            manage(env, iou, t);
+        for (ManageTest const& t : kMptTests)
+            manage(mptEnv, mpt, t);
+        // clang-format off
+        manage(uncoveredEnv, fx.uncovered, {.name = "a broker without cover", .loanAge = 700, .action = ManageAction::defaultLoan, .expected = tesSUCCESS});
 
         // Loans that cannot be managed at all
-        runManage(
-            env,
-            iou,
-            "a pending proposal",
-            0,
-            false,
-            ManageAction::impair,
-            tecNO_PERMISSION,
-            LoanKind::pending);
-        runManage(
-            env,
-            iou,
-            "a defaulted loan",
-            700,
-            false,
-            ManageAction::impair,
-            tecNO_PERMISSION,
-            LoanKind::defaulted);
-        runManage(
-            env,
-            iou,
-            "a paid-off loan",
-            0,
-            false,
-            ManageAction::impair,
-            tecNO_PERMISSION,
-            LoanKind::paidOff);
-
-        SweepFixtures const fixtures{
-            {.env = &iouSweepEnv, .f = iouSweep},
-            {.env = &mptSweepEnv, .f = mptSweep},
+        static ManageTest const kUnmanageableTests[] = {
+            {.name = "a pending proposal", .action = ManageAction::impair, .expected = tecNO_PERMISSION, .kind = LoanKind::pending},
+            {.name = "a defaulted loan", .loanAge = 700, .action = ManageAction::impair, .expected = tecNO_PERMISSION, .kind = LoanKind::defaulted},
+            {.name = "a paid-off loan", .action = ManageAction::impair, .expected = tecNO_PERMISSION, .kind = LoanKind::paidOff},
         };
-        testDefaultSweep(fixtures);
-        testImpairSweep(fixtures);
-        testDefaultCoverSweep(fixtures);
+        // clang-format on
+        for (ManageTest const& t : kUnmanageableTests)
+            manage(env, iou, t);
+        testLoanManageBoundaries(s);
     }
 };
 

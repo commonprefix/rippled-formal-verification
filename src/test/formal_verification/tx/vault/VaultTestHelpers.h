@@ -1,5 +1,7 @@
 #pragma once
 
+#include <test/formal_verification/common/LeanSuite.h>
+#include <test/formal_verification/ffi/vault/VaultClawbackFFI.h>
 #include <test/formal_verification/ffi/vault/VaultDepositFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
@@ -40,6 +42,13 @@
 #include <utility>
 
 namespace xrpl::test::formal_verification {
+
+// The amendments every vault suite enables; the expected verdicts are for this set.
+[[nodiscard]] inline FeatureBitset
+vaultTestAmendments()
+{
+    return jtx::testableAmendments();
+}
 
 // A FixedPrecision vault rejects inflows past 9e15 units of its base grid (10^-scale): 9e15 drops
 // or MPT units, 9e9 for an IOU at the default scale 6.
@@ -460,6 +469,77 @@ stagedAmounts(jtx::Env const& env, Keylet const& vault, StagedVault const& s)
     };
 }
 
+// `onDate` puts the parent close time exactly on the date bounding the phase: the subscription
+// date is the last instant of Subscription, the redemption date the first of Redemption.
+constexpr bool kOnDate = true;
+
+[[nodiscard]] inline std::string
+phaseName(VaultPhase phase, bool onDate)
+{
+    switch (phase)
+    {
+        case VaultPhase::NoPhase:
+            return "open-ended";
+        case VaultPhase::Subscription:
+            return onDate ? "at the subscription date" : "subscription";
+        case VaultPhase::Investment:
+            return "investment";
+        case VaultPhase::Redemption:
+            return onDate ? "at the redemption date" : "redemption";
+    }
+    return "?";
+}
+
+// Long enough for the creation and initial-deposit ledgers (5 s each) to stay in Subscription.
+constexpr auto kSubscriptionOffset = std::chrono::seconds{600};
+constexpr auto kInvestmentWindow = std::chrono::seconds{1'000'000};
+
+// 1000 IOU at scale 6, or 1000 XRP in drops: the old tests' initial deposit, in grid units and
+// in shares (price 1).
+constexpr std::int64_t kInitialDepositUnits = 1'000'000'000;
+
+// The schedule dates that put the parent close time P in `phase` (on the bounding date when
+// `onDate`).
+inline void
+stagePhase(
+    StagedAmounts& s,
+    std::uint32_t p,
+    VaultPhase phase,
+    std::optional<std::uint32_t> earlyExitFeeRate,
+    bool onDate = false)
+{
+    auto const offset = static_cast<std::uint32_t>(kSubscriptionOffset.count());
+    auto const window = static_cast<std::uint32_t>(kInvestmentWindow.count());
+    switch (phase)
+    {
+        case VaultPhase::NoPhase:
+            return;
+        case VaultPhase::Subscription:
+            s.subscriptionDate = onDate ? p : p + offset;
+            break;
+        case VaultPhase::Investment:
+            s.subscriptionDate = p - 1;
+            break;
+        case VaultPhase::Redemption:
+            s.subscriptionDate = (onDate ? p : p - 1) - window;
+            break;
+    }
+    s.redemptionDate = *s.subscriptionDate + window;
+    s.earlyExitFeeRate = earlyExitFeeRate;
+}
+
+// A vault at price 1 holding `units` grid units, every share owned by the holder.
+[[nodiscard]] inline StagedAmounts
+depositedVault(jtx::Env const& env, Keylet const& vault, std::int64_t units)
+{
+    return {
+        .available = vaultUnits(env, vault, units),
+        .sharesTotal = static_cast<std::uint64_t>(units),
+        .holderShares = static_cast<std::uint64_t>(units),
+        .pseudoHolding = true,
+    };
+}
+
 struct AppliedVaultTx
 {
     Vault pre;
@@ -468,7 +548,45 @@ struct AppliedVaultTx
     // What C++ moved, when the transaction reports it: compared with the model's assets / shares.
     std::optional<Number> assets{};
     std::optional<Number> shares{};
+    // The vault's asset and its stored sfAssetsTotal after the transaction, when read.
+    Asset asset{};
+    std::optional<Number> storedTotal{};
+    // What really moved, signed like `assets` / `shares`: the pseudo-account's holding of the
+    // asset and the holder's share balance.
+    std::optional<Number> held{};
+    std::optional<Number> heldShares{};
 };
+
+// The pseudo-account's raw holding of the vault asset (XRP balance, MPT amount or trust-line
+// balance), zero without an MPToken or trust line.
+[[nodiscard]] inline Number
+pseudoHolding(ReadView const& view, Keylet const& vault)
+{
+    auto const v = view.read(vault);
+    Asset const asset = v->at(sfAsset);
+    AccountID const pseudo = v->at(sfAccount);
+    if (asset.native())
+        return view.read(keylet::account(pseudo))->getFieldAmount(sfBalance);
+    if (asset.holds<MPTIssue>())
+    {
+        auto const token = view.read(keylet::mptoken(asset.get<MPTIssue>().getMptID(), pseudo));
+        return token ? Number{static_cast<std::int64_t>(token->at(sfMPTAmount))} : Number{0};
+    }
+    Issue const& issue = asset.get<Issue>();
+    auto const line = view.read(keylet::trustLine(pseudo, issue));
+    if (!line)
+        return Number{0};
+    Number const balance = line->getFieldAmount(sfBalance);
+    return pseudo > issue.account ? -balance : balance;
+}
+
+// `holder`'s balance of the vault's share MPT, zero without an MPToken.
+[[nodiscard]] inline Number
+holderShareBalance(ReadView const& view, Keylet const& vault, AccountID const& holder)
+{
+    auto const token = view.read(keylet::mptoken(view.read(vault)->at(sfShareMPTID), holder));
+    return token ? Number{static_cast<std::int64_t>(token->at(sfMPTAmount))} : Number{0};
+}
 
 // Set `balance` on `account`'s trust line for `issue` (held by the low account when positive).
 inline void
@@ -484,6 +602,11 @@ stageTrustLine(Sandbox& sb, AccountID const& account, Issue const& issue, Number
     sb.update(line);
 }
 
+// Staging writes ledger entries directly on a throwaway view and applies the transaction there
+// with unlimited flags. It reaches states no transaction sequence can: a holder owning fewer
+// shares than exist with nobody holding the rest, a pseudo-account balance set to the available
+// assets, totals past the open limit. A test compares the model and C++ on the same pre-state; its
+// verdict is not a claim that the state is reachable.
 // Stage `staged` on `view`; `holder` is the account whose share MPToken and IOU balance are set.
 inline void
 stageVault(
@@ -570,9 +693,19 @@ applyStaged(
     stageVault(view, vault, holder, staged);
     Asset const asset = view.read(vault)->at(sfAsset);
     Vault const pre = readVaultState(view, vault, asset);
+    Number const heldBefore = pseudoHolding(view, vault);
+    Number const sharesBefore = holderShareBalance(view, vault, holder.id());
     auto const jt = env.jt(tx);
     TER const ter = xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
-    return {.pre = pre, .ter = ter, .post = readVaultState(view, vault, asset)};
+    return {
+        .pre = pre,
+        .ter = ter,
+        .post = readVaultState(view, vault, asset),
+        .asset = asset,
+        .storedTotal = Number{view.read(vault)->at(sfAssetsTotal)},
+        .held = pseudoHolding(view, vault) - heldBefore,
+        .heldShares = holderShareBalance(view, vault, holder.id()) - sharesBefore,
+    };
 }
 
 [[nodiscard]] inline AppliedVaultTx
@@ -628,12 +761,11 @@ sampleText(StagedAmounts const& s, STAmount const& amount)
 
 // The staged sample in vault units, prefixed to every failure message.
 [[nodiscard]] inline std::string
-sampleText(StagedVault const& s, STAmount const& amount)
+sampleText(StagedVault const& s)
 {
-    std::string t = "amount " + amount.getText() + ", in vault units: available " +
-        std::to_string(s.available) + ", deployed " + std::to_string(s.deployed) + ", yield " +
-        std::to_string(s.yield) + ", loss " + std::to_string(s.loss) + ", sharesTotal " +
-        std::to_string(s.sharesTotal);
+    std::string t = "in vault units: available " + std::to_string(s.available) + ", deployed " +
+        std::to_string(s.deployed) + ", yield " + std::to_string(s.yield) + ", loss " +
+        std::to_string(s.loss) + ", sharesTotal " + std::to_string(s.sharesTotal);
     if (s.maximum)
         t += ", maximum " + std::to_string(*s.maximum);
     if (s.holderShares)
@@ -646,6 +778,12 @@ sampleText(StagedVault const& s, STAmount const& amount)
     if (s.earlyExitFeeRate)
         t += ", fee rate " + std::to_string(*s.earlyExitFeeRate);
     return t + ": ";
+}
+
+[[nodiscard]] inline std::string
+sampleText(StagedVault const& s, STAmount const& amount)
+{
+    return "amount " + amount.getText() + ", " + sampleText(s);
 }
 
 // The model's vault after the transaction equals C++'s.
@@ -668,51 +806,16 @@ expectSameVault(
     same("yieldUnrealized", lean.yieldUnrealized, cpp.yieldUnrealized);
 }
 
-// The model accepts the staged state as lawful and agrees with C++ on the verdict and, when both
-// succeed, on the vault. Returns the C++ verdict.
-inline TER
-expectAgree(
-    beast::unit_test::Suite& suite,
-    std::string const& at,
-    AppliedVaultTx const& cpp,
-    LeanVaultResult const& lean)
+// The model's verdict as a TER, a model error as tefEXCEPTION followed by its kind.
+[[nodiscard]] inline std::string
+leanVerdictText(std::optional<LeanError> leanError, TER ter)
 {
-    suite.expect(lean.leanError != LeanError::notLawful, at + "model: staged state not lawful");
-    TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
-    suite.expect(
-        leanTer == cpp.ter, at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter));
-    if (cpp.ter == tesSUCCESS && leanTer == tesSUCCESS)
-        expectSameVault(suite, at, lean.vault, cpp.post);
-    return cpp.ter;
-}
-
-// A deposit (or donation) on a throwaway view of `staged` and the model on the same state must
-// agree, and a deposit never charges more than offered. Returns the C++ verdict.
-inline TER
-checkDeposit(
-    beast::unit_test::Suite& suite,
-    jtx::Env& env,
-    Keylet const& vault,
-    jtx::Account const& depositor,
-    StagedAmounts const& staged,
-    STAmount const& amount,
-    bool donate = false)
-{
-    AppliedVaultTx const cpp = applyDeposit(env, vault, depositor, staged, amount, donate);
-    LeanVaultResult const lean = leanVaultDeposit(cpp.pre, amount, donate, parentCloseTime(env));
-    std::string const at = sampleText(staged, amount);
-    if (expectAgree(suite, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
-        return cpp.ter;
-    Number const charged = cpp.post.assetsTotal - cpp.pre.assetsTotal;
-    suite.expect(charged <= Number{amount}, at + "cpp charged " + to_string(charged));
-    suite.expect(
-        Number{lean.assets} <= Number{amount},
-        at + "lean charged " + to_string(Number{lean.assets}));
-    return cpp.ter;
+    return leanError ? "tefEXCEPTION (" + leanErrorText(*leanError) + ")" : transToken(ter);
 }
 
 // Both sides of one transaction return `expected`; when both succeed, every vault field is equal,
 // and so are the assets and shares the model returns and what C++ moved, when the C++ side set it.
+// A model error never matches: a row expecting tefEXCEPTION names its model error (overload below).
 inline void
 expectSame(
     beast::unit_test::Suite& suite,
@@ -721,22 +824,30 @@ expectSame(
     LeanVaultResult const& lean,
     TER expected)
 {
-    TER const leanTer = lean.leanError ? TER{tefEXCEPTION} : lean.error.value_or(tesSUCCESS);
+    TER const leanTer = lean.error.value_or(tesSUCCESS);
     suite.expect(
-        leanTer == expected && cpp.ter == expected,
-        at + "lean=" + transToken(leanTer) + " cpp=" + transToken(cpp.ter) +
+        !lean.leanError && expected != tefEXCEPTION && leanTer == expected && cpp.ter == expected,
+        at + "lean=" + leanVerdictText(lean.leanError, leanTer) + " cpp=" + transToken(cpp.ter) +
             " expected=" + transToken(expected));
+    if (lean.leanError)
+        return;
     if (leanTer != tesSUCCESS || cpp.ter != tesSUCCESS)
         return;
 
     auto const text = [](auto const& v) {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, Number>)
+        {
             return to_string(v);
+        }
         else if constexpr (std::is_same_v<T, bool>)
+        {
             return std::string{v ? "true" : "false"};
+        }
         else
+        {
             return std::to_string(v);
+        }
     };
     auto const same = [&](char const* field, auto const& l, auto const& c) {
         suite.expect(l == c, at + field + " lean=" + text(l) + " cpp=" + text(c));
@@ -766,54 +877,196 @@ expectSame(
         same("assets", Number{lean.assets}, *cpp.assets);
     if (cpp.shares)
         same("shares", Number{lean.shares}, *cpp.shares);
+    // C++ stores the total as the vault asset's amount, rounded down from available + deployed.
+    if (cpp.storedTotal)
+    {
+        NumberRoundModeGuard const rg(Number::RoundingMode::Downward);
+        same("stored assetsTotal", Number{STAmount{cpp.asset, lv.assetsTotal}}, *cpp.storedTotal);
+    }
+    if (cpp.held)
+        same("pseudo-account holding", Number{lean.assets}, *cpp.held);
+    if (cpp.heldShares)
+        same("holder share balance", Number{lean.shares}, *cpp.heldShares);
 }
 
-// A withdrawal (by assets, or by shares when `amount` is in shares) from a staged vault whose
-// pseudo-account holds the available assets and whose holder holds `holderShares` (all shares
-// when unset). Both sides must agree, also on the payout: what left the vault (an early-exit fee
-// stays behind), equal to `expectedPayout` when given.
-inline AppliedVaultTx
-checkWithdraw(
+// A C++ rejection with no model TER: a preflight rejection (tem), where the model answers
+// `leanError` (notLawful: the fields break a model invariant; badInput: it cannot express them) or
+// succeeds when `leanError` is none (it normalizes the field); or a C++ exception (tefEXCEPTION),
+// where the model answers `leanError`.
+inline void
+expectSame(
     beast::unit_test::Suite& suite,
+    std::string const& at,
+    AppliedVaultTx const& cpp,
+    LeanVaultResult const& lean,
+    TER expected,
+    std::optional<LeanError> leanError)
+{
+    suite.expect(
+        cpp.ter == expected && lean.leanError == leanError && (leanError || !lean.error),
+        at + "lean=" + leanVerdictText(lean.leanError, lean.error.value_or(tesSUCCESS)) +
+            " cpp=" + transToken(cpp.ter) + " expected=" + transToken(expected) +
+            " with lean error " + leanErrorText(leanError));
+}
+
+struct AppliedVaultDelete
+{
+    Vault pre;
+    TER ter;
+    bool deleted;
+};
+
+// VaultDelete of a staged vault on a copy of the open ledger, discarded afterwards.
+[[nodiscard]] inline AppliedVaultDelete
+applyDelete(
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& owner,
+    StagedAmounts const& staged)
+{
+    OpenView view{*env.current()};
+    stageVault(view, vault, owner, staged);
+    Vault const pre = readVaultState(view, vault, view.read(vault)->at(sfAsset));
+    auto const jt = env.jt(jtx::Vault::del({.owner = owner, .id = vault.key}));
+    TER const ter = xrpl::apply(env.app(), view, *jt.stx, TapUnlimited, env.journal).ter;
+    return {.pre = pre, .ter = ter, .deleted = !view.read(vault)};
+}
+
+// Both sides of a VaultDelete return `expected`, and the vault is gone exactly when C++ succeeds.
+inline void
+expectSame(
+    beast::unit_test::Suite& suite,
+    std::string const& at,
+    AppliedVaultDelete const& cpp,
+    LawfulTerResult const& lean,
+    TER expected)
+{
+    suite.expect(
+        !lean.leanError && lean.ter == expected && cpp.ter == expected,
+        at + "lean=" + leanVerdictText(lean.leanError, lean.ter) + " cpp=" + transToken(cpp.ter) +
+            " expected=" + transToken(expected));
+    suite.expect(
+        cpp.deleted == (cpp.ter == tesSUCCESS),
+        at + (cpp.deleted ? "the vault is gone after " : "the vault is still there after ") +
+            transToken(cpp.ter));
+}
+
+// A withdrawal of `amount` (vault assets, or shares) by `holder` from a staged vault whose
+// pseudo-account holds the available assets and whose holder holds every share unless
+// `holderShares` is set. Records what left the vault (an early-exit fee stays behind) and the
+// shares burned.
+[[nodiscard]] inline AppliedVaultTx
+applyWithdraw(
     jtx::Env& env,
     Keylet const& vault,
     jtx::Account const& holder,
     StagedAmounts staged,
-    STAmount const& amount,
-    std::optional<Number> const& expectedPayout = std::nullopt)
+    STAmount const& amount)
 {
     staged.pseudoHolding = true;
     if (!staged.holderShares)
         staged.holderShares = staged.sharesTotal;
-    std::uint64_t const held = *staged.holderShares;
-    bool const byShares = amount.asset() != Asset{env.le(vault)->at(sfAsset)};
-    AppliedVaultTx const cpp = applyStaged(
+    AppliedVaultTx applied = applyStaged(
         env,
         vault,
         holder,
         staged,
         jtx::Vault::withdraw({.depositor = holder, .id = vault.key, .amount = amount}));
-    LeanVaultResult const lean = leanVaultWithdraw(
+    applied.assets = applied.pre.assetsAvailable - applied.post.assetsAvailable;
+    applied.shares = applied.pre.sharesTotal - applied.post.sharesTotal;
+    applied.held = -*applied.held;
+    applied.heldShares = -*applied.heldShares;
+    return applied;
+}
+
+[[nodiscard]] inline AppliedVaultTx
+applyWithdraw(
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& holder,
+    StagedVault const& staged,
+    STAmount const& amount)
+{
+    return applyWithdraw(env, vault, holder, stagedAmounts(env, vault, staged), amount);
+}
+
+// The model's withdrawal from the pre-state C++ saw, by the holder `applyWithdraw` staged: it
+// waives the unrealized loss when that holder owns every share.
+[[nodiscard]] inline LeanVaultResult
+leanWithdraw(
+    AppliedVaultTx const& cpp,
+    StagedAmounts const& staged,
+    STAmount const& amount,
+    bool byShares,
+    std::uint32_t parentCloseTime)
+{
+    std::uint64_t const held = staged.holderShares.value_or(staged.sharesTotal);
+    return leanVaultWithdraw(
         cpp.pre,
         amount,
         byShares,
-        parentCloseTime(env),
+        parentCloseTime,
         held != 0 && held == staged.sharesTotal,
         Number{static_cast<std::int64_t>(held)});
-    std::string const at = sampleText(staged, amount);
-    if (expectAgree(suite, at, cpp, lean) != tesSUCCESS || lean.leanError || lean.error)
-        return cpp;
-    Number const cppPayout = cpp.pre.assetsAvailable - cpp.post.assetsAvailable;
-    suite.expect(
-        Number{lean.assets} == cppPayout,
-        at + "payout lean=" + to_string(Number{lean.assets}) + " cpp=" + to_string(cppPayout));
-    if (expectedPayout)
-    {
-        suite.expect(
-            cppPayout == *expectedPayout,
-            at + "payout " + to_string(cppPayout) + " expected " + to_string(*expectedPayout));
-    }
-    return cpp;
+}
+
+// A clawback by `account` from `holder` of a staged vault whose pseudo-account holds the available
+// assets and whose holder holds every share unless `holderShares` is set: the asset issuer claws
+// `amount` of the asset, the vault owner burns `amount` shares; no amount claws everything.
+// Records what left the vault and the shares burned.
+[[nodiscard]] inline AppliedVaultTx
+applyClawback(
+    jtx::Env& env,
+    Keylet const& vault,
+    jtx::Account const& account,
+    jtx::Account const& holder,
+    StagedAmounts staged,
+    std::optional<STAmount> const& amount)
+{
+    staged.pseudoHolding = true;
+    if (!staged.holderShares)
+        staged.holderShares = staged.sharesTotal;
+    AppliedVaultTx applied = applyStaged(
+        env,
+        vault,
+        holder,
+        staged,
+        jtx::Vault::clawback(
+            {.issuer = account, .id = vault.key, .holder = holder, .amount = amount}));
+    applied.assets = applied.pre.assetsAvailable - applied.post.assetsAvailable;
+    applied.shares = applied.pre.sharesTotal - applied.post.sharesTotal;
+    applied.held = -*applied.held;
+    applied.heldShares = -*applied.heldShares;
+    return applied;
+}
+
+// The model's issuer clawback from the pre-state C++ saw (an omitted amount is a zero `amount`): it
+// waives the unrealized loss when the holder `applyClawback` staged owns every share.
+[[nodiscard]] inline LeanVaultResult
+leanClawback(
+    AppliedVaultTx const& cpp,
+    StagedAmounts const& staged,
+    STAmount const& amount,
+    MPTIssue const& shares)
+{
+    std::uint64_t const held = staged.holderShares.value_or(staged.sharesTotal);
+    return leanVaultClawback(
+        cpp.pre, amount, STAmount{shares, held}, held != 0 && held == staged.sharesTotal);
+}
+
+// The model's owner burn of `amount` shares (zero for all): canBurnShares, then burnShares of the
+// holder's whole balance, which is what the result reports burned (no assets move).
+[[nodiscard]] inline LeanVaultResult
+leanOwnerBurn(AppliedVaultTx const& cpp, StagedAmounts const& staged, STAmount const& amount)
+{
+    STAmount const held{amount.get<MPTIssue>(), staged.holderShares.value_or(staged.sharesTotal)};
+    LeanAmountResult const can = leanCanBurnShares(cpp.pre, amount, held);
+    if (can.leanError || can.error)
+        return {.leanError = can.leanError, .error = can.error};
+    LeanBurnResult const burn = leanBurnShares(cpp.pre, held);
+    if (burn.leanError || burn.error)
+        return {.leanError = burn.leanError, .error = burn.error};
+    return {.shares = held, .vault = burn.vault};
 }
 
 }  // namespace xrpl::test::formal_verification

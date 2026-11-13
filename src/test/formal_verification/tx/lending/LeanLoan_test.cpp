@@ -1,7 +1,6 @@
 #include <test/formal_verification/common/LeanSuite.h>
 #include <test/formal_verification/ffi/lending/LoanFFI.h>
 #include <test/formal_verification/tx/lending/LendingTestHelpers.h>
-#include <test/formal_verification/tx/lending/LoanPaySweepCases.h>
 #include <test/jtx/Env.h>
 
 #include <xrpl/basics/Number.h>
@@ -9,14 +8,26 @@
 #include <xrpl/protocol/TER.h>
 
 #include <cstdint>
+#include <optional>
+#include <span>
 #include <string>
 
 namespace xrpl::test::formal_verification {
 
-using namespace loan_pay_sweep;
+// One loan field set to `value`: C++ LoanSet preflight answers `expected`, and the model's
+// lawfulness of the ledger's loan with that field answers `leanError` (notLawful where C++ rejects
+// the field, none where it creates the loan).
+struct LoanFieldCase
+{
+    std::int64_t value{};
+    TER expected;
+    std::optional<LeanError> leanError{};
+};
 
 // The loan lawfulness check (RawLoan.WF / RawLoan.Valid): a loan read from the ledger is lawful,
 // and each case below breaks one clause of it.
+// The model's loans are built field by field, including loans no transaction sequence may reach;
+// a lawfulness verdict is not a claim that the loan is reachable.
 class LeanLoan_test : public LeanSuite
 {
     void
@@ -26,141 +37,129 @@ class LeanLoan_test : public LeanSuite
         BEAST_EXPECTS(LoanFFI::build(s).has_value() == shouldBeLawful, label);
     }
 
-    // The model's lawfulness of a loan with `value` in one field against C++ LoanSet's preflight
-    // for the same field: a lawful loan must be one C++ creates. Returns the C++ verdict.
+    // Each row sets one field, on the LoanSet of the ledger's loan (applied on a throwaway view)
+    // and on that loan as the model reads it; C++ preflight and the model's lawfulness must give
+    // the row's pair of verdicts.
+    // - Rate cap: every rate (interest, late, close, overpayment interest, overpayment fee) is
+    //   capped at 100% (100'000); above it temINVALID / not lawful.
+    // - Grace period: the grace period must lie in [60, payment interval] (600 here).
+    // - Interval minimum: the payment interval must be at least 60 s (the stored grace period is
+    //   60); the model's loan has its first due date one interval after its start.
+    // clang-format off
+    static constexpr LoanFieldCase kRateCap[] = {
+        // 100% cap
+        {.value = 99'998, .expected = tesSUCCESS},
+        {.value = 99'999, .expected = tesSUCCESS},
+        {.value = 100'000, .expected = tesSUCCESS},
+        {.value = 100'001, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 100'002, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanFieldCase kGracePeriod[] = {
+        // 60 s minimum
+        {.value = 58, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 59, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 60, .expected = tesSUCCESS},
+        {.value = 61, .expected = tesSUCCESS},
+        {.value = 62, .expected = tesSUCCESS},
+        // the payment interval (600)
+        {.value = 598, .expected = tesSUCCESS},
+        {.value = 599, .expected = tesSUCCESS},
+        {.value = 600, .expected = tesSUCCESS},
+        {.value = 601, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 602, .expected = temINVALID, .leanError = LeanError::notLawful},
+    };
+    static constexpr LoanFieldCase kIntervalMinimum[] = {
+        // 60 s minimum
+        {.value = 58, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 59, .expected = temINVALID, .leanError = LeanError::notLawful},
+        {.value = 60, .expected = tesSUCCESS},
+        {.value = 61, .expected = tesSUCCESS},
+        {.value = 62, .expected = tesSUCCESS},
+    };
+    // clang-format on
     template <class Param, class Field>
-    TER
-    checkField(
-        jtx::Env& env,
-        BrokerFixture const& f,
-        LoanParams p,
-        Loan s,
-        Param LoanParams::* param,
-        Field Loan::* field,
-        std::int64_t value)
-    {
-        p.*param = static_cast<Field>(value);
-        s.*field = static_cast<Field>(value);
-        OpenView view{*env.current()};
-        TER const cpp = applyLoanSet(env, view, f, p);
-        bool const lawful = LoanFFI::build(s).has_value();
-        BEAST_EXPECTS(
-            lawful == isTesSuccess(cpp),
-            describe(value) + ": cpp=" + transToken(cpp) +
-                (lawful ? " lean=lawful" : " lean=not lawful"));
-        return cpp;
-    }
-
-    // Every rate is capped at 100% (100'000), in C++ preflight and in the model's lawful loan.
     void
-    testRateCapSweep(jtx::Env& env, BrokerFixture const& f, LoanParams const& p, Loan const& s)
-    {
-        sweepRateCap(env, f, p, s, "interest rate", &LoanParams::interestRate, &Loan::interestRate);
-        sweepRateCap(
-            env,
-            f,
-            p,
-            s,
-            "late interest rate",
-            &LoanParams::lateInterestRate,
-            &Loan::lateInterestRate);
-        sweepRateCap(
-            env,
-            f,
-            p,
-            s,
-            "close interest rate",
-            &LoanParams::closeInterestRate,
-            &Loan::closeInterestRate);
-        sweepRateCap(
-            env,
-            f,
-            p,
-            s,
-            "overpayment interest rate",
-            &LoanParams::overpaymentInterestRate,
-            &Loan::overpaymentInterestRate);
-        sweepRateCap(
-            env, f, p, s, "overpayment fee", &LoanParams::overpaymentFee, &Loan::overpaymentFee);
-    }
-
-    // Above 100% the loan is temINVALID in C++ and not lawful in the model.
-    void
-    sweepRateCap(
+    runField(
         jtx::Env& env,
         BrokerFixture const& f,
         LoanParams const& p,
-        Loan const& s,
+        Loan const& baseline,
         std::string const& name,
-        std::uint32_t LoanParams::* param,
-        std::uint32_t Loan::* field)
+        Param LoanParams::* param,
+        Field Loan::* field,
+        std::span<LoanFieldCase const> cases)
     {
-        beginCase(("loan " + name + " cap-Sweep").c_str());
-        for (auto const& [cusp, cases] : kRateCapCases)
+        beginCase(("loan " + name).c_str());
+        for (LoanFieldCase const& c : cases)
         {
-            std::set<TER> seen;
-            for (std::int64_t const rate : cases)
-            {
-                seen.insert(checkField(env, f, p, s, param, field, rate));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
+            LoanParams q = p;
+            Loan s = baseline;
+            q.*param = static_cast<Field>(c.value);
+            s.*field = static_cast<Field>(c.value);
+            if (field == &Loan::paymentInterval)
+                s.nextPaymentDueDate = s.startDate + static_cast<std::uint32_t>(c.value);
+            OpenView view{*env.current()};
+            AppliedLoanTx const cpp = applyLoanSet(env, view, f, q);
+            LeanLoanTx const lean{
+                .result = {
+                    .leanError =
+                        LoanFFI::build(s) ? std::nullopt : std::optional{LeanError::notLawful}}};
+            expectSame(
+                *this,
+                name + " " + std::to_string(c.value) + ": ",
+                cpp,
+                lean,
+                c.expected,
+                c.leanError);
         }
     }
 
-    // The grace period must lie in [60, payment interval] (600 here), else temINVALID / not
-    // lawful.
     void
-    testGracePeriodSweep(jtx::Env& env, BrokerFixture const& f, LoanParams const& p, Loan const& s)
-    {
-        beginCase("loan grace period-Sweep");
-        for (auto const& [cusp, cases] : kGraceCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const grace : cases)
-            {
-                seen.insert(
-                    checkField(env, f, p, s, &LoanParams::gracePeriod, &Loan::gracePeriod, grace));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
-    }
-
-    // The payment interval must be at least 60 s, else temINVALID / not lawful (the stored grace
-    // period is 60).
-    void
-    testIntervalMinimumSweep(
+    runLoanFieldBoundaries(
         jtx::Env& env,
         BrokerFixture const& f,
         LoanParams const& p,
         Loan const& s)
     {
-        beginCase("loan payment interval minimum-Sweep");
-        for (auto const& [cusp, cases] : kIntervalMinimumCases)
-        {
-            std::set<TER> seen;
-            for (std::int64_t const interval : cases)
-            {
-                // The first due date follows the interval.
-                Loan moved = s;
-                moved.nextPaymentDueDate = s.startDate + static_cast<std::uint32_t>(interval);
-                seen.insert(checkField(
-                    env,
-                    f,
-                    p,
-                    moved,
-                    &LoanParams::paymentInterval,
-                    &Loan::paymentInterval,
-                    interval));
-            }
-            expectCrossed(cusp, seen, {temINVALID});
-        }
+        auto const run = [&](char const* name, auto param, auto field, auto const& cases) {
+            runField(env, f, p, s, name, param, field, cases);
+        };
+        run("interest rate cap", &LoanParams::interestRate, &Loan::interestRate, kRateCap);
+        run("late interest rate cap",
+            &LoanParams::lateInterestRate,
+            &Loan::lateInterestRate,
+            kRateCap);
+        run("close interest rate cap",
+            &LoanParams::closeInterestRate,
+            &Loan::closeInterestRate,
+            kRateCap);
+        run("overpayment interest rate cap",
+            &LoanParams::overpaymentInterestRate,
+            &Loan::overpaymentInterestRate,
+            kRateCap);
+        run("overpayment fee cap", &LoanParams::overpaymentFee, &Loan::overpaymentFee, kRateCap);
+        run("grace period", &LoanParams::gracePeriod, &Loan::gracePeriod, kGracePeriod);
+        run("payment interval minimum",
+            &LoanParams::paymentInterval,
+            &Loan::paymentInterval,
+            kIntervalMinimum);
+    }
+
+    void
+    testLoanFieldBoundaries(
+        jtx::Env& env,
+        BrokerFixture const& f,
+        LoanParams const& p,
+        Loan const& s)
+    {
+        runLoanFieldBoundaries(env, f, p, s);
     }
 
     void
     runTests() override
     {
         using namespace jtx;
-        Env env(*this);
+        Env env{*this, lendingTestAmendments()};
         auto const f = setUpBrokerVault(env, BrokerConfig{});
         depositCover(env, f, Number{500});
         LoanParams const p{
@@ -172,7 +171,6 @@ class LeanLoan_test : public LeanSuite
             .paymentTotal = 3};
         auto const loanKeylet = submitLoanSet(env, f, p);
         Loan const baseline = readLoan(*env.current(), loanKeylet, f, p);
-        Number const grid{1, -6};
 
         runLawful(baseline, true, "a loan read from the ledger");
         {
@@ -233,7 +231,7 @@ class LeanLoan_test : public LeanSuite
         {
             auto s = baseline;
             s.paymentRemaining = s.paymentTotal + 1;
-            runLawful(s, true, "more payments left than scheduled (not an invariant)");
+            runLawful(s, false, "more payments left than scheduled");
         }
         {
             auto s = baseline;
@@ -243,7 +241,7 @@ class LeanLoan_test : public LeanSuite
         {
             auto s = baseline;
             s.nextPaymentDueDate += 7;
-            runLawful(s, true, "next due date off the schedule (not an invariant)");
+            runLawful(s, false, "next due date off the schedule");
         }
         {
             auto s = baseline;
@@ -256,10 +254,7 @@ class LeanLoan_test : public LeanSuite
             s.broker.managementFeeRate = 10'001;
             runLawful(s, false, "unlawful broker");
         }
-
-        testRateCapSweep(env, f, p, baseline);
-        testGracePeriodSweep(env, f, p, baseline);
-        testIntervalMinimumSweep(env, f, p, baseline);
+        testLoanFieldBoundaries(env, f, p, baseline);
     }
 };
 

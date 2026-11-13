@@ -93,7 +93,7 @@ private lemma LendingLedger.lending_step {l l' : LendingLedger} {tx : LendingTx}
       simp only [Loan.accept] at hok'
       unfold_ter at hok'
       walk_ok
-      exact ⟨_, ‹_›⟩
+      all_goals exact ⟨_, ‹_›⟩
     obtain ⟨hAR, hYU, -, -⟩ := LendingLedger.accept_releases_proof hr h hat hat' hi
     obtain ⟨hLU, hAD⟩ := Loan.accept_lossStep loan l.vault r hok
     rw [← hv] at hLU hAD

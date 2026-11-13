@@ -78,7 +78,7 @@ def withZeroAmounts (r : LoanWithPool Vault) : LoanResult :=
   { toLoanWithPool := r, amountToPool := Number.zero, amountToBroker := Number.zero }
 
 def withDisbursement (r : LoanWithDisbursement Vault) : LoanResult :=
-  { withZeroAmounts r.toLoanWithPool with amountToBorrower := r.amountToBorrower }
+  { withZeroAmounts r.toLoanWithPool with amountToBorrower := r.amountToBorrower, amountToBroker := r.amountToBroker }
 
 def ofAmounts (r : LoanWithAmounts Vault) : LoanResult := { toLoanWithAmounts := r }
 

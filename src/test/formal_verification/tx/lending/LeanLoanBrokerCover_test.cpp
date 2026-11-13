@@ -2,7 +2,6 @@
 #include <test/formal_verification/ffi/lending/LoanBrokerFFI.h>
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/tx/lending/LendingTestHelpers.h>
-#include <test/formal_verification/tx/lending/LoanSetSweepCases.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
@@ -20,184 +19,94 @@
 #include <cstdint>
 #include <exception>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
 
 namespace xrpl::test::formal_verification {
+
+// A cover deposit by the owner of amount * 10^exponent vault grid units, on a broker staged as
+// `stage`.
+struct LoanBrokerCoverDepositCase
+{
+    LendingStage stage{};
+    std::int64_t amount{};
+    int exponent{};
+    TER expected;
+};
+
+// A cover withdrawal by the owner, as LoanBrokerCoverDepositCase.
+struct LoanBrokerCoverWithdrawCase
+{
+    LendingStage stage{};
+    std::int64_t amount{};
+    int exponent{};
+    TER expected;
+};
+
+// A cover clawback by the issuer, as LoanBrokerCoverDepositCase; without an amount it claws
+// everything above the minimum cover.
+struct LoanBrokerCoverClawbackCase
+{
+    LendingStage stage{};
+    std::optional<std::int64_t> amount{};
+    int exponent{};
+    TER expected;
+};
 
 // Differential tests of the broker cover transactions: LoanBrokerCoverDeposit, CoverWithdraw and
 // CoverClawback. Each compares preclaim (the `can*` TER), doApply (the TER and the broker's
 // post-state) and the amount moved.
+// Rows stage ledger state on a throwaway view, including states no transaction sequence may
+// reach: a verdict compares model and C++ on the same pre-state, not a claim the state is
+// reachable (see stageLending).
 class LeanLoanBrokerCover_test : public LeanSuite
 {
-    enum class Op : std::uint8_t { deposit, withdraw, clawback };
-
     static std::string
-    opName(Op op)
+    opName(CoverOp op)
     {
         switch (op)
         {
-            case Op::deposit:
+            case CoverOp::Deposit:
                 return "cover deposit";
-            case Op::withdraw:
+            case CoverOp::Withdraw:
                 return "cover withdraw";
-            case Op::clawback:
+            case CoverOp::Clawback:
                 return "cover clawback";
         }
         return "?";
     }
 
-    std::optional<SweepLedger> iou_;
-    std::optional<SweepLedger> mpt_;
-
-    SweepLedger&
-    ledger(LendingAsset kind)
-    {
-        return kind == LendingAsset::mpt ? *mpt_ : *iou_;
-    }
-
-    // Run one cover transaction on `view` (already staged). `amount` is the transaction amount;
-    // for a clawback `nullopt` omits sfAmount (claw everything above the minimum cover).
-    // `expectedMoved` is the cover movement both sides must agree on. The tokens the broker's
-    // pseudo-account gains or loses must be the cover booked, and the vault must not change.
-    // Returns the C++ verdict.
-    TER
+    // Stage `stage` (the vault in its investment phase) on a throwaway view of the shared ledger,
+    // run the cover transaction there and the model on the same pre-state.
+    AppliedBrokerTx
     checkCover(
-        jtx::Env& env,
-        BrokerFixture const& f,
-        OpenView& view,
-        Op op,
+        TestLedger const& l,
+        LendingStage const& stage,
+        CoverOp op,
         std::optional<Number> const& amount,
-        std::optional<TER> expected,
-        std::optional<Number> const& expectedMoved,
-        std::string const& at)
+        TER expected)
     {
-        using namespace jtx;
-        LoanBroker const before = readBroker(view, f);
-        Vault const pool = readVaultState(view, f.vaultKeylet, f.asset.raw());
-        AccountID const pseudo = view.read(f.brokerKeylet)->at(sfAccount);
-        Number const heldBefore = holding(view, pseudo, f.asset.raw());
         std::optional<STAmount> const stAmount =
-            amount ? std::optional<STAmount>{f.asset(*amount)} : std::nullopt;
-
-        // The model's doApply assumes preclaim passed (a failed precondition there is
-        // tecINTERNAL), so it is only run when the model's preclaim accepts.
-        LawfulTerResult can{};
-        std::optional<LeanCoverResult> result;
-        switch (op)
-        {
-            case Op::deposit:
-                can = leanCanCoverDeposit(before, pool, *stAmount);
-                if (can.ter == tesSUCCESS)
-                    result = leanCoverDeposit(before, pool, *stAmount);
-                break;
-            case Op::withdraw:
-                can = leanCanCoverWithdraw(before, pool, *stAmount);
-                if (can.ter == tesSUCCESS)
-                    result = leanCoverWithdraw(before, pool, *stAmount);
-                break;
-            case Op::clawback:
-                can = leanCanCoverClawback(before, pool, stAmount);
-                if (can.ter == tesSUCCESS)
-                    result = leanCoverClawback(before, pool, stAmount);
-                break;
-        }
-        expectLawful(can);
-
-        json::Value tx;
-        switch (op)
-        {
-            case Op::deposit:
-                tx = loan_broker::coverDeposit(f.owner, f.brokerKeylet.key, *stAmount);
-                break;
-            case Op::withdraw:
-                tx = loan_broker::coverWithdraw(f.owner, f.brokerKeylet.key, *stAmount);
-                break;
-            case Op::clawback:
-                tx = loan_broker::coverClawback(f.issuer);
-                tx[sfLoanBrokerID] = to_string(f.brokerKeylet.key);
-                if (stAmount)
-                    tx[sfAmount] = stAmount->getJson(JsonOptions::Values::None);
-                break;
-        }
-        TER const cppTer = applyOn(env, view, tx);
-        LoanBroker const cpp = readBroker(view, f);
-
-        TER lean = can.ter;
-        if (can.leanError || (can.ter == tesSUCCESS && (!result || result->leanError)))
-        {
-            lean = tefEXCEPTION;
-        }
-        else if (can.ter == tesSUCCESS)
-        {
-            lean = result->error.value_or(tesSUCCESS);
-        }
-        BEAST_EXPECTS(
-            lean == cppTer, at + ": lean=" + transToken(lean) + " cpp=" + transToken(cppTer));
-        if (expected)
-            expectTer(*this, lean, cppTer, *expected, at + ": ");
-        if (cppTer != tesSUCCESS || lean != tesSUCCESS)
-            return cppTer;
-
-        BEAST_EXPECTS(
-            result->broker.coverAvailable == cpp.coverAvailable,
-            at + ": coverAvailable lean=" + to_string(result->broker.coverAvailable) +
-                " cpp=" + to_string(cpp.coverAvailable));
-        BEAST_EXPECTS(
-            result->broker.debtTotal == cpp.debtTotal && result->broker.loanCount == cpp.loanCount,
-            at + ": debt or loan count changed");
-        Number const cppMoved = op == Op::deposit ? cpp.coverAvailable - before.coverAvailable
-                                                  : before.coverAvailable - cpp.coverAvailable;
-        Number const heldAfter = holding(view, pseudo, f.asset.raw());
-        Number const tokensMoved =
-            op == Op::deposit ? heldAfter - heldBefore : heldBefore - heldAfter;
-        BEAST_EXPECTS(
-            tokensMoved == cppMoved,
-            at + ": tokens moved " + to_string(tokensMoved) + " but cover booked " +
-                to_string(cppMoved));
-        BEAST_EXPECTS(
-            Number{result->amount} == tokensMoved,
-            at + ": moved lean=" + to_string(Number{result->amount}) +
-                " cpp=" + to_string(tokensMoved));
-        expectSameVault(
-            *this, at + ": vault ", pool, readVaultState(view, f.vaultKeylet, f.asset.raw()));
-        if (expectedMoved)
-        {
-            BEAST_EXPECTS(
-                cppMoved == *expectedMoved,
-                at + ": moved " + to_string(cppMoved) + " expected " + to_string(*expectedMoved));
-        }
-        return cppTer;
-    }
-
-    // Stage `s` (the vault in its investment phase) on a throwaway view of the shared ledger and
-    // run the cover transaction there.
-    TER
-    checkStagedCover(
-        SweepLedger& l,
-        LendingStage s,
-        Op op,
-        std::optional<Number> const& amount,
-        std::optional<TER> expected = std::nullopt,
-        std::optional<Number> const& expectedMoved = std::nullopt)
-    {
-        std::string const at = opName(op) + " " + stageText(s) + " amount " +
-            (amount ? to_string(*amount) : std::string{"none"});
+            amount ? std::optional<STAmount>{l.f.asset(*amount)} : std::nullopt;
+        std::string const at = opName(op) + " " + stageText(stage) + " amount " +
+            (amount ? to_string(*amount) : std::string{"none"}) + ": ";
         OpenView view{*l.env->current()};
-        auto const phase = investment(view);
-        s.subscriptionDate = phase.subscriptionDate;
-        s.redemptionDate = phase.redemptionDate;
-        if (!tryStage(*this, at, [&] { stageLending(*l.env, view, l.f, s); }))
-            return tefINTERNAL;
-        return checkCover(*l.env, l.f, view, op, amount, expected, expectedMoved, at);
+        stageInvestment(*l.env, view, l.f, stage);
+        AppliedBrokerTx const cpp = applyLoanBrokerCover(*l.env, view, l.f, op, stAmount);
+        LeanBrokerTx const lean = leanLoanBrokerCover(cpp, op, stAmount);
+        expectSame(*this, at, cpp, lean, expected);
+        return cpp;
     }
 
     // A broker with `cover` deposited and, with `withLoan`, a loan of 1000 (minimum cover 100 at
     // the 10% rate), staged on the shared ledger of the asset like the default fixture broker
-    // (1% management fee, 10% / 20% cover rates).
+    // (1% management fee, 10% / 20% cover rates). `expectedMoved` is the cover both sides move.
     void
     runCover(
+        LendingSetup const& s,
         std::string const& label,
-        Op op,
+        CoverOp op,
         Number const& cover,
         bool withLoan,
         std::optional<Number> const& amount,
@@ -206,383 +115,1061 @@ class LeanLoanBrokerCover_test : public LeanSuite
         LendingAsset assetKind = LendingAsset::iou)
     {
         testcase(opName(op) + ": " + label);
-        SweepLedger& l = ledger(assetKind);
+        TestLedger const& l = assetKind == LendingAsset::mpt ? s.mptLedger : s.iouLedger;
         ReadView const& view = *l.env->current();
-        LendingStage s{
-            .cover = toUnits(view, l.f, cover), .managementFeeRate = 1'000, .coverRate = 10'000};
+        LendingStage stage{
+            .cover = toUnits(view, l.f, cover),
+            .managementFeeRate = 1'000,
+            .coverRate = 10'000,
+        };
         if (withLoan)
-            s.debt = toUnits(view, l.f, Number{1'000});
-        checkStagedCover(l, s, op, amount, expected, expectedMoved);
-    }
-
-    // ---- Sweeps ---------------------------------------------------------------------------------
-
-    // One grid step of the shared ledger's vault at 10^level units, mantissa moved (gridStep).
-    static Number
-    step(SweepLedger const& l, std::int64_t mantissa, int level = 0)
-    {
-        return gridStep(*l.env->current(), l.f, mantissa, level);
-    }
-
-    // A cover deposit that truncates to zero grid units is tecPRECISION_LOSS: a mantissa below
-    // one grid step truncates to nothing (IOU; an MPT amount is integral).
-    void
-    testCoverDepositSubGridSweep()
-    {
-        SweepLedger& l = *iou_;
-        beginCase(("cover deposit " + assetName(l.f) + " sub-grid-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kSubGridDepositCases)
+            stage.debt = toUnits(view, l.f, Number{1'000});
+        AppliedBrokerTx const cpp = checkCover(l, stage, op, amount, expected);
+        if (expectedMoved && cpp.ter == tesSUCCESS)
         {
-            std::set<TER> seen;
-            for (loan_set_sweep::SubGridCusp const& c : cases)
-            {
-                seen.insert(
-                    checkStagedCover(l, {.cover = c.cover}, Op::deposit, step(l, c.mantissa)));
-            }
-            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+            BEAST_EXPECTS(
+                cpp.booked == *expectedMoved,
+                "moved " + to_string(cpp.booked.value_or(Number{})) + " expected " +
+                    to_string(*expectedMoved));
         }
     }
 
-    // Above one grid unit an off-grid deposit is truncated to the grid: 10^level units, or one
-    // unit less below it. The verdict does not change; both sides must book the same cover.
+    // Each row stages the asset's shared ledger on a throwaway view (the vault in its investment
+    // phase), applies the cover transaction there and expects its verdict on both sides, with
+    // every broker field, the untouched vault and the cover moved equal when both succeed. Amounts
+    // are in units of the vault grid (IOU scale 6: 1e-6, MPT: 1); a one-unit amount is written as
+    // a 16-digit mantissa at exponent -15, so moving the mantissa leaves the grid.
+    // - Deposit sub-grid (IOU): a deposit that truncates to zero grid units is tecPRECISION_LOSS.
+    // - Deposit truncation (IOU): above one unit an off-grid deposit is truncated to the grid
+    //   (10^9 units, or one unit less below it); the verdict does not change.
+    // - Deposit open limit: cover + amount past 9e15 units is tecLIMIT_EXCEEDED. Each cusp puts
+    //   cover + amount exactly on the limit.
+    // - Withdraw sub-grid (IOU): as for a deposit.
+    // - Withdraw all: withdrawing more than the cover is tecINSUFFICIENT_FUNDS. Each cusp
+    //   withdraws the whole cover of a broker without debt.
+    // - Withdraw minimum cover: leaving less than the minimum cover ceil(debt * rate / 1e5) is
+    //   tecINSUFFICIENT_FUNDS. Each cusp leaves exactly the minimum.
+    // - Clawback sub-grid (IOU): as for a deposit.
+    // - Clawback no excess: a clawback without an amount and no cover above the minimum cover is
+    //   tecINSUFFICIENT_FUNDS; one unit of excess is clawed. Each cusp holds exactly the minimum.
+    // - Clawback clamp: a clawback above the excess over the minimum cover is clamped to it. The
+    //   withdraw minimum cover rows, whose amount is exactly the excess.
+    // clang-format off
+    static constexpr LoanBrokerCoverDepositCase kCoverDepositSubGrid[] = {
+        // cover 0, one unit
+        {.stage = {}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 1'000'000'000, one unit
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 8'999'999'999'999'997, one unit
+        {.stage = {.cover = 8'999'999'999'999'995}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'995}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'995}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'995}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'995}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverDepositCase kCoverDepositTruncation[] = {
+        // one step of 1e9 units
+        {.amount = 999'999'999'999'998, .exponent = -6, .expected = tesSUCCESS},
+        {.amount = 999'999'999'999'999, .exponent = -6, .expected = tesSUCCESS},
+        {.amount = 1'000'000'000'000'000, .exponent = -6, .expected = tesSUCCESS},
+        {.amount = 1'000'000'000'000'001, .exponent = -6, .expected = tesSUCCESS},
+        {.amount = 1'000'000'000'000'002, .exponent = -6, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverDepositCase kCoverDepositOpenLimit[] = {
+        // cover 0 + amount 9'000'000'000'000'000 = 9e15
+        {.stage = {}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 9'000'000'000'000'000, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {}, .amount = 9'000'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1}, .amount = 9'000'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 8'999'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 9'000'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        // cover 1 + amount 8'999'999'999'999'999 = 9e15
+        {.stage = {}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 9'000'000'000'000'000, .expected = tesSUCCESS},
+        {.stage = {}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 8'999'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 2}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 3}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 8'999'999'999'999'998, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 3}, .amount = 8'999'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 3}, .amount = 9'000'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 3}, .amount = 9'000'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        // cover 8'999'999'999'999'999 + amount 1 = 9e15
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 2, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 3, .expected = tecLIMIT_EXCEEDED},
+        // cover 4'500'000'000'000'000 + amount 4'500'000'000'000'000 = 9e15
+        {.stage = {.cover = 4'499'999'999'999'998}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'998}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'998}, .amount = 4'500'000'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'999}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'999}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'499'999'999'999'999}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'000}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'000}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'000}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'001}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'001}, .amount = 4'499'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'001}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'002}, .amount = 4'499'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 4'500'000'000'000'002}, .amount = 4'499'999'999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 4'500'000'000'000'002}, .amount = 4'500'000'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        // cover 1'000'000'000 + amount 8'999'999'000'000'000 = 9e15
+        {.stage = {.cover = 999'999'998}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 8'999'998'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 8'999'999'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 8'999'999'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 8'999'999'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 8'999'998'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 8'999'999'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 8'999'999'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 8'999'999'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'000}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 8'999'998'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 8'999'999'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'000}, .amount = 8'999'999'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'001}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 8'999'998'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 8'999'999'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'001}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'001}, .amount = 8'999'999'000'000'002, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'002}, .amount = 8'999'998'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 8'999'998'999'999'999, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'002}, .amount = 8'999'999'000'000'000, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'002}, .amount = 8'999'999'000'000'001, .expected = tecLIMIT_EXCEEDED},
+        {.stage = {.cover = 1'000'000'002}, .amount = 8'999'999'000'000'002, .expected = tecLIMIT_EXCEEDED},
+    };
+    static constexpr LoanBrokerCoverWithdrawCase kCoverWithdrawSubGrid[] = {
+        // cover 1, one unit
+        {.stage = {}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 3}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 1'000'000'000, one unit
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 8'999'999'999'999'998, one unit
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverWithdrawCase kCoverWithdrawAll[] = {
+        // cover 1, amount 1
+        {.stage = {}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 2}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 3}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 3, .expected = tesSUCCESS},
+        // cover 1'000'000'000, amount 1'000'000'000
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // cover 8'999'999'999'999'998, amount 8'999'999'999'999'998
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 8'999'999'999'999'996, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 8'999'999'999'999'997, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 8'999'999'999'999'998, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 8'999'999'999'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 9'000'000'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 8'999'999'999'999'996, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 8'999'999'999'999'998, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 8'999'999'999'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 9'000'000'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 8'999'999'999'999'996, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 8'999'999'999'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 9'000'000'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 8'999'999'999'999'996, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 9'000'000'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 8'999'999'999'999'996, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 8'999'999'999'999'997, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 8'999'999'999'999'998, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 8'999'999'999'999'999, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 9'000'000'000'000'000, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverWithdrawCase kCoverWithdrawMinimum[] = {
+        // debt 1, rate 1, cover 2, amount 1
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        // debt 100'000, rate 1, cover 2, amount 1
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 100'000'001, amount 1
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 1'000'000'000, amount 900'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 899'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 200'000'000, amount 100'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 99'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'001, rate 10'000, cover 100'000'002, amount 1
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 1, cover 1'000'010'000, amount 1'000'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 999'999'999, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'000, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'001, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'002, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 100'000, cover 1'000'000'001, amount 1
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 3, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverClawbackCase kCoverClawbackSubGrid[] = {
+        // cover 1, one unit
+        {.stage = {}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 2}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 3}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 3}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 1'000'000'000, one unit
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'000}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'001}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 1'000'000'002}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        // cover 8'999'999'999'999'998, one unit
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'996}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'997}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'998}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 8'999'999'999'999'999}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 999'999'999'999'998, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 999'999'999'999'999, .exponent = -15, .expected = tecPRECISION_LOSS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'000, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'001, .exponent = -15, .expected = tesSUCCESS},
+        {.stage = {.cover = 9'000'000'000'000'000}, .amount = 1'000'000'000'000'002, .exponent = -15, .expected = tesSUCCESS},
+    };
+    static constexpr LoanBrokerCoverClawbackCase kCoverClawbackNoExcess[] = {
+        // debt 0, rate 1, cover 0
+        {.stage = {.coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 2, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 2, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 2, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        // debt 1, rate 1, cover 1
+        {.stage = {.coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 2, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 3, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 1, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 2, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 3, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 2, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 3, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 2, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 3, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        // debt 100'000, rate 1, cover 1
+        {.stage = {.debt = 99'998, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 99'999, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'001, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'002, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 99'998, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 99'999, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'001, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'002, .cover = 1, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 99'998, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 99'999, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'001, .cover = 2, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'002, .cover = 2, .coverRate = 1}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 99'998, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 99'999, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'001, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'002, .cover = 3, .coverRate = 1}, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 100'000'000
+        {.stage = {.debt = 999'999'998, .cover = 99'999'998, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 99'999'998, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'998, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 99'999'998, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 99'999'998, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 100'000'001, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'001, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'001, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        // debt 1'000'000'001, rate 10'000, cover 100'000'001
+        {.stage = {.debt = 999'999'999, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'003, .cover = 99'999'999, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'003, .cover = 100'000'000, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'001, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'001, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'003, .cover = 100'000'001, .coverRate = 10'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'003, .cover = 100'000'002, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 100'000'003, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'002, .cover = 100'000'003, .coverRate = 10'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'003, .cover = 100'000'003, .coverRate = 10'000}, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 100'000, cover 1'000'000'000
+        {.stage = {.debt = 999'999'998, .cover = 999'999'998, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'999, .cover = 999'999'998, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 999'999'998, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 999'999'998, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 999'999'999, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 999'999'999, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 999'999'999, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 999'999'999, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 1'000'000'000, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 1'000'000'000, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 1'000'000'000, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 1'000'000'000, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 1'000'000'001, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 1'000'000'001, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 1'000'000'001, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'002, .cover = 1'000'000'001, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 999'999'998, .cover = 1'000'000'002, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 999'999'999, .cover = 1'000'000'002, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 1'000'000'002, .coverRate = 100'000}, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'002, .cover = 1'000'000'002, .coverRate = 100'000}, .expected = tecINSUFFICIENT_FUNDS},
+    };
+    static constexpr LoanBrokerCoverClawbackCase kCoverClawbackClamp[] = {
+        // debt 1, rate 1, cover 2, amount 1
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 2, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 3, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1, .cover = 4, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        // debt 100'000, rate 1, cover 2, amount 1
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 1, .coverRate = 1}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 2, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 3, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 100'000, .cover = 4, .coverRate = 1}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 100'000'001, amount 1
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 99'999'999, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'000, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'001, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'002, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 100'000'003, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 1'000'000'000, amount 900'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'998, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 899'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 899'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 10'000}, .amount = 900'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 10'000, cover 200'000'000, amount 100'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'998, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 199'999'999, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'000, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'001, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 99'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 99'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 200'000'002, .coverRate = 10'000}, .amount = 100'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'001, rate 10'000, cover 100'000'002, amount 1
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'000, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'001, .coverRate = 10'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'002, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'003, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'001, .cover = 100'000'004, .coverRate = 10'000}, .amount = 3, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 1, cover 1'000'010'000, amount 1'000'000'000
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'998, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'009'999, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'000, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'001, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 999'999'998, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 999'999'999, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'000, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'001, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'010'002, .coverRate = 1}, .amount = 1'000'000'002, .expected = tesSUCCESS},
+        // debt 1'000'000'000, rate 100'000, cover 1'000'000'001, amount 1
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 999'999'999, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 1, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 2, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'000, .coverRate = 100'000}, .amount = 3, .expected = tecINSUFFICIENT_FUNDS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'001, .coverRate = 100'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'002, .coverRate = 100'000}, .amount = 3, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 1, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 2, .expected = tesSUCCESS},
+        {.stage = {.debt = 1'000'000'000, .cover = 1'000'000'003, .coverRate = 100'000}, .amount = 3, .expected = tesSUCCESS},
+    };
+    // clang-format on
+
     void
-    testCoverDepositTruncationSweep()
+    runLoanBrokerCoverDepositBoundaries(LendingSetup const& s)
     {
-        SweepLedger& l = *iou_;
-        for (int const level : loan_set_sweep::kGridLevels)
-        {
-            if (level == 0)
-                continue;
-            beginCase(("cover deposit " + assetName(l.f) + " truncation at 1e" +
-                       std::to_string(level) + "-Sweep")
-                          .c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kOneStepCases)
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanBrokerCoverDepositCase const> cases) {
+            for (TestLedger const& l : ledgers)
             {
-                for (std::int64_t const mantissa : cases)
+                beginCase(
+                    ("cover deposit " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (auto const& [stage, amount, exponent, expected] : cases)
+                    checkCover(l, stage, CoverOp::Deposit, units(l.f, amount, exponent), expected);
+            }
+        };
+
+        run("sub-grid", s.iou, kCoverDepositSubGrid);
+        run("truncation", s.iou, kCoverDepositTruncation);
+        run("open limit", s.all, kCoverDepositOpenLimit);
+    }
+
+    void
+    testLoanBrokerCoverDepositBoundaries(LendingSetup const& s)
+    {
+        runLoanBrokerCoverDepositBoundaries(s);
+    }
+
+    void
+    runLoanBrokerCoverWithdrawBoundaries(LendingSetup const& s)
+    {
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanBrokerCoverWithdrawCase const> cases) {
+            for (TestLedger const& l : ledgers)
+            {
+                beginCase(
+                    ("cover withdraw " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (auto const& [stage, amount, exponent, expected] : cases)
+                    checkCover(l, stage, CoverOp::Withdraw, units(l.f, amount, exponent), expected);
+            }
+        };
+
+        run("sub-grid", s.iou, kCoverWithdrawSubGrid);
+        run("whole cover", s.all, kCoverWithdrawAll);
+        run("minimum cover", s.all, kCoverWithdrawMinimum);
+    }
+
+    void
+    testLoanBrokerCoverWithdrawBoundaries(LendingSetup const& s)
+    {
+        runLoanBrokerCoverWithdrawBoundaries(s);
+    }
+
+    void
+    runLoanBrokerCoverClawbackBoundaries(LendingSetup const& s)
+    {
+        auto const run = [&](std::string const& name,
+                             std::vector<TestLedger> const& ledgers,
+                             std::span<LoanBrokerCoverClawbackCase const> cases) {
+            for (TestLedger const& l : ledgers)
+            {
+                beginCase(
+                    ("cover clawback " + vaultName(*l.env, l.f.vaultKeylet) + " " + name).c_str());
+                for (auto const& [stage, amount, exponent, expected] : cases)
                 {
-                    checkStagedCover(l, {}, Op::deposit, step(l, mantissa, level));
+                    checkCover(
+                        l,
+                        stage,
+                        CoverOp::Clawback,
+                        amount ? std::optional{units(l.f, *amount, exponent)} : std::nullopt,
+                        expected);
                 }
             }
-        }
+        };
+
+        run("sub-grid", s.iou, kCoverClawbackSubGrid);
+        run("no excess", s.all, kCoverClawbackNoExcess);
+        run("clamp", s.all, kCoverClawbackClamp);
     }
 
     void
-    testCoverOpenLimitSweep()
+    testLoanBrokerCoverClawbackBoundaries(LendingSetup const& s)
     {
-        sweepCoverOpenLimit(*iou_);
-        sweepCoverOpenLimit(*mpt_);
-    }
-
-    // A cover deposit past the open limit (cover + amount > 9e15 units) is tecLIMIT_EXCEEDED.
-    // Rows put cover + amount exactly on the limit (the owner holds 1e16 units).
-    void
-    sweepCoverOpenLimit(SweepLedger& l)
-    {
-        beginCase(("cover deposit " + assetName(l.f) + " open limit-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kCoverOpenLimitCases)
-        {
-            std::set<TER> seen;
-            for (loan_set_sweep::CoverAmountCusp const& c : cases)
-            {
-                seen.insert(
-                    checkStagedCover(l, {.cover = c.cover}, Op::deposit, units(l.f, c.amount)));
-            }
-            expectCrossed(cusp, seen, {tecLIMIT_EXCEEDED});
-        }
-    }
-
-    // A cover withdrawal or clawback that truncates to zero grid units is tecPRECISION_LOSS
-    // (IOU; mantissa as in the deposit sweep).
-    void
-    testCoverTakeSubGridSweep()
-    {
-        SweepLedger& l = *iou_;
-        for (Op const op : {Op::withdraw, Op::clawback})
-        {
-            beginCase((opName(op) + " " + assetName(l.f) + " sub-grid-Sweep").c_str());
-            for (auto const& [cusp, cases] : loan_set_sweep::kSubGridTakeCases)
-            {
-                std::set<TER> seen;
-                for (loan_set_sweep::SubGridCusp const& c : cases)
-                {
-                    seen.insert(checkStagedCover(l, {.cover = c.cover}, op, step(l, c.mantissa)));
-                }
-                expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-            }
-        }
-    }
-
-    void
-    testCoverWithdrawAllSweep()
-    {
-        sweepCoverWithdrawAll(*iou_);
-        sweepCoverWithdrawAll(*mpt_);
-    }
-
-    // Withdrawing more than the cover is tecINSUFFICIENT_FUNDS. Rows withdraw the whole cover of
-    // a broker without debt.
-    void
-    sweepCoverWithdrawAll(SweepLedger& l)
-    {
-        beginCase(("cover withdraw " + assetName(l.f) + " whole cover-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kCoverWithdrawAllCases)
-        {
-            std::set<TER> seen;
-            for (loan_set_sweep::CoverAmountCusp const& c : cases)
-            {
-                seen.insert(
-                    checkStagedCover(l, {.cover = c.cover}, Op::withdraw, units(l.f, c.amount)));
-            }
-            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
-        }
-    }
-
-    void
-    testMinimumCoverSweep()
-    {
-        sweepMinimumCover(*iou_);
-        sweepMinimumCover(*mpt_);
-    }
-
-    // A withdrawal leaving less than the minimum cover ceil(debt * rate / 1e5) is
-    // tecINSUFFICIENT_FUNDS. Rows leave exactly the minimum.
-    void
-    sweepMinimumCover(SweepLedger& l)
-    {
-        beginCase(("cover withdraw " + assetName(l.f) + " minimum cover-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kMinimumCoverCases)
-        {
-            std::set<TER> seen;
-            for (loan_set_sweep::MinimumCoverCusp const& c : cases)
-            {
-                seen.insert(checkStagedCover(
-                    l,
-                    {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
-                    Op::withdraw,
-                    units(l.f, c.amount)));
-            }
-            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
-        }
-    }
-
-    void
-    testNoExcessSweep()
-    {
-        sweepNoExcess(*iou_);
-        sweepNoExcess(*mpt_);
-    }
-
-    // A clawback (no amount) with no cover above the minimum cover is tecINSUFFICIENT_FUNDS; one
-    // unit of excess is clawed. Rows hold exactly the minimum cover.
-    void
-    sweepNoExcess(SweepLedger& l)
-    {
-        beginCase(("cover clawback " + assetName(l.f) + " no excess-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kNoExcessCases)
-        {
-            std::set<TER> seen;
-            for (loan_set_sweep::NoExcessCusp const& c : cases)
-            {
-                seen.insert(checkStagedCover(
-                    l,
-                    {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
-                    Op::clawback,
-                    std::nullopt));
-            }
-            expectCrossed(cusp, seen, {tecINSUFFICIENT_FUNDS});
-        }
-    }
-
-    void
-    testClawbackClampSweep()
-    {
-        sweepClawbackClamp(*iou_);
-        sweepClawbackClamp(*mpt_);
-    }
-
-    // A clawback above the excess over the minimum cover is clamped to it. The minimum cover rows,
-    // whose amount is exactly the excess; the verdict only changes where the cover moves below
-    // the minimum.
-    void
-    sweepClawbackClamp(SweepLedger& l)
-    {
-        beginCase(("cover clawback " + assetName(l.f) + " clamp-Sweep").c_str());
-        for (auto const& [cusp, cases] : loan_set_sweep::kMinimumCoverCases)
-        {
-            for (loan_set_sweep::MinimumCoverCusp const& c : cases)
-            {
-                checkStagedCover(
-                    l,
-                    {.debt = c.debt, .cover = c.cover, .coverRate = c.rate},
-                    Op::clawback,
-                    units(l.f, c.amount));
-            }
-        }
+        runLoanBrokerCoverClawbackBoundaries(s);
     }
 
     void
     runTests() override
     {
-        jtx::Env iouEnv(*this);
-        iou_ = SweepLedger{
-            .env = &iouEnv,
-            .f = setUpSweepBroker(iouEnv, LendingAsset::iou, loan_set_sweep::kSeedUnits),
-        };
-        jtx::Env mptEnv(*this);
-        mpt_ = SweepLedger{
-            .env = &mptEnv,
-            .f = setUpSweepBroker(mptEnv, LendingAsset::mpt, loan_set_sweep::kSeedUnits),
-        };
+        jtx::Env iouEnv{*this, lendingTestAmendments()};
+        jtx::Env mptEnv{*this, lendingTestAmendments()};
+        LendingSetup const s = setUpLending(iouEnv, mptEnv);
 
         // The IOU vault has scale 6, so the cover grid is 1e-6 and the open limit 9e9.
         Number const grid{1, -6};
-        Number const openLimit = units(iou_->f, kOpenLimitUnits);
+        Number const openLimit = units(s.iouLedger.f, kOpenLimitUnits);
 
-        // Deposits
-        runCover(
-            "first deposit", Op::deposit, Number{0}, false, Number{100}, tesSUCCESS, Number{100});
-        runCover(
-            "second deposit", Op::deposit, Number{100}, false, Number{50}, tesSUCCESS, Number{50});
-        runCover(
-            "off-grid amount is truncated",
-            Op::deposit,
-            Number{100},
-            false,
-            Number{1'234'567, -7},
-            tesSUCCESS,
-            Number{123'456, -6});
-        // covered by testCoverDepositSubGridSweep
-        runCover(
-            "sub-grid dust", Op::deposit, Number{100}, false, Number{1, -7}, tecPRECISION_LOSS);
-        runCover(
-            "up to the open limit",
-            Op::deposit,
-            Number{0},
-            false,
-            openLimit,
-            tesSUCCESS,
-            openLimit);
-        runCover(
-            "17-digit cover leaves the base exponent",
-            Op::deposit,
-            Number{0},
-            false,
-            Number{1, 10},
-            tecLIMIT_EXCEEDED);
-        // covered by testCoverOpenLimitSweep
-        runCover(
-            "past the open limit",
-            Op::deposit,
-            Number{0},
-            false,
-            openLimit + grid,
-            tecLIMIT_EXCEEDED);
+        struct CoverTest
+        {
+            char const* name;
+            CoverOp op;
+            Number initialCover{0};
+            bool withLoan = false;
+            std::optional<Number> amount{};
+            TER expected;
+            std::optional<Number> expectedMoved{};
+            LendingAsset asset = LendingAsset::iou;
+        };
+        // Not static: rows use the open limit of this run's fixture.
+        // clang-format off
+        CoverTest const coverTests[] = {
+            // Deposits
+            {.name = "first deposit", .op = CoverOp::Deposit, .amount = Number{100}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            {.name = "second deposit", .op = CoverOp::Deposit, .initialCover = Number{100}, .amount = Number{50}, .expected = tesSUCCESS, .expectedMoved = Number{50}},
+            {.name = "off-grid amount is truncated", .op = CoverOp::Deposit, .initialCover = Number{100}, .amount = Number{1'234'567, -7}, .expected = tesSUCCESS, .expectedMoved = Number{123'456, -6}},
+            // Covered by testLoanBrokerCoverDepositBoundaries.
+            {.name = "sub-grid dust", .op = CoverOp::Deposit, .initialCover = Number{100}, .amount = Number{1, -7}, .expected = tecPRECISION_LOSS},
+            {.name = "up to the open limit", .op = CoverOp::Deposit, .amount = openLimit, .expected = tesSUCCESS, .expectedMoved = openLimit},
+            {.name = "17-digit cover leaves the base exponent", .op = CoverOp::Deposit, .amount = Number{1, 10}, .expected = tecLIMIT_EXCEEDED},
+            // Covered by testLoanBrokerCoverDepositBoundaries.
+            {.name = "past the open limit", .op = CoverOp::Deposit, .amount = openLimit + grid, .expected = tecLIMIT_EXCEEDED},
 
-        // Withdrawals
-        runCover("partial", Op::withdraw, Number{100}, false, Number{40}, tesSUCCESS, Number{40});
-        runCover(
-            "everything", Op::withdraw, Number{100}, false, Number{100}, tesSUCCESS, Number{100});
-        // covered by testCoverWithdrawAllSweep
-        runCover(
-            "more than available",
-            Op::withdraw,
-            Number{100},
-            false,
-            Number{101},
-            tecINSUFFICIENT_FUNDS);
-        // covered by testCoverTakeSubGridSweep
-        runCover(
-            "sub-grid dust", Op::withdraw, Number{100}, false, Number{1, -7}, tecPRECISION_LOSS);
-        runCover(
-            "down to the minimum cover",
-            Op::withdraw,
-            Number{200},
-            true,
-            Number{100},
-            tesSUCCESS,
-            Number{100});
-        // covered by testMinimumCoverSweep
-        runCover(
-            "below the minimum cover",
-            Op::withdraw,
-            Number{200},
-            true,
-            Number{150},
-            tecINSUFFICIENT_FUNDS);
+            // Withdrawals
+            {.name = "partial", .op = CoverOp::Withdraw, .initialCover = Number{100}, .amount = Number{40}, .expected = tesSUCCESS, .expectedMoved = Number{40}},
+            {.name = "everything", .op = CoverOp::Withdraw, .initialCover = Number{100}, .amount = Number{100}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            // Covered by testLoanBrokerCoverWithdrawBoundaries.
+            {.name = "more than available", .op = CoverOp::Withdraw, .initialCover = Number{100}, .amount = Number{101}, .expected = tecINSUFFICIENT_FUNDS},
+            // Covered by testLoanBrokerCoverWithdrawBoundaries.
+            {.name = "sub-grid dust", .op = CoverOp::Withdraw, .initialCover = Number{100}, .amount = Number{1, -7}, .expected = tecPRECISION_LOSS},
+            {.name = "down to the minimum cover", .op = CoverOp::Withdraw, .initialCover = Number{200}, .withLoan = true, .amount = Number{100}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            // Covered by testLoanBrokerCoverWithdrawBoundaries.
+            {.name = "below the minimum cover", .op = CoverOp::Withdraw, .initialCover = Number{200}, .withLoan = true, .amount = Number{150}, .expected = tecINSUFFICIENT_FUNDS},
 
-        // Clawbacks by the issuer
-        runCover(
-            "no amount claws everything",
-            Op::clawback,
-            Number{100},
-            false,
-            std::nullopt,
-            tesSUCCESS,
-            Number{100});
-        runCover(
-            "zero amount claws everything",
-            Op::clawback,
-            Number{100},
-            false,
-            Number{0},
-            tesSUCCESS,
-            Number{100});
-        runCover("partial", Op::clawback, Number{100}, false, Number{40}, tesSUCCESS, Number{40});
-        runCover(
-            "above the excess is clamped",
-            Op::clawback,
-            Number{100},
-            false,
-            Number{150},
-            tesSUCCESS,
-            Number{100});
-        runCover(
-            "only the excess over the minimum cover",
-            Op::clawback,
-            Number{200},
-            true,
-            std::nullopt,
-            tesSUCCESS,
-            Number{100});
-        runCover(
-            "clamped to the excess over the minimum cover",
-            Op::clawback,
-            Number{200},
-            true,
-            Number{150},
-            tesSUCCESS,
-            Number{100});
-        // covered by testNoExcessSweep
-        runCover(
-            "no excess cover", Op::clawback, Number{0}, false, std::nullopt, tecINSUFFICIENT_FUNDS);
-        // covered by testCoverTakeSubGridSweep
-        runCover(
-            "sub-grid dust", Op::clawback, Number{100}, false, Number{1, -7}, tecPRECISION_LOSS);
+            // Clawbacks by the issuer
+            {.name = "no amount claws everything", .op = CoverOp::Clawback, .initialCover = Number{100}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            {.name = "zero amount claws everything", .op = CoverOp::Clawback, .initialCover = Number{100}, .amount = Number{0}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            {.name = "partial", .op = CoverOp::Clawback, .initialCover = Number{100}, .amount = Number{40}, .expected = tesSUCCESS, .expectedMoved = Number{40}},
+            {.name = "above the excess is clamped", .op = CoverOp::Clawback, .initialCover = Number{100}, .amount = Number{150}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            {.name = "only the excess over the minimum cover", .op = CoverOp::Clawback, .initialCover = Number{200}, .withLoan = true, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            {.name = "clamped to the excess over the minimum cover", .op = CoverOp::Clawback, .initialCover = Number{200}, .withLoan = true, .amount = Number{150}, .expected = tesSUCCESS, .expectedMoved = Number{100}},
+            // Covered by testLoanBrokerCoverClawbackBoundaries.
+            {.name = "no excess cover", .op = CoverOp::Clawback, .expected = tecINSUFFICIENT_FUNDS},
+            // Covered by testLoanBrokerCoverClawbackBoundaries.
+            {.name = "sub-grid dust", .op = CoverOp::Clawback, .initialCover = Number{100}, .amount = Number{1, -7}, .expected = tecPRECISION_LOSS},
 
-        // An MPT cover is integral: no rounding to the cover grid.
-        auto const mpt = LendingAsset::mpt;
-        runCover("MPT", Op::deposit, Number{0}, false, Number{100}, tesSUCCESS, Number{100}, mpt);
-        runCover("MPT", Op::withdraw, Number{100}, false, Number{40}, tesSUCCESS, Number{40}, mpt);
-        runCover("MPT", Op::clawback, Number{100}, false, Number{40}, tesSUCCESS, Number{40}, mpt);
-        runCover(
-            "MPT excess over the minimum cover",
-            Op::clawback,
-            Number{200},
-            true,
-            std::nullopt,
-            tesSUCCESS,
-            Number{100},
-            mpt);
+            // An MPT cover is integral: no rounding to the cover grid.
+            {.name = "MPT", .op = CoverOp::Deposit, .amount = Number{100}, .expected = tesSUCCESS, .expectedMoved = Number{100}, .asset = LendingAsset::mpt},
+            {.name = "MPT", .op = CoverOp::Withdraw, .initialCover = Number{100}, .amount = Number{40}, .expected = tesSUCCESS, .expectedMoved = Number{40}, .asset = LendingAsset::mpt},
+            {.name = "MPT", .op = CoverOp::Clawback, .initialCover = Number{100}, .amount = Number{40}, .expected = tesSUCCESS, .expectedMoved = Number{40}, .asset = LendingAsset::mpt},
+            {.name = "MPT excess over the minimum cover", .op = CoverOp::Clawback, .initialCover = Number{200}, .withLoan = true, .expected = tesSUCCESS, .expectedMoved = Number{100}, .asset = LendingAsset::mpt},
+        };
+        // clang-format on
+        for (CoverTest const& t : coverTests)
+            runCover(
+                s,
+                t.name,
+                t.op,
+                t.initialCover,
+                t.withLoan,
+                t.amount,
+                t.expected,
+                t.expectedMoved,
+                t.asset);
 
-        // Sweeps
-        testCoverDepositSubGridSweep();
-        testCoverOpenLimitSweep();
-        testCoverTakeSubGridSweep();
-        testCoverWithdrawAllSweep();
-        testMinimumCoverSweep();
-        testNoExcessSweep();
-        testCoverDepositTruncationSweep();
-        testClawbackClampSweep();
+        testLoanBrokerCoverDepositBoundaries(s);
+        testLoanBrokerCoverWithdrawBoundaries(s);
+        testLoanBrokerCoverClawbackBoundaries(s);
     }
 };
 
