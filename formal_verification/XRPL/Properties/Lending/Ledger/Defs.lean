@@ -52,7 +52,7 @@ inductive LendingTx where
   | vaultWithdraw (holder : Nat) (amount : WithdrawAmount)
   | vaultClawback (holder : Nat) (assets : STAmount)
   | vaultBurnShares (holder : Nat) (amount : STAmount)
-  | vaultSet (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
+  | vaultSet (assetsMaximum : Option Number) (blockDeposit : Option Bool)
   | vaultDelete
   | loanBrokerCreate (tx : LoanBrokerSetCreate)
   | loanBrokerUpdate (broker : Nat) (debtMaximum : Option Number)
@@ -153,12 +153,11 @@ def LendingTx.preflight (l : LendingLedger) : LendingTx → TER
     else .tesSUCCESS
   | .vaultBurnShares _ amount =>
     if isCanonicalAmount amount .int64 && !amount.mIsNegative then .tesSUCCESS else .temBAD_AMOUNT
-  | .vaultSet assetsMaximum blockDeposit unblockDeposit =>
+  | .vaultSet assetsMaximum blockDeposit =>
     let maximumOk := match assetsMaximum with
       | none => true
       | some m => isNonnegativeInput m
     if !maximumOk then .temMALFORMED
-    else if blockDeposit && unblockDeposit then .temINVALID_FLAG
     else .tesSUCCESS
   | .loanBrokerCreate tx =>
     let debtMaximumOk := match tx.debtMaximum with
@@ -259,10 +258,10 @@ def LendingLedger.applyVault (l : LendingLedger) : LendingTx → TerExcept Vault
     let _ ← l.vault.canBurnShares amount holderShares
     let vault' ← l.vault.burnShares holderShares
     return { vault := vault', holderShares := some (h, Number.zero) }
-  | .vaultSet assetsMaximum blockDeposit unblockDeposit => do
-    let ter ← l.vault.canVaultUpdate assetsMaximum blockDeposit unblockDeposit
+  | .vaultSet assetsMaximum blockDeposit => do
+    let ter ← l.vault.canVaultUpdate assetsMaximum blockDeposit
     if !ter.isTesSuccess then throw ter
-    let vault' ← l.vault.update assetsMaximum blockDeposit unblockDeposit
+    let vault' ← l.vault.update assetsMaximum blockDeposit
     return { vault := vault', holderShares := none }
   | _ => throw .temMALFORMED
 

@@ -78,7 +78,7 @@ private lemma LendingLedger.applyVault_holder (l : LendingLedger) (hl : l.Shares
     simp only [Option.mem_def, Option.some.injEq] at hp
     subst hp
     exact Number.zero_isNormalized
-  | vaultSet assetsMaximum blockDeposit unblockDeposit =>
+  | vaultSet assetsMaximum blockDeposit =>
     simp only [LendingLedger.applyVault] at hu
     unfold_ter at hu
     walk_ok'

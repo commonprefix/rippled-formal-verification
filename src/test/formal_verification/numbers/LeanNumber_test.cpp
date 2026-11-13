@@ -3,6 +3,7 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -51,6 +52,7 @@ lean_number_ge(lean_object*, lean_object*);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 class LeanNumber_test : public LeanSuite
 {
@@ -68,31 +70,33 @@ class LeanNumber_test : public LeanSuite
         return fmtNum(p.leanNum.negative != 0, p.leanNum.mantissa, p.cppNum.exponent());
     }
 
-    bool
+    // Compares both sides; returns the C++ verdict for the crossing check.
+    TER
     checkResult(
         std::string const& label,
         LeanNumberResult const& lean,
         Number const& cpp,
         bool cppThrew)
     {
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp.signum() == 0);
         if (lean.ok == cppThrew)
         {
             std::stringstream ss;
             ss << label << ": error mismatch (lean." << (lean.ok ? "ok" : "error") << ", cpp."
                << (cppThrew ? "threw" : "ok") << ")";
             fail(ss.str());
-            return false;
+            return verdict;
         }
         if (!lean.ok)
         {
             pass();
-            return true;
+            return verdict;
         }
 
         if (lean.mantissa == 0 && cpp.mantissa() == 0)
         {
             pass();
-            return true;
+            return verdict;
         }
 
         if (!fieldsEqual(lean, cpp))
@@ -100,10 +104,10 @@ class LeanNumber_test : public LeanSuite
             std::stringstream ss;
             ss << label << ": result mismatch lean=" << format(lean) << " cpp=" << format(cpp);
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
     using LeanBinOp = lean_object* (*)(lean_object*, lean_object*, uint8_t);
@@ -111,7 +115,7 @@ class LeanNumber_test : public LeanSuite
     using CppBinOp = std::function<Number(Number const&, Number const&)>;
     using CppUnaryOp = std::function<Number(Number const&)>;
 
-    bool
+    TER
     checkBinOp(
         std::string const& label,
         LeanBinOp leanOp,
@@ -139,7 +143,7 @@ class LeanNumber_test : public LeanSuite
         return checkResult(label, lean, cpp, cppThrew);
     }
 
-    bool
+    TER
     checkUnary(std::string const& label, LeanUnaryOp leanOp, CppUnaryOp cppOp, NumberPair const& x)
     {
         auto lean = NumberFFI::fromObject(leanOp(lean_number_build(
@@ -157,7 +161,7 @@ class LeanNumber_test : public LeanSuite
         return checkResult(label, lean, cpp, cppThrew);
     }
 
-    bool
+    TER
     checkNormalize(
         std::string const& label,
         bool neg,
@@ -245,11 +249,7 @@ class LeanNumber_test : public LeanSuite
             return ops;
         };
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             for (auto const& [ea, eb] : edgeExpPairs())
@@ -266,11 +266,7 @@ class LeanNumber_test : public LeanSuite
     runFuzzBinOp(LeanBinOp leanOp, char opChar, CppBinOp cppOp, int iterations = 10'000)
     {
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(iterations, [&] {
@@ -313,11 +309,7 @@ class LeanNumber_test : public LeanSuite
     {
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         uint64_t const m = Number::minMantissa();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             for (auto const& region : regions)
@@ -404,11 +396,7 @@ class LeanNumber_test : public LeanSuite
     {
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         std::uniform_int_distribution<uint64_t> mantDist(Number::minMantissa(), Number::kMaxRep);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             for (uint64_t t = lo; t <= hi; ++t)
@@ -428,11 +416,7 @@ class LeanNumber_test : public LeanSuite
     {
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         uint64_t const minM = Number::minMantissa();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             for (int e : {0, 40, -40})
@@ -447,7 +431,7 @@ class LeanNumber_test : public LeanSuite
         }
     }
 
-    bool
+    TER
     compareMul(char const* label, NumberPair const& a, NumberPair const& b)
     {
         return checkBinOp(
@@ -459,7 +443,7 @@ class LeanNumber_test : public LeanSuite
             Number::RoundingMode::ToNearest);
     }
 
-    bool
+    TER
     compareAdd(char const* label, NumberPair const& a, NumberPair const& b)
     {
         return checkBinOp(
@@ -471,7 +455,7 @@ class LeanNumber_test : public LeanSuite
             Number::RoundingMode::ToNearest);
     }
 
-    bool
+    TER
     compareSub(char const* label, NumberPair const& a, NumberPair const& b)
     {
         return checkBinOp(
@@ -740,11 +724,7 @@ public:
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         uint64_t const minM = Number::minMantissa();
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
 
@@ -904,11 +884,7 @@ public:
         {
             auto a = makeNumberPair(true, 6'000'000'000'000'000'000ULL, 0);
             auto b = makeNumberPair(true, 6'000'000'000'000'000'003ULL, 0);
-            for (auto mode :
-                 {Number::RoundingMode::ToNearest,
-                  Number::RoundingMode::TowardsZero,
-                  Number::RoundingMode::Downward,
-                  Number::RoundingMode::Upward})
+            for (auto mode : kRoundingModes)
             {
                 SaveNumberRoundMode save{Number::setround(mode)};
                 checkBinOp(
@@ -946,11 +922,7 @@ public:
         std::pair<uint64_t, int> const params[] = {
             {Number::minMantissa(), 0}, {9'000'000'000'000'000'000ULL, 1}};
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             for (auto const& [mantissa, exponentOffset] : params)
@@ -1015,26 +987,7 @@ public:
         constexpr uint64_t kMaxRep = Number::kMaxRep;      // 2^63 - 1
         constexpr uint64_t kMaxRepUp = Number::kMaxRepUp;  // next multiple of 10
 
-        auto modeName = [](Number::RoundingMode m) -> char const* {
-            switch (m)
-            {
-                case Number::RoundingMode::ToNearest:
-                    return "ToNearest";
-                case Number::RoundingMode::TowardsZero:
-                    return "TowardsZero";
-                case Number::RoundingMode::Downward:
-                    return "Downward";
-                case Number::RoundingMode::Upward:
-                    return "Upward";
-            }
-            return "?";
-        };
-
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             // C++ Normalized{} rounds with the ambient mode; match it to `mode`.
             SaveNumberRoundMode save{Number::setround(mode)};
@@ -1050,7 +1003,7 @@ public:
         }
     }
 
-    bool
+    TER
     checkToRep(std::string const& label, NumberPair const& x, Number::RoundingMode mode)
     {
         auto const lean = readExcept<Int64FFI>(lean_number_to_rep(
@@ -1067,25 +1020,26 @@ public:
         {
             cppThrew = true;
         }
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp == 0);
         if (lean.value.has_value() == cppThrew)
         {
             fail(label + ": error mismatch");
-            return false;
+            return verdict;
         }
         if (!lean.value.has_value())
         {
             pass();
-            return true;
+            return verdict;
         }
         if (lean.value->read() != cpp)
         {
             std::stringstream ss;
             ss << label << ": lean=" << lean.value->read() << " cpp=" << cpp;
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
     void
@@ -1104,11 +1058,7 @@ public:
             {false, {5, -1}},
             {false, {1, 5}}};
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
 
@@ -1132,6 +1082,190 @@ public:
         }
     }
 
+    // ---- Cusp sweeps ----
+
+    TER
+    checkSweepOp(
+        char opChar,
+        LeanBinOp leanOp,
+        CppBinOp const& cppOp,
+        NumberPair const& a,
+        NumberPair const& b,
+        Number::RoundingMode mode)
+    {
+        return checkBinOp(fmtNum(a) + ' ' + opChar + ' ' + fmtNum(b), leanOp, cppOp, a, b, mode);
+    }
+
+    TER
+    checkSum(MantissaPair const& c, Number::RoundingMode mode)
+    {
+        return checkSweepOp(
+            '+',
+            lean_number_add,
+            [](Number const& x, Number const& y) { return x + y; },
+            makeNumberPair(c.a, c.exponent),
+            makeNumberPair(c.b, c.exponent),
+            mode);
+    }
+
+    TER
+    checkDifference(MantissaPair const& c, Number::RoundingMode mode)
+    {
+        return checkSweepOp(
+            '-',
+            lean_number_sub,
+            [](Number const& x, Number const& y) { return x - y; },
+            makeNumberPair(c.a, c.exponent),
+            makeNumberPair(c.b, c.exponent),
+            mode);
+    }
+
+    TER
+    checkProduct(Factors const& c, Number::RoundingMode mode)
+    {
+        return checkSweepOp(
+            '*',
+            lean_number_mul,
+            [](Number const& x, Number const& y) { return x * y; },
+            makeNumberPair(c.a, c.ea),
+            makeNumberPair(c.b, c.eb),
+            mode);
+    }
+
+    // Add at the largest exponent: a sum of magnitude up to kMaxRepUp fits, one more overflows
+    // ("Number::normalize 1.5").
+    void
+    sweepSumOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.add overflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kSumOverflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkSum(c, mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+    }
+
+    // Sub of opposite signs at the largest exponent: the same magnitudes as the add overflow.
+    void
+    sweepDifferenceOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.sub overflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kDifferenceOverflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkDifference(c, mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+    }
+
+    // The same sums at the smallest exponent: past the largest mantissa the result is rounded to
+    // 18 digits. Both sides succeed; results compared.
+    void
+    sweepSumRounding(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.add rounding " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kSumRoundingCases)
+        {
+            for (MantissaPair const& c : cases)
+            {
+                checkSum(c, mode);
+            }
+        }
+    }
+
+    // Sub at the smallest exponent: a - b down to the smallest mantissa is a value, one less
+    // needs a lower exponent and underflows to zero.
+    void
+    sweepDifferenceUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.sub underflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kDifferenceUnderflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkDifference(c, mode));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
+    }
+
+    // Mul at the largest exponent: a product above kMaxRepUp * 1e18 takes one more exponent step,
+    // which overflows (in every mode from (kMaxRepUp + 1) * 1e18).
+    void
+    sweepProductOverflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.mul overflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kProductOverflowCases)
+        {
+            std::set<TER> seen;
+            for (Factors const& c : cases)
+            {
+                seen.insert(checkProduct(c, mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+    }
+
+    // Mul at the smallest exponent: the same step is the first product that is not zero.
+    void
+    sweepProductUnderflow(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.mul underflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kProductUnderflowCases)
+        {
+            std::set<TER> seen;
+            for (Factors const& c : cases)
+            {
+                seen.insert(checkProduct(c, mode));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
+    }
+
+    // to_rep of m * 10^-1 around an exact half: the rounding mode picks the integer. Both sides
+    // succeed; results compared.
+    void
+    sweepToRepHalf(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.to_rep half " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kToRepHalfCases)
+        {
+            for (std::int64_t const m : cases)
+            {
+                auto const x = makeNumberPair(m, -1);
+                checkToRep("to_rep(" + fmtNum(x) + ")", x, mode);
+            }
+        }
+    }
+
+    // normalize at the exponent bounds: past kMaxRepUp at the largest exponent throws, below the
+    // smallest mantissa at the smallest exponent is zero.
+    void
+    sweepNormalizeBounds(Number::RoundingMode mode)
+    {
+        beginCase(("LeanNumber.normalize bounds " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kNormalizeBoundCases)
+        {
+            std::set<TER> seen;
+            for (Unsigned const& c : cases)
+            {
+                auto const m = mantissaOf(c);
+                auto const e = static_cast<int>(c.exponent);
+                seen.insert(checkNormalize(
+                    "normalize(" + fmtNum(c.negative, m, e) + ")", c.negative, m, e, mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
+        }
+    }
+
 private:
     void
     runTests() override
@@ -1145,6 +1279,14 @@ private:
         testNormalize();
         testCompare();
         testToRep();
+        forEachMode([&](Number::RoundingMode mode) {
+            sweepSumRounding(mode);
+            sweepDifferenceUnderflow(mode);
+            sweepProductOverflow(mode);
+            sweepProductUnderflow(mode);
+            sweepToRepHalf(mode);
+            sweepNormalizeBounds(mode);
+        });
 
         // Issues identified during formal verification.
         // Kept here to ensure there are no regression bugs.
@@ -1155,6 +1297,10 @@ private:
         testDivisionRounding();
         testMultiplicationRounding();
         testCuspRounding();
+        forEachMode([&](Number::RoundingMode mode) {
+            sweepSumOverflow(mode);
+            sweepDifferenceOverflow(mode);
+        });
     }
 };
 

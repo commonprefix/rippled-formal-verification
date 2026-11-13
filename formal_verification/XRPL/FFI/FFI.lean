@@ -7,7 +7,10 @@ import XRPL.FFI.Protocol.STAmountFFI
 import XRPL.FFI.Vault.Vault
 import XRPL.FFI.Vault.VaultBurn
 import XRPL.FFI.Vault.VaultClawback
+import XRPL.FFI.Vault.VaultCreate
 import XRPL.FFI.Vault.VaultDelete
 import XRPL.FFI.Vault.VaultDeposit
 import XRPL.FFI.Vault.VaultSet
 import XRPL.FFI.Vault.VaultWithdraw
+import XRPL.FFI.Lending.LoanBroker
+import XRPL.FFI.Lending.Loan

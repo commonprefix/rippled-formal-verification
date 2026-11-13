@@ -165,6 +165,7 @@ lemma Vault.clawback_lawful (v : Vault) (assets holderShares : STAmount) (waive 
   all_goals try first
     | exact computeClawback_ne_notLawful _ _ _ _ ‹_›
     | exact Vault.adjustAssetsAndShares_ne_notLawful _ _ _ ‹_›
+    | exact STAmount.operator_lt_ne_notLawful _ _ ‹_›
     | (simp only [STAmount.toNumber_ne_notLawful, Vault.checkDebitNotDust_ne_notLawful] at *)
   -- the cash update writes a lawful record
   have hcomp : (computeClawback v assets holderShares waive).run = .ok (.ok _) := ‹_›
@@ -197,13 +198,15 @@ lemma Vault.clawback_error_codes_proof (v : Vault) (assets holderShares : STAmou
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (ter : TER) (hok : (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) :
     ter = .tecNO_PERMISSION ∨ ter = .tecINTERNAL ∨ ter = .tecHAS_OBLIGATIONS ∨ ter = .tecPRECISION_LOSS ∨
-      ter = .tecPATH_DRY := by
+      ter = .tecPATH_DRY ∨ ter = .tecINSUFFICIENT_FUNDS := by
   simp only [Vault.clawback] at hok
   unfold_ter at hok
   walk_ok
   all_goals try simp only [true_or, or_true]
   -- the pricing
-  all_goals try exact Or.inr (computeClawback_codes v _ _ waive ter ‹_›)
+  all_goals try
+    exact (computeClawback_codes v _ _ waive ter ‹_›).elim (fun h => by simp [h])
+      (fun h => h.elim (fun h => by simp [h]) (fun h => h.elim (fun h => by simp [h]) (fun h => by simp [h])))
   -- the dust check
   all_goals try
     have hd : ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecPATH_DRY :=

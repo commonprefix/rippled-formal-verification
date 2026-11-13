@@ -68,11 +68,11 @@ lemma LendingLedger.applyVault_keepsLending (l : LendingLedger) (tx : LendingTx)
     exact ⟨(congrArg RawVault.assetsDeployed hf :), (congrArg RawVault.assetsReserved hf :),
       (congrArg RawVault.lossUnrealized hf :), (congrArg RawVault.yieldUnrealized hf :),
       (congrArg RawVault.schedule hf :), (congrArg RawVault.numericType hf :), (congrArg RawVault.scale hf :)⟩
-  | vaultSet m b ub =>
+  | vaultSet m b =>
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     exact ⟨(congrArg RawVault.assetsDeployed hf :), (congrArg RawVault.assetsReserved hf :),
       (congrArg RawVault.lossUnrealized hf :), (congrArg RawVault.yieldUnrealized hf :),
       (congrArg RawVault.schedule hf :), (congrArg RawVault.numericType hf :), (congrArg RawVault.scale hf :)⟩

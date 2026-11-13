@@ -33,6 +33,17 @@ lemma Refines.bind_ok {α β : Type} {A : Except Error α} {b : α} {K : α → 
   · rw [ok_bind]; exact hK
   · exact Or.inr rfl
 
+/-- Below the top exponent the same-sign add check passes. -/
+lemma checkSumAtTop_of_lt (z : UInt128) {e : Int} (h : e < maxExponent) : checkSumAtTop z e = .ok () := by
+  simp [checkSumAtTop, h]
+
+/-- A successful same-sign add passed its top-exponent check. -/
+lemma checkSumAtTop_bind_ok {α : Type} {z : UInt128} {e : Int} {k : Unit → Except Error α} {r : α}
+    (h : (checkSumAtTop z e >>= k) = .ok r) : k () = .ok r := by
+  cases hc : checkSumAtTop z e with
+  | error err => rw [hc] at h; cases h
+  | ok u => rw [hc, ok_bind] at h; exact h
+
 lemma Refines.ok_eq {α : Type} {new old : Except Error α} {r : α} (h : Refines new old) (hn : new = .ok r) :
     old = .ok r := by
   rcases h with rfl | rfl
@@ -375,6 +386,7 @@ def Number.operator_addSpec (x y : Number) (mode : rounding_mode) : Except Error
         (xm, xe, ym, ye, g)
     if xn == yn then
       let zm128 : UInt128 := toUInt128 xm + toUInt128 ym
+      checkSumAtTop zm128 xe
       let (zm, xe, g) :=
         if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
           let (g', zm128', xe') := g.doDropDigit128Spec zm128 xe
@@ -605,6 +617,7 @@ lemma Number.operator_add_refines (x y : Number) (mode : rounding_mode) :
   dsimp only
   split
   · refine Refines.bind_ok (BitVec.addChecked_refines _ _) ?_
+    refine Refines.bind (Refines.refl _) fun _ _ => ?_
     refine Refines.bind_ok ?_ (Refines.refl _)
     split
     · rw [Guard.doDropDigit128_eq_spec, ok_bind]

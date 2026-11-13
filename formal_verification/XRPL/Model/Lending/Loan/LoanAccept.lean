@@ -8,13 +8,13 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 
 -- LoanAccept -> preclaim
-def Loan.canAccept {α : Type} [AssetPool α] (loan : Loan) (pool : α) (ledgerCloseTime : UInt32)
+def Loan.canAccept {α : Type} [AssetPool α] (loan : Loan) (pool : α) (parentCloseTime : UInt32)
     : Except Error TER := do
   if !loan.isPending then return .tecNO_PERMISSION
-  let hasExpired : Bool := ledgerCloseTime ≥ loan.schedule.startDate
+  let hasExpired : Bool := parentCloseTime ≥ loan.schedule.startDate
   if hasExpired then return .tecEXPIRED
 
-  let phase := AssetPool.phase pool ledgerCloseTime
+  let phase := AssetPool.phase pool parentCloseTime
   match phase with
   | .subscription => return .tecTOO_SOON
   | .redemption => return .tecEXPIRED

@@ -319,8 +319,8 @@ open XRPL.Model.SingleAssetVault (Vault RawVault VaultAmounts WithdrawAmount com
 
 /-- The VaultSet checks read the vault through Number comparisons only. -/
 lemma Vault.canVaultUpdate_ne_notLawful (v : Vault) (assetsMaximum : Option Number)
-    (blockDeposit unblockDeposit : Bool) :
-    v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit ≠ .error .notLawful := by
+    (blockDeposit : Option Bool) :
+    v.canVaultUpdate assetsMaximum blockDeposit ≠ .error .notLawful := by
   unfold XRPL.Model.SingleAssetVault.Vault.canVaultUpdate
   simp only [bind, Except.bind, pure, Except.pure]
   split_ne_notLawful [Number.isOnExponentGrid_ne_notLawful, RawVault.assetsTotal_ne_notLawful]
@@ -340,12 +340,12 @@ private lemma Vault.with_flags_lawful (v : Vault) (am : Option Number) (db : Boo
 
 /-- A VaultSet that passed its preflight and checks writes a lawful vault. A nonzero maximum is above
 zero, and only an owner allowed to block deposits can block them. -/
-lemma Vault.update_ok_of_checks (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
+lemma Vault.update_ok_of_checks (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool)
     (hmax : ∀ m ∈ assetsMaximum, m.isNormalized ∧ Number.zero.operator_le m = true)
-    (hcan : v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS) :
-    ∃ v', v.update assetsMaximum blockDeposit unblockDeposit = .ok v' := by
-  have hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false := by
-    cases hp : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit))
+    (hcan : v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS) :
+    ∃ v', v.update assetsMaximum blockDeposit = .ok v' := by
+  have hperm : (!v.ownerCanBlockDeposit && blockDeposit.isSome) = false := by
+    cases hp : (!v.ownerCanBlockDeposit && blockDeposit.isSome)
     · rfl
     · exfalso
       unfold XRPL.Model.SingleAssetVault.Vault.canVaultUpdate at hcan
@@ -381,18 +381,16 @@ lemma Vault.update_ok_of_checks (v : Vault) (assetsMaximum : Option Number) (blo
           (by rw [Number.toRat_zero]; exact lt_of_le_of_ne h0 (Ne.symm hne'))⟩
   · intro hb
     cases hbd : blockDeposit
-    · cases hud : unblockDeposit
-      · simp only [hbd, hud, Bool.false_eq_true, ↓reduceIte] at hb
-        exact v.valid.depositBlocked_owner hb
-      · simp [hbd, hud] at hb
+    · simp only [hbd, Option.getD_none] at hb
+      exact v.valid.depositBlocked_owner hb
     · cases ho : v.ownerCanBlockDeposit
       · simp [ho, hbd] at hperm
       · rfl
 
 /-- A VaultSet never fails its lawfulness re-check. -/
 lemma LendingLedger.vaultSet_ne_notLawful (l : LendingLedger) (assetsMaximum : Option Number)
-    (blockDeposit unblockDeposit : Bool) :
-    (l.apply (.vaultSet assetsMaximum blockDeposit unblockDeposit)).run ≠ .error .notLawful := by
+    (blockDeposit : Option Bool) :
+    (l.apply (.vaultSet assetsMaximum blockDeposit)).run ≠ .error .notLawful := by
   apply LendingLedger.apply_ne_notLawful_of_vault rfl
   intro hpre _ h
   have hmax : ∀ m ∈ assetsMaximum, m.isNormalized ∧ Number.zero.operator_le m = true := by
@@ -407,14 +405,14 @@ lemma LendingLedger.vaultSet_ne_notLawful (l : LendingLedger) (assetsMaximum : O
   simp only [LendingLedger.applyVault] at h
   unfold_ter at h
   walk_ok'
-  · exact Vault.canVaultUpdate_ne_notLawful _ _ _ _ ‹_›
+  · exact Vault.canVaultUpdate_ne_notLawful _ _ _ ‹_›
   · rename_i hu
-    have hcan : l.vault.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok _ := ‹_›
+    have hcan : l.vault.canVaultUpdate assetsMaximum blockDeposit = .ok _ := ‹_›
     have hok : ∀ t : TER, ¬ (!t.isTesSuccess) = true → t = .tesSUCCESS := fun t ht =>
       (TER.isTesSuccess_iff t).mp (by simpa using ht)
     rename_i t _ _ hc _ _
     rw [hok t hc] at hcan
-    obtain ⟨v', hv'⟩ := Vault.update_ok_of_checks l.vault assetsMaximum blockDeposit unblockDeposit hmax hcan
+    obtain ⟨v', hv'⟩ := Vault.update_ok_of_checks l.vault assetsMaximum blockDeposit hmax hcan
     rw [hv'] at hu
     cases hu
 

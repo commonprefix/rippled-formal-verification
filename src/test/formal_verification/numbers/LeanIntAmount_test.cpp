@@ -3,6 +3,7 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -24,6 +25,7 @@ lean_int_amount_to_number(int64_t v, uint8_t mode);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 class LeanIntAmount_test : public LeanSuite
 {
@@ -35,7 +37,7 @@ class LeanIntAmount_test : public LeanSuite
         return ss.str();
     }
 
-    bool
+    TER
     checkOfNumber(NumberPair const& p, Number::RoundingMode mode)
     {
         auto lean = readExcept<Int64FFI>(lean_int_amount_of_number(
@@ -58,39 +60,41 @@ class LeanIntAmount_test : public LeanSuite
                << p.cppNum.exponent() << ")";
             return ss.str();
         };
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp == 0);
         if (lean.value.has_value() == cppThrew)
         {
             fail(
                 label() + ": error mismatch lean.ok=" + (lean.value.has_value() ? "1" : "0") +
                 " cppThrew=" + (cppThrew ? "1" : "0"));
-            return false;
+            return verdict;
         }
         if (!lean.value.has_value())
         {
             pass();
-            return true;
+            return verdict;
         }
         if (lean.value->read() != cpp)
         {
             std::stringstream ss;
             ss << label() << ": value mismatch lean=" << lean.value->read() << " cpp=" << cpp;
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
     // toNumber: C++ side is the implicit `operator Number()` ctor
-    bool
+    TER
     checkToNumber(MPTAmountPair const& p, Number::RoundingMode mode)
     {
         auto lean = NumberFFI::fromExcept(lean_int_amount_to_number(p.leanMpt, toLeanMode(mode)));
         Number cpp = static_cast<Number>(p.cppMpt);
+        TER const verdict = cppVerdict(false, cpp.signum() == 0);
         if (!lean.ok)
         {
             fail("toNumber(" + fmtVal(p.leanMpt) + "): Lean returned error");
-            return false;
+            return verdict;
         }
         if (!fieldsEqual(lean, cpp))
         {
@@ -98,10 +102,10 @@ class LeanIntAmount_test : public LeanSuite
             ss << "toNumber(" << p.leanMpt << "): mismatch lean=" << format(lean)
                << " cpp=" << format(cpp);
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
 public:
@@ -110,11 +114,7 @@ public:
     {
         beginCase("LeanIntAmount.fuzz_of_number", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(50'000, [&] { return checkOfNumber(randomNumberPair(-100, 100), mode); });
@@ -126,11 +126,7 @@ public:
     {
         beginCase("LeanIntAmount.fuzz_to_number", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(50'000, [&] { return checkToNumber(randomMPTAmountPair(), mode); });
@@ -150,11 +146,7 @@ public:
             static_cast<int64_t>(kMaxMpTokenAmount) == int64Max,
             "kMaxMpTokenAmount must equal INT64_MAX");
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode m{Number::setround(mode)};
             checkToNumber(makeMPTAmountPair(0), mode);
@@ -187,11 +179,7 @@ public:
             checkToNumber(makeMPTAmountPair(v), Number::RoundingMode::ToNearest);
 
         // ofNumber at boundary mantissas + overflow via large exponent.
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode m{Number::setround(mode)};
             checkOfNumber(makeNumberPair(false, Number::minMantissa(), 0), mode);
@@ -204,6 +192,38 @@ public:
         }
     }
 
+    // ---- Cusp sweeps ----
+
+    // Number to int64: m * 10^e up to int64 max converts, the next Number above it throws.
+    void
+    sweepOfNumber(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIntAmount.ofNumber int64 max " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIntOfNumberCases)
+        {
+            std::set<TER> seen;
+            for (Scaled const& c : cases)
+            {
+                seen.insert(checkOfNumber(storedNumber(c.mantissa, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+    }
+
+    // int64 to Number around INT64_MIN, whose magnitude 2^63 the mode rounds. Never throws.
+    void
+    sweepToNumber(Number::RoundingMode mode)
+    {
+        beginCase(("LeanIntAmount.toNumber int64 min " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIntToNumberCases)
+        {
+            for (std::int64_t const v : cases)
+            {
+                checkToNumber(makeMPTAmountPair(v), mode);
+            }
+        }
+    }
+
 private:
     void
     runTests() override
@@ -212,6 +232,10 @@ private:
         test_fuzz_to_number();
         test_known_values();
         test_extreme_values();
+        forEachMode([&](Number::RoundingMode mode) {
+            sweepOfNumber(mode);
+            sweepToNumber(mode);
+        });
     }
 };
 

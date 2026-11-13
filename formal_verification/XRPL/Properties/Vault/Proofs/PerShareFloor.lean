@@ -341,11 +341,11 @@ lemma Vault.ReachableFromIn.no_dilution_intended_proof (v : Vault) (t0 : UInt32)
     rw [hz.withdrawNav_eq, Number.toRat_eq_zero_of_mantissa_zero _ hAm, zero_div] at hP
     have := Vault.perShareValue_nonneg u'
     linarith
-  | update u _ t' n assetsMaximum blockDeposit unblockDeposit u' _ _ _ hok ih =>
+  | update u _ t' n assetsMaximum blockDeposit u' _ _ _ hok ih =>
     obtain ⟨hz, hnt, hP⟩ := ih
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     have hnt' : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
-    have hz' := Vault.update_openZone u _ _ _ u' hz hok
+    have hz' := Vault.update_openZone u _ _ u' hz hok
     refine ⟨hz', hnt'.trans hnt, ?_⟩
     -- an update keeps the cash and the share total
     have hP' : u'.withdrawNav / (u'.toExact.sharesTotal : ℚ) = u.withdrawNav / (u.toExact.sharesTotal : ℚ) := by

@@ -27,6 +27,7 @@ lemma add_lift_trace_g (mode : rounding_mode) :
   simp only [if_true]
   rw [show toUInt128 (5000000000000003000 : UInt64) + toUInt128 (5000000000000002000 : UInt64)
       = (10000000000000005000 : UInt128) from by decide]
+  rw [show checkSumAtTop (10000000000000005000 : UInt128) (-3) = .ok () from by decide, ok_bind]
   rw [show (decide ((10000000000000005000 : UInt128) > toUInt128 largeRange.max) ||
            decide ((10000000000000005000 : UInt128) > toUInt128 maxRepUp)) = true from by decide]
   simp only [if_true]

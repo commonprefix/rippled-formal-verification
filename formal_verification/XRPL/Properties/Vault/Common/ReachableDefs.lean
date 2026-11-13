@@ -86,10 +86,10 @@ inductive Vault.Reachable : Vault → UInt32 → Prop where
       (v.burnShares holderShares).run = .ok (.ok v') →
       Vault.Reachable v' t'
   | update (v : Vault) (t t' : UInt32) (assetsMaximum : Option Number)
-      (blockDeposit unblockDeposit : Bool) (v' : Vault) :
+      (blockDeposit : Option Bool) (v' : Vault) :
       Vault.Reachable v t → t ≤ t' →
-      v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      v.update assetsMaximum blockDeposit unblockDeposit = .ok v' →
+      v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      v.update assetsMaximum blockDeposit = .ok v' →
       Vault.Reachable v' t'
 
 /-- `u` results from `w` by `n` successful transactions, the last at parent close time `t`. With `whole`, deposits and
@@ -132,10 +132,10 @@ inductive Vault.ReachableFromIn (whole : Bool) : Vault → UInt32 → Vault → 
       (u.burnShares holderShares).run = .ok (.ok u') →
       Vault.ReachableFromIn whole w t' u' (n + 1)
   | update (w u : Vault) (t t' : UInt32) (n : ℕ) (assetsMaximum : Option Number)
-      (blockDeposit unblockDeposit : Bool) (u' : Vault) :
+      (blockDeposit : Option Bool) (u' : Vault) :
       Vault.ReachableFromIn whole w t u n → t ≤ t' →
-      u.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      u.update assetsMaximum blockDeposit unblockDeposit = .ok u' →
+      u.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      u.update assetsMaximum blockDeposit = .ok u' →
       Vault.ReachableFromIn whole w t' u' (n + 1)
 
 /-- Withdrawals from time `t` on that drain the vault to zero shares. `done`: no shares are left.

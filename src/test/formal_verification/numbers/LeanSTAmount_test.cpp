@@ -7,6 +7,7 @@
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
+#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
@@ -67,6 +68,7 @@ lean_stamount_are_comparable(lean_object*, lean_object*);
 namespace xrpl::test {
 
 using namespace formal_verification;
+using namespace formal_verification::number_sweep;
 
 namespace {
 
@@ -129,38 +131,40 @@ class LeanSTAmount_test : public LeanSuite
         return ss.str();
     }
 
-    bool
+    // Compares both sides; returns the C++ verdict for the crossing check.
+    TER
     checkStAmountResult(
         std::string const& tag,
         LeanSTAmountResult const& lean,
         STAmount const& cpp,
         bool cppThrew)
     {
+        TER const verdict = cppVerdict(cppThrew, !cppThrew && cpp.signum() == 0);
         if (lean.ok == cppThrew)
         {
             std::stringstream ss;
             ss << tag << ": error mismatch lean.ok=" << lean.ok << " cppThrew=" << cppThrew;
             fail(ss.str());
-            return false;
+            return verdict;
         }
         if (!lean.ok)
         {
             pass();
-            return true;
+            return verdict;
         }
         if (!stAmountFieldsEqual(lean, cpp))
         {
             std::stringstream ss;
             ss << tag << ": value mismatch lean=" << format(lean) << " cpp=" << format(cpp);
             fail(ss.str());
-            return false;
+            return verdict;
         }
         pass();
-        return true;
+        return verdict;
     }
 
     template <typename CppFn>
-    bool
+    TER
     runSTAmountOp(std::string const& tag, LeanSTAmountResult const& lean, CppFn&& cppFn)
     {
         STAmount cpp;
@@ -311,7 +315,7 @@ class LeanSTAmount_test : public LeanSuite
         return ok;
     }
 
-    bool
+    TER
     checkChecked(STAmountPair const& p, Number::RoundingMode mode)
     {
         auto const& s = p.leanSt;
@@ -335,7 +339,7 @@ class LeanSTAmount_test : public LeanSuite
             });
     }
 
-    bool
+    TER
     checkAddSub(
         char const* op,
         bool isAdd,
@@ -356,13 +360,16 @@ class LeanSTAmount_test : public LeanSuite
                 b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
             toLeanMode(mode));
         if (addWraps(a, b, isAdd))
-            return expectWrap(tag.str(), readExcept<STAmountFFI>(lean).error);
+        {
+            expectWrap(tag.str(), readExcept<STAmountFFI>(lean).error);
+            return tesSUCCESS;  // C++ returns the wrapped value.
+        }
         return runSTAmountOp(tag.str(), STAmountFFI::fromExcept(lean), [&] {
             return isAdd ? (a.cppSt + b.cppSt) : (a.cppSt - b.cppSt);
         });
     }
 
-    bool
+    TER
     checkRoundToExponent(STAmountPair const& p, int32_t scale, Number::RoundingMode mode)
     {
         NumberRoundModeGuard mg(mode);
@@ -500,7 +507,7 @@ class LeanSTAmount_test : public LeanSuite
             a.leanSt.numericType == b.leanSt.numericType);
     }
 
-    bool
+    TER
     checkNeg(STAmountPair const& p)
     {
         auto const& s = p.leanSt;
@@ -512,7 +519,7 @@ class LeanSTAmount_test : public LeanSuite
             [&] { return -p.cppSt; });
     }
 
-    bool
+    TER
     checkUncheckedFromInt64(uint8_t nt, int64_t v, int64_t offset)
     {
         bool const neg = v < 0;
@@ -523,6 +530,30 @@ class LeanSTAmount_test : public LeanSuite
             STAmountFFI::fromObject(
                 leanCall(lean_stamount_unchecked_from_int64, NumericTypeFFI::build(nt), v, offset)),
             [&] { return stAmountUnchecked(nt, magnitude(v), offset, neg ? 1 : 0); });
+    }
+
+    TER
+    checkOfNumber(uint8_t nt, NumberPair const& n, Number::RoundingMode mode)
+    {
+        NumberRoundModeGuard mg(mode);
+        std::stringstream tag;
+        tag << "ofNumber(nt=" << static_cast<int>(nt) << "," << (n.leanNum.negative ? "-" : "+")
+            << n.leanNum.mantissa << "e" << n.cppNum.exponent() << ")";
+        return runSTAmountOp(
+            tag.str(),
+            STAmountFFI::fromExcept(leanCall(
+                lean_stamount_of_number,
+                NumericTypeFFI::build(nt),
+                lean_number_build(
+                    n.leanNum.negative,
+                    n.leanNum.mantissa,
+                    static_cast<int64_t>(n.leanNum.exponent)),
+                toLeanMode(mode))),
+            [&] {
+                return assetForNumericType(nt).visit(
+                    [&](Issue const& iss) { return STAmount{iss, n.cppNum}; },
+                    [&](MPTIssue const& mpt) { return STAmount{mpt, n.cppNum}; });
+            });
     }
 
 public:
@@ -542,11 +573,7 @@ public:
             static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
         constexpr uint64_t kMaxNative = 100'000'000'000'000'000ULL;
 
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             checkAccessors(makeSTAmountPair(kIntegral, 0, 0, 0), mode);
             checkAccessors(makeSTAmountPair(kIntegral, 1, 0, 0), mode);
@@ -601,30 +628,7 @@ public:
                      {1, 1'000'000'000'000'000'000ULL, 0},
                      {0, 1'234'567'890'123'456'789ULL, -2}})
             {
-                NumberRoundModeGuard mg(m);
-                uint8_t const leanMode = toLeanMode(m);
-                auto lean = STAmountFFI::fromExcept(leanCall(
-                    lean_stamount_of_number,
-                    NumericTypeFFI::build(nt),
-                    lean_number_build(neg, mant, exp_),
-                    leanMode));
-                STAmount cpp;
-                bool cppThrew = false;
-                try
-                {
-                    Number const n{neg != 0, mant, static_cast<int>(exp_), Number::Unchecked{}};
-                    cpp = assetForNumericType(nt).visit(
-                        [&](Issue const& iss) { return STAmount{iss, n}; },
-                        [&](MPTIssue const& mpt) { return STAmount{mpt, n}; });
-                }
-                catch (std::exception const&)
-                {
-                    cppThrew = true;
-                }
-                std::stringstream tag;
-                tag << "ofNumber(nt=" << static_cast<int>(nt) << "," << (neg ? "-" : "+") << mant
-                    << "e" << exp_ << ")";
-                checkStAmountResult(tag.str(), lean, cpp, cppThrew);
+                checkOfNumber(nt, makeNumberPair(neg != 0, mant, static_cast<int>(exp_)), m);
             }
         }
     }
@@ -691,11 +695,7 @@ public:
             m);
 
         // Mode sweep on a non-trivial IOU sum.
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             checkAddSub(
                 "add",
@@ -728,11 +728,7 @@ public:
             -5,
             Number::RoundingMode::ToNearest);
         // IOU exponent < scale: rounds via the add-then-sub trick.
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             checkRoundToExponent(
                 makeSTAmountPair(kFractional, 1'234'567'890'123'456ULL, -10, 0), -5, mode);
@@ -747,11 +743,7 @@ public:
         beginCase("LeanSTAmount.fuzz_accessors", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(5'000, [&] { return checkAccessors(randomSTAmountPair(rng), mode); });
@@ -764,11 +756,7 @@ public:
         beginCase("LeanSTAmount.fuzz_constructors", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             // checked: hits canonicalization + boundary errors per numericType.
@@ -782,11 +770,7 @@ public:
         beginCase("LeanSTAmount.fuzz_add_sub", true);
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             std::bernoulli_distribution opDist(0.5);
@@ -806,11 +790,7 @@ public:
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         auto& rng = nextRng();
         std::uniform_int_distribution<int32_t> scaleDist(-110, 10);
-        for (auto mode :
-             {Number::RoundingMode::ToNearest,
-              Number::RoundingMode::TowardsZero,
-              Number::RoundingMode::Downward,
-              Number::RoundingMode::Upward})
+        for (auto mode : kRoundingModes)
         {
             SaveNumberRoundMode save{Number::setround(mode)};
             runFuzz(10'000, [&] {
@@ -1021,6 +1001,125 @@ public:
             "Lean XRP add at INT64_MAX wrapped to a negative value");
     }
 
+    // ---- Cusp sweeps ----
+
+    static STAmountPair
+    stPair(uint8_t nt, Scaled const& r)
+    {
+        return makeSTAmountPair(nt, magnitude(r.mantissa), r.exponent, r.mantissa < 0);
+    }
+
+    static STAmountPair
+    stPair(uint8_t nt, Unsigned const& r)
+    {
+        return makeSTAmountPair(nt, mantissaOf(r), r.exponent, r.negative);
+    }
+
+    static STAmountPair
+    iouPair(std::int64_t mantissa, std::int64_t exponent)
+    {
+        return stPair(kFractional, Scaled{.mantissa = mantissa, .exponent = exponent});
+    }
+
+    // The checked constructor: XRP above 1e17 drops and MPT above int64 max throw; an IOU past
+    // 16 digits at exponent 80 throws, below 16 digits at exponent -96 is zero.
+    template <class Row>
+    void
+    sweepChecked(
+        char const* asset,
+        uint8_t nt,
+        std::vector<AroundCusp<Row>> const& rows,
+        Number::RoundingMode mode)
+    {
+        beginCase((std::string("LeanSTAmount.checked ") + asset + " " + modeName(mode) + "-Sweep")
+                      .c_str());
+        for (auto const& [cusp, cases] : rows)
+        {
+            std::set<TER> seen;
+            for (Row const& c : cases)
+            {
+                seen.insert(checkChecked(stPair(nt, c), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
+        }
+    }
+
+    // From a Number: XRP up to 1e17 drops, MPT up to int64 max, IOU up to 16 digits at
+    // exponent 80 and down to them at -96.
+    void
+    sweepOfNumber(
+        char const* asset,
+        uint8_t nt,
+        std::vector<AroundCusp<Scaled>> const& rows,
+        Number::RoundingMode mode)
+    {
+        beginCase((std::string("LeanSTAmount.ofNumber ") + asset + " " + modeName(mode) + "-Sweep")
+                      .c_str());
+        for (auto const& [cusp, cases] : rows)
+        {
+            std::set<TER> seen;
+            for (Scaled const& c : cases)
+            {
+                seen.insert(checkOfNumber(nt, storedNumber(c.mantissa, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
+        }
+    }
+
+    // IOU add at exponent 80 up to 16 digits, sub at -96 down to them.
+    void
+    sweepAddSub(Number::RoundingMode mode)
+    {
+        beginCase(("LeanSTAmount.add overflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIouSumOverflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkAddSub(
+                    "add", true, iouPair(c.a, c.exponent), iouPair(c.b, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPATH_DRY});
+        }
+        beginCase(("LeanSTAmount.sub underflow " + modeName(mode) + "-Sweep").c_str());
+        for (auto const& [cusp, cases] : kIouDifferenceUnderflowCases)
+        {
+            std::set<TER> seen;
+            for (MantissaPair const& c : cases)
+            {
+                seen.insert(checkAddSub(
+                    "sub", false, iouPair(c.a, c.exponent), iouPair(c.b, c.exponent), mode));
+            }
+            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
+        }
+    }
+
+    // roundToScale around a half unit of 10^scale, and around exponent == scale where it stops
+    // rounding. Both sides succeed; results compared.
+    void
+    sweepRoundToScale(Number::RoundingMode mode)
+    {
+        beginCase(("LeanSTAmount.roundToScale " + modeName(mode) + "-Sweep").c_str());
+        auto const check = [&](ScaledTo const& c) {
+            return checkRoundToExponent(
+                iouPair(c.mantissa, c.exponent), static_cast<int32_t>(c.scale), mode);
+        };
+        for (auto const& [cusp, cases] : kRoundToScaleTieCases)
+        {
+            for (ScaledTo const& c : cases)
+            {
+                check(c);
+            }
+        }
+        for (auto const& [cusp, cases] : kRoundToScaleNoOpCases)
+        {
+            for (ScaledTo const& c : cases)
+            {
+                check(c);
+            }
+        }
+    }
+
 private:
     void
     runTests() override
@@ -1043,6 +1142,17 @@ private:
         test_known_round_to_exponent();
         test_extreme_values();
         test_integral_int64_wrap();
+        forEachMode([&](Number::RoundingMode mode) {
+            sweepChecked("XRP", kNative, kXrpCheckedCases, mode);
+            sweepChecked("MPT", kIntegral, kMptCheckedCases, mode);
+            sweepChecked("IOU", kFractional, kIouRangeCases, mode);
+            sweepOfNumber("XRP", kNative, kXrpCheckedCases, mode);
+            sweepOfNumber("MPT", kIntegral, kIntOfNumberCases, mode);
+            sweepOfNumber("IOU", kFractional, kIouOfNumberCases, mode);
+            sweepRoundToScale(mode);
+        });
+        // Every sum is exact, so one mode covers them.
+        forEachMode([&](Number::RoundingMode mode) { sweepAddSub(mode); }, kToNearestOnly);
 
         // Known discrepancies, each fails until the C++ code is fixed.
         // clang-format off

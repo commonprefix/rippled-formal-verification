@@ -580,10 +580,10 @@ lemma Vault.burnShares_openZone (v : Vault) (sharesDestroyed : STAmount) (v' : V
     ⟨k, hk, by rw [hAA]; exact hkv⟩ (by rw [hAA]; exact hz.cashExact)
 
 /-- An update keeps every balance, so the vault stays in the Open zone. -/
-lemma Vault.update_openZone (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
-    (v' : Vault) (hz : v.OpenZone) (hok : v.update assetsMaximum blockDeposit unblockDeposit = .ok v') :
+lemma Vault.update_openZone (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool)
+    (v' : Vault) (hz : v.OpenZone) (hok : v.update assetsMaximum blockDeposit = .ok v') :
     v'.OpenZone := by
-  obtain ⟨_, _, hv'⟩ := Vault.update_frame v assetsMaximum blockDeposit unblockDeposit v' hok
+  obtain ⟨_, _, hv'⟩ := Vault.update_frame v assetsMaximum blockDeposit v' hok
   obtain ⟨k, hk, hkv⟩ := hz.cash
   have hAA : v'.assetsAvailable = v.assetsAvailable := (congrArg RawVault.assetsAvailable hv').trans rfl
   exact Vault.OpenZone.of_fields hz ((congrArg RawVault.assetsDeployed hv').trans rfl)

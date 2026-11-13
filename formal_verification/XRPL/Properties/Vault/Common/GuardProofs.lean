@@ -17,17 +17,17 @@ namespace XRPL.Model.SingleAssetVault
 open XRPL.Model.Protocol
 
 /-- The grid check runs first, so an off-grid maximum stops there. -/
-lemma Vault.canVaultUpdate_off_grid_proof (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
+lemma Vault.canVaultUpdate_off_grid_proof (v : Vault) (m : Number) (blockDeposit : Option Bool)
     (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok false) :
-    v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tecPRECISION_LOSS := by
+    v.canVaultUpdate (some m) blockDeposit = .ok .tecPRECISION_LOSS := by
   simp [Vault.canVaultUpdate, hgrid, bind, Except.bind, pure, Except.pure]
 
 /-- With the maximum on the grid, the permission check is the next to fire. -/
 lemma Vault.canVaultUpdate_no_permission_proof (v : Vault) (assetsMaximum : Option Number)
-    (blockDeposit unblockDeposit : Bool)
+    (blockDeposit : Option Bool)
     (hgrid : ∀ m ∈ assetsMaximum, m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
-    (howner : v.ownerCanBlockDeposit = false) (hflag : (blockDeposit || unblockDeposit) = true) :
-    v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tecNO_PERMISSION := by
+    (howner : v.ownerCanBlockDeposit = false) (hflag : blockDeposit.isSome = true) :
+    v.canVaultUpdate assetsMaximum blockDeposit = .ok .tecNO_PERMISSION := by
   cases assetsMaximum with
   | none => simp [Vault.canVaultUpdate, howner, hflag, bind, Except.bind, pure, Except.pure]
   | some m =>
@@ -35,18 +35,18 @@ lemma Vault.canVaultUpdate_no_permission_proof (v : Vault) (assetsMaximum : Opti
 
 /-- With the grid and permission checks passed, a nonzero maximum below the total fails the limit check. -/
 lemma Vault.canVaultUpdate_below_total_proof (v : Vault) (m assetsTotal : Number)
-    (blockDeposit unblockDeposit : Bool)
+    (blockDeposit : Option Bool)
     (hgrid : m.isOnExponentGrid v.baseExponent v.numericType = .ok true)
-    (hperm : (!v.ownerCanBlockDeposit && (blockDeposit || unblockDeposit)) = false)
+    (hperm : (!v.ownerCanBlockDeposit && blockDeposit.isSome) = false)
     (hat : v.assetsTotal = .ok assetsTotal)
     (hne : m.operator_ne Number.zero = true) (hlt : m.operator_lt assetsTotal = true) :
-    v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tecLIMIT_EXCEEDED := by
+    v.canVaultUpdate (some m) blockDeposit = .ok .tecLIMIT_EXCEEDED := by
   simp [Vault.canVaultUpdate, hgrid, hperm, hat, hne, hlt, bind, Except.bind, pure, Except.pure]
 
 /-- Walks every exit of `canVaultUpdate`. -/
 lemma Vault.canVaultUpdate_error_codes_proof (v : Vault) (assetsMaximum : Option Number)
-    (blockDeposit unblockDeposit : Bool) (ter : TER)
-    (hok : v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok ter) :
+    (blockDeposit : Option Bool) (ter : TER)
+    (hok : v.canVaultUpdate assetsMaximum blockDeposit = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecNO_PERMISSION ∨
       ter = .tecLIMIT_EXCEEDED := by
   simp only [Vault.canVaultUpdate, bind, Except.bind, pure, Except.pure] at hok
@@ -152,16 +152,16 @@ lemma Vault.canVaultDelete_has_obligations_iff_proof (v : Vault) :
   · exact iff_of_false (by simp) h
 
 /-- An update the checks accept sets only a maximum on the vault's base grid. -/
-lemma Vault.canVaultUpdate_assetsMaximum (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
-    (h : v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS) :
+lemma Vault.canVaultUpdate_assetsMaximum (v : Vault) (m : Number) (blockDeposit : Option Bool)
+    (h : v.canVaultUpdate (some m) blockDeposit = .ok .tesSUCCESS) :
     m.isOnExponentGrid v.baseExponent v.numericType = .ok true := by
   simp only [Vault.canVaultUpdate, bind, Except.bind, pure, Except.pure] at h
   walk_ok
   all_goals simp_all
 
 /-- An update keeps the maximum, clears it, or sets the one the transaction names. -/
-lemma Vault.update_assetsMaximum_mem (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
-    (v' : Vault) (hok : v.update assetsMaximum blockDeposit unblockDeposit = .ok v') :
+lemma Vault.update_assetsMaximum_mem (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool)
+    (v' : Vault) (hok : v.update assetsMaximum blockDeposit = .ok v') :
     ∀ m ∈ v'.assetsMaximum, m ∈ v.assetsMaximum ∨ assetsMaximum = some m := by
   intro m hm
   unfold Vault.update at hok

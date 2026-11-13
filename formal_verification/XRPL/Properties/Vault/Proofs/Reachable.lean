@@ -41,8 +41,8 @@ lemma Vault.Reachable.noLending_proof (v : Vault) (t : UInt32) (hr : Vault.Reach
     exact ⟨((congrArg RawVault.assetsDeployed hv).trans rfl).trans ih.1,
       ((congrArg RawVault.lossUnrealized hv).trans rfl).trans ih.2.1,
       ((congrArg RawVault.yieldUnrealized hv).trans rfl).trans ih.2.2⟩
-  | update u _ _ _ _ _ u' _ _ _ hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+  | update u _ _ _ _ u' _ _ _ hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     exact ⟨((congrArg RawVault.assetsDeployed hv).trans rfl).trans ih.1,
       ((congrArg RawVault.lossUnrealized hv).trans rfl).trans ih.2.1,
       ((congrArg RawVault.yieldUnrealized hv).trans rfl).trans ih.2.2⟩
@@ -69,10 +69,10 @@ lemma Vault.Reachable.openZone_proof (v : Vault) (t : UInt32) (hr : Vault.Reacha
     obtain ⟨_, hv⟩ := Vault.burnShares_frame u _ u' hok
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     exact Vault.burnShares_openZone u _ u' (ih (hnt ▸ hmax)) hok
-  | update u _ _ _ _ _ u' _ _ _ hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+  | update u _ _ _ _ u' _ _ _ hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
-    exact Vault.update_openZone u _ _ _ u' (ih (hnt ▸ hmax)) hok
+    exact Vault.update_openZone u _ _ u' (ih (hnt ▸ hmax)) hok
 
 /-- A reachable vault has zero lending fields. AssetsReserved is 0 by `0 ≤ AssetsReserved ≤ AssetsDeployed`. -/
 lemma Vault.Reachable.lendingFields_zero_proof (v : Vault) (t : UInt32) (hr : Vault.Reachable v t) :
@@ -162,8 +162,8 @@ lemma Vault.Reachable.assetsReserved_zero_proof (v : Vault) (t : UInt32) (hr : V
   | burnShares u _ _ _ _ _ u' _ _ _ _ hok ih =>
     obtain ⟨_, hv⟩ := Vault.burnShares_frame u _ u' hok
     exact ((congrArg RawVault.assetsReserved hv).trans rfl).trans ih
-  | update u _ _ _ _ _ u' _ _ _ hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+  | update u _ _ _ _ u' _ _ _ hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     exact ((congrArg RawVault.assetsReserved hv).trans rfl).trans ih
 
 /-- The asset stores a reachable vault's maximum exactly: creation and updates only accept a
@@ -199,14 +199,14 @@ lemma Vault.Reachable.assetsMaximum_exact_proof (v : Vault) (t : UInt32) (hr : V
   | burnShares u _ _ _ _ _ u' _ _ _ _ hok ih =>
     obtain ⟨_, hv⟩ := Vault.burnShares_frame u _ u' hok
     rw [(congrArg RawVault.assetsMaximum hv).trans rfl, (congrArg RawVault.numericType hv).trans rfl]; exact ih
-  | update u _ _ assetsMaximum _ _ u' _ _ hcan hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+  | update u _ _ assetsMaximum _ u' _ _ hcan hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     rw [(congrArg RawVault.numericType hv).trans rfl]
     intro m hm
-    rcases Vault.update_assetsMaximum_mem u _ _ _ u' hok m hm with h | h
+    rcases Vault.update_assetsMaximum_mem u _ _ u' hok m hm with h | h
     · exact ih m h
     · subst h
-      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum u m _ _ hcan)
+      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum u m _ hcan)
 
 /-- `associateAsset` is a no-op on a reachable vault whose cash is stored exactly: every other amount
 it rounds is zero or a maximum on the base grid. -/

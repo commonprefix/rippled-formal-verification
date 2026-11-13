@@ -204,9 +204,9 @@ lemma Vault.Reachable.maxValue_fits (v : Vault) (t : UInt32) (hr : Vault.Reachab
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     rw [hnt]
     exact ih (Vault.canBurnShares_sharesTotal_pos u amount holderShares sharesTotalAmount hcan)
-  | update u _ _ _ _ _ u' _ _ _ hok ih =>
+  | update u _ _ _ _ u' _ _ _ hok ih =>
     intro hs
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     have hST : u'.sharesTotal = u.sharesTotal := (congrArg RawVault.sharesTotal hv).trans rfl
     rw [hnt]

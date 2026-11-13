@@ -184,8 +184,12 @@ private lemma Vault.deposit_success_of_lawful (v : Vault) (amountDeposit : STAmo
     (hat' : raw.assetsTotal = .ok assetsTotal')
     (hmax : ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
       assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = false)
-    (hl : raw.to_lawful = .ok v') :
+    (hl : raw.to_lawful = .ok v')
+    (hSsz : (v.toExact.sharesTotal : ℚ) + amounts.shares.toRat ≤ 2 ^ 63 - 1) :
     (v.deposit amountDeposit isDonation t hpos).run = .ok (.ok { amounts with vault' := v' }) := by
+  have hcap : ¬ ((maxRep.toNat : ℚ) < v.sharesTotal.toRat + amounts.shares.toRat) := by
+    rw [← RawVault.WF.toExact_sharesTotal v.toRawVault v.wf, show maxRep.toNat = 2 ^ 63 - 1 from rfl]
+    push_cast; linarith
   simp only [Vault.deposit]
   unfold_ter
   simp only [ExceptT.run] at hcomp hadj hrounded
@@ -193,7 +197,7 @@ private lemma Vault.deposit_success_of_lawful (v : Vault) (amountDeposit : STAmo
       assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero) = true) := by
     rw [← Bool.and_eq_true, hmax]; decide
   simp [hopen.phase, hopen.donation, hopen.insolvent, hopen.blocked, hrounded, hcomp, hin, hadj, hat', hl,
-    hmax', (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
+    hmax', hcap, (by decide : (TER.tesSUCCESS != TER.tesSUCCESS) = false)]
 
 /-- A deposit that passes every check produces a lawful vault. The new cash is the old cash plus a
 nonnegative charge, and the new share total gains the minted shares exactly, within the MPT maximum and never zero. -/
@@ -308,7 +312,7 @@ lemma Vault.deposit_success_proof (v : Vault) (amountDeposit : STAmount) (isDona
     Vault.deposit_success_lawful v amountDeposit isDonation t hc hty ra amounts raw hopen hrounded hcomp hadj hSsz
   obtain ⟨v', hl, hv'⟩ := RawVault.to_lawful_ok_of hwf hval
   exact ⟨v', Vault.deposit_success_of_lawful v amountDeposit isDonation t hpos ra amounts raw assetsTotal' v' hopen
-    hrounded hcomp hin hadj hat' hmax hl, hv'⟩
+    hrounded hcomp hin hadj hat' hmax hl hSsz, hv'⟩
 
 /-- Proof of `deposit_error_codes`: every exit is walked, and the cash update never reports a bad ledger. -/
 lemma Vault.deposit_error_codes_proof (v : Vault) (amountDeposit : STAmount) (isDonation : Bool)

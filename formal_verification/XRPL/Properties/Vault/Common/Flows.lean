@@ -45,10 +45,10 @@ inductive Vault.Flows (w : Vault) (t : UInt32) :
       (u.burnShares holderShares).run = .ok (.ok u') →
       Vault.Flows w t u' t' D W C SC SR (SD + holderShares.toRat)
   | update (u : Vault) (t₁ t' : UInt32) (D W C SC SR SD : ℚ) (assetsMaximum : Option Number)
-      (blockDeposit unblockDeposit : Bool) (u' : Vault) :
+      (blockDeposit : Option Bool) (u' : Vault) :
       Vault.Flows w t u t₁ D W C SC SR SD → t₁ ≤ t' →
-      u.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      u.update assetsMaximum blockDeposit unblockDeposit = .ok u' →
+      u.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      u.update assetsMaximum blockDeposit = .ok u' →
       Vault.Flows w t u' t' D W C SC SR SD
 
 /-- Transactions from a reachable vault lead to a reachable vault. -/
@@ -64,7 +64,7 @@ lemma Vault.Flows.reachable {w : Vault} {t : UInt32} (hr : Vault.Reachable w t) 
     exact .clawback u t₁ t' assets holderShares waive r ih hle hc hty hhs hsole hnn hok hheld
   | burnShares u t₁ t' _ _ _ _ _ _ amount holderShares sharesTotalAmount u' _ hle hhs hcan hok ih =>
     exact .burnShares u t₁ t' amount holderShares sharesTotalAmount u' ih hle hhs hcan hok
-  | update u t₁ t' _ _ _ _ _ _ assetsMaximum blockDeposit unblockDeposit u' _ hle hcan hok ih =>
-    exact .update u t₁ t' assetsMaximum blockDeposit unblockDeposit u' ih hle hcan hok
+  | update u t₁ t' _ _ _ _ _ _ assetsMaximum blockDeposit u' _ hle hcan hok ih =>
+    exact .update u t₁ t' assetsMaximum blockDeposit u' ih hle hcan hok
 
 end XRPL.Model.SingleAssetVault

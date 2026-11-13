@@ -22,9 +22,9 @@ private lemma Vault.StoresMaximum.of_raw {v v' : Vault} (hst : Vault.StoresMaxim
   unfold Vault.StoresMaximum; rw [hm, hnt]; exact hst
 
 /-- A VaultSet check that passed returned tesSUCCESS. -/
-private lemma Vault.canVaultUpdate_success {v : Vault} {m : Option Number} {b ub : Bool} {ter : TER}
-    (h : v.canVaultUpdate m b ub = .ok ter) (hs : ¬(!ter.isTesSuccess) = true) :
-    v.canVaultUpdate m b ub = .ok .tesSUCCESS := by
+private lemma Vault.canVaultUpdate_success {v : Vault} {m : Option Number} {b : Option Bool} {ter : TER}
+    (h : v.canVaultUpdate m b = .ok ter) (hs : ¬(!ter.isTesSuccess) = true) :
+    v.canVaultUpdate m b = .ok .tesSUCCESS := by
   rw [h, (TER.isTesSuccess_iff ter).mp (by simpa using hs)]
 
 open XRPL.Model.SingleAssetVault in
@@ -64,18 +64,18 @@ private lemma LendingLedger.applyVault_storesMaximum (l : LendingLedger) (tx : L
     walk_ok
     obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
     exact hst.of_raw (congrArg RawVault.assetsMaximum hf :) (congrArg RawVault.numericType hf :)
-  | vaultSet m b ub =>
+  | vaultSet m b =>
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok
     have hcan := Vault.canVaultUpdate_success ‹_› ‹_›
-    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+    obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
     intro m' hm'
     rw [(congrArg RawVault.numericType hf :)]
-    rcases Vault.update_assetsMaximum_mem _ _ _ _ _ ‹_› m' hm' with h' | h'
+    rcases Vault.update_assetsMaximum_mem _ _ _ _ ‹_› m' hm' with h' | h'
     · exact hst m' h'
     · subst h'
-      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum _ m' _ _ hcan)
+      exact Number.isRounded_eq_false_of_isOnExponentGrid _ _ _ (Vault.canVaultUpdate_assetsMaximum _ m' _ hcan)
   | _ => simp only [LendingLedger.applyVault] at h; cases h
 
 /-- Every transaction keeps AssetsMaximum stored exactly. -/

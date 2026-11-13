@@ -133,6 +133,15 @@ lemma Loan.accept_broker (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vau
   walk_ok
   exact (congrArg RawLoan.broker (RawLoan.to_lawful_ok ‹RawLoan.to_lawful _ = Except.ok _›).1 :)
 
+/-- An accept sends the broker owner the amount its active loan reports: the origination fee. -/
+lemma Loan.accept_eta (loan : Loan) (v : Vault) (r : LoanWithDisbursement Vault)
+    (h : (loan.accept v).run = .ok (.ok r)) :
+    r = { loan' := r.loan', pool' := r.pool', amountToBorrower := r.amountToBorrower } := by
+  simp only [Loan.accept] at h
+  unfold_ter at h
+  walk_ok
+  rfl
+
 /-- The vault update of an accept rejects only with tefBAD_LEDGER: it moves nothing into
 LossUnrealized or out of AssetsDeployed. -/
 private lemma accept_adjust_codes (loan : Loan) (v : Vault) (interestDue : Number) (ter : TER)

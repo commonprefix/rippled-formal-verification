@@ -598,17 +598,17 @@ lemma Vault.Reachable.isolation_update_proof (v : Vault) (t0 t : UInt32) (hr : V
     (ht : t0 ≤ t) (shares : STAmount) (waive : Bool) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat)
     (hc : shares.Canonical) (hty : shares.mNumericType = .int64) (rW : VaultWithAmounts)
     (hW : (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok rW))
-    (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) (v' : Vault)
-    (hcan : v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS)
-    (hok : v.update assetsMaximum blockDeposit unblockDeposit = .ok v') (waive' : Bool) :
+    (assetsMaximum : Option Number) (blockDeposit : Option Bool) (v' : Vault)
+    (hcan : v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS)
+    (hok : v.update assetsMaximum blockDeposit = .ok v') (waive' : Bool) :
     ∃ r' : VaultWithAmounts, (v'.withdraw (.vaultShares shares) waive' t hpos).run = .ok (.ok r') := by
   have hspos : 0 < shares.toRat := hpos
   have hsle := Vault.withdraw_shares_le_total v shares waive t hpos hc hty rW hW
   have hmax := Vault.Reachable.maxValue_fits v t0 hr (by linarith)
   have hz := Vault.Reachable.openZone_proof v t0 hr hmax
-  have hr' := Vault.Reachable.update v t0 t assetsMaximum blockDeposit unblockDeposit v' hr ht hcan hok
+  have hr' := Vault.Reachable.update v t0 t assetsMaximum blockDeposit v' hr ht hcan hok
   have hz' := Vault.Reachable.openZone v' t hr'
-  obtain ⟨m, d, hv⟩ := Vault.update_frame v assetsMaximum blockDeposit unblockDeposit v' hok
+  obtain ⟨m, d, hv⟩ := Vault.update_frame v assetsMaximum blockDeposit v' hok
   have hSn : v'.sharesTotal = v.sharesTotal := (congrArg RawVault.sharesTotal hv).trans rfl
   have hsch : v'.schedule = v.schedule := (congrArg RawVault.schedule hv).trans rfl
   have hfr : v'.earlyExitFeeRate = v.earlyExitFeeRate := (congrArg RawVault.earlyExitFeeRate hv).trans rfl

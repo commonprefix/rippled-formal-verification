@@ -481,11 +481,11 @@ lemma LendingLedger.flow_step_upper (l l' : LendingLedger) (tx : LendingTx) (hr 
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
       show _ ≤ _ + AssetFlows.net 0 + _
       rw [AssetFlows.net_zero]; linarith
-    | vaultSet m b ub =>
+    | vaultSet m b =>
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok
-      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
       show _ ≤ _ + AssetFlows.net 0 + _
       rw [AssetFlows.net_zero]; linarith
