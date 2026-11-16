@@ -3,18 +3,21 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
-#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
 
 #include <boost/multiprecision/cpp_int.hpp>
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <random>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -52,7 +55,91 @@ lean_number_ge(lean_object*, lean_object*);
 namespace xrpl::test {
 
 using namespace formal_verification;
-using namespace formal_verification::number_sweep;
+
+namespace {
+
+// a and b at one exponent.
+struct PairCase
+{
+    std::int64_t a;
+    std::int64_t b;
+    int exponent;
+    TER expected;
+};
+
+// a + b at one exponent, and the Number C++ returns.
+struct SumCase
+{
+    std::int64_t a;
+    std::int64_t b;
+    int exponent;
+    ScaledValue expected;
+    std::optional<Number::RoundingMode> mode{};
+};
+
+// a * 10^ea times b * 10^eb.
+struct ProductCase
+{
+    std::int64_t a;
+    std::int64_t b;
+    int ea;
+    int eb;
+    TER expected;
+    std::optional<Number::RoundingMode> mode{};
+};
+
+// to_rep of mantissa * 10^-1, and the int64 C++ returns.
+struct ToRepCase
+{
+    std::int64_t mantissa;
+    std::int64_t expected;
+    std::optional<Number::RoundingMode> mode{};
+};
+
+// normalize of the sign and unsigned mantissa at exponent.
+struct NormalizeCase
+{
+    bool negative;
+    std::uint64_t mantissa;
+    int exponent;
+    TER expected;
+};
+
+std::string
+text(PairCase const& c, char op, Number::RoundingMode mode)
+{
+    return std::to_string(c.a) + ' ' + op + ' ' + std::to_string(c.b) + " at exponent " +
+        std::to_string(c.exponent) + ", " + modeName(mode);
+}
+
+std::string
+text(SumCase const& c, Number::RoundingMode mode)
+{
+    return text(
+        PairCase{.a = c.a, .b = c.b, .exponent = c.exponent, .expected = tesSUCCESS}, '+', mode);
+}
+
+std::string
+text(ProductCase const& c, Number::RoundingMode mode)
+{
+    return std::to_string(c.a) + "e" + std::to_string(c.ea) + " * " + std::to_string(c.b) + "e" +
+        std::to_string(c.eb) + ", " + modeName(mode);
+}
+
+std::string
+text(ToRepCase const& c, Number::RoundingMode mode)
+{
+    return std::to_string(c.mantissa) + "e-1, " + modeName(mode);
+}
+
+std::string
+text(NormalizeCase const& c, Number::RoundingMode mode)
+{
+    return (c.negative ? "-" : "") + std::to_string(c.mantissa) + "e" + std::to_string(c.exponent) +
+        ", " + modeName(mode);
+}
+
+}  // namespace
 
 class LeanNumber_test : public LeanSuite
 {
@@ -70,7 +157,7 @@ class LeanNumber_test : public LeanSuite
         return fmtNum(p.leanNum.negative != 0, p.leanNum.mantissa, p.cppNum.exponent());
     }
 
-    // Compares both sides; returns the C++ verdict for the crossing check.
+    // Compares both sides; returns the C++ verdict.
     TER
     checkResult(
         std::string const& label,
@@ -260,7 +347,7 @@ class LeanNumber_test : public LeanSuite
         }
     }
 
-    // Safety net for inputs the targeted sweeps never thought to try: random
+    // Safety net for inputs the targeted tests never thought to try: random
     // operands, edge or interior, to catch divergences anywhere else.
     void
     runFuzzBinOp(LeanBinOp leanOp, char opChar, CppBinOp cppOp, int iterations = 10'000)
@@ -288,7 +375,7 @@ class LeanNumber_test : public LeanSuite
     // Walk the target result exponent over [center-radius, center+radius]; toExps
     // maps each target to the (ea, eb) that lands this op's result there.
     static std::vector<std::pair<int, int>>
-    sweepResultExp(int center, int radius, std::function<std::pair<int, int>(int)> toExps)
+    resultExpRange(int center, int radius, std::function<std::pair<int, int>(int)> toExps)
     {
         std::vector<std::pair<int, int>> out;
         for (int r = center - radius; r <= center + radius; ++r)
@@ -381,11 +468,11 @@ class LeanNumber_test : public LeanSuite
         return makeNumberPair(bNeg, mant, exp);
     }
 
-    // Sweep the result mantissa across [lo, hi] at a fixed result exponent and
+    // Walk the result mantissa across [lo, hi] at a fixed result exponent and
     // both result signs; a's exponent is pinned near resultExp/2 so the derived
     // partner stays in range.
     void
-    runResultMantissaSweep(
+    runResultMantissaRange(
         char opChar,
         LeanBinOp leanOp,
         CppBinOp cppOp,
@@ -553,17 +640,17 @@ public:
             mul,
             {
                 {"normal", {{0, 0}, {18, -18}, {-40, 40}}},
-                {"near-underflow", sweepResultExp(Number::kMinExponent, 5, mulExps)},
+                {"near-underflow", resultExpRange(Number::kMinExponent, 5, mulExps)},
                 {"underflow", {{-20000, -20000}}},
-                {"near-overflow", sweepResultExp(Number::kMaxExponent, 5, mulExps)},
+                {"near-overflow", resultExpRange(Number::kMaxExponent, 5, mulExps)},
                 {"overflow", {{20000, 20000}}},
             });
 
         uint64_t const minM = Number::minMantissa();
         uint64_t const maxM = Number::maxMantissa();
-        // Sweep the result mantissa across the cusp, at mid, top, and bottom exponents.
+        // Walk the result mantissa across the cusp, at mid, top, and bottom exponents.
         for (int e : {0, Number::kMaxExponent, Number::kMinExponent})
-            runResultMantissaSweep(
+            runResultMantissaRange(
                 '*',
                 lean_number_mul,
                 mul,
@@ -574,12 +661,12 @@ public:
 
         // Land at maxMantissa (top of range) at kMax: there a round-up carries past
         // it, and only at kMax does that carry tip the exponent into overflow.
-        runResultMantissaSweep(
+        runResultMantissaRange(
             '*', lean_number_mul, mul, mulFactor, maxM - 20, maxM, Number::kMaxExponent);
 
         // Land at minMantissa (bottom of range) at kMin: there a value below it gets
         // shifted down, and only at kMin does that shift tip the exponent into underflow.
-        runResultMantissaSweep(
+        runResultMantissaRange(
             '*', lean_number_mul, mul, mulFactor, minM - 3, minM + 3, Number::kMinExponent);
 
         runFuzzBinOp(lean_number_mul, '*', mul);
@@ -604,16 +691,16 @@ public:
             div,
             {
                 {"normal", {{0, 0}, {18, -18}, {-40, 40}}},
-                {"near-underflow", sweepResultExp(Number::kMinExponent, 5, divExps)},
+                {"near-underflow", resultExpRange(Number::kMinExponent, 5, divExps)},
                 {"underflow", {{-20000, 20000}}},
-                {"near-overflow", sweepResultExp(Number::kMaxExponent, 5, divExps)},
+                {"near-overflow", resultExpRange(Number::kMaxExponent, 5, divExps)},
                 {"overflow", {{20000, -20000}}},
             });
 
         uint64_t const minM = Number::minMantissa();
         uint64_t const maxM = Number::maxMantissa();
         for (int e : {0, Number::kMaxExponent, Number::kMinExponent})
-            runResultMantissaSweep(
+            runResultMantissaRange(
                 '/',
                 lean_number_div,
                 div,
@@ -622,16 +709,16 @@ public:
                 Number::kMaxRepUp + 13,
                 e);
 
-        runResultMantissaSweep(
+        runResultMantissaRange(
             '/', lean_number_div, div, divFactor, maxM - 20, maxM, Number::kMaxExponent);
 
-        runResultMantissaSweep(
+        runResultMantissaRange(
             '/', lean_number_div, div, divFactor, minM - 3, minM + 3, Number::kMinExponent);
 
         runFuzzBinOp(lean_number_div, '/', div);
 
         // Only the canonical zero (Number{}, exp=INT_MIN) is a zero divisor in
-        // C++ operator/=; it is the one divisor the non-zero sweeps cannot reach.
+        // C++ operator/=; it is the one divisor the non-zero cases cannot reach.
         {
             auto lean = NumberFFI::fromExcept(lean_number_div(
                 lean_number_build(false, 1'000'000'000'000'000'000ULL, 0),
@@ -1082,10 +1169,8 @@ public:
         }
     }
 
-    // ---- Cusp sweeps ----
-
     TER
-    checkSweepOp(
+    checkOp(
         char opChar,
         LeanBinOp leanOp,
         CppBinOp const& cppOp,
@@ -1097,21 +1182,21 @@ public:
     }
 
     TER
-    checkSum(MantissaPair const& c, Number::RoundingMode mode)
+    checkSum(std::int64_t a, std::int64_t b, int exponent, Number::RoundingMode mode)
     {
-        return checkSweepOp(
+        return checkOp(
             '+',
             lean_number_add,
             [](Number const& x, Number const& y) { return x + y; },
-            makeNumberPair(c.a, c.exponent),
-            makeNumberPair(c.b, c.exponent),
+            makeNumberPair(a, exponent),
+            makeNumberPair(b, exponent),
             mode);
     }
 
     TER
-    checkDifference(MantissaPair const& c, Number::RoundingMode mode)
+    checkDifference(PairCase const& c, Number::RoundingMode mode)
     {
-        return checkSweepOp(
+        return checkOp(
             '-',
             lean_number_sub,
             [](Number const& x, Number const& y) { return x - y; },
@@ -1121,9 +1206,9 @@ public:
     }
 
     TER
-    checkProduct(Factors const& c, Number::RoundingMode mode)
+    checkProduct(ProductCase const& c, Number::RoundingMode mode)
     {
-        return checkSweepOp(
+        return checkOp(
             '*',
             lean_number_mul,
             [](Number const& x, Number const& y) { return x * y; },
@@ -1132,141 +1217,943 @@ public:
             mode);
     }
 
-    // Add at the largest exponent: a sum of magnitude up to kMaxRepUp fits, one more overflows
-    // ("Number::normalize 1.5").
+    // One test case per list; each row compares Lean with C++, then the C++ result with the row.
     void
-    sweepSumOverflow(Number::RoundingMode mode)
+    testBoundaries()
     {
-        beginCase(("LeanNumber.add overflow " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kSumOverflowCases)
-        {
-            std::set<TER> seen;
-            for (MantissaPair const& c : cases)
-            {
-                seen.insert(checkSum(c, mode));
-            }
-            expectCrossed(cusp, seen, {tecPATH_DRY});
-        }
-    }
+        auto const sum = [&](std::size_t i, PairCase const& c, Number::RoundingMode mode) {
+            expectResult(i, text(c, '+', mode), checkSum(c.a, c.b, c.exponent, mode), c.expected);
+        };
+        auto const difference = [&](std::size_t i, PairCase const& c, Number::RoundingMode mode) {
+            expectResult(i, text(c, '-', mode), checkDifference(c, mode), c.expected);
+        };
+        auto const roundedSum = [&](std::size_t i, SumCase const& c, Number::RoundingMode mode) {
+            checkSum(c.a, c.b, c.exponent, mode);
+            Number const r =
+                makeNumberPair(c.a, c.exponent).cppNum + makeNumberPair(c.b, c.exponent).cppNum;
+            expectResult(i, text(c, mode), ScaledValue{r.mantissa(), r.exponent()}, c.expected);
+        };
+        auto const product = [&](std::size_t i, ProductCase const& c, Number::RoundingMode mode) {
+            expectResult(i, text(c, mode), checkProduct(c, mode), c.expected);
+        };
+        auto const toRep = [&](std::size_t i, ToRepCase const& c, Number::RoundingMode mode) {
+            auto const x = makeNumberPair(c.mantissa, -1);
+            checkToRep("to_rep(" + fmtNum(x) + ")", x, mode);
+            expectResult(i, text(c, mode), static_cast<std::int64_t>(x.cppNum), c.expected);
+        };
+        auto const normalize =
+            [&](std::size_t i, NormalizeCase const& c, Number::RoundingMode mode) {
+                TER const verdict = checkNormalize(
+                    "normalize(" + fmtNum(c.negative, c.mantissa, c.exponent) + ")",
+                    c.negative,
+                    c.mantissa,
+                    c.exponent,
+                    mode);
+                expectResult(i, text(c, mode), verdict, c.expected);
+            };
 
-    // Sub of opposite signs at the largest exponent: the same magnitudes as the add overflow.
-    void
-    sweepDifferenceOverflow(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.sub overflow " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kDifferenceOverflowCases)
-        {
-            std::set<TER> seen;
-            for (MantissaPair const& c : cases)
-            {
-                seen.insert(checkDifference(c, mode));
-            }
-            expectCrossed(cusp, seen, {tecPATH_DRY});
-        }
-    }
-
-    // The same sums at the smallest exponent: past the largest mantissa the result is rounded to
-    // 18 digits. Both sides succeed; results compared.
-    void
-    sweepSumRounding(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.add rounding " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kSumRoundingCases)
-        {
-            for (MantissaPair const& c : cases)
-            {
-                checkSum(c, mode);
-            }
-        }
-    }
-
-    // Sub at the smallest exponent: a - b down to the smallest mantissa is a value, one less
-    // needs a lower exponent and underflows to zero.
-    void
-    sweepDifferenceUnderflow(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.sub underflow " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kDifferenceUnderflowCases)
-        {
-            std::set<TER> seen;
-            for (MantissaPair const& c : cases)
-            {
-                seen.insert(checkDifference(c, mode));
-            }
-            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-        }
-    }
-
-    // Mul at the largest exponent: a product above kMaxRepUp * 1e18 takes one more exponent step,
-    // which overflows (in every mode from (kMaxRepUp + 1) * 1e18).
-    void
-    sweepProductOverflow(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.mul overflow " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kProductOverflowCases)
-        {
-            std::set<TER> seen;
-            for (Factors const& c : cases)
-            {
-                seen.insert(checkProduct(c, mode));
-            }
-            expectCrossed(cusp, seen, {tecPATH_DRY});
-        }
-    }
-
-    // Mul at the smallest exponent: the same step is the first product that is not zero.
-    void
-    sweepProductUnderflow(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.mul underflow " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kProductUnderflowCases)
-        {
-            std::set<TER> seen;
-            for (Factors const& c : cases)
-            {
-                seen.insert(checkProduct(c, mode));
-            }
-            expectCrossed(cusp, seen, {tecPRECISION_LOSS});
-        }
-    }
-
-    // to_rep of m * 10^-1 around an exact half: the rounding mode picks the integer. Both sides
-    // succeed; results compared.
-    void
-    sweepToRepHalf(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.to_rep half " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kToRepHalfCases)
-        {
-            for (std::int64_t const m : cases)
-            {
-                auto const x = makeNumberPair(m, -1);
-                checkToRep("to_rep(" + fmtNum(x) + ")", x, mode);
-            }
-        }
-    }
-
-    // normalize at the exponent bounds: past kMaxRepUp at the largest exponent throws, below the
-    // smallest mantissa at the smallest exponent is zero.
-    void
-    sweepNormalizeBounds(Number::RoundingMode mode)
-    {
-        beginCase(("LeanNumber.normalize bounds " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kNormalizeBoundCases)
-        {
-            std::set<TER> seen;
-            for (Unsigned const& c : cases)
-            {
-                auto const m = mantissaOf(c);
-                auto const e = static_cast<int>(c.exponent);
-                seen.insert(checkNormalize(
-                    "normalize(" + fmtNum(c.negative, m, e) + ")", c.negative, m, e, mode));
-            }
-            expectCrossed(cusp, seen, {tecPATH_DRY, tecPRECISION_LOSS});
-        }
+        runRows(*this, "LeanNumber.add overflow", kSumOverflow, sum);
+        runRows(*this, "LeanNumber.sub overflow", kDifferenceOverflow, difference);
+        runRows(*this, "LeanNumber.add rounding", kSumRounding, roundedSum);
+        runRows(*this, "LeanNumber.sub underflow", kDifferenceUnderflow, difference);
+        runRows(*this, "LeanNumber.mul overflow", kProductOverflow, product);
+        runRows(*this, "LeanNumber.mul underflow", kProductUnderflow, product);
+        runRows(*this, "LeanNumber.mul underflow, by mode", kProductUnderflowByMode, product);
+        runRows(*this, "LeanNumber.to_rep half", kToRepHalf, toRep);
+        runRows(*this, "LeanNumber.normalize bounds", kNormalizeBounds, normalize);
     }
 
 private:
+    // Each list runs its rows under every rounding mode on the large mantissa scale; a row that
+    // names a mode runs under that mode only, as its result depends on the mode. A group comment
+    // names the row on the cusp; its rows move both operands (or mantissa and exponent) around it.
+    // kMaxRep is 9'223'372'036'854'775'807 and kMaxRepUp 9'223'372'036'854'775'810.
+    // - kSumOverflow: add at exponent 32'768. A sum of magnitude up to kMaxRepUp fits; above it
+    //   the add throws (tecPATH_DRY) in every mode, even where the mode would round it to
+    //   kMaxRepUp.
+    // - kDifferenceOverflow: sub of opposite signs at exponent 32'768, the same sums and verdicts.
+    // - kSumRounding: the same sums at exponent -32'768. A sum past kMaxRep never throws; the mode
+    //   picks kMaxRep or a multiple of 10 (reported as 18 digits, exponent + 1). The rows hold the
+    //   Number C++ returns.
+    // - kDifferenceUnderflow: sub at exponent -32'768. a - b down to 10^18 is a value; below it
+    //   the result needs a lower exponent and is zero (tecPRECISION_LOSS) in every mode.
+    // - kProductOverflow: mul with result exponent 32'768. A product up to kMaxRepUp * 10^18 fits
+    //   in every mode, one whose 19 leading digits pass kMaxRepUp throws (tecPATH_DRY). The
+    //   commented rows break that rule: C++ and the model round first and succeed where the mode
+    //   rounds the product down to kMaxRepUp.
+    // - kProductUnderflow: mul with result exponent -32'768. A product that rounds to 10^37 or
+    //   more is a value, below that it is zero (tecPRECISION_LOSS). Just under 10^37 the mode
+    //   decides (kProductUnderflowByMode).
+    // - kToRepHalf: to_rep of m * 10^-1 around an exact half; the mode picks the integer, ToNearest
+    //   half to even. The rows hold the int64 C++ returns.
+    // - kNormalizeBounds: normalize at exponent 32'768 fits a mantissa up to kMaxRepUp and throws
+    //   above it (tecPATH_DRY); at -32'768 a mantissa below 10^18, or any lower exponent, is zero
+    //   (tecPRECISION_LOSS).
+    // clang-format off
+    static constexpr PairCase kSumOverflow[] = {
+        // 1'000'000'000'000'000'000 + 8'223'372'036'854'775'810 at exponent 32'768
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        // 8'223'372'036'854'775'810 + 1'000'000'000'000'000'000 at exponent 32'768
+        {.a = 8'223'372'036'854'775'808, .b = 1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'808, .b = 1'000'000'000'000'000'001, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'808, .b = 1'000'000'000'000'000'002, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'809, .b = 1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'809, .b = 1'000'000'000'000'000'001, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'809, .b = 1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'810, .b = 1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'810, .b = 1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'810, .b = 1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'811, .b = 1'000'000'000'000'000'000, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'811, .b = 1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'811, .b = 1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = 1'000'000'000'000'000'000, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = 1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = 1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        // 4'611'686'018'427'387'905 + 4'611'686'018'427'387'905 at exponent 32'768
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        // -1'000'000'000'000'000'000 + -8'223'372'036'854'775'810 at exponent 32'768
+        {.a = -1'000'000'000'000'000'002, .b = -8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = -8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = -8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = -8'223'372'036'854'775'809, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = -8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'001, .b = -8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = -8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = -8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = -8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'001, .b = -8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = -8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'000, .b = -8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'000, .b = -8'223'372'036'854'775'810, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = -8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = -8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        // -4'611'686'018'427'387'905 + -4'611'686'018'427'387'905 at exponent 32'768
+        {.a = -4'611'686'018'427'387'907, .b = -4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = -4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = -4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = -4'611'686'018'427'387'904, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = -4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'906, .b = -4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = -4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = -4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = -4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'906, .b = -4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = -4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'905, .b = -4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'905, .b = -4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = -4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = -4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = -4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'904, .b = -4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = -4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = -4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = -4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = -4'611'686'018'427'387'907, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = -4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = -4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = -4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = -4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+    };
+    static constexpr PairCase kDifferenceOverflow[] = {
+        // -1'000'000'000'000'000'000 - 8'223'372'036'854'775'810 at exponent 32'768
+        {.a = -1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'810, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'811, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'812, .exponent = 32'768, .expected = tecPATH_DRY},
+        // -4'611'686'018'427'387'905 - 4'611'686'018'427'387'905 at exponent 32'768
+        {.a = -4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'907, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'906, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = -4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'903, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'904, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = -4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'907, .exponent = 32'768, .expected = tesSUCCESS},
+        // 8'223'372'036'854'775'810 - -1'000'000'000'000'000'000 at exponent 32'768
+        {.a = 8'223'372'036'854'775'808, .b = -1'000'000'000'000'000'002, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'808, .b = -1'000'000'000'000'000'001, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'808, .b = -1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'809, .b = -1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'809, .b = -1'000'000'000'000'000'001, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'809, .b = -1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'810, .b = -1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'810, .b = -1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'810, .b = -1'000'000'000'000'000'000, .exponent = 32'768, .expected = tesSUCCESS},
+        {.a = 8'223'372'036'854'775'811, .b = -1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'811, .b = -1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'811, .b = -1'000'000'000'000'000'000, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = -1'000'000'000'000'000'002, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = -1'000'000'000'000'000'001, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.a = 8'223'372'036'854'775'812, .b = -1'000'000'000'000'000'000, .exponent = 32'768, .expected = tecPATH_DRY},
+    };
+    static constexpr SumCase kSumRounding[] = {
+        // 1'000'000'000'000'000'000 + 8'223'372'036'854'775'807 at exponent -32'768
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'805, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'000, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'001, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'002, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'582, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        // 4'611'686'018'427'387'903 + 4'611'686'018'427'387'904 at exponent -32'768
+        {.a = 4'611'686'018'427'387'901, .b = 4'611'686'018'427'387'902, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'803, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'901, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'804, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'901, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'805, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'901, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'901, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'902, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'804, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'805, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'902, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'902, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'805, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'903, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'902, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'806, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'904, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'902, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'903, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 9'223'372'036'854'775'807, .exponent = -32'768}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'904, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'905, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'581, .exponent = -32'767}, .mode = Number::RoundingMode::Downward},
+        {.a = 4'611'686'018'427'387'905, .b = 4'611'686'018'427'387'906, .exponent = -32'768, .expected = {.mantissa = 922'337'203'685'477'582, .exponent = -32'767}, .mode = Number::RoundingMode::Upward},
+    };
+    static constexpr PairCase kDifferenceUnderflow[] = {
+        // 2'000'000'000'000'000'000 - 1'000'000'000'000'000'000 at exponent -32'768
+        {.a = 1'999'999'999'999'999'998, .b = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'998, .b = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'998, .b = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'999, .b = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'999, .b = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'999, .b = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 2'000'000'000'000'000'000, .b = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'000, .b = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 2'000'000'000'000'000'000, .b = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 2'000'000'000'000'000'001, .b = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 2'000'000'000'000'000'002, .b = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tesSUCCESS},
+        // 9'223'372'036'854'775'807 - 8'223'372'036'854'775'807 at exponent -32'768
+        {.a = 9'223'372'036'854'775'805, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'805, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'805, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'805, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'805, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'806, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'806, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'806, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'806, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'806, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'807, .b = 8'223'372'036'854'775'805, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'807, .b = 8'223'372'036'854'775'806, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'807, .b = 8'223'372'036'854'775'807, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'807, .b = 8'223'372'036'854'775'808, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 9'223'372'036'854'775'807, .b = 8'223'372'036'854'775'809, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        // 5'000'000'000'000'000'000 - 4'000'000'000'000'000'000 at exponent -32'768
+        {.a = 4'999'999'999'999'999'998, .b = 3'999'999'999'999'999'998, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'998, .b = 3'999'999'999'999'999'999, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'998, .b = 4'000'000'000'000'000'000, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'998, .b = 4'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'998, .b = 4'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'999, .b = 3'999'999'999'999'999'998, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'999, .b = 3'999'999'999'999'999'999, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'999, .b = 4'000'000'000'000'000'000, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'999, .b = 4'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'999, .b = 4'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 5'000'000'000'000'000'000, .b = 3'999'999'999'999'999'998, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 3'999'999'999'999'999'999, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 4'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 4'000'000'000'000'000'001, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 5'000'000'000'000'000'000, .b = 4'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 5'000'000'000'000'000'001, .b = 3'999'999'999'999'999'998, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 3'999'999'999'999'999'999, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 4'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 4'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 4'000'000'000'000'000'002, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 5'000'000'000'000'000'002, .b = 3'999'999'999'999'999'998, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 3'999'999'999'999'999'999, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 4'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 4'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 4'000'000'000'000'000'002, .exponent = -32'768, .expected = tesSUCCESS},
+    };
+    static constexpr ProductCase kProductOverflow[] = {
+        // 1'000'000'000'000'000'000e32'750 * 9'223'372'036'854'775'807e0
+        {.a = 1'000'000'000'000'000'000, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'000, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tesSUCCESS},
+        {.a = 1'000'000'000'000'000'000, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tesSUCCESS},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'000'000'000'000'000'001, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 1'000'000'000'000'000'002, .b = 9'223'372'036'854'775'805, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 9'223'372'036'854'775'806, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY},
+        {.a = 1'000'000'000'000'000'002, .b = 9'223'372'036'854'775'807, .ea = 32'750, .eb = 0, .expected = tecPATH_DRY},
+        // 9'223'372'036'854'775'807e0 * 1'000'000'000'000'000'000e32'750
+        {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'000, .ea = 0, .eb = 32'750, .expected = tesSUCCESS},
+        // {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 9'223'372'036'854'775'805, .b = 1'000'000'000'000'000'002, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY},
+        {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'000, .ea = 0, .eb = 32'750, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 9'223'372'036'854'775'806, .b = 1'000'000'000'000'000'002, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY},
+        {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'000, .ea = 0, .eb = 32'750, .expected = tesSUCCESS},
+        {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'001, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 9'223'372'036'854'775'807, .b = 1'000'000'000'000'000'002, .ea = 0, .eb = 32'750, .expected = tecPATH_DRY},
+        // 3'037'000'499'976'049'692e16'375 * 3'037'000'499'976'049'693e16'375
+        {.a = 3'037'000'499'976'049'690, .b = 3'037'000'499'976'049'691, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'690, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'690, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'690, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'690, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'691, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        // {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'691, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'691, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'692, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'691, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'693, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'691, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'692, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'693, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::ToNearest},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::TowardsZero},
+        // {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tesSUCCESS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'694, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY, .mode = Number::RoundingMode::Upward},
+        {.a = 3'037'000'499'976'049'694, .b = 3'037'000'499'976'049'695, .ea = 16'375, .eb = 16'375, .expected = tecPATH_DRY},
+    };
+    static constexpr ProductCase kProductUnderflow[] = {
+        // 2'000'000'000'000'000'000e-32'768 * 5'000'000'000'000'000'000e-19
+        {.a = 1'999'999'999'999'999'998, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'998, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS},
+        {.a = 2'000'000'000'000'000'000, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'000, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'000, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'001, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        {.a = 2'000'000'000'000'000'002, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS},
+        // 5'000'000'000'000'000'000e-19 * 2'000'000'000'000'000'000e-32'768
+        {.a = 4'999'999'999'999'999'998, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'001, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'002, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'999, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'001, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'002, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS},
+        {.a = 5'000'000'000'000'000'000, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 2'000'000'000'000'000'001, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'000, .b = 2'000'000'000'000'000'002, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 2'000'000'000'000'000'001, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'001, .b = 2'000'000'000'000'000'002, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 2'000'000'000'000'000'001, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        {.a = 5'000'000'000'000'000'002, .b = 2'000'000'000'000'000'002, .ea = -19, .eb = -32'768, .expected = tesSUCCESS},
+        // 3'162'277'660'168'379'331e-16'393 * 3'162'277'660'168'379'331e-16'394
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS},
+    };
+    static constexpr ProductCase kProductUnderflowByMode[] = {
+        // 2'000'000'000'000'000'000e-32'768 * 5'000'000'000'000'000'000e-19
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'998, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'999, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'000, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'001, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 1'999'999'999'999'999'999, .b = 5'000'000'000'000'000'002, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'998, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 2'000'000'000'000'000'000, .b = 4'999'999'999'999'999'999, .ea = -32'768, .eb = -19, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        // 5'000'000'000'000'000'000e-19 * 2'000'000'000'000'000'000e-32'768
+        {.a = 4'999'999'999'999'999'998, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'999'999'999'999'999'998, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'999'999'999'999'999'998, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 4'999'999'999'999'999'998, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 4'999'999'999'999'999'998, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 4'999'999'999'999'999'999, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'999'999'999'999'999'999, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'999'999'999'999'999'999, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 4'999'999'999'999'999'999, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 4'999'999'999'999'999'999, .b = 2'000'000'000'000'000'000, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 5'000'000'000'000'000'000, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 5'000'000'000'000'000'000, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 5'000'000'000'000'000'000, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 5'000'000'000'000'000'000, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 5'000'000'000'000'000'001, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'998, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 5'000'000'000'000'000'002, .b = 1'999'999'999'999'999'999, .ea = -19, .eb = -32'768, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        // 3'162'277'660'168'379'331e-16'393 * 3'162'277'660'168'379'331e-16'394
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'329, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'330, .b = 3'162'277'660'168'379'333, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'331, .b = 3'162'277'660'168'379'332, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'332, .b = 3'162'277'660'168'379'331, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'329, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::ToNearest},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::TowardsZero},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tecPRECISION_LOSS, .mode = Number::RoundingMode::Downward},
+        {.a = 3'162'277'660'168'379'333, .b = 3'162'277'660'168'379'330, .ea = -16'393, .eb = -16'394, .expected = tesSUCCESS, .mode = Number::RoundingMode::Upward},
+    };
+    static constexpr ToRepCase kToRepHalf[] = {
+        // 1'000'000'000'000'000'005e-1
+        {.mantissa = 1'000'000'000'000'000'003, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'003, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'003, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'003, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'004, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'004, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'004, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'004, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'005, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'005, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'005, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'005, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'006, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'006, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'006, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'006, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'007, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'007, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'007, .expected = 100'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'007, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        // 1'000'000'000'000'000'015e-1
+        {.mantissa = 1'000'000'000'000'000'013, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'013, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'013, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'013, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'014, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'014, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'014, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'014, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'015, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'015, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'015, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'015, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'016, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'016, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'016, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'016, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 1'000'000'000'000'000'017, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 1'000'000'000'000'000'017, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 1'000'000'000'000'000'017, .expected = 100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 1'000'000'000'000'000'017, .expected = 100'000'000'000'000'002, .mode = Number::RoundingMode::Upward},
+        // 5'000'000'000'000'000'005e-1
+        {.mantissa = 5'000'000'000'000'000'003, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 5'000'000'000'000'000'003, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 5'000'000'000'000'000'003, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 5'000'000'000'000'000'003, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 5'000'000'000'000'000'004, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 5'000'000'000'000'000'004, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 5'000'000'000'000'000'004, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 5'000'000'000'000'000'004, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 5'000'000'000'000'000'005, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 5'000'000'000'000'000'005, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 5'000'000'000'000'000'005, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 5'000'000'000'000'000'005, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 5'000'000'000'000'000'006, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 5'000'000'000'000'000'006, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 5'000'000'000'000'000'006, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 5'000'000'000'000'000'006, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 5'000'000'000'000'000'007, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 5'000'000'000'000'000'007, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 5'000'000'000'000'000'007, .expected = 500'000'000'000'000'000, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 5'000'000'000'000'000'007, .expected = 500'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        // 9'223'372'036'854'775'805e-1
+        {.mantissa = 9'223'372'036'854'775'803, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 9'223'372'036'854'775'803, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 9'223'372'036'854'775'803, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 9'223'372'036'854'775'803, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 9'223'372'036'854'775'804, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 9'223'372'036'854'775'804, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 9'223'372'036'854'775'804, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 9'223'372'036'854'775'804, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 9'223'372'036'854'775'805, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 9'223'372'036'854'775'805, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 9'223'372'036'854'775'805, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 9'223'372'036'854'775'805, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 9'223'372'036'854'775'806, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 9'223'372'036'854'775'806, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 9'223'372'036'854'775'806, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 9'223'372'036'854'775'806, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::Upward},
+        {.mantissa = 9'223'372'036'854'775'807, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = 9'223'372'036'854'775'807, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = 9'223'372'036'854'775'807, .expected = 922'337'203'685'477'580, .mode = Number::RoundingMode::Downward},
+        {.mantissa = 9'223'372'036'854'775'807, .expected = 922'337'203'685'477'581, .mode = Number::RoundingMode::Upward},
+        // -1'000'000'000'000'000'005e-1
+        {.mantissa = -1'000'000'000'000'000'007, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'007, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'007, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'007, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'006, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'006, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'006, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'006, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'005, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'005, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'005, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'005, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'004, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'004, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'004, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'004, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'003, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'003, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'003, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'003, .expected = -100'000'000'000'000'000, .mode = Number::RoundingMode::Upward},
+        // -1'000'000'000'000'000'015e-1
+        {.mantissa = -1'000'000'000'000'000'017, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'017, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'017, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'017, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'016, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'016, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'016, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'016, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'015, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'015, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'015, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'015, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'014, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'014, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'014, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'014, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+        {.mantissa = -1'000'000'000'000'000'013, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::ToNearest},
+        {.mantissa = -1'000'000'000'000'000'013, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::TowardsZero},
+        {.mantissa = -1'000'000'000'000'000'013, .expected = -100'000'000'000'000'002, .mode = Number::RoundingMode::Downward},
+        {.mantissa = -1'000'000'000'000'000'013, .expected = -100'000'000'000'000'001, .mode = Number::RoundingMode::Upward},
+    };
+    static constexpr NormalizeCase kNormalizeBounds[] = {
+        // 9'223'372'036'854'775'810e32'768
+        {.negative = false, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        // -9'223'372'036'854'775'810e32'768
+        {.negative = true, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'808ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'809ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'810ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'811ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = true, .mantissa = 9'223'372'036'854'775'812ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        // 9'999'999'999'999'999'999e32'768
+        {.negative = false, .mantissa = 9'999'999'999'999'999'997ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'997ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'997ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'997ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'997ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'998ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'998ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'998ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'998ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'998ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'999ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'999ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'999ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'999ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 9'999'999'999'999'999'999ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'000ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'000ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'000ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'000ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'000ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'001ULL, .exponent = 32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'001ULL, .exponent = 32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'001ULL, .exponent = 32'768, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'001ULL, .exponent = 32'769, .expected = tecPATH_DRY},
+        {.negative = false, .mantissa = 10'000'000'000'000'000'001ULL, .exponent = 32'770, .expected = tecPATH_DRY},
+        // 1'000'000'000'000'000'000e-32'768
+        {.negative = false, .mantissa = 999'999'999'999'999'998, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'998, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'998, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'998, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 999'999'999'999'999'998, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 999'999'999'999'999'999, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'999, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'999, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 999'999'999'999'999'999, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 999'999'999'999'999'999, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'766, .expected = tesSUCCESS},
+        // -1'000'000'000'000'000'000e-32'768
+        {.negative = true, .mantissa = 999'999'999'999'999'998, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'998, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'998, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'998, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 999'999'999'999'999'998, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 999'999'999'999'999'999, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'999, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'999, .exponent = -32'768, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 999'999'999'999'999'999, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 999'999'999'999'999'999, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'000, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'001, .exponent = -32'766, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'770, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'769, .expected = tecPRECISION_LOSS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'768, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'767, .expected = tesSUCCESS},
+        {.negative = true, .mantissa = 1'000'000'000'000'000'002, .exponent = -32'766, .expected = tesSUCCESS},
+        // 1e-32'750
+        {.negative = false, .mantissa = 0, .exponent = -32'752, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 0, .exponent = -32'751, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 0, .exponent = -32'750, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 0, .exponent = -32'749, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 0, .exponent = -32'748, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1, .exponent = -32'752, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1, .exponent = -32'751, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 1, .exponent = -32'750, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1, .exponent = -32'749, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 1, .exponent = -32'748, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 2, .exponent = -32'752, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 2, .exponent = -32'751, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 2, .exponent = -32'750, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 2, .exponent = -32'749, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 2, .exponent = -32'748, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 3, .exponent = -32'752, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 3, .exponent = -32'751, .expected = tecPRECISION_LOSS},
+        {.negative = false, .mantissa = 3, .exponent = -32'750, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 3, .exponent = -32'749, .expected = tesSUCCESS},
+        {.negative = false, .mantissa = 3, .exponent = -32'748, .expected = tesSUCCESS},
+    };
+    // clang-format on
     void
     runTests() override
     {
@@ -1279,14 +2166,7 @@ private:
         testNormalize();
         testCompare();
         testToRep();
-        forEachMode([&](Number::RoundingMode mode) {
-            sweepSumRounding(mode);
-            sweepDifferenceUnderflow(mode);
-            sweepProductOverflow(mode);
-            sweepProductUnderflow(mode);
-            sweepToRepHalf(mode);
-            sweepNormalizeBounds(mode);
-        });
+        testBoundaries();
 
         // Issues identified during formal verification.
         // Kept here to ensure there are no regression bugs.
@@ -1297,10 +2177,6 @@ private:
         testDivisionRounding();
         testMultiplicationRounding();
         testCuspRounding();
-        forEachMode([&](Number::RoundingMode mode) {
-            sweepSumOverflow(mode);
-            sweepDifferenceOverflow(mode);
-        });
     }
 };
 

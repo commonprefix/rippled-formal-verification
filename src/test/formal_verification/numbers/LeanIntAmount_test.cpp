@@ -3,17 +3,20 @@
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
 #include <test/formal_verification/numbers/helpers/NumberHelpers.h>
-#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test.h>
 #include <xrpl/protocol/MPTAmount.h>
 #include <xrpl/protocol/Protocol.h>
 
+#include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <initializer_list>
 #include <limits>
+#include <optional>
 #include <sstream>
+#include <string>
 
 extern "C" {
 lean_object*
@@ -25,7 +28,38 @@ lean_int_amount_to_number(int64_t v, uint8_t mode);
 namespace xrpl::test {
 
 using namespace formal_verification;
-using namespace formal_verification::number_sweep;
+
+namespace {
+
+// A Number mantissa * 10^exponent, as ToNearest stores it.
+struct OfNumberCase
+{
+    std::int64_t mantissa;
+    int exponent;
+    TER expected;
+};
+
+// An int64, and the Number C++ converts it to.
+struct ToNumberCase
+{
+    std::int64_t value;
+    ScaledValue expected;
+    std::optional<Number::RoundingMode> mode{};
+};
+
+std::string
+text(OfNumberCase const& c, Number::RoundingMode mode)
+{
+    return std::to_string(c.mantissa) + "e" + std::to_string(c.exponent) + ", " + modeName(mode);
+}
+
+std::string
+text(ToNumberCase const& c, Number::RoundingMode mode)
+{
+    return std::to_string(c.value) + ", " + modeName(mode);
+}
+
+}  // namespace
 
 class LeanIntAmount_test : public LeanSuite
 {
@@ -192,39 +226,194 @@ public:
         }
     }
 
-    // ---- Cusp sweeps ----
-
-    // Number to int64: m * 10^e up to int64 max converts, the next Number above it throws.
+    // One test case per list; each row compares Lean with C++, then the C++ result with the row.
     void
-    sweepOfNumber(Number::RoundingMode mode)
+    testBoundaries()
     {
-        beginCase(("LeanIntAmount.ofNumber int64 max " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kIntOfNumberCases)
-        {
-            std::set<TER> seen;
-            for (Scaled const& c : cases)
-            {
-                seen.insert(checkOfNumber(storedNumber(c.mantissa, c.exponent), mode));
-            }
-            expectCrossed(cusp, seen, {tecPATH_DRY});
-        }
-    }
+        auto const ofNumber = [&](std::size_t i, OfNumberCase const& c, Number::RoundingMode mode) {
+            expectResult(
+                i,
+                text(c, mode),
+                checkOfNumber(storedNumber(c.mantissa, c.exponent), mode),
+                c.expected);
+        };
+        auto const toNumber = [&](std::size_t i, ToNumberCase const& c, Number::RoundingMode mode) {
+            auto const p = makeMPTAmountPair(c.value);
+            checkToNumber(p, mode);
+            Number const r = static_cast<Number>(p.cppMpt);
+            expectResult(i, text(c, mode), ScaledValue{r.mantissa(), r.exponent()}, c.expected);
+        };
 
-    // int64 to Number around INT64_MIN, whose magnitude 2^63 the mode rounds. Never throws.
-    void
-    sweepToNumber(Number::RoundingMode mode)
-    {
-        beginCase(("LeanIntAmount.toNumber int64 min " + modeName(mode) + "-Sweep").c_str());
-        for (auto const& [cusp, cases] : kIntToNumberCases)
-        {
-            for (std::int64_t const v : cases)
-            {
-                checkToNumber(makeMPTAmountPair(v), mode);
-            }
-        }
+        runRows(*this, "LeanIntAmount.ofNumber int64 max", kOfNumber, ofNumber);
+        runRows(*this, "LeanIntAmount.toNumber int64 min", kToNumber, toNumber);
     }
 
 private:
+    // Each list runs its rows under every rounding mode on the large mantissa scale; a row that
+    // names a mode runs under that mode only, as its result depends on the mode. A group comment
+    // names the row on the cusp; its rows move the mantissa and exponent around it.
+    // - kOfNumber: Number to int64. Up to int64 max converts; one Number above throws
+    //   (tecPATH_DRY); zero is tecPRECISION_LOSS. The input is m * 10^e as ToNearest stores it, so
+    //   the rows at -2^63 convert -kMaxRep (9'223'372'036'854'775'807).
+    // - kToNumber: int64 to Number around INT64_MIN. 2^63 lies between kMaxRep and kMaxRepUp
+    //   (9'223'372'036'854'775'810): Downward gives -kMaxRepUp, the other modes -kMaxRep. The rows
+    //   hold the Number C++ returns.
+    // clang-format off
+    static constexpr OfNumberCase kOfNumber[] = {
+        // 9'223'372'036'854'775'807e0
+        {.mantissa = 9'223'372'036'854'775'805, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'805, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'805, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'805, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036'854'775'805, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036'854'775'806, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'806, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'806, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'806, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036'854'775'806, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036'854'775'807, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'807, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'807, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036'854'775'807, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036'854'775'807, .exponent = 2, .expected = tecPATH_DRY},
+        // 922'337'203'685'477'580e1
+        {.mantissa = 922'337'203'685'477'578, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'578, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'578, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'578, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'578, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'579, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'579, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'579, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'579, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'579, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'580, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'580, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'580, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'580, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'580, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'581, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'581, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'581, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'581, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'581, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'582, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'582, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = 922'337'203'685'477'582, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'582, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = 922'337'203'685'477'582, .exponent = 3, .expected = tecPATH_DRY},
+        // 9'223'372'036e9
+        {.mantissa = 9'223'372'034, .exponent = 7, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'034, .exponent = 8, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'034, .exponent = 9, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'034, .exponent = 10, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'034, .exponent = 11, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'035, .exponent = 7, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'035, .exponent = 8, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'035, .exponent = 9, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'035, .exponent = 10, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'035, .exponent = 11, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036, .exponent = 7, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036, .exponent = 8, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036, .exponent = 9, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'036, .exponent = 10, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'036, .exponent = 11, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'037, .exponent = 7, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'037, .exponent = 8, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'037, .exponent = 9, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'037, .exponent = 10, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'037, .exponent = 11, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'038, .exponent = 7, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'038, .exponent = 8, .expected = tesSUCCESS},
+        {.mantissa = 9'223'372'038, .exponent = 9, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'038, .exponent = 10, .expected = tecPATH_DRY},
+        {.mantissa = 9'223'372'038, .exponent = 11, .expected = tecPATH_DRY},
+        // 9e18
+        {.mantissa = 7, .exponent = 16, .expected = tesSUCCESS},
+        {.mantissa = 7, .exponent = 17, .expected = tesSUCCESS},
+        {.mantissa = 7, .exponent = 18, .expected = tesSUCCESS},
+        {.mantissa = 7, .exponent = 19, .expected = tecPATH_DRY},
+        {.mantissa = 7, .exponent = 20, .expected = tecPATH_DRY},
+        {.mantissa = 8, .exponent = 16, .expected = tesSUCCESS},
+        {.mantissa = 8, .exponent = 17, .expected = tesSUCCESS},
+        {.mantissa = 8, .exponent = 18, .expected = tesSUCCESS},
+        {.mantissa = 8, .exponent = 19, .expected = tecPATH_DRY},
+        {.mantissa = 8, .exponent = 20, .expected = tecPATH_DRY},
+        {.mantissa = 9, .exponent = 16, .expected = tesSUCCESS},
+        {.mantissa = 9, .exponent = 17, .expected = tesSUCCESS},
+        {.mantissa = 9, .exponent = 18, .expected = tesSUCCESS},
+        {.mantissa = 9, .exponent = 19, .expected = tecPATH_DRY},
+        {.mantissa = 9, .exponent = 20, .expected = tecPATH_DRY},
+        {.mantissa = 10, .exponent = 16, .expected = tesSUCCESS},
+        {.mantissa = 10, .exponent = 17, .expected = tesSUCCESS},
+        {.mantissa = 10, .exponent = 18, .expected = tecPATH_DRY},
+        {.mantissa = 10, .exponent = 19, .expected = tecPATH_DRY},
+        {.mantissa = 10, .exponent = 20, .expected = tecPATH_DRY},
+        {.mantissa = 11, .exponent = 16, .expected = tesSUCCESS},
+        {.mantissa = 11, .exponent = 17, .expected = tesSUCCESS},
+        {.mantissa = 11, .exponent = 18, .expected = tecPATH_DRY},
+        {.mantissa = 11, .exponent = 19, .expected = tecPATH_DRY},
+        {.mantissa = 11, .exponent = 20, .expected = tecPATH_DRY},
+        // -9'223'372'036'854'775'807e0
+        {.mantissa = -9'223'372'036'854'775'807 - 1, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807 - 1, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807 - 1, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807 - 1, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'807 - 1, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'807, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'807, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'807, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'806, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'806, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'806, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'806, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'806, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'805, .exponent = -2, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'805, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'805, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -9'223'372'036'854'775'805, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -9'223'372'036'854'775'805, .exponent = 2, .expected = tecPATH_DRY},
+        // -922'337'203'685'477'580e1
+        {.mantissa = -922'337'203'685'477'582, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'582, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'582, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'582, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'582, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'581, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'581, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'581, .exponent = 1, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'581, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'581, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'580, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'580, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'580, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'580, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'580, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'579, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'579, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'579, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'579, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'579, .exponent = 3, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'578, .exponent = -1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'578, .exponent = 0, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'578, .exponent = 1, .expected = tesSUCCESS},
+        {.mantissa = -922'337'203'685'477'578, .exponent = 2, .expected = tecPATH_DRY},
+        {.mantissa = -922'337'203'685'477'578, .exponent = 3, .expected = tecPATH_DRY},
+    };
+    static constexpr ToNumberCase kToNumber[] = {
+        // -9'223'372'036'854'775'807
+        {.value = -9'223'372'036'854'775'807 - 1, .expected = {.mantissa = -9'223'372'036'854'775'807, .exponent = 0}, .mode = Number::RoundingMode::ToNearest},
+        {.value = -9'223'372'036'854'775'807 - 1, .expected = {.mantissa = -9'223'372'036'854'775'807, .exponent = 0}, .mode = Number::RoundingMode::TowardsZero},
+        {.value = -9'223'372'036'854'775'807 - 1, .expected = {.mantissa = -922'337'203'685'477'581, .exponent = 1}, .mode = Number::RoundingMode::Downward},
+        {.value = -9'223'372'036'854'775'807 - 1, .expected = {.mantissa = -9'223'372'036'854'775'807, .exponent = 0}, .mode = Number::RoundingMode::Upward},
+        {.value = -9'223'372'036'854'775'807, .expected = {.mantissa = -9'223'372'036'854'775'807, .exponent = 0}},
+        {.value = -9'223'372'036'854'775'806, .expected = {.mantissa = -9'223'372'036'854'775'806, .exponent = 0}},
+        {.value = -9'223'372'036'854'775'805, .expected = {.mantissa = -9'223'372'036'854'775'805, .exponent = 0}},
+    };
+    // clang-format on
+
     void
     runTests() override
     {
@@ -232,10 +421,7 @@ private:
         test_fuzz_to_number();
         test_known_values();
         test_extreme_values();
-        forEachMode([&](Number::RoundingMode mode) {
-            sweepOfNumber(mode);
-            sweepToNumber(mode);
-        });
+        testBoundaries();
     }
 };
 

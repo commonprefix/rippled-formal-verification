@@ -1,6 +1,5 @@
 #pragma once
 
-#include <test/formal_verification/common/Sweep.h>
 #include <test/formal_verification/ffi/LeanObjectFFI.h>
 
 #include <xrpl/beast/unit_test.h>
@@ -9,6 +8,7 @@
 #include <lean/lean.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <mutex>
@@ -70,6 +70,18 @@ leanErrorText(LeanError e)
 leanErrorText(std::optional<LeanError> e)
 {
     return e ? leanErrorText(*e) : std::string{"none"};
+}
+
+[[nodiscard]] inline std::string
+resultText(TER t)
+{
+    return transToken(t);
+}
+
+[[nodiscard]] inline std::string
+resultText(std::int64_t v)
+{
+    return std::to_string(v);
 }
 
 // Base for Lean-FFI test suites. run() guards Lean init + serializes all FFI
@@ -135,21 +147,15 @@ protected:
             r.leanError != LeanError::notLawful, "model rejected the staged state as not lawful");
     }
 
-    // Around its cusp a row must reach one of the `across` verdicts next to another one, or it
-    // missed the cusp. `describe(cusp)` labels the row in the failure message.
-    template <class Cusp>
+    // Row `index` of a list must give the result the list expects; `values` prints the row.
+    template <class T>
     void
-    expectCrossed(Cusp const& cusp, std::set<TER> const& seen, std::vector<TER> const& across)
+    expectResult(std::size_t index, std::string const& values, T const& got, T const& expected)
     {
-        bool const crossed =
-            seen.size() > 1 && std::ranges::any_of(across, [&](TER t) { return seen.contains(t); });
-        std::string verdicts;
-        for (TER const t : seen)
-            verdicts += " " + transToken(t);
         BEAST_EXPECTS(
-            crossed,
-            describe(cusp) + ": the row never crossed to " + transToken(across.front()) + ", saw" +
-                (seen.empty() ? std::string{" nothing"} : verdicts));
+            got == expected,
+            "row " + std::to_string(index) + ": " + values + ": got " + resultText(got) +
+                ", expected " + resultText(expected));
     }
 
 public:
