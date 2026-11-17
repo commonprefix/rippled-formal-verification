@@ -9,8 +9,8 @@
 #include <test/formal_verification/ffi/vault/VaultFFI.h>
 #include <test/formal_verification/ffi/vault/VaultSetFFI.h>
 #include <test/formal_verification/ffi/vault/VaultWithdrawFFI.h>
+#include <test/formal_verification/findings/VaultOldFindingsHelpers.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
-#include <test/formal_verification/tx/vault/CreateSetSweepCases.h>
 #include <test/formal_verification/tx/vault/VaultTestHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
@@ -204,17 +204,15 @@ class VaultOldFindings_test : public LeanSuite
     // A clawback by issuer_ from holder_ on a throwaway view of `staged`, and in the model. Both
     // must agree on the result and, on success, on the vault and on the amount recovered.
     std::pair<AppliedVaultTx, LeanVaultResult>
-    checkClawback(jtx::Env& env, Keylet const& vault, StagedAmounts staged, STAmount const& amount)
+    checkClawback(
+        jtx::Env& env,
+        Keylet const& vault,
+        StagedAmounts const& staged,
+        STAmount const& amount)
     {
         // holder_ owns every share unless `staged` says otherwise.
-        std::uint64_t const held = staged.holderShares.value_or(staged.sharesTotal);
-        staged.holderShares = held;
-        auto const tx = jtx::Vault::clawback(
-            {.issuer = issuer_, .id = vault.key, .holder = holder_, .amount = amount});
-        AppliedVaultTx const cpp = applyStaged(env, vault, holder_, staged, tx);
-        STAmount const heldShares{shareIssue(env, vault), held};
-        bool const ownsAll = staged.sharesTotal != 0 && held == staged.sharesTotal;
-        LeanVaultResult const lean = leanVaultClawback(cpp.pre, amount, heldShares, ownsAll);
+        AppliedVaultTx const cpp = applyClawback(env, vault, issuer_, holder_, staged, amount);
+        LeanVaultResult const lean = leanClawback(cpp, staged, amount, shareIssue(env, vault));
         std::string const at = sampleText(staged, amount);
         if (expectAgree(*this, at, cpp, lean) == tesSUCCESS && !lean.leanError && !lean.error)
         {
@@ -383,7 +381,6 @@ class VaultOldFindings_test : public LeanSuite
         StagedAmounts const staged{
             .available = vaultUnits(env, vault, 5),
             .sharesTotal = 3,
-            .pseudoHolding = true,
         };
         // 2. Claw back 2 units.
         auto const [cpp, lean] = checkClawback(env, vault, staged, vaultUnits(env, vault, 2));
@@ -638,7 +635,6 @@ class VaultOldFindings_test : public LeanSuite
         StagedAmounts const staged{
             .available = vaultUnits(env, vault, 1'000),
             .sharesTotal = 1'000,
-            .pseudoHolding = true,
         };
         auto const [cpp, lean] = checkClawback(env, vault, staged, vaultUnits(env, vault, 0));
         BEAST_EXPECTS(cpp.ter == tesSUCCESS, "cpp=" + transToken(cpp.ter));
@@ -654,7 +650,6 @@ class VaultOldFindings_test : public LeanSuite
         StagedAmounts const staged{
             .available = vaultUnits(env, vault, 7),
             .sharesTotal = 5,
-            .pseudoHolding = true,
         };
         // 2. Claw back 4 units.
         auto const [cpp, lean] = checkClawback(env, vault, staged, vaultUnits(env, vault, 4));
@@ -708,7 +703,6 @@ class VaultOldFindings_test : public LeanSuite
             .available = STAmount{asset, assetsTotal},
             .sharesTotal = sharesTotal,
             .holderShares = 1'000'000,
-            .pseudoHolding = true,
         };
         // 2. Claw back 2e-6.
         auto const [cpp, lean] = checkClawback(env, vault, staged, STAmount{asset, Number{2, -6}});
@@ -727,7 +721,6 @@ class VaultOldFindings_test : public LeanSuite
             .available = STAmount{asset, assetsTotal},
             .sharesTotal = 10'000'000'000'000'009ULL,
             .holderShares = 1'000'000'000,
-            .pseudoHolding = true,
         };
         // 2. Claw back 1e-6.
         auto const [cpp, lean] = checkClawback(env, vault, staged, STAmount{asset, Number{1, -6}});
@@ -1261,39 +1254,52 @@ class VaultOldFindings_test : public LeanSuite
             if (asset.native())
                 name = "XRP";
             testcase("model gap: create " + name + " maximum range-Sweep");
-            // Each row has maximums around the largest amount of the asset: 1e17 drops of XRP,
-            // 2^63 - 1 of an MPT, 9999999999999999e80 of an IOU.
-            for (auto const& [cusp, cases] : maximumRangeCases(asset))
+            // The largest maximum of the asset as mantissa * 10^exponent: 1e17 drops of XRP, the
+            // last multiple of 10 below 2^63 of an MPT, 9999999999999999e80 of an IOU.
+            auto mantissa = static_cast<std::int64_t>(STAmount::kMaxValue);
+            int exponent = STAmount::kMaxOffset;
+            if (asset.native())
             {
-                std::set<TER> seen;
-                for (MaximumRangeCusp const& c : cases)
-                {
-                    Number const maximum{c.mantissa, static_cast<int>(c.exponent)};
-                    VaultCreateArgs const args{
-                        .assetsMaximum = maximum, .numericType = NumericTypeFFI::tagOf(asset)};
-                    TER const cpp = applyCreate(env, owner, asset, args);
-                    LawfulTerResult const canCreate =
-                        leanCanVaultCreate(args, parentCloseTime(env));
-                    LeanCreateResult const created = leanVaultCreate(args);
-                    seen.insert(cpp);
-                    std::string const at =
-                        "maximum " + to_string(maximum) + " cpp=" + transToken(cpp) + ": ";
-                    BEAST_EXPECTS(!canCreate.leanError.has_value(), at + "lean canCreate error");
-                    if (isTemMalformed(cpp))
-                    {
-                        // GAP: the model creates the vault.
-                        BEAST_EXPECTS(
-                            created.leanError == LeanError::notLawful,
-                            at + "preflight rejects the maximum but the model creates the vault " +
-                                "(canCreate " + transToken(canCreate.ter) + ")");
-                        continue;
-                    }
-                    BEAST_EXPECTS(canCreate.ter == cpp, at + "lean=" + transToken(canCreate.ter));
-                    if (cpp == tesSUCCESS)
-                        BEAST_EXPECTS(!created.leanError.has_value(), at + "lean create error");
-                }
-                expectCrossed(cusp, seen, {temMALFORMED});
+                mantissa = static_cast<std::int64_t>(STAmount::kMaxNativeN);
+                exponent = 0;
             }
+            else if (asset.holds<MPTIssue>())
+            {
+                mantissa = static_cast<std::int64_t>(kMaxMpTokenAmount / 10);
+                exponent = 1;
+            }
+            std::set<TER> seen;
+            // Two units either side of the largest maximum, and the maximum itself.
+            for (std::int64_t const offset : {-2, -1, 0, 1, 2})
+            {
+                Number const maximum{mantissa + offset, exponent};
+                VaultCreateArgs const args{
+                    .assetsMaximum = maximum, .numericType = NumericTypeFFI::tagOf(asset)};
+                TER const cpp = applyCreate(env, owner, asset, args);
+                LawfulTerResult const canCreate = leanCanVaultCreate(args, parentCloseTime(env));
+                LeanCreateResult const created = leanVaultCreate(args);
+                seen.insert(cpp);
+                std::string const at =
+                    "maximum " + to_string(maximum) + " cpp=" + transToken(cpp) + ": ";
+                BEAST_EXPECTS(!canCreate.leanError.has_value(), at + "lean canCreate error");
+                if (isTemMalformed(cpp))
+                {
+                    // GAP: the model creates the vault.
+                    BEAST_EXPECTS(
+                        created.leanError == LeanError::notLawful,
+                        at + "preflight rejects the maximum but the model creates the vault " +
+                            "(canCreate " + transToken(canCreate.ter) + ")");
+                    continue;
+                }
+                BEAST_EXPECTS(canCreate.ter == cpp, at + "lean=" + transToken(canCreate.ter));
+                if (cpp == tesSUCCESS)
+                    BEAST_EXPECTS(!created.leanError.has_value(), at + "lean create error");
+            }
+            // One unit above the largest maximum is refused: the cases must reach temMALFORMED next
+            // to another verdict.
+            BEAST_EXPECTS(
+                seen.size() > 1 && seen.contains(temMALFORMED),
+                name + ": the maximum never crossed to temMALFORMED");
         }
     }
 

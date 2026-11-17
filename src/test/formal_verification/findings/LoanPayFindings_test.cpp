@@ -1,4 +1,5 @@
 #include <test/app/lending/LoanManageFixedPrecisionBase.h>
+#include <test/formal_verification/findings/LendingFindingsHelpers.h>
 #include <test/jtx/Account.h>
 #include <test/jtx/Env.h>
 #include <test/jtx/TestHelpers.h>
@@ -37,29 +38,6 @@ class LoanPayFindings_test : public LoanManageFixedPrecisionBase
     // The trust limit is above every balance. RedemptionDate is after every loan schedule.
     static inline Number const kTrustLimit{1, 31};
     static constexpr std::chrono::seconds kInvestmentWindow = std::chrono::hours{20 * 365 * 24};
-
-    // A loan to the fixture's depositor with one payment after 120 s and LateInterestRate 100%.
-    static Keylet
-    openLoanWithLateInterest(
-        test::jtx::Env& env,
-        LendingFixture const& fixture,
-        Number const& principal)
-    {
-        using namespace test::jtx;
-
-        Keylet const loanKeylet = keylet::loan(
-            fixture.brokerKeylet.key,
-            SeqProxy::rawSequence(env.le(fixture.brokerKeylet)->at(sfLoanSequence)));
-        env(loan::set(fixture.depositor, fixture.brokerKeylet.key, principal),
-            loan::kLateInterestRate(percentageToTenthBips(100)),
-            loan::kGracePeriod(60),
-            loan::kPaymentInterval(120),
-            loan::kPaymentTotal(1),
-            Sig(sfCounterpartySignature, fixture.owner),
-            Fee(env.current()->fees().base * 2));
-        env.close();
-        return loanKeylet;
-    }
 
     // The loan's NextPaymentDueDate as a ledger close time.
     static NetClock::time_point

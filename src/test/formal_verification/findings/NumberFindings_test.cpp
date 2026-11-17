@@ -1,7 +1,7 @@
 #include <test/formal_verification/common/LeanSuite.h>
 #include <test/formal_verification/findings/NumberFindingsHelpers.h>
 #include <test/formal_verification/numbers/helpers/NumberGenerators.h>
-#include <test/formal_verification/numbers/helpers/NumberSweepCases.h>
+#include <test/formal_verification/numbers/helpers/NumberHelpers.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/beast/unit_test/suite.h>
@@ -26,8 +26,6 @@
 #include <utility>
 
 namespace xrpl::test::formal_verification {
-
-using namespace number_sweep;
 
 // The number bugs found in Milestone 1. A Number case runs the reported inputs through the Lean
 // model and C++ and expects the same result. Calls that fail are commented out in runTests(), the

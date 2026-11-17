@@ -100,6 +100,14 @@ theorem Number.operator_sub_rounding_bound_to_nearest_tight (x y result : Number
       ≤ |x.toRat - y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) :=
   Number.operator_sub_rounding_bound_to_nearest_tight_proof x y result hx hy hx_mant_ne hy_mant_ne h_not_eq hok hresult
 
+theorem Number.operator_sub_rounds_diff_sign_to_nearest (x y result : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
+    (h_diff_sign : x.negative_ ≠ y.negative_)
+    (hok : Number.operator_sub x y .to_nearest = .ok result) :
+    RoundsWithin result (x.toRat - y.toRat) .to_nearest (5 / (2 ^ 63 + 7 : ℚ)) :=
+  Number.operator_sub_rounds_diff_sign_to_nearest_proof x y result hx hy hx_mant_ne hy_mant_ne h_diff_sign hok
+
 theorem Number.operator_sub_rounds_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)

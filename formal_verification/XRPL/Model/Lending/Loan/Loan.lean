@@ -214,9 +214,10 @@ structure LoanWithPool (α : Type) where
   loan' : Loan
   pool' : α
 
--- A loan with what the vault sends the borrower
+-- A loan with what the vault sends the borrower and, as the origination fee, the broker owner
 structure LoanWithDisbursement (α : Type) extends LoanWithPool α where
   amountToBorrower : Number
+  amountToBroker : Number := if loan'.isPending then Number.zero else loan'.fees.originationFee
 
 -- The loan with the amounts a fund-moving operation transfers (zero where nothing moves to that party)
 structure LoanWithAmounts (α : Type) extends LoanWithPool α where
