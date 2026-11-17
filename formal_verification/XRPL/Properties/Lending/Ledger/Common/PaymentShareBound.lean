@@ -89,7 +89,7 @@ lemma LendingLedger.pay_credit_floor (l : LendingLedger) (hr : l.Reachable) (i :
       exact_mod_cast lt_of_mul_lt_mul_right this hp.le
     obtain ⟨w, hw', hwv⟩ := Number.exists_normalized_int_mul_pow (-1) l.vault.baseExponent (by norm_num)
       ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
-    have hR := operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsDeployed_norm
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsDeployed_norm
       (Number.operator_neg_isNormalized _ hPg.1) hdep
     have := Number.roundsToRepresentable_le _ _ hR w hw' (by
       rw [hwv, Number.toRat_neg, hpAD, hkD, hkP]
@@ -112,7 +112,7 @@ lemma LendingLedger.pay_credit_floor (l : LendingLedger) (hr : l.Reachable) (i :
   refine ⟨hPdeploy, hI0, fun e he => ?_⟩
   have hPI : tot.toRat = p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat :=
     Number.add_exact_of_grid hPg hIg (by nlinarith) (by linarith) hsr htot
-  have htotn := operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
+  have htotn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
   have htot0 : 0 ≤ tot.toRat := by rw [hPI]; linarith
   obtain ⟨kA, hkA⟩ := hpAAg.2
   obtain ⟨kP, hkP⟩ := hPg.2
@@ -181,7 +181,7 @@ lemma LendingLedger.pay_credit_floor (l : LendingLedger) (hr : l.Reachable) (i :
       rw [this]
     have haav := Number.operator_add_exact_of_fits p.pool.wf.assetsAvailable_norm hcrn haa
       ⟨w, hw, by rw [hwsum, hcr]⟩
-    have haan := operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
+    have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
     have haa0 : 0 ≤ aa.toRat := by rw [haav, hcr]; rw [hpAA]; linarith
     have hden : aa.toRat.den = 1 := by
       rw [haav, hcr, htk, hkA]

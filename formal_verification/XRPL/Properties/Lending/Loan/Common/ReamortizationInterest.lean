@@ -36,8 +36,8 @@ private lemma LoanState.build_normalized {a b c : Number} {st : LoanState} (ha :
       st.managementFeeDue.isNormalized := by
   obtain ⟨h1, h2, h3, v, hv, hi⟩ := LoanState.build_ok h
   rw [h1, h2, h3]
-  exact ⟨ha, hb, operator_sub_isNormalized_to_nearest_sz _ _ _
-    (operator_sub_isNormalized_to_nearest_sz _ _ _ ha hb hv) hc hi, hc⟩
+  exact ⟨ha, hb, Number.operator_sub_isNormalized_to_nearest_sz _ _ _
+    (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ ha hb hv) hc hi, hc⟩
 
 /-- The principal a periodic payment implies is normalized. -/
 private lemma loanPrincipalFromPeriodicPayment_normalized {pp rate r : Number} {n : UInt32}
@@ -74,9 +74,9 @@ private lemma LoanState.buildTheoretical_normalized {pp rate : Number} {n : UInt
     obtain rfl := (Except.ok.inj h).symm
     have htvn := Number.operator_mul_isNormalized _ _ _ _ hpp (Number.ofInt64_isNormalized _) htv
     have hpn := loanPrincipalFromPeriodicPayment_normalized hpp hrate hp
-    have hgn := operator_sub_isNormalized_to_nearest_sz _ _ _ htvn hpn hg
+    have hgn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ htvn hpn hg
     have hmn := tenthBipsOfValue_normalized hgn hm
-    exact ⟨htvn, hpn, operator_sub_isNormalized_to_nearest_sz _ _ _ hgn hmn hi, hmn⟩
+    exact ⟨htvn, hpn, Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hgn hmn hi, hmn⟩
 
 /-- The deltas between two states with normalized fields are normalized. -/
 private lemma LoanState.calculateDeltas_normalized {x y : LoanState} {d : LoanStateDeltas}
@@ -89,9 +89,9 @@ private lemma LoanState.calculateDeltas_normalized {x y : LoanState} {d : LoanSt
   obtain ⟨i, hi, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨m, hm, h⟩ := bind_ok_peel _ _ _ h
   obtain rfl := (Except.ok.inj h).symm
-  exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 hp,
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hx.2.1 hy.2.1 hi,
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hx.2.2 hy.2.2 hm⟩
+  exact ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 hp,
+    Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx.2.1 hy.2.1 hi,
+    Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx.2.2 hy.2.2 hm⟩
 
 /-- Adding normalized deltas to a normalized value keeps it normalized. -/
 private lemma LoanState.addDeltas_value_normalized {x y : LoanState} {d : LoanStateDeltas}
@@ -106,9 +106,9 @@ private lemma LoanState.addDeltas_value_normalized {x y : LoanState} {d : LoanSt
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   obtain rfl := (Except.ok.inj h).symm
-  have hpin := operator_add_isNormalized_to_nearest_sz _ _ _ hd.1 hd.2.1 hpi
-  exact operator_add_isNormalized_to_nearest_sz _ _ _ hx
-    (operator_add_isNormalized_to_nearest_sz _ _ _ hpin hd.2.2 ht) htv
+  have hpin := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hd.1 hd.2.1 hpi
+  exact Number.operator_add_isNormalized_to_nearest_sz _ _ _ hx
+    (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hpin hd.2.2 ht) htv
 
 /-- The periodic payment a re-amortization computes from a normalized principal is normalized. -/
 private lemma computeLoanPropertiesFromPeriodicRate_periodicPayment_normalized {principal rate : Number}
@@ -138,13 +138,13 @@ lemma tenthBipsOfValue_pos_le {G pm : Number} {rate : TenthBips32} (hG : G.isNor
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hG hrn hp
   have hpm0 : pm.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hpm)
-  have hp0 : p.mantissa_ ≠ 0 := (operator_div_operands_ne_zero hpn hun h hpm0).1
+  have hp0 : p.mantissa_ ≠ 0 := (Number.operator_div_operands_ne_zero hpn hun h hpm0).1
   have hdiv : |pm.toRat - p.toRat / 100000| ≤ |p.toRat / 100000| * (6 / ((2 : ℚ) ^ 63 - 3)) := by
-    have := operator_div_rounds_to_nearest p _ pm hpn hun h hpm0
+    have := Number.operator_div_rounds_to_nearest p _ pm hpn hun h hpm0
     rw [huv, hu] at this
     exact this
   have hmul : |p.toRat - G.toRat * rate.toNat| ≤ |G.toRat * rate.toNat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
-    have := operator_mul_rounds_to_nearest G _ p hG hrn hp hp0
+    have := Number.operator_mul_rounds_to_nearest G _ p hG hrn hp hp0
     rw [hrv] at this
     exact this
   have he1 : (6 / ((2 : ℚ) ^ 63 - 3)) ≤ 1 / 10 ^ 18 := by norm_num
@@ -209,18 +209,18 @@ lemma Number.clamp_zero_cases (x cap : Number) (hx : x.isNormalized) (hcap : cap
   unfold Number.clamp
   by_cases h1 : x.operator_lt Number.zero = true
   · left
-    have := (operator_lt_iff _ _ hx Number.zero_isNormalized).mp h1
+    have := (Number.operator_lt_iff _ _ hx Number.zero_isNormalized).mp h1
     rw [Number.toRat_zero] at this
     exact ⟨this, by rw [if_pos h1]⟩
   · have h1' : 0 ≤ x.toRat := by
-      have := (operator_lt_eq_false_iff _ _ hx Number.zero_isNormalized).mp (by simpa using h1)
+      have := (Number.operator_lt_eq_false_iff _ _ hx Number.zero_isNormalized).mp (by simpa using h1)
       rwa [Number.toRat_zero] at this
     rw [if_neg h1]
     by_cases h2 : cap.operator_lt x = true
     · right; left
-      exact ⟨(operator_lt_iff _ _ hcap hx).mp h2, h1', by rw [if_pos h2]⟩
+      exact ⟨(Number.operator_lt_iff _ _ hcap hx).mp h2, h1', by rw [if_pos h2]⟩
     · right; right
-      exact ⟨h1', (operator_lt_eq_false_iff _ _ hcap hx).mp (by simpa using h2), by rw [if_neg h2]⟩
+      exact ⟨h1', (Number.operator_lt_eq_false_iff _ _ hcap hx).mp (by simpa using h2), by rw [if_neg h2]⟩
 
 /-- A lawful fractional loan's amounts are on the LoanScale grid. TotalValueOutstanding and ManagementFeeOutstanding
 are below `10^16` units, PrincipalOutstanding and ManagementFeeOutstanding are not negative. -/
@@ -270,7 +270,7 @@ private lemma Loan.reamortization_gross_normalized (l : Loan) (opc : PaymentComp
   have hthN := LoanState.buildTheoretical_normalized l.wf.periodicPayment_norm hrateN hth
   have hdeN := LoanState.calculateDeltas_normalized ⟨hstN.2.1, hstN.2.2.1, hstN.2.2.2⟩
     ⟨hthN.2.1, hthN.2.2.1, hthN.2.2.2⟩ hde
-  have h18N := operator_sub_isNormalized_to_nearest_sz _ _ _ hthN.2.1 hpd h18
+  have h18N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hthN.2.1 hpd h18
   have hmaxN : (v18.max Number.zero).isNormalized := by
     unfold Number.max; split
     · exact Number.zero_isNormalized
@@ -278,8 +278,8 @@ private lemma Loan.reamortization_gross_normalized (l : Loan) (opc : PaymentComp
   have hppN := computeLoanPropertiesFromPeriodicRate_periodicPayment_normalized hmaxN hrateN hprops
   have hth2N := LoanState.buildTheoretical_normalized hppN hrateN hth2
   have h15N := LoanState.addDeltas_value_normalized hth2N.1 hdeN h15
-  have hpinN := operator_sub_isNormalized_to_nearest_sz _ _ _ hstN.2.1 hpd hpin
-  exact operator_sub_isNormalized_to_nearest_sz _ _ _ h15N hpinN hG
+  have hpinN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hstN.2.1 hpd hpin
+  exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ h15N hpinN hG
 
 /-- The re-amortized state owes at least its principal and management fee. The hypotheses are the steps of
 `Loan.tryOverpayment`, in order. -/
@@ -367,7 +367,7 @@ private lemma Loan.reamortized_interestDue_nonneg (l : Loan) (opc : PaymentCompo
   have htvpos : 0 < tvo'.toRat := by
     have hn : ¬ (tvo'.signum ≤ 0) := by
       intro hle; apply hsig; simp [hle]
-    rw [signum_eq _ gtv.1] at hn
+    rw [Number.signum_eq _ gtv.1] at hn
     split_ifs at hn with h1 h2
     · exact h1
     · exact absurd (show (-1 : Int) ≤ 0 by decide) hn
@@ -390,12 +390,12 @@ private lemma Loan.reamortized_interestDue_nonneg (l : Loan) (opc : PaymentCompo
     by_contra hlt
     push Not at hlt
     have hexp : io.operator_ne Number.zero = true :=
-      (operator_ne_iff _ _ gio.1 Number.zero_isNormalized).mpr (by rw [hiov, Number.toRat_zero]; linarith)
+      (Number.operator_ne_iff _ _ gio.1 Number.zero_isNormalized).mpr (by rw [hiov, Number.toRat_zero]; linarith)
     rw [hexp] at hguard
     obtain ⟨ti, hti, hpos⟩ := LoanProperties.amortizationGuards_interest hguard (by simpa using hg)
     have htiv := Number.OnGrid.sub_toRat gtv gpo hs (hbsub _ _ vtv0 (by linarith) vpo0 (by linarith)) hti
     have gti := Number.OnGrid.sub gtv gpo hs hti
-    rw [signum_eq _ gti.1] at hpos
+    rw [Number.signum_eq _ gti.1] at hpos
     split_ifs at hpos with h1 h2
     · linarith
     · exact absurd hpos (by decide)
@@ -427,9 +427,9 @@ private lemma Loan.reamortized_interestDue_nonneg (l : Loan) (opc : PaymentCompo
   have hGN := Loan.reamortization_gross_normalized l opc hpd hrate hst hth hde h18 hprops hth2 h15
     (by rw [hsP]; exact hpin) hG
   have hpmN := tenthBipsOfValue_normalized hGN hpm
-  have hi11N := operator_sub_isNormalized_to_nearest_sz _ _ _ hGN hpmN hi11
-  have hintN := operator_add_isNormalized_to_nearest_sz _ _ _ hi11N hpmN hint
-  have htvoN := operator_add_isNormalized_to_nearest_sz _ _ _ gpo.1 hintN htvo
+  have hi11N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hGN hpmN hi11
+  have hintN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hi11N hpmN hint
+  have htvoN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ gpo.1 hintN htvo
   -- a fee rounding to a positive amount is at least 0.49 units
   have hpm_pos : 0 < pm.toRat := by
     by_contra hc
@@ -460,14 +460,14 @@ private lemma Loan.reamortized_interestDue_nonneg (l : Loan) (opc : PaymentCompo
     have := mul_le_mul_of_nonneg_left hc (show (0 : ℚ) ≤ G.toRat / 10 by positivity)
     linarith
   -- the pinned interestDue is at least the fee, so it is nonzero and rounds within its relative error
-  have hR11 := operator_sub_rounded_to_nearest G pm _ hGN hpmN hi11
+  have hR11 := Number.operator_sub_rounded_to_nearest G pm _ hGN hpmN hi11
   have hiD_ge : pm.toRat ≤ s11.interestDue.toRat :=
     Number.roundsToRepresentable_ge _ _ hR11 _ hpmN (by linarith)
   have hGm := (hGN.mantissaBounds_nat (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hG0)))
-  have hW11 := operator_sub_rounds_to_nearest G pm _ hGN hpmN
+  have hW11 := Number.operator_sub_rounds_to_nearest G pm _ hGN hpmN
     (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hG0))
     (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hpm_pos))
-    (fun h => by have := (operator_eq_iff _ _ hGN hpmN).mp h; linarith) hi11
+    (fun h => by have := (Number.operator_eq_iff _ _ hGN hpmN).mp h; linarith) hi11
     (Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith))
   have hWint := operator_add_nonneg_rounds _ _ _ hi11N hpmN (by linarith) hpm_pos.le hint
   have hint0 : 0 ≤ interest.toRat := by
@@ -573,10 +573,10 @@ lemma Loan.overpaymentComponents_principalDelta_normalized (l : Loan) (overpayme
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hsplit).symm
   have hi'n := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hi'
   have hm'n := computeManagementFee_isNormalized _ _ _ _ _ hm'
-  have hnet := operator_sub_isNormalized_to_nearest_sz _ _ _ hi'n hm'n hn'
+  have hnet := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hi'n hm'n hn'
   have hf'n := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hfee'
-  have h1 := operator_sub_isNormalized_to_nearest_sz _ _ _ hov hnet hpai
-  have h2 := operator_sub_isNormalized_to_nearest_sz _ _ _ h1 hm'n hpaf
-  exact operator_sub_isNormalized_to_nearest_sz _ _ _ h2 hf'n hpd
+  have h1 := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hov hnet hpai
+  have h2 := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ h1 hm'n hpaf
+  exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ h2 hf'n hpd
 
 end XRPL.Model.Lending

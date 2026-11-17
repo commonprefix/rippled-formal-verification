@@ -53,12 +53,12 @@ private lemma loanPeriodicPayment_nonpos (principal rate : Number) (pr : UInt32)
   · simp only [pure, Except.pure, Except.ok.injEq] at h; subst h; rw [Number.toRat_zero]
   · obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     split at h
-    · exact Number.roundsToRepresentable_nonpos _ _ (operator_div_rounded_to_nearest _ _ _ hp hN h)
+    · exact Number.roundsToRepresentable_nonpos _ _ (Number.operator_div_rounded_to_nearest _ _ _ hp hN h)
         (div_nonpos_of_nonpos_of_nonneg hp0 hN0)
     · obtain ⟨f, hf, h⟩ := bind_ok_peel _ _ _ h
       have hfN := computePaymentFactor_isNormalized rate _ pr f hrate hN hf
       have hf0 := computePaymentFactor_nonneg rate _ pr f hrate hr0 hN hN0 hf
-      exact Number.roundsToRepresentable_nonpos _ _ (operator_mul_rounded_to_nearest _ _ _ hp hfN h)
+      exact Number.roundsToRepresentable_nonpos _ _ (Number.operator_mul_rounded_to_nearest _ _ _ hp hfN h)
         (mul_nonpos_of_nonpos_of_nonneg hp0 hf0)
 
 /-- A successful create lends a positive amount. A nonpositive principal would give a nonpositive
@@ -144,7 +144,7 @@ private lemma Loan.create_interestDue_nonneg (broker : LoanBroker) (v : Vault) (
     rw [hf] at haT
     exact lt_of_le_of_lt (Nat.sub_le _ _) haT
   obtain ⟨-, hmf_hi, -, -⟩ := computeManagementFee_bounds broker.numericType ti _ (aT - j)
-    broker.managementFeeRate ls (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
+    broker.managementFeeRate ls (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
     (by omega) hR10 ⟨hlo, hhi⟩ hint hfr hmfo
   have hC : ((aT - j) * broker.managementFeeRate.toNat + 99999) / 100000 ≤ aT - j := by
     have : (aT - j) * broker.managementFeeRate.toNat ≤ (aT - j) * 10000 := Nat.mul_le_mul_left _ hR10

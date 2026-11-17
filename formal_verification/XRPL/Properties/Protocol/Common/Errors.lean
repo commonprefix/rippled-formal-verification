@@ -225,7 +225,6 @@ lemma STAmount.intAmount_ne_notLawful (s : STAmount) : s.intAmount ≠ .error .n
 
 lemma STAmount.iou_ne_notLawful (s : STAmount) (mode : rounding_mode) : s.iou mode ≠ .error .notLawful := by
   unfold STAmount.iou
-  simp only [bind, Except.bind]
   split_ne_notLawful [IOUAmount.ofMantissaExp_ne_notLawful]
 
 lemma STAmount.toNumber_ne_notLawful (s : STAmount) (mode : rounding_mode) :

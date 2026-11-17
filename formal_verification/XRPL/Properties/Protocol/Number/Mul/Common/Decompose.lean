@@ -22,19 +22,27 @@ structure MulDecomp (x y result : Number) (mode : rounding_mode)
     .overflow = .ok res
   normalizes : res.toNumber.normalize largeRange.min largeRange.max mode = .ok result
 
-theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
+/-- `operator_mul` up to its scale-down. The rest is `doRoundUp` on the scaled mantissa `zm` and then `normalize`,
+and `|x * y| = (zm + f)·10^ze'` for the guard fraction `f`. -/
+lemma Number.operator_mulSpec_scaled (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
-    (hok : Number.operator_mul x y mode = .ok result) :
-    ∃ (zn : Bool) (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res : RoundResult),
-      MulDecomp x y result mode zn zm ze' f g res := by
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0) :
+    ∃ (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard),
+      mantissaFloorSucc ≤ zm.toNat ∧ zm.toNat ≤ maxRepUp.toNat ∧ 0 ≤ f ∧ f < 1 ∧
+      (zm.toNat = mantissaFloor → (8 : ℚ) / 10 ≤ f) ∧
+      |x.toRat * y.toRat| = ((zm.toNat : ℚ) + f) * 10 ^ ze' ∧
+      represents g f ∧ g.sbit_ = (x.negative_ != y.negative_) ∧
+      x.operator_mulSpec y mode =
+        (match g.doRoundUp (x.negative_ != y.negative_) zm ze' largeRange.min largeRange.max mode .overflow with
+         | .error err => .error err
+         | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) := by
+  generalize hok : x.operator_mulSpec y mode = out
   have hx_bounds := hx.mantissaBounds hx_mant_ne
   have hy_bounds := hy.mantissaBounds hy_mant_ne
-  have hx_mant_pos := mantissa_toNat_pos_of_bounds hx_bounds
-  have hy_mant_pos := mantissa_toNat_pos_of_bounds hy_bounds
+  have hx_mant_pos := Number.mantissa_toNat_pos_of_bounds hx_bounds
+  have hy_mant_pos := Number.mantissa_toNat_pos_of_bounds hy_bounds
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
-  rw [Number.operator_mul_eq_spec] at hok
   unfold Number.operator_mulSpec at hok
   simp only [hx_ne_zero, hy_ne_zero, Bool.false_eq_true, if_false] at hok
   set zn : Bool := x.negative_ != y.negative_ with hzn_def
@@ -121,15 +129,27 @@ theorem operator_mul_decompose (x y result : Number) (mode : rounding_mode)
     by_cases hzn : zn
     · rw [if_pos hzn]; exact hzn.symm
     · rw [if_neg hzn]; exact (Bool.not_eq_true _ |>.mp hzn).symm
+  exact ⟨zm, ze', f, g, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, h_floor_constraint, habs_xy_eq2, hf_rep,
+    h_g_sbit, hok.symm⟩
+
+theorem Number.operator_mul_decompose (x y result : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
+    (hok : Number.operator_mul x y mode = .ok result) :
+    ∃ (zn : Bool) (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res : RoundResult),
+      MulDecomp x y result mode zn zm ze' f g res := by
+  obtain ⟨zm, ze', f, g, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, h_floor_constraint, habs_xy_eq2, hf_rep,
+      h_g_sbit, hspec⟩ := Number.operator_mulSpec_scaled x y mode hx hy hx_mant_ne hy_mant_ne
+  rw [Number.operator_mul_eq_spec, hspec] at hok
   have h_rup_exists : ∃ res : RoundResult,
-      g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
-    match hg : g.doRoundUp zn zm ze' largeRange.min largeRange.max mode .overflow with
+      g.doRoundUp (x.negative_ != y.negative_) zm ze' largeRange.min largeRange.max mode .overflow = .ok res := by
+    match hg : g.doRoundUp (x.negative_ != y.negative_) zm ze' largeRange.min largeRange.max mode .overflow with
     | .error e => simp only [hg, reduceCtorEq] at hok
     | .ok r => exact ⟨r, rfl⟩
   obtain ⟨res, h_rup⟩ := h_rup_exists
   simp only [h_rup] at hok
-  exact ⟨zn, zm, ze', f, g, res,
-    ⟨hzn_def, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt,
+  exact ⟨x.negative_ != y.negative_, zm, ze', f, g, res,
+    ⟨rfl, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt,
      h_floor_constraint, habs_xy_eq2, hf_rep, h_g_sbit, h_rup, hok⟩⟩
 
 structure MulFactsSpec (x y result : Number) (mode : rounding_mode)
@@ -179,14 +199,14 @@ structure MulFactsTowardsZero (x y result : Number) (mode : rounding_mode)
   result_neg : result.negative_ = (x.negative_ != y.negative_)
   zm_succ : mantissaFloorSucc ≤ zm.toNat
 
-theorem operator_mul_result_isNormalized (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_mul_result_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     result.isNormalized := by
   obtain ⟨zn, zm, ze', f, g, res, d⟩ :=
-    operator_mul_decompose x y result mode hx hy hx_mant_ne hy_mant_ne hok
+    Number.operator_mul_decompose x y result mode hx hy hx_mant_ne hy_mant_ne hok
   have hzm_ge : zm.toNat ≥ mantissaFloor := by have := d.zm_ge_floorSucc; omega
   have hres_mant_ne : res.mantissa_ ≠ 0 :=
     Number.normalize_mantissa_ne_zero_of_result d.normalizes hresult
@@ -195,7 +215,7 @@ theorem operator_mul_result_isNormalized (x y result : Number) (mode : rounding_
       .overflow res d.rounds hres_mant_ne
   exact Number.normalize_isNormalized_of_invariants h_res_min h_res_max h_res_exp h_res_mod d.normalizes
 
-theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y mode = .ok result)
@@ -204,7 +224,7 @@ theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding
     result.mantissa_ ≤ maxRepUp := by
   obtain ⟨zn, zm, ze', f, g, res, hzn, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, hfloor,
       habs, hf_rep, hsbit, h_rup, hok'⟩ :=
-    operator_mul_decompose x y result mode hx hy hx_mant_ne hy_mant_ne hok
+    Number.operator_mul_decompose x y result mode hx hy hx_mant_ne hy_mant_ne hok
   have hzm_ge : zm.toNat ≥ mantissaFloor := by omega
   have hres_mant_ne : res.mantissa_ ≠ 0 :=
     Number.normalize_mantissa_ne_zero_of_result hok' hresult
@@ -214,7 +234,7 @@ theorem operator_mul_no_overflow_mantissa (x y result : Number) (mode : rounding
 
 /-- `operator_mul` returns a zero operand unchanged, so a nonzero result forces both operands' mantissas to be
 nonzero. -/
-theorem operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mode}
+theorem Number.operator_mul_operands_ne_zero {x y result : Number} {mode : rounding_mode}
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
     x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 := by

@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! # Witness for `operator_mul_rounding_bound_upward`
+/-! # Witness for `Number.operator_mul_rounding_bound_upward`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = maxRepNat`, `y = 1000000000000000009` exceeds `9/(2^63+2)`.
@@ -67,7 +67,7 @@ lemma doNormalize_upward_witness :
   simp only [RoundResult.toNumber]
 
 /-- `operator_mul` trace for the upward witness inputs. -/
-lemma operator_mul_upward_witness :
+lemma Number.operator_mul_upward_witness :
     Number.operator_mul
         ⟨false, maxRepNat, 0⟩
         ⟨false, 1000000000000000009, 0⟩
@@ -91,7 +91,7 @@ lemma operator_mul_upward_witness :
   rw [doNormalize_upward_witness]
 
 
-theorem operator_mul_upward_attained :
+theorem Number.operator_mul_upward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_mul x y .upward = .ok result ∧
@@ -103,7 +103,7 @@ theorem operator_mul_upward_attained :
           ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_mul_upward_witness
+  · exact Number.operator_mul_upward_witness
   · decide
   · have hx_rat : (⟨false, maxRepNat, 0⟩ : Number).toRat = maxRepNat := by
       unfold Number.toRat; rfl

@@ -38,27 +38,20 @@ lemma Vault.adjustBalances_ok_facts (v : Vault) (c : PoolBalanceChange) (raw : R
     0 ≤ raw.assetsAvailable.toRat ∧ 0 ≤ raw.assetsDeployed.toRat ∧ 0 ≤ raw.assetsReserved.toRat ∧
     0 ≤ raw.lossUnrealized.toRat ∧ 0 ≤ raw.yieldUnrealized.toRat ∧
     raw.lossUnrealized.toRat ≤ raw.assetsDeployed.toRat := by
-  simp only [XRPL.Model.SingleAssetVault.Vault.adjustBalances] at hadj
-  unfold_ter at hadj
-  walk_ok
-  rename_i hsign hgt
-  have hAAn := STAmount.roundToNumericType_isNormalized _ _ _ _ _
-    ‹STAmount.roundToNumericType v.numericType _ .to_nearest = .ok _›
-  have hADn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm hc.deployed
-    ‹v.assetsDeployed.operator_add c.deployed .to_nearest = .ok _›
-  have hLUn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hc.loss
-    ‹v.lossUnrealized.operator_add c.loss .to_nearest = .ok _›
-  have hARn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hc.reserved
-    ‹v.assetsReserved.operator_add c.reserved .to_nearest = .ok _›
-  have hYUn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm hc.yield
-    ‹v.yieldUnrealized.operator_add c.yield .to_nearest = .ok _›
-  simp only [Bool.or_eq_true, decide_eq_true_eq, not_or] at hsign
-  obtain ⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩ := hsign
+  obtain ⟨aa', ad', lu', ar', yu', hs, ⟨h1, h2, h3, h4, h5⟩, hgt, rfl⟩ := Vault.adjustBalances_ok_parts v c raw hadj
+  obtain ⟨aa, -, hround⟩ := hs.cash
+  have hAAn := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hround
+  have hADn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm hc.deployed hs.deployed
+  have hLUn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hc.loss hs.loss
+  have hARn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hc.reserved hs.reserved
+  have hYUn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm hc.yield hs.yield
   unfold Number.operator_gt at hgt
-  have hle := (operator_lt_eq_false_iff _ _ hADn hLUn).mp (by simpa using hgt)
-  exact ⟨rfl, hAAn, hADn, hARn, hLUn, hYUn, Number.toRat_nonneg_of_not_signum_neg _ hAAn h1,
-    Number.toRat_nonneg_of_not_signum_neg _ hADn h2, Number.toRat_nonneg_of_not_signum_neg _ hARn h5,
-    Number.toRat_nonneg_of_not_signum_neg _ hLUn h3, Number.toRat_nonneg_of_not_signum_neg _ hYUn h4, hle⟩
+  have hle := (Number.operator_lt_eq_false_iff _ _ hADn hLUn).mp hgt
+  exact ⟨rfl, hAAn, hADn, hARn, hLUn, hYUn, Number.toRat_nonneg_of_not_signum_neg _ hAAn (not_lt.mpr h1),
+    Number.toRat_nonneg_of_not_signum_neg _ hADn (not_lt.mpr h2),
+    Number.toRat_nonneg_of_not_signum_neg _ hARn (not_lt.mpr h5),
+    Number.toRat_nonneg_of_not_signum_neg _ hLUn (not_lt.mpr h3),
+    Number.toRat_nonneg_of_not_signum_neg _ hYUn (not_lt.mpr h4), hle⟩
 
 /-- A balance update that passed its checks writes a lawful vault when the asset stores the new AssetsDeployed and
 AssetsAvailable, AssetsReserved fits in AssetsDeployed, AssetsAvailable is on the grid, and no shares, no assets. -/

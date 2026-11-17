@@ -101,9 +101,7 @@ lemma STAmount.canonicalize_fractional_offset (s result : STAmount) (mode : roun
     have heq := Except.ok.inj hok
     have hres : result.mOffset = i.exponent_ := by rw [← heq]
     rw [hres]
-    unfold STAmount.iou at hone
-    rw [if_neg hint] at hone
-    obtain ⟨m, -, hone⟩ := bind_ok_peel _ _ _ hone
+    rw [STAmount.iou_eq mode hint] at hone
     exact IOUAmount.ofMantissaExp_exponent_cases _ _ mode i hone
 
 /-- `STAmount.ofNumber` on a fractional asset: the output offset is `-100` (zero)

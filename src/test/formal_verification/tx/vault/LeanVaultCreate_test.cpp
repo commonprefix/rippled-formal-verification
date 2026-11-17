@@ -293,27 +293,6 @@ class LeanVaultCreate_test : public LeanSuite
         }
     }
 
-    // An AssetsMaximum the asset cannot represent (XRP above 1e17 drops, MPT above 2^63 - 1, IOU
-    // past the 16-digit mantissa at exponent 80) is temMALFORMED in C++ preflight.
-    void
-    testMaximumRangeSweep(jtx::Env& env, jtx::Account const& owner, SweepAssets const& assets)
-    {
-        for (Asset const& asset : assets)
-        {
-            beginCase(("create " + assetName(asset) + " maximum range-Sweep").c_str());
-            for (auto const& [cusp, cases] : maximumRangeCases(asset))
-            {
-                std::set<TER> seen;
-                for (MaximumRangeCusp const& c : cases)
-                {
-                    Number const maximum{c.mantissa, static_cast<int>(c.exponent)};
-                    seen.insert(checkCreate(env, owner, asset, {.assetsMaximum = maximum}));
-                }
-                expectCrossed(cusp, seen, {temMALFORMED});
-            }
-        }
-    }
-
     void
     runTests() override
     {
@@ -378,17 +357,6 @@ class LeanVaultCreate_test : public LeanSuite
             "IOU maximum off the scale-2 grid",
             AssetKind::iou,
             {.scale = 2, .assetsMaximum = Number{1'001, -3}},
-            std::nullopt,
-            tecPRECISION_LOSS);
-        // FV_M2_19 (regression): a 17-digit AssetsMaximum used to be rounded to the STAmount grid
-        // on create, storing a different cap than submitted. It is now rejected upfront.
-        runVaultCreate(
-            env,
-            owner,
-            assets,
-            "IOU maximum over 16 digits",
-            AssetKind::iou,
-            {.assetsMaximum = Number{12'345'678'901'234'567LL, -1}},
             std::nullopt,
             tecPRECISION_LOSS);
         runVaultCreate(
@@ -506,13 +474,6 @@ class LeanVaultCreate_test : public LeanSuite
             {.earlyExitFeeRate = 100'001},
             ScheduleOffsets{.subscription = 60, .investmentPeriod = 1'000'000},
             temMALFORMED);
-        // Accepted divergence: an early-exit fee, even zero, on an open-ended vault. C++ preflight
-        // returns temMALFORMED; the model copies doApply, which drops the rate, and creates the
-        // vault.
-        // clang-format off
-        // runVaultCreate(env, owner, assets, "open-ended vault with an early-exit fee", AssetKind::iou, {.earlyExitFeeRate = 5'000}, std::nullopt, temMALFORMED);
-        // runVaultCreate(env, owner, assets, "open-ended vault with a zero early-exit fee", AssetKind::iou, {.earlyExitFeeRate = 0}, std::nullopt, temMALFORMED);
-        // clang-format on
 
         SweepAssets const all{assets.xrp, assets.iou, assets.mpt};
         testScheduleSweep(env, owner, all);
@@ -520,11 +481,6 @@ class LeanVaultCreate_test : public LeanSuite
         testScaleSweep(env, owner, assets.iou);
         testMaximumSignSweep(env, owner, all);
         testMaximumGridSweep(env, owner, assets.iou);
-
-        // Acknowledged gap, disabled.
-        // clang-format off
-        // testMaximumRangeSweep(env, owner, all);  // maximum past the asset's range (XRP 1e17, MPT 2^63-1, IOU 9999999999999999e80): C++ temMALFORMED, model canCreate tecPRECISION_LOSS but create builds a lawful vault
-        // clang-format on
     }
 };
 

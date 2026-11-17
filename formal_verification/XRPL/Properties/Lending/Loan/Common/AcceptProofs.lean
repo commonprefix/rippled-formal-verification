@@ -348,6 +348,11 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
   obtain ⟨aaA, adA, luA, arA, yuA, hsA, ⟨-, -, -, hgyA, -⟩, -, hrawAeq⟩ :=
     Vault.adjustBalances_ok_parts r.pool' _ rawA hadjA
   have hpf := hrawP.trans hrawPeq
+  -- the accept stored the total of the balances it wrote
+  have hstA : XRPL.Model.SingleAssetVault.TotalStores v.numericType aaA adA := by
+    have h := Vault.adjustBalances_ok_totalStores r.pool' _ rawA hadjA
+    rw [hrawAeq, show r.pool'.numericType = v.numericType from (congrArg RawVault.numericType hpf :)] at h
+    exact h
   obtain ⟨aa, h1P, h2P⟩ := hsP.cash
   have hdP := hsP.deployed
   have hlP := hsP.loss
@@ -370,10 +375,11 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
   have hneg := Number.operator_neg_isNormalized _ hpn
 
   -- the accept rounds the available assets again, and a stored amount rounds to itself
-  have haan : aa.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hneg h1P
+  have haan : aa.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hneg h1P
   have haa0 : 0 ≤ aa.toRat := by
-    have hle := (operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hpn).mp hchecks.funds
-    have h := Number.roundsToRepresentable_ge _ _ (operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm
+    have hle := (Number.operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hpn).mp hchecks.funds
+    have h := Number.roundsToRepresentable_ge _ _ (Number.operator_add_rounded_to_nearest _ _ _
+      v.wf.assetsAvailable_norm
       hneg h1P) Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero, Number.toRat_neg]; linarith)
     rwa [Number.toRat_zero] at h
   have haaPn := STAmount.roundToNumericType_isNormalized _ _ _ _ _ h2P
@@ -384,13 +390,13 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
   subst haaA
 
   -- the reserve takes the principal and gives it back exactly
-  have harPn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hpn hrP
+  have harPn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hpn hrP
   have harPv := Number.operator_add_exact_of_fits v.wf.assetsReserved_norm hpn hrP
     (STAmount.Representable.number har)
   have harA : arA = v.assetsReserved := by
     have h := Number.operator_add_exact_of_fits harPn hneg hrA
       ⟨v.assetsReserved, v.wf.assetsReserved_norm, by rw [harPv, Number.toRat_neg]; ring⟩
-    refine Number.isNormalized.toRat_inj (operator_add_isNormalized_to_nearest_sz _ _ _ harPn hneg hrA)
+    refine Number.isNormalized.toRat_inj (Number.operator_add_isNormalized_to_nearest_sz _ _ _ harPn hneg hrA)
       v.wf.assetsReserved_norm ?_
     rw [h, harPv, Number.toRat_neg]; ring
   subst harA
@@ -400,6 +406,7 @@ lemma Loan.createPending_accept_proof (r rA : LoanWithDisbursement Vault)
     ⟨⟨aa, h1P, h2P⟩, hdP, Number.operator_add_zero_right _ _, Number.operator_add_zero_right _ _, hyA⟩
   have hadjI := Vault.adjustBalances_ok v _ aaA adP v.lossUnrealized v.assetsReserved yuA hsI
     ⟨hgaP, hgdP, hglP, hgyA, Number.signum_nonneg_of_le _ v.wf.assetsReserved_norm v.valid.assetsReserved_nonneg⟩ hleP
+    hstA
   have hrawI : rawA = { v.toRawVault with
       assetsAvailable := aaA
       assetsDeployed := adP

@@ -65,17 +65,18 @@ lemma loanAccruedInterest_le_period (tpo rate : Number) (now start prev interval
   have hIN := Number.ofInt64_isNormalized interval.toInt64
   have hIv := Number.ofInt64_seconds interval
   have hipiN := Number.operator_mul_isNormalized _ _ ipi _ htpo hrate hipi
-  have hipi0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ htpo hrate hipi) (mul_nonneg htpo0 hr0)
+  have hipi0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ htpo hrate hipi) (mul_nonneg htpo0 hr0)
   have hipile := (Number.mul_near _ _ _ htpo hrate hipi).le (mul_nonneg htpo0 hr0)
   have hnumN := Number.operator_mul_isNormalized _ _ num _ hipiN hS hnum
-  have hnum0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hipiN hS hnum) (mul_nonneg hipi0 (by
+  have hnum0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hipiN hS hnum) (mul_nonneg hipi0 (by
     rw [hSv]; positivity))
   have hnumle := (Number.mul_near _ _ _ hipiN hS hnum).le (mul_nonneg hipi0 (by rw [hSv]; positivity))
   have hle := (Number.div_near _ _ _ hnumN hIN h).le (div_nonneg hnum0 (by rw [hIv]; positivity))
   rw [hSv] at hnumle
   rw [hIv] at hle
   refine ⟨Number.operator_div_isNormalized _ _ a _ hnumN hIN h,
-    rn_nonneg (operator_div_rounded_to_nearest _ _ _ hnumN hIN h) (div_nonneg hnum0 (by rw [hIv]; positivity)), ?_⟩
+    rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hnumN hIN h) (div_nonneg hnum0 (by rw [hIv]; positivity)),
+      ?_⟩
   have hIpos : (0 : ℚ) < interval.toNat := by linarith
   calc a.toRat ≤ num.toRat / interval.toNat * (1 + ε) := hle
     _ ≤ ipi.toRat * (now - last).toNat * (1 + ε) / interval.toNat * (1 + ε) := by gcongr
@@ -99,13 +100,13 @@ lemma tenthBipsOfValue_le_share (x : Number) (bips : TenthBips32) (r : Number) (
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hx hrn hp
-  have hp0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hx hrn hp) (by rw [hrv]; positivity)
+  have hp0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hx hrn hp) (by rw [hrv]; positivity)
   have hple := (Number.mul_near _ _ _ hx hrn hp).le (by rw [hrv]; positivity)
   have hle := (Number.div_near _ _ _ hpn hun h).le (by rw [huv, hU]; positivity)
   rw [hrv] at hple
   rw [huv, hU] at hle
   refine ⟨Number.operator_div_isNormalized _ _ _ _ hpn hun h,
-    rn_nonneg (operator_div_rounded_to_nearest _ _ _ hpn hun h) (by rw [huv, hU]; positivity), ?_⟩
+    rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hpn hun h) (by rw [huv, hU]; positivity), ?_⟩
   have he := Number.nearestError_pos
   calc r.toRat ≤ p.toRat / 100000 * (1 + ε) := hle
     _ ≤ x.toRat * bips.toNat * (1 + ε) / 100000 * (1 + ε) := by gcongr
@@ -139,8 +140,8 @@ lemma computeFullPaymentInterest_le_principal (tpo rate : Number) (now interval 
       have : tpo.toRat * (cr.toNat / 100000) ≤ tpo.toRat := by nlinarith
       nlinarith [pow_pos (show (0 : ℚ) < 1 + ε by linarith) 2]
   obtain ⟨pen, hpN, hp0, hple, h⟩ := hpenb
-  refine ⟨operator_add_isNormalized_to_nearest_sz _ _ _ haN hpN h,
-    rn_nonneg (operator_add_rounded_to_nearest _ _ _ haN hpN h) (add_nonneg ha0 hp0), ?_⟩
+  refine ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ haN hpN h,
+    rn_nonneg (Number.operator_add_rounded_to_nearest _ _ _ haN hpN h) (add_nonneg ha0 hp0), ?_⟩
   have hfle := (Number.add_near _ _ _ haN hpN h).le (add_nonneg ha0 hp0)
   have h1 : (1 + ε) ^ 2 ≤ (1 + ε) ^ 3 := pow_le_pow_right₀ (by linarith) (by norm_num)
   calc fi.toRat ≤ (acc.toRat + pen.toRat) * (1 + ε) := hfle

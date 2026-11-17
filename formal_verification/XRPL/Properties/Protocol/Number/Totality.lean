@@ -4,11 +4,19 @@ import XRPL.Properties.Protocol.Number.Common.Rounding.DivQuotient
 import XRPL.Properties.Protocol.Number.Common.NumberBridge
 import XRPL.Properties.Protocol.Number.Compare.Compare
 import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
+import XRPL.Properties.Protocol.Number.Add.Common.SuccessCondition
+import XRPL.Properties.Protocol.Number.Mul.Common.SuccessCondition
+import XRPL.Properties.Protocol.Number.Div.Common.SuccessCondition
+import XRPL.Properties.Protocol.Number.Common.Rounding.TopGap
 
 /-! # When the `Number` operations succeed
 
 Success conditions for `doRoundUp`, `doNormalize`, `doNormalize128`, `operator_mul`, `operator_div`
-and `operator_sub` on normalized operands with exponent headroom. -/
+and `operator_sub` on normalized operands with exponent headroom. Then the success condition of the four
+operations in each rounding mode, and the overflow error outside it. Add, subtract and divide check for
+overflow before they round (FV_M1_19). Where that differs from the rule of the mode their theorems carry
+`hrange`, the widest range that leaves those results out, and an `_attained` witness. The four named values
+are in `Common/Rounding/TopGap.lean`. -/
 
 namespace XRPL.Model.Protocol
 
@@ -268,7 +276,7 @@ theorem Number.operator_mul_ok_of_large_operands
 
 /-- `operator_mul` succeeds in every mode on two normalized nonzero operands whose exponent sum lies in
 `[minExponent, maxExponent - 22]`. -/
-theorem Number.operator_mul_ok_of_normalized
+lemma Number.operator_mul_ok_of_normalized
     (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
@@ -375,7 +383,7 @@ theorem doNormalize128_ok_of_exp (zn : Bool) (M : UInt128) (e : Int)
 
 /-- `operator_div` succeeds in every mode on two normalized nonzero operands with
 `x.exponent_ - y.exponent_ ≤ maxExponent - 5`, which leaves `doNormalize128` the headroom it needs. -/
-theorem Number.operator_div_ok_of_normalized
+lemma Number.operator_div_ok_of_normalized
     (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
@@ -385,8 +393,8 @@ theorem Number.operator_div_ok_of_normalized
   have hyb := hy.mantissaBounds hy0
   obtain ⟨zmq, zeq, drp, N, r, hdq, htail⟩ :=
     divQuotient128_correct x.mantissa_ y.mantissa_ x.exponent_ y.exponent_
-      (mantissa_toNat_pos_of_bounds hxb)
-      (mantissa_toNat_pos_of_bounds hyb)
+      (Number.mantissa_toNat_pos_of_bounds hxb)
+      (Number.mantissa_toNat_pos_of_bounds hyb)
       (UInt64.le_iff_toNat_le.mp hxb.2)
       (UInt64.le_iff_toNat_le.mp hyb.2)
       (UInt64.le_iff_toNat_le.mp hyb.1)
@@ -433,12 +441,11 @@ private theorem Number.operator_add_diffSign_ok (x y : Number) (mode : rounding_
       apply Number.diffSign_recover_tail_ok
       split_ifs <;> first | (rw [alignDown_e_eq]; omega) | omega
 
-/-- Two aligned mantissas below `10^19` with sum at least `10^18`, at a common exponent in
-`[minExponent, maxExponent - 3]`, add, round and normalize without error. -/
+/-- Two aligned mantissas below `10^19` with sum at least `10^18`, at a common exponent at most
+`maxExponent - 3`, add and round without error. -/
 lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g : Guard)
     (mode : rounding_mode) (hxm : xm_a.toNat < 10 ^ 19) (hym : ym_a.toNat < 10 ^ 19)
-    (hsum : 10 ^ 18 ≤ xm_a.toNat + ym_a.toNat)
-    (he_lo : minExponent ≤ e) (he_hi : e + 3 ≤ maxExponent) :
+    (hsum : 10 ^ 18 ≤ xm_a.toNat + ym_a.toNat) (he_hi : e + 3 ≤ maxExponent) :
     ∃ result, (let zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a
       let p : UInt64 × Int × Guard :=
         if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then
@@ -447,7 +454,7 @@ lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g 
         else (toUInt64 zm128, e, g)
       match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode .overflow with
       | .error err => Except.error err
-      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) = .ok result := by
+      | .ok res => .ok res.toNumber) = .ok result := by
   have hxm_tu : (toUInt128 xm_a).toNat = xm_a.toNat := toNat_toUInt128 xm_a
   have hym_tu : (toUInt128 ym_a).toNat = ym_a.toNat := toNat_toUInt128 ym_a
   set zm128 : UInt128 := toUInt128 xm_a + toUInt128 ym_a with hzm128_def
@@ -501,26 +508,9 @@ lemma Number.sameSign_add_tail_ok (xn : Bool) (xm_a ym_a : UInt64) (e : Int) (g 
   show ∃ result, (match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max mode
       .overflow with
     | .error err => Except.error err
-    | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode) = .ok result
+    | .ok res => .ok res.toNumber) = .ok result
   rw [hres]
-  simp only []
-  have hexp_out : res.exponent_ ≤ p.2.1 + 1 :=
-    Guard.doRoundUp_ok_output_exp_le p.2.2 xn p.1 p.2.1 largeRange.min largeRange.max mode
-      .overflow res (by omega) hres
-  by_cases hrm : res.mantissa_ = 0
-  · refine ⟨Number.zero, ?_⟩
-    show doNormalize res.toNumber.negative_ res.toNumber.mantissa_ res.toNumber.exponent_
-      largeRange.min largeRange.max mode = .ok Number.zero
-    rw [doNormalize_eq_spec]
-    all_goals try min_fit
-    unfold doNormalizeSpec
-    rw [if_pos (show (res.toNumber.mantissa_ == 0) = true from by
-      show (res.mantissa_ == 0) = true; rw [beq_iff_eq]; exact hrm)]
-  · obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
-      doRoundUp_output_invariants_upTo_maxRepUp_anyMode p.2.2 xn p.1 p.2.1 mode hlo hhi
-        .overflow res hres hrm
-    exact ⟨res.toNumber, doNormalize_id mode res.negative_ res.mantissa_ res.exponent_
-      h_res_min h_res_max h_res_exp h_res_mod (by omega) (fun _ => by omega)⟩
+  exact ⟨res.toNumber, rfl⟩
 
 /-- The `Number` exponent of a nonzero normalized source sits at or above `minExponent`. -/
 lemma Number.exponent_ge_min (n : Number) (hn : n.isNormalized) (hn0 : n.mantissa_ ≠ 0) :
@@ -560,7 +550,7 @@ lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).1 y.mantissa_
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.2 mode
-      (by omega) hy_b.2 (by omega) (by rw [he]; exact hye_min) (by rw [he]; exact hye)
+      (by omega) hy_b.2 (by omega) (by rw [he]; exact hye)
     exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show
       (Number.operator_add.alignDown x.mantissa_ x.exponent_ g₀ y.exponent_).2.1 < maxExponent by
         rw [he]; omega), ok_bind] using hr⟩
@@ -573,13 +563,13 @@ lemma Number.operator_add_sameSign_ok (x y : Number) (mode : rounding_mode)
     obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_
       (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).1 x.exponent_
       (Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_).2.2 mode
-      hx_b.2 (by omega) (by omega) hxe_min hxe
+      hx_b.2 (by omega) (by omega) hxe
     exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
       ok_bind] using hr⟩
   · rw [if_neg hlt, if_neg hgt]
     obtain ⟨r, hr⟩ := Number.sameSign_add_tail_ok x.negative_ x.mantissa_ y.mantissa_ x.exponent_
       (if x.negative_ then Guard.new.set_negative else Guard.new) mode
-      hx_b.2 hy_b.2 (by omega) hxe_min hxe
+      hx_b.2 hy_b.2 (by omega) hxe
     exact ⟨r, by simpa only [hsn, if_true, checkSumAtTop_of_lt _ (show x.exponent_ < maxExponent by omega),
       ok_bind] using hr⟩
 
@@ -616,5 +606,517 @@ lemma Number.operator_sub_ok_of_exp (x y : Number) (mode : rounding_mode)
   · show (-2147483648 : Int) + 22 ≤ maxExponent
     unfold maxExponent; norm_num
   · exact hye
+
+/-- `to_nearest` `x + y` succeeds exactly when the exact sum is below `Number.top_plus_five` in size. `hrange` leaves
+out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_ok_iff_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat + y.toRat| < Number.top_plus_one ∨ Number.top_plus_five ≤ |x.toRat + y.toRat|) :
+    (∃ result, x.operator_add y .to_nearest = .ok result) ↔
+      |x.toRat + y.toRat| < Number.top_plus_five :=
+  (Number.operator_add_ok_iff_proof x y .to_nearest hx hy hx0 hy0).trans (topGap_to_nearest_agree_iff.mpr hrange)
+
+/-- A sum left out by `hrange`: it is below `Number.top_plus_five` in size, and `to_nearest` `x + y` fails with an
+overflow error. -/
+theorem Number.operator_add_ok_iff_to_nearest_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat + y.toRat| < Number.top_plus_five ∧
+      ∃ err, x.operator_add y .to_nearest = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat + y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_add_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `towards_zero` `x + y` succeeds exactly when the exact sum is below `Number.top_plus_ten` in size. `hrange` leaves
+out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_ok_iff_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat + y.toRat| < Number.top_plus_one ∨ Number.top_plus_ten ≤ |x.toRat + y.toRat|) :
+    (∃ result, x.operator_add y .towards_zero = .ok result) ↔
+      |x.toRat + y.toRat| < Number.top_plus_ten :=
+  (Number.operator_add_ok_iff_proof x y .towards_zero hx hy hx0 hy0).trans (topGap_towards_zero_agree_iff.mpr hrange)
+
+/-- A sum left out by `hrange`: it is below `Number.top_plus_ten` in size, and `towards_zero` `x + y` fails with an
+overflow error. -/
+theorem Number.operator_add_ok_iff_towards_zero_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat + y.toRat| < Number.top_plus_ten ∧
+      ∃ err, x.operator_add y .towards_zero = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat + y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_add_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `downward` `x + y` succeeds exactly when the exact sum is at least `-Number.top` and below `Number.top_plus_ten`.
+`hrange` leaves out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_ok_iff_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat + y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat + y.toRat) ∧
+      (x.toRat + y.toRat < Number.top_plus_one ∨ Number.top_plus_ten ≤ x.toRat + y.toRat)) :
+    (∃ result, x.operator_add y .downward = .ok result) ↔
+      -Number.top ≤ x.toRat + y.toRat ∧ x.toRat + y.toRat < Number.top_plus_ten :=
+  (Number.operator_add_ok_iff_proof x y .downward hx hy hx0 hy0).trans (topGap_downward_agree_iff.mpr hrange)
+
+/-- A sum left out by `hrange`: it is at least `-Number.top` and below `Number.top_plus_ten`, and `downward` `x + y`
+fails with an overflow error. -/
+theorem Number.operator_add_ok_iff_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top ≤ x.toRat + y.toRat ∧ x.toRat + y.toRat < Number.top_plus_ten) ∧
+      ∃ err, x.operator_add y .downward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat + y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_add_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `upward` `x + y` succeeds exactly when the exact sum is above `-Number.top_plus_ten` and at most `Number.top`.
+`hrange` leaves out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_ok_iff_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat + y.toRat ≤ -Number.top_plus_ten ∨ -Number.top_plus_one < x.toRat + y.toRat) ∧
+      (x.toRat + y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat + y.toRat)) :
+    (∃ result, x.operator_add y .upward = .ok result) ↔
+      -Number.top_plus_ten < x.toRat + y.toRat ∧ x.toRat + y.toRat ≤ Number.top :=
+  (Number.operator_add_ok_iff_proof x y .upward hx hy hx0 hy0).trans (topGap_upward_agree_iff.mpr hrange)
+
+/-- A sum left out by `hrange`: it is above `-Number.top_plus_ten` and at most `Number.top`, and `upward` `x + y` fails
+with an overflow error. -/
+theorem Number.operator_add_ok_iff_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top_plus_ten < x.toRat + y.toRat ∧ x.toRat + y.toRat ≤ Number.top) ∧
+      ∃ err, x.operator_add y .upward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_mid_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat + y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_add_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `to_nearest` `x - y` succeeds exactly when the exact difference is below `Number.top_plus_five` in size. `hrange`
+leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_ok_iff_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat - y.toRat| < Number.top_plus_one ∨ Number.top_plus_five ≤ |x.toRat - y.toRat|) :
+    (∃ result, x.operator_sub y .to_nearest = .ok result) ↔
+      |x.toRat - y.toRat| < Number.top_plus_five :=
+  (Number.operator_sub_ok_iff_proof x y .to_nearest hx hy hx0 hy0).trans (topGap_to_nearest_agree_iff.mpr hrange)
+
+/-- A difference left out by `hrange`: it is below `Number.top_plus_five` in size, and `to_nearest` `x - y` fails with
+an overflow error. -/
+theorem Number.operator_sub_ok_iff_to_nearest_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat - y.toRat| < Number.top_plus_five ∧
+      ∃ err, x.operator_sub y .to_nearest = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat - y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_sub_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `towards_zero` `x - y` succeeds exactly when the exact difference is below `Number.top_plus_ten` in size. `hrange`
+leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_ok_iff_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat - y.toRat| < Number.top_plus_one ∨ Number.top_plus_ten ≤ |x.toRat - y.toRat|) :
+    (∃ result, x.operator_sub y .towards_zero = .ok result) ↔
+      |x.toRat - y.toRat| < Number.top_plus_ten :=
+  (Number.operator_sub_ok_iff_proof x y .towards_zero hx hy hx0 hy0).trans (topGap_towards_zero_agree_iff.mpr hrange)
+
+/-- A difference left out by `hrange`: it is below `Number.top_plus_ten` in size, and `towards_zero` `x - y` fails with
+an overflow error. -/
+theorem Number.operator_sub_ok_iff_towards_zero_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat - y.toRat| < Number.top_plus_ten ∧
+      ∃ err, x.operator_sub y .towards_zero = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat - y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_sub_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `downward` `x - y` succeeds exactly when the exact difference is at least `-Number.top` and below
+`Number.top_plus_ten`. `hrange` leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_ok_iff_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat - y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat - y.toRat) ∧
+      (x.toRat - y.toRat < Number.top_plus_one ∨ Number.top_plus_ten ≤ x.toRat - y.toRat)) :
+    (∃ result, x.operator_sub y .downward = .ok result) ↔
+      -Number.top ≤ x.toRat - y.toRat ∧ x.toRat - y.toRat < Number.top_plus_ten :=
+  (Number.operator_sub_ok_iff_proof x y .downward hx hy hx0 hy0).trans (topGap_downward_agree_iff.mpr hrange)
+
+/-- A difference left out by `hrange`: it is at least `-Number.top` and below `Number.top_plus_ten`, and `downward`
+`x - y` fails with an overflow error. -/
+theorem Number.operator_sub_ok_iff_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top ≤ x.toRat - y.toRat ∧ x.toRat - y.toRat < Number.top_plus_ten) ∧
+      ∃ err, x.operator_sub y .downward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat - y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_sub_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `upward` `x - y` succeeds exactly when the exact difference is above `-Number.top_plus_ten` and at most
+`Number.top`. `hrange` leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_ok_iff_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat - y.toRat ≤ -Number.top_plus_ten ∨ -Number.top_plus_one < x.toRat - y.toRat) ∧
+      (x.toRat - y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat - y.toRat)) :
+    (∃ result, x.operator_sub y .upward = .ok result) ↔
+      -Number.top_plus_ten < x.toRat - y.toRat ∧ x.toRat - y.toRat ≤ Number.top :=
+  (Number.operator_sub_ok_iff_proof x y .upward hx hy hx0 hy0).trans (topGap_upward_agree_iff.mpr hrange)
+
+/-- A difference left out by `hrange`: it is above `-Number.top_plus_ten` and at most `Number.top`, and `upward` `x - y`
+fails with an overflow error. -/
+theorem Number.operator_sub_ok_iff_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top_plus_ten < x.toRat - y.toRat ∧ x.toRat - y.toRat ≤ Number.top) ∧
+      ∃ err, x.operator_sub y .upward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_mid_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat - y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_sub_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `to_nearest` `x / y` succeeds exactly when the exact quotient is below `Number.top_plus_five` in size. `hrange`
+leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_ok_iff_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat / y.toRat| < Number.top_plus_one ∨ Number.top_plus_five ≤ |x.toRat / y.toRat|) :
+    (∃ result, x.operator_div y .to_nearest = .ok result) ↔
+      |x.toRat / y.toRat| < Number.top_plus_five :=
+  (Number.operator_div_ok_iff_proof x y .to_nearest hx hy hx0 hy0).trans (topGap_to_nearest_agree_iff.mpr hrange)
+
+/-- A quotient left out by `hrange`: it is below `Number.top_plus_five` in size, and `to_nearest` `x / y` fails with an
+overflow error. -/
+theorem Number.operator_div_ok_iff_to_nearest_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat / y.toRat| < Number.top_plus_five ∧
+      ∃ err, x.operator_div y .to_nearest = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat / y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_div_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `towards_zero` `x / y` succeeds exactly when the exact quotient is below `Number.top_plus_ten` in size. `hrange`
+leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_ok_iff_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : |x.toRat / y.toRat| < Number.top_plus_one ∨ Number.top_plus_ten ≤ |x.toRat / y.toRat|) :
+    (∃ result, x.operator_div y .towards_zero = .ok result) ↔
+      |x.toRat / y.toRat| < Number.top_plus_ten :=
+  (Number.operator_div_ok_iff_proof x y .towards_zero hx hy hx0 hy0).trans (topGap_towards_zero_agree_iff.mpr hrange)
+
+/-- A quotient left out by `hrange`: it is below `Number.top_plus_ten` in size, and `towards_zero` `x / y` fails with an
+overflow error. -/
+theorem Number.operator_div_ok_iff_towards_zero_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      |x.toRat / y.toRat| < Number.top_plus_ten ∧
+      ∃ err, x.operator_div y .towards_zero = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat / y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, by rw [habs]; linarith,
+    Number.operator_div_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `downward` `x / y` succeeds exactly when the exact quotient is at least `-Number.top` and below
+`Number.top_plus_ten`. `hrange` leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_ok_iff_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat / y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat / y.toRat) ∧
+      (x.toRat / y.toRat < Number.top_plus_one ∨ Number.top_plus_ten ≤ x.toRat / y.toRat)) :
+    (∃ result, x.operator_div y .downward = .ok result) ↔
+      -Number.top ≤ x.toRat / y.toRat ∧ x.toRat / y.toRat < Number.top_plus_ten :=
+  (Number.operator_div_ok_iff_proof x y .downward hx hy hx0 hy0).trans (topGap_downward_agree_iff.mpr hrange)
+
+/-- A quotient left out by `hrange`: it is at least `-Number.top` and below `Number.top_plus_ten`, and `downward`
+`x / y` fails with an overflow error. -/
+theorem Number.operator_div_ok_iff_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top ≤ x.toRat / y.toRat ∧ x.toRat / y.toRat < Number.top_plus_ten) ∧
+      ∃ err, x.operator_div y .downward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_mid_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat / y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_div_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- `upward` `x / y` succeeds exactly when the exact quotient is above `-Number.top_plus_ten` and at most `Number.top`.
+`hrange` leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_ok_iff_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : (x.toRat / y.toRat ≤ -Number.top_plus_ten ∨ -Number.top_plus_one < x.toRat / y.toRat) ∧
+      (x.toRat / y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat / y.toRat)) :
+    (∃ result, x.operator_div y .upward = .ok result) ↔
+      -Number.top_plus_ten < x.toRat / y.toRat ∧ x.toRat / y.toRat ≤ Number.top :=
+  (Number.operator_div_ok_iff_proof x y .upward hx hy hx0 hy0).trans (topGap_upward_agree_iff.mpr hrange)
+
+/-- A quotient left out by `hrange`: it is above `-Number.top_plus_ten` and at most `Number.top`, and `upward` `x / y`
+fails with an overflow error. -/
+theorem Number.operator_div_ok_iff_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      (-Number.top_plus_ten < x.toRat / y.toRat ∧ x.toRat / y.toRat ≤ Number.top) ∧
+      ∃ err, x.operator_div y .upward = .error err ∧ isOverflow err = true := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_mid_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat / y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, ⟨by linarith, by linarith⟩,
+    Number.operator_div_overflow_proof x y _ hx hy hx0 hy0
+      (by show Number.top_plus_one ≤ _; rw [habs]; linarith)⟩
+
+/-- In `to_nearest`, `x * y` succeeds exactly when the exact product is below `Number.top_plus_five` in size. -/
+theorem Number.operator_mul_ok_iff_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0) :
+    (∃ result, x.operator_mul y .to_nearest = .ok result) ↔
+      |x.toRat * y.toRat| < Number.top_plus_five :=
+  Number.operator_mul_ok_iff_to_nearest_proof x y hx hy hx0 hy0
+
+/-- In `towards_zero`, `x * y` succeeds exactly when the exact product is below `Number.top_plus_ten` in size. -/
+theorem Number.operator_mul_ok_iff_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0) :
+    (∃ result, x.operator_mul y .towards_zero = .ok result) ↔
+      |x.toRat * y.toRat| < Number.top_plus_ten :=
+  Number.operator_mul_ok_iff_towards_zero_proof x y hx hy hx0 hy0
+
+/-- In `downward`, `x * y` succeeds exactly when the exact product is at least `-Number.top` and below
+`Number.top_plus_ten`. -/
+theorem Number.operator_mul_ok_iff_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0) :
+    (∃ result, x.operator_mul y .downward = .ok result) ↔
+      -Number.top ≤ x.toRat * y.toRat ∧ x.toRat * y.toRat < Number.top_plus_ten :=
+  Number.operator_mul_ok_iff_downward_proof x y hx hy hx0 hy0
+
+/-- In `upward`, `x * y` succeeds exactly when the exact product is above `-Number.top_plus_ten` and at most
+`Number.top`. -/
+theorem Number.operator_mul_ok_iff_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0) :
+    (∃ result, x.operator_mul y .upward = .ok result) ↔
+      -Number.top_plus_ten < x.toRat * y.toRat ∧ x.toRat * y.toRat ≤ Number.top :=
+  Number.operator_mul_ok_iff_upward_proof x y hx hy hx0 hy0
+
+/-- In `to_nearest`, `x + y` fails with an overflow error when the exact sum is at least `Number.top_plus_five` in size.
+-/
+theorem Number.operator_add_overflow_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_five ≤ |x.toRat + y.toRat|) :
+    ∃ err, x.operator_add y .to_nearest = .error err ∧ isOverflow err = true :=
+  Number.operator_add_overflow_proof x y .to_nearest hx hy hx0 hy0 (topGap_overflow_to_nearest h)
+
+/-- In `towards_zero`, `x + y` fails with an overflow error when the exact sum is at least `Number.top_plus_ten` in
+size. -/
+theorem Number.operator_add_overflow_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_ten ≤ |x.toRat + y.toRat|) :
+    ∃ err, x.operator_add y .towards_zero = .error err ∧ isOverflow err = true :=
+  Number.operator_add_overflow_proof x y .towards_zero hx hy hx0 hy0 (topGap_overflow_towards_zero h)
+
+/-- `downward` `x + y` fails with an overflow error when the exact sum is below `-Number.top` or at least
+`Number.top_plus_ten`. `hrange` leaves out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_overflow_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat + y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat + y.toRat)
+    (h : x.toRat + y.toRat < -Number.top ∨ Number.top_plus_ten ≤ x.toRat + y.toRat) :
+    ∃ err, x.operator_add y .downward = .error err ∧ isOverflow err = true :=
+  Number.operator_add_overflow_proof x y .downward hx hy hx0 hy0
+    (topGap_overflow_downward_iff.mpr hrange h)
+
+/-- A sum left out by `hrange`: it is below `-Number.top`, and `downward` `x + y` returns a result. -/
+theorem Number.operator_add_overflow_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      x.toRat + y.toRat < -Number.top ∧
+      ∃ result, x.operator_add y .downward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_low_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat + y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hhi,
+    (Number.operator_add_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- `upward` `x + y` fails with an overflow error when the exact sum is at most `-Number.top_plus_ten` or above
+`Number.top`. `hrange` leaves out the sums where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_add_overflow_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat + y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat + y.toRat)
+    (h : x.toRat + y.toRat ≤ -Number.top_plus_ten ∨ Number.top < x.toRat + y.toRat) :
+    ∃ err, x.operator_add y .upward = .error err ∧ isOverflow err = true :=
+  Number.operator_add_overflow_proof x y .upward hx hy hx0 hy0
+    (topGap_overflow_upward_iff.mpr hrange h)
+
+/-- A sum left out by `hrange`: it is above `Number.top`, and `upward` `x + y` returns a result. -/
+theorem Number.operator_add_overflow_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      Number.top < x.toRat + y.toRat ∧
+      ∃ result, x.operator_add y .upward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.add_topGap_low_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat + y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hlo,
+    (Number.operator_add_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- In `to_nearest`, `x - y` fails with an overflow error when the exact difference is at least `Number.top_plus_five`
+in size. -/
+theorem Number.operator_sub_overflow_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_five ≤ |x.toRat - y.toRat|) :
+    ∃ err, x.operator_sub y .to_nearest = .error err ∧ isOverflow err = true :=
+  Number.operator_sub_overflow_proof x y .to_nearest hx hy hx0 hy0 (topGap_overflow_to_nearest h)
+
+/-- In `towards_zero`, `x - y` fails with an overflow error when the exact difference is at least `Number.top_plus_ten`
+in size. -/
+theorem Number.operator_sub_overflow_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_ten ≤ |x.toRat - y.toRat|) :
+    ∃ err, x.operator_sub y .towards_zero = .error err ∧ isOverflow err = true :=
+  Number.operator_sub_overflow_proof x y .towards_zero hx hy hx0 hy0 (topGap_overflow_towards_zero h)
+
+/-- `downward` `x - y` fails with an overflow error when the exact difference is below `-Number.top` or at least
+`Number.top_plus_ten`. `hrange` leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_overflow_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat - y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat - y.toRat)
+    (h : x.toRat - y.toRat < -Number.top ∨ Number.top_plus_ten ≤ x.toRat - y.toRat) :
+    ∃ err, x.operator_sub y .downward = .error err ∧ isOverflow err = true :=
+  Number.operator_sub_overflow_proof x y .downward hx hy hx0 hy0
+    (topGap_overflow_downward_iff.mpr hrange h)
+
+/-- A difference left out by `hrange`: it is below `-Number.top`, and `downward` `x - y` returns a result. -/
+theorem Number.operator_sub_overflow_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      x.toRat - y.toRat < -Number.top ∧
+      ∃ result, x.operator_sub y .downward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_low_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat - y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hhi,
+    (Number.operator_sub_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- `upward` `x - y` fails with an overflow error when the exact difference is at most `-Number.top_plus_ten` or above
+`Number.top`. `hrange` leaves out the differences where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_sub_overflow_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat - y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat - y.toRat)
+    (h : x.toRat - y.toRat ≤ -Number.top_plus_ten ∨ Number.top < x.toRat - y.toRat) :
+    ∃ err, x.operator_sub y .upward = .error err ∧ isOverflow err = true :=
+  Number.operator_sub_overflow_proof x y .upward hx hy hx0 hy0
+    (topGap_overflow_upward_iff.mpr hrange h)
+
+/-- A difference left out by `hrange`: it is above `Number.top`, and `upward` `x - y` returns a result. -/
+theorem Number.operator_sub_overflow_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      Number.top < x.toRat - y.toRat ∧
+      ∃ result, x.operator_sub y .upward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.sub_topGap_low_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat - y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hlo,
+    (Number.operator_sub_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- In `to_nearest`, `x / y` fails with an overflow error when the exact quotient is at least `Number.top_plus_five` in
+size. -/
+theorem Number.operator_div_overflow_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_five ≤ |x.toRat / y.toRat|) :
+    ∃ err, x.operator_div y .to_nearest = .error err ∧ isOverflow err = true :=
+  Number.operator_div_overflow_proof x y .to_nearest hx hy hx0 hy0 (topGap_overflow_to_nearest h)
+
+/-- In `towards_zero`, `x / y` fails with an overflow error when the exact quotient is at least `Number.top_plus_ten` in
+size. -/
+theorem Number.operator_div_overflow_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_ten ≤ |x.toRat / y.toRat|) :
+    ∃ err, x.operator_div y .towards_zero = .error err ∧ isOverflow err = true :=
+  Number.operator_div_overflow_proof x y .towards_zero hx hy hx0 hy0 (topGap_overflow_towards_zero h)
+
+/-- `downward` `x / y` fails with an overflow error when the exact quotient is below `-Number.top` or at least
+`Number.top_plus_ten`. `hrange` leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_overflow_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat / y.toRat ≤ -Number.top_plus_one ∨ -Number.top ≤ x.toRat / y.toRat)
+    (h : x.toRat / y.toRat < -Number.top ∨ Number.top_plus_ten ≤ x.toRat / y.toRat) :
+    ∃ err, x.operator_div y .downward = .error err ∧ isOverflow err = true :=
+  Number.operator_div_overflow_proof x y .downward hx hy hx0 hy0
+    (topGap_overflow_downward_iff.mpr hrange h)
+
+/-- A quotient left out by `hrange`: it is below `-Number.top`, and `downward` `x / y` returns a result. -/
+theorem Number.operator_div_overflow_downward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      x.toRat / y.toRat < -Number.top ∧
+      ∃ result, x.operator_div y .downward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_low_neg
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonpos (show x.toRat / y.toRat ≤ 0 by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hhi,
+    (Number.operator_div_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- `upward` `x / y` fails with an overflow error when the exact quotient is at most `-Number.top_plus_ten` or above
+`Number.top`. `hrange` leaves out the quotients where the early overflow check differs (FV_M1_19). -/
+theorem Number.operator_div_overflow_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (hrange : x.toRat / y.toRat ≤ Number.top ∨ Number.top_plus_one ≤ x.toRat / y.toRat)
+    (h : x.toRat / y.toRat ≤ -Number.top_plus_ten ∨ Number.top < x.toRat / y.toRat) :
+    ∃ err, x.operator_div y .upward = .error err ∧ isOverflow err = true :=
+  Number.operator_div_overflow_proof x y .upward hx hy hx0 hy0
+    (topGap_overflow_upward_iff.mpr hrange h)
+
+/-- A quotient left out by `hrange`: it is above `Number.top`, and `upward` `x / y` returns a result. -/
+theorem Number.operator_div_overflow_upward_attained :
+    ∃ x y : Number, x.isNormalized ∧ y.isNormalized ∧ x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 ∧
+      Number.top < x.toRat / y.toRat ∧
+      ∃ result, x.operator_div y .upward = .ok result := by
+  obtain ⟨x, y, hx, hy, hx0, hy0, hlo, hhi⟩ := Number.div_topGap_low_pos
+  obtain ⟨hL, hLR, hRM, hMN⟩ := Number.topGap_order
+  have habs := abs_of_nonneg (show 0 ≤ x.toRat / y.toRat by linarith)
+  exact ⟨x, y, hx, hy, hx0, hy0, hlo,
+    (Number.operator_div_ok_iff_proof x y _ hx hy hx0 hy0).mpr
+      (by show _ < Number.top_plus_one; rw [habs]; linarith)⟩
+
+/-- In `to_nearest`, `x * y` fails with an overflow error when the exact product is at least `Number.top_plus_five` in
+size. -/
+theorem Number.operator_mul_overflow_to_nearest (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_five ≤ |x.toRat * y.toRat|) :
+    ∃ err, x.operator_mul y .to_nearest = .error err ∧ isOverflow err = true :=
+  Number.operator_mul_overflow_to_nearest_proof x y hx hy hx0 hy0 h
+
+/-- In `towards_zero`, `x * y` fails with an overflow error when the exact product is at least `Number.top_plus_ten` in
+size. -/
+theorem Number.operator_mul_overflow_towards_zero (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : Number.top_plus_ten ≤ |x.toRat * y.toRat|) :
+    ∃ err, x.operator_mul y .towards_zero = .error err ∧ isOverflow err = true :=
+  Number.operator_mul_overflow_towards_zero_proof x y hx hy hx0 hy0 h
+
+/-- In `downward`, `x * y` fails with an overflow error when the exact product is below `-Number.top` or at least
+`Number.top_plus_ten`. -/
+theorem Number.operator_mul_overflow_downward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : x.toRat * y.toRat < -Number.top ∨ Number.top_plus_ten ≤ x.toRat * y.toRat) :
+    ∃ err, x.operator_mul y .downward = .error err ∧ isOverflow err = true :=
+  Number.operator_mul_overflow_downward_proof x y hx hy hx0 hy0 h
+
+/-- In `upward`, `x * y` fails with an overflow error when the exact product is at most `-Number.top_plus_ten` or above
+`Number.top`. -/
+theorem Number.operator_mul_overflow_upward (x y : Number)
+    (hx : x.isNormalized) (hy : y.isNormalized) (hx0 : x.mantissa_ ≠ 0) (hy0 : y.mantissa_ ≠ 0)
+    (h : x.toRat * y.toRat ≤ -Number.top_plus_ten ∨ Number.top < x.toRat * y.toRat) :
+    ∃ err, x.operator_mul y .upward = .error err ∧ isOverflow err = true :=
+  Number.operator_mul_overflow_upward_proof x y hx hy hx0 hy0 h
 
 end XRPL.Model.Protocol

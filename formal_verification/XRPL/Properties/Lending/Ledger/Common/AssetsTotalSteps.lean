@@ -28,7 +28,7 @@ private lemma Vault.cash_update_eq (v : Vault) (cash aa aa' : Number) (hasset : 
     aa'.toRat = v.assetsAvailable.toRat + cash.toRat := by
   obtain ⟨hb, hsr⟩ := Vault.baseExponent_grid v
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have han := operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
+  have han := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
   have hT : (10 : ℚ) ^ (16 + v.baseExponent) ≤ 2 ^ 63 * 10 ^ v.baseExponent := by
     rw [open_line_eq]; exact mul_le_mul_of_nonneg_right (by norm_num) hp.le
   have haav : aa.toRat = v.assetsAvailable.toRat + cash.toRat :=
@@ -98,7 +98,7 @@ private lemma Loan.create_total_eq (broker : LoanBroker) (v : Vault) (principal 
     have hf := hchecks.funds
     by_contra hc
     push Not at hc
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
     cases hf
   obtain ⟨raw, hadj, hlaw⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
   have hp' : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
@@ -200,6 +200,7 @@ private lemma Vault.deposit_total_ge (v : Vault) (amount : STAmount) (isDonation
     · obtain ⟨assetsTotal, -, -, hcl, -⟩ := computeDeposit_donation_reduces v ra amounts hcomp
       exact Vault.clamp_grid v _ _ _ hrac hcl
   obtain ⟨amountNum, hnum, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+    (v.deposit_clampedCharge amount ra isDonation amounts hty (fun h => hc.2 h) hra hcomp)
   obtain ⟨hnv, hnn⟩ := hcf.toNumber_exact amountNum hnum
   obtain ⟨k, hk⟩ := hcharge
   have hex' := hex
@@ -279,19 +280,19 @@ private lemma add_downward_ge_any (x y r w : Number) (hx : x.isNormalized) (hy :
         Number.toRat_eq_zero_of_mantissa_zero r hr0] at hwt
       linarith
     by_cases heq : x.operator_eq y.operator_neg = true
-    · have h := (operator_eq_iff _ _ hx (Number.operator_neg_isNormalized y hy)).mp heq
+    · have h := (Number.operator_eq_iff _ _ hx (Number.operator_neg_isNormalized y hy)).mp heq
       rw [Number.toRat_neg] at h
       linarith
     have hxm : x.mantissa_ ≠ 0 := fun h => hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
     have hym : y.mantissa_ ≠ 0 := fun h => hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
     by_cases hsign : x.negative_ = y.negative_
-    · obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_anyMode x y r _ hx hy hxm hym
+    · obtain ⟨_, _, _, _, _, hspec⟩ := Number.operator_add_algorithmic_facts_same_sign_anyMode x y r _ hx hy hxm hym
         hsign heq hok
       exact hspec.result_mant_ne hr0
-    · have hsmall := operator_add_underflow_truth_small x y r _ hx hy hxm hym hsign heq hok hr0
+    · have hsmall := Number.operator_add_underflow_truth_small x y r _ hx hy hxm hym hsign heq hok hr0
       have := (abs_lt.mp hsmall).2
       linarith
-  · obtain ⟨n, hn, hv⟩ := operator_add_rounded_downward x y r hx hy hok hr0
+  · obtain ⟨n, hn, hv⟩ := Number.operator_add_rounded_downward x y r hx hy hok hr0
     rw [hv]
     exact Number.lower_tight _ n hn w hw hwt
 
@@ -368,8 +369,8 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
     by_cases hEb : E = b
     · rw [hEb]; linarith
     · have hlt : b < E := lt_of_le_of_ne hErange.1 (Ne.symm hEb)
-      have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
-      have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
+      have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
+      have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
       obtain ⟨-, hbig⟩ := numberExponent_frac_lower s0 b E hs0n hs00 (by omega) hne hlt
       obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow 1 (E + 14) (by constructor <;> norm_num)
         ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
@@ -378,7 +379,7 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
       have hge14 : (10 : ℚ) ^ (E + 14) ≤ A.toRat + c.toRat := by
         by_contra hlt14
         push Not at hlt14
-        have := operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hw (by rw [hwv]; linarith)
+        have := Number.operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hw (by rw [hwv]; linarith)
         rw [hwv] at this
         linarith
       have := add_downward_ge_any A c sum w hA hc hsum hw (by rw [hwv]; positivity) (by rw [hwv]; exact hge14)
@@ -481,9 +482,9 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
 
   have haaW : 10 ^ 16 * 10 ^ b ≤ aa.toRat := by
     rw [← hWv']
-    exact Number.roundsToRepresentable_ge aa _ (operator_add_rounded_to_nearest _ _ _ hA hcrn haa) Wn hWn
+    exact Number.roundsToRepresentable_ge aa _ (Number.operator_add_rounded_to_nearest _ _ _ hA hcrn haa) Wn hWn
       (by rw [hWv', hcrv]; linarith)
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
   unfold STAmount.roundToNumericType at ha'
   cases hof : STAmount.ofNumber .fractional aa .to_nearest with
   | error e => rw [hof] at ha'; cases ha'
@@ -638,7 +639,7 @@ private lemma LendingLedger.pay_total_ge (l l' : LendingLedger) (i : Nat) (pt : 
       exact_mod_cast lt_of_mul_lt_mul_right this hp.le
     obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-1) l.vault.baseExponent (by norm_num)
       ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
-    have hR := operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsDeployed_norm
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsDeployed_norm
       (Number.operator_neg_isNormalized _ hPg.1) hdep
     have := Number.roundsToRepresentable_le _ _ hR w hw (by
       rw [hwv, Number.toRat_neg, hpAD, hkD, hkP]
@@ -653,10 +654,11 @@ private lemma LendingLedger.pay_total_ge (l l' : LendingLedger) (i : Nat) (pt : 
       (by rw [Number.toRat_neg, hpAD]; linarith) hsr hdep
     rw [this, Number.toRat_neg, hpAD]; ring
   rw [hPdeploy]
-  have htotn := operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
-  have htot0 : 0 ≤ tot.toRat := operator_add_nonneg _ _ _ hPg.1 hIg.1 htot (by linarith)
+  have htotn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
+  have htot0 : 0 ≤ tot.toRat := Number.operator_add_nonneg _ _ _ hPg.1 hIg.1 htot (by linarith)
   have htotP : p.amounts.principalPaid.toRat ≤ tot.toRat :=
-    Number.roundsToRepresentable_ge tot _ (operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) _ hPg.1 (by linarith)
+    Number.roundsToRepresentable_ge tot _ (Number.operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) _ hPg.1 (by
+      linarith)
   have hpasset : Vault.HoldsAsset p.pool := by unfold Vault.HoldsAsset; rw [hpnt]; exact hasset
   rw [hpnt] at hround
   cases hint : l.vault.numericType.isIntegral
@@ -680,7 +682,8 @@ private lemma LendingLedger.pay_total_ge (l l' : LendingLedger) (i : Nat) (pt : 
         exact hne (Number.add_exact_of_grid hPg hIg (by nlinarith) hsmall hsr htot)
       obtain ⟨Wn, hWn, hWv⟩ := Number.exists_normalized_int_mul_pow (10 ^ 16) l.vault.baseExponent
         (by constructor <;> norm_num) ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
-      have := Number.roundsToRepresentable_ge tot _ (operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) Wn hWn
+      have := Number.roundsToRepresentable_ge tot _ (Number.operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) Wn
+        hWn
         (by rw [hWv]; push_cast; linarith)
       rw [hWv] at this
       push_cast at this
@@ -779,8 +782,9 @@ private lemma LendingLedger.pay_total_ge (l l' : LendingLedger) (i : Nat) (pt : 
       rw [hwv, hkA, hkP]; push_cast; ring
     have haaw : w.toRat ≤ aa.toRat :=
       Number.roundsToRepresentable_ge aa _
-        (operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa) w hw (by rw [hcrv]; linarith)
-    have haan := operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
+        (Number.operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa) w hw
+          (by rw [hcrv]; linarith)
+    have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
     -- rounding to the asset lands on the floor or the ceiling, both at least that whole number
     unfold STAmount.roundToNumericType at hround
     cases hof : STAmount.ofNumber l.vault.numericType aa .to_nearest with

@@ -255,7 +255,7 @@ lemma Loan.scheduledComponents_delta_lt (l : Loan) (pc : PaymentComponents) (hlo
     have : l.totalValueOutstanding.operator_le pp' = false := by
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf
       simpa using hnf.2
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, this]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, this]
     simp
   have gtpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint htpo
   have gti := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hti
@@ -326,9 +326,9 @@ lemma Loan.scheduledComponents_delta_lt (l : Loan) (pc : PaymentComponents) (hlo
     · rfl
     · exfalso
       have gov := Number.OnGrid.sub gt1 gcT hs hov
-      have hR := operator_sub_rounded_to_nearest _ _ _ gt1.1 gcT.1 hov
+      have hR := Number.operator_sub_rounded_to_nearest _ _ _ gt1.1 gcT.1 hov
       have hov0 := Number.roundsToRepresentable_nonpos _ _ hR (by rw [vcT]; linarith)
-      have := (operator_gt_iff _ _ gov.1 Number.zero_isNormalized).mp hgt
+      have := (Number.operator_gt_iff _ _ gov.1 Number.zero_isNormalized).mp hgt
       rw [Number.toRat_zero] at this
       linarith
   subst hd2'
@@ -341,7 +341,7 @@ lemma Loan.scheduledComponents_delta_lt (l : Loan) (pc : PaymentComponents) (hlo
     · exfalso
       have gt2 : Number.OnGrid l.loanScale t2 := by rw [Except.ok.inj (ht1.symm.trans ht2)] at gt1; exact gt1
       have gsh := Number.OnGrid.sub gpp gt2 hs hsh
-      have hR := operator_sub_rounded_to_nearest _ _ _ gpp.1 gt2.1 hsh
+      have hR := Number.operator_sub_rounded_to_nearest _ _ _ gpp.1 gt2.1 hsh
       have hsh0 := hR.ge_of_le (Or.inl rfl) Number.zero Number.zero_isNormalized
         (by rw [Number.toRat_zero, ht2v]; linarith)
       rw [Number.toRat_zero] at hsh0
@@ -774,8 +774,8 @@ private lemma LoanBroker.settle_lawful (b : LoanBroker) (pp dt' ca' : Number) (h
     (hp0 : 0 ≤ pp.toRat) (hple : pp.toRat ≤ b.debtTotal.toRat) (hcount : b.loanCount ≠ 0)
     (hdt : b.debtTotal.operator_sub pp .to_nearest = .ok dt') (hcan : ca'.isNormalized) (hca0 : 0 ≤ ca'.toRat) :
     ∃ b', ({ b.toRawLoanBroker with debtTotal := dt', coverAvailable := ca' } : RawLoanBroker).to_lawful = .ok b' := by
-  have hdtn := operator_sub_isNormalized_to_nearest_sz _ _ _ b.wf.debtTotal_norm hpn hdt
-  have hdt0 := operator_sub_nonneg _ _ _ b.wf.debtTotal_norm hpn hdt (by linarith)
+  have hdtn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ b.wf.debtTotal_norm hpn hdt
+  have hdt0 := Number.operator_sub_nonneg _ _ _ b.wf.debtTotal_norm hpn hdt (by linarith)
   have hdtle := Number.operator_sub_le_self b.wf.debtTotal_norm hpn hp0 hdt
   set rb : RawLoanBroker := { b.toRawLoanBroker with debtTotal := dt', coverAvailable := ca' }
   have hwf : rb.WF := ⟨hdtn, b.wf.debtMaximum_norm, hcan⟩
@@ -810,7 +810,7 @@ private lemma Loan.settle_pool_ne_notLawful (p : UnsettledPayment Vault) (hpn : 
   have hcN :
       PoolBalanceChange.Normalized { cash := tp, deployed := p.amounts.principalPaid.operator_neg, yield := yd } :=
     ⟨Number.operator_neg_isNormalized _ hpn, Number.zero_isNormalized, Number.zero_isNormalized,
-      operator_sub_isNormalized_to_nearest_sz _ _ _ (RawLoan.interestDue_isNormalized _ _ hdue) hsi hyd⟩
+      Number.operator_sub_isNormalized_to_nearest_sz _ _ _ (RawLoan.interestDue_isNormalized _ _ hdue) hsi hyd⟩
   refine Vault.poolAdjust_ne_notLawful p.pool _ hcN (fun raw hadj => ?_) hfail
   obtain ⟨h1, h2, h3⟩ := hpool tp yd raw hadj
   have hg := sumRoundAndSubtract_onGrid _ _ _ _ _ _ _ (Vault.assetsAvailable_onGrid p.pool)
@@ -874,9 +874,9 @@ lemma Loan.settle_ne_notLawful (p : UnsettledPayment Vault)
           have hadd := ‹p.loan.broker.coverAvailable.operator_add _ _ = _›
           obtain ⟨b', hb'⟩ := LoanBroker.settle_lawful _ _ _ _ hpaid.1 hpaid.2.1 hpaid.2.2 hcount
             ‹p.loan.broker.debtTotal.operator_sub _ _ = _›
-            (operator_add_isNormalized_to_nearest_sz _ _ _ p.loan.broker.wf.coverAvailable_norm
+            (Number.operator_add_isNormalized_to_nearest_sz _ _ _ p.loan.broker.wf.coverAvailable_norm
               (STAmount.toNumber_isNormalized _ _ _ ‹STAmount.toNumber _ _ = _›) hadd)
-            (operator_add_nonneg _ _ _ p.loan.broker.wf.coverAvailable_norm
+            (Number.operator_add_nonneg _ _ _ p.loan.broker.wf.coverAvailable_norm
               (STAmount.toNumber_isNormalized _ _ _ ‹STAmount.toNumber _ _ = _›) hadd hcov)
           rw [hb'] at hb; cases hb))
   -- the loan on the new broker
@@ -980,7 +980,7 @@ private lemma Loan.reamortized_lawful (l : Loan) (opc : PaymentComponents)
   have hmax : (v18.max Number.zero).isNormalized := by
     unfold Number.max; split
     · exact Number.zero_isNormalized
-    · exact operator_sub_isNormalized_to_nearest_sz _ _ _ hthN.2.1 hpd h18
+    · exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hthN.2.1 hpd h18
   have hppN := computeLoanPropertiesFromPeriodicRate_periodicPayment_normalized hmax hrateN hprops
   have hpp0 : 0 < props.periodicPayment.toRat := (Number.signum_pos_iff_toRat hppN).mp hpp
   have htvp : 0 < tvo'.toRat := (Number.signum_pos_iff_toRat gtv.1).mp htvpos

@@ -20,8 +20,8 @@ variable {α : Type} [AssetPool α]
 private lemma canUpdate_guard_true_iff (lb : LoanBroker) (dm : Number) (hnorm : dm.isNormalized) :
     (dm.signum ≠ 0 ∧ dm.operator_lt lb.debtTotal = true) ↔
       dm.toRat ≠ 0 ∧ dm.toRat < lb.toExact.debtTotal := by
-  rw [ne_eq, signum_eq_zero_iff dm hnorm,
-    operator_lt_iff dm lb.debtTotal hnorm lb.wf.debtTotal_norm]
+  rw [ne_eq, Number.signum_eq_zero_iff dm hnorm,
+    Number.operator_lt_iff dm lb.debtTotal hnorm lb.wf.debtTotal_norm]
   rfl
 
 /-- The same guard reads `false` exactly when `dm` is zero or not below the debt. -/

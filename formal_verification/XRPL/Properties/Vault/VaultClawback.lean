@@ -161,7 +161,8 @@ theorem Vault.clawback_sharesDestroyed_truncation_attained :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
       (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
       assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
@@ -176,7 +177,8 @@ theorem Vault.clawback_sharesDestroyed_relative_attained :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
       (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
       assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
@@ -190,11 +192,12 @@ worth, half a unit above it (`2` for `1.5`). -/
 theorem Vault.clawback_assetsRecovered_overshoot_attained :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
       (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ assets.Canonical ∧ assets.isZero = false ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧ assets.Canonical ∧
+      assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       v.idealAssetsClawback waiveUnrealizedLoss r.shares.toRat < r.assets.toRat := by
-  obtain ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hc, hznz, -, hok, heq⟩ :=
+  obtain ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hhold, hc, hznz, -, hok, heq⟩ :=
     Vault.clawback_assetsRecovered_upper_witness
-  exact ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hc, hznz, hok, heq⟩
+  exact ⟨v, t0, assets, holderShares, waiveUnrealizedLoss, hnn, r, hr, hhold, hc, hznz, hok, heq⟩
 
 end XRPL.Model.SingleAssetVault

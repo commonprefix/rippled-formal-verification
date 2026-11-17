@@ -14,7 +14,7 @@ The result is `Number.upper` of the input value, the smallest representable at o
 is needed: an underflow returns zero even for a tiny positive input, and zero is below that input. -/
 
 /-- No normalized Number lies at or above `n.toRat` and below `result.toRat`. -/
-theorem normalize_no_inbetween_above_upward (n result : Number)
+theorem Number.normalize_no_inbetween_above_upward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0)
@@ -24,7 +24,7 @@ theorem normalize_no_inbetween_above_upward (n result : Number)
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hfloor_constr, _hcusp,
           h_truth_abs, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign,
           h_g_sbit, hzm_succ⟩ :=
-    normalize_algorithmic_facts_upward n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_upward n result hn_mant_ne hok hresult
   exact no_inbetween_above_upward_frame result n.toRat zm ze' f g res_pos
     .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
@@ -54,7 +54,7 @@ theorem normalize_no_inbetween_above_upward (n result : Number)
 
 /-- A nonzero `Number.normalize` result under `.upward` is correctly rounded, equal to `Number.upper` of the
 input. The nonzero condition is needed because the underflow flush returns zero even for a tiny positive input. -/
-theorem normalize_rounded_upward_proof (n result : Number)
+theorem Number.normalize_rounded_upward_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     Number.RoundsToRepresentable result n.toRat .upward := by
@@ -71,7 +71,7 @@ theorem normalize_rounded_upward_proof (n result : Number)
     rfl
   -- Generic path.
   obtain ⟨h_dir, h_mag⟩ :=
-    normalize_rounding_bound_upward n result hnz hok hresult
+    Number.normalize_rounding_bound_upward n result hnz hok hresult
   have h_bound : |result.toRat - n.toRat| ≤ |n.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
     rw [abs_of_nonneg (by linarith : (0 : ℚ) ≤ result.toRat - n.toRat)]
     have h_eps : |n.toRat| * (10 / (2 ^ 63 + 2 : ℚ))
@@ -79,7 +79,7 @@ theorem normalize_rounded_upward_proof (n result : Number)
       mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _)
     linarith [le_of_lt h_mag]
   have h_result_norm : result.isNormalized :=
-    normalize_result_isNormalized n result .upward hnz hok hresult
+    Number.normalize_result_isNormalized n result .upward hnz hok hresult
   exact closest_upper_of_no_inbetween result n.toRat
     h_result_norm
     hresult
@@ -88,9 +88,9 @@ theorem normalize_rounded_upward_proof (n result : Number)
     (fun h => truth_top_of_result_cap result n.toRat h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (normalize_no_overflow_mantissa n result .upward hnz hok hresult h))
+          (Number.normalize_no_overflow_mantissa n result .upward hnz hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h)
     h_dir
-    (normalize_no_inbetween_above_upward n result hnz hok hresult h_dir)
+    (Number.normalize_no_inbetween_above_upward n result hnz hok hresult h_dir)
 
 end XRPL.Model.Protocol

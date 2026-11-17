@@ -234,10 +234,10 @@ lemma Loan.fullPayment_cheaper_proof (loan : Loan) (v : Vault) (amount : Number)
     have hC : (2 : ℚ) ^ 62 ≤ c := by exact_mod_cast hc
     have hcfN := gcf'.1
     have hspN := gfee.1
-    have hcfm0 : 0 ≤ cfm.toRat := operator_add_nonneg _ _ _ hcfN hspN hcfm (by rw [hcu]; positivity)
-    have hcfmN := operator_add_isNormalized_to_nearest_sz _ _ _ hcfN hspN hcfm
+    have hcfm0 : 0 ≤ cfm.toRat := Number.operator_add_nonneg _ _ _ hcfN hspN hcfm (by rw [hcu]; positivity)
+    have hcfmN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hcfN hspN hcfm
     have hcfm_le := (Number.add_near _ _ _ hcfN hspN hcfm).le (by rw [hcu]; positivity)
-    have hufN := operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
+    have hufN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
     have huf_le := (Number.sub_near _ _ _ hcfmN hmv.norm huf).le_max
     have hd_le := (Number.add_near _ _ _ hvpi'.norm hufN hd).le_max
     have hM0 : 0 ≤ state.managementFeeDue.toRat := by rw [hmv.val]; positivity

@@ -35,17 +35,17 @@ private lemma Number.add_abs_le_any (x y n w : Number) (mode : rounding_mode) (h
     linarith [abs_nonneg (x.toRat + y.toRat)]
   cases mode with
   | to_nearest =>
-    rcases operator_add_rounded_to_nearest x y n hx hy hok with ⟨l, hl, hv⟩ | ⟨u, hu, hv⟩
+    rcases Number.operator_add_rounded_to_nearest x y n hx hy hok with ⟨l, hl, hv⟩ | ⟨u, hu, hv⟩
     · rw [hv]; exact hlow l hl
     · rw [hv]; exact hup u hu
   | upward =>
-    obtain ⟨u, hu, hv⟩ := operator_add_rounded_upward x y n hx hy hok hm0
+    obtain ⟨u, hu, hv⟩ := Number.operator_add_rounded_upward x y n hx hy hok hm0
     rw [hv]; exact hup u hu
   | downward =>
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward x y n hx hy hok hm0
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward x y n hx hy hok hm0
     rw [hv]; exact hlow l hl
   | towards_zero =>
-    obtain ⟨m, hm, hv⟩ := operator_add_rounded_towards_zero x y n hx hy hok
+    obtain ⟨m, hm, hv⟩ := Number.operator_add_rounded_towards_zero x y n hx hy hok
     rw [hv]
     split_ifs at hm
     · exact hlow m hm
@@ -68,7 +68,7 @@ private lemma STAmount.lift_add_exponent_le (v1 v2 : STAmount) (mode : rounding_
     rw [lift_toRat v1 hc1.mant_hi, lift_toRat v2 hc2.mant_hi, hwv]
     push_cast
     linarith [show (5 : ℚ) * 10 ^ 94 = 5 * 10 ^ 18 * 10 ^ (76 : ℤ) by norm_num])
-  have hnn := operator_add_isNormalized _ _ _ mode hn1 hn2 hadd hn0
+  have hnn := Number.operator_add_isNormalized _ _ _ mode hn1 hn2 hadd hn0
   have := Number.exponent_lt_of_abs_lt n hnn hn0 77 (by
     rw [hwv] at hb
     push_cast at hb
@@ -219,7 +219,7 @@ private lemma STAmount.roundToExponent_ok_abs (value : STAmount) (s : Int) (mode
     have hs0 : (sum.mValue == 0) = true := by rw [hz0]; rfl
     rw [hcmp, hnz, hs0]
     simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
-    rw [hsnt]
+    rw [if_neg (by simp [STAmount.integral, hsnt, NumericType.isIntegral]), hsnt]
     exact ⟨_, STAmount.checked_reference s _ mode hs_lo (by omega)⟩
 
 /-- The grid points either side of a value are within one step of it. -/
@@ -429,7 +429,7 @@ lemma STAmount.roundToNumericType_integral_ok_abs (nt : NumericType) (x : Number
       rw [abs_of_neg hx0] at hmax ⊢
       obtain ⟨r, hr, hr0, hru64, -⟩ := STAmount.ofNumber_integral_reduce nt w mode hint hwn hwneg (by
         rw [hwv]; linarith)
-      have hwr := to_rep_within_one w mode r hwn hr
+      have hwr := Number.to_rep_within_one w mode r hwn hr
       rw [hwv] at hwr
       have hrn : (r.toUInt64.toNat : ℤ) = r.toInt := toUInt64_toNat_of_nonneg r hr0
       have hrv : r.toUInt64.toNat ≤ nt.maxValue.toNat := by
@@ -438,7 +438,7 @@ lemma STAmount.roundToNumericType_integral_ok_abs (nt : NumericType) (x : Number
         omega
       obtain ⟨a, ha, hav⟩ := STAmount.checked_integral_neg_ok nt r.toUInt64 mode hint hmo hrv hmr
       have hsig : decide (x.signum < 0) = true := by
-        rw [decide_eq_true_eq, (signum_eq_neg_one_iff x hx).mpr hx0]
+        rw [decide_eq_true_eq, (Number.signum_eq_neg_one_iff x hx).mpr hx0]
         norm_num
       have heq : STAmount.ofNumber nt x mode = STAmount.checked nt r.toUInt64 0 true mode := by
         unfold STAmount.ofNumber

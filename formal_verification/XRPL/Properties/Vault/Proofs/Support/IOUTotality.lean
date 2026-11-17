@@ -10,6 +10,7 @@ import XRPL.Properties.Protocol.STAmount.Add.Common.IOU
 import XRPL.Properties.Protocol.Number.Add.Common.NormalizedSum
 import XRPL.Properties.Protocol.Number.Add.RoundsToRepresentable
 import XRPL.Properties.Protocol.Number.AtExponent
+import XRPL.Properties.Lending.Loan.Common.Grid
 
 /-! # IOU conversions and roundings never fail within range
 
@@ -81,7 +82,7 @@ lemma STAmount.ofNumber_fractional_ok_below (r : Number) (hn : r.isNormalized) (
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_of_lt .to_nearest h_int h_fit]
+    rw [STAmount.iou_eq .to_nearest h_int]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .to_nearest hmtu_lo hmtu_hi
@@ -155,7 +156,7 @@ lemma STAmount.ofNumber_fractional_downward_ok (r : Number) (hn : r.isNormalized
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_of_lt .downward h_int h_fit]
+    rw [STAmount.iou_eq .downward h_int]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .downward hmtu_lo hmtu_hi
@@ -222,7 +223,7 @@ lemma STAmount.operator_add_iou_ok (v1 v2 : STAmount) (mode : rounding_mode) (hc
     (by show v2.mOffset - 3 + 22 ≤ maxExponent; have := hc2.exp_hi; unfold maxExponent; omega)
   rw [hadd]
   exact STAmount.ofIOU_ofNumber_ok n mode
-    (fun h0 => ⟨operator_add_isNormalized _ _ _ mode hn1 hn2 hadd h0, hexp n hadd h0⟩)
+    (fun h0 => ⟨Number.operator_add_isNormalized _ _ _ mode hn1 hn2 hadd h0, hexp n hadd h0⟩)
 
 /-- A sum in any mode of a true value between zero and `5·10^18` units at exponent `t` has its exponent at
 most `t`. -/
@@ -247,17 +248,17 @@ private lemma Number.add_exponent_le_any (x y n : Number) (t : Int) (mode : roun
   have hb : 0 ≤ n.toRat ∧ n.toRat ≤ w.toRat := by
     cases mode with
     | to_nearest =>
-      rcases operator_add_rounded_to_nearest x y n hx hy hok with ⟨l, hl, hv⟩ | ⟨u, hu, hv⟩
+      rcases Number.operator_add_rounded_to_nearest x y n hx hy hok with ⟨l, hl, hv⟩ | ⟨u, hu, hv⟩
       · rw [hv]; exact hlow l hl
       · rw [hv]; exact hup u hu
     | upward =>
-      obtain ⟨u, hu, hv⟩ := operator_add_rounded_upward x y n hx hy hok hm0
+      obtain ⟨u, hu, hv⟩ := Number.operator_add_rounded_upward x y n hx hy hok hm0
       rw [hv]; exact hup u hu
     | downward =>
-      obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward x y n hx hy hok hm0
+      obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward x y n hx hy hok hm0
       rw [hv]; exact hlow l hl
     | towards_zero =>
-      obtain ⟨m, hm, hv⟩ := operator_add_rounded_towards_zero x y n hx hy hok
+      obtain ⟨m, hm, hv⟩ := Number.operator_add_rounded_towards_zero x y n hx hy hok
       rw [if_pos h0] at hm
       rw [hv]; exact hlow m hm
   have hp : (0 : ℚ) < 10 ^ t := zpow_pos (by norm_num) _
@@ -367,5 +368,237 @@ lemma STAmount.roundToExponent_ok_any (value : STAmount) (s : Int) (mode : round
     hts
     (by rw [lift_toRat sum hc_sum.mant_hi, lift_toRat negRef hcneg.mant_hi, hsumv, hnegv]; push_cast; nlinarith)
   omega
+
+/-- A positive normalized `Number` of at least `10^19` units at a scale has its exponent above it. -/
+lemma exponent_gt_of_le (n : Number) (s : ℤ) (hn : n.isNormalized) (hpos : 0 < n.toRat)
+    (hge : (10 : ℚ) ^ (19 : ℕ) * 10 ^ s ≤ n.toRat) : s < n.exponent_ := by
+  have hm0 : n.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hpos.ne'
+  obtain ⟨-, hhi⟩ := hn.mantissaBounds_nat hm0
+  have hval := Number.toRat_of_nonneg n (Number.negative_false_of_pos n hpos)
+  have hm : (n.mantissa_.toNat : ℚ) < (10 : ℚ) ^ (19 : ℕ) := by exact_mod_cast hhi
+  have hpe : (0 : ℚ) < 10 ^ n.exponent_ := zpow_pos (by norm_num) _
+  by_contra hc
+  push Not at hc
+  have h1 : (10 : ℚ) ^ n.exponent_ ≤ 10 ^ s := zpow_le_zpow_right₀ (by norm_num) hc
+  have h2 : n.toRat < (10 : ℚ) ^ (19 : ℕ) * 10 ^ s := by
+    rw [hval]
+    calc (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ < 10 ^ (19 : ℕ) * 10 ^ n.exponent_ :=
+          mul_lt_mul_of_pos_right hm hpe
+      _ ≤ _ := mul_le_mul_of_nonneg_left h1 (by positivity)
+  linarith
+
+/-- Rounding a positive IOU amount toward zero at the top IOU scale `80` never throws. The amount is below
+`10^95`, so adding the reference `10^95` and taking it back stays within sixteen digits at that scale. -/
+lemma STAmount.roundToExponent_top_ok (value : STAmount) (hc : value.IOUCanonical)
+    (hneg : value.mIsNegative = false) (hev : value.mOffset < 80) :
+    ∃ r, STAmount.roundToExponent value 80 .towards_zero = .ok r := by
+  have h_int : value.integral = false := by unfold STAmount.integral; rw [hc.is_fractional]; rfl
+  have h_mv : value.mValue ≠ 0 := by
+    intro h0
+    have h1 : value.mValue.toNat = 0 := by rw [h0]; rfl
+    have := hc.mant_lo
+    omega
+  have hz : value.isZero = false := by simp [STAmount.isZero, h_mv]
+  have hkMin : kMinValue.toNat = 10 ^ 15 := by decide
+  have hexp : ¬ (80 : ℤ) ≤ value.exponent := by show ¬ (80 : ℤ) ≤ value.mOffset; omega
+  unfold STAmount.roundToExponent
+  rw [if_neg (by rw [h_int]; exact Bool.false_ne_true), if_neg (by rw [hz]; exact Bool.false_ne_true),
+    if_neg hexp]
+  have hchk : STAmount.checked value.mNumericType kMinValue 80 value.negative .towards_zero =
+      .ok ⟨.fractional, kMinValue, 80, false⟩ := by
+    rw [hc.is_fractional]
+    show STAmount.checked .fractional kMinValue 80 value.mIsNegative .towards_zero = _
+    rw [hneg]
+    exact STAmount.checked_reference 80 false .towards_zero (by norm_num) le_rfl
+  rw [hchk]
+  simp only []
+  set refA : STAmount := ⟨.fractional, kMinValue, 80, false⟩ with hrefA_def
+  have hcr : refA.IOUCanonical :=
+    ⟨rfl, by show 10 ^ 15 ≤ kMinValue.toNat; omega, by show kMinValue.toNat < 10 ^ 16; omega,
+      by show (-96 : ℤ) ≤ 80; norm_num, by show (80 : ℤ) ≤ 80; norm_num⟩
+  have hrefv : refA.toRat = (10 : ℚ) ^ 95 := by
+    rw [STAmount.toRat_of_nonneg refA rfl]
+    show (kMinValue.toNat : ℚ) * 10 ^ (80 : ℤ) = _
+    rw [hkMin]; norm_num
+  have hvv : value.toRat < (10 : ℚ) ^ 95 := by
+    rw [STAmount.toRat_of_nonneg value hneg]
+    have hm : (value.mValue.toNat : ℚ) < 10 ^ 16 := by exact_mod_cast hc.mant_hi
+    have hp : (10 : ℚ) ^ value.mOffset ≤ (10 : ℚ) ^ (79 : ℤ) := zpow_le_zpow_right₀ (by norm_num) (by omega)
+    calc (value.mValue.toNat : ℚ) * 10 ^ value.mOffset
+        ≤ (value.mValue.toNat : ℚ) * 10 ^ (79 : ℤ) := mul_le_mul_of_nonneg_left hp (by positivity)
+      _ < 10 ^ 16 * 10 ^ (79 : ℤ) := mul_lt_mul_of_pos_right hm (zpow_pos (by norm_num) _)
+      _ = 10 ^ 95 := by norm_num
+  have hv0 : 0 ≤ value.toRat := by rw [STAmount.toRat_of_nonneg value hneg]; positivity
+  obtain ⟨sum, hsum⟩ : ∃ sum, STAmount.operator_add value refA .towards_zero = .ok sum := by
+    rw [STAmount.operator_add_iou_unfold value refA .towards_zero hc hcr]
+    set v1n : Number := ⟨value.mIsNegative, value.mValue * 10 * 10 * 10, value.mOffset - 3⟩ with hv1n_def
+    set v2n : Number := ⟨refA.mIsNegative, refA.mValue * 10 * 10 * 10, refA.mOffset - 3⟩ with hv2n_def
+    have hv1_norm : v1n.isNormalized :=
+      lift_isNormalized _ _ _ hc.mant_lo hc.mant_hi
+        (by have := hc.exp_lo; unfold minExponent; omega) (by have := hc.exp_hi; unfold maxExponent; omega)
+    have hv2_norm : v2n.isNormalized :=
+      lift_isNormalized _ _ _ hcr.mant_lo hcr.mant_hi
+        (by have := hcr.exp_lo; unfold minExponent; omega) (by have := hcr.exp_hi; unfold maxExponent; omega)
+    have hv1_val : v1n.toRat = value.toRat := lift_toRat value hc.mant_hi
+    have hv2_val : v2n.toRat = refA.toRat := lift_toRat refA hcr.mant_hi
+    obtain ⟨n, hadd⟩ := Number.operator_add_ok_of_exp v1n v2n .towards_zero hv1_norm hv2_norm
+      (by show value.mOffset - 3 + 22 ≤ maxExponent; have := hc.exp_hi; unfold maxExponent; omega)
+      (by show (80 : ℤ) - 3 + 22 ≤ maxExponent; unfold maxExponent; omega)
+    rw [hadd]
+    simp only []
+    have hR := Number.operator_add_rounded_towards_zero _ _ _ hv1_norm hv2_norm hadd
+    have h95 : (0 : ℚ) ≤ 10 ^ 95 := by norm_num
+    have ht0 : 0 ≤ v1n.toRat + v2n.toRat := by rw [hv1_val, hv2_val, hrefv]; linarith
+    have hRd : n.RoundsToRepresentable (v1n.toRat + v2n.toRat) .downward := by
+      unfold Number.RoundsToRepresentable at hR ⊢
+      rw [if_pos ht0] at hR
+      exact hR
+    obtain ⟨P, hPn, hPv⟩ := Number.exists_normalized_int_mul_pow 1 95 (by norm_num)
+      ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
+    have hPv' : P.toRat = 10 ^ 95 := by rw [hPv]; norm_num
+    obtain ⟨Q, hQn, hQv⟩ := Number.exists_normalized_int_mul_pow 2 95 (by norm_num)
+      ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
+    have hQv' : Q.toRat = 2 * 10 ^ 95 := by rw [hQv]; norm_num
+    have hnlo : (10 : ℚ) ^ 95 ≤ n.toRat := by
+      rw [← hPv']
+      exact hRd.ge_of_le (Or.inr (Or.inr rfl)) P hPn (by rw [hPv', hv1_val, hv2_val, hrefv]; linarith)
+    have hnhi : n.toRat ≤ 2 * 10 ^ 95 := by
+      rw [← hQv']
+      exact hRd.le_of_ge (Or.inr (Or.inr rfl)) Q hQn (by rw [hQv', hv1_val, hv2_val, hrefv]; linarith)
+    have hnpos : 0 < n.toRat := lt_of_lt_of_le (by positivity) hnlo
+    have hnm : n.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hnpos.ne'
+    have hnn : n.isNormalized := Number.operator_add_isNormalized _ _ _ _ hv1_norm hv2_norm hadd hnm
+    obtain ⟨hlo, hhi⟩ := hnn.mantissaBounds_nat hnm
+    have he_hi : n.exponent_ ≤ 77 :=
+      Number.exponent_le_of_toRat_lt n 77 hnn (Number.negative_false_of_pos n hnpos)
+        (by unfold minExponent; norm_num) (by norm_num; linarith)
+    have he_lo : 76 < n.exponent_ := exponent_gt_of_le n 76 hnn hnpos (by norm_num; linarith)
+    obtain ⟨⟨m, e⟩, hnorm⟩ := normalizeToRange_16_ok n .towards_zero hlo hhi
+      (by unfold minExponent; omega) (by unfold maxExponent; omega)
+    have herange := normalizeToRange_16_exp_range n .towards_zero m e hlo hhi
+      (by unfold minExponent; omega) (by unfold maxExponent; omega) hnorm
+    have hulp := normalizeToRange_16_within_ulp n .towards_zero m e hlo hhi
+      (by unfold minExponent; omega) (by unfold maxExponent; omega) hnorm
+    have hmr := normalizeToRange_16_mantissa_range n .towards_zero m e hlo hhi
+      (by unfold minExponent; omega) (by unfold maxExponent; omega) hnorm
+    have hcmin : cMinValue.toNat = 10 ^ 15 := by decide
+    -- a carry to exponent `81` would need a value of at least `10^96`
+    have he80 : e = 80 := by
+      by_contra hne
+      have he81 : e = 81 := by omega
+      have hn77 : n.exponent_ = 77 := by omega
+      rw [he81, hn77] at hulp
+      have hm15 : (10 : ℚ) ^ 15 ≤ |(m.toInt : ℚ)| := by
+        rw [← Int.cast_abs, Int.abs_eq_natAbs]
+        have : 10 ^ 15 ≤ m.toInt.natAbs := by rw [← hcmin]; exact hmr.1
+        exact_mod_cast this
+      have h81 : (0 : ℚ) < 10 ^ (81 : ℤ) := by positivity
+      have h1 := abs_sub_abs_le_abs_sub ((m.toInt : ℚ) * 10 ^ (81 : ℤ)) n.toRat
+      rw [abs_mul, abs_of_pos h81, abs_of_pos hnpos] at h1
+      have h2 : (10 : ℚ) ^ 15 * 10 ^ (81 : ℤ) ≤ |(m.toInt : ℚ)| * 10 ^ (81 : ℤ) :=
+        mul_le_mul_of_nonneg_right hm15 h81.le
+      have h3 : (10 : ℚ) ^ 15 * 10 ^ (81 : ℤ) = 10 ^ 96 := by norm_num
+      have h4 : (10 : ℚ) ^ (77 + 3 : ℤ) = 10 ^ 80 := by norm_num
+      rw [h4] at hulp
+      have h5 : (2 : ℚ) * 10 ^ 95 + 10 ^ 80 < 10 ^ 96 := by norm_num
+      linarith
+    have hof : IOUAmount.ofNumber n .towards_zero = .ok ⟨m, e⟩ := by
+      unfold IOUAmount.ofNumber IOUAmount.fromNumber
+      rw [hnorm]
+      simp only []
+      rw [if_neg (by unfold cMaxOffset; omega), if_neg (by unfold cMinOffset; omega)]
+    rw [hof]
+    simp only []
+    have hne : (⟨m, e⟩ : IOUAmount).mantissa_ ≠ 0 := by
+      intro hz
+      have : m.toInt.natAbs = 0 := by
+        show (⟨m, e⟩ : IOUAmount).mantissa_.toInt.natAbs = 0
+        rw [hz]; rfl
+      omega
+    have hr := IOUAmount.ofNumber_InRange16 n .towards_zero ⟨m, e⟩ hlo hhi
+      (by unfold minExponent; omega) (by unfold maxExponent; omega) hof hne
+    exact ⟨_, STAmount.ofIOU_canonical _ _ hr⟩
+  rw [hsum]
+  simp only []
+  -- the sum is `10^15 + k` units at exponent `80`, with `k` the whole units of the amount, below `10^15`
+  have hrefeq : refA = ⟨value.mNumericType, kMinValue, 80, value.mIsNegative⟩ := by
+    rw [hc.is_fractional, hneg]
+  obtain ⟨k, -, h_sum_asset, h_sum_mv, h_sum_off, h_sum_neg, -, htz, -⟩ :=
+    STAmount.roundToExponent_sum_spec value 80 .towards_zero hc hev (by norm_num) le_rfl sum
+      (by rw [← hrefeq]; exact hsum)
+  have hk := htz rfl
+  rw [abs_of_nonneg hv0] at hk
+  have hk_lt : k < 10 ^ 15 := by
+    have h1 : value.toRat / 10 ^ (80 : ℤ) < (10 ^ 15 : ℤ) := by
+      rw [div_lt_iff₀ (by positivity)]
+      have h := hvv
+      push_cast
+      norm_num at h ⊢
+      linarith
+    have h2 := Int.floor_lt.mpr h1
+    rw [← hk] at h2
+    exact_mod_cast h2
+  have hc_sum : sum.IOUCanonical :=
+    { is_fractional := by rw [h_sum_asset]; exact hc.is_fractional
+      mant_lo := by omega
+      mant_hi := by omega
+      exp_lo := by rw [h_sum_off]; norm_num
+      exp_hi := by rw [h_sum_off] }
+  have hsumv : sum.toRat = ((10 ^ 15 + k : ℕ) : ℚ) * 10 ^ (80 : ℤ) := by
+    rw [STAmount.toRat_of_nonneg sum (by rw [h_sum_neg, hneg]), h_sum_mv, h_sum_off]
+  unfold STAmount.operator_sub
+  have h_negRef : refA.operator_neg = ⟨.fractional, kMinValue, 80, true⟩ := by
+    rw [STAmount.operator_neg_of_ne refA (by show kMinValue ≠ 0; decide)]
+    rfl
+  rw [h_negRef]
+  set negRef : STAmount := ⟨.fractional, kMinValue, 80, true⟩ with hnegRef_def
+  have hcneg : negRef.IOUCanonical :=
+    ⟨rfl, by show 10 ^ 15 ≤ kMinValue.toNat; omega, by show kMinValue.toNat < 10 ^ 16; omega,
+      by show (-96 : ℤ) ≤ 80; norm_num, by show (80 : ℤ) ≤ 80; norm_num⟩
+  have hnegv : negRef.toRat = -(10 : ℚ) ^ 95 := by
+    rw [STAmount.toRat_of_neg negRef rfl]
+    show -((kMinValue.toNat : ℚ) * 10 ^ (80 : ℤ)) = _
+    rw [hkMin]; norm_num
+  apply STAmount.operator_add_iou_ok sum negRef .towards_zero hc_sum hcneg
+  intro n hadd hn0
+  have hs1 := lift_isNormalized sum.mIsNegative sum.mValue sum.mOffset hc_sum.mant_lo hc_sum.mant_hi
+    (by have := hc_sum.exp_lo; unfold minExponent; omega) (by have := hc_sum.exp_hi; unfold maxExponent; omega)
+  have hs2 := lift_isNormalized negRef.mIsNegative negRef.mValue negRef.mOffset hcneg.mant_lo hcneg.mant_hi
+    (by have := hcneg.exp_lo; unfold minExponent; omega) (by have := hcneg.exp_hi; unfold maxExponent; omega)
+  have hR := Number.operator_add_rounded_towards_zero _ _ _ hs1 hs2 hadd
+  rw [lift_toRat sum hc_sum.mant_hi, lift_toRat negRef hcneg.mant_hi, hsumv, hnegv] at hR
+  have htv : ((10 ^ 15 + k : ℕ) : ℚ) * 10 ^ (80 : ℤ) + -(10 : ℚ) ^ 95 = (k : ℚ) * 10 ^ (80 : ℤ) := by
+    push_cast; norm_num; ring
+  rw [htv] at hR
+  have ht0 : 0 ≤ (k : ℚ) * 10 ^ (80 : ℤ) := by positivity
+  unfold Number.RoundsToRepresentable at hR
+  rw [if_pos ht0] at hR
+  obtain ⟨l, hl, hnv⟩ := hR
+  have hle := Number.lower_le _ l hl
+  have hl0 := Number.lower_tight _ l hl Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero]; exact ht0)
+  rw [Number.toRat_zero] at hl0
+  have hnn := Number.operator_add_isNormalized _ _ _ _ hs1 hs2 hadd hn0
+  have hk' : (k : ℚ) + 1 ≤ 10 ^ 15 := by exact_mod_cast hk_lt
+  have hlt : n.toRat < (10 : ℚ) ^ (19 : ℕ) * 10 ^ (76 : ℤ) := by
+    rw [hnv]
+    have h80 : (10 : ℚ) ^ (19 : ℕ) * 10 ^ (76 : ℤ) = 10 ^ 15 * 10 ^ (80 : ℤ) := by norm_num
+    rw [h80]
+    have : (k : ℚ) * 10 ^ (80 : ℤ) < 10 ^ 15 * 10 ^ (80 : ℤ) :=
+      mul_lt_mul_of_pos_right (by linarith) (by positivity)
+    linarith
+  exact Number.exponent_le_of_toRat_lt n 76 hnn (Number.negative_false_of_nonneg n hnn (by rw [hnv]; exact hl0))
+    (by unfold minExponent; norm_num) hlt
+
+/-- Rounding a nonnegative IOU amount toward zero never throws, at any scale up to the top IOU scale `80`. -/
+lemma STAmount.roundToExponent_towards_zero_ok (value : STAmount) (s : Int) (hc : value.IOUCanonical)
+    (hneg : value.mIsNegative = false) (hs_lo : -96 ≤ s) (hs_hi : s ≤ 80) :
+    ∃ r, STAmount.roundToExponent value s .towards_zero = .ok r := by
+  by_cases h79 : s ≤ 79
+  · exact STAmount.roundToExponent_ok_any value s .towards_zero hc hneg hs_lo h79
+  obtain rfl : s = 80 := by omega
+  by_cases hev : value.mOffset < 80
+  · exact STAmount.roundToExponent_top_ok value hc hneg hev
+  · exact ⟨value, STAmount.roundToExponent_eq_self value 80 _
+      (Or.inr (Or.inr (by show (80 : ℤ) ≤ value.mOffset; omega)))⟩
 
 end XRPL.Model.Protocol

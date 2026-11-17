@@ -82,7 +82,7 @@ lemma Vault.withdraw_holder_ne_notLawful (v : Vault) (amount : WithdrawAmount) (
     rw [hs, Except.ok.injEq] at hsn
     subst hsn
     rw [← hv]
-    exact le_trans ((operator_lt_eq_false_iff _ _ hn hsnorm).mp hlt) hbal
+    exact le_trans ((Number.operator_lt_eq_false_iff _ _ hn hsnorm).mp hlt) hbal
   · intro h
     push Not at hpass
     obtain ⟨a, ha, hfail⟩ := hpass

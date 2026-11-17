@@ -42,8 +42,8 @@ private lemma LoanBroker.releaseLoan_ok (lb : LoanBroker) (d : Number) (hc0 : lb
     · have hb : (lb.loanCount - 1 == 0) = false := by simpa using hc
       refine { lb.valid with debtTotal_nonneg := ?_, debt_within_cap := ?_, empty_broker := ?_ } <;>
         dsimp only <;> rw [hb, if_neg Bool.false_ne_true]
-      · exact (operator_le_iff _ _ Number.zero_isNormalized hn).mpr (by rw [Number.toRat_zero]; exact h0 hc)
-      · exact fun hm => (operator_le_iff _ _ hn lb.wf.debtMaximum_norm).mpr (hle hc hm)
+      · exact (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mpr (by rw [Number.toRat_zero]; exact h0 hc)
+      · exact fun hm => (Number.operator_le_iff _ _ hn lb.wf.debtMaximum_norm).mpr (hle hc hm)
       · exact fun h => absurd h hc
 
 /-- The balance change a pending delete makes to the vault: the rounded principal returns from
@@ -98,7 +98,7 @@ lemma Loan.deleteActive_ok (broker : LoanBroker) (hc0 : broker.loanCount ≠ 0) 
       debtTotal := if broker.loanCount - 1 == 0 then Number.zero else broker.debtTotal } :=
   LoanBroker.releaseLoan_ok broker broker.debtTotal hc0 broker.wf.debtTotal_norm
     (fun _ => (show 0 ≤ broker.debtTotal.toRat from broker.exact.debtTotal_nonneg))
-    (fun _ hm => (operator_le_iff _ _ broker.wf.debtTotal_norm broker.wf.debtMaximum_norm).mp
+    (fun _ hm => (Number.operator_le_iff _ _ broker.wf.debtTotal_norm broker.wf.debtMaximum_norm).mp
       (broker.valid.debt_within_cap hm))
 
 /-- A release that passed: the broker with one loan less, and DebtTotal kept or dropped to zero with the last
@@ -171,13 +171,13 @@ lemma Loan.delete_broker_lawful (loan : Loan) (debtTotal' : Number)
     ∃ broker', loan.broker.releaseLoan debtTotal' = .ok broker' := by
   have hdn := loan.broker.wf.debtTotal_norm
   have hpn := loan.wf.principalOutstanding_norm
-  have hn : debtTotal'.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ _ hdn hpn hdebt
+  have hn : debtTotal'.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hdn hpn hdebt
   rcases h with h1 | hle
   · obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hc0 hn
       (fun hc => absurd (by rw [h1]; rfl) hc) (fun hc => absurd (by rw [h1]; rfl) hc)
     exact ⟨b, hb⟩
   · -- the new DebtTotal is the rounded difference, between zero and the old DebtTotal
-    have hR := operator_sub_rounded_to_nearest _ _ _ hdn hpn hdebt
+    have hR := Number.operator_sub_rounded_to_nearest _ _ _ hdn hpn hdebt
     have h0 : 0 ≤ debtTotal'.toRat := by
       have := Number.roundsToRepresentable_ge _ _ hR Number.zero Number.zero_isNormalized
         (by rw [Number.toRat_zero]; linarith)
@@ -186,7 +186,7 @@ lemma Loan.delete_broker_lawful (loan : Loan) (debtTotal' : Number)
       Number.operator_sub_toRat_le _ _ _ hdn hpn
         (show 0 ≤ loan.principalOutstanding.toRat from loan.exact.principalOutstanding_nonneg) hdebt
     obtain ⟨b, hb, -⟩ := LoanBroker.releaseLoan_ok loan.broker debtTotal' hc0 hn (fun _ => h0)
-      (fun _ hm => hup.trans ((operator_le_iff _ _ hdn loan.broker.wf.debtMaximum_norm).mp
+      (fun _ hm => hup.trans ((Number.operator_le_iff _ _ hdn loan.broker.wf.debtMaximum_norm).mp
         (loan.broker.valid.debt_within_cap hm)))
     exact ⟨b, hb⟩
 
@@ -216,11 +216,11 @@ lemma Loan.delete_vault_lawful (loan : Loan) (v : Vault) (principal' : Number) (
     Number.isNormalized.toRat_inj (STAmount.roundToNumericType_isNormalized _ _ _ _ _ hround) hpn
       (STAmount.roundToNumericType_of_isRounded_false _ _ _ hpn hpo hround)
   subst hp'
-  have haan : aa.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hpn h1
+  have haan : aa.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hpn h1
   have haan' : aa'.isNormalized := STAmount.roundToNumericType_isNormalized _ _ _ _ _ h2
-  have hadn' : ad'.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
+  have hadn' : ad'.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
     (Number.operator_neg_isNormalized _ hpn) hd
-  have harn : ar'.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm
+  have harn : ar'.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm
     (Number.operator_neg_isNormalized _ hpn) hr
   have hadv : ad'.toRat = v.assetsDeployed.toRat - loan.principalOutstanding.toRat := by
     have h := Number.operator_add_exact_of_fits v.wf.assetsDeployed_norm (Number.operator_neg_isNormalized _ hpn) hd
@@ -255,13 +255,13 @@ lemma Loan.delete_vault_lawful (loan : Loan) (v : Vault) (principal' : Number) (
     · unfold Number.operator_le; unfold Number.operator_gt at hle; simpa using hle
     · exact (STAmount.isRounded_eq_false_iff _ _ hadn' had0).mpr (by rw [hadv]; exact had)
     · -- AssetsReserved and AssetsDeployed both lose the principal
-      have hR := operator_add_rounded_to_nearest _ _ _ v.wf.assetsReserved_norm
+      have hR := Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsReserved_norm
         (Number.operator_neg_isNormalized _ hpn) hr
-      have hrd := (operator_le_iff _ _ v.wf.assetsReserved_norm v.wf.assetsDeployed_norm).mp
+      have hrd := (Number.operator_le_iff _ _ v.wf.assetsReserved_norm v.wf.assetsDeployed_norm).mp
         v.valid.assetsReserved_le
       have hle' := Number.roundsToRepresentable_le _ _ hR ad' hadn'
         (by rw [hadv, Number.toRat_neg]; linarith)
-      exact (operator_le_iff _ _ harn hadn').mpr hle'
+      exact (Number.operator_le_iff _ _ harn hadn').mpr hle'
 
 variable (loan : Loan) (v : Vault)
 

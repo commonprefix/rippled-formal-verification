@@ -48,32 +48,6 @@ lemma add_lift_trace :
     unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize
-  rw [doNormalize_eq_spec]
-  all_goals try min_fit
-  unfold doNormalizeSpec
-  rw [show (((1000000000000000500 : UInt64)) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUpSpec largeRange.min (1000000000000000500 : UInt64) (-2)
-        = ((1000000000000000500 : UInt64), (-2 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
-  rw [show doNormalize_scaleDown largeRange.max (1000000000000000500 : UInt64) (-2 : Int) Guard.new
-        = .ok ((1000000000000000500 : UInt64), (-2 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
-  simp only []
-  rw [show ((-2 : Int) < minExponent || (1000000000000000500 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_capAtMaxRep (1000000000000000500 : UInt64) (-2 : Int) Guard.new
-        = .ok ((1000000000000000500 : UInt64), (-2 : Int), Guard.new) from by
-      unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
-  simp only []
-  have h_rup2 : Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max .to_nearest .normalize2 =
-      .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 } := by
-    rw_doRoundUp_spec
-    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
-  rw [h_rup2]
-  simp only [RoundResult.toNumber]
 
 /-- The 16-digit canonical re-round of `10¹⁶+5` (`= 1000000000000000500·10⁻²`):
 scale down three digits (dropping `500`), `to_nearest` ties to even → `10¹⁶`. -/

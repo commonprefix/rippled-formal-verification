@@ -342,7 +342,7 @@ lemma Vault.adjustAssetsAndShares_bad_ledger (v : Vault) (assets shares : STAmou
   have hnn : ∀ n : Number, n.isNormalized → Number.zero.operator_le n = true → ¬ n.signum < 0 := by
     intro n hn hle
     have h0 : 0 ≤ n.toRat := by
-      have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp hle
+      have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp hle
       rwa [Number.toRat_zero] at this
     exact not_lt.mpr (Number.signum_nonneg_of_negative_false n (Number.negative_false_of_nonneg n hn h0))
   simp only [Vault.adjustAssetsAndShares, Vault.adjustBalances] at h
@@ -367,9 +367,9 @@ lemma Vault.adjustAssetsAndShares_not_bad_ledger_of_le (v : Vault) (assets share
   obtain ⟨assetsNum, s, aa', hnum, hs, haa, hneg⟩ := Vault.adjustAssetsAndShares_bad_ledger v assets shares h
   obtain ⟨hv, hnorm⟩ := hc.toNumber_exact assetsNum hnum
   have hsn : s.isNormalized :=
-    operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
+    Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
   have hsum : 0 ≤ s.toRat :=
-    operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs (by rw [hv]; exact hle)
+    Number.operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs (by rw [hv]; exact hle)
   have haa0 := STAmount.roundToNumericType_nonneg _ _ _ hsn hsum haa
   have haan := STAmount.roundToNumericType_isNormalized _ _ _ _ _ haa
   exact absurd hneg (not_lt.mpr
@@ -526,7 +526,7 @@ lemma Vault.cash_shares_update_lawful (v : Vault) (aa' st' : Number)
   refine ⟨⟨haa, hAD, hAR, hmax, hst, hLU, hYU, hst0, hstd, hsi, hsl⟩,
     ⟨?_, hADnn, hARnn, hLUnn, hYUnn, hmaxp, hempty, hLUle, hADr, hARle, hrep, hblk, hsched, hfee1, hfee2, haar,
       haag⟩⟩
-  rw [operator_le_iff _ _ Number.zero_isNormalized haa, Number.toRat_zero]
+  rw [Number.operator_le_iff _ _ Number.zero_isNormalized haa, Number.toRat_zero]
   exact haa0
 
 /-- The cash update adds a whole number of shares exactly while the new share total stays
@@ -542,7 +542,7 @@ lemma Vault.adjustAssetsAndShares_sharesTotal (v : Vault) (assets shares : STAmo
   have hsden : sharesNum.toRat.den = 1 := by rw [hsv]; exact hden
   have hbound := Rat.num_natAbs_add_lt_of_den_one _ _ v.wf.sharesTotal_int hsden (by rw [hsv]; exact hlo)
     (by rw [hsv]; exact hhi)
-  obtain ⟨hstv, -⟩ := operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
+  obtain ⟨hstv, -⟩ := Number.operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
     hsden hbound hst
   show st'.toRat = _
   rw [hstv, hsv]

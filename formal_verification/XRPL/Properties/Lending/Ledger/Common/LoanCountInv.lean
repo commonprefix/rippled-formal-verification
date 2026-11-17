@@ -125,7 +125,7 @@ lemma LendingTx.preflight_loanSet_principal (l : LendingLedger) (i : Nat) (princ
     have hn := of_decide_eq_true hpi.1
     have hlt := hpi.2
     refine ⟨hn, ?_⟩
-    have := (operator_lt_iff _ _ Number.zero_isNormalized hn).mp hlt
+    have := (Number.operator_lt_iff _ _ Number.zero_isNormalized hn).mp hlt
     rwa [Number.toRat_zero] at this
   · exact absurd h (by rw [show TER.temINVALID.isTesSuccess = false from rfl]; decide)
 

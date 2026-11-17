@@ -50,12 +50,12 @@ lemma IOUAmount.normalize_mantissa_nonpos (m : Int64) (e : Int) (mode : rounding
           UInt64.toNat_ofNat_of_lt hb
         intro h; rw [h] at heq; simp at heq; omega
       have hv_norm : v.isNormalized :=
-        normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
+        Number.normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
       obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv_ne
       have hv_exp_lo : minExponent ≤ v.exponent_ := Number.exponent_ge_min v hv_norm hv_ne
       have hvneg : v.negative_ = true := by
         obtain ⟨m3, e3, g3, res, hrup, hres_eq, -, -, -, -⟩ :=
-          normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
+          Number.normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
         have hres_ne : res.mantissa_ ≠ 0 := by rw [hres_eq] at hv_ne; exact hv_ne
         have hsg := doRoundUp_negative_of_mant_ne g3 _ m3 e3 largeRange.min largeRange.max mode
           .normalize2 res hrup hres_ne
@@ -198,7 +198,7 @@ lemma IOUAmount.normalize_zero_exp (a : IOUAmount) (mode : rounding_mode) (i : I
           · have hfr' : (Number.unchecked (a.mantissa_ < 0) a.mantissa_.toInt.natAbs.toUInt64
                 a.exponent_).normalize largeRange.min largeRange.max mode = .ok v := hfr
             have hv_norm : v.isNormalized :=
-              normalize_result_isNormalized _ v mode hun_ne hfr' hv0
+              Number.normalize_result_isNormalized _ v mode hun_ne hfr' hv0
             obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv0
             have hv_exp_lo : minExponent ≤ v.exponent_ := Number.exponent_ge_min v hv_norm hv0
             have hexp3 : v.exponent_ + 3 ≤ maxExponent :=

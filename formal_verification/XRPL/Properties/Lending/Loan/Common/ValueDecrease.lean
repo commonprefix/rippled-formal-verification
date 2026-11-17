@@ -96,7 +96,7 @@ private lemma sumRoundAndSubtract_zero (A : Number) (e : Int) (nt : NumericType)
   have hd0 : d.toRat = 0 := by
     by_cases hm : d.mantissa_ = 0
     · exact Number.toRat_eq_zero_of_mantissa_zero d hm
-    obtain ⟨n, hn, hv⟩ := operator_sub_rounded_downward sum' sum' d hs'n hs'n hd hm
+    obtain ⟨n, hn, hv⟩ := Number.operator_sub_rounded_downward sum' sum' d hs'n hs'n hd hm
     rw [sub_self] at hn
     have h1 := Number.lower_le _ n hn
     have h2 := Number.lower_tight _ n hn Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero])

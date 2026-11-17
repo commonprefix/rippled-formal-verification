@@ -240,8 +240,8 @@ private lemma Vault.withdraw_part_ok_full_fee (v : Vault) (t : UInt32)
   obtain ⟨zN, hzN⟩ := STAmount.CanonicalOrZero.toNumber_ok hzc
   have hge : v.assetsAvailable.operator_lt zN = false :=
     Vault.lt_cash_false v _ zN hzc hzN (by rw [hz0]; exact hApos.le)
-  obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hexact hmax _ shares hzc hzt (by rw [hz0])
-    (by rw [hz0]; exact hApos.le) hsic hty hspos.le hlt.le
+  obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hexact hmax (Vault.DebitStores.of_noLending v hAD) _ shares hzc hzt
+    (by rw [hz0]) (by rw [hz0]; exact hApos.le) hsic hty hspos.le hlt.le
   have hlaw := Vault.withdraw_update_lawful v _ shares raw hmax ⟨0, by rw [hz0]; simp⟩ hzc
     (by rw [STAmount.operator_neg_toRat, hz0]; linarith) hsic hty hspos.le hlt.le
     (fun h => absurd h (ne_of_lt hlt)) hadj
@@ -346,11 +346,11 @@ private lemma Vault.withdraw_part_ok_partial_fee (v : Vault) (t : UInt32) (hz : 
     have : p.toRat * (5 / 10 ^ 18) < 10 ^ v.baseExponent := by nlinarith
     linarith
   have hpnm : pn.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hpnpos.ne'
-  have hpnn : pn.isNormalized := operator_sub_isNormalized _ _ _ _ hpNn hfn hsub hpnm
+  have hpnn : pn.isNormalized := Number.operator_sub_isNormalized _ _ _ _ hpNn hfn hsub hpnm
   obtain ⟨w, hwn, hwv⟩ := Exact.exists_normalized_grid 1 v.baseExponent le_rfl (by norm_num)
     (by unfold minExponent; omega) (by have := (Vault.baseExponent_bounds v).2.1; unfold maxExponent; omega)
   rw [Nat.cast_one, one_mul] at hwv
-  obtain ⟨n, hn, hpnv⟩ := operator_sub_rounded_downward pN fee pn hpNn hfn hsub hpnm
+  obtain ⟨n, hn, hpnv⟩ := Number.operator_sub_rounded_downward pN fee pn hpNn hfn hsub hpnm
   have hpnge : (10 : ℚ) ^ v.baseExponent ≤ pn.toRat := by
     rw [hpnv, ← hwv]
     exact Number.lower_tight _ n hn w hwn (by rw [hwv, hpNv]; linarith)
@@ -379,8 +379,8 @@ private lemma Vault.withdraw_part_ok_partial_fee (v : Vault) (t : UInt32) (hz : 
     hpocan hpot (by rw [hE]; exact hpayge) (by linarith)
   obtain ⟨cN, hcN⟩ := STAmount.CanonicalOrZero.toNumber_ok hcc
   have hlt' : v.assetsAvailable.operator_lt cN = false := Vault.lt_cash_false v cl cN hcc hcN (by linarith)
-  obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hexact hmax cl shares hcc hct hc0 (by linarith) hsic hty
-    hspos.le hlt.le
+  obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hexact hmax (Vault.DebitStores.of_noLending v hz.assetsDeployed)
+    cl shares hcc hct hc0 (by linarith) hsic hty hspos.le hlt.le
   have hlaw := Vault.withdraw_update_lawful v cl shares raw hmax
     (Vault.clamp_grid v _ _ _ (STAmount.CanonicalOrZero.operator_neg hpoc) hcl)
     hcc (by rw [STAmount.operator_neg_toRat]; linarith) hsic hty hspos.le hlt.le

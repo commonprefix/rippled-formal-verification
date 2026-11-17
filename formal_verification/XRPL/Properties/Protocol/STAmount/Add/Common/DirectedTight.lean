@@ -137,11 +137,11 @@ lemma STAmount.operator_add_repr_iou_directed_core (v1 v2 result : STAmount)
     have h : Number.RoundsToRepresentable sum (xn.toRat + yn.toRat) mode := by
       rcases hmode with hm | hm | hm
       · subst hm
-        exact operator_add_rounded_upward xn yn sum hxn_norm hyn_norm hadd hsum_ne
+        exact Number.operator_add_rounded_upward xn yn sum hxn_norm hyn_norm hadd hsum_ne
       · subst hm
-        exact operator_add_rounded_downward xn yn sum hxn_norm hyn_norm hadd hsum_ne
+        exact Number.operator_add_rounded_downward xn yn sum hxn_norm hyn_norm hadd hsum_ne
       · subst hm
-        exact operator_add_rounded_towards_zero xn yn sum hxn_norm hyn_norm hadd
+        exact Number.operator_add_rounded_towards_zero xn yn sum hxn_norm hyn_norm hadd
     rwa [hxn_val, hyn_val] at h
   have hs_neg : sum.negative_ = false :=
     Number.RoundsToRepresentable.nonneg_of_pos sum truth mode hrepr htruth_pos
@@ -344,11 +344,11 @@ lemma STAmount.operator_add_repr_iou_directed_core_neg (v1 v2 result : STAmount)
     have h : Number.RoundsToRepresentable sum (xn.toRat + yn.toRat) mode := by
       rcases hmode with hm | hm | hm
       · subst hm
-        exact operator_add_rounded_upward xn yn sum hxn_norm hyn_norm hadd hsum_ne
+        exact Number.operator_add_rounded_upward xn yn sum hxn_norm hyn_norm hadd hsum_ne
       · subst hm
-        exact operator_add_rounded_downward xn yn sum hxn_norm hyn_norm hadd hsum_ne
+        exact Number.operator_add_rounded_downward xn yn sum hxn_norm hyn_norm hadd hsum_ne
       · subst hm
-        exact operator_add_rounded_towards_zero xn yn sum hxn_norm hyn_norm hadd
+        exact Number.operator_add_rounded_towards_zero xn yn sum hxn_norm hyn_norm hadd
     rwa [hxn_val, hyn_val] at h
   have hs_neg : sum.negative_ = true :=
     Number.RoundsToRepresentable.neg_of_neg sum truth mode hrepr htruth_neg

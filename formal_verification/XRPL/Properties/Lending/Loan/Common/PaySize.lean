@@ -108,7 +108,7 @@ private lemma loanPeriodicRate_le_cap (ir : TenthBips32) (interval : UInt32) (ra
   rw [hy] at h
   have hyv' : ((31536000 : UInt32).toNat : ℚ) = 31536000 := rfl
   refine ⟨Number.operator_div_isNormalized _ _ _ _ htbN hyn h,
-    rn_nonneg (operator_div_rounded_to_nearest _ _ _ htbN hyn h) (by rw [hyv, hyv']; positivity), ?_⟩
+    rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ htbN hyn h) (by rw [hyv, hyv']; positivity), ?_⟩
   have hle := (Number.div_near _ _ _ htbN hyn h).le (by rw [hyv, hyv']; positivity)
   rw [hyv, hyv'] at hle
   rw [hiv] at htble
@@ -154,7 +154,8 @@ private lemma loanLatePaymentInterest_le (l : Loan) (now : UInt32) (li : Number)
   obtain ⟨hrN, hr0, hr137⟩ := loanPeriodicRate_le_cap _ _ rate l.exact.lateInterestRate_cap hrate
   have hle := (Number.mul_near _ _ _ l.wf.principalOutstanding_norm hrN h).le (mul_nonneg hP0 hr0)
   refine ⟨Number.operator_mul_isNormalized _ _ _ _ l.wf.principalOutstanding_norm hrN h,
-    rn_nonneg (operator_mul_rounded_to_nearest _ _ _ l.wf.principalOutstanding_norm hrN h) (mul_nonneg hP0 hr0), ?_⟩
+    rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ l.wf.principalOutstanding_norm hrN h) (mul_nonneg hP0 hr0),
+      ?_⟩
   calc li.toRat ≤ l.principalOutstanding.toRat * rate.toRat * (1 + ε) := hle
     _ ≤ l.principalOutstanding.toRat * 137 * (1 + 1 / 10 ^ 18) := by gcongr
     _ ≤ 138 * l.principalOutstanding.toRat := by nlinarith
@@ -175,10 +176,10 @@ private lemma Loan.lateComponents_interest_le (l : Loan) (now : UInt32) (pc : Pa
   obtain ⟨gsp, hsp0, hsple⟩ := computeManagementFee_le _ _ _ _ _ hlrN hlr0 l.broker.managementFeeRate_le hs hint
     hsplit
   have hnetle := (Number.sub_near _ _ _ hlrN gsp.1 hnet).le_max
-  have hnet0 := rn_nonneg (operator_sub_rounded_to_nearest _ _ _ hlrN gsp.1 hnet) (by linarith)
+  have hnet0 := rn_nonneg (Number.operator_sub_rounded_to_nearest _ _ _ hlrN gsp.1 hnet) (by linarith)
   have hmax : max (lr.toRat - split.toRat) 0 ≤ 276 * l.principalOutstanding.toRat + 10 ^ l.loanScale + 1 :=
     max_le (by linarith) (by have : (0 : ℚ) < 10 ^ l.loanScale := zpow_pos (by norm_num) _; nlinarith [hli0])
-  exact ⟨hnet0, operator_sub_isNormalized_to_nearest_sz _ _ _ hlrN gsp.1 hnet,
+  exact ⟨hnet0, Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hlrN gsp.1 hnet,
     le_trans hnetle (mul_le_mul_of_nonneg_right hmax (by linarith))⟩
 
 /-- An overpayment that pays some principal pays less interest than the overpayment. The interest, its
@@ -206,13 +207,13 @@ private lemma Loan.overpaymentComponents_interest_lt (l : Loan) (ov : Number) (o
   have hlrN := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hlr
   have hlr0 := STAmount.roundToNumericType_some_nonneg _ _ _ _ _ hoiN hoi0 (Or.inl rfl) hs hlr
   obtain ⟨gmf, hmf0, -⟩ := computeManagementFee_le _ _ _ _ _ hlrN hlr0 l.broker.managementFeeRate_le hs hint hfee
-  have hnetN := operator_sub_isNormalized_to_nearest_sz _ _ _ hlrN gmf.1 hnet
+  have hnetN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hlrN gmf.1 hnet
   refine ⟨hnetN, ?_⟩
   -- were the interest at least the overpayment, no principal would be left
   by_contra hge
   push Not at hge
-  have hpaiN := operator_sub_isNormalized_to_nearest_sz _ _ _ hov hnetN hpai
-  have hpafN := operator_sub_isNormalized_to_nearest_sz _ _ _ hpaiN gmf.1 hpaf
+  have hpaiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hov hnetN hpai
+  have hpafN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hpaiN gmf.1 hpaf
   have h1 := (Number.sub_near _ _ _ hov hnetN hpai).nonpos (by linarith)
   have h2 := (Number.sub_near _ _ _ hpaiN gmf.1 hpaf).nonpos (by linarith)
   have h3 := (Number.sub_near _ _ _ hpafN hof'N hpdv).nonpos (by linarith)
@@ -243,9 +244,9 @@ private lemma UnsettledPayment.applyOverpayment_interest_le (payment p' : Unsett
   have hlt : payment.totalPaid.toRat < a'.toRat := by
     have : payment.totalPaid.operator_lt a' = true := by
       revert hcond; cases payment.totalPaid.operator_lt a' <;> simp
-    exact (operator_lt_iff _ _ htp ha'N).mp this
-  have hunN := operator_sub_isNormalized_to_nearest_sz _ _ _ ha'N htp hun
-  have hun0 := rn_nonneg (operator_sub_rounded_to_nearest _ _ _ ha'N htp hun) (by linarith)
+    exact (Number.operator_lt_iff _ _ htp ha'N).mp this
+  have hunN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ ha'N htp hun
+  have hun0 := rn_nonneg (Number.operator_sub_rounded_to_nearest _ _ _ ha'N htp hun) (by linarith)
   -- the overpayment is at most TotalValueOutstanding
   have hmin : (Number.min un payment.loan.totalValueOutstanding).isNormalized ∧
       0 ≤ (Number.min un payment.loan.totalValueOutstanding).toRat ∧
@@ -254,7 +255,7 @@ private lemma UnsettledPayment.applyOverpayment_interest_le (payment p' : Unsett
     split
     · exact ⟨payment.loan.wf.totalValueOutstanding_norm, hT0, le_rfl⟩
     · rename_i hn
-      exact ⟨hunN, hun0, (operator_lt_eq_false_iff _ _ payment.loan.wf.totalValueOutstanding_norm hunN).mp
+      exact ⟨hunN, hun0, (Number.operator_lt_eq_false_iff _ _ payment.loan.wf.totalValueOutstanding_norm hunN).mp
         (by simpa using hn)⟩
   obtain ⟨hmN, hm0, hmle⟩ := hmin
   have hovN := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hov
@@ -265,7 +266,7 @@ private lemma UnsettledPayment.applyOverpayment_interest_le (payment p' : Unsett
     have hpdN := Loan.overpaymentComponents_principalDelta_normalized _ _ _ hovN hopc
     have : opc.principalDelta.operator_gt Number.zero = true := by
       revert hpd; cases opc.principalDelta.operator_gt Number.zero <;> simp
-    have := (operator_gt_iff _ _ hpdN Number.zero_isNormalized).mp this
+    have := (Number.operator_gt_iff _ _ hpdN Number.zero_isNormalized).mp this
     rwa [Number.toRat_zero] at this
   obtain ⟨hniN, hnilt⟩ := Loan.overpaymentComponents_interest_lt _ _ _ hovN hov0 hs hint hopc hpd'
   obtain ⟨hrei, -⟩ := Loan.tryOverpayment_interestDue_le _ _ _ (by omega) hint hi hre
@@ -302,9 +303,10 @@ private lemma UnsettledPayment.payInstalments_totalPaid {α : Type} (amount : Nu
       obtain ⟨d1, hd1, hdue⟩ := bind_ok_peel _ _ _ hdue
       simp only at hd1 hdue
       rw [hu] at hd1
-      have hd1N := operator_add_isNormalized_to_nearest_sz _ _ _ htvN Number.zero_isNormalized hd1
-      have hdueN := operator_add_isNormalized_to_nearest_sz _ _ _ hd1N payment.loan.wf.serviceFee_norm hdue
-      have htp' := operator_add_isNormalized_to_nearest_sz _ _ _ htp hdueN ‹payment.totalPaid.operator_add _ _ = _›
+      have hd1N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ htvN Number.zero_isNormalized hd1
+      have hdueN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hd1N payment.loan.wf.serviceFee_norm hdue
+      have htp' := Number.operator_add_isNormalized_to_nearest_sz _ _ _ htp hdueN ‹payment.totalPaid.operator_add _ _ =
+        _›
     · exact htp'
     · exact ih _ p' htp' ‹UnsettledPayment.payInstalments _ n amount = _›
 
@@ -366,8 +368,8 @@ lemma Loan.Reachable.pay_sum_le {loan : Loan} {t : UInt32} (hreach : loan.Reacha
     obtain ⟨vap, id, hvap, hid, hipv, -, -⟩ := PaymentComponents.paidAmounts_ok_inv _ _ hamt
     rw [e1, e2] at hvap
     rw [e3] at hid
-    have hvapN := operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hpdN hvap
-    have hidN := operator_sub_isNormalized_to_nearest_sz _ _ _ hvapN hmdN hid
+    have hvapN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hpdN hvap
+    have hidN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hvapN hmdN hid
     have h1 := (Number.sub_near _ _ _ htvN hpdN hvap).le_max
     have h2 := (Number.sub_near _ _ _ hvapN hmdN hid).le_max
     have h3 := (Number.add_near _ _ _ hidN huiN hipv).le_max

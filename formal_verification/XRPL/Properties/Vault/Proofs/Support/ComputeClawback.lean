@@ -49,7 +49,7 @@ lemma Vault.ClawbackPriced.form {v : Vault} {assets holderShares : STAmount} {wa
     have hsdc : sd.CanonicalOrZero := Or.inl (hic.canonical (by rw [hty]; decide))
     obtain ⟨hv, hnorm⟩ := har.toNumber_exact n hn
     have hle : ¬ v.assetsAvailable.toRat < n.toRat := by
-      rw [← operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
+      rw [← Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
       simpa [Number.operator_gt] using hgt
     exact ⟨har, Vault.sharesToAssetsWithdraw_nonneg v _ _ waive hsdc h0 hs2a, by rw [← hv]; linarith⟩
   cases hpr with

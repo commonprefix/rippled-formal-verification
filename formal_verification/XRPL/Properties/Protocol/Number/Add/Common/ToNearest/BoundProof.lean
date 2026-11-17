@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.Helpers
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result : Number)
+theorem Number.operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -14,7 +14,7 @@ theorem operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result 
     |result.toRat - (x.toRat + y.toRat)| ≤ |x.toRat + y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, _hf_nn, _hf_lt, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _, _, _⟩ :=
-    operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
       h_same_sign h_not_zero hok
   -- For same-sign add, x.toRat + y.toRat has the same sign as both x.toRat and y.toRat.
   -- And result.negative_ = x.negative_ from `h_sign`. So `result.toRat` aligns with `x+y`.
@@ -42,7 +42,7 @@ theorem operator_add_rounding_bound_same_sign_to_nearest (x y : Number) (result 
     h_floor_constraint .overflow res_pos h_rup_pos hres_pos_mant_ne
 /-- For nonzero operands that do not cancel, `to_nearest` addition with a nonzero result has relative error at most
 `6/(2^63 - 3)`. The same-sign bound `5/(2^63 + 7)` is smaller. -/
-theorem operator_add_rounding_bound_to_nearest_tight (x y result : Number)
+theorem Number.operator_add_rounding_bound_to_nearest_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -50,7 +50,7 @@ theorem operator_add_rounding_bound_to_nearest_tight (x y result : Number)
     (hresult : result.mantissa_ ≠ 0) :
     |result.toRat - (x.toRat + y.toRat)| ≤ |x.toRat + y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) := by
   by_cases h_sign : x.negative_ = y.negative_
-  · have hss := operator_add_rounding_bound_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
+  · have hss := Number.operator_add_rounding_bound_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok
     have htruth_nn : 0 ≤ |x.toRat + y.toRat| := abs_nonneg _
     have hconst : (5 / (2 ^ 63 + 7 : ℚ)) ≤ (6 / (2 ^ 63 - 3 : ℚ)) := by norm_num
@@ -58,7 +58,7 @@ theorem operator_add_rounding_bound_to_nearest_tight (x y result : Number)
         ≤ |x.toRat + y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := hss
       _ ≤ |x.toRat + y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) :=
           mul_le_mul_of_nonneg_left hconst htruth_nn
-  · exact operator_add_rounding_bound_diff_sign_to_nearest_tight x y result hx hy hx_mant_ne hy_mant_ne
+  · exact Number.operator_add_rounding_bound_diff_sign_to_nearest_tight x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok hresult
 
 end XRPL.Model.Protocol

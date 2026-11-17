@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! # Witness for `operator_mul_rounding_bound_to_nearest`
+/-! # Witness for `Number.operator_mul_rounding_bound_to_nearest`
 
 The bound `5/(2^63 + 7)` is attained at `x = 5*10^18`, `y = (2^63 + 7)/5`. -/
 
@@ -63,7 +63,7 @@ lemma doNormalize_witness :
   simp only [RoundResult.toNumber]
 
 /-- `operator_mul` trace for the witness inputs. -/
-lemma operator_mul_to_nearest_witness :
+lemma Number.operator_mul_to_nearest_witness :
     Number.operator_mul
         ⟨false, 5000000000000000000, 0⟩
         ⟨false, 1844674407370955163, 0⟩
@@ -87,7 +87,7 @@ lemma operator_mul_to_nearest_witness :
   rw [doNormalize_witness]
 
 
-theorem operator_mul_to_nearest_attained :
+theorem Number.operator_mul_to_nearest_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_mul x y .to_nearest = .ok result ∧
@@ -100,7 +100,7 @@ theorem operator_mul_to_nearest_attained :
           ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_mul_to_nearest_witness
+  · exact Number.operator_mul_to_nearest_witness
   · decide
   · have hx_rat : (⟨false, 5000000000000000000, 0⟩ : Number).toRat = 5000000000000000000 := by
       unfold Number.toRat; rfl

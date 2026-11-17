@@ -202,7 +202,7 @@ def _root_.XRPL.Model.Protocol.Number.Below (x : Number) (b : ℕ) : Prop := x.i
 lemma _root_.XRPL.Model.Protocol.Number.Below.add {x y r : Number} {b : ℕ} (hx : x.Below b) (hy : y.Below b)
     (h : x.operator_add y .to_nearest = .ok r) : r.Below (b + 1) := by
   have hε' := Number.nearestError_le
-  refine ⟨operator_add_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 h, ?_⟩
+  refine ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 h, ?_⟩
   have := (Number.add_near _ _ _ hx.1 hy.1 h).abs_le
   have h1 := abs_add_le x.toRat y.toRat
   have hp : (10 : ℚ) ^ (b + 1) = 10 ^ b * 10 := by rw [pow_succ]
@@ -214,7 +214,7 @@ lemma _root_.XRPL.Model.Protocol.Number.Below.add {x y r : Number} {b : ℕ} (hx
 lemma _root_.XRPL.Model.Protocol.Number.Below.sub {x y r : Number} {b : ℕ} (hx : x.Below b) (hy : y.Below b)
     (h : x.operator_sub y .to_nearest = .ok r) : r.Below (b + 1) := by
   have hε' := Number.nearestError_le
-  refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 h, ?_⟩
+  refine ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx.1 hy.1 h, ?_⟩
   have := (Number.sub_near _ _ _ hx.1 hy.1 h).abs_le
   have h1 := abs_sub x.toRat y.toRat
   have hp : (10 : ℚ) ^ (b + 1) = 10 ^ b * 10 := by rw [pow_succ]
@@ -332,10 +332,10 @@ lemma Loan.fullComponents_ok (loan : Loan) (now : UInt32) (rate tpo cf : Number)
   have ha5B := (hnetB.mono (by norm_num : 151 ≤ 152)).sub hd2B ha5
   -- the untracked fee, at least minus ManagementFeeOutstanding and at most the close fee and the fee share
   have hM0 : 0 ≤ loan.managementFeeOutstanding.toRat := loan.exact.managementFeeOutstanding_nonneg
-  have ha30 : 0 ≤ a3.toRat := operator_add_nonneg _ _ _ hcfN hfeeN ha3 (by linarith)
+  have ha30 : 0 ≤ a3.toRat := Number.operator_add_nonneg _ _ _ hcfN hfeeN ha3 (by linarith)
   have ha3le := (Number.add_near _ _ _ hcfN hfeeN ha3).le (by linarith)
   have ha4ge : -loan.managementFeeOutstanding.toRat ≤ a4.toRat := by
-    have hR := operator_add_rounded_to_nearest _ _ _ ha3B.1
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ ha3B.1
       (Number.operator_neg_isNormalized _ loan.wf.managementFeeOutstanding_norm) ha4
     have := hR.ge_of_le (Or.inl rfl) loan.managementFeeOutstanding.operator_neg
       (Number.operator_neg_isNormalized _ loan.wf.managementFeeOutstanding_norm)

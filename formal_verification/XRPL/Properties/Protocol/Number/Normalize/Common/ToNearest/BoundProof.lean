@@ -7,14 +7,14 @@ namespace XRPL.Model.Protocol
 
 /-- `Number.normalize` under `.to_nearest` on any nonzero `(mantissa, exponent)` pair, normalized or not, has
 relative error at most `5/(2^63 + 7)` when the result is nonzero. -/
-theorem normalize_rounding_bound_to_nearest (n result : Number)
+theorem Number.normalize_rounding_bound_to_nearest (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     |result.toRat - n.toRat| ≤ |n.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
   obtain ⟨zm, ze, f, g, res_pos, hzm_ge, hzm_le_max, h_floor_constraint,
           habs_n_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
   -- align signs: result.negative_ = n.negative_, so |result - n| = ||result| - |n||
   have h_abs_diff_eq : |result.toRat - n.toRat|
       = |(|result.toRat| - |n.toRat|)| := by

@@ -25,7 +25,7 @@ lemma tenthBipsOfValue_upward_tight (d : Number) (rate : TenthBips32) (fee c c5 
   rw [hu] at huv
   have hun0 : ¬ kTenthBipsPerUnity.toNumber.operator_eq Number.zero = true := by
     intro h
-    have := (operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
+    have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
     rw [huv, Number.toRat_zero] at this
     norm_num at this
   unfold tenthBipsOfValue at hok
@@ -34,9 +34,9 @@ lemma tenthBipsOfValue_upward_tight (d : Number) (rate : TenthBips32) (fee c c5 
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hd hrn hp
   by_cases hfm : fee.mantissa_ = 0
   · rw [Number.toRat_eq_zero_of_mantissa_zero fee hfm]; exact hc0
-  have hpm : p.mantissa_ ≠ 0 := operator_div_numerator_ne_zero_sz _ _ _ _ hun0 hok hfm
+  have hpm : p.mantissa_ ≠ 0 := Number.operator_div_numerator_ne_zero_sz _ _ _ _ hun0 hok hfm
   -- the product rounds up to at most the representable `100000·c`
-  obtain ⟨n, hn, hpv⟩ := operator_mul_rounded_upward d rate.toNumber p hd hrn hp hpm
+  obtain ⟨n, hn, hpv⟩ := Number.operator_mul_rounded_upward d rate.toNumber p hd hrn hp hpm
   have hple : p.toRat ≤ c5.toRat := by
     rw [hpv]
     refine Number.upper_tight _ n hn c5 hc5 ?_
@@ -44,7 +44,7 @@ lemma tenthBipsOfValue_upward_tight (d : Number) (rate : TenthBips32) (fee c c5 
     rw [div_le_iff₀ (by norm_num)] at hge
     linarith
   -- and the quotient by unity rounds up to at most `c`
-  obtain ⟨n', hn', hfv⟩ := operator_div_rounded_upward p _ fee hpn hun hok hfm
+  obtain ⟨n', hn', hfv⟩ := Number.operator_div_rounded_upward p _ fee hpn hun hok hfm
   rw [hfv]
   refine Number.upper_tight _ n' hn' c hc ?_
   rw [huv, div_le_iff₀ (by norm_num)]
@@ -212,7 +212,7 @@ lemma Vault.Reachable.withdraw_payout_floor_proof (v : Vault) (amount : Withdraw
       (by have := (Vault.baseExponent_bounds v).2.1; unfold maxExponent; omega)
     have hkcast : ((k.toNat : ℕ) : ℚ) = k := by exact_mod_cast Int.toNat_of_nonneg hk0
     rw [hkcast] at hwv
-    obtain ⟨n, hn, hpNv⟩ := operator_sub_rounded_downward aN fee pN han hfn hsub hpNm
+    obtain ⟨n, hn, hpNv⟩ := Number.operator_sub_rounded_downward aN fee pN han hfn hsub hpNm
     rw [hpNv, ← hwv]
     exact Number.lower_tight _ n hn w hwn (by rw [hwv, hav]; linarith)
   -- the payout and the clamp floor onto grids no coarser than the base grid
@@ -322,7 +322,7 @@ lemma Vault.Reachable.sharesToAssetsWithdraw_mono (v : Vault) (t0 : UInt32) (hr 
   have hsn₁pos : 0 < sn₁.toRat := by rw [hsnv₁]; linarith
   have hsn₂pos : 0 < sn₂.toRat := by rw [hsnv₂]; linarith
   -- the share total is at least one and at most `2^63 - 1`
-  have hSTm := operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv₁
+  have hSTm := Number.operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv₁
   have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne v.wf.sharesTotal_nonneg
     (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hSTm))
   have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := rat_one_le_of_den_one_pos _ v.wf.sharesTotal_int hSTpos
@@ -344,9 +344,9 @@ lemma Vault.Reachable.sharesToAssetsWithdraw_mono (v : Vault) (t0 : UInt32) (hr 
     hmul₂ hdiv₂
   have han₁m : an₁.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero han₁pos.ne'
   have han₂m : an₂.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero han₂pos.ne'
-  have hNS₁m := (operator_div_operands_ne_zero (Number.operator_mul_isNormalized _ _ _ _ hnavn hsnn₁ hmul₁)
+  have hNS₁m := (Number.operator_div_operands_ne_zero (Number.operator_mul_isNormalized _ _ _ _ hnavn hsnn₁ hmul₁)
     v.wf.sharesTotal_norm hdiv₁ han₁m).1
-  have hNS₂m := (operator_div_operands_ne_zero (Number.operator_mul_isNormalized _ _ _ _ hnavn hsnn₂ hmul₂)
+  have hNS₂m := (Number.operator_div_operands_ne_zero (Number.operator_mul_isNormalized _ _ _ _ hnavn hsnn₂ hmul₂)
     v.wf.sharesTotal_norm hdiv₂ han₂m).1
   have hanle : an₁.toRat ≤ an₂.toRat :=
     Number.mul_div_num_mono nav v.sharesTotal sn₁ sn₂ NS₁ NS₂ an₁ an₂ hnavn hnavm hnavneg

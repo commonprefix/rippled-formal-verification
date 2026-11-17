@@ -41,9 +41,9 @@ private lemma Vault.assetsTotal_ge_available (v : Vault) (assetsTotal : Number) 
   have hnd := Number.negative_false_of_nonneg _ hAD hAD0
   have hnz : ¬ v.assetsAvailable.operator_eq v.assetsDeployed.operator_neg = true := by
     simp [Number.operator_eq, Number.operator_neg, hd, hna, hnd]
-  obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
+  obtain ⟨_, _, _, _, _, hspec⟩ := Number.operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
     (by rw [hna, hnd]) hnz h
-  obtain ⟨n, hlo, hval⟩ := operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
+  obtain ⟨n, hlo, hval⟩ := Number.operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
   refine ⟨hspec.result_norm, ?_⟩
   rw [hval]
   exact Number.lower_tight _ n hlo _ hAA (by linarith)
@@ -67,7 +67,7 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
     simp only [pure, Except.pure, Except.ok.injEq] at h; exact h
   obtain ⟨hatN, hatge⟩ := Vault.assetsTotal_ge_available v atot hat
   have hat0 : 0 ≤ atot.toRat := le_trans v.exact.assetsAvailable_nonneg hatge
-  obtain ⟨n₁, hlo₁, hs₁v⟩ := operator_add_rounded_towards_zero _ _ _ hatN v.wf.yieldUnrealized_norm hs₁
+  obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hatN v.wf.yieldUnrealized_norm hs₁
   rw [if_pos (by linarith)] at hlo₁
   have hs₁ge : atot.toRat ≤ s₁.toRat := by
     rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ atot hatN (by linarith)
@@ -80,7 +80,7 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
       rw [← hs₁]; exact hatN
     · have hYpos : 0 < v.yieldUnrealized.toRat :=
         lt_of_le_of_ne hY0 (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hY))
-      exact operator_add_isNormalized _ _ _ .towards_zero hatN v.wf.yieldUnrealized_norm hs₁ (fun h0 => by
+      exact Number.operator_add_isNormalized _ _ _ .towards_zero hatN v.wf.yieldUnrealized_norm hs₁ (fun h0 => by
         have := Number.toRat_eq_zero_of_mantissa_zero s₁ h0; linarith)
   -- the limit is `9·10^15` base units
   obtain ⟨w, hw, hwv, hwn⟩ := Number.from_rep_exact (9 : Int64) (15 + v.baseExponent) .to_nearest (by decide)
@@ -99,7 +99,7 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
     have htruth : m.toRat ≤ s₁.toRat + x.toRat := by
       rw [hmv]; push_cast at hge ⊢; linarith
     have hm0 : 0 < m.toRat := by rw [hmv]; push_cast; positivity
-    obtain ⟨n, hlo, hcapv⟩ := operator_add_rounded_towards_zero _ _ _ hs₁N hx hcap
+    obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁N hx hcap
     rw [if_pos (by linarith)] at hlo
     have hmn := Number.lower_tight _ n hlo m hm htruth
     have hlt : limit.toRat < capacity.toRat := by
@@ -114,8 +114,8 @@ lemma Vault.exceedsOpenLimit_false_bound (v : Vault) (x : Number) (hx : x.isNorm
       have := Number.toRat_eq_zero_of_mantissa_zero capacity h0
       rw [hcapv] at this
       linarith [lt_of_lt_of_le hm0 hmn]
-    have hcapN := operator_add_isNormalized _ _ _ .towards_zero hs₁N hx hcap hcap0
-    have : capacity.operator_gt limit = true := (operator_lt_iff _ _ hwn hcapN).mpr hlt
+    have hcapN := Number.operator_add_isNormalized _ _ _ .towards_zero hs₁N hx hcap hcap0
+    have : capacity.operator_gt limit = true := (Number.operator_lt_iff _ _ hwn hcapN).mpr hlt
     rw [this] at hgt
     exact absurd hgt (by decide)
   refine ⟨key _ (hatge.trans hs₁ge), key _ hYge, fun atot' hat' => ?_⟩
@@ -139,10 +139,10 @@ lemma LoanState.build_interestDue_grid (tvo p mfo : Number) (s : ℤ) (a j m : �
   subst h
   have hdv := Number.operator_sub_toRat_of_grid _ _ d a j s htN hpN (by rw [hav]; norm_cast)
     (by rw [hjv]; norm_cast) (by omega) hs hd
-  have hdN := operator_sub_isNormalized_to_nearest_sz _ _ d htN hpN hd
+  have hdN := Number.operator_sub_isNormalized_to_nearest_sz _ _ d htN hpN hd
   have hiv := Number.operator_sub_toRat_of_grid _ _ i ((a : ℤ) - j) m s hdN hmN hdv
     (by rw [hmv]; norm_cast) (by omega) hs hi
-  refine ⟨operator_sub_isNormalized_to_nearest_sz _ _ i hdN hmN hi, ?_⟩
+  refine ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ i hdN hmN hi, ?_⟩
   show i.toRat = _
   rw [hiv, hav, hjv, hmv]
   push_cast
@@ -164,8 +164,8 @@ lemma operator_mul_rounded_valueMode (rate x y r : Number) (hx : x.isNormalized)
     (hok : x.operator_mul y (valueMode rate) = .ok r) (hr : r.mantissa_ ≠ 0) :
     r.RoundsToRepresentable (x.toRat * y.toRat) (valueMode rate) := by
   rcases valueMode_cases rate with h | h <;> rw [h] at hok ⊢
-  · exact operator_mul_rounded_to_nearest _ _ _ hx hy hok
-  · exact operator_mul_rounded_upward _ _ _ hx hy hok hr
+  · exact Number.operator_mul_rounded_to_nearest _ _ _ hx hy hok
+  · exact Number.operator_mul_rounded_upward _ _ _ hx hy hok hr
 
 /-- Proof body of the LoanScale line of `Lending.create_updates`. -/
 lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal : Number) (rates : LoanRates)
@@ -268,8 +268,8 @@ lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal :
         rw [hTV, htvv, hj] at h1
         have : (a : ℚ) = j := mul_right_cancel₀ hp10.ne' h1
         exact le_of_eq (by exact_mod_cast this.symm)
-      · have htiN := operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
-        have hR' := operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
+      · have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
+        have hR' := Number.operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
         by_contra hc'
         push Not at hc'
         have h1 : props.totalValueOutstanding.toRat - principal.toRat ≤ 0 := by
@@ -293,7 +293,7 @@ lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal :
       push_cast [Nat.cast_sub hja]; ring
     have hR10 : broker.managementFeeRate.toNat ≤ 10000 := broker.managementFeeRate_le
     obtain ⟨-, -, hmf_hi, ⟨mm, hmm⟩⟩ := computeManagementFee_bounds .fractional ti _ K broker.managementFeeRate
-      props.loanScale (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) hKv (by omega) hR10
+      props.loanScale (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) hKv (by omega) hR10
       ⟨hlo, hhi⟩ hint (fun _ => by omega) hmfo
     have hmf_hi' := hmf_hi (by omega)
     set D := (K * broker.managementFeeRate.toNat + 99) / 100 with hD
@@ -321,7 +321,7 @@ lemma Loan.create_loanScale_proof (broker : LoanBroker) (v : Vault) (principal :
       have h1 := hchecks.funds
       by_contra hc'
       push Not at hc'
-      rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
+      rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
       exact absurd h1 (by decide)
     have hscale : (10 : ℚ) ^ (v.baseExponent - 1) ≤ 10 * 10 ^ (props.loanScale - 3) := by
       have h1 : (10 : ℚ) ^ (v.baseExponent - 1) = 10 * 10 ^ (v.baseExponent - 2) := by

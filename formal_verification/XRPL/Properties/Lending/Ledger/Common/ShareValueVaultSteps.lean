@@ -308,6 +308,7 @@ lemma Vault.deposit_keeps_shareValue (hat : v.assetsTotal = .ok v.assetsAvailabl
   obtain ⟨assets, assetsTotal, -, -, hsta, -, -, hcl, -⟩ := computeDeposit_success_reduces v ra amounts hcomp
   obtain ⟨j, hj⟩ := Vault.clamp_grid v _ _ _ (sharesToAssetsDeposit_form v amounts.shares assets hmax hsta).1 hcl
   obtain ⟨amountNum, hnum, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+    (v.deposit_clampedCharge amount ra false amounts hty (fun h => hc.2 h) hra hcomp)
   obtain ⟨hnv, hnn⟩ := hcf.toNumber_exact amountNum hnum
   obtain ⟨kA, hkA⟩ := haa
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _

@@ -91,7 +91,7 @@ lemma LoanBroker.feeCover_nonneg (b : LoanBroker) (e : Int) (he : (-96 : â„¤) â‰
   have hlt : b.coverAvailable.toRat < mc.toRat := by
     by_contra hc
     push Not at hc
-    rw [(operator_le_iff _ _ hmcn b.wf.coverAvailable_norm).mpr hc] at hle
+    rw [(Number.operator_le_iff _ _ hmcn b.wf.coverAvailable_norm).mpr hc] at hle
     cases hle
   have := STAmount.FracCanonZero.lt_pow ha
   rw [hav] at this

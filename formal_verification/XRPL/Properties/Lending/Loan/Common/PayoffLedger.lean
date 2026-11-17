@@ -49,7 +49,8 @@ private lemma PaymentComponents.totalDue_isNormalized {pc : PaymentComponents} {
     (h3 : pc.untrackedManagementFee.isNormalized) (h : pc.totalDue = .ok td) : td.isNormalized := by
   unfold PaymentComponents.totalDue at h
   obtain ⟨v1, hv1, hd⟩ := bind_ok_peel _ _ _ h
-  exact operator_add_isNormalized_to_nearest_sz _ _ _ (operator_add_isNormalized_to_nearest_sz _ _ _ h1 h2 hv1) h3 hd
+  exact Number.operator_add_isNormalized_to_nearest_sz _ _ _ (Number.operator_add_isNormalized_to_nearest_sz _ _ _ h1 h2
+    hv1) h3 hd
 
 /-- A full payment that passes pays the same with any larger normalized amount. -/
 lemma Loan.fullPay_amount (loan : Loan) (v : Vault) (now : UInt32) (a b : Number) (p : UnsettledPayment Vault)
@@ -60,7 +61,7 @@ lemma Loan.fullPay_amount (loan : Loan) (v : Vault) (now : UInt32) (a b : Number
   obtain ⟨n1, -, -, n4, n5⟩ := Loan.fullComponents_norm loan now pc hpc
   have htdN := PaymentComponents.totalDue_isNormalized n1 n4 n5 htd
   have heq := Loan.fullPayInstalments_amount loan v now pc _ a b hpc htd ha
-    ((operator_lt_eq_false_iff b p.totalPaid hb htdN).mpr hle)
+    ((Number.operator_lt_eq_false_iff b p.totalPaid hb htdN).mpr hle)
   have hx : (loan.payInstalments v .full b now : TerExcept (UnsettledPayment Vault)) =
       loan.payInstalments v .full a now := heq.symm
   rw [Loan.pay_run] at hok ⊢
@@ -115,7 +116,7 @@ private lemma UnsettledPayment.payInstalments_last (q p : UnsettledPayment Vault
       untrackedManagementFee := q.loan.fees.serviceFee, isFinal := true }) n1
       (by show pc.untrackedInterest.isNormalized; rw [n4]; exact Number.zero_isNormalized)
       q.loan.wf.serviceFee_norm hdue
-    have hbd : b.operator_lt due = false := (operator_lt_eq_false_iff b due hb hdN).mpr (htp' ▸ hle)
+    have hbd : b.operator_lt due = false := (Number.operator_lt_eq_false_iff b due hb hdN).mpr (htp' ▸ hle)
     rw [if_neg (by rw [hbd]; decide)]
     exact h
 
@@ -266,8 +267,8 @@ private lemma Loan.full_totalPaid_le (loan : Loan) (v : Vault) (amount : Number)
     have he0 := Number.nearestError_pos
     have h2 : 1 + Number.nearestError ≤ 2 := by linarith [show (1 : ℚ) / 10 ^ 18 ≤ 1 by norm_num]
     have hp1 : (10 : ℚ) ^ loan.loanScale ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hls0
-    have hcfmN := operator_add_isNormalized_to_nearest_sz _ _ _ gcf'.1 gfee.1 hcfm
-    have hufN := operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
+    have hcfmN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ gcf'.1 gfee.1 hcfm
+    have hufN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
     have b1 := (Number.add_near _ _ _ gcf'.1 gfee.1 hcfm).abs_le
     have b2 := (Number.sub_near _ _ _ hcfmN hmv.norm huf).abs_le
     have b3 := (Number.add_near _ _ _ hvpi'.norm hufN hd).abs_le
@@ -336,12 +337,13 @@ private lemma LendingLedger.Reachable.payoffRoom {l : LendingLedger} (hr : l.Rea
     (hroom : l.vault.numericType = .fractional → l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat +
       loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat < 10 ^ 80)
     (hsupply : l.vault.numericType.isIntegral = true →
-      l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-        loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
+      l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+        loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + loan.fees.serviceFee.toRat +
+        loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
       ∀ fi, loan.payoffInterest l.now = .ok fi →
-        l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-          fi.toRat + loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤
-          l.vault.numericType.maxValue.toNat) :
+        l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+          loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + fi.toRat +
+          loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat) :
     ∃ t, loan.Reachable t ∧ loan.isImpaired = false ∧ loan.PayoffRoom l.vault l.now := by
   -- the loan is reachable, and not impaired as it is not late
   obtain ⟨t, ht, hre⟩ := hr.loanAt_reachable hat
@@ -482,17 +484,29 @@ lemma LendingLedger.payoff_possible_proof (l : LendingLedger) (hr : l.Reachable)
     (hroom : l.vault.numericType = .fractional → l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat +
       loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat < 10 ^ 80)
     (hsupply : l.vault.numericType.isIntegral = true →
-      l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-        loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
+      l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+        loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + loan.fees.serviceFee.toRat +
+        loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
       ∀ fi, loan.payoffInterest l.now = .ok fi →
-        l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-          fi.toRat + loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤
-          l.vault.numericType.maxValue.toNat) :
+        l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+          loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + fi.toRat +
+          loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat) :
     ∃ (paymentType : LoanPaymentType) (amount : Number) (l' : LendingLedger) (loan' : Loan),
       (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l'.LoanAt i loan' ∧
         loan'.paymentRemaining = 0 := by
   obtain ⟨hnp, hpr, hpo⟩ := Loan.canPay_active hact
   obtain ⟨t, hre, himp, hroomP⟩ := hr.payoffRoom hat hpr hnl hnp hroom hsupply
+  -- the loan's principal is part of AssetsDeployed, so the room on the total is also room on the cash
+  have hsupplyC : l.vault.numericType.isIntegral = true →
+      l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
+        loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
+      ∀ fi, loan.payoffInterest l.now = .ok fi →
+        l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
+          fi.toRat + loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤
+          l.vault.numericType.maxValue.toNat := fun hint => by
+    have hLU0 : 0 ≤ l.vault.lossUnrealized.toRat := l.vault.exact.lossUnrealized_nonneg
+    have hloss := hroomP.loss
+    exact ⟨by linarith [(hsupply hint).1], fun fi hfi => by linarith [(hsupply hint).2 fi hfi]⟩
   have hasset := hr.holdsAsset
   obtain ⟨hls, hnt⟩ := hr.loanAt_scale hat
   have hbase := Vault.baseExponent_scale_range l.vault
@@ -545,7 +559,7 @@ lemma LendingLedger.payoff_possible_proof (l : LendingLedger) (hr : l.Reachable)
           by linarith)
         linarith [hAfrac hf, show (2 : ℚ) * (10 ^ 16 + 1 + 10 ^ 80) < 10 ^ 95 by norm_num]
       · have hs0 := hint0 hint
-        have hsup := (hsupply hint).1
+        have hsup := (hsupplyC hint).1
         have hv := Number.OnGrid.add_toRat (Loan.outstanding_onGrid loan).1 (Loan.Reachable.fees_onGrid hre).1
           (Loan.loanScale_bounds loan) (by
             rw [hs0, zpow_zero, mul_one, abs_of_nonneg (by linarith)]
@@ -568,10 +582,10 @@ lemma LendingLedger.payoff_possible_proof (l : LendingLedger) (hr : l.Reachable)
         linarith [hAfrac hf, show (8 : ℚ) * 10 ^ 80 + 10 ^ 20 < 10 ^ 95 by norm_num]
       · have hs0 := hint0 hint
         obtain ⟨fi, hfi, hle⟩ := hexact fun fi hfi => by
-          have := (hsupply hint).2 fi hfi
+          have := (hsupplyC hint).2 fi hfi
           rw [hs0, zpow_zero, mul_one]
           linarith [(hAint hint).1, (hAint hint).2]
-        have := (hsupply hint).2 fi hfi
+        have := (hsupplyC hint).2 fi hfi
         rw [hs0, zpow_zero] at hle
         linarith [(hAint hint).1]
     exact key .full r (by rw [Loan.canPay_eq_regular loan (by decide)]; exact hact) hr0

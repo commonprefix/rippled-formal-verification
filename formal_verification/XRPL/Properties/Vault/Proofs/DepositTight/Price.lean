@@ -74,7 +74,7 @@ private lemma IOUAmount.normalize_sigdigits16 (M : UInt64) (e : Int) (mode : rou
     rw [hMtoInt, show Int64.minValue.toInt = (-9223372036854775808 : ℤ) from by decide] at h2
     omega
   obtain ⟨v, hfr, hvval, hvnorm⟩ := Number.from_rep_exact M.toInt64 e mode hne_min
-    (by omega : minExponent + 18 ≤ e) (by omega : e ≤ maxExponent - 1)
+    (by omega : minExponent + 18 ≤ e) (by omega : e ≤ maxExponent)
   rw [hMtoInt] at hvval
   have hvpos : 0 < v.toRat := by rw [hvval]; positivity
   have hvm_ne : v.mantissa_ ≠ 0 := fun h => by
@@ -216,7 +216,7 @@ private lemma STAmount.checked_frac_sigdigits_exact (M : UInt64) (e : Int) (mode
     show s0.signedDrops = (M.toNat : ℤ)
     simp [hs0, STAmount.signedDrops, STAmount.unchecked]
   have hiou : s0.iou mode = IOUAmount.normalize ⟨M.toInt64, e⟩ mode := by
-    rw [STAmount.iou_of_lt mode h_int (show s0.mValue.toNat < 2 ^ 63 from hfit), hsd_eq]; rfl
+    rw [STAmount.iou_eq mode h_int, hsd_eq]; rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok
   rw [if_neg h_int, hiou] at hok
@@ -462,18 +462,18 @@ lemma charge_nonempty (v : Vault) (shares c : STAmount)
       nlinarith [hu_pos, show (2 : ℚ) ≤ (10 : ℚ) ^ (50 : ℤ) from by norm_num]
     have hbound : nav * s / ST < 2 * (10 : ℚ) ^ (-32750 : ℤ) := by
       by_cases hPm0 : P.mantissa_ = 0
-      · have hsmall := operator_mul_underflow_truth_small navN shN P .to_nearest
+      · have hsmall := Number.operator_mul_underflow_truth_small navN shN P .to_nearest
           hnavnorm hsnnorm hmz hshNm hP hPm0
         rw [abs_of_pos (mul_pos (by rw [hnavv]; exact hnav_pos) hshN_pos), hunit, hnavv,
           hshN_val] at hsmall
         have := charge_underflow_mul nav s ST _ hshpos hnav_pos hST_one hsmall
         linarith
-      · have hsmall := operator_div_underflow_truth_small P v.sharesTotal Q .to_nearest
-          (operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hmz
+      · have hsmall := Number.operator_div_underflow_truth_small P v.sharesTotal Q .to_nearest
+          (Number.operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hmz
             hshNm hP hPm0)
           v.wf.sharesTotal_norm hPm0 hSTm hQ hQm
         rw [hunit] at hsmall
-        have hmulbound := operator_mul_rounds_to_nearest navN shN P hnavnorm hsnnorm hP hPm0
+        have hmulbound := Number.operator_mul_rounds_to_nearest navN shN P hnavnorm hsnnorm hP hPm0
         rw [hnavv, hshN_val] at hmulbound
         exact charge_underflow_div nav s ST P.toRat _ hshpos hnav_pos hST_pos hmulbound hsmall
     linarith [hbound, h_le]

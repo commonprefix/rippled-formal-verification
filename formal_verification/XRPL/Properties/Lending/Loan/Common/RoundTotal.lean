@@ -67,8 +67,8 @@ lemma sumRoundAndSubtract_frac_downward_ok_any (A c : Number) (b : Int) (hA : A.
   have hε' := Number.nearestError_le
   -- the exponent of the sum, at most `79`
   obtain ⟨s0, hs0⟩ := Number.operator_add_ok_of_lt A c .to_nearest hA hc hA0 (by linarith) hc0 (by linarith)
-  have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
-  have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
+  have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
+  have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
   have hs0lt : s0.toRat < 10 ^ 90 := by
     have := (Number.add_near _ _ _ hA hc hs0).le (by linarith)
     nlinarith
@@ -96,12 +96,12 @@ lemma sumRoundAndSubtract_frac_downward_ok_any (A c : Number) (b : Int) (hA : A.
   have hsmle : sm.toRat ≤ A.toRat + c.toRat := by
     by_cases h0 : sm.mantissa_ = 0
     · rw [Number.toRat_eq_zero_of_mantissa_zero sm h0]; linarith
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward A c sm hA hc hsm h0
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward A c sm hA hc hsm h0
     rw [hv]; exact Number.lower_le _ l hl
   have hsm0 : 0 ≤ sm.toRat := by
     by_cases h0 : sm.mantissa_ = 0
     · rw [Number.toRat_eq_zero_of_mantissa_zero sm h0]
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward A c sm hA hc hsm h0
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward A c sm hA hc hsm h0
     rw [hv]
     have := Number.lower_tight _ l hl Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero]; linarith)
     rwa [Number.toRat_zero] at this
@@ -120,7 +120,7 @@ lemma sumRoundAndSubtract_frac_downward_ok_any (A c : Number) (b : Int) (hA : A.
   have hdlt : |d.toRat| < 10 ^ 90 := by
     by_cases h0 : d.mantissa_ = 0
     · rw [Number.toRat_eq_zero_of_mantissa_zero d h0, abs_zero]; norm_num
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward sm' A.operator_neg d hsm'n
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward sm' A.operator_neg d hsm'n
       (Number.operator_neg_isNormalized A hA) hd h0
     rw [Number.toRat_neg] at hl
     have hle : d.toRat ≤ sm'.toRat + -A.toRat := by rw [hv]; exact Number.lower_le _ l hl

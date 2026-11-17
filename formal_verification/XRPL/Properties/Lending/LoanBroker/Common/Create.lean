@@ -65,7 +65,7 @@ lemma LoanBroker.create_success_proof (tx : LoanBrokerSetCreate) (nt : NumericTy
     | none =>
       have ⟨hcv, hcn⟩ := debtMaximumCap_facts
       refine ⟨Number.zero_isNormalized, by decide, ?_⟩
-      rw [Option.getD_none, operator_le_iff _ _ Number.zero_isNormalized hcn, Number.toRat_zero, hcv]
+      rw [Option.getD_none, Number.operator_le_iff _ _ Number.zero_isNormalized hcn, Number.toRat_zero, hcv]
       norm_num
     | some dm => simpa using hdm dm h
   have hwf : (LoanBroker.createRaw tx nt).WF :=

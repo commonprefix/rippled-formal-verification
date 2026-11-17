@@ -189,7 +189,7 @@ lemma add_nearestTo_below_pow (x y s : Number)
     s.NearestTo (x.toRat + y.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_lo, hzm_hi, hf_nn, hf_lt, -, hval, hrup, habs, hres_ne,
       hrep, hsneg, -, -, -⟩ :=
-    operator_add_algorithmic_facts_same_sign_to_nearest x y s hx hy hxm hym (by rw [hxn, hyn]) hnz hok
+    Number.operator_add_algorithmic_facts_same_sign_to_nearest x y s hx hy hxm hym (by rw [hxn, hyn]) hnz hok
   set t := x.toRat + y.toRat with ht_def
   have hj : (0 : ℚ) < 10 ^ j := zpow_pos (by norm_num) _
   have hpos : 0 < t := lt_trans (by positivity) hlo
@@ -244,10 +244,10 @@ lemma postSumExponent_mono (A d₁ d₂ : Number) (exponent e₁ e₂ : Int)
   swap
   · omega
   have hd₂0 : 0 ≤ d₂.toRat := le_trans hd₁0 hle
-  have hr₁ := operator_add_rounded_to_nearest A d₁ s₁ hA hd₁ hs₁
-  have hr₂ := operator_add_rounded_to_nearest A d₂ s₂ hA hd₂ hs₂
-  have hs₁n : s₁.isNormalized := operator_add_isNormalized_to_nearest_sz A d₁ s₁ hA hd₁ hs₁
-  have hs₂n : s₂.isNormalized := operator_add_isNormalized_to_nearest_sz A d₂ s₂ hA hd₂ hs₂
+  have hr₁ := Number.operator_add_rounded_to_nearest A d₁ s₁ hA hd₁ hs₁
+  have hr₂ := Number.operator_add_rounded_to_nearest A d₂ s₂ hA hd₂ hs₂
+  have hs₁n : s₁.isNormalized := Number.operator_add_isNormalized_to_nearest_sz A d₁ s₁ hA hd₁ hs₁
+  have hs₂n : s₂.isNormalized := Number.operator_add_isNormalized_to_nearest_sz A d₂ s₂ hA hd₂ hs₂
   have hs₁0 : 0 ≤ s₁.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s₁ _ hr₁ (by linarith)
   obtain ⟨-, hP₁⟩ := numberExponent_frac_lower s₁ exponent e₁ hs₁n hs₁0 (by omega) hn₁ hgt
   have he₁hi : e₁ ≤ 80 := by

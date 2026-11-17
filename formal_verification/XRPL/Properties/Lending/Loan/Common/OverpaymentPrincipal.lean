@@ -58,7 +58,7 @@ private lemma Loan.tryOverpayment_periodic_ge (l : Loan) (opc : PaymentComponent
   obtain ⟨hrN, h0r, hlow, -⟩ := Loan.periodicRate_bounds l rate hrate
   -- the re-amortized principal is positive, or the new PeriodicPayment would be zero
   have hthN := (LoanState.buildTheoretical_normalized l.wf.periodicPayment_norm hrN hth).2.1
-  have hrp0N := operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN hrp0
+  have hrp0N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN hrp0
   have hmaxN := Number.max_isNormalized' hrp0N Number.zero_isNormalized
   have hpp := computeLoanPropertiesFromPeriodicRate_pp _ _ _ _ _ _ _ hprops
   have hppN := loanPeriodicPayment_isNormalized _ _ _ _ hmaxN hrN hpp
@@ -81,7 +81,7 @@ private lemma Loan.tryOverpayment_periodic_ge (l : Loan) (opc : PaymentComponent
     by_contra hle1
     push Not at hle1
     have := Number.roundsToRepresentable_nonpos _ _
-      (operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0) (by linarith)
+      (Number.operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0) (by linarith)
     linarith
   -- the theoretical principal is at least `10^-10`, so its exponent is at least `-28`
   have hth0 : 0 < th.principalOutstanding.toRat := lt_trans hδ0 hthδ

@@ -95,7 +95,8 @@ theorem Lending.loan_ops_total (l : LendingLedger) (hr : l.Reachable) (hnd : l.v
       (l.vault.numericType = .native → loan.totalValueOutstanding.toRat < 6 * 10 ^ 14) →
       -- the broker holds its cover as an amount of the asset, a balance the model does not track
       b.coverAvailable.toRat < 10 ^ 96 →
-      -- the credit fits the XRP or MPT supply, and the fee fits beside the cover, which the model does not track
+      -- on XRP or an MPT the vault total after the payment is an amount of the asset (FV_M4_59), and the fee fits
+      -- beside the cover, which the model does not track
       l.CreditFits i pt amount → l.FeeFits i pt amount →
       -- the model does not run C++ LoanInvariant, which rejects a late payment that takes nothing off the loan
       -- (FV_M4_35)
@@ -198,14 +199,15 @@ theorem Lending.Reachable.payoff_reachable (l : LendingLedger) (hr : l.Reachable
       -- IOU amounts below 10^80, the range of the proof
       (l.vault.numericType = .fractional → l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat +
         loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat < 10 ^ 80) →
-      -- the XRP and MPT supply limit
+      -- on XRP or an MPT the vault's total after the payoff, the cover and the fees stay within the asset's maximum
       (l.vault.numericType.isIntegral = true →
-        l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-          loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
+        l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+          loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + loan.fees.serviceFee.toRat +
+          loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat ∧
         ∀ fi, loan.payoffInterest l.now = .ok fi →
-          l.vault.assetsAvailable.toRat + loan.broker.coverAvailable.toRat + loan.totalValueOutstanding.toRat +
-            fi.toRat + loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤
-            l.vault.numericType.maxValue.toNat) →
+          l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + loan.broker.coverAvailable.toRat +
+            loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat + fi.toRat +
+            loan.fees.serviceFee.toRat + loan.fees.closePaymentFee.toRat + 1 ≤ l.vault.numericType.maxValue.toNat) →
       ∃ (paymentType : LoanPaymentType) (amount : Number) (l' : LendingLedger) (loan' : Loan),
         (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l'.LoanAt i loan' ∧
           loan'.paymentRemaining = 0) :=

@@ -229,7 +229,7 @@ lemma doNormalize_scaleDown_fired_output_le
 
 /-- In every mode, a successful `normalize` with nonzero result has a pre-`doRoundUp` state `(zm, ze, g)` and a
 fraction `f` represented by `g` with `|n| = (zm + f) * 10^ze`, and `doRoundUp` on it yields `|result|`. -/
-theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding_mode)
+theorem Number.normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -456,7 +456,7 @@ theorem normalize_algorithmic_facts_anyMode (n result : Number) (mode : rounding
       hcusp_state, hval_total, hrup_pos, h_result_abs, hres_mant_ne, hrep3, h_res_neg, h_g_sbit,
       hm3_ge_floorSucc⟩
 
-theorem normalize_algorithmic_facts_to_nearest (n result : Number)
+theorem Number.normalize_algorithmic_facts_to_nearest (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -471,7 +471,7 @@ theorem normalize_algorithmic_facts_to_nearest (n result : Number)
       represents g f ∧
       result.negative_ = n.negative_ := by
   obtain ⟨zm, ze, f, g, res_pos, hc1, hc2, _hc3, _hc4, hc5, _hc6, hc7, hc8, hc9, hc10, hc11, hc12, _hc13, _hc14⟩ :=
-    normalize_algorithmic_facts_anyMode n result .to_nearest hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_anyMode n result .to_nearest hn_mant_ne hok hresult
   exact ⟨zm, ze, f, g, res_pos, hc1, hc2, hc5, hc7, hc8, hc9, hc10, hc11, hc12⟩
 
 end XRPL.Model.Protocol

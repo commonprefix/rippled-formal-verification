@@ -16,7 +16,7 @@ namespace XRPL.Model.Protocol
 to zero, which is itself correct rounding toward zero. -/
 
 /-- No normalized Number lies above `result.toRat` and at or below `n.toRat` when `result.toRat ≤ n.toRat`. -/
-theorem normalize_no_inbetween_below_towards_zero (n result : Number)
+theorem Number.normalize_no_inbetween_below_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
     (hresult : result.mantissa_ ≠ 0)
@@ -25,7 +25,7 @@ theorem normalize_no_inbetween_below_towards_zero (n result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ n.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hcusp, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
-    normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
   exact no_inbetween_below_towards_zero_frame result n.toRat zm ze' f g res_pos
     .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
@@ -38,7 +38,7 @@ theorem normalize_no_inbetween_below_towards_zero (n result : Number)
     h_le
 
 /-- No normalized Number lies at or above `n.toRat` and below `result.toRat` when `n.toRat ≤ result.toRat`. -/
-theorem normalize_no_inbetween_above_towards_zero (n result : Number)
+theorem Number.normalize_no_inbetween_above_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
     (hresult : result.mantissa_ ≠ 0)
@@ -47,7 +47,7 @@ theorem normalize_no_inbetween_above_towards_zero (n result : Number)
       m.toRat < result.toRat → ¬ (n.toRat ≤ m.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hcusp, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
-    normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
   exact no_inbetween_above_towards_zero_frame result n.toRat zm ze' f g res_pos
     .normalize2 hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
@@ -60,14 +60,14 @@ theorem normalize_no_inbetween_above_towards_zero (n result : Number)
     h_ge
 
 /-- A zero result is correctly rounded toward zero, since flushing to zero is rounding toward zero. -/
-lemma normalize_rounded_towards_zero_of_result_zero (n result : Number)
+lemma Number.normalize_rounded_towards_zero_of_result_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
     (hres : result.mantissa_ = 0) :
     Number.RoundsToRepresentable result n.toRat .towards_zero := by
   have h_res0 : result.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero result hres
   have h_truth_ne : n.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero n hn_mant_ne
-  have h_small := normalize_underflow_truth_small n result .towards_zero hn_mant_ne hok hres
+  have h_small := Number.normalize_underflow_truth_small_proof n result .towards_zero hn_mant_ne hok hres
   change ∃ n' : Number, (if n.toRat ≥ 0 then Number.lower n.toRat else Number.upper n.toRat)
     = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : n.toRat ≥ 0
@@ -87,7 +87,7 @@ lemma normalize_rounded_towards_zero_of_result_zero (n result : Number)
 
 /-- Any successful `Number.normalize` under `.towards_zero` is correctly rounded: the result is `Number.lower`
 of the input for nonnegative inputs and `Number.upper` for negative ones. -/
-theorem normalize_rounded_towards_zero_proof (n result : Number)
+theorem Number.normalize_rounded_towards_zero_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result) :
     Number.RoundsToRepresentable result n.toRat .towards_zero := by
   -- Zero input: the model short-circuits to the canonical zero.
@@ -108,16 +108,16 @@ theorem normalize_rounded_towards_zero_proof (n result : Number)
     · rw [h_result]
   -- Underflow: flush-to-zero is correct rounding toward zero.
   by_cases hres : result.mantissa_ = 0
-  · exact normalize_rounded_towards_zero_of_result_zero n result hnz hok hres
+  · exact Number.normalize_rounded_towards_zero_of_result_zero n result hnz hok hres
   -- Generic path.
   have hresult : result.mantissa_ ≠ 0 := hres
   obtain ⟨h_dir, h_mag⟩ :=
-    normalize_rounding_bound_towards_zero n result hnz hok hresult
+    Number.normalize_rounding_bound_towards_zero n result hnz hok hresult
   have h_result_norm : result.isNormalized :=
-    normalize_result_isNormalized n result .towards_zero hnz hok hresult
+    Number.normalize_result_isNormalized n result .towards_zero hnz hok hresult
   have h_truth_ne : n.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero n hnz
   obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_sign, _⟩ :=
-    normalize_algorithmic_facts_towards_zero n result hnz hok hresult
+    Number.normalize_algorithmic_facts_towards_zero n result hnz hok hresult
   have h_abs_diff_eq : |result.toRat - n.toRat| = |(|result.toRat| - |n.toRat|)| := by
     apply abs_diff_eq_abs_sub_abs_of_sign_aligned result n.toRat
     · intro h_neg
@@ -136,7 +136,7 @@ theorem normalize_rounded_towards_zero_proof (n result : Number)
     truth_top_of_result_cap result n.toRat h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (normalize_no_overflow_mantissa n result .towards_zero hnz hok hresult h))
+          (Number.normalize_no_overflow_mantissa n result .towards_zero hnz hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h
   change ∃ n' : Number, (if n.toRat ≥ 0 then Number.lower n.toRat else Number.upper n.toRat)
     = some n' ∧ result.toRat = n'.toRat
@@ -149,7 +149,7 @@ theorem normalize_rounded_towards_zero_proof (n result : Number)
         _ = n.toRat := abs_of_nonneg h_truth_nn
     exact closest_lower_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_down
-      (normalize_no_inbetween_below_towards_zero n result hnz hok hresult h_round_down)
+      (Number.normalize_no_inbetween_below_towards_zero n result hnz hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
     push Not at h_truth_nn
     have h_truth_np : n.toRat ≤ 0 := le_of_lt h_truth_nn
@@ -161,6 +161,6 @@ theorem normalize_rounded_towards_zero_proof (n result : Number)
       linarith [neg_le_neg h_dir]
     exact closest_upper_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_up
-      (normalize_no_inbetween_above_towards_zero n result hnz hok hresult h_round_up)
+      (Number.normalize_no_inbetween_above_towards_zero n result hnz hok hresult h_round_up)
 
 end XRPL.Model.Protocol

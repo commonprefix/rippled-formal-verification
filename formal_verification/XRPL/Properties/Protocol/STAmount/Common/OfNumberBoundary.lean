@@ -368,11 +368,11 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
     (hok : n.to_rep .downward = .ok r) :
     (r.toInt : ℚ) ≤ n.toRat ∧ n.toRat < (r.toInt : ℚ) + 1 := by
   have hupper : n.toRat < (r.toInt : ℚ) + 1 := by
-    have hw := to_rep_within_one n .downward r hn hok
+    have hw := Number.to_rep_within_one n .downward r hn hok
     rw [abs_lt] at hw; linarith [hw.1]
   refine ⟨?_, hupper⟩
   by_cases hexp0 : 0 ≤ n.exponent
-  · rw [to_rep_exact_of_exponent_nonneg n .downward r hn hexp0 hok]
+  · rw [Number.to_rep_exact_of_exponent_nonneg n .downward r hn hexp0 hok]
   · push Not at hexp0
     rw [Number.to_rep_eq_spec] at hok
     unfold Number.to_repSpec at hok
@@ -381,11 +381,11 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
     · rw [if_pos hz] at hok
       have hr : r = 0 := by injection hok with h; exact h.symm
       have hmant0 : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
-      have htr : n.toRat = 0 := by rw [← mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
+      have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
       rw [hr, htr, show (0 : Int64).toInt = 0 from by decide]; norm_num
     · rw [if_neg hz] at hok
-      have hmag_nn : 0 ≤ n.mantissa.toInt := (mantissa_sign n).2 hneg
-      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := mantissa_natAbs_le_maxRep n hn
+      have hmag_nn : 0 ≤ n.mantissa.toInt := (Number.mantissa_sign n).2 hneg
+      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le_maxRep n hn
       rw [hneg] at hok
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
@@ -423,7 +423,7 @@ lemma Number.to_rep_downward_floor (n : Number) (r : Int64)
         rw [hDf]; exact Int.ediv_mul_le _ h10k_ne
       have hmul_le_q : (sp.1.toInt : ℚ) * 10 ^ k ≤ (n.mantissa.toInt : ℚ) := by
         exact_mod_cast hmul_le
-      rw [← mantissa_mul_exponent_eq_toRat n hn]
+      rw [← Number.mantissa_mul_exponent_eq_toRat n hn]
       have hexp_pow : (10 : ℚ) ^ n.exponent = ((10 : ℚ) ^ k)⁻¹ := by
         rw [show n.exponent = -(k : ℤ) from by omega, zpow_neg, zpow_natCast]
       rw [hexp_pow, ← div_eq_mul_inv, le_div_iff₀ (by positivity : (0 : ℚ) < 10 ^ k)]
@@ -506,7 +506,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
     (hok : n.to_rep .to_nearest = .ok r) :
     |(r.toInt : ℚ) - n.toRat| ≤ (1 / 2 : ℚ) := by
   by_cases hexp0 : 0 ≤ n.exponent
-  · rw [to_rep_exact_of_exponent_nonneg n .to_nearest r hn hexp0 hok, sub_self, abs_zero]
+  · rw [Number.to_rep_exact_of_exponent_nonneg n .to_nearest r hn hexp0 hok, sub_self, abs_zero]
     norm_num
   · push Not at hexp0
     rw [Number.to_rep_eq_spec] at hok
@@ -516,11 +516,11 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
     · rw [if_pos hz] at hok
       have hr : r = 0 := by injection hok with h; exact h.symm
       have hmant0 : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
-      have htr : n.toRat = 0 := by rw [← mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
+      have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
       rw [hr, htr, show (0 : Int64).toInt = 0 from by decide]; norm_num
     · rw [if_neg hz] at hok
-      have hmag_nn : 0 ≤ n.mantissa.toInt := (mantissa_sign n).2 hneg
-      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := mantissa_natAbs_le_maxRep n hn
+      have hmag_nn : 0 ≤ n.mantissa.toInt := (Number.mantissa_sign n).2 hneg
+      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le_maxRep n hn
       rw [hneg] at hok
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
@@ -534,7 +534,7 @@ lemma Number.to_rep_to_nearest_within_half (n : Number) (r : Int64)
         rw [hspdef]; exact shift_fst_eq n.mantissa n.exponent Guard.new hmag_nn
       have hsp_nn : 0 ≤ sp.1.toInt := by rw [hDf]; exact Int.ediv_nonneg hmag_nn (by positivity)
       have hval : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent :=
-        (mantissa_mul_exponent_eq_toRat n hn).symm
+        (Number.mantissa_mul_exponent_eq_toRat n hn).symm
       have hexp_pow : (10 : ℚ) ^ n.exponent = ((10 : ℚ) ^ k)⁻¹ := by
         rw [show n.exponent = -(k : ℤ) from by omega, zpow_neg, zpow_natCast]
       -- `frac = n.toRat - sp.1 = (n.mantissa mod 10^k)/10^k`
@@ -609,11 +609,11 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
     (hok : n.to_rep .upward = .ok r) :
     n.toRat ≤ (r.toInt : ℚ) ∧ (r.toInt : ℚ) < n.toRat + 1 := by
   have hupper : (r.toInt : ℚ) < n.toRat + 1 := by
-    have hw := to_rep_within_one n .upward r hn hok
+    have hw := Number.to_rep_within_one n .upward r hn hok
     rw [abs_lt] at hw; linarith [hw.2]
   refine ⟨?_, hupper⟩
   by_cases hexp0 : 0 ≤ n.exponent
-  · rw [to_rep_exact_of_exponent_nonneg n .upward r hn hexp0 hok]
+  · rw [Number.to_rep_exact_of_exponent_nonneg n .upward r hn hexp0 hok]
   · push Not at hexp0
     rw [Number.to_rep_eq_spec] at hok
     unfold Number.to_repSpec at hok
@@ -622,11 +622,11 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
     · rw [if_pos hz] at hok
       have hr : r = 0 := by injection hok with h; exact h.symm
       have hmant0 : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
-      have htr : n.toRat = 0 := by rw [← mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
+      have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant0]; norm_num
       rw [hr, htr, show (0 : Int64).toInt = 0 from by decide]; norm_num
     · rw [if_neg hz] at hok
-      have hmag_nn : 0 ≤ n.mantissa.toInt := (mantissa_sign n).2 hneg
-      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := mantissa_natAbs_le_maxRep n hn
+      have hmag_nn : 0 ≤ n.mantissa.toInt := (Number.mantissa_sign n).2 hneg
+      have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le_maxRep n hn
       rw [hneg] at hok
       simp only [Bool.false_eq_true, if_false] at hok
       rw [if_pos hexp0, if_neg (by omega : ¬ n.exponent ≥ 0)] at hok
@@ -641,7 +641,7 @@ lemma Number.to_rep_upward_ceil (n : Number) (r : Int64)
         rw [hspdef]; exact shift_fst_eq n.mantissa n.exponent Guard.new hmag_nn
       have hsp_nn : 0 ≤ sp.1.toInt := by rw [hDf]; exact Int.ediv_nonneg hmag_nn (by positivity)
       have hval : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent :=
-        (mantissa_mul_exponent_eq_toRat n hn).symm
+        (Number.mantissa_mul_exponent_eq_toRat n hn).symm
       have hexp_pow : (10 : ℚ) ^ n.exponent = ((10 : ℚ) ^ k)⁻¹ := by
         rw [show n.exponent = -(k : ℤ) from by omega, zpow_neg, zpow_natCast]
       set frac : ℚ := ((n.mantissa.toInt % 10 ^ k : ℤ) : ℚ) / 10 ^ k with hfrac_def

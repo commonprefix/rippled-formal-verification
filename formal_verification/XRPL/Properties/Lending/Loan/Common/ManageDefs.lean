@@ -131,7 +131,7 @@ lemma Vault.balances_lawful (v : Vault) (aa' ad' ar' lu' yu' : Number)
   obtain ⟨han, hdn, hrn, hln, hyn⟩ := hn
   obtain ⟨ha, hd, hr, hl, hy⟩ := hnn
   have hz : ∀ n : Number, n.isNormalized → 0 ≤ n.toRat → Number.zero.operator_le n = true := fun n hn h =>
-    (operator_le_iff _ _ Number.zero_isNormalized hn).mpr (by rw [Number.toRat_zero]; exact h)
+    (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mpr (by rw [Number.toRat_zero]; exact h)
   have hwf := v.wf
   have hvalid := v.valid
   refine RawVault.to_lawful_ok_of ?_ ?_
@@ -149,9 +149,9 @@ lemma Vault.balances_lawful (v : Vault) (aa' ad' ar' lu' yu' : Number)
       yieldUnrealized_nonneg := hz _ hyn hy
       empty_shares := fun h => ⟨(Number.toRat_eq_zero_iff_eq_zero han).mp (hempty h).1,
         (Number.toRat_eq_zero_iff_eq_zero hdn).mp (hempty h).2⟩
-      lossUnrealized_le := (operator_le_iff _ _ hln hdn).mpr hlu
+      lossUnrealized_le := (Number.operator_le_iff _ _ hln hdn).mpr hlu
       assetsDeployed_representable := hrep
-      assetsReserved_le := (operator_le_iff _ _ hrn hdn).mpr har
+      assetsReserved_le := (Number.operator_le_iff _ _ hrn hdn).mpr har
       assetsAvailable_representable := haar
       assetsAvailable_onGrid := Vault.onGrid_clause v aa' han ha haag }
 
@@ -193,7 +193,7 @@ lemma Loan.defaultedLoan_lawful (loan : Loan) (broker' : LoanBroker)
 
 /-- A normalized value that is not below zero has a sign that is not negative. -/
 lemma Number.signum_nonneg_of_toRat (n : Number) (hn : n.isNormalized) (h : 0 ≤ n.toRat) : 0 ≤ n.signum := by
-  rw [signum_eq n hn]
+  rw [Number.signum_eq n hn]
   split_ifs <;> first | omega | linarith
 
 /-- Adding the canonical zero leaves a balance as it is. -/

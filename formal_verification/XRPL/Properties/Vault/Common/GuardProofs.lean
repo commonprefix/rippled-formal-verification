@@ -72,7 +72,7 @@ lemma Vault.isInsolvent_iff_proof (v : Vault) :
   unfold RawVault.toExact
   simp only [Bool.and_eq_true, decide_eq_true_eq]
   rw [Number.toRat_eq_zero_iff.symm, Number.toRat_eq_zero_iff.symm,
-    signum_eq_one_iff v.sharesTotal v.wf.sharesTotal_norm]
+    Number.signum_eq_one_iff v.sharesTotal v.wf.sharesTotal_norm]
   have hcast : ((v.sharesTotal.toRat.num.toNat : ℕ) : ℚ) = v.sharesTotal.toRat :=
     RawVault.WF.toExact_sharesTotal v.toRawVault v.wf
   constructor

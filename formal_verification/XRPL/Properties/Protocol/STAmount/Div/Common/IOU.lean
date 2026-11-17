@@ -20,10 +20,10 @@ lemma from_rep_RoundsWithin_anyMode (m : Int64) (e : Int) (mode : rounding_mode)
   cases mode with
   | to_nearest =>
     exact RoundsWithin_mono v _ (5 / (2 ^ 63 + 7 : ℚ)) (10 / (2 ^ 63 + 2 : ℚ)) .to_nearest
-      (from_rep_rounds_to_nearest m e v hok hv_ne) (by norm_num)
-  | downward => exact from_rep_rounds_downward m e v hok hv_ne
-  | upward => exact from_rep_rounds_upward m e v hok hv_ne
-  | towards_zero => exact from_rep_rounds_towards_zero m e v hok hv_ne
+      (Number.from_rep_rounds_to_nearest m e v hok hv_ne) (by norm_num)
+  | downward => exact Number.from_rep_rounds_downward m e v hok hv_ne
+  | upward => exact Number.from_rep_rounds_upward m e v hok hv_ne
+  | towards_zero => exact Number.from_rep_rounds_towards_zero m e v hok hv_ne
 
 /-- Shared `IOUAmount.normalize` decomposition facts for a 17-to-18-digit signed mantissa: the exact
 19-digit re-lift `v` (`from_rep`) and its 16-digit re-round (`ofNumber`). -/
@@ -51,7 +51,7 @@ lemma IOUAmount.normalize_vfacts (m : Int64) (e : Int) (mode : rounding_mode) (r
       have heq : m.toInt.natAbs.toUInt64.toNat = m.toInt.natAbs := UInt64.toNat_ofNat_of_lt hb
       intro h; rw [h] at heq; simp at heq; omega
     have hv_norm : v.isNormalized :=
-      normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
+      Number.normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
     have hv_mant := hv_norm.mantissaBounds_nat hv_ne
     have hv_exp_lo : minExponent ≤ v.exponent_ := by
       rcases hv_norm with hz | ⟨_, _, _, hlo, _⟩

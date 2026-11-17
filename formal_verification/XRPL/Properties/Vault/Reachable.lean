@@ -1,5 +1,6 @@
 import XRPL.Properties.Vault.Common.ReachableDefs
 import XRPL.Properties.Vault.Proofs.Reachable
+import XRPL.Properties.Vault.Proofs.ReachableTotal
 import XRPL.Properties.Vault.Proofs.MaxValueFits
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
 import XRPL.Properties.Vault.Proofs.ShareWorth

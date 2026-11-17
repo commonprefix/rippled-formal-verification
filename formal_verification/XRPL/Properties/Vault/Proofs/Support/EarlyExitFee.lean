@@ -29,7 +29,7 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
   rw [hu] at huv
   have hun0 : ¬ kTenthBipsPerUnity.toNumber.operator_eq Number.zero = true := by
     intro h
-    have := (operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
+    have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
     rw [huv, Number.toRat_zero] at this
     norm_num at this
   unfold tenthBipsOfValue at hok
@@ -41,14 +41,14 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
   · -- a zero product gives a zero fee
     have hpm : p.mantissa_ = 0 := by
       by_contra hpm
-      obtain ⟨hdm, hrm⟩ := operator_mul_operands_ne_zero hd hrn hp hpm
+      obtain ⟨hdm, hrm⟩ := Number.operator_mul_operands_ne_zero hd hrn hp hpm
       have h1 := Number.toRat_ne_zero_of_mantissa_ne_zero d hdm
       have h2 := Number.toRat_ne_zero_of_mantissa_ne_zero _ hrm
       rw [hrv] at h2
       exact (mul_ne_zero h1 h2) htz
     have hfm : fee.mantissa_ = 0 := by
       by_contra hfm
-      exact operator_div_numerator_ne_zero_sz _ _ _ _ hun0 hok hfm hpm
+      exact Number.operator_div_numerator_ne_zero_sz _ _ _ _ hun0 hok hfm hpm
     rw [Number.toRat_eq_zero_of_mantissa_zero fee hfm, htz]
     norm_num
   -- a positive product stays clear of the `Number` underflow, so both steps round up
@@ -70,10 +70,10 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at hrv; rw [← hrv] at hrpos; exact lt_irrefl _ hrpos
   have hpm : p.mantissa_ ≠ 0 := by
     intro hpm
-    have h := operator_mul_underflow_truth_small d rate.toNumber p .upward hd hrn hdm hrm hp hpm
+    have h := Number.operator_mul_underflow_truth_small d rate.toNumber p .upward hd hrn hdm hrm hp hpm
     rw [hrv, abs_of_pos (mul_pos hdpos hrpos)] at h
     linarith
-  obtain ⟨hplo, hphi⟩ := operator_mul_rounds_upward d rate.toNumber p hd hrn hp hpm
+  obtain ⟨hplo, hphi⟩ := Number.operator_mul_rounds_upward d rate.toNumber p hd hrn hp hpm
   change d.toRat * rate.toNumber.toRat ≤ p.toRat at hplo
   change p.toRat - d.toRat * rate.toNumber.toRat ≤ |d.toRat * rate.toNumber.toRat| * _ at hphi
   rw [hrv] at hplo hphi
@@ -82,7 +82,7 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h] at huv; norm_num at huv
   have hfm : fee.mantissa_ ≠ 0 := by
     intro hfm
-    have h := operator_div_underflow_truth_small p _ fee .upward hpn hun hpm hum hok hfm
+    have h := Number.operator_div_underflow_truth_small p _ fee .upward hpn hun hpm hum hok hfm
     rw [huv, abs_of_pos (div_pos (lt_of_lt_of_le (mul_pos hdpos hrpos) hplo) (by norm_num))] at h
     have : (10 : ℚ) ^ (-1005 : ℤ) ≤ p.toRat / 100000 := by
       rw [le_div_iff₀ (by norm_num)]
@@ -90,7 +90,7 @@ lemma tenthBipsOfValue_upward_bounds (d : Number) (rate : TenthBips32) (fee : Nu
         rw [show (100000 : ℚ) = 10 ^ (5 : ℤ) by norm_num, ← zpow_add₀ (by norm_num)]; norm_num
       linarith
     linarith
-  obtain ⟨hflo, hfhi⟩ := operator_div_rounds_upward p _ fee hpn hun hok hfm
+  obtain ⟨hflo, hfhi⟩ := Number.operator_div_rounds_upward p _ fee hpn hun hok hfm
   change p.toRat / kTenthBipsPerUnity.toNumber.toRat ≤ fee.toRat at hflo
   change fee.toRat - p.toRat / kTenthBipsPerUnity.toNumber.toRat ≤
     |p.toRat / kTenthBipsPerUnity.toNumber.toRat| * _ at hfhi

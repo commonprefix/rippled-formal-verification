@@ -73,7 +73,7 @@ private lemma LendingLedger.apply_redeem (l : LendingLedger) (hr : l.Reachable) 
   obtain ⟨sn, hsn, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical S .to_nearest
     (STAmount.Canonical.exactCanonical _ hc)
   have hlt' : (l.sharesOf h).operator_lt sn = false := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff _ _ hheldn hsnn, hsnv]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff _ _ hheldn hsnn, hsnv]
     exact not_lt.mpr hcover
   have hheld0 : 0 ≤ (l.sharesOf h).toRat := le_trans hSpos.le hcover
   obtain ⟨d, hd⟩ := Number.operator_sub_ok_of_normalized_cap (l.sharesOf h) sn .to_nearest hheldn hsnn
@@ -84,7 +84,7 @@ private lemma LendingLedger.apply_redeem (l : LendingLedger) (hr : l.Reachable) 
     have h' : (l.sharesOf h).toRat - sn.toRat = (((l.sharesOf h).toRat.num - sn.toRat.num : ℤ) : ℚ) := by
       rw [Int.cast_sub, Rat.coe_int_num_of_den_eq_one hwhole, Rat.coe_int_num_of_den_eq_one hsnd]
     rw [h']; exact Rat.den_intCast _
-  obtain ⟨hdv, -⟩ := operator_sub_exact_int _ _ _ hheldn hsnn hwhole hsnd
+  obtain ⟨hdv, -⟩ := Number.operator_sub_exact_int _ _ _ hheldn hsnn hwhole hsnd
     (Rat.num_natAbs_lt hdiff (by rw [hsnv]; linarith) (by rw [hsnv]; linarith)) hd
   refine ⟨d, ?_, by rw [hdv, hsnv]⟩
   rw [LendingLedger.apply_of_preflight hpre]
@@ -275,8 +275,8 @@ private lemma LendingLedger.sole_of_all {l : LendingLedger} (hr : l.Reachable) {
     l.isSoleShareholder h = true := by
   obtain ⟨hn, -⟩ := hr.sharesNonneg.sharesOf h
   unfold LendingLedger.isSoleShareholder
-  rw [Bool.and_eq_true, operator_ne_iff _ _ hn Number.zero_isNormalized,
-    operator_eq_iff _ _ hn l.vault.wf.sharesTotal_norm, Number.toRat_zero]
+  rw [Bool.and_eq_true, Number.operator_ne_iff _ _ hn Number.zero_isNormalized,
+    Number.operator_eq_iff _ _ hn l.vault.wf.sharesTotal_norm, Number.toRat_zero]
   exact ⟨ne_of_gt hpos, hall⟩
 
 /-- In a list of nonnegative values, two different entries add up to at most the sum. -/

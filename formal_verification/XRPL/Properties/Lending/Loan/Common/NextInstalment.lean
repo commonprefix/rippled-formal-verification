@@ -121,7 +121,7 @@ private lemma LoanState.buildTheoretical_below (pp rate : Number) (ir : TenthBip
   have h20 : (70 : ℚ) * 10 ^ 18 + 10 ^ 18 * 2 < 10 ^ 190 := by norm_num
   obtain ⟨ig, hig⟩ := Number.operator_sub_ok_of_abs vo tpo .to_nearest hvoN htpoN
     (by nlinarith) (by rw [abs_of_nonneg htpo0]; nlinarith)
-  have higN := operator_sub_isNormalized_to_nearest_sz _ _ _ hvoN htpoN hig
+  have higN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hvoN htpoN hig
   have higl : |ig.toRat| ≤ 72 * B := by
     have h1 := (Number.sub_near _ _ _ hvoN htpoN hig).abs_le
     have h2 := abs_sub vo.toRat tpo.toRat
@@ -147,7 +147,7 @@ private lemma LoanState.buildTheoretical_below (pp rate : Number) (ir : TenthBip
     linarith
   have hmfB : |mf.toRat| ≤ 8 * B := by linarith
   obtain ⟨i, hi⟩ := Number.operator_sub_ok_of_abs ig mf .to_nearest higN hmfN (by nlinarith) (by nlinarith)
-  have hiN := operator_sub_isNormalized_to_nearest_sz _ _ _ higN hmfN hi
+  have hiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ higN hmfN hi
   have hiB : |i.toRat| ≤ 80 * B := by
     have h1 := (Number.sub_near _ _ _ higN hmfN hi).abs_le
     have h3 : |ig.toRat - mf.toRat| ≤ 7992 / 100 * B := by linarith [abs_sub ig.toRat mf.toRat]
@@ -231,7 +231,7 @@ lemma Loan.scheduledComponents_computes (l : Loan) (hlo : -81 ≤ l.loanScale) (
   have hpp'N := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hpp'
   have hpp'0 := STAmount.roundToNumericType_some_nonneg _ _ _ _ _ hppN hpp0.le (Or.inr (Or.inl rfl)) hs hpp'
   have hpp'T : pp'.toRat < l.totalValueOutstanding.toRat := by
-    rw [← not_le, ← operator_le_iff _ _ l.wf.totalValueOutstanding_norm hpp'N]
+    rw [← not_le, ← Number.operator_le_iff _ _ l.wf.totalValueOutstanding_norm hpp'N]
     simpa using hle
   have bpp' : pp'.Below 17 := ⟨hpp'N, by rw [abs_of_nonneg hpp'0]; linarith⟩
   have hk0 : l.paymentRemaining - 1 ≠ 0 := by

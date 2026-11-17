@@ -161,38 +161,6 @@ class LeanVaultSet_test : public LeanSuite
         BEAST_EXPECTS(cppTer == tecPRECISION_LOSS, std::string("cpp=") + transToken(cppTer));
     }
 
-    // Finding (FV_M2_19, c++): VaultSet rounds an AssetsMaximum over 16 digits to the STAmount
-    // grid via associateAsset, so the stored cap differs from the submitted value.
-    void
-    testAssetsMaximumRoundedToGrid()
-    {
-        using namespace jtx;
-        testcase("AssetsMaximum over 16 digits is rounded on VaultSet");
-
-        Env env(*this);
-        Account const owner{"owner"}, issuer{"issuer"};
-        env.fund(XRP(1'000'000), owner, issuer);
-        env.close();
-        PrettyAsset const asset = issuer["USD"];
-        env.trust(asset(1'000), owner);
-        env(pay(issuer, owner, asset(200)));
-        env.close();
-
-        auto const vaultKeylet = createVault(env, owner, asset.raw());
-
-        Number const submitted{12'345'678'901'234'567LL, -1};  // 17 significant digits
-        auto tx = jtx::Vault::set({.owner = owner, .id = vaultKeylet.key});
-        tx[sfAssetsMaximum] = submitted;
-        env(tx);
-        env.close();
-
-        Number const stored = env.le(vaultKeylet)->at(sfAssetsMaximum);
-        BEAST_EXPECTS(
-            stored == submitted,
-            "AssetsMaximum rounded to grid: submitted=" + to_string(submitted) +
-                " stored=" + to_string(stored));
-    }
-
     // ---- Sweeps --------------------------------------------------------------------------------
 
     using SweepVaults = std::vector<Keylet>;
@@ -326,11 +294,6 @@ class LeanVaultSet_test : public LeanSuite
         testMaximumBelowTotalSweep(env, owner, all);
         testMaximumGridSweep(env, owner, ious);
         testMaximumRangeSweep(env, owner, all);
-
-        // Known discrepancies, each fails until the C++ code is fixed.
-        // clang-format off
-        // testAssetsMaximumRoundedToGrid();  // FV_M2_19_b: AssetsMaximum over 16 digits is rounded
-        // clang-format on
     }
 };
 

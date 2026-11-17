@@ -206,11 +206,12 @@ lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v 
     have hfN := computePaymentFactor_isNormalized rate₁ _ _ f hrN hNn' hf
     have hfN' := computePaymentFactor_isNormalized rate₁ _ _ f' hrN hNN' hf'
     have hfpos : 0 < f.toRat := by
-      have ht := Number.pos_of_roundsToRepresentable _ _ (operator_mul_rounded_to_nearest _ _ _ hp hfN hm₁) hpos₁
+      have ht := Number.pos_of_roundsToRepresentable _ _ (Number.operator_mul_rounded_to_nearest _ _ _ hp hfN hm₁) hpos₁
       by_contra hc; push Not at hc
       exact absurd ht (not_lt.mpr (mul_nonpos_of_nonneg_of_nonpos hpos.le hc))
     have hfpos' : 0 < f'.toRat := by
-      have ht := Number.pos_of_roundsToRepresentable _ _ (operator_mul_rounded_to_nearest _ _ _ hp hfN' hm₂) hpos₂
+      have ht := Number.pos_of_roundsToRepresentable _ _ (Number.operator_mul_rounded_to_nearest _ _ _ hp hfN' hm₂)
+        hpos₂
       by_contra hc; push Not at hc
       exact absurd ht (not_lt.mpr (mul_nonpos_of_nonneg_of_nonpos hpos.le hc))
     have hspd := loanPrincipalFromPeriodicPayment_div _ _ _ _ _ hN0 hz' hf' hsp
@@ -219,14 +220,14 @@ lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v 
     have hspN := Number.operator_div_isNormalized _ _ _ _ hppN hfN' hspd
     have hnpN := Number.operator_div_isNormalized _ _ _ _ hppN hfN hnpd
     -- the guard: the principal of `n + 1` payments is above the principal of `n`
-    have hfpN := operator_sub_isNormalized_to_nearest_sz _ _ _ hspN hnpN hfp
+    have hfpN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hspN hnpN hfp
     have hfp0 : 0 < props.firstPaymentPrincipal.toRat := (Number.signum_pos_iff_toRat hfpN).mp hfirst
     have hgt : np.toRat < sp.toRat := by
       by_contra hc; push Not at hc
       have := (Number.sub_near _ _ _ hspN hnpN hfp).nonpos (by linarith)
       linarith
     have hnp0 : 0 ≤ np.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg np _
-      (operator_div_rounded_to_nearest _ _ _ hppN hfN hnpd) (div_nonneg hpos₂.le hfpos.le)
+      (Number.operator_div_rounded_to_nearest _ _ _ hppN hfN hnpd) (div_nonneg hpos₂.le hfpos.le)
     have hflt : f'.toRat < f.toRat := by
       by_contra hc; push Not at hc
       -- the principal of `n` payments is far above the smallest Number, so it is not zero
@@ -235,7 +236,7 @@ lemma Loan.create_periodicPayment_count_antitone_proof (broker : LoanBroker) (v 
         (Number.mul_near _ _ _ hp hfN' hm₂).ge (ne_of_gt hpos₂) (by positivity)
       have hnpm : np.mantissa_ ≠ 0 := by
         intro h0
-        have hsmall := operator_div_underflow_truth_small _ _ _ .to_nearest hppN hfN (hm _ hpos₂) (hm _ hfpos)
+        have hsmall := Number.operator_div_underflow_truth_small _ _ _ .to_nearest hppN hfN (hm _ hpos₂) (hm _ hfpos)
           hnpd h0
         have hq : principal.toRat * (1 - ε) ≤ props.periodicPayment.toRat / f.toRat := by
           rw [le_div_iff₀ hfpos]

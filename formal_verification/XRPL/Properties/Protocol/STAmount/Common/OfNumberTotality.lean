@@ -256,7 +256,7 @@ lemma STAmount.ofNumber_integral_ok_of_le (nt : NumericType) (n : Number)
     STAmount.ofNumber_integral_reduce nt n mode hnt hnorm hneg hcap
   rw [heq]
   -- `to_rep` returns the whole value itself, which fits the type's bound
-  have hw := to_rep_within_one n mode r hnorm hr
+  have hw := Number.to_rep_within_one n mode r hnorm hr
   have hnum : (n.toRat.num : ℚ) = n.toRat := Rat.coe_int_num_of_den_eq_one hden
   have hreq : r.toInt = n.toRat.num := by
     have h1 : |((r.toInt - n.toRat.num : ℤ) : ℚ)| < 1 := by push_cast; rw [hnum]; exact hw
@@ -297,7 +297,7 @@ lemma STAmount.isRounded_integral_eq_false (nt : NumericType) (n : Number)
       · exact hsz
   obtain ⟨sn, hsn, hsv, hsnn⟩ := STAmount.toNumber_integral_small_exact s .to_nearest hic hsz
   have heq : sn.operator_eq n = true :=
-    (operator_eq_iff sn n hsnn hnorm).mpr (by rw [hsv, hval])
+    (Number.operator_eq_iff sn n hsnn hnorm).mpr (by rw [hsv, hval])
   unfold STAmount.isRounded STAmount.equalAfterNumberConvert
   simp [hs, hsn, heq, bind, Except.bind, pure, Except.pure]
 

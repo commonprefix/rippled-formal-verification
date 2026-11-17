@@ -12,6 +12,7 @@ import XRPL.Properties.Vault.Proofs.Support.PostSumExponent
 import XRPL.Properties.Vault.Proofs.Support.EarlyExitFee
 import XRPL.Properties.Vault.Proofs.Support.OfNumberFractional
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
+import XRPL.Properties.Vault.Proofs.Support.TotalStores
 
 /-! # Rounding a sum onto its grid
 
@@ -174,7 +175,7 @@ lemma sumRoundAndSubtract_downward_le (A c : Number) (e : Int) (nt : NumericType
     have hdle : d.toRat ≤ c.toRat ∨ d.toRat ≤ 0 := by
       by_cases hd0 : d.mantissa_ = 0
       · exact Or.inr (le_of_eq (Number.toRat_eq_zero_of_mantissa_zero d hd0))
-      · obtain ⟨n, hn, hv⟩ := operator_sub_rounded_downward sum' A d hs'n hA hd hd0
+      · obtain ⟨n, hn, hv⟩ := Number.operator_sub_rounded_downward sum' A d hs'n hA hd hd0
         exact Or.inl (by rw [hv]; linarith [Number.lower_le _ n hn])
     have hst := STAmount.ofNumber_downward_le_max .fractional d st hdn (by simp [NumericType.isIntegral]) h
     refine ⟨?_, fun m hm => STAmount.ofNumber_toNumber_exact _ d _ _ st m hdn
@@ -194,44 +195,15 @@ private lemma floor_grid_eq (s : ℚ) (k : ℤ) (b : ℤ) (h1 : (k : ℚ) * 10 ^
 /-- A sum of two values that are not negative is zero only when both are. -/
 private lemma add_zero_sum (x y r : Number) (mode : rounding_mode) (hx : x.isNormalized) (hy : y.isNormalized)
     (hx0 : 0 ≤ x.toRat) (hy0 : 0 ≤ y.toRat) (hok : x.operator_add y mode = .ok r) (hr0 : r.mantissa_ = 0) :
-    x.toRat + y.toRat = 0 := by
-  by_cases hy_guard : y.operator_eq Number.zero = true
-  · have hrx : r = x := by
-      unfold Number.operator_add at hok; rw [if_pos hy_guard] at hok; exact (Except.ok.inj hok).symm
-    rw [Number.toRat_eq_zero_of_mantissa_zero y (Number.mantissa_eq_zero_of_operator_eq_zero hy_guard), ← hrx,
-      Number.toRat_eq_zero_of_mantissa_zero r hr0]
-    ring
-  by_cases hx_guard : x.operator_eq Number.zero = true
-  · have hry : r = y := by
-      unfold Number.operator_add at hok; rw [if_neg hy_guard, if_pos hx_guard] at hok
-      exact (Except.ok.inj hok).symm
-    rw [Number.toRat_eq_zero_of_mantissa_zero x (Number.mantissa_eq_zero_of_operator_eq_zero hx_guard), ← hry,
-      Number.toRat_eq_zero_of_mantissa_zero r hr0]
-    ring
-  by_cases heq : x.operator_eq y.operator_neg = true
-  · have h := (operator_eq_iff _ _ hx (Number.operator_neg_isNormalized y hy)).mp heq
-    rw [Number.toRat_neg] at h
-    linarith
-  · exfalso
-    have hxm : x.mantissa_ ≠ 0 := fun h => hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
-    have hym : y.mantissa_ ≠ 0 := fun h => hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
-    have hsign : x.negative_ = y.negative_ := by
-      rw [Number.negative_false_of_nonneg x hx hx0, Number.negative_false_of_nonneg y hy hy0]
-    obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_anyMode x y r mode hx hy hxm hym
-      hsign heq hok
-    exact hspec.result_mant_ne hr0
+    x.toRat + y.toRat = 0 :=
+  Number.add_nonneg_zero_sum x y r mode hx hy hx0 hy0 hok hr0
 
 /-- A downward sum of two values that are not negative never lands below a representable value under the
 exact sum. -/
 private lemma add_downward_ge (x y r w : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (hx0 : 0 ≤ x.toRat) (hy0 : 0 ≤ y.toRat) (hok : x.operator_add y .downward = .ok r)
-    (hw : w.isNormalized) (hwt : w.toRat ≤ x.toRat + y.toRat) : w.toRat ≤ r.toRat := by
-  by_cases hr0 : r.mantissa_ = 0
-  · rw [Number.toRat_eq_zero_of_mantissa_zero r hr0]
-    linarith [add_zero_sum x y r _ hx hy hx0 hy0 hok hr0]
-  · obtain ⟨n, hn, hv⟩ := operator_add_rounded_downward x y r hx hy hok hr0
-    rw [hv]
-    exact Number.lower_tight _ n hn w hw hwt
+    (hw : w.isNormalized) (hwt : w.toRat ≤ x.toRat + y.toRat) : w.toRat ≤ r.toRat :=
+  Number.add_downward_floor x y r w hx hy hx0 hy0 hok hw hwt
 
 /-- A difference of two values that are not negative is exact, in every mode, when a `Number` holds it. -/
 private lemma sub_exact (x y r w : Number) (mode : rounding_mode) (hx : x.isNormalized) (hy : y.isNormalized)
@@ -257,7 +229,7 @@ private lemma sub_exact (x y r w : Number) (mode : rounding_mode) (hx : x.isNorm
     rw [Number.negative_false_of_nonneg x hx hx0, Number.operator_neg_negative_of_ne y hym,
       Number.negative_false_of_nonneg y hy hy0]
     decide
-  have h := operator_add_exact_diff_sign x y.operator_neg r mode hx hyn hxm hnm hdiff w hw
+  have h := Number.operator_add_exact_diff_sign x y.operator_neg r mode hx hyn hxm hnm hdiff w hw
     (by rw [hwt, Number.toRat_neg]; ring) hok
   rw [h, Number.toRat_neg]
   ring
@@ -486,10 +458,10 @@ lemma sumRoundAndSubtract_at_base (A c : Number) (b : Int) (st : STAmount) (a : 
     obtain ⟨_, -, h'⟩ := bind_ok_peel _ _ _ h'
     obtain ⟨E, hE, -⟩ := bind_ok_peel _ _ _ h'
     obtain ⟨s0, hs0, hE'⟩ := postSumExponent_reduces _ _ _ _ _ hE
-    have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
+    have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
     have hs0le : s0.toRat ≤ W.toRat :=
-      operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hW (by rw [hWq]; exact hroom)
-    have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
+      Number.operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hW (by rw [hWq]; exact hroom)
+    have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
     have hge := numberExponent_ge _ _ _ _ hE'
     rw [hE]
     by_contra hne
@@ -575,7 +547,7 @@ private lemma STAmount.ofNumber_frac_downward_neg_ge (d : Number) (st : STAmount
         = (if exp > cMaxOffset then .error .overflow
            else if exp < cMinOffset then .ok IOUAmount.zero
            else .ok ⟨-mant.toUInt64.toInt64, exp⟩) := by
-      rw [STAmount.iou_of_lt .downward h_int h_fit]
+      rw [STAmount.iou_eq .downward h_int]
       unfold IOUAmount.ofMantissaExp
       rw [h_sd]
       have := IOUAmount.normalize_canonical16 mant.toUInt64 exp true .downward hmtu_lo hmtu_hi
@@ -638,7 +610,7 @@ lemma sumRoundAndSubtract_downward_cover_nonneg (A c : Number) (e : Int) (nt : N
     have hdA : -A.toRat ≤ d.toRat := by
       by_cases hdm : d.mantissa_ = 0
       · rw [Number.toRat_eq_zero_of_mantissa_zero d hdm]; linarith
-      · obtain ⟨n, hn, hv⟩ := operator_sub_rounded_downward sum' A d hs'n hA hd hdm
+      · obtain ⟨n, hn, hv⟩ := Number.operator_sub_rounded_downward sum' A d hs'n hA hd hdm
         rw [hv]
         have := Number.lower_tight _ n hn A.operator_neg (Number.operator_neg_isNormalized A hA)
           (by rw [Number.toRat_neg]; linarith)

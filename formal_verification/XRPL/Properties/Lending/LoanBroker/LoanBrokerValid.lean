@@ -39,24 +39,24 @@ theorem RawLoanBroker.valid_iff_exact (rb : RawLoanBroker) (hwf : rb.WF) :
         coverRateMinimum_cap := ?_
         coverRateLiquidation_cap := ?_
         coverRates_coupled := ?_ }
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.debtTotal_norm).mp hv.debtTotal_nonneg
       rwa [Number.toRat_zero] at this
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.coverAvailable_norm).mp hv.coverAvailable_nonneg
       rwa [Number.toRat_zero] at this
     · intro hne
       have hne' : rb.debtMaximum ≠ Number.zero := fun h =>
         hne ((Number.toRat_eq_zero_iff_eq_zero hwf.debtMaximum_norm).mpr h)
-      exact (operator_le_iff _ _ hwf.debtTotal_norm hwf.debtMaximum_norm).mp (hv.debt_within_cap hne')
+      exact (Number.operator_le_iff _ _ hwf.debtTotal_norm hwf.debtMaximum_norm).mp (hv.debt_within_cap hne')
     · intro h0
       have h0' : rb.loanCount = 0 := (UInt32.toNat_eq_zero_iff _).mp h0
       show rb.debtTotal.toRat = 0
       exact (Number.toRat_eq_zero_iff_eq_zero hwf.debtTotal_norm).mpr (hv.empty_broker h0')
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.debtMaximum_norm).mp hv.debtMaximum_nonneg
       rwa [Number.toRat_zero] at this
-    · have := (operator_le_iff _ _ hwf.debtMaximum_norm debtMaximumCap_facts.2).mp hv.debtMaximum_cap
+    · have := (Number.operator_le_iff _ _ hwf.debtMaximum_norm debtMaximumCap_facts.2).mp hv.debtMaximum_cap
       rwa [debtMaximumCap_facts.1] at this
     · exact UInt16.le_iff_toNat_le.mp hv.managementFeeRate_cap
     · exact UInt32.le_iff_toNat_le.mp hv.coverRateMinimum_cap
@@ -77,23 +77,23 @@ theorem RawLoanBroker.valid_iff_exact (rb : RawLoanBroker) (hwf : rb.WF) :
         coverRateLiquidation_cap := ?_
         coverRates_coupled := ?_ }
     · have h : (0 : ℚ) ≤ rb.debtTotal.toRat := he.debtTotal_nonneg
-      exact (operator_le_iff _ _ Number.zero_isNormalized
+      exact (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.debtTotal_norm).mpr (by rw [Number.toRat_zero]; exact h)
     · have h : (0 : ℚ) ≤ rb.coverAvailable.toRat := he.coverAvailable_nonneg
-      exact (operator_le_iff _ _ Number.zero_isNormalized
+      exact (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.coverAvailable_norm).mpr (by rw [Number.toRat_zero]; exact h)
     · intro hne
       have hne' : rb.debtMaximum.toRat ≠ 0 := fun h =>
         hne ((Number.toRat_eq_zero_iff_eq_zero hwf.debtMaximum_norm).mp h)
-      exact (operator_le_iff _ _ hwf.debtTotal_norm hwf.debtMaximum_norm).mpr (he.debt_within_cap hne')
+      exact (Number.operator_le_iff _ _ hwf.debtTotal_norm hwf.debtMaximum_norm).mpr (he.debt_within_cap hne')
     · intro h0
       have h0' : rb.loanCount.toNat = 0 := (UInt32.toNat_eq_zero_iff _).mpr h0
       exact (Number.toRat_eq_zero_iff_eq_zero hwf.debtTotal_norm).mp (he.empty_broker h0')
     · have h : (0 : ℚ) ≤ rb.debtMaximum.toRat := he.debtMaximum_nonneg
-      exact (operator_le_iff _ _ Number.zero_isNormalized
+      exact (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.debtMaximum_norm).mpr (by rw [Number.toRat_zero]; exact h)
     · have h : rb.debtMaximum.toRat ≤ (2 : ℚ) ^ 63 - 1 := he.debtMaximum_cap
-      exact (operator_le_iff _ _ hwf.debtMaximum_norm debtMaximumCap_facts.2).mpr
+      exact (Number.operator_le_iff _ _ hwf.debtMaximum_norm debtMaximumCap_facts.2).mpr
         (by rw [debtMaximumCap_facts.1]; exact h)
     · exact UInt16.le_iff_toNat_le.mpr he.managementFeeRate_cap
     · exact UInt32.le_iff_toNat_le.mpr he.coverRateMinimum_cap

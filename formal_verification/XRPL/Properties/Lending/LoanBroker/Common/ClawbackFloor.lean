@@ -77,12 +77,13 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
   have hmg := minimumBrokerCover_onGrid _ _ _ _ _ ⟨by omega, by omega⟩ (fun h => (hint h).le) hmin
 
   -- the cap is exactly the cover above the minimum, a whole number of base units
-  obtain ⟨hmxp, hmxm⟩ := (signum_pos_iff mx).mp hsig
-  have hmxn : mx.isNormalized := operator_sub_isNormalized _ _ _ .downward lb.wf.coverAvailable_norm hmn hsub hmxm
+  obtain ⟨hmxp, hmxm⟩ := (Number.signum_pos_iff mx).mp hsig
+  have hmxn : mx.isNormalized := Number.operator_sub_isNormalized _ _ _ .downward lb.wf.coverAvailable_norm hmn hsub
+    hmxm
   have hmx0 : 0 ≤ mx.toRat := Number.toRat_nonneg_of_nonnegative mx hmxp
   -- the cap is the difference rounded down and is not negative, so the cover is at least the minimum cover
   have hmle : minimumCover.toRat ≤ lb.coverAvailable.toRat := by
-    obtain ⟨n, hn, hdn⟩ := operator_sub_rounded_downward _ _ _ lb.wf.coverAvailable_norm hmn hsub hmxm
+    obtain ⟨n, hn, hdn⟩ := Number.operator_sub_rounded_downward _ _ _ lb.wf.coverAvailable_norm hmn hsub hmxm
     have := Number.lower_le _ n hn
     linarith
   obtain ⟨hmxv, k, hkle, hk⟩ := LoanBroker.CoverFits.sub_downward_exact lb v hf _ _ hmg hm0 hmle hsub
@@ -126,7 +127,7 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
         simp only [LoanBroker.clawTarget, hza, Bool.false_eq_true, if_false]
         by_cases hgt : mag.operator_gt mx = true
         · rw [if_pos hgt] at hcm
-          have hlt : mx.toRat < a.toRat := hmagv ▸ (operator_gt_iff mag mx hmagn hmxn).mp hgt
+          have hlt : mx.toRat < a.toRat := hmagv ▸ (Number.operator_gt_iff mag mx hmagn hmxn).mp hgt
           have h := hcap hcm
           refine ⟨h.1, h.2.1, h.2.2.1, ?_, h.2.2.2.2⟩
           rw [h.2.2.2.1, min_eq_right]
@@ -134,7 +135,7 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
         · rw [if_neg hgt] at hcm
           rw [hcm] at hof ⊢
           have hle : a.toRat ≤ mx.toRat := by
-            rw [← hmagv]; exact not_lt.mp (by rw [← operator_gt_iff mag mx hmagn hmxn]; exact hgt)
+            rw [← hmagv]; exact not_lt.mp (by rw [← Number.operator_gt_iff mag mx hmagn hmxn]; exact hgt)
           refine ⟨hmagn, by rw [hmagv]; exact ha0, by rw [hmagv]; exact hle, ?_, ?_⟩
           · rw [hmagv, min_eq_left]
             exact hle.trans (le_of_eq hmxv)
@@ -165,9 +166,9 @@ lemma LoanBroker.roundedCoverClawback_floor (lb : LoanBroker) (v : Vault) (amoun
     obtain ⟨s, hs, hne'⟩ := postSumExponent_reduces _ _ _ _ _ hps
     obtain ⟨hdv, hdn⟩ := hcz.operator_neg.toNumber_exact dN hdN
     rw [STAmount.operator_neg_toRat] at hdv
-    have hr1 := operator_add_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hdn hs
+    have hr1 := Number.operator_add_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hdn hs
     rw [hdv, ← sub_eq_add_neg] at hr1
-    have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ lb.wf.coverAvailable_norm hdn hs
+    have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ lb.wf.coverAvailable_norm hdn hs
     -- the cover it leaves is between zero and the cover
     have hcle : claw'.toRat ≤ lb.coverAvailable.toRat := by rw [hcv]; linarith
     have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s _ hr1 (by linarith)

@@ -222,9 +222,9 @@ lemma Vault.deposit_success_lawful (v : Vault) (amountDeposit : STAmount) (isDon
   obtain ⟨assetsNum, sharesNum, s, aa', st', hnum, hsnum, hst, hs, haa, rfl⟩ :=
     Vault.adjustAssetsAndShares_ok_reduces v _ _ raw hadj
   obtain ⟨hv, hnorm⟩ := ha1.toNumber_exact assetsNum hnum
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
   have hAA : 0 ≤ v.assetsAvailable.toRat := v.exact.assetsAvailable_nonneg
-  have hsum : 0 ≤ s.toRat := operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs
+  have hsum : 0 ≤ s.toRat := Number.operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs
     (by rw [hv]; linarith)
   have haa0 := STAmount.roundToNumericType_nonneg _ _ _ hsn hsum haa
   have haan := STAmount.roundToNumericType_isNormalized _ _ _ _ _ haa
@@ -274,9 +274,9 @@ lemma Vault.deposit_success_lawful (v : Vault) (amountDeposit : STAmount) (isDon
     have hlo' : 0 ≤ v.sharesTotal.toRat.num + sharesNum.toRat.num := by exact_mod_cast hlo
     have hhi' : v.sharesTotal.toRat.num + sharesNum.toRat.num ≤ 9223372036854775807 := by exact_mod_cast hhi
     omega
-  obtain ⟨hstv, hstd⟩ := operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
+  obtain ⟨hstv, hstd⟩ := Number.operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
     hsden hbound hst
-  have hstn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsnorm hst
+  have hstn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsnorm hst
   have hst0 : 0 ≤ st'.toRat := by rw [hstv, hsv]; linarith [v.wf.sharesTotal_nonneg]
   refine Vault.cash_shares_update_lawful v aa' st' haan haa0 haar (Vault.onGrid_clause v aa' haan haa0 haak) hstn hst0
     hstd (by rw [hstv]; exact hsum') ?_

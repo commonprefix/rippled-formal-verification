@@ -39,11 +39,13 @@ def aT : STAmount := int64Amount 5005
 def aS : STAmount := iouAmount 1000000009899901 (-2)
 def aO : STAmount := int64Amount 2
 
-/-- The holder's balance: enough to cover the shares a positive clawback amount burns. -/
-def hold : STAmount := int64Amount 9223372036854775807
+/-- The holders' balances: part of the share total, enough to cover the shares the clawback burns. -/
+def holdT : STAmount := int64Amount 10000
+def holdS : STAmount := int64Amount 50000000000000
+def holdO : STAmount := int64Amount 1
 
 /-- A clawback's result, computed by the model. -/
-def run (v : Vault) (a : STAmount) (h : 0 ≤ a.toRat) : VaultWithAmounts :=
+def run (v : Vault) (a hold : STAmount) (h : 0 ≤ a.toRat) : VaultWithAmounts :=
   ((v.clawback a hold false h).run.toOption.bind Except.toOption).getD ⟨⟨a, a⟩, v⟩
 
 /-- The shares an amount prices to, then the worth of those shares, as the model computes them. -/
@@ -70,15 +72,17 @@ lemma Vault.clawback_sharesDestroyed_witness :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
       (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
       assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧ assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ :=
-  ⟨vT, 0, aT, hold, shares vT aT, worth vT (shares vT aT), false, number (worth vT (shares vT aT)), nav vT,
-    aT_nn, run vT aT aT_nn, vT_reach, by native_decide, STAmount.canonical_of_canonicalB _ (by native_decide),
+  ⟨vT, 0, aT, holdT, shares vT aT, worth vT (shares vT aT), false, number (worth vT (shares vT aT)), nav vT,
+    aT_nn, run vT aT holdT aT_nn, vT_reach, by native_decide, by native_decide,
+    STAmount.canonical_of_canonicalB _ (by native_decide),
     by native_decide, by native_decide, by native_decide, by native_decide, by native_decide,
     by native_decide, by native_decide⟩
 
@@ -87,15 +91,17 @@ lemma Vault.clawback_sharesDestroyed_upper_witness :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares sharesDestroyed assetsRecovered : STAmount)
       (waiveUnrealizedLoss : Bool) (assetsRecoveredNumber netAssetValue : Number) (hnn : 0 ≤ assets.toRat)
       (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧
+      v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧ assets.Canonical ∧
       assetsToSharesWithdraw v assets true waiveUnrealizedLoss = .ok sharesDestroyed ∧
       v.sharesToAssetsWithdraw sharesDestroyed waiveUnrealizedLoss = .ok assetsRecovered ∧
       assetsRecovered.toNumber .to_nearest = .ok assetsRecoveredNumber ∧
       assetsRecoveredNumber.operator_gt v.assetsAvailable = false ∧ assets.isZero = false ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=
-  ⟨vS, 0, aS, hold, shares vS aS, worth vS (shares vS aS), false, number (worth vS (shares vS aS)), nav vS,
-    aS_nn, run vS aS aS_nn, vS_reach, by native_decide, STAmount.canonical_of_canonicalB _ (by native_decide),
+  ⟨vS, 0, aS, holdS, shares vS aS, worth vS (shares vS aS), false, number (worth vS (shares vS aS)), nav vS,
+    aS_nn, run vS aS holdS aS_nn, vS_reach, by native_decide, by native_decide,
+    STAmount.canonical_of_canonicalB _ (by native_decide),
     by native_decide, by native_decide, by native_decide, by native_decide, by native_decide,
     by native_decide, by native_decide⟩
 
@@ -103,11 +109,12 @@ lemma Vault.clawback_sharesDestroyed_upper_witness :
 lemma Vault.clawback_assetsRecovered_upper_witness :
     ∃ (v : Vault) (t0 : UInt32) (assets holderShares : STAmount) (waiveUnrealizedLoss : Bool)
       (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ assets.Canonical ∧ assets.isZero = false ∧
+      Vault.Reachable v t0 ∧ holderShares.toRat ≤ v.toExact.sharesTotal ∧ assets.Canonical ∧
+      assets.isZero = false ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.clawback assets holderShares waiveUnrealizedLoss hnn).run = .ok (.ok r) ∧
       v.idealAssetsClawback waiveUnrealizedLoss r.shares.toRat < r.assets.toRat :=
-  ⟨vO, 0, aO, hold, false, aO_nn, run vO aO aO_nn, vO_reach,
+  ⟨vO, 0, aO, holdO, false, aO_nn, run vO aO holdO aO_nn, vO_reach, by native_decide,
     STAmount.canonical_of_canonicalB _ (by native_decide), by native_decide, fun _ => by native_decide,
     by native_decide, by native_decide⟩
 

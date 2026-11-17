@@ -1,4 +1,5 @@
 import XRPL.Properties.Protocol.IOUAmount.Add.Common.Proofs
+import XRPL.Properties.Protocol.IOUAmount.Common.Underflow
 import XRPL.Properties.Protocol.IOUAmount.Common.Defs
 
 /-! # Correctness of the `IOUAmount` addition -/
@@ -50,5 +51,13 @@ theorem IOUAmount.operator_add_rounds (x y result : IOUAmount) (mode : rounding_
     RoundsWithin result (x.toRat + y.toRat) mode IOUAmount.εDirected :=
   IOUAmount.operator_add_rounds_proof x y result mode hx hy
     (IOUAmount.operator_add_truth_ne_of_result x y result _ hx hy hok hresult) hok hresult
+
+/-- IOU addition returns zero only when the exact sum is below `10⁻⁸¹` in magnitude, the smallest positive IOU
+amount. -/
+theorem IOUAmount.operator_add_underflow_truth_small (x y result : IOUAmount) (mode : rounding_mode)
+    (hx : x.InRange16) (hy : y.InRange16)
+    (hok : IOUAmount.operator_add x y mode = .ok result) (hres0 : result.mantissa_ = 0) :
+    |x.toRat + y.toRat| < (10 : ℚ) ^ (-81 : ℤ) :=
+  IOUAmount.operator_add_underflow_truth_small_proof x y result mode hx hy hok hres0
 
 end XRPL.Model.Protocol

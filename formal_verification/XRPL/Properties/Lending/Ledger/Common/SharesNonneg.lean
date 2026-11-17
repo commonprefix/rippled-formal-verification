@@ -43,9 +43,9 @@ private lemma Number.sub_covered (held burned shares' : Number) (hh : held.isNor
   have hle : burned.toRat ≤ held.toRat := by
     by_contra hc
     push Not at hc
-    exact hlt ((operator_lt_iff _ _ hh hb).mpr hc)
-  exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hh hb hok,
-    Number.RoundsToRepresentable.nonneg_of_nonneg _ _ (operator_sub_rounded_to_nearest _ _ _ hh hb hok)
+    exact hlt ((Number.operator_lt_iff _ _ hh hb).mpr hc)
+  exact ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hh hb hok,
+    Number.RoundsToRepresentable.nonneg_of_nonneg _ _ (Number.operator_sub_rounded_to_nearest _ _ _ hh hb hok)
       (by linarith)⟩
 
 open XRPL.Model.SingleAssetVault in
@@ -80,8 +80,8 @@ private lemma LendingLedger.applyVault_holder_nonneg (l : LendingLedger) (hl : l
       have hmn : (_ : STAmount).toNumber .to_nearest = .ok _ := ‹_›
       obtain ⟨hmv, hmn'⟩ := hsc.toNumber_exact _ hmn
       obtain ⟨hhn, hh0⟩ := hl.sharesOf h
-      exact ⟨operator_add_isNormalized_to_nearest_sz _ _ _ hhn hmn' ‹_›,
-        operator_add_nonneg _ _ _ hhn hmn' ‹_› (by rw [hmv]; linarith)⟩
+      exact ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ hhn hmn' ‹_›,
+        Number.operator_add_nonneg _ _ _ hhn hmn' ‹_› (by rw [hmv]; linarith)⟩
     · cases hu
   | vaultWithdraw h amount =>
     simp only [LendingLedger.applyVault] at hu

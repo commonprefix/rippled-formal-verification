@@ -334,7 +334,7 @@ private lemma sumRoundAndSubtract_credit_core (A c : Number) (b : Int) (st : STA
 
   have hsumv : A.toRat + cr.toRat = sum'.toRat := by rw [hcrv, hstv, hdv]; ring
   have haav := Number.operator_add_exact_of_fits hA hcrn haa ⟨sum', hsum'n, hsumv.symm⟩
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
   have haa0 : 0 ≤ aa.toRat := by rw [haav, hsumv]; exact hs'0
   have hrep : STAmount.isRounded .fractional aa = false := by
     rw [STAmount.isRounded_eq_false_iff _ _ haan haa0, haav, hsumv, hsum'v]
@@ -391,7 +391,7 @@ lemma sumRoundAndSubtract_credit_floor (A c : Number) (b : Int) (st : STAmount) 
       · right
         obtain ⟨s0, hs0, hne⟩ := postSumExponent_reduces _ _ _ _ _ hE
         have hs0v := Number.operator_add_exact_of_fits hA hc hs0 ⟨w, hw, hwv⟩
-        have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
+        have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
         obtain ⟨-, hbig⟩ := numberExponent_frac_lower s0 b E hs0n (by rw [hs0v]; linarith) (by omega) hne hEb
         rw [hs0v] at hbig
         subst hGE
@@ -468,7 +468,7 @@ lemma sumRoundAndSubtract_credit_exact_integral (A c : Number) (b : Int) (nt : N
     exact_mod_cast this
   obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_of_int (kA + iv.toInt) (by omega)
   have haav := Number.operator_add_exact_of_fits hA hcrn haa ⟨w, hw, by rw [hwv, hsumv]⟩
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
   have haa0 : 0 ≤ aa.toRat := by rw [haav, hsumv]; exact_mod_cast (show (0 : ℤ) ≤ kA + iv.toInt by omega)
   have hden : aa.toRat.den = 1 := by rw [haav, hsumv]; exact Rat.den_intCast _
   have hrep := STAmount.isRounded_eq_false_of_integral_round nt aa a' hint haan haa0 hden ha'

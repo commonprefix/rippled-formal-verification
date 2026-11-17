@@ -493,7 +493,7 @@ lemma Loan.canPay_success_proof (loan : Loan) (paymentType : LoanPaymentType) (h
     rw [Bool.eq_false_iff]
     intro h
     apply hpo
-    have := (operator_eq_iff _ _ loan.wf.principalOutstanding_norm Number.zero_isNormalized).mp h
+    have := (Number.operator_eq_iff _ _ loan.wf.principalOutstanding_norm Number.zero_isNormalized).mp h
     rw [Number.toRat_zero] at this
     exact (Number.toRat_eq_zero_iff_eq_zero loan.wf.principalOutstanding_norm).mp this
   cases paymentType <;> simp_all [Loan.canPay]
@@ -568,12 +568,11 @@ lemma Loan.canManage_not_impaired_proof (loan : Loan) (now : UInt32) (h : loan.i
 /-- Proof body of the too-soon exit of `Loan.canManage_exits`. -/
 lemma Loan.canManage_default_too_soon_proof (loan : Loan) (now : UInt32)
     (hp : loan.isPending = false) (hd : loan.isDefault = false) (hr : loan.paymentRemaining ≠ 0)
-    (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat)
     (hsoon : now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat) :
     loan.canManage .default now = .ok .tecTOO_SOON := by
   have hsum : (loan.nextPaymentDueDate + loan.schedule.gracePeriod).toNat =
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat := by
-    rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by simp [maxTime] at hfit; omega)
+    rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by have := loan.gracePeriodEnd_lt; omega)
   have hle : ¬ now > loan.nextPaymentDueDate + loan.schedule.gracePeriod := by
     rw [gt_iff_lt, UInt32.lt_iff_toNat_lt, hsum]; omega
   simp [Loan.canManage, hp, hd, hr, hle, UInt32.addChecked_of_lt loan.gracePeriodEnd_lt, bind, Except.bind]
@@ -582,12 +581,11 @@ lemma Loan.canManage_default_too_soon_proof (loan : Loan) (now : UInt32)
 lemma Loan.canManage_success_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
     (hp : loan.isPending = false) (hd : loan.isDefault = false) (hr : loan.paymentRemaining ≠ 0)
     (himp : action = .impair → loan.isImpaired = false) (hunimp : action = .unimpair → loan.isImpaired = true)
-    (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat)
     (hlate : action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) :
     loan.canManage action now = .ok .tesSUCCESS := by
   have hsum : (loan.nextPaymentDueDate + loan.schedule.gracePeriod).toNat =
       loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat := by
-    rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by simp [maxTime] at hfit; omega)
+    rw [UInt32.toNat_add]; exact Nat.mod_eq_of_lt (by have := loan.gracePeriodEnd_lt; omega)
   cases action with
   | impair => simp [Loan.canManage, hp, hd, hr, himp rfl]
   | unimpair => simp [Loan.canManage, hp, hd, hr, hunimp rfl]
@@ -606,8 +604,7 @@ lemma Loan.canManage_error_codes_proof (loan : Loan) (action : LoanManageAction)
   split_ifs at hr <;> subst hr <;> simp
 
 /-- Proof body of `canManage_lawful_iff`. -/
-lemma Loan.canManage_lawful_iff_proof (loan : Loan) (action : LoanManageAction) (now : UInt32)
-    (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat) :
+lemma Loan.canManage_lawful_iff_proof (loan : Loan) (action : LoanManageAction) (now : UInt32) :
     loan.canManage action now = .ok .tesSUCCESS ↔
       loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
         (action = .impair → loan.isImpaired = false) ∧ (action = .unimpair → loan.isImpaired = true) ∧
@@ -629,10 +626,10 @@ lemma Loan.canManage_lawful_iff_proof (loan : Loan) (action : LoanManageAction) 
       exact absurd h (by decide)
     · subst ha
       by_contra hc
-      rw [Loan.canManage_default_too_soon_proof loan now hp' hd' hr hfit (by omega)] at h
+      rw [Loan.canManage_default_too_soon_proof loan now hp' hd' hr (by omega)] at h
       exact absurd h (by decide)
   · rintro ⟨hp, hd, hr, himp, hunimp, hlate⟩
-    exact Loan.canManage_success_proof loan action now hp hd hr himp hunimp hfit hlate
+    exact Loan.canManage_success_proof loan action now hp hd hr himp hunimp hlate
 
 /-- Proof body of the has-obligations exit of `Loan.canDelete_exits`. -/
 lemma Loan.canDelete_has_obligations_proof (loan : Loan) (hp : loan.isPending = false)

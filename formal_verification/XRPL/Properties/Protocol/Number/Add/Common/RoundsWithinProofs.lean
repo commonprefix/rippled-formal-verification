@@ -15,9 +15,9 @@ namespace XRPL.Model.Protocol
 
 set_option maxHeartbeats 1600000 in
 -- Two-sign × in-range/cusp leaf navigation with nlinarith over 2^63-scale literals.
-/-- `RoundsWithin` form of `operator_add_rounding_bound_same_sign_downward` for both operand signs: same-sign
+/-- `RoundsWithin` form of `Number.operator_add_rounding_bound_same_sign_downward` for both operand signs: same-sign
 addition rounding downward never lands above the true sum, with relative error at most `10/(2^63 + 2)`. -/
-theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
+theorem Number.operator_add_rounds_same_sign_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -26,7 +26,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
     RoundsWithin result (x.toRat + y.toRat) .downward (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_sbit, _, _, _, _⟩ :=
-    operator_add_algorithmic_facts_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_add_algorithmic_facts_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
       h_same_sign h_not_zero hok
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
@@ -341,7 +341,7 @@ theorem operator_add_rounds_same_sign_downward_proof (x y result : Number)
 
 /-- Addition rounding downward with a nonzero result never lands above the true sum and has relative error at most
 `11/(2^63 - 18)`, for both operand signs. -/
-theorem operator_add_rounds_downward_proof (x y result : Number)
+theorem Number.operator_add_rounds_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -350,12 +350,12 @@ theorem operator_add_rounds_downward_proof (x y result : Number)
     RoundsWithin result (x.toRat + y.toRat) .downward (11 / (2 ^ 63 - 18 : ℚ)) := by
   have h_dir : result.toRat ≤ x.toRat + y.toRat := by
     by_cases h_sign : x.negative_ = y.negative_
-    · exact (operator_add_rounds_same_sign_downward_proof x y result hx hy hx_mant_ne hy_mant_ne
+    · exact (Number.operator_add_rounds_same_sign_downward_proof x y result hx hy hx_mant_ne hy_mant_ne
         h_sign h_not_zero hok).1
-    · exact operator_add_rounding_bound_diff_sign_downward_dir x y result hx hy
+    · exact Number.operator_add_rounding_bound_diff_sign_downward_dir x y result hx hy
         hx_mant_ne hy_mant_ne h_sign h_not_zero hok hresult
   refine ⟨h_dir, ?_⟩
-  have h_bound := operator_add_rounding_bound_downward_tight x y result hx hy
+  have h_bound := Number.operator_add_rounding_bound_downward_tight x y result hx hy
     hx_mant_ne hy_mant_ne h_not_zero hok hresult
   have h_abs_eq : |result.toRat - (x.toRat + y.toRat)|
       = (x.toRat + y.toRat) - result.toRat := by
@@ -368,9 +368,9 @@ theorem operator_add_rounds_downward_proof (x y result : Number)
 
 set_option maxHeartbeats 1600000 in
 -- Two-sign × in-range/cusp leaf navigation with nlinarith over 2^63-scale literals.
-/-- `RoundsWithin` form of `operator_add_rounding_bound_same_sign_upward` for both operand signs: same-sign
+/-- `RoundsWithin` form of `Number.operator_add_rounding_bound_same_sign_upward` for both operand signs: same-sign
 addition rounding upward never lands below the true sum, with relative error at most `10/(2^63 + 2)`. -/
-theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
+theorem Number.operator_add_rounds_same_sign_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -379,7 +379,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
     RoundsWithin result (x.toRat + y.toRat) .upward (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_sbit, _, _, _, _⟩ :=
-    operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
       h_same_sign h_not_zero hok
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
@@ -685,7 +685,7 @@ theorem operator_add_rounds_same_sign_upward_proof (x y result : Number)
 
 /-- Addition rounding upward with a nonzero result never lands below the true sum and has relative error at most
 `11/(2^63 - 18)`, for both operand signs. -/
-theorem operator_add_rounds_upward_proof (x y result : Number)
+theorem Number.operator_add_rounds_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -694,12 +694,12 @@ theorem operator_add_rounds_upward_proof (x y result : Number)
     RoundsWithin result (x.toRat + y.toRat) .upward (11 / (2 ^ 63 - 18 : ℚ)) := by
   have h_dir : x.toRat + y.toRat ≤ result.toRat := by
     by_cases h_sign : x.negative_ = y.negative_
-    · exact (operator_add_rounds_same_sign_upward_proof x y result hx hy hx_mant_ne hy_mant_ne
+    · exact (Number.operator_add_rounds_same_sign_upward_proof x y result hx hy hx_mant_ne hy_mant_ne
         h_sign h_not_zero hok).1
-    · exact operator_add_rounding_bound_diff_sign_upward_dir x y result hx hy
+    · exact Number.operator_add_rounding_bound_diff_sign_upward_dir x y result hx hy
         hx_mant_ne hy_mant_ne h_sign h_not_zero hok hresult
   refine ⟨h_dir, ?_⟩
-  have h_bound := operator_add_rounding_bound_upward_tight x y result hx hy
+  have h_bound := Number.operator_add_rounding_bound_upward_tight x y result hx hy
     hx_mant_ne hy_mant_ne h_not_zero hok hresult
   have h_abs_eq : |result.toRat - (x.toRat + y.toRat)| = result.toRat - (x.toRat + y.toRat) :=
     abs_of_nonneg (by linarith)
@@ -707,21 +707,21 @@ theorem operator_add_rounds_upward_proof (x y result : Number)
   rw [show (RatValued.toRat result : ℚ) = result.toRat from rfl]
   exact le_of_lt h_bound
 
-/-- `RoundsWithin`-shaped restatement of `operator_add_rounding_bound_same_sign_towards_zero`. -/
-theorem operator_add_rounds_same_sign_towards_zero_proof (x y result : Number)
+/-- `RoundsWithin`-shaped restatement of `Number.operator_add_rounding_bound_same_sign_towards_zero`. -/
+theorem Number.operator_add_rounds_same_sign_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
     (hok : Number.operator_add x y .towards_zero = .ok result) :
     RoundsWithin result (x.toRat + y.toRat) .towards_zero (10 / (2 ^ 63 + 2 : ℚ)) := by
-  obtain ⟨h_dir, h_mag⟩ := operator_add_rounding_bound_same_sign_towards_zero x y result hx hy
+  obtain ⟨h_dir, h_mag⟩ := Number.operator_add_rounding_bound_same_sign_towards_zero x y result hx hy
     hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
   exact ⟨h_dir, le_of_lt h_mag⟩
 
 /-- Addition rounding towards zero with a nonzero result never exceeds the true sum's magnitude and has relative
 error at most `11/(2^63 - 18)`, for both operand signs. -/
-theorem operator_add_rounds_towards_zero_proof (x y result : Number)
+theorem Number.operator_add_rounds_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -730,12 +730,12 @@ theorem operator_add_rounds_towards_zero_proof (x y result : Number)
     RoundsWithin result (x.toRat + y.toRat) .towards_zero (11 / (2 ^ 63 - 18 : ℚ)) := by
   have h_dir : |result.toRat| ≤ |x.toRat + y.toRat| := by
     by_cases h_sign : x.negative_ = y.negative_
-    · exact (operator_add_rounds_same_sign_towards_zero_proof x y result hx hy hx_mant_ne hy_mant_ne
+    · exact (Number.operator_add_rounds_same_sign_towards_zero_proof x y result hx hy hx_mant_ne hy_mant_ne
         h_sign h_not_zero hok).1
-    · exact operator_add_rounding_bound_diff_sign_towards_zero_dir x y result hx hy
+    · exact Number.operator_add_rounding_bound_diff_sign_towards_zero_dir x y result hx hy
         hx_mant_ne hy_mant_ne h_sign h_not_zero hok hresult
   refine ⟨h_dir, ?_⟩
-  have h_bound := operator_add_rounding_bound_towards_zero_tight x y result hx hy
+  have h_bound := Number.operator_add_rounding_bound_towards_zero_tight x y result hx hy
     hx_mant_ne hy_mant_ne h_not_zero hok hresult
   have h_le : |x.toRat + y.toRat| - |RatValued.toRat result|
       ≤ |result.toRat - (x.toRat + y.toRat)| := by
@@ -746,27 +746,27 @@ theorem operator_add_rounds_towards_zero_proof (x y result : Number)
       _ = |result.toRat - (x.toRat + y.toRat)| := abs_sub_comm _ _
   linarith
 
-/-- `RoundsWithin`-shaped restatement of `operator_add_rounding_bound_same_sign_to_nearest`. -/
-theorem operator_add_rounds_same_sign_to_nearest_proof (x y result : Number)
+/-- `RoundsWithin`-shaped restatement of `Number.operator_add_rounding_bound_same_sign_to_nearest`. -/
+theorem Number.operator_add_rounds_same_sign_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
     (hok : Number.operator_add x y .to_nearest = .ok result) :
     RoundsWithin result (x.toRat + y.toRat) .to_nearest (5 / (2 ^ 63 + 7 : ℚ)) :=
-  operator_add_rounding_bound_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
+  Number.operator_add_rounding_bound_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
     h_same_sign h_not_zero hok
 
 /-- Addition rounding to nearest with a nonzero result has relative error at most `6/(2^63 - 3)`, for both operand
 signs, with no bound on the input magnitudes. -/
-theorem operator_add_rounds_to_nearest_proof (x y result : Number)
+theorem Number.operator_add_rounds_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
     (hok : Number.operator_add x y .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result (x.toRat + y.toRat) .to_nearest (6 / (2 ^ 63 - 3 : ℚ)) :=
-  operator_add_rounding_bound_to_nearest_tight x y result hx hy hx_mant_ne hy_mant_ne
+  Number.operator_add_rounding_bound_to_nearest_tight x y result hx hy hx_mant_ne hy_mant_ne
     h_not_zero hok hresult
 
 end XRPL.Model.Protocol

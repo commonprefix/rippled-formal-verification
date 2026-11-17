@@ -9,7 +9,7 @@ namespace XRPL.Model.Protocol
 
 /-- A nonzero `to_nearest` product of nonzero operands meets `MulFactsToNearest`: the exact product has magnitude
 `(zm + f)·10^ze'`, and `doRoundUp` on `zm` gives `|result|`. -/
-theorem operator_mul_algorithmic_facts_to_nearest (x y result : Number)
+theorem Number.operator_mul_algorithmic_facts_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -18,7 +18,7 @@ theorem operator_mul_algorithmic_facts_to_nearest (x y result : Number)
       MulFactsToNearest x y result .to_nearest zm ze' f g res_pos := by
   obtain ⟨zn, zm, ze', f, g, res, hzn, hzm_succ, hzm_le_maxRep, hf_nn, hf_lt, hfloor,
       habs, hf_rep, hsbit, h_rup, hok'⟩ :=
-    operator_mul_decompose x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok
+    Number.operator_mul_decompose x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok
   have hzm_ge : zm.toNat ≥ mantissaFloor := by omega
   have hres_mant_ne : res.mantissa_ ≠ 0 :=
     Number.normalize_mantissa_ne_zero_of_result hok' hresult

@@ -58,7 +58,8 @@ lemma Vault.adjustBalances_ne_notLawful (v : Vault) (change : Lending.PoolBalanc
   simp only [Vault.adjustBalances] at h
   unfold_ter at h
   walk_ok
-  all_goals simp_all [Number.operator_add_ne_notLawful, STAmount.roundToNumericType_ne_notLawful]
+  all_goals simp_all [Number.operator_add_ne_notLawful, STAmount.roundToNumericType_ne_notLawful,
+    RawVault.assetsTotal, STAmount.ofNumber_ne_notLawful]
 
 lemma Vault.adjustAssetsAndShares_ne_notLawful (v : Vault) (assets shares : STAmount) :
     (v.adjustAssetsAndShares assets shares).run ≠ .error .notLawful := by

@@ -209,13 +209,13 @@ lemma Loan.lateComponents_below {loan : Loan} {t : UInt32} (hre : loan.Reachable
   obtain ⟨gsp, hsp0, hsple⟩ := computeManagementFee_le _ _ _ _ _ hlrN hlr0 loan.broker.managementFeeRate_le hs hint
     hsplit
   have bsf := Number.Below.add bS bL hsf
-  have hsf0 := operator_add_nonneg _ _ _ bS.1 bL.1 hsf (by linarith)
+  have hsf0 := Number.operator_add_nonneg _ _ _ bS.1 bL.1 hsf (by linarith)
   have bsp : split.Below 98 := ⟨gsp.1, by
     rw [abs_of_nonneg hsp0]
     have : li.toRat ≤ 138 * (10 ^ 16 + 1) := by nlinarith
     linarith [show (2 : ℚ) * (138 * (10 ^ 16 + 1)) + 1 + 1 < 10 ^ 98 by norm_num]⟩
   have buf := Number.Below.add bsf bsp huf
-  have huf0 := operator_add_nonneg _ _ _ bsf.1 bsp.1 huf (by linarith)
+  have huf0 := Number.operator_add_nonneg _ _ _ bsf.1 bsp.1 huf (by linarith)
   refine ⟨b1.mono (by norm_num), b2.mono (by norm_num), b3.mono (by norm_num), ⟨huiN, ?_⟩,
     buf.mono (by norm_num), hm0, huf0⟩
   show |net.toRat| < 10 ^ 100
@@ -264,16 +264,17 @@ lemma Loan.latePayInstalments_due {loan : Loan} {t : UInt32} (hre : loan.Reachab
   have htdN : td.isNormalized := by
     unfold PaymentComponents.totalDue at htd
     obtain ⟨x, hx, htd⟩ := bind_ok_peel _ _ _ htd
-    exact operator_add_isNormalized_to_nearest_sz _ _ _
-      (operator_add_isNormalized_to_nearest_sz _ _ _ b1.1 b4.1 hx) b5.1 htd
+    exact Number.operator_add_isNormalized_to_nearest_sz _ _ _
+      (Number.operator_add_isNormalized_to_nearest_sz _ _ _ b1.1 b4.1 hx) b5.1 htd
   refine ⟨⟨l', v1, a, td, 1, i⟩, ?_, ?_⟩
   · simp only [ExceptT.run] at hu
     simp only [Loan.payInstalments, Loan.payInstalment]
     unfold_ter
     simp only [hchk, hdd, hlate, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hu, Loan.lateComponents_unimpaired,
-      hpc', htd, (operator_lt_eq_false_iff amount td hamt htdN).mpr hge, Loan.interestDue_unimpaired, hi, ha, hl']
+      hpc', htd, (Number.operator_lt_eq_false_iff amount td hamt htdN).mpr hge, Loan.interestDue_unimpaired, hi, ha,
+        hl']
   · obtain ⟨-, -, -, -, -, hfee, -⟩ := PaymentComponents.paidAmounts_ok_inv pc a ha
-    exact operator_add_nonneg _ _ _ b3.1 b5.1 hfee (by linarith)
+    exact Number.operator_add_nonneg _ _ _ b3.1 b5.1 hfee (by linarith)
 
 /-- The parts of a full payment's instalment of a reachable loan are below `10^100`, and its two fee parts
 add up to at least zero. -/
@@ -329,10 +330,10 @@ lemma Loan.fullComponents_below {loan : Loan} {t : UInt32} (hre : loan.Reachable
     rw [abs_of_nonneg hC0] at this
     linarith [show (2 : ℚ) * 10 ^ 97 + 1 + 1 < 10 ^ 98 by norm_num]⟩
   have bcfm := Number.Below.add bcf (bsp.mono (by norm_num)) hcfm
-  have hcfm0 := operator_add_nonneg _ _ _ bcf.1 bsp.1 hcfm (by linarith)
+  have hcfm0 := Number.operator_add_nonneg _ _ _ bcf.1 bsp.1 hcfm (by linarith)
   have buf := Number.Below.sub bcfm (bsM.mono (by norm_num)) huf
   have hufge : -state.managementFeeDue.toRat ≤ uf.toRat := by
-    have := rn_ge (operator_sub_rounded_to_nearest _ _ _ bcfm.1 bsM.1 huf) state.managementFeeDue.operator_neg
+    have := rn_ge (Number.operator_sub_rounded_to_nearest _ _ _ bcfm.1 bsM.1 huf) state.managementFeeDue.operator_neg
       (Number.operator_neg_isNormalized _ bsM.1) (by rw [Number.toRat_neg]; linarith)
     rwa [Number.toRat_neg] at this
   refine ⟨btr.mono (by norm_num), bsP.mono (by norm_num), bsM.mono (by norm_num), bui.mono (by norm_num),
@@ -373,15 +374,15 @@ lemma Loan.fullPayInstalments_due {loan : Loan} {t : UInt32} (hre : loan.Reachab
   have htdN : td.isNormalized := by
     unfold PaymentComponents.totalDue at htd
     obtain ⟨x, hx, htd⟩ := bind_ok_peel _ _ _ htd
-    exact operator_add_isNormalized_to_nearest_sz _ _ _
-      (operator_add_isNormalized_to_nearest_sz _ _ _ b1.1 b4.1 hx) b5.1 htd
+    exact Number.operator_add_isNormalized_to_nearest_sz _ _ _
+      (Number.operator_add_isNormalized_to_nearest_sz _ _ _ b1.1 b4.1 hx) b5.1 htd
   refine ⟨⟨l', v1, a, td, 1, i⟩, ?_, ?_⟩
   · simp only [ExceptT.run] at hu
     simp only [Loan.payInstalments, Loan.payInstalment]
     unfold_ter
     simp only [hchk, hdd, hnl, Bool.false_eq_true, ↓reduceIte, h1, hu, Loan.fullComponents_unimpaired, hpc', htd,
-      (operator_lt_eq_false_iff amount td hamt htdN).mpr hge, Loan.interestDue_unimpaired, hi, ha, hl']
+      (Number.operator_lt_eq_false_iff amount td hamt htdN).mpr hge, Loan.interestDue_unimpaired, hi, ha, hl']
   · obtain ⟨-, -, -, -, -, hfee, -⟩ := PaymentComponents.paidAmounts_ok_inv pc a ha
-    exact operator_add_nonneg _ _ _ b3.1 b5.1 hfee hf0
+    exact Number.operator_add_nonneg _ _ _ b3.1 b5.1 hfee hf0
 
 end XRPL.Model.Lending

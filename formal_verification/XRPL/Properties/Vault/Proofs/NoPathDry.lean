@@ -50,8 +50,8 @@ private lemma Vault.Reachable.size_facts (v : Vault) (t0 : UInt32) (hr : Vault.R
 /-- On a reachable vault the shares an amount within the Open limit names never overflow. -/
 private lemma Vault.Reachable.assetsToSharesWithdraw_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (X : STAmount) (w : Bool) (hX : X.CanonicalOrZero) (hX0 : 0 ≤ X.toRat)
-    (hXl : X.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) :
-    assetsToSharesWithdraw v X true w ≠ .error .overflow := by
+    (hXl : X.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) {err : Error} (hov : isOverflow err = true) :
+    assetsToSharesWithdraw v X true w ≠ .error err := by
   have hz := Vault.Reachable.openZone v t0 hr
   intro h
   unfold assetsToSharesWithdraw at h
@@ -73,9 +73,11 @@ private lemma Vault.Reachable.assetsToSharesWithdraw_ne_overflow (v : Vault) (t0
   obtain ⟨hxv, hxnn⟩ := hX.toNumber_exact xn hxn
   rw [hxn] at h
   simp only at h
+  have hSl : |v.sharesTotal.toRat| ≤ 10 ^ 17 := by rw [abs_of_nonneg hS0]; linarith
+  have hxl : |xn.toRat| ≤ 10 ^ 17 := by rw [hxv, abs_of_nonneg hX0]; nlinarith
   have h200 : (10 : ℚ) ^ 17 < 10 ^ (200 : ℤ) := by norm_num
   obtain ⟨P, hP⟩ := Number.operator_mul_ok_of_size v.sharesTotal xn .to_nearest v.wf.sharesTotal_norm hxnn
-    (by rw [abs_of_nonneg hS0]; linarith) (by rw [hxv, abs_of_nonneg hX0]; nlinarith)
+    (by linarith) (by linarith)
     (fun hm => by
       rw [abs_of_nonneg hS0]
       exact le_trans (zpow_le_one_of_nonpos₀ (by norm_num) (by norm_num)) (hS1 hm))
@@ -86,39 +88,40 @@ private lemma Vault.Reachable.assetsToSharesWithdraw_ne_overflow (v : Vault) (t0
       exact le_trans (zpow_le_zpow_right₀ (by norm_num) (by norm_num)) (STAmount.CanonicalOrZero.abs_ge X hX hm'))
   rw [hP] at h
   simp only at h
-  cases hQ : P.operator_div v.assetsAvailable .to_nearest with
-  | error e => rw [hQ] at h; cases h; exact Number.operator_div_ne_overflow _ _ _ hQ
-  | ok Q =>
-    rw [hQ] at h
+  obtain ⟨Q, hQ⟩ := Number.mul_div_ok _ _ v.assetsAvailable P .to_nearest v.wf.sharesTotal_norm hxnn
+    v.wf.assetsAvailable_norm hSl hxl
+    (by rw [abs_of_nonneg hA0]; exact le_trans (zpow_le_zpow_right₀ (by norm_num) (by omega)) hAb) hP
+  rw [hQ] at h
+  simp only at h
+  obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.sharesTotal_norm hxnn v.wf.assetsAvailable_norm
+    hS0 (by rw [hxv]; exact hX0) hApos hP hQ
+  cases hT : Q.truncate with
+  | error e => rw [hT] at h; cases h; exact Number.truncate_ne_overflow _ hov hT
+  | ok T =>
+    rw [hT] at h
     simp only at h
-    obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.sharesTotal_norm hxnn v.wf.assetsAvailable_norm
-      hS0 (by rw [hxv]; exact hX0) hApos hP hQ
-    cases hT : Q.truncate with
-    | error e => rw [hT] at h; cases h; exact Number.truncate_ne_overflow _ hT
-    | ok T =>
-      rw [hT] at h
-      simp only at h
-      obtain ⟨hTv, -⟩ := Number.truncate_floor Q T hQn (Number.negative_false_of_nonneg Q hQn hQ0) hT
-      have hTn := Number.truncate_isNormalized hQn hT
-      refine STAmount.ofNumber_ne_overflow .int64 T .to_nearest hTn ?_ h
-      -- the quotient is at most `9·10^15` shares: a share is worth at least a base unit
-      have hq : v.sharesTotal.toRat * xn.toRat / v.assetsAvailable.toRat ≤ 9 * 10 ^ 15 := by
-        rw [div_le_iff₀ hApos, hxv]
-        calc v.sharesTotal.toRat * X.toRat ≤ v.sharesTotal.toRat * (9 * 10 ^ 15 * 10 ^ v.baseExponent) :=
-              mul_le_mul_of_nonneg_left hXl' hS0
-          _ = 9 * 10 ^ 15 * (v.sharesTotal.toRat * 10 ^ v.baseExponent) := by ring
-          _ ≤ 9 * 10 ^ 15 * v.assetsAvailable.toRat := by nlinarith
-      have hfl0 : (0 : ℚ) ≤ ⌊Q.toRat⌋ := by exact_mod_cast Int.floor_nonneg.mpr hQ0
-      have hfl := Int.floor_le Q.toRat
-      rw [hTv, abs_of_nonneg hfl0]
-      have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
-      nlinarith
+    obtain ⟨hTv, -⟩ := Number.truncate_floor Q T hQn (Number.negative_false_of_nonneg Q hQn hQ0) hT
+    have hTn := Number.truncate_isNormalized hQn hT
+    refine STAmount.ofNumber_ne_overflow .int64 T .to_nearest hTn ?_ hov h
+    -- the quotient is at most `9·10^15` shares: a share is worth at least a base unit
+    have hq : v.sharesTotal.toRat * xn.toRat / v.assetsAvailable.toRat ≤ 9 * 10 ^ 15 := by
+      rw [div_le_iff₀ hApos, hxv]
+      calc v.sharesTotal.toRat * X.toRat ≤ v.sharesTotal.toRat * (9 * 10 ^ 15 * 10 ^ v.baseExponent) :=
+            mul_le_mul_of_nonneg_left hXl' hS0
+        _ = 9 * 10 ^ 15 * (v.sharesTotal.toRat * 10 ^ v.baseExponent) := by ring
+        _ ≤ 9 * 10 ^ 15 * v.assetsAvailable.toRat := by nlinarith
+    have hfl0 : (0 : ℚ) ≤ ⌊Q.toRat⌋ := by exact_mod_cast Int.floor_nonneg.mpr hQ0
+    have hfl := Int.floor_le Q.toRat
+    rw [hTv, abs_of_nonneg hfl0]
+    have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
+    nlinarith
 
 /-- On a reachable vault the price of a share amount whose worth is at most `10^17` never overflows. -/
 private lemma Vault.Reachable.sharesToAssetsWithdraw_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (sh : STAmount) (w : Bool) (hsh : sh.CanonicalOrZero) (hs0 : 0 ≤ sh.toRat) (hsl : sh.toRat ≤ 10 ^ 17)
-    (hq : v.assetsAvailable.toRat * sh.toRat / v.sharesTotal.toRat ≤ 10 ^ 17) :
-    v.sharesToAssetsWithdraw sh w ≠ .error .overflow := by
+    (hq : v.assetsAvailable.toRat * sh.toRat / v.sharesTotal.toRat ≤ 10 ^ 17) {err : Error}
+    (hov : isOverflow err = true) :
+    v.sharesToAssetsWithdraw sh w ≠ .error err := by
   have hz := Vault.Reachable.openZone v t0 hr
   intro h
   unfold Vault.sharesToAssetsWithdraw at h
@@ -144,31 +147,33 @@ private lemma Vault.Reachable.sharesToAssetsWithdraw_ne_overflow (v : Vault) (t0
   obtain ⟨hsv, hsnn⟩ := hsh.toNumber_exact sn hsn
   rw [hsn] at h
   simp only at h
+  have hAl : |v.assetsAvailable.toRat| ≤ 10 ^ 17 := by rw [abs_of_nonneg hA0]; nlinarith
+  have hsl' : |sn.toRat| ≤ 10 ^ 17 := by rw [hsv, abs_of_nonneg hs0]; exact hsl
   have h200 : (10 : ℚ) ^ 17 < 10 ^ (200 : ℤ) := by norm_num
   obtain ⟨P, hP⟩ := Number.operator_mul_ok_of_size v.assetsAvailable sn .to_nearest v.wf.assetsAvailable_norm hsnn
-    (by rw [abs_of_nonneg hA0]; nlinarith) (by rw [hsv, abs_of_nonneg hs0]; linarith)
+    (by linarith) (by linarith)
     (fun _ => by
       rw [abs_of_nonneg hA0]
       exact le_trans (zpow_le_zpow_right₀ (by norm_num) (by norm_num)) (le_trans hb10 hAb))
     (fun hm => STAmount.CanonicalOrZero.number_ge sh hsh sn hsv hm)
   rw [hP] at h
   simp only at h
-  cases hQ : P.operator_div v.sharesTotal .to_nearest with
-  | error e => rw [hQ] at h; cases h; exact Number.operator_div_ne_overflow _ _ _ hQ
-  | ok Q =>
-    rw [hQ] at h
-    simp only at h
-    obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.assetsAvailable_norm hsnn
-      v.wf.sharesTotal_norm hA0 (by rw [hsv]; exact hs0) hSpos hP hQ
-    have hne : STAmount.ofNumber v.numericType Q .to_nearest ≠ .error .overflow := by
-      refine STAmount.ofNumber_ne_overflow _ Q .to_nearest hQn ?_
-      rw [abs_of_nonneg hQ0]
-      rw [hsv] at hQl
-      have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
-      nlinarith
-    split at h
-    · rename_i e he; cases h; exact hne he
-    · cases h
+  obtain ⟨Q, hQ⟩ := Number.mul_div_ok _ _ v.sharesTotal P .to_nearest v.wf.assetsAvailable_norm hsnn
+    v.wf.sharesTotal_norm hAl hsl'
+    (by rw [abs_of_nonneg hS0]; exact le_trans (zpow_le_one_of_nonpos₀ (by norm_num) (by norm_num)) (hS1 hSm)) hP
+  rw [hQ] at h
+  simp only at h
+  obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.assetsAvailable_norm hsnn
+    v.wf.sharesTotal_norm hA0 (by rw [hsv]; exact hs0) hSpos hP hQ
+  have hne : STAmount.ofNumber v.numericType Q .to_nearest ≠ .error err := by
+    refine STAmount.ofNumber_ne_overflow _ Q .to_nearest hQn ?_ hov
+    rw [abs_of_nonneg hQ0]
+    rw [hsv] at hQl
+    have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
+    nlinarith
+  split at h
+  · rename_i e he; cases h; exact hne he
+  · cases h
 
 /-- The base grid and the share scale cancel: an IOU base unit is `10^-scale`, an integral vault has scale `0`. -/
 private lemma Vault.baseExponent_add_scale (v : Vault) : v.baseExponent + (v.scale.toNat : ℤ) = 0 := by
@@ -180,8 +185,8 @@ private lemma Vault.baseExponent_add_scale (v : Vault) : v.baseExponent + (v.sca
 /-- On a reachable vault the shares a deposit within the Open limit prices never overflow. -/
 private lemma Vault.Reachable.assetsToSharesDeposit_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (ra : STAmount) (hc : ra.Canonical) (hpos : 0 < ra.toRat)
-    (hl : ra.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) :
-    assetsToSharesDeposit v ra ≠ .error .overflow := by
+    (hl : ra.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) {err : Error} (hov : isOverflow err = true) :
+    assetsToSharesDeposit v ra ≠ .error err := by
   have hz := Vault.Reachable.openZone v t0 hr
   intro h
   unfold assetsToSharesDeposit at h
@@ -211,7 +216,7 @@ private lemma Vault.Reachable.assetsToSharesDeposit_ne_overflow (v : Vault) (t0 
     rw [hdn'] at h
     simp only at h
     cases hn2 : (⟨false, M, e1⟩ : Number).truncate with
-    | error e => rw [hn2] at h; cases h; exact Number.truncate_ne_overflow _ hn2
+    | error e => rw [hn2] at h; cases h; exact Number.truncate_ne_overflow _ hov hn2
     | ok n2 =>
       rw [hn2] at h
       simp only at h
@@ -237,7 +242,7 @@ private lemma Vault.Reachable.assetsToSharesDeposit_ne_overflow (v : Vault) (t0 
           exact_mod_cast Int.floor_nonneg.mpr h0
         rw [hn2v, hn1v, abs_of_nonneg hfl0]
         linarith
-      have hne := STAmount.ofNumber_ne_overflow .int64 n2 .to_nearest hn2n hbound
+      have hne := STAmount.ofNumber_ne_overflow .int64 n2 .to_nearest hn2n hbound hov
       split at h
       · rename_i e he; cases h; exact hne he
       · cases h
@@ -251,52 +256,55 @@ private lemma Vault.Reachable.assetsToSharesDeposit_ne_overflow (v : Vault) (t0 
     obtain ⟨hxv, hxnn⟩ := hX.toNumber_exact xn hxn
     rw [hxn] at h
     simp only at h
+    have hSl : |v.sharesTotal.toRat| ≤ 10 ^ 17 := by rw [abs_of_nonneg hS0]; linarith
+    have hxl : |xn.toRat| ≤ 10 ^ 17 := by rw [hxv, abs_of_nonneg hpos.le]; nlinarith
     have h200 : (10 : ℚ) ^ 17 < 10 ^ (200 : ℤ) := by norm_num
     obtain ⟨P, hP⟩ := Number.operator_mul_ok_of_size v.sharesTotal xn .to_nearest v.wf.sharesTotal_norm hxnn
-      (by rw [abs_of_nonneg hS0]; linarith) (by rw [hxv, abs_of_nonneg hpos.le]; nlinarith)
+      (by linarith) (by linarith)
       (fun hm => by
         rw [abs_of_nonneg hS0]
         exact le_trans (zpow_le_one_of_nonpos₀ (by norm_num) (by norm_num)) (hS1 hm))
       (fun hm => STAmount.CanonicalOrZero.number_ge ra hX xn hxv hm)
     rw [hP] at h
     simp only at h
-    cases hQ : P.operator_div v.assetsAvailable .to_nearest with
-    | error e => rw [hQ] at h; cases h; exact Number.operator_div_ne_overflow _ _ _ hQ
-    | ok Q =>
-      rw [hQ] at h
+    obtain ⟨Q, hQ⟩ := Number.mul_div_ok _ _ v.assetsAvailable P .to_nearest v.wf.sharesTotal_norm hxnn
+      v.wf.assetsAvailable_norm hSl hxl
+      (by rw [abs_of_nonneg hA0]; exact le_trans (zpow_le_zpow_right₀ (by norm_num) (by omega)) hAb) hP
+    rw [hQ] at h
+    simp only at h
+    obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.sharesTotal_norm hxnn v.wf.assetsAvailable_norm
+      hS0 (by rw [hxv]; exact hpos.le) hApos hP hQ
+    cases hT : Q.truncate with
+    | error e => rw [hT] at h; cases h; exact Number.truncate_ne_overflow _ hov hT
+    | ok T =>
+      rw [hT] at h
       simp only at h
-      obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.sharesTotal_norm hxnn v.wf.assetsAvailable_norm
-        hS0 (by rw [hxv]; exact hpos.le) hApos hP hQ
-      cases hT : Q.truncate with
-      | error e => rw [hT] at h; cases h; exact Number.truncate_ne_overflow _ hT
-      | ok T =>
-        rw [hT] at h
-        simp only at h
-        obtain ⟨hTv, -⟩ := Number.truncate_floor Q T hQn (Number.negative_false_of_nonneg Q hQn hQ0) hT
-        have hTn := Number.truncate_isNormalized hQn hT
-        have hq : v.sharesTotal.toRat * xn.toRat / v.assetsAvailable.toRat ≤ 9 * 10 ^ 15 := by
-          rw [div_le_iff₀ hApos, hxv]
-          calc v.sharesTotal.toRat * ra.toRat ≤ v.sharesTotal.toRat * (9 * 10 ^ 15 * 10 ^ v.baseExponent) :=
-                mul_le_mul_of_nonneg_left hl' hS0
-            _ = 9 * 10 ^ 15 * (v.sharesTotal.toRat * 10 ^ v.baseExponent) := by ring
-            _ ≤ 9 * 10 ^ 15 * v.assetsAvailable.toRat := by nlinarith
-        have hbound : |T.toRat| < 9 * 10 ^ 18 := by
-          have hfl0 : (0 : ℚ) ≤ ⌊Q.toRat⌋ := by exact_mod_cast Int.floor_nonneg.mpr hQ0
-          have hfl := Int.floor_le Q.toRat
-          rw [hTv, abs_of_nonneg hfl0]
-          have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
-          nlinarith
-        have hne := STAmount.ofNumber_ne_overflow .int64 T .to_nearest hTn hbound
-        split at h
-        · rename_i e he; cases h; exact hne he
-        · cases h
+      obtain ⟨hTv, -⟩ := Number.truncate_floor Q T hQn (Number.negative_false_of_nonneg Q hQn hQ0) hT
+      have hTn := Number.truncate_isNormalized hQn hT
+      have hq : v.sharesTotal.toRat * xn.toRat / v.assetsAvailable.toRat ≤ 9 * 10 ^ 15 := by
+        rw [div_le_iff₀ hApos, hxv]
+        calc v.sharesTotal.toRat * ra.toRat ≤ v.sharesTotal.toRat * (9 * 10 ^ 15 * 10 ^ v.baseExponent) :=
+              mul_le_mul_of_nonneg_left hl' hS0
+          _ = 9 * 10 ^ 15 * (v.sharesTotal.toRat * 10 ^ v.baseExponent) := by ring
+          _ ≤ 9 * 10 ^ 15 * v.assetsAvailable.toRat := by nlinarith
+      have hbound : |T.toRat| < 9 * 10 ^ 18 := by
+        have hfl0 : (0 : ℚ) ≤ ⌊Q.toRat⌋ := by exact_mod_cast Int.floor_nonneg.mpr hQ0
+        have hfl := Int.floor_le Q.toRat
+        rw [hTv, abs_of_nonneg hfl0]
+        have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
+        nlinarith
+      have hne := STAmount.ofNumber_ne_overflow .int64 T .to_nearest hTn hbound hov
+      split at h
+      · rename_i e he; cases h; exact hne he
+      · cases h
 
 /-- On a reachable vault the price of the shares a deposit issues never overflows, while their worth is at most
 `10^17`. -/
 private lemma Vault.Reachable.sharesToAssetsDeposit_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (sh : STAmount) (hshc : sh.IntegralCanonical) (hsht : sh.mNumericType = .int64) (hs0 : 0 ≤ sh.toRat)
-    (hsl : sh.toRat ≤ 10 ^ 17) (hq : v.assetsAvailable.toRat * sh.toRat / v.sharesTotal.toRat ≤ 10 ^ 17) :
-    sharesToAssetsDeposit v sh ≠ .error .overflow := by
+    (hsl : sh.toRat ≤ 10 ^ 17) (hq : v.assetsAvailable.toRat * sh.toRat / v.sharesTotal.toRat ≤ 10 ^ 17)
+    {err : Error} (hov : isOverflow err = true) :
+    sharesToAssetsDeposit v sh ≠ .error err := by
   have hz := Vault.Reachable.openZone v t0 hr
   intro h
   unfold sharesToAssetsDeposit at h
@@ -311,16 +319,16 @@ private lemma Vault.Reachable.sharesToAssetsDeposit_ne_overflow (v : Vault) (t0 
   · -- an empty vault prices the shares at one base unit each, exactly
     have hscale : (v.scale.toNat : ℤ) ≤ 10 := by have := v.baseExponent_add_scale; omega
     have hne : STAmount.checked v.numericType sh.mantissa (sh.exponent - (v.scale.toNat : ℤ)) false .to_nearest
-        ≠ .error .overflow := by
+        ≠ .error err := by
       have hexp : sh.exponent = 0 := hshc.offset_zero
       by_cases hint : v.numericType.isIntegral = true
       · rw [hexp, v.wf.scale_integral hint]
-        exact STAmount.checked_integral_ne_overflow _ hint _ _ _ hshm
+        exact STAmount.checked_integral_ne_overflow _ hint _ _ _ hshm hov
       · cases hnt : v.numericType with
         | integral => rw [hnt] at hint; exact absurd rfl hint
         | fractional =>
           refine STAmount.checked_fractional_ne_overflow _ _ _ _
-            (show sh.mValue.toNat < 2 ^ 63 by rw [maxRep_val] at hshm; omega) (fun _ => ?_)
+            (show sh.mValue.toNat < 2 ^ 63 by rw [maxRep_val] at hshm; omega) (fun _ => ?_) hov
           rw [hexp]
           unfold minExponent
           constructor <;> omega
@@ -341,31 +349,33 @@ private lemma Vault.Reachable.sharesToAssetsDeposit_ne_overflow (v : Vault) (t0 
     obtain ⟨hsv, hsnn⟩ := hsh.toNumber_exact sn hsn
     rw [hsn] at h
     simp only at h
+    have hAl : |v.assetsAvailable.toRat| ≤ 10 ^ 17 := by rw [abs_of_nonneg hA0]; nlinarith
+    have hsl' : |sn.toRat| ≤ 10 ^ 17 := by rw [hsv, abs_of_nonneg hs0]; exact hsl
     have h200 : (10 : ℚ) ^ 17 < 10 ^ (200 : ℤ) := by norm_num
     obtain ⟨P, hP⟩ := Number.operator_mul_ok_of_size v.assetsAvailable sn .to_nearest v.wf.assetsAvailable_norm
-      hsnn (by rw [abs_of_nonneg hA0]; nlinarith) (by rw [hsv, abs_of_nonneg hs0]; linarith)
+      hsnn (by linarith) (by linarith)
       (fun _ => by
         rw [abs_of_nonneg hA0]
         exact le_trans (zpow_le_zpow_right₀ (by norm_num) (by norm_num)) (le_trans hb10 hAb))
       (fun hm => STAmount.CanonicalOrZero.number_ge sh hsh sn hsv hm)
     rw [hP] at h
     simp only at h
-    cases hQ : P.operator_div v.sharesTotal .to_nearest with
-    | error e => rw [hQ] at h; cases h; exact Number.operator_div_ne_overflow _ _ _ hQ
-    | ok Q =>
-      rw [hQ] at h
-      simp only at h
-      obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.assetsAvailable_norm hsnn
-        v.wf.sharesTotal_norm hA0 (by rw [hsv]; exact hs0) hSpos hP hQ
-      have hne : STAmount.ofNumber v.numericType Q .to_nearest ≠ .error .overflow := by
-        refine STAmount.ofNumber_ne_overflow _ Q .to_nearest hQn ?_
-        rw [abs_of_nonneg hQ0]
-        rw [hsv] at hQl
-        have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
-        nlinarith
-      split at h
-      · rename_i e he; cases h; exact hne he
-      · cases h
+    obtain ⟨Q, hQ⟩ := Number.mul_div_ok _ _ v.sharesTotal P .to_nearest v.wf.assetsAvailable_norm hsnn
+      v.wf.sharesTotal_norm hAl hsl'
+      (by rw [abs_of_nonneg hS0]; exact le_trans (zpow_le_one_of_nonpos₀ (by norm_num) (by norm_num)) (hS1 hSm)) hP
+    rw [hQ] at h
+    simp only at h
+    obtain ⟨hQn, hQ0, hQl⟩ := Number.mul_div_facts _ _ _ P Q v.wf.assetsAvailable_norm hsnn
+      v.wf.sharesTotal_norm hA0 (by rw [hsv]; exact hs0) hSpos hP hQ
+    have hne : STAmount.ofNumber v.numericType Q .to_nearest ≠ .error err := by
+      refine STAmount.ofNumber_ne_overflow _ Q .to_nearest hQn ?_ hov
+      rw [abs_of_nonneg hQ0]
+      rw [hsv] at hQl
+      have : (1 + 1 / 10 ^ 18 : ℚ) ^ 2 ≤ 2 := by norm_num
+      nlinarith
+    split at h
+    · rename_i e he; cases h; exact hne he
+    · cases h
 
 /-- On a reachable vault the dust check of an amount at most `9·10^17` in size never reports an overflow. -/
 private lemma Vault.Reachable.checkDebitNotDust_ne_path_dry (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -380,20 +390,25 @@ private lemma Vault.Reachable.checkDebitNotDust_ne_path_dry (v : Vault) (t0 : UI
   have hrn : r.isNormalized := Number.operator_add_isNormalized_any _ _ r _ v.wf.assetsAvailable_norm
     (Number.operator_neg_isNormalized _ hn) hrs
   have hrl : |r.toRat| ≤ 10 ^ 18 := Number.abs_le_of_rounded r _
-    (operator_add_rounded_to_nearest _ _ r v.wf.assetsAvailable_norm (Number.operator_neg_isNormalized _ hn) hrs)
+    (Number.operator_add_rounded_to_nearest _ _ r v.wf.assetsAvailable_norm (Number.operator_neg_isNormalized _ hn) hrs)
     (by
       rw [Number.toRat_neg]
       calc |v.assetsAvailable.toRat + -amount.toRat| ≤ |v.assetsAvailable.toRat| + |-amount.toRat| :=
             abs_add_le _ _
         _ ≤ 10 ^ 18 := by rw [abs_neg]; linarith)
-  have hcash := STAmount.ofNumber_ne_overflow v.numericType v.assetsAvailable .to_nearest
-    v.wf.assetsAvailable_norm (by linarith)
-  have hrest := STAmount.ofNumber_ne_overflow v.numericType r .to_nearest hrn (by linarith)
+  have hcash : ∀ err, isOverflow err = true →
+      STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest ≠ .error err := fun _ =>
+    STAmount.ofNumber_ne_overflow v.numericType v.assetsAvailable .to_nearest v.wf.assetsAvailable_norm (by linarith)
+  have hrest : ∀ err, isOverflow err = true → STAmount.ofNumber v.numericType r .to_nearest ≠ .error err := fun _ =>
+    STAmount.ofNumber_ne_overflow v.numericType r .to_nearest hrn (by linarith)
   intro h
   simp only [Vault.checkDebitNotDust, bind, Except.bind, pure, Except.pure, tryCatch, tryCatchThe,
     MonadExceptOf.tryCatch, Except.tryCatch] at h
   walk_ok
-  all_goals (obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›; simp_all)
+  all_goals first
+    | exact hcash _ ‹_› ‹_›
+    | exact hrest _ ‹_› ‹_›
+    | simp_all
 
 /-- The shares a deposit within the Open limit issues on a reachable vault: a canonical count at most `10^17`, worth
 at most `10^17`. -/
@@ -465,7 +480,8 @@ private lemma Vault.Reachable.deposit_charge_clamp_ne_overflow (v : Vault) (t0 :
     (hl : ra.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) (sh c : STAmount) (b : Bool) (A : Number)
     (hs : assetsToSharesDeposit v ra = .ok sh) (hsz' : ¬ sh.isZero = true)
     (hp : sharesToAssetsDeposit v sh = .ok c) (hgt : c.operator_gt ra = .ok b) (hb : ¬ b = true)
-    (hat : v.assetsTotal = .ok A) : clampToSumExponent A c v.baseExponent ≠ .error .overflow := by
+    (hat : v.assetsTotal = .ok A) {err : Error} (hov : isOverflow err = true) :
+    clampToSumExponent A c v.baseExponent ≠ .error err := by
   have hz := Vault.Reachable.openZone v t0 hr
   have hmax := Vault.maxValue_fits_of_canonical v ra hc hty
   obtain ⟨hA0, hA9, -, -, -, -, -, hblo, hbhi⟩ := Vault.Reachable.size_facts v t0 hr
@@ -493,7 +509,7 @@ private lemma Vault.Reachable.deposit_charge_clamp_ne_overflow (v : Vault) (t0 :
       · exact hic.canonical (by rw [hct]; exact hmax (by rw [← hct]; exact hic.is_integral))
     · right; simp [STAmount.isZero, hz0]
   exact clampToSumExponent_ne_overflow _ c _ v.wf.assetsAvailable_norm hA17 hcc
-    (by rw [abs_of_nonneg hc0]; nlinarith) hbr.1 (by omega)
+    (by rw [abs_of_nonneg hc0]; nlinarith) hbr.1 (by omega) hov
 
 /-- On a reachable vault the share and charge computation of a deposit within the Open limit never overflows. -/
 private lemma Vault.Reachable.computeDeposit_ne_path_dry (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -514,27 +530,26 @@ private lemma Vault.Reachable.computeDeposit_ne_path_dry (v : Vault) (t0 : UInt3
   simp only [computeDeposit] at h
   unfold_ter at h
   walk_ok
-  all_goals (obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›)
   all_goals first
-    | exact Vault.Reachable.assetsToSharesDeposit_ne_overflow v t0 hr ra hc hpos hl ‹_›
-    | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹_›
-    | exact STAmount.operator_lt_ne_overflow _ _ ‹_›
+    | exact Vault.Reachable.assetsToSharesDeposit_ne_overflow v t0 hr ra hc hpos hl ‹isOverflow _ = true› ‹_›
+    | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹isOverflow _ = true› ‹_›
+    | exact STAmount.operator_lt_ne_overflow _ _ ‹isOverflow _ = true› ‹_›
     | (rw [hat'] at *; contradiction)
     | skip
   · -- the price of the issued shares
     obtain ⟨hshc, hsht, hs0, hsl, hq⟩ := Vault.Reachable.deposit_shares_facts v t0 hr ra _ hc hpos hl
       ‹assetsToSharesDeposit v ra = .ok _› (by simpa using ‹¬ STAmount.isZero _ = true›)
-    exact Vault.Reachable.sharesToAssetsDeposit_ne_overflow v t0 hr _ hshc hsht hs0 hsl hq ‹_›
+    exact Vault.Reachable.sharesToAssetsDeposit_ne_overflow v t0 hr _ hshc hsht hs0 hsl hq ‹isOverflow _ = true› ‹_›
   · -- the charge, at most the rounded amount, clamped onto the new total
     exact Vault.Reachable.deposit_charge_clamp_ne_overflow v t0 hr ra hc hpos hty hl _ _ _ _ ‹_› ‹_› ‹_› ‹_› ‹_›
-      ‹_› ‹_›
+      ‹_› ‹isOverflow _ = true› ‹_›
   · -- a donation clamps the rounded amount onto the new total
-    obtain ⟨A, hat, hcl⟩ : ∃ A, v.assetsTotal = .ok A ∧ clampToSumExponent A ra v.baseExponent = .error .overflow :=
-      ⟨_, ‹_›, ‹_›⟩
+    obtain ⟨A, err, hov, hat, hcl⟩ : ∃ A err, isOverflow err = true ∧ v.assetsTotal = .ok A ∧
+        clampToSumExponent A ra v.baseExponent = .error err := ⟨_, _, ‹_›, ‹_›, ‹_›⟩
     rw [hat', Except.ok.injEq] at hat
     subst hat
     exact clampToSumExponent_ne_overflow _ ra _ v.wf.assetsAvailable_norm hA17 (Or.inl hc)
-      (le_trans hra17 (by norm_num)) hbr.1 (by omega) hcl
+      (le_trans hra17 (by norm_num)) hbr.1 (by omega) hov hcl
 
 /-- Deposit on a reachable vault of a canonical amount of its asset within the Open limit -> never `tecPATH_DRY`. -/
 lemma Vault.Reachable.deposit_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -651,8 +666,8 @@ private lemma Vault.Reachable.computeWithdraw_ne_path_dry (v : Vault) (t0 : UInt
   cases amount with
   | vaultShares s =>
     have hsl : s.toRat ≤ v.sharesTotal.toRat := by rw [← hST]; exact hlim
-    have hne := Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr s w (Or.inl hc) hpos.le
-      (by linarith) (by
+    have hne : ∀ err, isOverflow err = true → v.sharesToAssetsWithdraw s w ≠ .error err := fun _ =>
+      Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr s w (Or.inl hc) hpos.le (by linarith) (by
         by_cases hS : v.sharesTotal.toRat = 0
         · rw [hS, div_zero]; norm_num
         have hSpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne hS0 (Ne.symm hS)
@@ -664,18 +679,17 @@ private lemma Vault.Reachable.computeWithdraw_ne_path_dry (v : Vault) (t0 : UInt
     simp only [computeWithdraw] at h
     unfold_ter at h
     walk_ok
-    all_goals (obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›; exact hne ‹_›)
+    all_goals exact hne _ ‹_› ‹_›
   | vaultAssets X =>
-    have hne := Vault.Reachable.assetsToSharesWithdraw_ne_overflow v t0 hr X w (Or.inl hc) hpos.le hlim
     intro h
     simp only [computeWithdraw] at h
     unfold_ter at h
     walk_ok
-    all_goals (obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›)
-    · exact hne ‹_›
+    · exact Vault.Reachable.assetsToSharesWithdraw_ne_overflow v t0 hr X w (Or.inl hc) hpos.le hlim
+        ‹isOverflow _ = true› ‹_›
     · obtain ⟨hshc, hs0, hsl, hq⟩ := Vault.Reachable.withdraw_shares_facts v t0 hr X _ w hc hpos hlim ‹_›
         (by simpa using ‹¬ STAmount.isZero _ = true›)
-      exact Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr _ w hshc hs0 hsl hq ‹_›
+      exact Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr _ w hshc hs0 hsl hq ‹isOverflow _ = true› ‹_›
 
 /-- On a reachable vault the price of a canonical share amount whose worth is at most `10^17` is a canonical amount
 between zero and `3·10^17`. -/
@@ -790,14 +804,14 @@ private lemma Vault.Reachable.withdraw_fee_ne_overflow (v : Vault) (t0 : UInt32)
     (hmax : v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat)
     (assets : STAmount) (hac : assets.CanonicalOrZero) (ha0 : 0 ≤ assets.toRat) (hal : assets.toRat ≤ 3 * 10 ^ 17)
     (aN : Number) (haN : assets.toNumber .to_nearest = .ok aN)
-    (hrate : ¬ (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = true) :
-    tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward ≠ .error .overflow ∧
+    (hrate : ¬ (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = true) {err : Error} (hov : isOverflow err = true) :
+    tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward ≠ .error err ∧
     ∀ fee, tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward = .ok fee →
-      aN.operator_sub fee .downward ≠ .error .overflow ∧
+      aN.operator_sub fee .downward ≠ .error err ∧
       ∀ pN, aN.operator_sub fee .downward = .ok pN →
-        STAmount.ofNumber v.numericType pN .downward ≠ .error .overflow ∧
+        STAmount.ofNumber v.numericType pN .downward ≠ .error err ∧
         ∀ payout, STAmount.ofNumber v.numericType pN .downward = .ok payout → payout.isZero = false →
-          clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent ≠ .error .overflow := by
+          clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent ≠ .error err := by
   obtain ⟨hav, han⟩ := hac.toNumber_exact aN haN
   obtain ⟨hA0, hA9, -, -, -, -, -, hblo, hbhi⟩ := Vault.Reachable.size_facts v t0 hr
   have hb1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbhi
@@ -839,13 +853,13 @@ private lemma Vault.Reachable.withdraw_fee_ne_overflow (v : Vault) (t0 : UInt32)
     have : (0 : ℚ) ≤ (v.earlyExitFeeRateAt t).toNat / 100000 := by positivity
     nlinarith [show 0 ≤ aN.toRat by rw [hav]; exact ha0]
   rw [hav] at hr1 hpNle
-  refine ⟨STAmount.ofNumber_ne_overflow _ pN _ hpNn (by rw [abs_of_nonneg hpN0]; linarith),
+  refine ⟨STAmount.ofNumber_ne_overflow _ pN _ hpNn (by rw [abs_of_nonneg hpN0]; linarith) hov,
     fun payout hpo hpz => ?_⟩
   obtain ⟨-, -, -, -, -, -, -, hple, hpay0⟩ :=
     Vault.feePayout_shape v assets payout aN fee pN _ hac ha0 (by rw [← hav]; exact hsmall) hrlt haN hfee hsub hpo hpz
   have hpc := (STAmount.ofNumber_canonicalOrZero _ _ _ _ hmax hpo).1
   exact clampToSumExponent_ne_overflow _ _ _ v.wf.assetsAvailable_norm hA17 hpc.operator_neg
-    (by rw [STAmount.operator_neg_toRat, abs_neg, abs_of_nonneg hpay0]; linarith) hbr.1 (by omega)
+    (by rw [STAmount.operator_neg_toRat, abs_neg, abs_of_nonneg hpay0]; linarith) hbr.1 (by omega) hov
 
 /-- The dust check of a withdrawal within the limit on a reachable vault never reports an overflow. -/
 private lemma Vault.Reachable.withdraw_dust_ne_path_dry (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -862,21 +876,22 @@ private lemma Vault.Reachable.withdraw_fee_steps_ne_overflow (v : Vault) (t0 : U
     (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hc : amount.amount.Canonical)
     (hpos : 0 < amount.amount.toRat) (hlim : amount.WithinLimit v) (am : VaultAmounts) (aN : Number) (b : Bool)
     (hcw : (computeWithdraw v amount waive).run = .ok (.ok am)) (haN : am.assets.toNumber .to_nearest = .ok aN)
-    (hfin : (b && !am.assets.isZero) = true) (hrate : ¬ (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = true) :
-    tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward ≠ .error .overflow ∧
+    (hfin : (b && !am.assets.isZero) = true) (hrate : ¬ (v.earlyExitFeeRateAt t == maxEarlyExitFeeRate) = true)
+    {err : Error} (hov : isOverflow err = true) :
+    tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward ≠ .error err ∧
     ∀ fee, tenthBipsOfValue aN (v.earlyExitFeeRateAt t) .upward = .ok fee →
-      aN.operator_sub fee .downward ≠ .error .overflow ∧
+      aN.operator_sub fee .downward ≠ .error err ∧
       ∀ pN, aN.operator_sub fee .downward = .ok pN →
-        STAmount.ofNumber v.numericType pN .downward ≠ .error .overflow ∧
+        STAmount.ofNumber v.numericType pN .downward ≠ .error err ∧
         ∀ payout, STAmount.ofNumber v.numericType pN .downward = .ok payout → payout.isZero = false →
-          clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent ≠ .error .overflow := by
+          clampToSumExponent v.assetsAvailable payout.operator_neg v.baseExponent ≠ .error err := by
   obtain ⟨hac, ha0, hal⟩ := Vault.Reachable.computeWithdraw_assets_facts v t0 hr amount waive hc hpos hlim am hcw
   have hnz : am.assets.isZero = false := by
     simp only [Bool.and_eq_true, Bool.not_eq_true'] at hfin
     exact hfin.2
   have hmax := Vault.Reachable.maxValue_fits_of_price v t0 hr _ _ waive
     (computeWithdraw_ok_priced v amount waive am hcw) hnz
-  exact Vault.Reachable.withdraw_fee_ne_overflow v t0 hr t hmax am.assets hac ha0 hal aN haN hrate
+  exact Vault.Reachable.withdraw_fee_ne_overflow v t0 hr t hmax am.assets hac ha0 hal aN haN hrate hov
 
 /-- Withdrawal on a reachable vault of an asset amount within the Open limit, or of at most the share total ->
 never `tecPATH_DRY`. -/
@@ -897,18 +912,16 @@ lemma Vault.Reachable.withdraw_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr :
   all_goals try (exact Vault.Reachable.computeWithdraw_ne_path_dry v t0 hr amount waive hc hpos hlim ‹_›)
   all_goals try (rcases Vault.adjustAssetsAndShares_codes _ _ _ _ ‹_› with h | h <;> exact absurd h (by decide))
   · exact Vault.Reachable.withdraw_dust_ne_path_dry v t0 hr amount waive hc hpos hlim _ _ ‹_› ‹_› ‹_›
-  all_goals (
-    obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›
-    first
-      | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹_›
-      | exact (Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_› ‹_›
-          ‹_›).1 ‹_›
-      | exact ((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_› ‹_›
-          ‹_›).2 _ ‹_›).1 ‹_›
-      | exact (((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_›
-          ‹_› ‹_›).2 _ ‹_›).2 _ ‹_›).1 ‹_›
-      | exact (((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_›
-          ‹_› ‹_›).2 _ ‹_›).2 _ ‹_›).2 _ ‹_› (by simpa using ‹¬ STAmount.isZero _ = true›) ‹_›)
+  all_goals first
+    | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹isOverflow _ = true› ‹_›
+    | exact (Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_› ‹_›
+        ‹_› ‹isOverflow _ = true›).1 ‹_›
+    | exact ((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_› ‹_›
+        ‹_› ‹isOverflow _ = true›).2 _ ‹_›).1 ‹_›
+    | exact (((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_›
+        ‹_› ‹_› ‹isOverflow _ = true›).2 _ ‹_›).2 _ ‹_›).1 ‹_›
+    | exact (((Vault.Reachable.withdraw_fee_steps_ne_overflow v t0 hr amount waive t hc hpos hlim _ _ _ ‹_› ‹_›
+        ‹_› ‹_› ‹isOverflow _ = true›).2 _ ‹_›).2 _ ‹_›).2 _ ‹_› (by simpa using ‹¬ STAmount.isZero _ = true›) ‹_›
 
 /-- On a reachable vault the cash converted to the asset is a canonical amount, or zero, of the cash's value. -/
 private lemma Vault.Reachable.cash_facts (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) (cash : STAmount)
@@ -1024,14 +1037,14 @@ private lemma Vault.Reachable.clawback_direct_ne_overflow (v : Vault) (t0 : UInt
     (assets holderShares : STAmount) (waive : Bool) (hc : assets.CanonicalOrZero) (hnn : 0 ≤ assets.toRat)
     (hl : assets.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) (hhs : holderShares.ShareBalance)
     (hhl : holderShares.toRat ≤ v.toExact.sharesTotal) (sh : STAmount)
-    (hs : assetsToSharesClawback v assets holderShares waive = .ok sh) :
-    v.sharesToAssetsWithdraw sh waive ≠ .error .overflow ∧
+    (hs : assetsToSharesClawback v assets holderShares waive = .ok sh) {err : Error} (hov : isOverflow err = true) :
+    v.sharesToAssetsWithdraw sh waive ≠ .error err ∧
     ∀ rec, v.sharesToAssetsWithdraw sh waive = .ok rec →
-      rec.toNumber .to_nearest ≠ .error .overflow ∧
-      clampToSumExponent v.assetsAvailable rec.operator_neg v.baseExponent ≠ .error .overflow := by
+      rec.toNumber .to_nearest ≠ .error err ∧
+      clampToSumExponent v.assetsAvailable rec.operator_neg v.baseExponent ≠ .error err := by
   obtain ⟨hshc, hs0, hsl, hq⟩ :=
     Vault.Reachable.clawback_shares_facts v t0 hr assets holderShares sh waive hc hnn hl hhs hhl hs
-  refine ⟨Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr sh waive (Or.inl hshc) hs0 hsl hq,
+  refine ⟨Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr sh waive (Or.inl hshc) hs0 hsl hq hov,
     fun rec hp => ?_⟩
   obtain ⟨hrc, hr0, hrl⟩ := Vault.Reachable.price_facts v t0 hr sh waive hshc hs0 hq rec hp
   obtain ⟨hA0, hA9, -, -, -, -, -, -, hbhi⟩ := Vault.Reachable.size_facts v t0 hr
@@ -1039,52 +1052,53 @@ private lemma Vault.Reachable.clawback_direct_ne_overflow (v : Vault) (t0 : UInt
   refine ⟨STAmount.CanonicalOrZero.toNumber_ne_overflow hrc,
     clampToSumExponent_ne_overflow _ _ _ v.wf.assetsAvailable_norm
     (by rw [abs_of_nonneg hA0]; nlinarith) hrc.operator_neg ?_ v.baseExponent_range.1
-    (by have := v.baseExponent_bounds; omega)⟩
+    (by have := v.baseExponent_bounds; omega) hov⟩
   rw [STAmount.operator_neg_toRat, abs_neg, abs_of_nonneg hr0]; linarith
 
 /-- On a reachable vault the shares the cash names, their price and its clamp never overflow. -/
 private lemma Vault.Reachable.clawback_capped_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (waive : Bool) (cash : STAmount)
-    (hcash : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok cash) :
-    assetsToSharesWithdraw v cash true waive ≠ .error .overflow ∧
+    (hcash : STAmount.ofNumber v.numericType v.assetsAvailable .to_nearest = .ok cash) {err : Error}
+    (hov : isOverflow err = true) :
+    assetsToSharesWithdraw v cash true waive ≠ .error err ∧
     ∀ sh, assetsToSharesWithdraw v cash true waive = .ok sh →
-      v.sharesToAssetsWithdraw sh waive ≠ .error .overflow ∧
+      v.sharesToAssetsWithdraw sh waive ≠ .error err ∧
       ∀ rec, v.sharesToAssetsWithdraw sh waive = .ok rec →
-        rec.toNumber .to_nearest ≠ .error .overflow ∧
-        clampToSumExponent v.assetsAvailable rec.operator_neg v.baseExponent ≠ .error .overflow := by
+        rec.toNumber .to_nearest ≠ .error err ∧
+        clampToSumExponent v.assetsAvailable rec.operator_neg v.baseExponent ≠ .error err := by
   obtain ⟨hcc, hcv⟩ := Vault.Reachable.cash_facts v t0 hr cash hcash
   obtain ⟨hA0, hA9, -, -, -, -, -, -, hbhi⟩ := Vault.Reachable.size_facts v t0 hr
   have hb1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbhi
   refine ⟨Vault.Reachable.assetsToSharesWithdraw_ne_overflow v t0 hr cash waive hcc (by rw [hcv]; exact hA0)
-    (by rw [hcv, zpow_add₀ (by norm_num), show ((10 : ℚ) ^ (15 : ℤ)) = 10 ^ 15 by norm_num, ← mul_assoc]; exact hA9),
-    fun sh hs => ?_⟩
+    (by rw [hcv, zpow_add₀ (by norm_num), show ((10 : ℚ) ^ (15 : ℤ)) = 10 ^ 15 by norm_num, ← mul_assoc]; exact hA9)
+    hov, fun sh hs => ?_⟩
   obtain ⟨hshc, hs0, hsl, hq⟩ := Vault.Reachable.cash_shares_facts v t0 hr cash sh waive hcash hs
-  refine ⟨Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr sh waive (Or.inl hshc) hs0 hsl hq,
+  refine ⟨Vault.Reachable.sharesToAssetsWithdraw_ne_overflow v t0 hr sh waive (Or.inl hshc) hs0 hsl hq hov,
     fun rec hp => ?_⟩
   obtain ⟨hrc, hr0, hrl⟩ := Vault.Reachable.price_facts v t0 hr sh waive hshc hs0 hq rec hp
   refine ⟨STAmount.CanonicalOrZero.toNumber_ne_overflow hrc,
     clampToSumExponent_ne_overflow _ _ _ v.wf.assetsAvailable_norm
     (by rw [abs_of_nonneg hA0]; nlinarith) hrc.operator_neg ?_ v.baseExponent_range.1
-    (by have := v.baseExponent_bounds; omega)⟩
+    (by have := v.baseExponent_bounds; omega) hov⟩
   rw [STAmount.operator_neg_toRat, abs_neg, abs_of_nonneg hr0]; linarith
 
 /-- On a reachable vault the shares a clawback within the Open limit names never overflow. -/
 private lemma Vault.Reachable.assetsToSharesClawback_ne_overflow (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
     (assets holderShares : STAmount) (waive : Bool) (hc : assets.CanonicalOrZero) (hnn : 0 ≤ assets.toRat)
-    (hl : assets.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) :
-    assetsToSharesClawback v assets holderShares waive ≠ .error .overflow := by
+    (hl : assets.toRat ≤ 9 * 10 ^ (15 + v.baseExponent)) {err : Error} (hov : isOverflow err = true) :
+    assetsToSharesClawback v assets holderShares waive ≠ .error err := by
   obtain ⟨-, -, hS0, hS9, -, -, -, -, -⟩ := Vault.Reachable.size_facts v t0 hr
   unfold assetsToSharesClawback
   split
   · split
     · simp only [bind, Except.bind, pure, Except.pure]
       have hne := STAmount.ofNumber_ne_overflow .int64 v.sharesTotal .to_nearest v.wf.sharesTotal_norm
-        (by rw [abs_of_nonneg hS0]; linarith)
+        (by rw [abs_of_nonneg hS0]; linarith) hov
       split
       · rename_i e he; intro h; cases h; exact hne he
       · simp
     · intro h; cases h
-  · exact Vault.Reachable.assetsToSharesWithdraw_ne_overflow v t0 hr assets waive hc hnn hl
+  · exact Vault.Reachable.assetsToSharesWithdraw_ne_overflow v t0 hr assets waive hc hnn hl hov
 
 /-- On a reachable vault the pricing of a clawback within the limits never overflows. -/
 private lemma Vault.Reachable.computeClawback_ne_path_dry (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -1098,26 +1112,28 @@ private lemma Vault.Reachable.computeClawback_ne_path_dry (v : Vault) (t0 : UInt
   simp only [computeClawback] at h
   unfold_ter at h
   walk_ok
-  all_goals (obtain rfl := isOverflow_eq_true ‹isOverflow _ = true›)
   all_goals first
-    | exact Vault.Reachable.assetsToSharesClawback_ne_overflow v t0 hr assets holderShares waive hc hnn hl ‹_›
+    | exact Vault.Reachable.assetsToSharesClawback_ne_overflow v t0 hr assets holderShares waive hc hnn hl
+        ‹isOverflow _ = true› ‹_›
     | exact (Vault.Reachable.clawback_direct_ne_overflow v t0 hr assets holderShares waive hc hnn hl hhs hhl _
-        ‹_›).1 ‹_›
+        ‹_› ‹isOverflow _ = true›).1 ‹_›
     | exact ((Vault.Reachable.clawback_direct_ne_overflow v t0 hr assets holderShares waive hc hnn hl hhs hhl _
-        ‹_›).2 _ ‹_›).1 ‹_›
+        ‹_› ‹isOverflow _ = true›).2 _ ‹_›).1 ‹_›
     | exact ((Vault.Reachable.clawback_direct_ne_overflow v t0 hr assets holderShares waive hc hnn hl hhs hhl _
-        ‹_›).2 _ ‹_›).2 ‹_›
+        ‹_› ‹isOverflow _ = true›).2 _ ‹_›).2 ‹_›
     | exact STAmount.ofNumber_ne_overflow v.numericType v.assetsAvailable .to_nearest v.wf.assetsAvailable_norm (by
         rw [abs_of_nonneg hA0]
         have hb1 : (10 : ℚ) ^ v.baseExponent ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbhi
-        nlinarith) ‹_›
+        nlinarith) ‹isOverflow _ = true› ‹_›
     | exact STAmount.ofNumber_ne_overflow .int64 v.sharesTotal .to_nearest v.wf.sharesTotal_norm
-        (by rw [abs_of_nonneg hS0]; linarith) ‹_›
-    | exact (Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_›).1 ‹_›
-    | exact ((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_›).2 _ ‹_›).1 ‹_›
-    | exact (((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_›).2 _ ‹_›).2 _ ‹_›).1 ‹_›
-    | exact (((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_›).2 _ ‹_›).2 _ ‹_›).2 ‹_›
-    | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹_›
+        (by rw [abs_of_nonneg hS0]; linarith) ‹isOverflow _ = true› ‹_›
+    | exact (Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_› ‹isOverflow _ = true›).1 ‹_›
+    | exact ((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_› ‹isOverflow _ = true›).2 _ ‹_›).1 ‹_›
+    | exact (((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_› ‹isOverflow _ = true›).2 _ ‹_›).2 _
+        ‹_›).1 ‹_›
+    | exact (((Vault.Reachable.clawback_capped_ne_overflow v t0 hr waive _ ‹_› ‹isOverflow _ = true›).2 _ ‹_›).2 _
+        ‹_›).2 ‹_›
+    | exact STAmount.isFractionalNonPositive_ne_overflow _ ‹isOverflow _ = true› ‹_›
 
 /-- A clawback computation within the limits on a reachable vault records a canonical amount between zero and
 `3·10^17`. -/

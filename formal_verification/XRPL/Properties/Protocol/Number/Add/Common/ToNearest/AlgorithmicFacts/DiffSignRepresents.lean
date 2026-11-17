@@ -22,35 +22,24 @@ private lemma diffSign_UL_bound : (toUInt128 largeRange.min * 1000).toNat * 10 <
 
 set_option maxHeartbeats 3200000 in
 -- Three-leg recover analysis over large UInt128 terms needs a raised budget.
-/-- After the opposite-sign subtraction, `recover` and the borrow give `M` and `δ` in `[0, 1)` with
-`|truth| = (M + δ)·10^ze'`, and `doNormalize128` on `M` returns `result`. -/
-theorem operator_add_post_subtract
-    (zn : Bool) (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ)
-    (mode : rounding_mode)
+/-- After the opposite-sign subtraction, `recover` and the borrow leave a mantissa `M`, an exponent `e` and a `δ` in
+`[0, 1)` with `|truth| = (M + δ)·10^e`. The guard is left empty exactly when `δ = 0`. -/
+lemma Number.operator_add_post_subtract_value
+    (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ)
     (hrep : represents g_aln f_aln)
     (hzm_pos : 1 ≤ zm_pre.toNat)
     (hzm_lt : zm_pre.toNat < 10 ^ 20)
     (hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat)
     (truth : ℚ)
-    (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E)
-    (result : Number)
-    (hok : doNormalize128 zn
-        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
-          then (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
-          else (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
-        (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
-        largeRange.min largeRange.max mode
-        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
-        = .ok result) :
-    ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (sticky : Bool),
-      (0 ≤ δ) ∧ δ ≤ 1 ∧
-      (sticky = false → δ = 0) ∧
-      1 ≤ M.toNat ∧ M.toNat < 10 ^ 22 ∧
-      (sticky = true → 10 ^ 20 ≤ M.toNat) ∧
-      |truth| = ((M.toNat : ℚ) + δ) * 10 ^ ze' ∧
-      doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result ∧
-      δ < 1 ∧
-      (sticky = true → 0 < δ) := by
+    (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E) :
+    let R := recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40
+    let M := if R.2.2.empty = true then R.1 else R.1 - 1
+    ∃ δ : ℚ,
+      0 ≤ δ ∧ δ < 1 ∧
+      (R.2.2.empty = true → δ = 0) ∧ (R.2.2.empty = false → 0 < δ) ∧
+      1 ≤ M.toNat ∧ M.toNat < 10 ^ 22 ∧ (R.2.2.empty = false → 10 ^ 20 ≤ M.toNat) ∧
+      |truth| = ((M.toNat : ℚ) + δ) * 10 ^ R.2.1 := by
+  dsimp only
   have hUL := diffSign_UL_bound
   have hall : allNibblesAtMost9 g_aln.digits_ := by
     obtain ⟨_, _, _, _, _, h⟩ := hrep; exact h
@@ -83,12 +72,11 @@ theorem operator_add_post_subtract
       have h : R.1.toNat = 0 := by omega
       rw [h] at hL_pos
       norm_num at hL_pos
-    refine ⟨R.1, R.2.1, 0, false, by norm_num, by norm_num, fun _ => rfl,
-      hR1_pos, hupper, fun h => Bool.noConfusion h, ?_, ?_, by norm_num,
-      fun h => Bool.noConfusion h⟩
+    rw [if_pos hemp]
+    refine ⟨0, le_refl _, by norm_num, fun _ => rfl, fun h => ?_, hR1_pos, hupper, fun h => ?_, ?_⟩
+    · rw [hemp] at h; exact Bool.noConfusion h
+    · rw [hemp] at h; exact Bool.noConfusion h
     · rw [htruth, hexact, add_zero]
-    · rw [if_pos hemp, hemp] at hok
-      simpa using hok
   · -- NON-EMPTY legs: the mantissa is huge, so borrow and pass the sticky tail.
     have hUL_le : (toUInt128 largeRange.min * 1000).toNat ≤ R.1.toNat :=
       hcases.resolve_right hemp
@@ -180,9 +168,9 @@ theorem operator_add_post_subtract
           linarith
         exact ⟨f', represents_nonneg hrep', represents_lt_one hrep', hf'_pos, hval⟩
     obtain ⟨f', hf'_nn, hf'_lt, hf'_pos, hval⟩ := hresidue
-    refine ⟨R.1 - 1, R.2.1, 1 - f', true, by linarith, by linarith,
-      fun h => Bool.noConfusion h, ?_, ?_, fun _ => ?_, ?_, ?_, by linarith,
-      fun _ => by linarith⟩
+    rw [if_neg hemp]
+    refine ⟨1 - f', by linarith, by linarith, fun h => absurd h hemp, fun _ => by linarith, ?_, ?_,
+      fun _ => ?_, ?_⟩
     · rw [hM_toNat]; omega
     · rw [hM_toNat]; omega
     · rw [hM_toNat]
@@ -190,10 +178,40 @@ theorem operator_add_post_subtract
       omega
     · rw [htruth, hval, hM_cast]
       ring
-    · have hempf : R.2.2.empty = false := by
-        rw [Bool.not_eq_true] at hemp; exact hemp
-      rw [if_neg hemp, hempf] at hok
-      simpa using hok
+
+/-- After the opposite-sign subtraction, `recover` and the borrow give `M` and `δ` in `[0, 1)` with
+`|truth| = (M + δ)·10^ze'`, and `doNormalize128` on `M` returns `result`. -/
+theorem Number.operator_add_post_subtract
+    (zn : Bool) (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ)
+    (mode : rounding_mode)
+    (hrep : represents g_aln f_aln)
+    (hzm_pos : 1 ≤ zm_pre.toNat)
+    (hzm_lt : zm_pre.toNat < 10 ^ 20)
+    (hxbit_big : g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat)
+    (truth : ℚ)
+    (htruth : |truth| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E)
+    (result : Number)
+    (hok : doNormalize128 zn
+        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
+          then (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
+          else (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
+        (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
+        largeRange.min largeRange.max mode
+        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty)
+        = .ok result) :
+    ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (sticky : Bool),
+      (0 ≤ δ) ∧ δ ≤ 1 ∧
+      (sticky = false → δ = 0) ∧
+      1 ≤ M.toNat ∧ M.toNat < 10 ^ 22 ∧
+      (sticky = true → 10 ^ 20 ≤ M.toNat) ∧
+      |truth| = ((M.toNat : ℚ) + δ) * 10 ^ ze' ∧
+      doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result ∧
+      δ < 1 ∧
+      (sticky = true → 0 < δ) := by
+  obtain ⟨δ, hδ0, hδ1, hδ_empty, hδ_pos, hM_pos, hM_lt, hM_big, hval⟩ :=
+    Number.operator_add_post_subtract_value zm_pre E g_aln f_aln hrep hzm_pos hzm_lt hxbit_big truth htruth
+  exact ⟨_, _, δ, _, hδ0, le_of_lt hδ1, fun h => hδ_empty (by simpa using h), hM_pos, hM_lt,
+    fun h => hM_big (by simpa using h), hval, hok, hδ1, fun h => hδ_pos (by simpa using h)⟩
 
 /-- For diff-sign Numbers with `|x.toRat| < |y.toRat|`, the sum `x.toRat + y.toRat`
 takes the sign of the dominant operand `y`. -/
@@ -224,23 +242,29 @@ lemma diff_sign_sum_sign_of_dominant {x y : Number}
 
 set_option maxHeartbeats 8000000 in
 -- The five-way case split on exponents and mantissas needs a raised heartbeat budget.
-theorem operator_add_algorithmic_facts_diff_sign_represents
-    (x y result : Number) (mode : rounding_mode)
+/-- Opposite-sign addition up to the subtraction of the aligned mantissas. The rest is `recover`, the borrow and
+`doNormalize128` on the difference `zm_pre`, and `|x + y| = (zm_pre - f)·10^E` for the guard fraction `f`. -/
+lemma Number.operator_addSpec_diff_sign_subtract
+    (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
-    (h_not_zero : ¬ x.operator_eq y.operator_neg)
-    (hok : Number.operator_add x y mode = .ok result) :
-    ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (zn sticky : Bool),
-      (0 ≤ δ) ∧ δ ≤ 1 ∧
-      (sticky = false → δ = 0) ∧
-      1 ≤ M.toNat ∧ M.toNat < 10 ^ 22 ∧
-      (sticky = true → 10 ^ 20 ≤ M.toNat) ∧
-      |x.toRat + y.toRat| = ((M.toNat : ℚ) + δ) * 10 ^ ze' ∧
-      doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result ∧
+    (h_not_zero : ¬ x.operator_eq y.operator_neg) :
+    ∃ (zn : Bool) (zm_pre : UInt128) (E : Int) (g_aln : Guard) (f_aln : ℚ),
+      represents g_aln f_aln ∧
+      1 ≤ zm_pre.toNat ∧ zm_pre.toNat < 10 ^ 20 ∧
+      (g_aln.xbit_ = true → 10 ^ 18 - 101 ≤ zm_pre.toNat) ∧
+      |x.toRat + y.toRat| = ((zm_pre.toNat : ℚ) - f_aln) * 10 ^ E ∧
+      E ≤ maxExponent ∧
       ((zn = true → x.toRat + y.toRat ≤ 0) ∧ (zn = false → 0 ≤ x.toRat + y.toRat)) ∧
-      δ < 1 ∧
-      (sticky = true → 0 < δ) := by
+      x.operator_addSpec y mode = doNormalize128 zn
+        (if (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty = true
+          then (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1
+          else (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).1 - 1)
+        (recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.1
+        largeRange.min largeRange.max mode
+        (!(recoverSpec (toUInt128 largeRange.min * 1000) zm_pre E g_aln 40).2.2.empty) := by
+  generalize hok : x.operator_addSpec y mode = r
   have hx_bounds := hx.mantissaBounds hx_mant_ne
   have hy_bounds := hy.mantissaBounds hy_mant_ne
   have hx_min : (10 : ℕ) ^ 18 ≤ x.mantissa_.toNat := (mantissaBounds_nat_of hx_bounds).1
@@ -261,8 +285,15 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
     norm_num at this
   have h_xneqyn : (x.negative_ == y.negative_) = false := by
     rw [beq_eq_false_iff_ne]; exact h_diff_sign
+  have hxe_max : x.exponent_ ≤ maxExponent := by
+    rcases hx with hz | ⟨_, _, _, _, hemax⟩
+    · exfalso; apply hx_mant_ne; rw [hz]; rfl
+    · exact hemax
+  have hye_max : y.exponent_ ≤ maxExponent := by
+    rcases hy with hz | ⟨_, _, _, _, hemax⟩
+    · exfalso; apply hy_mant_ne; rw [hz]; rfl
+    · exact hemax
   have h_abs_add := abs_add_eq_of_diff_sign h_diff_sign
-  replace hok := Number.operator_add_ok_spec hok
   unfold Number.operator_addSpec at hok
   simp only [hy_ne_zero, hx_ne_zero, h_not_zero, Bool.false_eq_true, if_false] at hok
   rw [h_xneqyn] at hok
@@ -283,8 +314,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       rw [this]
       exact max_eq_right (le_of_lt h_xe_lt_ye)
     rw [he_common_eq] at hok
-    set K : ℕ := (max x.exponent_ y.exponent_ - x.exponent_).toNat with hK_def
-    have hmax_eq : max x.exponent_ y.exponent_ = y.exponent_ :=
+    set K : ℕ := (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat with hK_def
+    have hmax_eq : Max.max x.exponent_ y.exponent_ = y.exponent_ :=
       max_eq_right (le_of_lt h_xe_lt_ye)
     -- Aligned mantissa is strictly smaller than the other operand: xm_a < 10^18 ≤ y.mantissa_.
     have hK_pos : 1 ≤ K := by
@@ -306,7 +337,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
     set f_aln : ℚ := (0 + ((x.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
     have hf_aln_rep : represents g_aln f_aln := by
       have h := alignDown_represents x.mantissa_ x.exponent_ g₀ y.exponent_ 0 hg₀_rep
-      have hK_eq : (max x.exponent_ y.exponent_ - x.exponent_).toNat = K := by rw [hK_def]
+      have hK_eq : (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat = K := by rw [hK_def]
       rw [hK_eq] at h
       exact h
     have hf_aln_nn : 0 ≤ f_aln := represents_nonneg hf_aln_rep
@@ -380,13 +411,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       exact mul_lt_mul_of_pos_right h_lt h_pow_pos
     have h_sign := diff_sign_sum_sign_of_dominant h_diff_sign h_dom
     simp only [if_neg h_not_xm_a_gt] at hok
-    obtain ⟨M, ze', δ, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
-        htruth_out, hok_out, hδ_lt, hsticky_pos⟩ :=
-      operator_add_post_subtract y.negative_ zm_pre y.exponent_ g_aln f_aln mode
-        hf_aln_rep hzm_pre_pos hzm_pre_lt hxbit_big (x.toRat + y.toRat) h_truth_eq_minus
-        result hok
-    exact ⟨M, ze', δ, y.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
-      hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
+    exact ⟨y.negative_, zm_pre, y.exponent_, g_aln, f_aln, hf_aln_rep, hzm_pre_pos, hzm_pre_lt,
+      hxbit_big, h_truth_eq_minus, hye_max, h_sign, hok.symm⟩
   · push Not at h_xe_lt_ye
     by_cases h_xe_gt_ye : x.exponent_ > y.exponent_
     · -- Case 2: xe > ye, align y to xe. Aligned operand = y (smaller magnitude).
@@ -398,8 +424,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
         Number.operator_add.alignDown y.mantissa_ y.exponent_ g₀ x.exponent_ with haln_def
       set ym_a : UInt64 := aln_result.1 with hym_a_def
       set g_aln : Guard := aln_result.2.2 with hg_aln_def
-      set K : ℕ := (max y.exponent_ x.exponent_ - y.exponent_).toNat with hK_def
-      have hmax_eq : max y.exponent_ x.exponent_ = x.exponent_ :=
+      set K : ℕ := (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat with hK_def
+      have hmax_eq : Max.max y.exponent_ x.exponent_ = x.exponent_ :=
         max_eq_right (le_of_lt h_xe_gt_ye)
       have hK_pos : 1 ≤ K := by
         rw [hK_def, hmax_eq]; omega
@@ -418,7 +444,7 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
       set f_aln : ℚ := (0 + ((y.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
       have hf_aln_rep : represents g_aln f_aln := by
         have h := alignDown_represents y.mantissa_ y.exponent_ g₀ x.exponent_ 0 hg₀_rep
-        have hK_eq : (max y.exponent_ x.exponent_ - y.exponent_).toNat = K := by rw [hK_def]
+        have hK_eq : (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat = K := by rw [hK_def]
         rw [hK_eq] at h
         exact h
       have hf_aln_nn : 0 ≤ f_aln := represents_nonneg hf_aln_rep
@@ -492,13 +518,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
           (x.negative_ = false → 0 ≤ x.toRat + y.toRat) := by
         rw [add_comm x.toRat y.toRat]; exact h_sign'
       simp only [if_pos h_xm_gt_uint] at hok
-      obtain ⟨M, ze', δ, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
-          htruth_out, hok_out, hδ_lt, hsticky_pos⟩ :=
-        operator_add_post_subtract x.negative_ zm_pre x.exponent_ g_aln f_aln mode
-          hf_aln_rep hzm_pre_pos hzm_pre_lt hxbit_big (x.toRat + y.toRat) h_truth_eq_minus
-          result hok
-      exact ⟨M, ze', δ, x.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
-        hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
+      exact ⟨x.negative_, zm_pre, x.exponent_, g_aln, f_aln, hf_aln_rep, hzm_pre_pos, hzm_pre_lt,
+        hxbit_big, h_truth_eq_minus, hxe_max, h_sign, hok.symm⟩
     · -- Case 3: xe = ye, no alignment. The guard starts empty with x's sign, and f_aln = 0.
       push Not at h_xe_gt_ye
       have h_xe_eq_ye : x.exponent_ = y.exponent_ := le_antisymm h_xe_gt_ye h_xe_lt_ye
@@ -554,13 +575,8 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
             (x.negative_ = false → 0 ≤ x.toRat + y.toRat) := by
           rw [add_comm x.toRat y.toRat]; exact h_sign'
         simp only [if_pos h_xm_gt_uint] at hok
-        obtain ⟨M, ze', δ, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
-            htruth_out, hok_out, hδ_lt, hsticky_pos⟩ :=
-          operator_add_post_subtract x.negative_ zm_pre x.exponent_ g₀ 0 mode
-            hg₀_rep hzm_pre_pos hzm_pre_lt hxbit_big (x.toRat + y.toRat) h_truth_eq
-            result hok
-        exact ⟨M, ze', δ, x.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
-          hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
+        exact ⟨x.negative_, zm_pre, x.exponent_, g₀, 0, hg₀_rep, hzm_pre_pos, hzm_pre_lt,
+          hxbit_big, h_truth_eq, hxe_max, h_sign, hok.symm⟩
       · push Not at h_xm_gt
         by_cases h_xm_eq : x.mantissa_.toNat = y.mantissa_.toNat
         · -- Degenerate: xm = ym ∧ xe = ye ∧ diff-sign means x = -y, which contradicts h_not_zero.
@@ -616,12 +632,35 @@ theorem operator_add_algorithmic_facts_diff_sign_represents
             exact mul_lt_mul_of_pos_right h_lt h_pow_pos
           have h_sign := diff_sign_sum_sign_of_dominant h_diff_sign h_dom
           simp only [if_neg h_not_xm_gt] at hok
-          obtain ⟨M, ze', δ, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
-              htruth_out, hok_out, hδ_lt, hsticky_pos⟩ :=
-            operator_add_post_subtract y.negative_ zm_pre x.exponent_ g₀ 0 mode
-              hg₀_rep hzm_pre_pos hzm_pre_lt hxbit_big (x.toRat + y.toRat) h_truth_eq
-              result hok
-          exact ⟨M, ze', δ, y.negative_, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
-            hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
+          exact ⟨y.negative_, zm_pre, x.exponent_, g₀, 0, hg₀_rep, hzm_pre_pos, hzm_pre_lt,
+            hxbit_big, h_truth_eq, hxe_max, h_sign, hok.symm⟩
+
+/-- A successful opposite-sign addition gives `M`, `δ` in `[0, 1)` and a sign `zn` with
+`|x + y| = (M + δ)·10^ze'`, and `doNormalize128` on `M` returns `result`. -/
+theorem Number.operator_add_algorithmic_facts_diff_sign_represents
+    (x y result : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
+    (h_diff_sign : x.negative_ ≠ y.negative_)
+    (h_not_zero : ¬ x.operator_eq y.operator_neg)
+    (hok : Number.operator_add x y mode = .ok result) :
+    ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (zn sticky : Bool),
+      (0 ≤ δ) ∧ δ ≤ 1 ∧
+      (sticky = false → δ = 0) ∧
+      1 ≤ M.toNat ∧ M.toNat < 10 ^ 22 ∧
+      (sticky = true → 10 ^ 20 ≤ M.toNat) ∧
+      |x.toRat + y.toRat| = ((M.toNat : ℚ) + δ) * 10 ^ ze' ∧
+      doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky = .ok result ∧
+      ((zn = true → x.toRat + y.toRat ≤ 0) ∧ (zn = false → 0 ≤ x.toRat + y.toRat)) ∧
+      δ < 1 ∧
+      (sticky = true → 0 < δ) := by
+  obtain ⟨zn, zm_pre, E, g_aln, f_aln, hrep, hzm_pos, hzm_lt, hxbit_big, htruth, -, h_sign, hspec⟩ :=
+    Number.operator_addSpec_diff_sign_subtract x y mode hx hy hx_mant_ne hy_mant_ne h_diff_sign h_not_zero
+  obtain ⟨M, ze', δ, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
+      htruth_out, hok_out, hδ_lt, hsticky_pos⟩ :=
+    Number.operator_add_post_subtract zn zm_pre E g_aln f_aln mode hrep hzm_pos hzm_lt hxbit_big
+      (x.toRat + y.toRat) htruth result (hspec ▸ Number.operator_add_ok_spec hok)
+  exact ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt,
+    hM_big, htruth_out, hok_out, h_sign, hδ_lt, hsticky_pos⟩
 
 end XRPL.Model.Protocol

@@ -75,7 +75,7 @@ lemma Number.mul_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalize
     (h : x.operator_mul y .to_nearest = .ok r) : r.Near (x.toRat * y.toRat) := by
   by_cases hm : r.mantissa_ = 0
   · exact Or.inl (Number.toRat_eq_zero_of_mantissa_zero _ hm)
-  · exact Number.near_of_within (operator_mul_rounds_to_nearest x y r hx hy h hm)
+  · exact Number.near_of_within (Number.operator_mul_rounds_to_nearest x y r hx hy h hm)
       (by unfold Number.nearestError; norm_num)
 
 /-- A to-nearest quotient is near the exact quotient. -/
@@ -83,7 +83,7 @@ lemma Number.div_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalize
     (h : x.operator_div y .to_nearest = .ok r) : r.Near (x.toRat / y.toRat) := by
   by_cases hm : r.mantissa_ = 0
   · exact Or.inl (Number.toRat_eq_zero_of_mantissa_zero _ hm)
-  · exact Number.near_of_within (operator_div_rounds_to_nearest x y r hx hy h hm) le_rfl
+  · exact Number.near_of_within (Number.operator_div_rounds_to_nearest x y r hx hy h hm) le_rfl
 
 /-- A to-nearest sum is near the exact sum. -/
 lemma Number.add_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalized)
@@ -114,7 +114,7 @@ lemma Number.add_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalize
     exact Or.inl (by rw [hres, Number.toRat_zero])
   by_cases hm : r.mantissa_ = 0
   · exact Or.inl (Number.toRat_eq_zero_of_mantissa_zero _ hm)
-  · exact Number.near_of_within (operator_add_rounds_to_nearest x y r hx hy hxm hym hc h hm) le_rfl
+  · exact Number.near_of_within (Number.operator_add_rounds_to_nearest x y r hx hy hxm hym hc h hm) le_rfl
 
 /-- A to-nearest difference is near the exact difference. -/
 lemma Number.sub_near (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalized)

@@ -193,7 +193,7 @@ lemma Loan.manageDefault_at_base (minimumCover liquidationAmount : Number) (a : 
   obtain ⟨w, hw, hwv⟩ := Number.exists_units_normalized (a + kn) v.baseExponent hK ⟨by omega, hbhi⟩
   have haav := Number.operator_add_exact_of_fits v.wf.assetsAvailable_norm hdn h1
     ⟨w, hw, by rw [hwv, haa, hdcv']; push_cast; ring⟩
-  have hann := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn h1
+  have hann := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn h1
   have hann0 : 0 ≤ aa.toRat := by rw [haav, haa, hdcv']; positivity
   have hrep : STAmount.isRounded v.numericType aa = false := by
     by_cases hint : v.numericType.isIntegral = true

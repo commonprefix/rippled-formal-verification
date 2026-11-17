@@ -32,9 +32,9 @@ lemma alignDown_abs_value
   simp only
   have h_abs := abs_toRat_eq n
   rw [h_abs]
-  have hmax : max n.exponent_ target = target := max_eq_right h_le
+  have hmax : Max.max n.exponent_ target = target := max_eq_right h_le
   have h_me : (Number.operator_add.alignDown n.mantissa_ n.exponent_ g₀ target).1.toNat
-      = n.mantissa_.toNat / 10 ^ (max n.exponent_ target - n.exponent_).toNat :=
+      = n.mantissa_.toNat / 10 ^ (Max.max n.exponent_ target - n.exponent_).toNat :=
     alignDown_mantissa_eq n.mantissa_ n.exponent_ g₀ target
   rw [hmax] at h_me
   rw [h_me]

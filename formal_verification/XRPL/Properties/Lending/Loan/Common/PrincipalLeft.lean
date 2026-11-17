@@ -138,7 +138,7 @@ lemma Loan.scheduledComponents_principal_lt (l : Loan) (pc : PaymentComponents) 
     have : l.totalValueOutstanding.operator_le pp' = false := by
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf
       simpa using hnf.2
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, this]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, this]
     simp
   have gtpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint htpo
   have gti := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hti
@@ -162,7 +162,7 @@ lemma Loan.scheduledComponents_principal_lt (l : Loan) (pc : PaymentComponents) 
     · have vdp := Number.OnGrid.sub_toRat gcP gtpo hs (by rw [vcP, abs_lt]; constructor <;> linarith) hdp
       rw [vdp, vcP]
       exact max_lt hPpos (by linarith)
-    · have hR := operator_sub_rounded_to_nearest _ _ _ gcP.1 gtpo.1 hdp
+    · have hR := Number.operator_sub_rounded_to_nearest _ _ _ gcP.1 gtpo.1 hdp
       have hdp0 := Number.roundsToRepresentable_nonpos _ _ hR (by rw [vcP]; linarith)
       rw [max_eq_left hdp0]; exact hPpos
   have gP1 := Number.OnGrid.min gP0 gcP

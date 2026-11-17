@@ -66,9 +66,9 @@ private lemma LoanBroker.clamp_units (lb : LoanBroker) (v : Vault) (hz : lb.Open
   rw [STAmount.operator_neg_toRat] at hdNv
   obtain ⟨s, hs⟩ := Number.operator_add_ok_of_exp _ _ .to_nearest hAn hdNn
     (Number.exponent_headroom_of_lt _ hAn hA0 (by linarith)) hdNe
-  have hr1 := operator_add_rounded_to_nearest _ _ _ hAn hdNn hs
+  have hr1 := Number.operator_add_rounded_to_nearest _ _ _ hAn hdNn hs
   rw [hdNv, ← sub_eq_add_neg] at hr1
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hAn hdNn hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAn hdNn hs
   have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s _ hr1 (by linarith)
   have hsle : s.toRat ≤ lb.coverAvailable.toRat :=
     Number.RoundsToRepresentable.le_of_le_normalized s _ hr1 _ hAn (by linarith)
@@ -132,7 +132,7 @@ lemma LoanBroker.canCoverClawback_of_units (lb : LoanBroker) (v : Vault) (amount
   obtain ⟨hmxv, km, -, hkm⟩ := LoanBroker.CoverFits.sub_downward_exact lb v hz.coverFits _ _ hmg hm0 hroom'.le hsub
   have hmxn := Number.operator_sub_isNormalized_any _ _ _ _ hAn hmn hsub
   have hmx0 : 0 < mx.toRat := by rw [hmxv]; linarith
-  have hsig : 0 < mx.signum := (signum_pos_iff mx).mpr ⟨Number.negative_false_of_nonneg mx hmxn hmx0.le,
+  have hsig : 0 < mx.signum := (Number.signum_pos_iff mx).mpr ⟨Number.negative_false_of_nonneg mx hmxn hmx0.le,
     fun h0 => by rw [Number.toRat_eq_zero_of_mantissa_zero mx h0] at hmx0; exact lt_irrefl _ hmx0⟩
 
   -- the clawback takes the request capped at the cap, a positive whole number of base units
@@ -159,7 +159,7 @@ lemma LoanBroker.canCoverClawback_of_units (lb : LoanBroker) (v : Vault) (amount
           by simp [LoanBroker.clawRequest, hza, hmag, bind, Except.bind, Except.pure], ?_⟩
         split_ifs with hgt
         · exact ⟨hmxn, hcap⟩
-        · exact ⟨hmagn, ka, hka1, not_lt.mp (by rwa [← operator_gt_iff mag mx hmagn hmxn]),
+        · exact ⟨hmagn, ka, hka1, not_lt.mp (by rwa [← Number.operator_gt_iff mag mx hmagn hmxn]),
             by rw [hmagv, hka]⟩
 
   -- the asset stores the claw exactly, and the clamp keeps an amount that is not zero
@@ -203,7 +203,7 @@ lemma LoanBroker.coverClawback_lawful_total_proof (lb : LoanBroker) (v : Vault) 
   obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_lt _ _ .to_nearest lb.wf.coverAvailable_norm hcn
     lb.exact.coverAvailable_nonneg (by linarith) (by rw [hcv]; exact hc0) (by linarith)
   have hge : lb.coverAvailable.operator_lt cN = false :=
-    (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hcn).mpr hcle
+    (Number.operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hcn).mpr hcle
   obtain ⟨lb', hrun, -⟩ := LoanBroker.coverClawback_success_proof lb v amount c cN c' hrc hcN hge hsub
   exact ⟨c, _, hrc, hrun, rfl⟩
 

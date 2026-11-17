@@ -233,7 +233,7 @@ lemma IOUAmount.toNumber_canonical (i : IOUAmount) (mode : rounding_mode)
         rw [hcast, abs_of_nonneg (by exact_mod_cast hge)]
       rw [Number.toRat_of_nonneg _ hnegfalse, hmant, hexpn, hm3, hm0, hpow, htoInt_q]
       push_cast; ring
-  · apply normalize_result_isNormalized (Number.unchecked neg m₀ i.exponent_) _ mode
+  · apply Number.normalize_result_isNormalized (Number.unchecked neg m₀ i.exponent_) _ mode
       (by show m₀ ≠ 0; exact hm0_ne)
     · show (Number.unchecked neg m₀ i.exponent_).normalize largeRange.min largeRange.max mode
         = .ok ⟨neg, m₀ * 10 * 10 * 10, i.exponent_ - 3⟩
@@ -272,7 +272,7 @@ lemma IOUAmount.operator_add_truth_ne_of_result (x y result : IOUAmount) (mode :
       have hzero : IOUAmount.ofNumber Number.zero mode = .ok IOUAmount.zero := by cases mode <;> rfl
       rw [hsum, hzero] at hok
       exact hresult (by rw [← Except.ok.inj hok]; rfl)
-    · exact XRPL.Model.Protocol.operator_add_truth_ne xn yn hxn_norm hyn_norm hxn_ne hyn_ne hcancel mode sum hs
+    · exact XRPL.Model.Protocol.Number.operator_add_truth_ne xn yn hxn_norm hyn_norm hxn_ne hyn_ne hcancel mode sum hs
         (by rw [hxn_val, hyn_val]; exact h0)
 
 /-- A nonzero `operator_add` result is normalized, whether the operands have the same or opposite signs. -/
@@ -285,10 +285,10 @@ theorem operator_add_result_isNormalized_anyMode (x y result : Number) (mode : r
     result.isNormalized := by
   by_cases hs : x.negative_ = y.negative_
   · obtain ⟨_, _, _, _, _, hspec⟩ :=
-      operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
+      Number.operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
         hx_mant_ne hy_mant_ne hs h_not_zero hok
     exact hspec.result_norm
-  · exact operator_add_result_isNormalized x y result mode hx hy
+  · exact Number.operator_add_result_isNormalized x y result mode hx hy
       hx_mant_ne hy_mant_ne hs h_not_zero hok hresult
 
 /-- The `Number` sum of two in-range IOU amounts has `sum.exp + 4 ≤ maxExponent`, because
@@ -322,7 +322,7 @@ lemma IOUAmount.add_sum_exponent_hi (x y : IOUAmount) (xn yn sum : Number)
           rw [← zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; ring_nf
       _ ≤ (sum.mantissa_.toNat : ℚ) * (10 : ℚ) ^ sum.exponent_ := by gcongr
   -- Upper bound: |sum.toRat| < 10^(maxExponent+15), via |sum| ≤ (|x|+|y|)·(1+ε).
-  have hadd_bound := operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm
+  have hadd_bound := Number.operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm
     hxn_ne hyn_ne h_no_cancel hadd hsum_ne
   simp only [RoundsWithin] at hadd_bound
   rw [hxn_val, hyn_val, show RatValued.toRat sum = sum.toRat from rfl] at hadd_bound
@@ -392,7 +392,7 @@ lemma IOUAmount.operator_add_compose_to_nearest
       ≤ |x.toRat + y.toRat| *
         (6 / (2 ^ 63 - 3 : ℚ) + (1 / 2) * (10 : ℚ) ^ (-15 : ℤ)
           + 6 / (2 ^ 63 - 3 : ℚ) * ((1 / 2) * (10 : ℚ) ^ (-15 : ℤ))) := by
-  have hadd_bound := operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm
+  have hadd_bound := Number.operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm
     hxn_ne hyn_ne h_no_cancel hadd hsum_ne
   simp only [RoundsWithin] at hadd_bound
   rw [hxn_val, hyn_val] at hadd_bound
@@ -464,7 +464,7 @@ lemma IOUAmount.operator_add_to_nearest_decompose (x y result : IOUAmount)
       intro hc
       have hyn_neg_norm : yn.operator_neg.isNormalized :=
         Number.operator_neg_isNormalized yn hyn_norm
-      have heq := (operator_eq_iff xn yn.operator_neg hxn_norm hyn_neg_norm).mp hc
+      have heq := (Number.operator_eq_iff xn yn.operator_neg hxn_norm hyn_neg_norm).mp hc
       rw [Number.toRat_neg, hxn_val, hyn_val] at heq
       exact h_truth_ne (by linarith)
     have hsum_ne : sum.mantissa_ ≠ 0 :=
@@ -536,13 +536,11 @@ lemma STAmount.ofIOU_mantissa_ne_zero (a : IOUAmount) (mode : rounding_mode) (re
     a.mantissa_ ≠ 0 := by
   intro hm
   apply hres
-  have htc : Int.toInt64Checked 0 = .ok 0 := by decide
   have hmag : (0 : Int64).magnitude = 0 := by decide
   have hcompute : STAmount.ofIOUAmount a mode = .ok ⟨.fractional, 0, -100, false⟩ := by
     unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
     simp [hm, STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-      STAmount.signedDrops, IOUAmount.ofMantissaExp, IOUAmount.normalize, htc, hmag, ok_bind,
-      IOUAmount.signum, IOUAmount.zero]
+      IOUAmount.ofMantissaExp, IOUAmount.normalize, hmag, IOUAmount.signum, IOUAmount.zero]
   rw [hpack] at hcompute
   rw [Except.ok.inj hcompute]
 

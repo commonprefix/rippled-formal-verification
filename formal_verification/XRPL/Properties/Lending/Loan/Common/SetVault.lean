@@ -128,7 +128,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
     have h1 := hchecks.funds
     by_contra hc'
     push Not at hc'
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
     exact absurd h1 (by decide)
   have hja : jb ≤ a := by
     have : (jb : ℚ) * 10 ^ b ≤ (a : ℚ) * 10 ^ b := by rw [← hjb, ← hav]; exact hfunds
@@ -147,7 +147,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
       (by rw [Number.toRat_neg, hp', hjb]; push_cast; ring) (by omega) hs hadd
     have haaN : aa.isNormalized := by
       have := Number.operator_neg_isNormalized _ hpN'
-      exact operator_add_isNormalized_to_nearest_sz _ _ aa v.wf.assetsAvailable_norm this hadd
+      exact Number.operator_add_isNormalized_to_nearest_sz _ _ aa v.wf.assetsAvailable_norm this hadd
     have haav' : aa.toRat = ((a - jb : ℕ) : ℚ) * 10 ^ b := by
       rw [haav]; push_cast [Nat.cast_sub hja]; ring
     have haa0 : 0 ≤ aa.toRat := by rw [haav']; positivity
@@ -224,7 +224,7 @@ lemma Loan.create_balances (broker : LoanBroker) (v : Vault) (principal : Number
     rw [hNT, hf] at haT
     exact lt_of_le_of_lt (Nat.sub_le _ _) haT
   obtain ⟨-, hmf_hi, -, -⟩ := computeManagementFee_bounds broker.numericType ti _ (aT - j)
-    broker.managementFeeRate ls (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
+    broker.managementFeeRate ls (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
     (by omega) hR10 ⟨by omega, hhi⟩ hint hfr hmfo
   have hmmK : mm ≤ aT - j := by
     have hC : ((aT - j) * broker.managementFeeRate.toNat + 99999) / 100000 ≤ aT - j := by

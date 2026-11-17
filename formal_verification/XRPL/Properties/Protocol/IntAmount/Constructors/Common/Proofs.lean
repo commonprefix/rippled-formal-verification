@@ -18,7 +18,7 @@ theorem IntAmount.ofNumber_within_one_proof (n : Number) (mode : rounding_mode)
   · rename_i rep heq
     have hr : result.toRat = (rep.toInt : ℚ) := by
       rw [← (Except.ok.inj hok)]; rfl
-    rw [hr]; exact to_rep_within_one n mode rep hn heq
+    rw [hr]; exact Number.to_rep_within_one n mode rep hn heq
   · exact absurd hok (by simp)
 
 end XRPL.Model.Protocol

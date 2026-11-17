@@ -92,13 +92,13 @@ private lemma pipe_underflow (x y z p q : Number) (hx : x.isNormalized) (hy : y.
   · rw [Number.toRat_eq_zero_of_mantissa_zero y hym]; norm_num
   have ht := underflow_small
   by_cases hpm : p.mantissa_ = 0
-  · have h1 := operator_mul_underflow_truth_small x y p _ hx hy hxm hym hmul hpm
+  · have h1 := Number.operator_mul_underflow_truth_small x y p _ hx hy hxm hym hmul hpm
     rw [abs_of_nonneg hxy0] at h1
     linarith
-  · have hpn := operator_mul_result_isNormalized _ _ _ _ hx hy hxm hym hmul hpm
-    have hzm := operator_div_divisor_ne_zero _ _ _ _ hz hdiv
-    have hu := operator_div_underflow_truth_small p z q _ hpn hz hpm hzm hdiv hq
-    have hw1 := operator_mul_rounds_to_nearest x y p hx hy hmul hpm
+  · have hpn := Number.operator_mul_result_isNormalized _ _ _ _ hx hy hxm hym hmul hpm
+    have hzm := Number.operator_div_divisor_ne_zero _ _ _ _ hz hdiv
+    have hu := Number.operator_div_underflow_truth_small p z q _ hpn hz hpm hzm hdiv hq
+    have hw1 := Number.operator_mul_rounds_to_nearest x y p hx hy hmul hpm
     simp only [RoundsWithin, RatValued.toRat] at hw1
     change |p.toRat - x.toRat * y.toRat| ≤ |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7)) at hw1
     rw [abs_of_nonneg hxy0] at hw1
@@ -136,7 +136,7 @@ private lemma Vault.sharesToAssetsWithdraw_integral_near (v : Vault) (shares pri
   obtain ⟨sn0, hsn0, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical shares .to_nearest
     (STAmount.Canonical.exactCanonical _ hsc)
   obtain rfl := Except.ok.inj (hsn0.symm.trans hsn)
-  have hSTm := operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
+  have hSTm := Number.operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
   have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne v.wf.sharesTotal_nonneg
     (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hSTm))
   have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := rat_one_le_of_den_one_pos _ v.wf.sharesTotal_int hSTpos

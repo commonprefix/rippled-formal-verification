@@ -148,8 +148,8 @@ private lemma Vault.cash_update_le (v : Vault) (cash aa aa' : Number) (hfr : v.n
     rw [hfr]; intro h'; cases h'
   obtain ⟨hb, hsr⟩ := Vault.baseExponent_grid v
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have han := operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
-  have hR := operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
+  have han := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
   by_cases hneg : v.assetsAvailable.toRat + cash.toRat < 0
   · -- the sum rounds to at most zero, and so does its rounding to the asset
     have haa0 : aa.toRat ≤ Number.zero.toRat := Number.roundsToRepresentable_le aa _ hR Number.zero
@@ -236,7 +236,7 @@ private lemma Loan.create_total_le (broker : LoanBroker) (v : Vault) (principal 
     have hf := hchecks.funds
     by_contra hc
     push Not at hc
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
     cases hf
   obtain ⟨raw, hadj, hlaw⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
   have hp' : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
@@ -400,6 +400,7 @@ private lemma Vault.deposit_total_lt (v : Vault) (amount : STAmount) (isDonation
       simp only [Vault.checkOpenLimit, hat, bind, Except.bind] at hin
       cases hin
   have hbound := Vault.checkOpenLimit_bound v amounts.assets hcf hc0 navN hat hin
+    (v.deposit_clampedCharge amount ra isDonation amounts hty (fun h => hc.2 h) hra hcomp)
   rw [Vault.assetsTotal_eq_of_grid v navN hv hS hat] at hbound
   obtain ⟨assetsNum, _, s, aa', _, hnum, -, -, hs, haa, hrw⟩ := Vault.adjustAssetsAndShares_ok_reduces v _ _ raw hadj
   obtain ⟨hnv, hnn⟩ := hcf.toNumber_exact assetsNum hnum

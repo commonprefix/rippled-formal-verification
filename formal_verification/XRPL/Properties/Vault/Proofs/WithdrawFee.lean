@@ -77,7 +77,7 @@ lemma payoutNumber_bounds (a fee pN : Number) (rate : TenthBips32) (ha : a.isNor
     · nlinarith
   have hfneg := Number.operator_neg_isNormalized fee hfn
   have hne : ¬ a.operator_eq fee = true := by
-    rw [operator_eq_iff _ _ ha hfn]
+    rw [Number.operator_eq_iff _ _ ha hfn]
     intro h
     nlinarith
   by_cases hpm : pN.mantissa_ = 0
@@ -92,11 +92,11 @@ lemma payoutNumber_bounds (a fee pN : Number) (rate : TenthBips32) (ha : a.isNor
         Number.negative_false_of_pos fee hfpos]
       decide
     have hnz : ¬ a.operator_eq fee.operator_neg.operator_neg = true := by
-      rw [operator_eq_iff _ _ ha (Number.operator_neg_isNormalized _ hfneg), Number.toRat_neg,
+      rw [Number.operator_eq_iff _ _ ha (Number.operator_neg_isNormalized _ hfneg), Number.toRat_neg,
         Number.toRat_neg, neg_neg]
       intro h
       nlinarith
-    have h := operator_add_underflow_truth_small a fee.operator_neg pN .downward ha hfneg ham
+    have h := Number.operator_add_underflow_truth_small a fee.operator_neg pN .downward ha hfneg ham
       (by rw [Number.operator_neg_mantissa_of_ne fee hfm]; exact hfm) hdiff hnz hsub' hpm
     rw [Number.toRat_neg, ← sub_eq_add_neg, abs_of_pos (by nlinarith)] at h
     have htiny : (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) <
@@ -110,7 +110,7 @@ lemma payoutNumber_bounds (a fee pN : Number) (rate : TenthBips32) (ha : a.isNor
         norm_num
       exact lt_trans (zpow_lt_zpow_right₀ (by norm_num) (by norm_num)) h5
     nlinarith
-  obtain ⟨hlo, hhi⟩ := operator_sub_rounds_downward a fee pN ha hfn ham hfm hne hsub hpm
+  obtain ⟨hlo, hhi⟩ := Number.operator_sub_rounds_downward a fee pN ha hfn ham hfm hne hsub hpm
   change pN.toRat ≤ a.toRat - fee.toRat at hlo
   change a.toRat - fee.toRat - pN.toRat ≤ |a.toRat - fee.toRat| * _ at hhi
   rw [abs_of_pos (by nlinarith)] at hhi
@@ -168,7 +168,7 @@ lemma Vault.feePayout_shape (v : Vault) (priced payout : STAmount) (aN fee pN : 
   obtain ⟨hpN0, hpNle, -⟩ := payoutNumber_bounds aN fee pN rate han (hav ▸ hp0) (hav ▸ hsmall) hrate hfee hsub
   have hpm : payout.mValue ≠ 0 := by simpa [STAmount.isZero] using hpz
   have hfn := (tenthBipsOfValue_upward_facts aN rate fee han (hav ▸ hp0) hfee).1
-  have hpNn := operator_sub_isNormalized _ _ _ _ han hfn hsub (STAmount.ofNumber_source_ne_zero _ _ _ _ hpo hpm)
+  have hpNn := Number.operator_sub_isNormalized _ _ _ _ han hfn hsub (STAmount.ofNumber_source_ne_zero _ _ _ _ hpo hpm)
   obtain ⟨hple, -, hpay0⟩ := STAmount.ofNumber_downward_floor_bounds _ _ _ hpNn
     (Number.negative_false_of_nonneg _ hpNn hpN0) hpo hpm
   rw [hav] at hpNle
@@ -317,9 +317,9 @@ lemma Vault.Reachable.clamp_base (v : Vault) (t0 : UInt32) (hr : Vault.Reachable
   obtain ⟨s, hs, hne'⟩ := postSumExponent_reduces _ _ _ _ _ hps
   obtain ⟨hdv, hdn⟩ := hX.operator_neg.toNumber_exact dN hdN
   rw [STAmount.operator_neg_toRat] at hdv
-  have hr1 := operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs
+  have hr1 := Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs
   rw [hdv, ← sub_eq_add_neg] at hr1
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs
   have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s _ hr1 (by linarith)
   have hsle : s.toRat ≤ v.assetsAvailable.toRat :=
     Number.RoundsToRepresentable.le_of_le_normalized s _ hr1 _ v.wf.assetsAvailable_norm (by linarith)
@@ -341,7 +341,7 @@ lemma Vault.lt_cash_false (v : Vault) (X : STAmount) (n : Number) (hX : X.Canoni
   cases h : v.assetsAvailable.operator_lt n with
   | false => rfl
   | true =>
-    have := (operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).mp h
+    have := (Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).mp h
     linarith
 
 /-- Proof of `Vault.withdraw_under_available`. A reachable vault prices shares up to the share total at

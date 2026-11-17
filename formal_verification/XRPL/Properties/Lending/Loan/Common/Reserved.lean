@@ -92,7 +92,7 @@ lemma Loan.create_checkedInterest_nonneg (broker : LoanBroker) (v : Vault) (prin
     push_cast [Nat.cast_sub hjaT]; ring
   have hR10 : broker.managementFeeRate.toNat ≤ 10000 := broker.managementFeeRate_le
   obtain ⟨-, hmf_hi, -, -⟩ := computeManagementFee_bounds broker.numericType ti _ (aT - j)
-    broker.managementFeeRate ls (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
+    broker.managementFeeRate ls (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
     (by omega) hR10 ⟨by omega, hhi⟩ hint hfr hmfo
   have hmmK : mm ≤ aT - j := by
     have hC : ((aT - j) * broker.managementFeeRate.toNat + 99999) / 100000 ≤ aT - j := by
@@ -139,7 +139,7 @@ lemma Loan.create_inside_open_zone (broker : LoanBroker) (v : Vault) (principal 
   · have h1 := hchecks.funds
     by_contra hc'
     push Not at hc'
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
     exact absurd h1 (by decide)
 
 /-- What a new loan reserves. On the base grid a pending loan adds PrincipalRequested to AssetsReserved

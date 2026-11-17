@@ -1,4 +1,5 @@
 import XRPL.Properties.Lending.LoanBroker.Common.DepositExits
+import XRPL.Properties.Lending.LoanBroker.Common.DepositRangeWitness
 
 /-! # `LoanBrokerCoverDeposit` exits
 
@@ -61,6 +62,15 @@ theorem LoanBroker.canCoverDeposit_error_codes (pool : α) (amount : STAmount) (
     (hok : lb.canCoverDeposit pool amount = .ok ter) :
     ter = .tesSUCCESS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED :=
   LoanBroker.canCoverDeposit_error_codes_proof lb pool amount ter hok
+
+/-- Witness for `canCoverDeposit_error_codes`: on a reachable XRP broker with 1 drop of cover, the check of a deposit
+of `10^17` drops ends in an error, not a result code. CoverAvailable + amount is above the largest XRP amount. -/
+theorem LoanBroker.canCoverDeposit_error_codes_attained :
+    ∃ (lb : LoanBroker) (v : SingleAssetVault.Vault) (amount : STAmount),
+      lb.Reachable v.baseExponent ∧ v.numericType = lb.numericType ∧ amount.Canonical ∧
+      amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
+      lb.canCoverDeposit v amount = .error .outOfRange :=
+  LoanBroker.canCoverDeposit_out_of_range_witness
 
 /-- The exits of `coverDeposit`, in the order it runs its checks. Each line assumes the checks before it passed. -/
 theorem LoanBroker.coverDeposit_exits (pool : α) (amount : STAmount) :

@@ -66,7 +66,7 @@ private lemma STAmount.roundtrip_of_isRounded_false (nt : NumericType) (value : 
     have heq : n.operator_eq value = true :=
       Except.ok.inj (show (Except.ok (n.operator_eq value) : Except Error Bool) = .ok true from hconv)
     exact ⟨st, n, hst, hnum,
-      (operator_eq_iff n value (STAmount.toNumber_isNormalized st _ n hnum) hn).mp heq⟩
+      (Number.operator_eq_iff n value (STAmount.toNumber_isNormalized st _ n hnum) hn).mp heq⟩
 
 /-- An amount the asset stores exactly converts to it without throwing. -/
 lemma STAmount.ofNumber_ok_of_isRounded_false (nt : NumericType) (x : Number)
@@ -82,7 +82,7 @@ private lemma STAmount.isRounded_false_of_exact (nt : NumericType) (value : Numb
     (hc : st.ExactCanonical) (hval : st.toRat = value.toRat) :
     STAmount.isRounded nt value = false := by
   obtain ⟨sn, hsn, hv, hsnorm⟩ := STAmount.toNumber_exact_canonical st .to_nearest hc
-  have heq : sn.operator_eq value = true := (operator_eq_iff sn value hsnorm hn).mpr (hv.trans hval)
+  have heq : sn.operator_eq value = true := (Number.operator_eq_iff sn value hsnorm hn).mpr (hv.trans hval)
   have hconv : STAmount.equalAfterNumberConvert nt value = .ok true := by
     unfold STAmount.equalAfterNumberConvert
     rw [hok]
@@ -229,7 +229,7 @@ lemma STAmount.roundToNumericType_of_isRounded_false (nt : NumericType) (value r
       rw [hsn] at h hok
       obtain rfl := Except.ok.inj hok
       have heq : n.operator_eq value = true := by simpa using h
-      exact (operator_eq_iff n value (STAmount.toNumber_isNormalized st _ n hsn) hn).mp heq
+      exact (Number.operator_eq_iff n value (STAmount.toNumber_isNormalized st _ n hsn) hn).mp heq
 
 /-- A whole number of units below `10^16` at a scale in `[-81, 80]` is a value an IOU stores exactly. -/
 lemma STAmount.representable_fractional_of_units (k : ℕ) (s : ℤ) (hk : k < 10 ^ 16)

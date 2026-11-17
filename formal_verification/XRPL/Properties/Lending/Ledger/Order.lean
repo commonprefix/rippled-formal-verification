@@ -68,11 +68,12 @@ theorem Lending.defaults_comm (l la lb lab lba : LendingLedger) (hr : l.Reachabl
     -- the vault is not coarsened (Bug FV_M4_28)
     (htotal : l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat <
       10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
-    -- CoverAvailable is below 2^63 base units, so a Number takes each cover off it exactly
+    -- CoverAvailable is below 10^16 base units, so its 16 stored digits take each cover off it exactly
     (hcover : ∀ loan, l.LoanAt i loan →
-      loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) :
+      loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) :
     lab.vault = lba.vault ∧ lab.brokers = lba.brokers ∧ ∀ k loan, lab.LoanAt k loan ↔ lba.LoanAt k loan :=
-  LendingLedger.defaults_comm_proof l la lb lab lba hr i j ha hab hb hba hliq htotal hcover
+  LendingLedger.defaults_comm_proof l la lb lab lba hr i j ha hab hb hba hliq htotal fun loan hat =>
+    (hcover loan hat).trans_le (mul_le_mul_of_nonneg_right (by norm_num) (by positivity))
 
 /-- Witness: a run where the liquidation amount caps the defaults and the two orders give a different vault. Loans
 of 800 and 150 on a broker with DebtTotal 950: the larger first gets 935 of cover, the other order only 870. -/
@@ -83,7 +84,7 @@ theorem Lending.defaults_comm_attained :
       (l.apply (.loanManage j .default)).run = .ok (.ok lb) ∧
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
-      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
+      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
       lab.vault ≠ lba.vault :=
   LendingLedger.defaults_comm_liquidation_witness
 
@@ -96,12 +97,12 @@ theorem Lending.defaults_comm_coarsened_attained :
       (l.apply (.loanManage j .default)).run = .ok (.ok lb) ∧
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       (l.DefaultUncapped i ∧ la.DefaultUncapped j ∧ l.DefaultUncapped j ∧ lb.DefaultUncapped i) ∧
-      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
+      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
       lab.vault ≠ lba.vault :=
   LendingLedger.defaults_comm_coarsened_witness
 
 /-- Witness: a run where the two orders give a different broker. The cover of 1000000000001 on a vault at Scale 10 is
-about 10^22 base units, above 2^63, and a Number rounds each cover taken off it to whole millionths. -/
+about 10^22 base units, above 10^16, and a Number rounds each cover taken off it to whole millionths. -/
 theorem Lending.defaults_comm_cover_attained :
     ∃ (l la lb lab lba : LendingLedger) (i j : Nat), l.Reachable ∧
       (l.apply (.loanManage i .default)).run = .ok (.ok la) ∧

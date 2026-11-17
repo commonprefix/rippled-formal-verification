@@ -1,5 +1,6 @@
 import XRPL.Properties.Vault.Proofs.WithdrawExits
 import XRPL.Properties.Vault.Proofs.MaxValueFits
+import XRPL.Properties.Vault.Proofs.WithdrawRangeWitness
 
 /-! # `Vault.withdraw` exits
 
@@ -124,5 +125,14 @@ theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t :
   -- a lawful vault stores its cash exactly, so the `tefBAD_LEDGER` branch never runs
   simpa [v.valid.assetsAvailable_representable] using
     Vault.withdraw_error_codes_proof v amount waive t hpos hmax ter hok
+
+/-- Witness for `withdraw_error_codes`: on a reachable XRP vault of 100 drops and 100 shares, a withdrawal of
+`10^17 + 1` shares ends in an error, not a result code. The shares are worth more than the largest XRP amount. -/
+theorem Vault.withdraw_error_codes_attained :
+    ∃ (v : Vault) (t0 t : UInt32) (amount : WithdrawAmount) (waive : Bool) (hpos : 0 < amount.amount.toRat),
+      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧
+      (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
+      (v.withdraw amount waive t hpos).run = .error .outOfRange :=
+  Vault.withdraw_out_of_range_witness
 
 end XRPL.Model.SingleAssetVault

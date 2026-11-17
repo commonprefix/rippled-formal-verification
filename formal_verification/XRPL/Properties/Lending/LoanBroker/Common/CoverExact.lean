@@ -29,7 +29,7 @@ private lemma grid_add_exact (x y d : Number) (s : Int) (hx : Number.OnGrid s x)
     exfalso
     obtain ⟨w, hw, hwv⟩ :=
       Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) s (by constructor <;> norm_num) hs
-    have hR := operator_add_rounded_to_nearest x y d hxn hyn hok
+    have hR := Number.operator_add_rounded_to_nearest x y d hxn hyn hok
     have hwle : w.toRat ≤ x.toRat + y.toRat := by
       rw [hwv, hsum]
       have h9 : 9 * 10 ^ 15 + 1 ≤ jx + jy := by omega
@@ -150,7 +150,7 @@ lemma LoanBroker.coverWithdraw_exact (lb : LoanBroker) (v : Vault) (amount : STA
   obtain ⟨hav, -⟩ := STAmount.CanonicalOrZero.toNumber_exact hac aN hnum
   have hng := Vault.clamp_onGrid v _ _ _ (STAmount.CanonicalOrZero.operator_neg (Or.inl hc)) hcl aN hnum
   have hle : aN.toRat ≤ lb.coverAvailable.toRat :=
-    (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hng.1).mp hge
+    (Number.operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hng.1).mp hge
   have hexact := grid_sub_exact _ _ _ _ hz.cover hng (Vault.baseExponent_grid v).2 (by rw [hav]; exact ha0) hle
     hz.coverFits.coverLt hsub
   refine ⟨hcl, ⟨j, hj⟩, (STAmount.isZero_eq_false_iff_pos a ha0).mp hnz, hale, by rw [← hav]; exact hle, ?_⟩
@@ -191,7 +191,7 @@ lemma LoanBroker.coverClawback_exact (lb : LoanBroker) (v : Vault) (amount : Opt
       exact_mod_cast lt_of_mul_lt_mul_right this hp.le
     obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-1) v.baseExponent (by constructor <;> norm_num)
       (Vault.baseExponent_grid v).2
-    have hR := operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hsub
+    have hR := Number.operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hsub
     have hwle : lb.coverAvailable.toRat - m.toRat ≤ w.toRat := by
       rw [hwv, hjc, hjm]
       have : ((jc - jm : ℤ) : ℚ) ≤ -1 := by exact_mod_cast (by omega : jc - jm ≤ -1)

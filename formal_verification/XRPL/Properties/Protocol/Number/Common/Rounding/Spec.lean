@@ -394,7 +394,7 @@ def Number.operator_addSpec (x y : Number) (mode : rounding_mode) : Except Error
         else (toUInt64 zm128, xe, g)
       match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
       | .error err => .error err
-      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
+      | .ok res => .ok res.toNumber
     else
       let (zm128, zn, ze) :=
         if xm > ym then (toUInt128 xm - toUInt128 ym, xn, xe)

@@ -25,7 +25,7 @@ private lemma Number.min_eq_left_of_le (x y : Number) (hx : x.isNormalized) (hy 
   unfold Number.min
   rw [if_neg]
   intro hlt
-  exact absurd ((operator_lt_iff _ _ hy hx).mp hlt) (not_lt.mpr h)
+  exact absurd ((Number.operator_lt_iff _ _ hy hx).mp hlt) (not_lt.mpr h)
 
 /-- A broker that holds its minimum cover holds at least the liquidation amount of a default. DebtTotal is `t`
 base units, at most `10^16` of them, as on every reachable ledger. -/
@@ -110,11 +110,11 @@ private lemma Loan.defaultCover_eq_of_cover (loan₁ loan₂ : Loan) (v : Vault)
   dsimp only
   rw [hdebt, hcrm, hcrl, hnt, hpo]
   cases hmc : tenthBipsOfValue loan₁.broker.debtTotal loan₁.broker.coverRateMinimum .upward with
-  | error err => rfl
+  | error err => exact (rfl : (Except.error err : Except Error _) = .error err)
   | ok minimumCover =>
     rw [ok_bind, ok_bind]
     cases hliq : tenthBipsOfValue minimumCover loan₁.broker.coverRateLiquidation .upward with
-    | error err => rfl
+    | error err => exact (rfl : (Except.error err : Except Error _) = .error err)
     | ok liquidationAmount =>
       rw [ok_bind, ok_bind]
       -- the cover is not the smallest of the three, in either copy

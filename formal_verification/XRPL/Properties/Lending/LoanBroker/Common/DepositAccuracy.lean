@@ -45,7 +45,7 @@ lemma LoanBroker.coverDeposit_increases_cover_proof (lb : LoanBroker) (pool : α
   have hm0 : 0 ≤ m.toRat := by rw [hmv]; exact ((STAmount.signum_pos_iff_toRat_pos r).mp hpos).le
   show lb.coverAvailable.toRat ≤ res.loanBroker'.toRawLoanBroker.coverAvailable.toRat
   rw [hraw]
-  exact operator_add_ge_of_ge_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn hadd lb.wf.coverAvailable_norm
+  exact Number.operator_add_ge_of_ge_normalized _ _ _ _ lb.wf.coverAvailable_norm hmn hadd lb.wf.coverAvailable_norm
     (by linarith)
 
 /-- Proof body of the deposit line of `cover_total`. -/

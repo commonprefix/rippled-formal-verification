@@ -56,9 +56,9 @@ def STAmount.intAmount (s : STAmount) : Except Error IntAmount :=
 def STAmount.iou (s : STAmount) (mode : rounding_mode) : Except Error IOUAmount :=
   if s.integral then
     .error .cannotConvert
-  else do
-    let mantissa ← s.signedDrops.toInt64Checked
-    IOUAmount.ofMantissaExp mantissa s.mOffset mode
+  else
+    let mantissa := s.mValue.toInt64
+    IOUAmount.ofMantissaExp (if s.mIsNegative then -mantissa else mantissa) s.mOffset mode
 
 def STAmount.toNumber (s : STAmount) (mode : rounding_mode) : Except Error Number :=
   if s.integral then
@@ -182,7 +182,8 @@ def STAmount.operator_add (v1 v2 : STAmount) (mode : rounding_mode)
     .error .notComparable
   else if v2.mValue == 0 then .ok v1
   else if v1.mValue == 0 then
-    STAmount.checked v1.mNumericType v2.mValue v2.mOffset v2.mIsNegative mode
+    if v1.integral && v2.mValue > maxRep then .error .overflow
+    else STAmount.checked v1.mNumericType v2.mValue v2.mOffset v2.mIsNegative mode
   else if v1.integral then do
     let drops1 ← v1.signedDrops.toInt64Checked
     let drops2 ← v2.signedDrops.toInt64Checked

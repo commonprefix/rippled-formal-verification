@@ -120,13 +120,13 @@ structure UnitsAt (x : Number) (s : Int) (k : ℤ) : Prop where
 lemma UnitsAt.add {x y d : Number} {s : Int} {a b : ℤ} (hx : UnitsAt x s a) (hy : UnitsAt y s b)
     (hab : -2 ^ 63 < a + b ∧ a + b < 2 ^ 63) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1)
     (hok : x.operator_add y .to_nearest = .ok d) : UnitsAt d s (a + b) :=
-  ⟨operator_add_isNormalized_to_nearest_sz x y d hx.norm hy.norm hok,
+  ⟨Number.operator_add_isNormalized_to_nearest_sz x y d hx.norm hy.norm hok,
     Number.operator_add_toRat_of_grid x y d a b s hx.norm hy.norm hx.val hy.val hab hs hok⟩
 
 lemma UnitsAt.sub {x y d : Number} {s : Int} {a b : ℤ} (hx : UnitsAt x s a) (hy : UnitsAt y s b)
     (hab : -2 ^ 63 < a - b ∧ a - b < 2 ^ 63) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1)
     (hok : x.operator_sub y .to_nearest = .ok d) : UnitsAt d s (a - b) :=
-  ⟨operator_sub_isNormalized_to_nearest_sz x y d hx.norm hy.norm hok,
+  ⟨Number.operator_sub_isNormalized_to_nearest_sz x y d hx.norm hy.norm hok,
     Number.operator_sub_toRat_of_grid x y d a b s hx.norm hy.norm hx.val hy.val hab hs hok⟩
 
 lemma UnitsAt.of_atExponent {x : Number} {s : Int} {B : ℕ} (hx : x.isNormalized)

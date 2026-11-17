@@ -123,7 +123,7 @@ lemma LendingLedger.Reachable.pay_of_instalments {l : LendingLedger} (hr : l.Rea
   obtain ⟨yd, hyd⟩ := Number.operator_sub_ok_of_abs i' q.scheduledInterest .to_nearest hi'N hsiN
     (by rw [abs_of_nonneg hi'0]; nlinarith [show (10 : ℚ) ^ 16 + 1 < 10 ^ 200 by norm_num])
     (by rw [abs_of_nonneg hsi0]; nlinarith [show (10 : ℚ) ^ 16 < 10 ^ 200 by norm_num])
-  have hydN := operator_sub_isNormalized_to_nearest_sz _ _ _ hi'N hsiN hyd
+  have hydN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hi'N hsiN hyd
   have hydv : yd.toRat = i'.toRat - q.scheduledInterest.toRat := Number.OnGrid.sub_toRat gi' gsi hs81 hb63 hyd
   have hyd0 : 0 ≤ q.pool.yieldUnrealized.toRat + yd.toRat := by rw [hYUe, hydv]; linarith
   have hydl : |yd.toRat| < 10 ^ 150 := by
@@ -167,11 +167,11 @@ lemma LendingLedger.Reachable.pay_of_instalments {l : LendingLedger} (hr : l.Rea
       rw [hpoe, hr.reservedInv.sum, hr.debtInv.deployed]
       exact LendingLedger.principalSum_add_le_all l (·.isPending) he hnpe
     rw [hARe, hADe]; linarith
-  have hAAfit : q.pool.numericType.isIntegral = true → q.pool.assetsAvailable.toRat +
-      q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤ q.pool.numericType.maxValue.toNat := by
+  have hATfit : q.pool.numericType.isIntegral = true → q.pool.assetsAvailable.toRat +
+      q.pool.assetsDeployed.toRat + q.amounts.interestPaid.toRat + 1 ≤ q.pool.numericType.maxValue.toNat := by
     intro hint
     rw [hntv] at hint ⊢
-    rw [hAv]
+    rw [hAv, hADe]
     exact hfit loan q hat hq hint
 
   obtain ⟨toBroker, cover', hfeeF, hcovN, hcov0⟩ := UnsettledPayment.fee_of_fits q hasset hnt hdebt hfN hF0
@@ -180,7 +180,7 @@ lemma LendingLedger.Reachable.pay_of_instalments {l : LendingLedger} (hr : l.Rea
 
   obtain ⟨r, hok⟩ := Loan.pay_ok_of_room loan l.vault pt amount l.now q hq hnt hasset hArep hAg hA16 gP gI hP0
     hI0 hPI hparts yd ⟨i', hi', hyd⟩ hydN hyd0 hydl hYU toBroker cover' hfeeF hcovN hcov0 hdebt hPDT hcount hdep
-    hADpos hLU hAR hAAfit (hmove.symm.imp id id)
+    hADpos hLU hAR hATfit (hmove.symm.imp id id)
   refine ⟨l.commitLoan (LoanEffect.ofLoan i e r.loan' r.pool'), ?_⟩
   rw [LendingLedger.apply_of_preflight hpre]
   simp only [LendingLedger.applyChecked, hnd, LendingTx.isVault, LendingTx.isBroker, Bool.false_eq_true,

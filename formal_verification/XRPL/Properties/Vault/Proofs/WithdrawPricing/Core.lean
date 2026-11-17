@@ -46,13 +46,13 @@ lemma pipe (nav sn NS an ST : Number) (hnav : nav.isNormalized) (hN0 : 0 ≤ nav
       nav.toRat * sn.toRat / ST.toRat * sharesε := by
   have hyne : ¬ ST.operator_eq Number.zero = true := fun h => by
     simp [Number.operator_div, h] at hdiv
-  have hNSm := operator_div_numerator_ne_zero_sz _ _ _ _ hyne hdiv han
-  obtain ⟨hnm, hsm⟩ := operator_mul_operands_ne_zero hnav hsn hmul hNSm
-  have hNSn := operator_mul_result_isNormalized _ _ _ _ hnav hsn hnm hsm hmul hNSm
-  obtain ⟨-, hSTm⟩ := operator_div_operands_ne_zero hNSn hST hdiv han
-  have hann := operator_div_result_isNormalized _ _ _ _ hNSn hST hNSm hSTm hdiv han
+  have hNSm := Number.operator_div_numerator_ne_zero_sz _ _ _ _ hyne hdiv han
+  obtain ⟨hnm, hsm⟩ := Number.operator_mul_operands_ne_zero hnav hsn hmul hNSm
+  have hNSn := Number.operator_mul_result_isNormalized _ _ _ _ hnav hsn hnm hsm hmul hNSm
+  obtain ⟨-, hSTm⟩ := Number.operator_div_operands_ne_zero hNSn hST hdiv han
+  have hann := Number.operator_div_result_isNormalized _ _ _ _ hNSn hST hNSm hSTm hdiv han
   have h1 : |NS.toRat - nav.toRat * sn.toRat| ≤ |nav.toRat * sn.toRat| * (5 / (2 ^ 63 + 7)) :=
-    operator_mul_rounds_to_nearest nav sn NS hnav hsn hmul hNSm
+    Number.operator_mul_rounds_to_nearest nav sn NS hnav hsn hmul hNSm
   have h2 : |an.toRat - NS.toRat / ST.toRat| ≤ |NS.toRat / ST.toRat| * DepTight.divSharpε :=
     DepTight.operator_div_rounds_to_nearest_sharp NS ST an hNSn hST hdiv han
   set T := nav.toRat * sn.toRat with hT

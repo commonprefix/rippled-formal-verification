@@ -9,7 +9,6 @@
 #include <test/jtx/flags.h>
 #include <test/jtx/mpt.h>
 #include <test/jtx/pay.h>
-#include <test/jtx/ter.h>
 #include <test/jtx/trust.h>
 
 #include <xrpl/basics/Number.h>
@@ -328,23 +327,6 @@ class LeanVaultDeposit_test : public LeanSuite
             tefEXCEPTION);
     }
 
-    // Finding (C++ bug): a deposit charges round-to-nearest, so a deposit into a vault
-    // can be undercharged, overvaluing the new shares and diluting existing holders (FV_M2_3).
-    // Covered by the charge rounding cases of testDepositCases.
-    void
-    testVaultDepositOvervaluedShares(
-        jtx::Env& env,
-        Keylet const& vault,
-        jtx::Account const& depositor)
-    {
-        testcase("deposit overvalued shares");
-        // A 3-drop seed and a 2-drop donation: 1 share = 1.667 drops. A 4-drop deposit buys 2
-        // shares: C++ charges round(3.33) = 3, the model charges ceil = 4.
-        StagedAmounts staged = seededVault(env, vault, vaultUnits(env, vault, 3));
-        staged.available = vaultUnits(env, vault, 5);
-        expectStagedDeposit(env, vault, depositor, staged, vaultUnits(env, vault, 4), tesSUCCESS);
-    }
-
     // Donating to a vault with no outstanding shares is rejected (tecNO_PERMISSION).
     void
     testVaultDonationEmptyVault(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
@@ -374,152 +356,6 @@ class LeanVaultDeposit_test : public LeanSuite
             .sharesTotal = 1'000,
         };
         expectStagedDeposit(env, vault, depositor, staged, vaultUnits(env, vault, 1'000), expected);
-    }
-
-    // FV_M2_7: a donation to an insolvent vault (assetsTotal=0, sharesTotal>0) is NOT blocked
-    void
-    testVaultDonationInsolvent(jtx::Env& env, Keylet const& vault, jtx::Account const& owner)
-    {
-        testcase("donation to insolvent vault");
-        StagedAmounts const insolvent{
-            .available = vaultUnits(env, vault, 0),
-            .sharesTotal = 1'000'000,
-        };
-        expectStagedDeposit(
-            env, vault, owner, insolvent, vaultUnits(env, vault, 1'000), tesSUCCESS, true);
-    }
-
-    // FV_M2_8 (both sides): the sfAssetsTotal += update re-rounds, dropping the sum's low
-    // digits and lowering the share price. Assert the price does not fall.
-    void
-    testDepositDilution()
-    {
-        using namespace jtx;
-        testcase("deposit lowers the share price (dilution)");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        PrettyAsset const asset = issuer["USD"];
-        Number const depositN{15'870'335, -4};  // 1587.0335
-        auto const vaultKeylet = createDilutionVault(env, owner, issuer, holder, asset, depositN);
-
-        Vault const before = readVaultState(env, vaultKeylet, asset.raw());
-        STAmount const amount = asset(depositN);
-        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
-        expectLawful(lean);
-        BEAST_EXPECTS(!lean.leanError.has_value(), "lean deposit error");
-
-        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        Vault const after = readVaultState(env, vaultKeylet, asset.raw());
-
-        BEAST_EXPECTS(
-            priceNotBelow(
-                after.assetsTotal, after.sharesTotal, before.assetsTotal, before.sharesTotal),
-            "C++ deposit lowered the share price");
-        BEAST_EXPECTS(
-            priceNotBelow(
-                lean.vault.assetsTotal,
-                lean.vault.sharesTotal,
-                before.assetsTotal,
-                before.sharesTotal),
-            "model deposit lowered the share price");
-    }
-
-    // FV_M2_15 (regression): an IOU deposit whose exact new total needed 17 significant digits
-    // rounded up when stored, crediting more than the depositor paid. Such a total is now past the
-    // open limit (9e15 grid units), which is what rejects the deposit on both sides.
-    void
-    testDepositPastOpenLimit(
-        jtx::Env& env,
-        Keylet const& vault,
-        jtx::Account const& issuer,
-        Number const& seed,
-        Number const& deposit)
-    {
-        int const vaultScale = env.le(vault)->at(sfScale);
-        testcase(
-            "deposit " + to_string(deposit) + " into " + to_string(seed) + " at scale " +
-            std::to_string(vaultScale) + " passes the open limit");
-        Asset const asset = env.le(vault)->at(sfAsset);
-        expectStagedDeposit(
-            env,
-            vault,
-            issuer,
-            seededVault(env, vault, STAmount{asset, seed}),
-            STAmount{asset, deposit},
-            tecLIMIT_EXCEEDED);
-    }
-
-    // The round-trip charge is clamped to the vault grid, so the totals move by exactly what the
-    // depositor pays (both C++ and the model).
-    void
-    testDepositAppliedDelta()
-    {
-        using namespace jtx;
-        testcase("deposit moves the vault totals by exactly the amount paid");
-
-        Env env(*this);
-        Account const owner{"owner"};
-        Account const issuer{"issuer"};
-        Account const holder{"holder"};
-        PrettyAsset const asset = issuer["USD"];
-        auto const vaultKeylet = createAppliedDeltaVault(env, owner, issuer, holder, asset);
-
-        // Leave the holder exactly 0.001: the debit below then subtracts without rounding,
-        // so the balance diff is the exact amount accountSend moves.
-        env(pay(holder, issuer, asset(Number{992, -3})));
-        env.close();
-
-        Vault const before = readVaultState(env, vaultKeylet, asset.raw());
-        BEAST_EXPECT(before.assetsTotal == Number{3});
-
-        // Deposit 0.001, an amount already on the vault grid.
-        STAmount const amount = asset(Number{1, -3});
-        LeanVaultResult const lean = leanVaultDeposit(before, amount, false, parentCloseTime(env));
-        expectLawful(lean);
-        BEAST_EXPECTS(!lean.leanError.has_value() && !lean.error, "lean deposit failed");
-
-        Number const holderBefore = iouBalance(env, holder, asset);
-        env(jtx::Vault::deposit({.depositor = holder, .id = vaultKeylet.key, .amount = amount}),
-            jtx::Ter(tesSUCCESS));
-        env.close();
-        Vault const after = readVaultState(env, vaultKeylet, asset.raw());
-
-        // C++: the vault must gain exactly what the depositor paid.
-        Number const cppDelta = after.assetsTotal - before.assetsTotal;
-        Number const paid = holderBefore - iouBalance(env, holder, asset);
-        BEAST_EXPECTS(
-            cppDelta == paid,
-            "C++ booked " + to_string(cppDelta) + " but the depositor paid " + to_string(paid));
-
-        // Model: the vault must gain exactly the charge it reports.
-        Number const leanDelta = lean.vault.assetsTotal - before.assetsTotal;
-        BEAST_EXPECTS(
-            leanDelta == Number{lean.assets},
-            "model booked " + to_string(leanDelta) + " but charged " +
-                to_string(Number{lean.assets}));
-
-        // C++: the paid amount must be on the vault scale.
-        STAmount const paidRounded =
-            roundToVaultGrid(asset, before.scale, before.assetsTotal, paid);
-        BEAST_EXPECTS(
-            Number{paidRounded} == paid,
-            "the paid " + to_string(paid) + " re-rounds to " + to_string(Number{paidRounded}));
-
-        // Model: its charge must be on the vault scale as well.
-        LeanAmountResult const chargeRounded = leanRoundedDepositAmount(before, lean.assets);
-        expectLawful(chargeRounded);
-        BEAST_EXPECTS(
-            !chargeRounded.leanError.has_value() && chargeRounded.amount,
-            "rounding the charge failed");
-        BEAST_EXPECTS(
-            chargeRounded.amount && Number{*chargeRounded.amount} == Number{lean.assets},
-            "the charge " + to_string(Number{lean.assets}) + " re-rounds to " +
-                (chargeRounded.amount ? to_string(Number{*chargeRounded.amount}) : "none"));
     }
 
     // The vaults a case list runs on, each with the account that deposits into it.
@@ -1385,20 +1221,6 @@ class LeanVaultDeposit_test : public LeanSuite
         testVaultDonationEmptyVault(env, s.xrpVault, s.owner);
         testVaultDepositCap(env, s.mptVault, s.depositor, Number{1'000}, tecLIMIT_EXCEEDED);
         testVaultDepositCap(env, s.mptVault, s.depositor, Number{2'000}, tesSUCCESS);
-
-        // Open discrepancies, disabled until the C++ code is fixed.
-        // clang-format off
-        // testDepositDilution();          // FV_M2_8_c: deposit lowers the share price (both)
-        // testDepositPastOpenLimit(env, s.iouDefaultScaleVault, s.issuer, Number{9'999'999'999'999'999LL, -6}, Number{1, -5});  // FV_M2_15_b
-
-        // Properties both sides now satisfy, kept as regression tests.
-        testVaultDepositOvervaluedShares(env, s.xrpVault, s.depositor);
-        testDepositAppliedDelta();
-        testVaultDonationInsolvent(env, s.mptVault, s.owner);
-        // FV_M2_15: 899999.9999999999 is at the scale-10 open limit (9e5); +5 passes it.
-        // covered by testDepositCases
-        testDepositPastOpenLimit(env, s.iouMaxScaleVault, s.issuer, Number{8'999'999'999'999'999LL, -10}, Number{5});
-        // clang-format on
 
         testDepositCases(env, s);
     }

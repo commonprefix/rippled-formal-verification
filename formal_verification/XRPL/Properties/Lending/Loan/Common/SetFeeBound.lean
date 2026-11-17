@@ -48,7 +48,7 @@ lemma operator_div_unity_le (y q : Number) (hy : y.isNormalized) (hy0 : 0 ≤ y.
   have hU := Number.ofInt64_isNormalized kTenthBipsPerUnity.toInt64
   have hUv : (Number.ofInt64 kTenthBipsPerUnity.toInt64).toRat = 100000 := by
     rw [Number.ofInt64_count]; rfl
-  have hR := operator_div_rounded_to_nearest _ _ q hy hU hq
+  have hR := Number.operator_div_rounded_to_nearest _ _ q hy hU hq
   rw [hUv] at hR
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
@@ -148,7 +148,7 @@ lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vau
     rw [Number.operator_sub_toRat_of_grid _ _ ti aT j ls htvN hpoN (by rw [haTv]; norm_cast)
       (by rw [hpov, hj]; norm_cast) (by omega) hsl hti, hK]
     push_cast [Nat.cast_sub hjaT]; ring
-  have htiN := operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti
+  have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti
   set R := broker.managementFeeRate.toNat with hRdef
 
   -- the interest times the rate is below `2^63` units
@@ -173,7 +173,7 @@ lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vau
     show ((broker.managementFeeRate.toUInt32.toNat : ℕ) : ℚ) = _
     rw [UInt16.toNat_toUInt32]
   have hyN := Number.operator_mul_isNormalized _ _ y _ htiN hRB hy
-  have hR1 := operator_mul_rounded_to_nearest _ _ y htiN hRB hy
+  have hR1 := Number.operator_mul_rounded_to_nearest _ _ y htiN hRB hy
   rw [htiv, hRBv] at hR1
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
@@ -223,7 +223,7 @@ lemma Loan.create_managementFee_upper_bound_proof (broker : LoanBroker) (v : Vau
     rw [Number.ofInt64_count]; rfl
   have hrawN := Number.operator_div_isNormalized _ _ raw _ hyN hU hraw
   have hraw0 : 0 ≤ raw.toRat := by
-    have h := (operator_div_rounded_to_nearest _ _ raw hyN hU hraw).ge_of_le hmode Number.zero
+    have h := (Number.operator_div_rounded_to_nearest _ _ raw hyN hU hraw).ge_of_le hmode Number.zero
       Number.zero_isNormalized (by rw [Number.toRat_zero, hUv]; positivity)
     rwa [Number.toRat_zero] at h
   have hmfC : props.managementFeeOutstanding.toRat ≤ raw.toRat := by

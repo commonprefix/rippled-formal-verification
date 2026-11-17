@@ -1,4 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
 
 /-! # `STAmount.roundToExponent` rounds onto the scale grid
 
@@ -16,5 +17,15 @@ theorem STAmount.roundToExponent_rounded (value result : STAmount) (s : ℤ)
     (hok : STAmount.roundToExponent value s mode = .ok result) :
     RoundsToRepresentableAt result value.toRat s mode :=
   STAmount.roundToExponent_rounded_proof value result s mode hc h_s h_s_hi hnz hok
+
+/-- At a scale of at least `-81` the rounded value never flushes to zero, so `STAmount.roundToExponent` rounds onto
+the `10^s` grid with no assumption on the result. -/
+theorem STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
+    (mode : rounding_mode)
+    (hc : value.IOUCanonical)
+    (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
+    (hok : STAmount.roundToExponent value s mode = .ok result) :
+    RoundsToRepresentableAt result value.toRat s mode :=
+  STAmount.roundToExponent_rounded_any_proof value result s mode hc h_s h_s_hi hok
 
 end XRPL.Model.Protocol

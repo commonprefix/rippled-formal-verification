@@ -195,7 +195,7 @@ lemma LendingLedger.pay_replay_twin {l L lb : LendingLedger} (hr : l.Reachable) 
   have hiN := RawLoan.interestDue_isNormalized p.loan i' hi'
   have hsiN := RawLoan.interestDue_isNormalized loanL q.scheduledInterest hsiL
   rw [← hqs] at hyd'
-  have hydN := operator_sub_isNormalized_to_nearest_sz _ _ _ hiN hsiN hyd'
+  have hydN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hiN hsiN hyd'
   have hpls : p.loan.loanScale = loanL.loanScale := by
     rw [← (congrArg RawLoan.loanScale htwq.raw :), hstL.loanScale]; rfl
   have gi' : Number.OnGrid loanL.loanScale i' := hpls ▸ Loan.interestDue_onGrid p.loan i' hi'
@@ -289,11 +289,11 @@ lemma LendingLedger.pay_replay_twin {l L lb : LendingLedger} (hr : l.Reachable) 
       rw [hpoL, hR.reservedInv.sum, hR.debtInv.deployed]
       exact LendingLedger.principalSum_add_le_all L (·.isPending) he' hnpe
     rw [hARe, hADe]; linarith
-  have hAAfit : q.pool.numericType.isIntegral = true → q.pool.assetsAvailable.toRat +
-      q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤ q.pool.numericType.maxValue.toNat := by
+  have hATfit : q.pool.numericType.isIntegral = true → q.pool.assetsAvailable.toRat +
+      q.pool.assetsDeployed.toRat + q.amounts.interestPaid.toRat + 1 ≤ q.pool.numericType.maxValue.toNat := by
     intro hint
     rw [hntv] at hint ⊢
-    rw [hAv]
+    rw [hAv, hADe]
     exact hvfit loanL q hatL hq hint
 
   have hat : l.LoanAt j loan := ⟨e, b, he, hb0, hw⟩
@@ -320,7 +320,7 @@ lemma LendingLedger.pay_replay_twin {l L lb : LendingLedger} (hr : l.Reachable) 
       have hiNp := (Loan.payInstalments_norm loan l.vault amount l.now pt p hpay).2.1
       have htpv := Number.operator_add_exact_of_fits hpNp hiNp htp
         ⟨Number.zero, Number.zero_isNormalized, by rw [hp0, hi0, Number.toRat_zero]; ring⟩
-      have htpN := operator_add_isNormalized_to_nearest_sz _ _ _ hpNp hiNp htp
+      have htpN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hpNp hiNp htp
       have htpz : tp = Number.zero := (Number.toRat_eq_zero_iff_eq_zero htpN).mp (by rw [htpv, hp0, hi0]; ring)
       rw [htpz, hpb, hntb, ← hntvl] at hcr
       have hbl := Vault.baseExponent_scale_range p.pool
@@ -348,7 +348,7 @@ lemma LendingLedger.pay_replay_twin {l L lb : LendingLedger} (hr : l.Reachable) 
 
   obtain ⟨r', hok'⟩ := Loan.pay_ok_of_room loanL L.vault pt amount L.now q hq hntq hasset hArep hAg hA16 gP gI hP0
     hI0 hPI hparts yd ⟨i', by rw [htwq.interestDue]; exact hi', hyd'⟩ hydN hyd0 hydl hYU toBroker' cover'' hfeeF
-    hcovN hcov0 hdebt hPDT hcount hdep hADpos hLU hAR hAAfit hmove
+    hcovN hcov0 hdebt hPDT hcount hdep hADpos hLU hAR hATfit hmove
   have hpreL : (LendingTx.loanPay j' pt amount).preflight L = .tesSUCCESS := by
     have h1 : (LendingTx.loanPay j' pt amount).preflight L = (LendingTx.loanPay j pt amount).preflight l := by
       simp only [LendingTx.preflight, hnt]

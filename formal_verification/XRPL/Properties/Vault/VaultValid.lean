@@ -56,11 +56,11 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
   constructor
   · intro hv
     have hAA : 0 ≤ rv.assetsAvailable.toRat := by
-      have := (operator_le_iff _ _ Number.zero_isNormalized
+      have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
       rwa [Number.toRat_zero] at this
     have hAD : 0 ≤ rv.assetsDeployed.toRat := by
-      have := (operator_le_iff _ _ Number.zero_isNormalized
+      have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.assetsDeployed_norm).mp hv.assetsDeployed_nonneg
       rwa [Number.toRat_zero] at this
     refine
@@ -81,23 +81,23 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         earlyExitFeeRate_le := ?_
         assetsAvailable_representable := ?_
         assetsAvailable_onGrid := ?_ }
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.assetsAvailable_norm).mp hv.assetsAvailable_nonneg
       rwa [Number.toRat_zero] at this
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.assetsReserved_norm).mp hv.assetsReserved_nonneg
       rwa [Number.toRat_zero] at this
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.lossUnrealized_norm).mp hv.lossUnrealized_nonneg
       rwa [Number.toRat_zero] at this
-    · have := (operator_le_iff _ _ Number.zero_isNormalized
+    · have := (Number.operator_le_iff _ _ Number.zero_isNormalized
           hwf.yieldUnrealized_norm).mp hv.yieldUnrealized_nonneg
       rwa [Number.toRat_zero] at this
     · intro m hm
       show 0 < m
       obtain ⟨m0, hm0, hval⟩ := Option.mem_map.mp hm
       have hm0norm := hwf.assetsMaximum_norm m0 hm0
-      have := (operator_lt_iff _ _ Number.zero_isNormalized
+      have := (Number.operator_lt_iff _ _ Number.zero_isNormalized
           hm0norm).mp (hv.assetsMaximum_pos m0 hm0)
       rw [Number.toRat_zero] at this
       rwa [← hval]
@@ -110,11 +110,11 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
       obtain ⟨hA, hD⟩ := hv.empty_shares hszero
       exact ⟨by show rv.assetsAvailable.toRat = 0; rw [hA, Number.toRat_zero],
              by show rv.assetsDeployed.toRat = 0; rw [hD, Number.toRat_zero]⟩
-    · exact (operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mp hv.lossUnrealized_le
+    · exact (Number.operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mp hv.lossUnrealized_le
     · -- assetsDeployed is an amount of the asset
       exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsDeployed_norm hAD).mp
         hv.assetsDeployed_representable
-    · exact (operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mp hv.assetsReserved_le
+    · exact (Number.operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mp hv.assetsReserved_le
     · -- sharesTotal fits an MPT amount
       have hcast := RawVault.WF.toExact_sharesTotal rv hwf
       rcases (STAmount.isRounded_eq_false_iff _ _ hwf.sharesTotal_norm hwf.sharesTotal_nonneg).mp
@@ -153,18 +153,18 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
         earlyExitFeeRate_le := ?_
         assetsAvailable_representable := ?_
         assetsAvailable_onGrid := ?_ }
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsAvailable_norm, Number.toRat_zero]
+    · rw [Number.operator_le_iff _ _ Number.zero_isNormalized hwf.assetsAvailable_norm, Number.toRat_zero]
       exact he.assetsAvailable_nonneg
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsDeployed_norm, Number.toRat_zero]
+    · rw [Number.operator_le_iff _ _ Number.zero_isNormalized hwf.assetsDeployed_norm, Number.toRat_zero]
       exact he.assetsDeployed_nonneg
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.assetsReserved_norm, Number.toRat_zero]
+    · rw [Number.operator_le_iff _ _ Number.zero_isNormalized hwf.assetsReserved_norm, Number.toRat_zero]
       exact he.assetsReserved_nonneg
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.lossUnrealized_norm, Number.toRat_zero]
+    · rw [Number.operator_le_iff _ _ Number.zero_isNormalized hwf.lossUnrealized_norm, Number.toRat_zero]
       exact he.lossUnrealized_nonneg
-    · rw [operator_le_iff _ _ Number.zero_isNormalized hwf.yieldUnrealized_norm, Number.toRat_zero]
+    · rw [Number.operator_le_iff _ _ Number.zero_isNormalized hwf.yieldUnrealized_norm, Number.toRat_zero]
       exact he.yieldUnrealized_nonneg
     · intro m hm
-      rw [operator_lt_iff _ _ Number.zero_isNormalized
+      rw [Number.operator_lt_iff _ _ Number.zero_isNormalized
           (hwf.assetsMaximum_norm m hm), Number.toRat_zero]
       exact he.assetsMaximum_pos m.toRat (Option.mem_map_of_mem _ hm)
     · intro hsz
@@ -174,10 +174,10 @@ theorem RawVault.valid_iff_exact (rv : RawVault) (hwf : rv.WF) :
       obtain ⟨hA, hD⟩ := he.empty_shares hsh
       exact ⟨(Number.toRat_eq_zero_iff_eq_zero hwf.assetsAvailable_norm).mp hA,
              (Number.toRat_eq_zero_iff_eq_zero hwf.assetsDeployed_norm).mp hD⟩
-    · exact (operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mpr he.lossUnrealized_le
+    · exact (Number.operator_le_iff _ _ hwf.lossUnrealized_norm hwf.assetsDeployed_norm).mpr he.lossUnrealized_le
     · exact (STAmount.isRounded_eq_false_iff _ _ hwf.assetsDeployed_norm he.assetsDeployed_nonneg).mpr
         he.assetsDeployed_representable
-    · exact (operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mpr he.assetsReserved_le
+    · exact (Number.operator_le_iff _ _ hwf.assetsReserved_norm hwf.assetsDeployed_norm).mpr he.assetsReserved_le
     · -- sharesTotal fits an MPT amount
       rw [STAmount.isRounded_eq_false_iff _ _ hwf.sharesTotal_norm hwf.sharesTotal_nonneg]
       have hcap := he.sharesTotal_representable

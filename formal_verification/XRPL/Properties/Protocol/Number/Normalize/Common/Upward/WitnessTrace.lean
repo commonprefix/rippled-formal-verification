@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.Upward.BoundProof
 namespace XRPL.Model.Protocol
 
 /-- `Number.normalize` trace for the upward witness input `10^19 + 1`. -/
-lemma normalize_upward_witness :
+lemma Number.normalize_upward_witness :
     Number.normalize ⟨false, 10000000000000000001, 0⟩
         largeRange.min largeRange.max .upward =
       .ok ⟨false, 1000000000000000001, 1⟩ := by
@@ -46,7 +46,7 @@ lemma normalize_upward_witness :
 
 /-- Rounding upward can be off by more than `8/(2^63 + 2)` of the value, here on the input `10^19 + 1`. The largest
 error is `9/(2^63 + 3)`, on the input `2^63 + 3`. -/
-theorem normalize_upward_attained :
+theorem Number.normalize_upward_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .upward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -54,7 +54,7 @@ theorem normalize_upward_attained :
   refine ⟨⟨false, 10000000000000000001, 0⟩,
           ⟨false, 1000000000000000001, 1⟩,
           ?_, ?_, ?_⟩
-  · exact normalize_upward_witness
+  · exact Number.normalize_upward_witness
   · decide
   · have hn_rat : (⟨false, 10000000000000000001, 0⟩ : Number).toRat = 10000000000000000001 := by
       unfold Number.toRat; rfl

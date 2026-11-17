@@ -10,7 +10,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
+theorem Number.operator_add_no_inbetween_below_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -23,7 +23,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
   · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ, _, _, _⟩ :=
-      operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
+      Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     exact no_inbetween_below_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
       .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
@@ -34,7 +34,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
   · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, _h_sbit, hzm_succ,
@@ -55,7 +55,7 @@ theorem operator_add_no_inbetween_below_towards_zero (x y result : Number)
         exact Number.toRat_nonneg_of_nonnegative result (h_neg.trans hzn_false))
       h_le
 
-theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
+theorem Number.operator_add_no_inbetween_above_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -67,7 +67,7 @@ theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
   by_cases h_sign_eq : x.negative_ = y.negative_
   · obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ, _, _, _⟩ :=
-      operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
+      Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     exact no_inbetween_above_towards_zero_frame result (x.toRat + y.toRat) zm ze' f g res_pos
       .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq
@@ -77,7 +77,7 @@ theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
       h_ge
   · obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, _h_sbit, hzm_succ,
@@ -98,7 +98,7 @@ theorem operator_add_no_inbetween_above_towards_zero (x y result : Number)
         exact Number.toRat_nonpos_of_negative result (h_neg.trans hzn_true))
       h_ge
 
-theorem operator_add_rounded_towards_zero_proof (x y result : Number)
+theorem Number.operator_add_rounded_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .towards_zero = .ok result) :
     Number.RoundsToRepresentable result (x.toRat + y.toRat) .towards_zero := by
@@ -193,7 +193,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
     rw [hy_zero]
     decide
   have h_truth_ne : x.toRat + y.toRat ≠ 0 :=
-    operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .towards_zero result hok
+    Number.operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .towards_zero result hok
   -- Underflow: flush-to-zero is correct rounding toward zero.
   by_cases hres : result.mantissa_ = 0
   · have h_res0 : result.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero result hres
@@ -201,10 +201,10 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
     · -- Same-sign addition cannot flush (the sum stays at operand scale).
       exfalso
       obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hresult_ne, _, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
+        Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
           hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
       exact hresult_ne hres
-    · have h_small := operator_add_underflow_truth_small x y result .towards_zero hx hy
+    · have h_small := Number.operator_add_underflow_truth_small_proof x y result .towards_zero hx hy
         hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok hres
       change ∃ n' : Number, (if x.toRat + y.toRat ≥ 0 then Number.lower (x.toRat + y.toRat)
         else Number.upper (x.toRat + y.toRat)) = some n' ∧ result.toRat = n'.toRat
@@ -222,26 +222,26 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
   -- In-range path.
   have hresult : result.mantissa_ ≠ 0 := hres
   have h_dir : |result.toRat| ≤ |x.toRat + y.toRat| :=
-    (operator_add_rounds_towards_zero x y result hx hy hx_mant_ne hy_mant_ne heq_guard
+    (Number.operator_add_rounds_towards_zero x y result hx hy hx_mant_ne hy_mant_ne heq_guard
       hok hresult).1
   have h_result_norm : result.isNormalized := by
     by_cases h_sign_eq : x.negative_ = y.negative_
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_norm, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
+        Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
           hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
       exact h_norm
-    · exact operator_add_result_isNormalized x y result .towards_zero hx hy
+    · exact Number.operator_add_result_isNormalized x y result .towards_zero hx hy
         hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok hresult
   have h_bound : |result.toRat - (x.toRat + y.toRat)|
       ≤ |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
-    le_of_lt (operator_add_rounding_bound_towards_zero_tight x y result hx hy
+    le_of_lt (Number.operator_add_rounding_bound_towards_zero_tight x y result hx hy
       hx_mant_ne hy_mant_ne heq_guard hok hresult)
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
     intro _
     by_cases h_sign_eq : x.negative_ = y.negative_
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_top⟩ :=
-        operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
+        Number.operator_add_algorithmic_facts_same_sign_towards_zero x y result hx hy
           hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
       exact h_top
     · exact add_diff_sign_truth_top x y hx hy h_sign_eq
@@ -256,7 +256,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
         _ = x.toRat + y.toRat := abs_of_nonneg h_truth_nn
     exact closest_lower_of_no_inbetween result (x.toRat + y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_down
-      (operator_add_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
+      (Number.operator_add_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         heq_guard hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
     push Not at h_truth_nn
@@ -269,7 +269,7 @@ theorem operator_add_rounded_towards_zero_proof (x y result : Number)
       linarith [neg_le_neg h_dir]
     exact closest_upper_of_no_inbetween result (x.toRat + y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_up
-      (operator_add_no_inbetween_above_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
+      (Number.operator_add_no_inbetween_above_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         heq_guard hok hresult h_round_up)
 
 end XRPL.Model.Protocol

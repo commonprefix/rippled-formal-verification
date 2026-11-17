@@ -88,7 +88,7 @@ lemma STAmount.canonicalize_integral_toRat (s result : STAmount) (mode : roundin
     | ok r =>
       rw [hr] at hok
       simp only [] at hok
-      have hkey := to_rep_exact_of_exponent_zero s.mIsNegative s.mValue mode r hval_le hr
+      have hkey := Number.to_rep_exact_of_exponent_zero s.mIsNegative s.mValue mode r hval_le hr
       have hr_sd : r.toInt = s.signedDrops := by
         have h1 : (r.toInt : ℚ) = (s.signedDrops : ℚ) := by
           rw [hkey]; simp only [STAmount.signedDrops]

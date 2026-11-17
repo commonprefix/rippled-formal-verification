@@ -131,13 +131,13 @@ lemma Vault.Settled.sharesToAssetsWithdraw_all_ok (v : Vault) (hz : v.Settled)
     exponent_gt_of_le _ _ v.wf.sharesTotal_norm hSTpos (by norm_num; linarith)
   obtain ⟨NS, hmul⟩ := Number.operator_mul_ok_of_normalized v.assetsAvailable sn .to_nearest hAAn hsnn hAm hsnm
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
-  have hNSr := operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul
+  have hNSr := Number.operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul
   have hNSge : v.assetsAvailable.toRat ≤ NS.toRat :=
     Number.RoundsToRepresentable.ge_of_ge_normalized NS _ hNSr _ hAAn (by
       rw [hsnST]; nlinarith)
   have hNSpos : 0 < NS.toRat := lt_of_lt_of_le hAApos hNSge
   have hNSm : NS.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hNSpos.ne'
-  have hNSn : NS.isNormalized := operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
+  have hNSn : NS.isNormalized := Number.operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
   obtain ⟨w, hwn, hwv⟩ := Exact.exists_normalized_grid 1 115 le_rfl (by norm_num)
     (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have hNSle : NS.toRat ≤ 10 ^ 115 := by
@@ -255,7 +255,7 @@ lemma Vault.Settled.sharesToAssetsWithdraw_all (v : Vault) (hz : v.Settled)
   obtain ⟨sn0, hsn0, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical shares .to_nearest
     (STAmount.Canonical.exactCanonical _ hc)
   obtain rfl := Except.ok.inj (hsn0.symm.trans hsn)
-  have hSTm := operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
+  have hSTm := Number.operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
   have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne v.wf.sharesTotal_nonneg
     (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hSTm))
   have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := rat_one_le_of_den_one_pos _ v.wf.sharesTotal_int hSTpos
@@ -363,12 +363,12 @@ lemma Vault.adjustAssetsAndShares_burn_all_ok' (v : Vault) (assets shares : STAm
     (Number.exponent_headroom_of_lt _ hAAn hAA0 hcap)
     (exponent_headroom_of_neg _ hann (by rw [hanv, hpay]; linarith) (by rw [hanv, hpay]; linarith))
   have hsum : v.assetsAvailable.toRat + an.toRat = 0 := by rw [hanv, hpay]; ring
-  have hsr := operator_add_rounded_to_nearest _ _ _ hAAn hann hs
+  have hsr := Number.operator_add_rounded_to_nearest _ _ _ hAAn hann hs
   rw [hsum] at hsr
   have hs0 : s.toRat = 0 :=
     Number.RoundsToRepresentable.eq_of_representable s 0 hsr Number.zero (Or.inl rfl) Number.toRat_zero
   have hsz : s = Number.zero := Number.eq_zero_of_mantissa_zero s
-    (operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hann hs) (Number.toRat_eq_zero_iff.mp hs0)
+    (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hann hs) (Number.toRat_eq_zero_iff.mp hs0)
   rw [hsz] at hs
   -- every other step is a check, so the update returns a record or a `TER`
   cases h : (v.adjustAssetsAndShares assets.operator_neg shares.operator_neg).run with
@@ -382,9 +382,14 @@ lemma Vault.adjustAssetsAndShares_burn_all_ok' (v : Vault) (assets shares : STAm
         (by rw [STAmount.operator_neg_toRat, hpay]; simp) h
   | error e =>
     exfalso
+    -- the new total is AssetsDeployed alone, which the asset stores
+    obtain ⟨total, amount, htotal, hamount⟩ := XRPL.Model.SingleAssetVault.TotalStores.of_zero_available
+      v.numericType v.assetsDeployed v.wf.assetsDeployed_norm v.exact.assetsDeployed_nonneg
+      v.valid.assetsDeployed_representable
     simp only [Vault.adjustAssetsAndShares, Vault.adjustBalances] at h
     unfold_ter at h
-    simp [han, hsn, hst, hs, STAmount.roundToNumericType_zero_to_nearest, Number.operator_add_zero_right] at h
+    simp [han, hsn, hst, hs, STAmount.roundToNumericType_zero_to_nearest, Number.operator_add_zero_right,
+      RawVault.assetsTotal, htotal, hamount] at h
     split_ifs at h
 
 /-- On a settled vault one withdrawal of every share succeeds at a time withdrawals are open. It
@@ -417,7 +422,7 @@ lemma Vault.Settled.withdraw_all (v : Vault) (t : UInt32) (hz : v.Settled)
   obtain ⟨aN, haN⟩ := STAmount.CanonicalOrZero.toNumber_ok hac
   obtain ⟨haNv, haNn⟩ := STAmount.CanonicalOrZero.toNumber_exact hac aN haN
   have hge : v.assetsAvailable.operator_lt aN = false := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff _ _ hAAn haNn, haNv, hav]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff _ _ hAAn haNn, haNv, hav]
     exact lt_irrefl _
   have hAD : v.assetsDeployed.operator_ne Number.zero = false := by rw [hz.assetsDeployed]; decide
   have hLU : v.lossUnrealized.operator_ne Number.zero = false := by rw [hz.lossUnrealized]; decide

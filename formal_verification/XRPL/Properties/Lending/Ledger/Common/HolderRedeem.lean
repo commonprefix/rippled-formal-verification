@@ -131,9 +131,9 @@ lemma Vault.debit_le_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
   obtain ⟨hv, hnorm⟩ :=
     STAmount.CanonicalOrZero.toNumber_exact (STAmount.CanonicalOrZero.operator_neg hc) assetsNum hnum
   rw [STAmount.operator_neg_toRat] at hv
-  have hr := operator_add_rounded_to_nearest _ _ _ hAAn hnorm hs
+  have hr := Number.operator_add_rounded_to_nearest _ _ _ hAAn hnorm hs
   rw [hv, ← sub_eq_add_neg] at hr
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hnorm hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hnorm hs
   have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg _ _ hr (by linarith)
   have hsle : s.toRat ≤ v.assetsAvailable.toRat :=
     Number.RoundsToRepresentable.le_of_le_normalized _ _ hr _ hAAn (by linarith)
@@ -213,7 +213,8 @@ lemma Vault.Settled.withdraw_part_ok (v : Vault) (t : UInt32) (hz : v.Settled)
       simp [Vault.checkDebitNotDust, show Number.zero.operator_eq Number.zero = true by decide]
       rfl
     have hge : v.assetsAvailable.operator_lt Number.zero = false := by rw [hAz]; decide
-    obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hz.cashExact hmax _ shares hzc hzt (by rw [hz0])
+    obtain ⟨raw, hadj⟩ := Vault.adjust_ok_of_exact v hz.cashExact hmax
+      (XRPL.Model.SingleAssetVault.Vault.DebitStores.of_noLending v hz.assetsDeployed) _ shares hzc hzt (by rw [hz0])
       (by rw [hz0]; exact hAA0) hsic hty hspos.le hlt.le
     have hlaw := Vault.withdraw_update_lawful v _ shares raw hmax ⟨0, by rw [hz0]; simp⟩ hzc
       (by rw [STAmount.operator_neg_toRat, hz0]; linarith) hsic hty hspos.le hlt.le

@@ -1,9 +1,11 @@
 import XRPL.Properties.Vault.Proofs.ClawbackUpdates
+import XRPL.Properties.Vault.Proofs.Support.TotalStores
 import XRPL.Properties.Vault.Proofs.WithdrawExits
 import XRPL.Properties.Vault.Proofs.MaxValueFits
 import XRPL.Properties.Vault.Proofs.ExactUpdates.Grid
 import XRPL.Properties.Vault.Proofs.Support.ComputeWithdraw
 import XRPL.Properties.Vault.Proofs.Support.OfNumberFractional
+import XRPL.Properties.Vault.Proofs.Support.IOUTotality
 
 /-! # Emptying a reachable vault
 
@@ -13,24 +15,6 @@ share pays out all of it and leaves the vault empty. -/
 namespace XRPL.Model.SingleAssetVault
 
 open XRPL.Model.Protocol
-
-/-- A positive normalized `Number` of at least `10^19` units at a scale has its exponent above it. -/
-lemma exponent_gt_of_le (n : Number) (s : ℤ) (hn : n.isNormalized) (hpos : 0 < n.toRat)
-    (hge : (10 : ℚ) ^ (19 : ℕ) * 10 ^ s ≤ n.toRat) : s < n.exponent_ := by
-  have hm0 : n.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hpos.ne'
-  obtain ⟨-, hhi⟩ := hn.mantissaBounds_nat hm0
-  have hval := Number.toRat_of_nonneg n (Number.negative_false_of_pos n hpos)
-  have hm : (n.mantissa_.toNat : ℚ) < (10 : ℚ) ^ (19 : ℕ) := by exact_mod_cast hhi
-  have hpe : (0 : ℚ) < 10 ^ n.exponent_ := zpow_pos (by norm_num) _
-  by_contra hc
-  push Not at hc
-  have h1 : (10 : ℚ) ^ n.exponent_ ≤ 10 ^ s := zpow_le_zpow_right₀ (by norm_num) hc
-  have h2 : n.toRat < (10 : ℚ) ^ (19 : ℕ) * 10 ^ s := by
-    rw [hval]
-    calc (n.mantissa_.toNat : ℚ) * 10 ^ n.exponent_ < 10 ^ (19 : ℕ) * 10 ^ n.exponent_ :=
-          mul_lt_mul_of_pos_right hm hpe
-      _ ≤ _ := mul_le_mul_of_nonneg_left h1 (by positivity)
-  linarith
 
 /-- On a reachable vault the whole share total prices without throwing. -/
 lemma Vault.Reachable.sharesToAssetsWithdraw_all_ok (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0)
@@ -74,13 +58,13 @@ lemma Vault.Reachable.sharesToAssetsWithdraw_all_ok (v : Vault) (t0 : UInt32) (h
     exponent_gt_of_le _ _ v.wf.sharesTotal_norm hSTpos (by norm_num; linarith)
   obtain ⟨NS, hmul⟩ := Number.operator_mul_ok_of_normalized v.assetsAvailable sn .to_nearest hAAn hsnn hAm hsnm
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
-  have hNSr := operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul
+  have hNSr := Number.operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul
   have hNSge : v.assetsAvailable.toRat ≤ NS.toRat :=
     Number.RoundsToRepresentable.ge_of_ge_normalized NS _ hNSr _ hAAn (by
       rw [hsnST]; nlinarith)
   have hNSpos : 0 < NS.toRat := lt_of_lt_of_le hAApos hNSge
   have hNSm : NS.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero hNSpos.ne'
-  have hNSn : NS.isNormalized := operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
+  have hNSn : NS.isNormalized := Number.operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
   obtain ⟨w35, hw35n, hw35v⟩ := Exact.exists_normalized_grid 1 35 le_rfl (by norm_num)
     (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have hNSle : NS.toRat ≤ 10 ^ 35 := by
@@ -203,12 +187,12 @@ lemma Vault.adjustAssetsAndShares_burn_all_ok (v : Vault) (assets shares : STAmo
     (exponent_headroom_of_abs _ hAAn (by rw [abs_of_nonneg hAA0]; exact hcap))
     (exponent_headroom_of_abs _ hann (by rw [hanv, abs_neg, hpay, abs_of_nonneg hAA0]; exact hcap))
   have hsum : v.assetsAvailable.toRat + an.toRat = 0 := by rw [hanv, hpay]; ring
-  have hsr := operator_add_rounded_to_nearest _ _ _ hAAn hann hs
+  have hsr := Number.operator_add_rounded_to_nearest _ _ _ hAAn hann hs
   rw [hsum] at hsr
   have hs0 : s.toRat = 0 :=
     Number.RoundsToRepresentable.eq_of_representable s 0 hsr Number.zero (Or.inl rfl) Number.toRat_zero
   have hsz : s = Number.zero := Number.eq_zero_of_mantissa_zero s
-    (operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hann hs) (Number.toRat_eq_zero_iff.mp hs0)
+    (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hann hs) (Number.toRat_eq_zero_iff.mp hs0)
   rw [hsz] at hs
   -- every other step is a check, so the update returns a record or a `TER`
   cases h : (v.adjustAssetsAndShares assets.operator_neg shares.operator_neg).run with
@@ -222,9 +206,13 @@ lemma Vault.adjustAssetsAndShares_burn_all_ok (v : Vault) (assets shares : STAmo
         (by rw [STAmount.operator_neg_toRat, hpay]; simp) h
   | error e =>
     exfalso
+    -- the new total is AssetsDeployed alone, which the asset stores
+    obtain ⟨total, amount, htotal, hamount⟩ := TotalStores.of_zero_available v.numericType v.assetsDeployed
+      v.wf.assetsDeployed_norm v.exact.assetsDeployed_nonneg v.valid.assetsDeployed_representable
     simp only [Vault.adjustAssetsAndShares, Vault.adjustBalances] at h
     unfold_ter at h
-    simp [han, hsn, hst, hs, STAmount.roundToNumericType_zero_to_nearest, Number.operator_add_zero_right] at h
+    simp [han, hsn, hst, hs, STAmount.roundToNumericType_zero_to_nearest, Number.operator_add_zero_right,
+      RawVault.assetsTotal, htotal, hamount] at h
     split_ifs at h
 
 /-- On a reachable vault one withdrawal of every share succeeds at a time withdrawals are open. It
@@ -260,7 +248,7 @@ lemma Vault.withdraw_all_proof (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable
   obtain ⟨aN, haN⟩ := STAmount.CanonicalOrZero.toNumber_ok hac
   obtain ⟨haNv, haNn⟩ := STAmount.CanonicalOrZero.toNumber_exact hac aN haN
   have hge : v.assetsAvailable.operator_lt aN = false := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff _ _ hAAn haNn, haNv, hav]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff _ _ hAAn haNn, haNv, hav]
     exact lt_irrefl _
   -- nothing is deployed and nothing is lost
   have hAD : v.assetsDeployed.operator_ne Number.zero = false := by rw [hz.assetsDeployed]; decide

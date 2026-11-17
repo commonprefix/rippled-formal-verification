@@ -28,7 +28,7 @@ lemma Loan.doPayment_final_ok (l : Loan) (pc : PaymentComponents) (hf : pc.isFin
 
 /-- An amount is never below itself. -/
 private lemma Number.operator_lt_self (x : Number) (hx : x.isNormalized) : x.operator_lt x = false :=
-  (operator_lt_eq_false_iff x x hx hx).mpr le_rfl
+  (Number.operator_lt_eq_false_iff x x hx hx).mpr le_rfl
 
 /-- A full payment of exactly the payoff's total due pays the payoff instalment, on a loan that is not
 impaired and not late, with two or more payments left. -/

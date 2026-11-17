@@ -44,8 +44,8 @@ renumbered to `start.aloneIndex i`. -/
 def LendingLedger.loanSubsequence (start : LendingLedger) (i : Nat) (txs : List LendingTx) : List LendingTx :=
   start.loanTxsFrom i (start.aloneIndex i) txs
 
-/-- The balances the model does not track fit before each transaction of `txs` from `start`: the cover of loan
-`i`'s broker as an amount of the asset, and a LoanPay's credit to the vault and fee within the XRP or MPT supply. -/
+/-- Before each transaction of `txs` from `start` the cover of loan `i`'s broker and a LoanPay's fee fit the asset,
+and on XRP or an MPT the vault total after a LoanPay is an amount of the asset (FV_M4_59). -/
 def LendingLedger.UntrackedFitsAlong (start : LendingLedger) (i : Nat) (txs : List LendingTx) : Prop :=
   ∀ (pre : List LendingTx) (m : LendingLedger) (tx : LendingTx), pre ++ [tx] <+: txs →
     LendingLedger.Reaches start pre m →

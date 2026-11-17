@@ -3,7 +3,7 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.AlgorithmicFac
 
 namespace XRPL.Model.Protocol
 
-theorem normalize_algorithmic_facts_downward (n result : Number)
+theorem Number.normalize_algorithmic_facts_downward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -21,6 +21,6 @@ theorem normalize_algorithmic_facts_downward (n result : Number)
       result.negative_ = n.negative_ ∧
       g.sbit_ = n.negative_ ∧
       mantissaFloorSucc ≤ zm.toNat :=
-  normalize_algorithmic_facts_anyMode n result .downward hn_mant_ne hok hresult
+  Number.normalize_algorithmic_facts_anyMode n result .downward hn_mant_ne hok hresult
 
 end XRPL.Model.Protocol

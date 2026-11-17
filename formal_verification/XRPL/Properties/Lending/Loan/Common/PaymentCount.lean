@@ -74,7 +74,7 @@ lemma Loan.NeedsAllPayments.not_final {l : Loan} (h : l.NeedsAllPayments) (hpr :
     simp only [Bool.or_eq_true, beq_iff_eq] at hfin
     rcases hfin with h1 | hle
     · rw [h1] at hpr; simp at hpr
-    · have hle' := (operator_le_iff _ _ l.wf.totalValueOutstanding_norm
+    · have hle' := (Number.operator_le_iff _ _ l.wf.totalValueOutstanding_norm
         (STAmount.roundToNumericType_isNormalized _ _ _ _ _ hpp)).mp hle
       by_cases hpp0 : 0 ≤ pp'.toRat
       · nlinarith

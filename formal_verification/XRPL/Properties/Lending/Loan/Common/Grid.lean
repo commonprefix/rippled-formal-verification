@@ -141,18 +141,18 @@ lemma Number.OnGrid.add {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy 
     Number.OnGrid s d := by
   obtain ⟨hxn, a, ha⟩ := hx
   obtain ⟨hyn, b, hb⟩ := hy
-  have hR := operator_add_rounded_to_nearest x y d hxn hyn hok
+  have hR := Number.operator_add_rounded_to_nearest x y d hxn hyn hok
   rw [ha, hb, ← add_mul, show (a : ℚ) + b = ((a + b : ℤ) : ℚ) by push_cast; ring] at hR
-  exact Number.OnGrid.of_rounds (operator_add_isNormalized_to_nearest_sz x y d hxn hyn hok) hR hs
+  exact Number.OnGrid.of_rounds (Number.operator_add_isNormalized_to_nearest_sz x y d hxn hyn hok) hR hs
 
 lemma Number.OnGrid.sub {s : Int} {x y d : Number} (hx : Number.OnGrid s x) (hy : Number.OnGrid s y)
     (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1) (hok : x.operator_sub y .to_nearest = .ok d) :
     Number.OnGrid s d := by
   obtain ⟨hxn, a, ha⟩ := hx
   obtain ⟨hyn, b, hb⟩ := hy
-  have hR := operator_sub_rounded_to_nearest x y d hxn hyn hok
+  have hR := Number.operator_sub_rounded_to_nearest x y d hxn hyn hok
   rw [ha, hb, ← sub_mul, show (a : ℚ) - b = ((a - b : ℤ) : ℚ) by push_cast; ring] at hR
-  exact Number.OnGrid.of_rounds (operator_sub_isNormalized_to_nearest_sz x y d hxn hyn hok) hR hs
+  exact Number.OnGrid.of_rounds (Number.operator_sub_isNormalized_to_nearest_sz x y d hxn hyn hok) hR hs
 
 lemma Number.OnGrid.neg {s : Int} {x : Number} (hx : Number.OnGrid s x) : Number.OnGrid s x.operator_neg := by
   obtain ⟨hxn, a, ha⟩ := hx

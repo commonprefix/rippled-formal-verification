@@ -25,7 +25,7 @@ leaves room for the `largeRange` scale-up. Far weaker than `InRange16`. -/
 structure IOUAmount.ToNumberExact (a : IOUAmount) : Prop where
   mant_ne_min : a.mantissa_ ≠ Int64.minValue
   exp_lo : minExponent + 18 ≤ a.exponent_
-  exp_hi : a.exponent_ ≤ maxExponent - 1
+  exp_hi : a.exponent_ ≤ maxExponent
 
 /-- A canonical 16-digit amount satisfies `ToNumberExact` (with enormous margin). -/
 lemma IOUAmount.InRange16.toNumberExact {a : IOUAmount} (h : a.InRange16) :

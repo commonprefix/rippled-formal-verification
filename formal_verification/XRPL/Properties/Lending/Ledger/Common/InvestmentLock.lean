@@ -64,6 +64,7 @@ private lemma Vault.donation_notCoarsened (v : Vault) (amount : STAmount) (t : U
   obtain ⟨assetsTotal, -, -, hcl, -⟩ := computeDeposit_donation_reduces v ra amounts hcomp
   obtain ⟨k, hk⟩ := Vault.clamp_grid v _ _ _ hrac hcl
   obtain ⟨x, hnum, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+    (v.deposit_clampedCharge amount ra true amounts hty (fun h => hc.2 h) hra hcomp)
   obtain ⟨hxv, hxn⟩ := hcf.toNumber_exact x hnum
   have hb := Vault.exceedsOpenLimit_false_sum v x hv hYg ⟨hxn, k, by rw [hxv, hk]⟩ (by rw [hxv]; exact hc0) hex
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _

@@ -27,7 +27,7 @@ lemma NumericType.mantissaBound_le (nt : NumericType) : nt.mantissaBound ≤ 2 ^
   cases nt with
   | fractional => norm_num [NumericType.mantissaBound]
   | integral mv _ _ _ =>
-    show min mv.toNat maxRep.toNat + 1 ≤ 2 ^ 63
+    show Min.min mv.toNat maxRep.toNat + 1 ≤ 2 ^ 63
     have h : maxRep.toNat = 9223372036854775807 := by decide
     have h2 := Nat.min_le_right mv.toNat maxRep.toNat
     have h3 : (2 : ℕ) ^ 63 = 9223372036854775808 := by norm_num
@@ -45,7 +45,8 @@ lemma Number.exists_normalized_int_mul_pow (a : ℤ) (s : Int)
     have h' : (Int64.ofInt a).toInt = Int64.minValue.toInt := by rw [h]
     rw [hval, show Int64.minValue.toInt = -2 ^ 63 from by decide] at h'
     omega
-  obtain ⟨w, _, hw, hnorm⟩ := Number.from_rep_exact (Int64.ofInt a) s .to_nearest hne hs.1 hs.2
+  obtain ⟨w, _, hw, hnorm⟩ := Number.from_rep_exact (Int64.ofInt a) s .to_nearest hne hs.1
+    (by have := hs.2; omega)
   exact ⟨w, hnorm, by rw [hw, hval]⟩
 
 /-- A `to_nearest` rounding of a representable value is that value. -/
@@ -75,14 +76,14 @@ lemma Number.operator_add_exact_of_fits {x y r : Number} (hx : x.isNormalized) (
     (hok : x.operator_add y .to_nearest = .ok r)
     (hfit : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat + y.toRat) : r.toRat = x.toRat + y.toRat := by
   obtain ⟨w, hw, hwt⟩ := hfit
-  exact Number.roundsToRepresentable_eq r _ (operator_add_rounded_to_nearest x y r hx hy hok) w hw hwt
+  exact Number.roundsToRepresentable_eq r _ (Number.operator_add_rounded_to_nearest x y r hx hy hok) w hw hwt
 
 /-- A `to_nearest` difference that fits a `Number` is exact. -/
 lemma Number.operator_sub_exact_of_fits {x y r : Number} (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : x.operator_sub y .to_nearest = .ok r)
     (hfit : ∃ w : Number, w.isNormalized ∧ w.toRat = x.toRat - y.toRat) : r.toRat = x.toRat - y.toRat := by
   obtain ⟨w, hw, hwt⟩ := hfit
-  exact Number.roundsToRepresentable_eq r _ (operator_sub_rounded_to_nearest x y r hx hy hok) w hw hwt
+  exact Number.roundsToRepresentable_eq r _ (Number.operator_sub_rounded_to_nearest x y r hx hy hok) w hw hwt
 
 /-- A `to_nearest` rounding never lands above a representable value that bounds the truth. -/
 lemma Number.roundsToRepresentable_le (d : Number) (truth : ℚ)
@@ -211,7 +212,7 @@ lemma Number.operator_sub_toRat_of_grid (x y d : Number) (a b : ℤ) (s : Int)
     (hab : -2 ^ 63 < a - b ∧ a - b < 2 ^ 63) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1)
     (hok : x.operator_sub y .to_nearest = .ok d) :
     d.toRat = ((a - b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
-  have hR := operator_sub_rounded_to_nearest x y d hx hy hok
+  have hR := Number.operator_sub_rounded_to_nearest x y d hx hy hok
   obtain ⟨w, hw, hwt⟩ := Number.exists_normalized_int_mul_pow (a - b) s hab hs
   have htruth : x.toRat - y.toRat = ((a - b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
     rw [hxv, hyv]; push_cast; ring
@@ -226,7 +227,7 @@ lemma Number.operator_add_toRat_of_grid (x y d : Number) (a b : ℤ) (s : Int)
     (hab : -2 ^ 63 < a + b ∧ a + b < 2 ^ 63) (hs : minExponent + 18 ≤ s ∧ s ≤ maxExponent - 1)
     (hok : x.operator_add y .to_nearest = .ok d) :
     d.toRat = ((a + b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
-  have hR := operator_add_rounded_to_nearest x y d hx hy hok
+  have hR := Number.operator_add_rounded_to_nearest x y d hx hy hok
   obtain ⟨w, hw, hwt⟩ := Number.exists_normalized_int_mul_pow (a + b) s hab hs
   have htruth : x.toRat + y.toRat = ((a + b : ℤ) : ℚ) * (10 : ℚ) ^ s := by
     rw [hxv, hyv]; push_cast; ring

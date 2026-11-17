@@ -65,7 +65,7 @@ lemma doNormalize128_upward_witness :
   simp only [RoundResult.toNumber]
 
 /-- `operator_div` trace for the `.upward` witness inputs. -/
-lemma operator_div_upward_witness :
+lemma Number.operator_div_upward_witness :
     Number.operator_div ⟨false, 1000735865998747695, 0⟩ ⟨false, 1085000000000004899, 0⟩
         .upward = .ok ⟨false, 9223372036854775830, -19⟩ := by
   unfold Number.operator_div
@@ -84,7 +84,7 @@ lemma operator_div_upward_witness :
 
 /-- Division rounding upward can overshoot by more than `9/(2^63 − 18)` of the value. The error stays under
 `10/(2^63 + 2)` and gets close to it, so 9 is the largest numerator reachable over this denominator. -/
-theorem operator_div_upward_attained :
+theorem Number.operator_div_upward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_div x y .upward = .ok result ∧
@@ -94,7 +94,7 @@ theorem operator_div_upward_attained :
           ⟨false, 9223372036854775830, -19⟩, ?_, ?_, ?_, ?_, ?_⟩
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
-  · exact operator_div_upward_witness
+  · exact Number.operator_div_upward_witness
   · decide
   · have hx_rat : (⟨false, 1000735865998747695, 0⟩ : Number).toRat = 1000735865998747695 := by
       unfold Number.toRat; rfl

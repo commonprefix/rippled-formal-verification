@@ -282,19 +282,19 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
   have h_basics : n₁.mantissa_ ≠ 0 ∧ n₁.isNormalized := by
     rcases mode with _ | _ | _ | _
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_ne, h_norm, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_to_nearest v1n v2n n₁ hv1_norm hv2_norm
+        Number.operator_add_algorithmic_facts_same_sign_to_nearest v1n v2n n₁ hv1_norm hv2_norm
           hv1_mant hv2_mant h_same_sign h_not_zero h_add
       exact ⟨h_ne, h_norm⟩
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_ne, h_norm, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_towards_zero v1n v2n n₁ hv1_norm hv2_norm
+        Number.operator_add_algorithmic_facts_same_sign_towards_zero v1n v2n n₁ hv1_norm hv2_norm
           hv1_mant hv2_mant h_same_sign h_not_zero h_add
       exact ⟨h_ne, h_norm⟩
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_norm, _, h_ne⟩ :=
-        operator_add_algorithmic_facts_same_sign_downward v1n v2n n₁ hv1_norm hv2_norm
+        Number.operator_add_algorithmic_facts_same_sign_downward v1n v2n n₁ hv1_norm hv2_norm
           hv1_mant hv2_mant h_same_sign h_not_zero h_add
       exact ⟨h_ne, h_norm⟩
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_norm, _, h_ne⟩ :=
-        operator_add_algorithmic_facts_same_sign_upward v1n v2n n₁ hv1_norm hv2_norm
+        Number.operator_add_algorithmic_facts_same_sign_upward v1n v2n n₁ hv1_norm hv2_norm
           hv1_mant hv2_mant h_same_sign h_not_zero h_add
       exact ⟨h_ne, h_norm⟩
   obtain ⟨h_n₁_ne, h_n₁_norm⟩ := h_basics
@@ -333,7 +333,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have : n' = n'' := Option.some.inj (hn'.symm.trans hn''_eq)
         rw [this, hn''_val, hσ_pos_eq, hCσ_def]
       rcases mode with _ | _ | _ | _
-      · have h := operator_add_rounded_to_nearest v1n v2n n₁ hv1_norm hv2_norm h_add
+      · have h := Number.operator_add_rounded_to_nearest v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         rcases h with ⟨n', hn'_eq, hn'_val⟩ | ⟨n', hn'_eq, hn'_val⟩
         · exact ⟨Fσ, by rw [hn'_val, h_floor_val n' hn'_eq]; norm_num,
@@ -342,21 +342,21 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         · exact ⟨Cσ, by rw [hn'_val, h_ceil_val n' hn'_eq]; norm_num,
             fun _ => Or.inr rfl, fun h => rounding_mode.noConfusion h,
             fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
+      · have h := Number.operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         rw [if_pos (by rw [hσ_pos_eq]; exact le_of_lt hA_pos : σ ≥ 0)] at hn'_eq
         exact ⟨Fσ, by rw [hn'_val, h_floor_val n' hn'_eq]; norm_num,
           fun h => rounding_mode.noConfusion h, fun _ => rfl,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_downward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
+      · have h := Number.operator_add_rounded_downward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         exact ⟨Fσ, by rw [hn'_val, h_floor_val n' hn'_eq]; norm_num,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun _ => by rw [if_neg (by exact Bool.noConfusion)],
           fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
+      · have h := Number.operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         exact ⟨Cσ, by rw [hn'_val, h_ceil_val n' hn'_eq]; norm_num,
@@ -401,7 +401,7 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         have : -σ = A := hσ_neg_eq
         linarith
       rcases mode with _ | _ | _ | _
-      · have h := operator_add_rounded_to_nearest v1n v2n n₁ hv1_norm hv2_norm h_add
+      · have h := Number.operator_add_rounded_to_nearest v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         rcases h with ⟨n', hn'_eq, hn'_val⟩ | ⟨n', hn'_eq, hn'_val⟩
         · exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, if_pos rfl]; ring,
@@ -410,21 +410,21 @@ theorem STAmount.roundToExponent_sum_spec (value : STAmount) (s : ℤ) (mode : r
         · exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,
             fun _ => Or.inl rfl, fun h => rounding_mode.noConfusion h,
             fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
+      · have h := Number.operator_add_rounded_towards_zero v1n v2n n₁ hv1_norm hv2_norm h_add
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         rw [if_neg (not_le.mpr hσ_lt)] at hn'_eq
         exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,
           fun h => rounding_mode.noConfusion h, fun _ => rfl,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_downward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
+      · have h := Number.operator_add_rounded_downward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         exact ⟨Cσ, by rw [hn'_val, h_floor_val n' hn'_eq, if_pos rfl]; ring,
           fun h => rounding_mode.noConfusion h, fun h => rounding_mode.noConfusion h,
           fun _ => by rw [if_pos rfl],
           fun h => rounding_mode.noConfusion h⟩
-      · have h := operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
+      · have h := Number.operator_add_rounded_upward v1n v2n n₁ hv1_norm hv2_norm h_add h_n₁_ne
         rw [← hσ_def] at h
         obtain ⟨n', hn'_eq, hn'_val⟩ := h
         exact ⟨Fσ, by rw [hn'_val, h_ceil_val n' hn'_eq, if_pos rfl]; ring,

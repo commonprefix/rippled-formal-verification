@@ -31,8 +31,8 @@ private lemma add_downward_exponent_le (x y n : Number) (t : Int) (hx : x.isNorm
     (hok : Number.operator_add x y .downward = .ok n) (hn0 : n.mantissa_ ≠ 0) (h0 : 0 ≤ x.toRat + y.toRat)
     (ht : minExponent + 18 ≤ t) (hlt : x.toRat + y.toRat < (10 : ℚ) ^ (19 : ℕ) * (10 : ℚ) ^ t) :
     n.exponent_ ≤ t := by
-  have hnn := operator_add_isNormalized _ _ _ .downward hx hy hok hn0
-  obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward x y n hx hy hok hn0
+  have hnn := Number.operator_add_isNormalized _ _ _ .downward hx hy hok hn0
+  obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward x y n hx hy hok hn0
   have hle : n.toRat ≤ x.toRat + y.toRat := by rw [hv]; exact Number.lower_le _ l hl
   have hge : 0 ≤ n.toRat := by
     rw [hv]
@@ -174,7 +174,7 @@ private lemma add_downward_abs_lt (x y n : Number) (hx : x.isNormalized) (hy : y
     (hok : Number.operator_add x y .downward = .ok n) (hlt : |x.toRat + y.toRat| < 10 ^ 20) : |n.toRat| < 10 ^ 90 := by
   by_cases hn0 : n.mantissa_ = 0
   · rw [Number.toRat_eq_zero_of_mantissa_zero n hn0, abs_zero]; norm_num
-  obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward x y n hx hy hok hn0
+  obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward x y n hx hy hok hn0
   obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-10 ^ 18) 2 (by constructor <;> norm_num)
     ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
   have habs := abs_lt.mp hlt
@@ -200,10 +200,10 @@ lemma sumRoundAndSubtract_frac_downward_ok (A c : Number) (b : Int) (hA : A.isNo
   have hwv' : w.toRat = 10 ^ 16 * 10 ^ b - 10 ^ b := by rw [hwv]; push_cast; ring
 
   obtain ⟨s0, hs0⟩ := Number.operator_add_ok_of_lt A c .to_nearest hA hc hA0 (by linarith) hc0 (by linarith)
-  have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
+  have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0
   have hs0le : s0.toRat ≤ w.toRat :=
-    operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hw (by rw [hwv']; exact hlt)
-  have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
+    Number.operator_add_le_of_le_normalized _ _ _ _ hA hc hs0 hw (by rw [hwv']; exact hlt)
+  have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA hc hs0 (by linarith)
   obtain ⟨e, he'⟩ : ∃ e, numberExponent s0 b .fractional = .ok e := by
     unfold numberExponent
     by_cases hz : s0.operator_eq Number.zero = true
@@ -230,12 +230,12 @@ lemma sumRoundAndSubtract_frac_downward_ok (A c : Number) (b : Int) (hA : A.isNo
   have hsmle : sm.toRat ≤ A.toRat + c.toRat := by
     by_cases h0 : sm.mantissa_ = 0
     · rw [Number.toRat_eq_zero_of_mantissa_zero sm h0]; linarith
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward A c sm hA hc hsm h0
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward A c sm hA hc hsm h0
     rw [hv]; exact Number.lower_le _ l hl
   have hsm0 : 0 ≤ sm.toRat := by
     by_cases h0 : sm.mantissa_ = 0
     · rw [Number.toRat_eq_zero_of_mantissa_zero sm h0]
-    obtain ⟨l, hl, hv⟩ := operator_add_rounded_downward A c sm hA hc hsm h0
+    obtain ⟨l, hl, hv⟩ := Number.operator_add_rounded_downward A c sm hA hc hsm h0
     rw [hv]
     have := Number.lower_tight _ l hl Number.zero Number.zero_isNormalized (by rw [Number.toRat_zero]; linarith)
     rwa [Number.toRat_zero] at this
@@ -303,7 +303,7 @@ lemma STAmount.ofNumber_integral_ok_of_lt (nt : NumericType) (n : Number) (mode 
   have hneg := Number.negative_false_of_nonneg n hnorm h0
   obtain ⟨r, hr, hr0, hru64, heq⟩ := STAmount.ofNumber_integral_reduce nt n mode hnt hnorm hneg (by linarith)
   rw [heq]
-  have hw := to_rep_within_one n mode r hnorm hr
+  have hw := Number.to_rep_within_one n mode r hnorm hr
   have hrmax : r.toUInt64.toNat ≤ nt.maxValue.toNat := by
     have hnat : (r.toUInt64.toNat : ℤ) = r.toInt := toUInt64_toNat_of_nonneg r hr0
     have h1 : (r.toInt : ℚ) < nt.maxValue.toNat := by

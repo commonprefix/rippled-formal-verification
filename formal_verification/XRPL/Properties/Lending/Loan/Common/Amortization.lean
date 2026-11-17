@@ -92,7 +92,7 @@ private lemma powerMinusOneLoop_isNormalized (rate : Number) (hrate : rate.isNor
       have hc1 := Number.operator_mul_isNormalized _ _ c1 _ hc hrate h1
       have hc2 := Number.operator_mul_isNormalized _ _ c2 _ hc1 (Number.ofInt64_isNormalized _) h2
       have hc3 := Number.operator_div_isNormalized _ _ c3 _ hc2 (Number.ofInt64_isNormalized _) h3
-      have hns := operator_add_isNormalized_to_nearest_sz _ _ ns hs hc3 h4
+      have hns := Number.operator_add_isNormalized_to_nearest_sz _ _ ns hs hc3 h4
       split at h
       · cases h; exact hs
       · exact ih (pr - (index + 1)) (by omega) (index + 1) c3 ns r rfl hc3 hns h
@@ -125,8 +125,8 @@ lemma computePowerMinusOneHybrid_isNormalized (rate n : Number) (pr : UInt32) (r
     split at h
     · obtain ⟨b, hb, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨raised, hraised, h⟩ := bind_ok_peel _ _ _ h
-      exact operator_sub_isNormalized_to_nearest_sz _ _ r
-        (Number.power_isNormalized b (operator_add_isNormalized_to_nearest_sz _ _ b
+      exact Number.operator_sub_isNormalized_to_nearest_sz _ _ r
+        (Number.power_isNormalized b (Number.operator_add_isNormalized_to_nearest_sz _ _ b
           (Number.ofInt64_isNormalized 1) hrate hb) _ raised hraised) (Number.ofInt64_isNormalized 1) h
     · exact computePowerMinusOne_isNormalized rate n pr r hrate hn h
 
@@ -145,7 +145,7 @@ lemma computePaymentFactor_isNormalized (rate n : Number) (pr : UInt32) (r : Num
       obtain ⟨rr, hrr, h⟩ := bind_ok_peel _ _ _ h
       obtain ⟨num, hnum, h⟩ := bind_ok_peel _ _ _ h
       have hp := computePowerMinusOneHybrid_isNormalized rate n pr pmo hrate hn hpmo
-      have hr' := operator_add_isNormalized_to_nearest_sz _ _ rr (Number.ofInt64_isNormalized 1) hp hrr
+      have hr' := Number.operator_add_isNormalized_to_nearest_sz _ _ rr (Number.ofInt64_isNormalized 1) hp hrr
       exact Number.operator_div_isNormalized _ _ r _ (Number.operator_mul_isNormalized _ _ num _ hrate hr' hnum) hp h
 
 /-- The periodic payment is normalized. -/

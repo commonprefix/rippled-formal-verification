@@ -65,7 +65,7 @@ lemma Vault.canBurnShares_sharesTotal_pos (v : Vault) (amount holderShares share
   have hins := (Vault.canBurnShares_ok_reduces v amount holderShares sharesTotalAmount hok).1
   simp only [Vault.isInsolvent, Bool.and_eq_true, decide_eq_true_eq] at hins
   rw [RawVault.WF.toExact_sharesTotal v.toRawVault v.wf]
-  exact (signum_eq_one_iff _ v.wf.sharesTotal_norm).mp hins.2
+  exact (Number.signum_eq_one_iff _ v.wf.sharesTotal_norm).mp hins.2
 
 /-- On a reachable vault with no shares, the clawback pricing accepts only a zero amount that names
 the holder's balance: there is no cash, so every other request prices to no shares. -/

@@ -488,7 +488,7 @@ lemma operator_mul_roundsCuspAware (x y r : Number)
     (hpos : 0 < x.toRat * y.toRat) :
     r.RoundsCuspAware (x.toRat * y.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hF⟩ :=
-    operator_mul_algorithmic_facts_to_nearest x y r hx hy hxm hym hok hrm
+    Number.operator_mul_algorithmic_facts_to_nearest x y r hx hy hxm hym hok hrm
   have hrep := hF.represents_f
   exact roundsCuspAware_of_doRoundUp _ r zm ze' f g res_pos .overflow hpos
     (by rw [← abs_of_pos hpos]; exact hF.value_eq)
@@ -496,9 +496,9 @@ lemma operator_mul_roundsCuspAware (x y r : Number)
     hF.f_nonneg hF.f_lt_one hF.zm_ge_floor hF.zm_le_maxRepUp hF.floor_cusp
     (represents_round_eq_one hrep) (represents_round_eq_zero hrep) (represents_f_gt_half hrep)
     (represents_half_round_eq_zero hrep)
-    (fun hdir => operator_mul_rounded_branchA x y r hx hy hxm hym hok hrm hdir
-      (operator_mul_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hrm hdir))
-    (fun hdir => operator_mul_rounded_branchB x y r hx hy hxm hym hok hrm hdir
-      (operator_mul_no_inbetween_above x y r hx hy hxm hym hok hrm hdir))
+    (fun hdir => Number.operator_mul_rounded_branchA x y r hx hy hxm hym hok hrm hdir
+      (Number.operator_mul_no_inbetween_below_to_nearest x y r hx hy hxm hym hok hrm hdir))
+    (fun hdir => Number.operator_mul_rounded_branchB x y r hx hy hxm hym hok hrm hdir
+      (Number.operator_mul_no_inbetween_above x y r hx hy hxm hym hok hrm hdir))
 
 end XRPL.Model.Protocol

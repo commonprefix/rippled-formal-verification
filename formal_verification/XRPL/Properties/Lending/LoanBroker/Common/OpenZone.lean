@@ -301,7 +301,7 @@ lemma LoanBroker.roundedCoverAvailable_of_exact (lb : LoanBroker) (s : STAmount)
       have heq : num.operator_eq lb.coverAvailable = true := by simpa [pure, Except.pure] using he
       obtain ⟨hmv, hmn⟩ := STAmount.ofNumber_toNumber_exact _ _ _ _ s num lb.wf.coverAvailable_norm
         (fun _ => lb.exact.coverAvailable_nonneg) hok hn
-      have hv := (operator_eq_iff num lb.coverAvailable hmn lb.wf.coverAvailable_norm).mp heq
+      have hv := (Number.operator_eq_iff num lb.coverAvailable hmn lb.wf.coverAvailable_norm).mp heq
       show s.toRat = lb.coverAvailable.toRat
       rw [← hmv, hv]
 

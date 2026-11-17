@@ -28,7 +28,7 @@ structure DivFactsToNearest (x y result : Number) (mode : rounding_mode)
   f_gt_half : f > 1 / 2 → g.round .to_nearest = 1
   f_eq_half : f = 1 / 2 → g.round .to_nearest = 0
 
-theorem operator_div_algorithmic_facts_to_nearest (x y result : Number)
+theorem Number.operator_div_algorithmic_facts_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .to_nearest = .ok result)
@@ -37,7 +37,7 @@ theorem operator_div_algorithmic_facts_to_nearest (x y result : Number)
       DivFactsToNearest x y result .to_nearest zm ze' f g res_pos := by
   obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-    operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor, h_value,
       h_rup, h_abs, hres_mant, h_neg, _hzm_succ, hround1, hround0, hfgt, hfeq⟩ :=
@@ -54,7 +54,7 @@ theorem operator_div_algorithmic_facts_to_nearest (x y result : Number)
 
 /-- If `result.toRat ≤ x/y` and no normalized Number lies above `result.toRat` and at or below `x/y`, the
 result has the value of `Number.lower (x/y)`. -/
-theorem operator_div_rounded_branchA (x y result : Number)
+theorem Number.operator_div_rounded_branchA (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .to_nearest = .ok result)
@@ -64,23 +64,23 @@ theorem operator_div_rounded_branchA (x y result : Number)
                        result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat / y.toRat)) :
     ∃ n_lo : Number, Number.lower (x.toRat / y.toRat) = some n_lo ∧
                      result.toRat = n_lo.toRat := by
-  have h5 := operator_div_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h5 := Number.operator_div_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_div_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
-  have h_truth_ne : x.toRat / y.toRat ≠ 0 := operator_div_truth_ne x y hx_mant_ne hy_mant_ne
+    Number.operator_div_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h_truth_ne : x.toRat / y.toRat ≠ 0 := Number.operator_div_truth_ne x y hx_mant_ne hy_mant_ne
   have h_bound : |result.toRat - x.toRat / y.toRat|
       ≤ |x.toRat / y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat / y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := fun h =>
     truth_top_of_result_cap result (x.toRat / y.toRat) h_result_norm hresult h_bound
-      (operator_div_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h) h
+      (Number.operator_div_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h) h
   exact closest_lower_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
     h_truth_ne h_bound h_truth_top h_round_down h_no_inbetween
 
 /-- If `x/y ≤ result.toRat` and no normalized Number lies at or above `x/y` and below `result.toRat`, the
 result has the value of `Number.upper (x/y)`. -/
-theorem operator_div_rounded_branchB (x y result : Number)
+theorem Number.operator_div_rounded_branchB (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .to_nearest = .ok result)
@@ -90,17 +90,17 @@ theorem operator_div_rounded_branchB (x y result : Number)
                        m.toRat < result.toRat → ¬ (x.toRat / y.toRat ≤ m.toRat)) :
     ∃ n_up : Number, Number.upper (x.toRat / y.toRat) = some n_up ∧
                      result.toRat = n_up.toRat := by
-  have h5 := operator_div_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h5 := Number.operator_div_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_div_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
-  have h_truth_ne : x.toRat / y.toRat ≠ 0 := operator_div_truth_ne x y hx_mant_ne hy_mant_ne
+    Number.operator_div_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h_truth_ne : x.toRat / y.toRat ≠ 0 := Number.operator_div_truth_ne x y hx_mant_ne hy_mant_ne
   have h_bound : |result.toRat - x.toRat / y.toRat|
       ≤ |x.toRat / y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat / y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := fun h =>
     truth_top_of_result_cap result (x.toRat / y.toRat) h_result_norm hresult h_bound
-      (operator_div_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h) h
+      (Number.operator_div_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h) h
   exact closest_upper_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
     h_truth_ne h_bound h_truth_top h_round_up h_no_inbetween
 

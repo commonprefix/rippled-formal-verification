@@ -27,6 +27,8 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
     (hfit : (v.numericType = .fractional ∧ v.assetsAvailable.toRat + toPool.toRat < 10 ^ 89) ∨
       (v.numericType.isIntegral = true ∧
         v.assetsAvailable.toRat + toPool.toRat + 1 ≤ v.numericType.maxValue.toNat))
+    (htot : v.numericType.isIntegral = true → v.assetsAvailable.toRat + toPool.toRat +
+      (v.assetsDeployed.toRat - pp.toRat) + 1 ≤ v.numericType.maxValue.toNat)
     (hgP : Number.OnGrid v.baseExponent pp) (hP0 : 0 ≤ pp.toRat)
     (hdep : ∃ d : ℕ, d < 10 ^ 16 ∧ v.assetsDeployed.toRat = (d : ℚ) * 10 ^ v.baseExponent)
     (hADpos : 0 < v.assetsDeployed.toRat)
@@ -56,8 +58,8 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
   obtain ⟨aa, haa⟩ := Number.operator_add_ok_of_abs _ _ .to_nearest hAAN htoN
     (by rw [abs_of_nonneg hAA0]; linarith [show (10 : ℚ) ^ 89 < 10 ^ 200 by norm_num])
     (by linarith [show (10 : ℚ) ^ 150 < 10 ^ 200 by norm_num])
-  have haaN := operator_add_isNormalized_to_nearest_sz _ _ _ hAAN htoN haa
-  have haa0 := operator_add_nonneg _ _ _ hAAN htoN haa hAAm
+  have haaN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAN htoN haa
+  have haa0 := Number.operator_add_nonneg _ _ _ hAAN htoN haa hAAm
   obtain ⟨aa', haa'⟩ : ∃ aa', STAmount.roundToNumericType v.numericType aa .to_nearest = .ok aa' := by
     rcases hfit with ⟨h, h1⟩ | ⟨hint, h1⟩
     · rw [h]
@@ -104,7 +106,7 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
     v.wf.assetsDeployed_norm (Number.operator_neg_isNormalized _ hgP.1)
     (by rw [abs_of_nonneg (by linarith)]; linarith [show (10 : ℚ) ^ 16 < 10 ^ 200 by norm_num])
     (by rw [Number.toRat_neg, abs_neg, abs_of_nonneg hP0]; linarith [show (10 : ℚ) ^ 16 < 10 ^ 200 by norm_num])
-  have had'N := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
+  have had'N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
     (Number.operator_neg_isNormalized _ hgP.1) had'
   have had'v : ad'.toRat = v.assetsDeployed.toRat - pp.toRat := by
     have h63 : |v.assetsDeployed.toRat + pp.operator_neg.toRat| < 2 ^ 63 * 10 ^ v.baseExponent := by
@@ -129,8 +131,8 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
     v.wf.yieldUnrealized_norm hydN
     (by rw [abs_of_nonneg hYU0]; linarith [show (10 : ℚ) ^ 150 < 10 ^ 200 by norm_num])
     (by linarith [show (10 : ℚ) ^ 150 < 10 ^ 200 by norm_num])
-  have hyu'N := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm hydN hyu'
-  have hyu'0 := operator_add_nonneg _ _ _ v.wf.yieldUnrealized_norm hydN hyu' hyd0
+  have hyu'N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm hydN hyu'
+  have hyu'0 := Number.operator_add_nonneg _ _ _ v.wf.yieldUnrealized_norm hydN hyu' hyd0
 
   -- the update passes its checks, and the vault it writes is lawful
   have hsums : Vault.AdjustSums v ⟨toPool, pp.operator_neg, yd, Number.zero, Number.zero⟩ aa' ad'
@@ -140,12 +142,25 @@ private lemma Vault.pay_adjust (v : Vault) (hasset : Vault.HoldsAsset v) (toPool
   have harle : v.assetsReserved.toRat ≤ ad'.toRat := by rw [had'v]; linarith
   have hle : v.lossUnrealized.operator_gt ad' = false := by
     unfold Number.operator_gt
-    exact (operator_lt_eq_false_iff _ _ had'N v.wf.lossUnrealized_norm).mpr hlule
+    exact (Number.operator_lt_eq_false_iff _ _ had'N v.wf.lossUnrealized_norm).mpr hlule
   have had'0 : 0 ≤ ad'.toRat := le_trans hLU0 hlule
+  -- the new total is an amount of the asset, which C++ `syncAssetsTotal` stores
+  have hst : XRPL.Model.SingleAssetVault.TotalStores v.numericType aa' ad' := by
+    refine XRPL.Model.SingleAssetVault.TotalStores.of_rounded_cash _ hasset aa aa' ad' haaN haa0 haa' had'N had'0
+      (fun hi => ?_) (fun _ => by rw [had'v]; linarith [show (10 : ℚ) ^ 16 < 10 ^ 80 by norm_num])
+    have hm : (v.numericType.maxValue.toNat : ℚ) ≤ 2 ^ 63 := by
+      have : v.numericType.maxValue.toNat ≤ 2 ^ 63 := by rcases hasset with h | h | h <;> rw [h] <;> decide
+      exact_mod_cast this
+    have haav : aa.toRat = v.assetsAvailable.toRat + toPool.toRat := by
+      refine Number.OnGrid.add_toRat hgA hgm hs ?_ haa
+      rw [hint0 hi, zpow_zero, mul_one, abs_of_nonneg hAAm]
+      linarith [htot hi, had'v]
+    rw [haav, had'v]
+    linarith [htot hi]
   have hadj := Vault.adjustBalances_ok v _ _ _ _ _ _ hsums
     ⟨Number.signum_nonneg_of_toRat _ haa'N haa'0, Number.signum_nonneg_of_toRat _ had'N had'0,
       Number.signum_nonneg_of_toRat _ v.wf.lossUnrealized_norm hLU0, Number.signum_nonneg_of_toRat _ hyu'N hyu'0,
-      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm hAR0⟩ hle
+      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm hAR0⟩ hle hst
   obtain ⟨v', hv', hv'r⟩ := Vault.balances_lawful v aa' ad' v.assetsReserved v.lossUnrealized yu'
     ⟨haa'N, had'N, v.wf.assetsReserved_norm, v.wf.lossUnrealized_norm, hyu'N⟩
     ⟨haa'0, had'0, hAR0, hLU0, hyu'0⟩ hlule harle
@@ -304,10 +319,16 @@ lemma Loan.pay_ok_of_room (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amou
     (hADpos : 0 < p.pool.assetsDeployed.toRat)
     (hLU : p.pool.lossUnrealized.toRat + p.amounts.principalPaid.toRat ≤ p.pool.assetsDeployed.toRat)
     (hAR : p.pool.assetsReserved.toRat + p.amounts.principalPaid.toRat ≤ p.pool.assetsDeployed.toRat)
-    (hAAfit : p.pool.numericType.isIntegral = true → p.pool.assetsAvailable.toRat + p.amounts.principalPaid.toRat +
+    (hATfit : p.pool.numericType.isIntegral = true → p.pool.assetsAvailable.toRat + p.pool.assetsDeployed.toRat +
       p.amounts.interestPaid.toRat + 1 ≤ p.pool.numericType.maxValue.toNat)
     (hmove : p.loan.paymentRemaining = 0 ∨ 0 < p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat) :
     ∃ r, (loan.pay v pt amount now).run = .ok (.ok r) := by
+  -- the principal paid is part of AssetsDeployed, so the cash after the credit is within the total
+  have hAAfit : p.pool.numericType.isIntegral = true → p.pool.assetsAvailable.toRat + p.amounts.principalPaid.toRat +
+      p.amounts.interestPaid.toRat + 1 ≤ p.pool.numericType.maxValue.toNat := fun hi => by
+    have := hATfit hi
+    have hLU0 : 0 ≤ p.pool.lossUnrealized.toRat := p.pool.exact.lossUnrealized_nonneg
+    linarith
   have hbase := Vault.baseExponent_scale_range p.pool
   have hs : minExponent + 18 ≤ p.pool.baseExponent ∧ p.pool.baseExponent ≤ maxExponent - 1 := by
     unfold minExponent maxExponent; omega
@@ -331,7 +352,7 @@ lemma Loan.pay_ok_of_room (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amou
     (by rw [abs_of_nonneg hI0]; linarith [show (10 : ℚ) ^ 20 < 10 ^ 200 by norm_num])
   have htpv : tp.toRat = p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat :=
     Number.OnGrid.add_exact hgP hgI hP0 hI0 (by nlinarith) hs htp
-  have htpN := operator_add_isNormalized_to_nearest_sz _ _ _ hgP.1 hgI.1 htp
+  have htpN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hgP.1 hgI.1 htp
   have hgtp := Number.OnGrid.add hgP hgI hs htp
 
   have hcredit : p.pool.numericType.CreditFits p.pool.assetsAvailable.toRat tp.toRat := by
@@ -377,7 +398,7 @@ lemma Loan.pay_ok_of_room (loan : Loan) (v : Vault) (pt : LoanPaymentType) (amou
       exact Or.inr ⟨hi, by linarith [hAAfit hi]⟩
   obtain ⟨raw, v', at', hadj, hv', hat, aa, haa, haa'⟩ := Vault.pay_adjust p.pool hasset toPool
     p.amounts.principalPaid yd hgA (by linarith [show (10 : ℚ) ^ 16 < 10 ^ 89 by norm_num]) htoN hgm hAAm
-    (by linarith) hfit hgP hP0 hdep hADpos hLU hAR hydN hyd0 hydl hYU
+    (by linarith) hfit (fun hi => by linarith [hATfit hi]) hgP hP0 hdep hADpos hLU hAR hydN hyd0 hydl hYU
   obtain ⟨broker', hb'⟩ := LoanBroker.settle_lawful p.loan.broker p.amounts.principalPaid dt' cover' hgP.1
     hP0 hPDT hcount hdt' hcovN hcov0
   have hbnt : broker'.numericType = p.loan.broker.numericType :=

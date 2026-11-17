@@ -71,7 +71,7 @@ private lemma Number.clamp_zero_le (x hi : Number) (hx : x.isNormalized) (hhi : 
   · split
     · exact le_refl _
     · rename_i h
-      exact (operator_lt_eq_false_iff hi x hhi hx).mp (by simpa using h)
+      exact (Number.operator_lt_eq_false_iff hi x hhi hx).mp (by simpa using h)
 
 private lemma LoanStateDeltas.total_isNormalized' {d : LoanStateDeltas} (h1 : d.principal.isNormalized)
     (h2 : d.interest.isNormalized) (h3 : d.managementFee.isNormalized) (t : Number) (ht : d.total = .ok t) :
@@ -81,7 +81,8 @@ private lemma LoanStateDeltas.total_isNormalized' {d : LoanStateDeltas} (h1 : d.
   split at ht
   · cases ht
   · rename_i s hs
-    exact operator_add_isNormalized_to_nearest_sz _ _ _ (operator_add_isNormalized_to_nearest_sz _ _ _ h1 h2 hs)
+    exact Number.operator_add_isNormalized_to_nearest_sz _ _ _ (Number.operator_add_isNormalized_to_nearest_sz _ _ _ h1
+      h2 hs)
       h3 ht
 
 /-- The state of a lawful loan holds its outstanding amounts. -/
@@ -93,8 +94,8 @@ lemma Loan.state_fields (l : Loan) (s : LoanState) (h : l.state = .ok s) :
   walk_ok
   obtain rfl := (Except.ok.inj ‹pure _ = Except.ok s›)
   refine ⟨rfl, rfl, rfl, ?_⟩
-  exact operator_sub_isNormalized_to_nearest_sz _ _ _
-    (operator_sub_isNormalized_to_nearest_sz _ _ _ l.wf.totalValueOutstanding_norm l.wf.principalOutstanding_norm
+  exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _
+    (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ l.wf.totalValueOutstanding_norm l.wf.principalOutstanding_norm
       ‹_›)
     l.wf.managementFeeOutstanding_norm ‹_›
 
@@ -137,8 +138,8 @@ private lemma reduceCapped_normalized (value excess v' e' : Number) (hv : value.
     have h1 := Except.ok.inj ‹pure _ = Except.ok (v', e')›
     simp only [Prod.mk.injEq] at h1
     obtain ⟨rfl, rfl⟩ := h1
-    exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hv hm ‹_›,
-      operator_sub_isNormalized_to_nearest_sz _ _ _ he hm ‹_›⟩
+    exact ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hv hm ‹_›,
+      Number.operator_sub_isNormalized_to_nearest_sz _ _ _ he hm ‹_›⟩
   · have h1 := Except.ok.inj h
     simp only [Prod.mk.injEq] at h1
     obtain ⟨rfl, rfl⟩ := h1
@@ -241,14 +242,14 @@ elab "pay_norm_forward" : tactic => do
           | some ``Number.operator_sub =>
             if args.size == 3 && args[2]!.isConstOf ``rounding_mode.to_nearest then
               match ← proveNorm args[0]!, ← proveNorm args[1]! with
-              | some p0, some p1 => pure (some (← mkAppM ``operator_sub_isNormalized_to_nearest_sz
+              | some p0, some p1 => pure (some (← mkAppM ``Number.operator_sub_isNormalized_to_nearest_sz
                   #[args[0]!, args[1]!, c, p0, p1, ldecl.toExpr]))
               | _, _ => pure none
             else pure none
           | some ``Number.operator_add =>
             if args.size == 3 && args[2]!.isConstOf ``rounding_mode.to_nearest then
               match ← proveNorm args[0]!, ← proveNorm args[1]! with
-              | some p0, some p1 => pure (some (← mkAppM ``operator_add_isNormalized_to_nearest_sz
+              | some p0, some p1 => pure (some (← mkAppM ``Number.operator_add_isNormalized_to_nearest_sz
                   #[args[0]!, args[1]!, c, p0, p1, ldecl.toExpr]))
               | _, _ => pure none
             else pure none
@@ -516,8 +517,8 @@ private lemma Loan.tryOverpayment_some (l : Loan) (opc : PaymentComponents) (re 
   · rw [b1, ← hs1]; exact g6
   · rw [b2, ← hs2]; exact g3
   · rw [b3, ← hs3]; exact g9
-  · exact operator_sub_isNormalized_to_nearest_sz _ _ _ hP g1 hd
-  · exact operator_sub_nonneg _ _ _ hP g1 hd (by linarith)
+  · exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hP g1 hd
+  · exact Number.operator_sub_nonneg _ _ _ hP g1 hd (by linarith)
 
 /-- What a payment carries forward: a principal sum of at least zero. -/
 private def UnsettledPayment.PaidOk {α : Type} (p : UnsettledPayment α) : Prop :=
@@ -544,8 +545,8 @@ private lemma PaymentAmounts.add_paidOk (a b c : PaymentAmounts) (h : a.add b = 
     (hb : b.principalPaid.isNormalized ∧ 0 ≤ b.principalPaid.toRat) :
     c.principalPaid.isNormalized ∧ 0 ≤ c.principalPaid.toRat := by
   have hc := PaymentAmounts.add_principal a b c h
-  exact ⟨operator_add_isNormalized_to_nearest_sz _ _ _ ha.1 hb.1 hc,
-    operator_add_nonneg _ _ _ ha.1 hb.1 hc (by linarith [ha.2, hb.2])⟩
+  exact ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ ha.1 hb.1 hc,
+    Number.operator_add_nonneg _ _ _ ha.1 hb.1 hc (by linarith [ha.2, hb.2])⟩
 
 /-- The instalment loop never raises an outstanding amount or PaymentRemaining, and keeps the principal sum at
 least zero. -/

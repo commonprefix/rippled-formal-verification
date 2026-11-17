@@ -69,13 +69,24 @@ lemma doNormalize_scaleUp_id_or_mul10 (minMant m : UInt64) (e : Int)
   | case2 m e hcond =>
     left; rw [doNormalize_scaleUpSpec, if_neg hcond]
 
+/-- `doNormalize_scaleUpSpec` exits either at the input mantissa or at least one exponent lower. -/
+lemma doNormalize_scaleUp_id_or_exp_lt (minMant m : UInt64) (e : Int) :
+    (doNormalize_scaleUpSpec minMant m e).1 = m ∨ (doNormalize_scaleUpSpec minMant m e).2 ≤ e - 1 := by
+  induction m, e using doNormalize_scaleUpSpec.induct (minMantissa := minMant) with
+  | case1 m e hcond _ =>
+    right
+    rw [doNormalize_scaleUpSpec, if_pos hcond]
+    exact doNormalize_scaleUp_exp_le minMant (m * 10) (e - 1)
+  | case2 m e hcond =>
+    left; rw [doNormalize_scaleUpSpec, if_neg hcond]
+
 set_option maxHeartbeats 800000 in
 -- unfolds the full normalize pipeline (scaleUp / scaleDown / capAtMaxRep / doRoundUp)
 /-- With enough exponent room, `doNormalize` scales any mantissa `m ∈ [1, maxRep]` into `largeRange` with no
 rounding, in every mode, and returns a normalized number of the same value `m · 10^e`. -/
 lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : rounding_mode)
     (h_pos : 1 ≤ m.toNat) (h_le : m.toNat ≤ maxRep.toNat)
-    (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent - 1) :
+    (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent) :
     ∃ M : UInt64, ∃ e1 : Int,
       doNormalize neg m e largeRange.min largeRange.max mode = .ok ⟨neg, M, e1⟩ ∧
       (M.toNat : ℚ) * 10 ^ e1 = (m.toNat : ℚ) * 10 ^ e ∧ Number.isnormal ⟨neg, M, e1⟩ := by
@@ -174,6 +185,14 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
       rcases hM_or with h | h
       · exfalso; have := UInt64.lt_iff_toNat_lt.mp hM_gt_maxRep; omega
       · exact h
+    -- a mantissa above `maxRep` was scaled up at least once, so the exponent has room for the dropped digit
+    have he1_lt : e1 ≤ e - 1 := by
+      rcases doNormalize_scaleUp_id_or_exp_lt largeRange.min m e with h | h
+      · simp only [hMe1] at h
+        have hgt := UInt64.lt_iff_toNat_lt.mp hM_gt_maxRep
+        rw [h] at hgt
+        omega
+      · simp only [hMe1] at h; exact h
     have h_cap_eq : doNormalize_capAtMaxRep M e1 g0
         = .ok (M / 10, e1 + 1, g0.push (M % 10)) := by
       unfold doNormalize_capAtMaxRep
@@ -205,7 +224,7 @@ lemma doNormalize_largeRange_exact (neg : Bool) (m : UInt64) (e : Int) (mode : r
 `2⁶³`, the `pushOverflow` cusp): the result equals `mantissa · 10^e` and is normalized, in every mode. -/
 theorem Number.from_rep_exact (mantissa : Int64) (e : Int) (mode : rounding_mode)
     (h_ne_min : mantissa ≠ Int64.minValue)
-    (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent - 1) :
+    (he_lo : minExponent + 18 ≤ e) (he_hi : e ≤ maxExponent) :
     ∃ result : Number,
       Number.from_rep mantissa e largeRange.min largeRange.max mode = .ok result ∧
       result.toRat = (mantissa.toInt : ℚ) * 10 ^ e ∧ result.isNormalized := by

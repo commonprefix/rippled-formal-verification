@@ -6,7 +6,7 @@ import XRPL.Properties.Protocol.Number.Common.Helpers
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_rounding_bound_diff_sign_upward_tight (x y result : Number)
+theorem Number.operator_add_rounding_bound_diff_sign_upward_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -16,7 +16,7 @@ theorem operator_add_rounding_bound_diff_sign_upward_tight (x y result : Number)
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
       htruth, hok128, hsign, _, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   obtain ⟨hbound, hneg⟩ :=
     doNormalize128_rounds_any zn M ze' δ sticky .upward hδ_low hδ_le hsticky_zero
@@ -42,7 +42,7 @@ theorem operator_add_rounding_bound_diff_sign_upward_tight (x y result : Number)
         exact mul_lt_mul_of_pos_left (by norm_num) h_truth_pos
 
 /-- Diff-sign addition under `.upward` rounding never lands below the true sum. -/
-theorem operator_add_rounding_bound_diff_sign_upward_dir (x y result : Number)
+theorem Number.operator_add_rounding_bound_diff_sign_upward_dir (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -52,7 +52,7 @@ theorem operator_add_rounding_bound_diff_sign_upward_dir (x y result : Number)
     x.toRat + y.toRat ≤ result.toRat := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
       htruth, hok128, hsign, _, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   obtain ⟨_, hdir, _⟩ :=
     doNormalize128_rounds_direction zn M ze' δ sticky .upward hδ_low hδ_le hsticky_zero

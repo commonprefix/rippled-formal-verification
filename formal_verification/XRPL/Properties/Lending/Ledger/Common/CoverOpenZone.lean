@@ -219,7 +219,7 @@ private lemma LendingLedger.applyLoan_cover (l : LendingLedger) (hr : l.Reachabl
       rw [hcb, ← hlb]
       have hdn := Loan.defaultCover_isNormalized loan l.vault _ (Loan.manageDefault_ok_parts loan l.vault r₀ hok₀
         |>.choose_spec.choose_spec.choose_spec.choose_spec.choose_spec.2.1)
-      exact Number.roundsToRepresentable_le _ _ (operator_sub_rounded_to_nearest _ _ _
+      exact Number.roundsToRepresentable_le _ _ (Number.operator_sub_rounded_to_nearest _ _ _
         loan.broker.wf.coverAvailable_norm hdn hcov) _ loan.broker.wf.coverAvailable_norm (by linarith)
   | loanPay i paymentType amount => exact absurd rfl (hpay i paymentType amount)
   | loanDelete i =>

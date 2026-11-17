@@ -67,7 +67,7 @@ lemma LoanProperties.amortizationGuards_room (props : LoanProperties) (principal
       rename_i hne
       have hcpn : cp = n.toInt64 := by simpa using hne
       have hratioN := Number.operator_div_isNormalized _ _ _ _ htv hrpN hratio
-      have hwithin := to_rep_within_one ratio .upward cp hratioN hcp
+      have hwithin := Number.to_rep_within_one ratio .upward cp hratioN hcp
       rw [hcpn, UInt32.toUInt64_toInt64_toInt] at hwithin
       have hn1 : (1 : ℚ) ≤ n.toNat := by
         have : n.toNat ≠ 0 := fun h0 => hn (UInt32.toNat_inj.mp (by simpa using h0))
@@ -87,7 +87,7 @@ lemma LoanProperties.amortizationGuards_room (props : LoanProperties) (principal
         linarith
       obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow ((n.toNat : ℤ) - 1) 0
         (by have := n.toNat_lt; constructor <;> omega) (by unfold minExponent maxExponent; omega)
-      have hR := operator_div_rounded_upward _ _ _ htv hrpN hratio hratio_ne
+      have hR := Number.operator_div_rounded_upward _ _ _ htv hrpN hratio hratio_ne
       have := hR.le_of_ge (Or.inr (Or.inl rfl)) w hw (by rw [hwv]; push_cast; simpa using hq)
       rw [hwv] at this
       push_cast at this
@@ -156,7 +156,7 @@ private lemma Loan.Created.size {start : Loan} {t₀ : UInt32} (h : Loan.Created
     rw [hf] at haT
     exact lt_of_le_of_lt (Nat.sub_le _ _) haT
   obtain ⟨-, hmf_hi, -, m, hmv⟩ := computeManagementFee_bounds broker.numericType ti _ (aT - j)
-    broker.managementFeeRate ls (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
+    broker.managementFeeRate ls (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
     (by omega) hR10 ⟨hlo, hhi⟩ hint hfr hmfo
   -- the fee is at most a tenth of the interest plus one unit
   have hmf10 : props.managementFeeOutstanding.toRat ≤ (((aT - j : ℕ) : ℚ) / 10 + 1) * 10 ^ ls := by
@@ -191,17 +191,17 @@ private lemma Loan.Created.size {start : Loan} {t₀ : UInt32} (h : Loan.Created
     rw [Number.operator_sub_toRat_of_grid _ _ d1 aT j ls htvN hp (by rw [haTv]; norm_cast)
       (by rw [hj]; norm_cast) (by omega) hsl hd1]
     push_cast [Nat.cast_sub hjaT]; ring
-  have hd1N := operator_sub_isNormalized_to_nearest_sz _ _ d1 htvN hp hd1
+  have hd1N := Number.operator_sub_isNormalized_to_nearest_sz _ _ d1 htvN hp hd1
   have hd2v : d2.toRat = ((aT - j - m : ℕ) : ℚ) * 10 ^ ls := by
     rw [Number.operator_sub_toRat_of_grid _ _ d2 (aT - j) m ls hd1N hmfN (by rw [hd1v]; norm_cast)
       (by rw [hmv]; norm_cast) (by omega) hsl hd2]
     push_cast [Nat.cast_sub hjaT, Nat.cast_sub hm_le]; ring
   have hxN : loanState.interestDue.isNormalized := by
-    rw [hxe]; exact operator_sub_isNormalized_to_nearest_sz _ _ d2 hd1N hmfN hd2
+    rw [hxe]; exact Number.operator_sub_isNormalized_to_nearest_sz _ _ d2 hd1N hmfN hd2
   -- AssetsAvailable is at least PrincipalRequested, and both with the interest stay below the limit
   have hopen := (Vault.exceedsOpenLimit_false_bound v _ hxN hchecks.open_zone).1
   have hfunds : principal.toRat ≤ v.assetsAvailable.toRat :=
-    (operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hp).mp hchecks.funds
+    (Number.operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hp).mp hchecks.funds
   have hbase := Vault.baseExponent_scale_range v
   obtain ⟨hls1, -⟩ := computeLoanProperties_loanScale _ _ _ _ _ _ _ _ hchecks.properties_ok hbase.2
   have hpow : (10 : ℚ) ^ (v.baseExponent - 1) ≤ 10 ^ ls / 10 := by

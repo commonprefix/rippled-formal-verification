@@ -25,7 +25,7 @@ private lemma canVaultUpdate_on_grid_iff (v : Vault) (m assetsTotal : Number) (b
   have hb1 : m.operator_ne Number.zero = false ↔ m.toRat = 0 := Number.operator_ne_zero_eq_false_iff m hnorm
   -- the below-total guard vanishes exactly when the maximum is at least the total
   have hb2 : m.operator_lt assetsTotal = false ↔ assetsTotal.toRat ≤ m.toRat := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff m assetsTotal hnorm hatn, not_lt]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff m assetsTotal hnorm hatn, not_lt]
   by_cases hc : (m.operator_ne Number.zero && m.operator_lt assetsTotal) = true
   · have hrej := Vault.canVaultUpdate_below_total_proof v m assetsTotal blockDeposit hgrid hperm hat
       (Bool.and_eq_true _ _ ▸ hc).1 (Bool.and_eq_true _ _ ▸ hc).2

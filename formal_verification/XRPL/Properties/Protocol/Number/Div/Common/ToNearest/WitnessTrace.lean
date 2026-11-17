@@ -64,7 +64,7 @@ lemma doNormalize128_to_nearest_witness :
   simp only [RoundResult.toNumber]
 
 /-- `operator_div` trace for the `.to_nearest` witness inputs. -/
-lemma operator_div_to_nearest_witness :
+lemma Number.operator_div_to_nearest_witness :
     Number.operator_div ⟨false, 1000735865998743757, 0⟩ ⟨false, 1085000000000000630, 0⟩
         .to_nearest = .ok ⟨false, 9223372036854775820, -19⟩ := by
   unfold Number.operator_div
@@ -83,7 +83,7 @@ lemma operator_div_to_nearest_witness :
 
 /-- Division rounding to nearest can be off by more than `4/(2^63 − 3)` of the value, just above a tie at the
 `capAtMaxRep` corner. -/
-theorem operator_div_to_nearest_attained :
+theorem Number.operator_div_to_nearest_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_div x y .to_nearest = .ok result ∧
@@ -93,7 +93,7 @@ theorem operator_div_to_nearest_attained :
           ⟨false, 9223372036854775820, -19⟩, ?_, ?_, ?_, ?_, ?_⟩
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
-  · exact operator_div_to_nearest_witness
+  · exact Number.operator_div_to_nearest_witness
   · decide
   · have hx_rat : (⟨false, 1000735865998743757, 0⟩ : Number).toRat = 1000735865998743757 := by
       unfold Number.toRat; rfl

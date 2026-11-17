@@ -95,7 +95,7 @@ lemma STAmount.canonicalize_signtrue_nonpos (s result : STAmount) (mode : roundi
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  rw [STAmount.iou_of_lt mode hint hfit] at hok
+  rw [STAmount.iou_eq mode hint] at hok
   have hsd_np : s.signedDrops.toInt64.toInt ≤ 0 := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -352,7 +352,7 @@ lemma STAmount.operator_sub_self_zero (a result : STAmount) (mode : rounding_mod
       simp only [Bool.not_false, Bool.not_true, if_true, if_false, Bool.false_eq_true] <;>
       ring
   have h_n₂_val : n₂.toRat = 0 := by
-    have h := operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
+    have h := Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
       hs1_mant hs2_mant h_diff Number.zero (Or.inl rfl)
       (by rw [Number.toRat_zero, h_opp]) h_add₂
     rw [h, h_opp]

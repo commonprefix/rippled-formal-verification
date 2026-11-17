@@ -33,7 +33,7 @@ private lemma LoanBroker.hasMinimumCover_iff (lb : LoanBroker) (e : Int) (m : Nu
     lb.HasMinimumCover e ↔ m.toRat ≤ lb.toExact.coverAvailable := by
   unfold LoanBroker.HasMinimumCover RawLoanBroker.hasMinimumCover
   simp only [hmin, ok_bind, pure_eq, Except.ok.injEq]
-  exact operator_le_iff m lb.coverAvailable (minimumBrokerCover_isNormalized _ _ _ _ _ hmin)
+  exact Number.operator_le_iff m lb.coverAvailable (minimumBrokerCover_isNormalized _ _ _ _ _ hmin)
     lb.wf.coverAvailable_norm
 
 /-- The cover floor reads only the numeric type, `debtTotal`, `coverRateMinimum` and `coverAvailable`, so a

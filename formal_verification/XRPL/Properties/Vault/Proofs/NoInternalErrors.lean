@@ -247,7 +247,7 @@ lemma Vault.cash_ofNumber_toRat (v : Vault) (cash : STAmount)
       · exact (STAmount.toNumber_exact_of cash n (STAmount.ofNumber_exactCanonical _ _ _ cash
           v.wf.assetsAvailable_norm v.exact.assetsAvailable_nonneg hcash hz) hsn).1
     rw [← hnv]
-    exact (operator_eq_iff n v.assetsAvailable (STAmount.toNumber_isNormalized cash _ n hsn)
+    exact (Number.operator_eq_iff n v.assetsAvailable (STAmount.toNumber_isNormalized cash _ n hsn)
       v.wf.assetsAvailable_norm).mp heq
 
 /-- On a reachable vault the price of the shares its cash names is a canonical amount at most the cash. -/
@@ -337,7 +337,7 @@ lemma Vault.Reachable.clawback_no_internal_proof (v : Vault) (t0 : UInt32) (hr :
   obtain ⟨hrc, hle⟩ := Vault.Reachable.cash_price_le v t0 hr waive cash shares recovered hcash hs hp
   obtain ⟨hv, hnorm⟩ := hrc.toNumber_exact n hn
   have hlt : v.assetsAvailable.toRat < n.toRat :=
-    (operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).mp (by simpa [Number.operator_gt] using hgt)
+    (Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).mp (by simpa [Number.operator_gt] using hgt)
   linarith
 
 end XRPL.Model.SingleAssetVault

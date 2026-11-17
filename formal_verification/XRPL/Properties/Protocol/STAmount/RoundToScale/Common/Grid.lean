@@ -150,10 +150,10 @@ lemma STAmount.roundToExponent_grid_self (value : STAmount) (s : ℤ) (k : ℕ)
     rw [hx₁_val, hv1_val, hv2_val, hval, hrefA_val]; push_cast; ring
   have hn₁_val : n₁.toRat = x₁.toRat :=
     (Number.roundsToRepresentable_eq n₁ _
-      (operator_add_rounded_to_nearest _ _ _ hv1_norm hv2_norm h_add₁) x₁ hx₁_norm hx₁_sum).trans
+      (Number.operator_add_rounded_to_nearest _ _ _ hv1_norm hv2_norm h_add₁) x₁ hx₁_norm hx₁_sum).trans
       hx₁_sum.symm
   have hn₁ : n₁ = x₁ :=
-    (operator_add_isNormalized_to_nearest_sz _ _ _ hv1_norm hv2_norm h_add₁).toRat_inj hx₁_norm hn₁_val
+    (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hv1_norm hv2_norm h_add₁).toRat_inj hx₁_norm hn₁_val
   rw [hn₁] at h_add₁
   obtain ⟨hof₁, hpack₁, hsum_c, hsum_val⟩ :=
     STAmount.repack_exact x₁ .to_nearest hx₁_norm hx₁_neg hx₁_mant hx₁_mod (by omega) (by omega)
@@ -219,11 +219,11 @@ lemma STAmount.roundToExponent_grid_self (value : STAmount) (s : ℤ) (k : ℕ)
   have hw_sum : w.toRat = s1n.toRat + s2n.toRat := by
     rw [hw_val, hs1_val, hs2_val, hsum_val, hx₁_val, hnegRef_val]; push_cast; ring
   have hn₂_val : n₂.toRat = w.toRat := by
-    rw [operator_add_exact_diff_sign s1n s2n n₂ .to_nearest hs1_norm hs2_norm hs1_mant hs2_mant h_diff
+    rw [Number.operator_add_exact_diff_sign s1n s2n n₂ .to_nearest hs1_norm hs2_norm hs1_mant hs2_mant h_diff
       w hw_norm hw_sum h_add₂]
     exact hw_sum.symm
   have hn₂ : n₂ = w :=
-    (operator_add_isNormalized_to_nearest_sz _ _ _ hs1_norm hs2_norm h_add₂).toRat_inj hw_norm hn₂_val
+    (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hs1_norm hs2_norm h_add₂).toRat_inj hw_norm hn₂_val
   rw [hn₂] at h_add₂
   obtain ⟨hof₂, hpack₂, hr_c, hr_val⟩ :=
     STAmount.repack_exact w .to_nearest hw_norm hw_neg hw_mant hw_mod (by omega) (by omega)

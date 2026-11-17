@@ -52,7 +52,7 @@ private lemma units_lt_pow (k : ℕ) (s : ℤ) (hk : k < 2 ^ 63) (hs : s ≤ 0) 
 /-- A normalized value at least zero passes the `Number` check `0 ≤ x`. -/
 private lemma zero_le_of_toRat (x : Number) (hx : x.isNormalized) (h : 0 ≤ x.toRat) :
     Number.zero.operator_le x = true :=
-  (operator_le_iff _ _ Number.zero_isNormalized hx).mpr (by rw [Number.toRat_zero]; exact h)
+  (Number.operator_le_iff _ _ Number.zero_isNormalized hx).mpr (by rw [Number.toRat_zero]; exact h)
 
 variable (loan : Loan) (v : Vault)
 
@@ -114,7 +114,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
   obtain ⟨x, hx, hix⟩ := bind_ok_peel _ _ _ hib
   have hxv := Number.operator_sub_toRat_of_grid _ _ x tv p b loan.wf.totalValueOutstanding_norm
     loan.wf.principalOutstanding_norm (by rw [htvv]; norm_cast) (by rw [hpv]; norm_cast) (by omega) hs hx
-  have hxn := operator_sub_isNormalized_to_nearest_sz _ _ _ loan.wf.totalValueOutstanding_norm
+  have hxn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ loan.wf.totalValueOutstanding_norm
     loan.wf.principalOutstanding_norm hx
   have hiDue : loan.toExact.interestDue = (((tv : ℤ) - p - mf : ℤ) : ℚ) * 10 ^ b := by
     show loan.totalValueOutstanding.toRat - loan.principalOutstanding.toRat - loan.managementFeeOutstanding.toRat = _
@@ -128,7 +128,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
     exact_mod_cast le_of_mul_le_mul_right h2 hp10
   have hiv := Number.operator_sub_toRat_of_grid _ _ i ((tv : ℤ) - p) mf b hxn loan.wf.managementFeeOutstanding_norm
     hxv (by rw [hmfv]; norm_cast) (by omega) hs hix
-  have hin := operator_sub_isNormalized_to_nearest_sz _ _ _ hxn loan.wf.managementFeeOutstanding_norm hix
+  have hin := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hxn loan.wf.managementFeeOutstanding_norm hix
 
   -- the cover is `k` whole base units, at most the principal and the cover
   obtain ⟨dc, hdc⟩ := Loan.defaultCover_ok loan v hasset hg.numericType hg.loanScale hg.assetsAvailable hg.room
@@ -170,7 +170,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
     rw [Number.operator_add_toRat_of_grid _ _ aa a k b v.wf.assetsAvailable_norm hdcn (by rw [hav]; norm_cast)
       (by rw [hdck]; norm_cast) (by omega) hs haa]
     push_cast; ring
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdcn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdcn haa
   have haar : STAmount.isRounded v.numericType aa = false := hasset.isRounded_units aa (a + k) haan (by omega) haav
   obtain ⟨aa', hround⟩ := STAmount.roundToNumericType_ok_of_isRounded_false _ _ haar
   have haa'v : aa'.toRat = aa.toRat := STAmount.roundToNumericType_of_isRounded_false _ _ _ haan haar hround
@@ -182,7 +182,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
     rw [Number.operator_sub_toRat_of_grid _ _ ad' d p b v.wf.assetsDeployed_norm loan.wf.principalOutstanding_norm
       (by rw [hdv]; norm_cast) (by rw [hpv]; norm_cast) (by omega) hs had]
     push_cast [Nat.cast_sub hpd]; ring
-  have hadn := operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
+  have hadn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.assetsDeployed_norm
     loan.wf.principalOutstanding_norm had
 
   have hlad : l ≤ d := by
@@ -212,7 +212,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
       have hv' := Number.operator_sub_toRat_of_grid _ _ lu' l p b v.wf.lossUnrealized_norm
         loan.wf.principalOutstanding_norm (by rw [hlv]; norm_cast) (by rw [hpv]; norm_cast) (by omega) hs hsub
       have hlp : (((l : ℤ) - p : ℤ) : ℚ) = ((l - p : ℕ) : ℚ) := by push_cast [Nat.cast_sub hpl]; ring
-      refine ⟨lu', ?_, ?_, operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm
+      refine ⟨lu', ?_, ?_, Number.operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm
         loan.wf.principalOutstanding_norm hsub, ?_⟩
       · simp only [Loan.defaultChange, himp, ↓reduceIte]
         exact hsub
@@ -249,7 +249,7 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
   have hyuv : yu'.toRat = (((y : ℤ) - ((tv : ℤ) - p - mf) : ℤ) : ℚ) * 10 ^ b :=
     Number.operator_sub_toRat_of_grid _ _ yu' y ((tv : ℤ) - p - mf) b v.wf.yieldUnrealized_norm hin
       (by rw [hyv]; norm_cast) hiv' (by omega) hs hyu'
-  have hyun := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm
+  have hyun := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm
     (Number.operator_neg_isNormalized i hin) hyu'
   have hyu0 : 0 ≤ yu'.toRat := by
     rw [hyuv]
@@ -266,11 +266,21 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
     rw [hadv]; push_cast [Nat.cast_sub hpd]; rw [hdv, hpv] at hreserved; linarith
   have hle : lu'.operator_gt ad' = false := by
     unfold Number.operator_gt
-    exact (operator_lt_eq_false_iff _ _ hadn hlun).mpr hlule
+    exact (Number.operator_lt_eq_false_iff _ _ hadn hlun).mpr hlule
+  -- both new balances are below `10^16` base units, so their total is an amount of the asset
+  have hst : XRPL.Model.SingleAssetVault.TotalStores v.numericType aa' ad' := by
+    refine XRPL.Model.SingleAssetVault.TotalStores.of_le_units _ hasset aa' ad' haa'n hadn haa'0 had0 ?_
+    rw [haa'v, haav, hadv]
+    have h1 : ((a + k : ℕ) : ℚ) < 10 ^ 16 := by exact_mod_cast (show a + k < 10 ^ 16 by omega)
+    have h2 : ((d - p : ℕ) : ℚ) < 10 ^ 16 := by exact_mod_cast (show d - p < 10 ^ 16 by omega)
+    have hb1 : (10 : ℚ) ^ b ≤ 1 := zpow_le_one_of_nonpos₀ (by norm_num) hbase.2
+    have e1 : ((a + k : ℕ) : ℚ) * 10 ^ b ≤ ((a + k : ℕ) : ℚ) := mul_le_of_le_one_right (by positivity) hb1
+    have e2 : ((d - p : ℕ) : ℚ) * 10 ^ b ≤ ((d - p : ℕ) : ℚ) := mul_le_of_le_one_right (by positivity) hb1
+    linarith
   have hadj := Vault.adjustBalances_ok v _ _ _ _ _ _ hs'
     ⟨Number.signum_nonneg_of_toRat _ haa'n haa'0, Number.signum_nonneg_of_toRat _ hadn had0,
       Number.signum_nonneg_of_toRat _ hlun hlu0, Number.signum_nonneg_of_toRat _ hyun hyu0,
-      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm v.exact.assetsReserved_nonneg⟩ hle
+      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm v.exact.assetsReserved_nonneg⟩ hle hst
   obtain ⟨v', hv', -⟩ := Vault.balances_lawful v aa' ad' v.assetsReserved lu' yu'
     ⟨haa'n, hadn, v.wf.assetsReserved_norm, hlun, hyun⟩
     ⟨haa'0, had0, v.exact.assetsReserved_nonneg, hlu0, hyu0⟩ hlule harle
@@ -294,15 +304,15 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
     rw [Number.operator_sub_toRat_of_grid _ _ dt' t p b loan.broker.wf.debtTotal_norm
       loan.wf.principalOutstanding_norm (by rw [htv]; norm_cast) (by rw [hpv]; norm_cast) (by omega) hs hdt']
     push_cast [Nat.cast_sub hpt]; ring
-  have hdt'n := operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.debtTotal_norm
+  have hdt'n := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.debtTotal_norm
     loan.wf.principalOutstanding_norm hdt'
   have hCA0 : 0 ≤ loan.broker.coverAvailable.toRat := loan.broker.exact.coverAvailable_nonneg
   obtain ⟨ca', hca'⟩ := Number.operator_sub_ok_of_lt loan.broker.coverAvailable dc .to_nearest
     loan.broker.wf.coverAvailable_norm hdcn hCA0 hg.coverAvailable (by rw [hdck]; positivity)
     (by rw [hdck]; exact units_lt_pow k b (by omega) hbase.2)
-  have hca'n := operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.coverAvailable_norm hdcn hca'
+  have hca'n := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.coverAvailable_norm hdcn hca'
   have hca'0 : 0 ≤ ca'.toRat :=
-    operator_add_nonneg _ _ _ loan.broker.wf.coverAvailable_norm (Number.operator_neg_isNormalized _ hdcn) hca'
+    Number.operator_add_nonneg _ _ _ loan.broker.wf.coverAvailable_norm (Number.operator_neg_isNormalized _ hdcn) hca'
       (by rw [Number.toRat_neg, hdck]; linarith)
   have hdtle : dt'.toRat ≤ loan.broker.debtTotal.toRat := by
     rw [hdt'v, htv]
@@ -315,9 +325,9 @@ lemma Loan.manageDefault_ok_of_grid (hg : Loan.DefaultGrid loan v) (hasset : Vau
       debtTotal_nonneg := zero_le_of_toRat dt' hdt'n (by rw [hdt'v]; positivity)
       coverAvailable_nonneg := zero_le_of_toRat ca' hca'n hca'0
       debt_within_cap := fun hdm => by
-        have h1 := (operator_le_iff _ _ loan.broker.wf.debtTotal_norm loan.broker.wf.debtMaximum_norm).mp
+        have h1 := (Number.operator_le_iff _ _ loan.broker.wf.debtTotal_norm loan.broker.wf.debtMaximum_norm).mp
           (loan.broker.valid.debt_within_cap hdm)
-        exact (operator_le_iff _ _ hdt'n loan.broker.wf.debtMaximum_norm).mpr (le_trans hdtle h1)
+        exact (Number.operator_le_iff _ _ hdt'n loan.broker.wf.debtMaximum_norm).mpr (le_trans hdtle h1)
       empty_broker := fun hlc => by
         have h0 := loan.broker.valid.empty_broker hlc
         have ht0 : t = 0 := by

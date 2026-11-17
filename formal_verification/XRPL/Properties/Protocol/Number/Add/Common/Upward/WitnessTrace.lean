@@ -16,38 +16,8 @@ lemma alignDown_upward_addwitness :
   repeat (first | rw [alignDown_step (by decide)] | rw [alignDown_noop (by decide)])
   rfl
 
-/-- `doNormalize` trace for the upward witness post-rounding state. -/
-lemma doNormalize_upward_addwitness :
-    doNormalize false (1000000000000000001 : UInt64) (20 : Int)
-        largeRange.min largeRange.max .upward =
-        .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } := by
-  rw [doNormalize_eq_spec]
-  all_goals try min_fit
-  unfold doNormalizeSpec
-  rw [show ((1000000000000000001 : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUpSpec largeRange.min (1000000000000000001 : UInt64) 20
-        = ((1000000000000000001 : UInt64), (20 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
-  rw [show doNormalize_scaleDown largeRange.max (1000000000000000001 : UInt64) (20 : Int) Guard.new
-        = .ok ((1000000000000000001 : UInt64), (20 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
-  simp only []
-  rw [show ((20 : Int) < minExponent || (1000000000000000001 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_capAtMaxRep (1000000000000000001 : UInt64) (20 : Int) Guard.new
-        = .ok ((1000000000000000001 : UInt64), (20 : Int), Guard.new) from by
-      unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
-  simp only []
-  rw [show Guard.new.doRoundUp false (1000000000000000001 : UInt64) (20 : Int)
-        largeRange.min largeRange.max .upward .normalize2 =
-        .ok { negative_ := false, mantissa_ := 1000000000000000001, exponent_ := 20 } from by
-    rw_doRoundUp_spec
-    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl]
-  rfl
-
 /-- `operator_add` trace for the upward witness inputs. -/
-lemma operator_add_upward_witness :
+lemma Number.operator_add_upward_witness :
     Number.operator_add
         ⟨false, 1000000000000000000, 0⟩
         ⟨false, 1000000000000000000, 20⟩
@@ -86,12 +56,12 @@ lemma operator_add_upward_witness :
     unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit
     rfl]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize
-  exact doNormalize_upward_addwitness
+  rfl
 
-theorem operator_add_upward_attained :
+theorem Number.operator_add_upward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
+      x.negative_ = y.negative_ ∧
       Number.operator_add x y .upward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       |result.toRat - (x.toRat + y.toRat)|
@@ -99,10 +69,11 @@ theorem operator_add_upward_attained :
   refine ⟨⟨false, 1000000000000000000, 0⟩,
           ⟨false, 1000000000000000000, 20⟩,
           ⟨false, 1000000000000000001, 20⟩,
-          ?_, ?_, ?_, ?_, ?_⟩
+          ?_, ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_add_upward_witness
+  · rfl
+  · exact Number.operator_add_upward_witness
   · decide
   · have hx_rat : (⟨false, 1000000000000000000, 0⟩ : Number).toRat = 1000000000000000000 := by
       unfold Number.toRat; rfl

@@ -83,11 +83,11 @@ lemma shares_bounds (v : Vault) (a s : STAmount) (w : Bool) (nav : Number)
   have htm : t.mantissa_ ≠ 0 :=
     STAmount.ofNumber_integral_source_ne_zero .int64 t .to_nearest s (by decide) hof hmv
   have hSNm : SN.mantissa_ ≠ 0 := Number.truncate_source_ne_zero SN t htr htm
-  have hSAm : SA.mantissa_ ≠ 0 := operator_div_numerator_ne_zero_sz SA nav SN .to_nearest
+  have hSAm : SA.mantissa_ ≠ 0 := Number.operator_div_numerator_ne_zero_sz SA nav SN .to_nearest
     (Number.not_operator_eq_zero_of_mantissa_ne hnm) hdiv hSNm
-  obtain ⟨hSm, hanm⟩ := operator_mul_operands_ne_zero v.wf.sharesTotal_norm hann hmul hSAm
-  have hSAn := operator_mul_result_isNormalized _ _ _ _ v.wf.sharesTotal_norm hann hSm hanm hmul hSAm
-  have hSNn := operator_div_result_isNormalized _ _ _ _ hSAn hnavn hSAm hnm hdiv hSNm
+  obtain ⟨hSm, hanm⟩ := Number.operator_mul_operands_ne_zero v.wf.sharesTotal_norm hann hmul hSAm
+  have hSAn := Number.operator_mul_result_isNormalized _ _ _ _ v.wf.sharesTotal_norm hann hSm hanm hmul hSAm
+  have hSNn := Number.operator_div_result_isNormalized _ _ _ _ hSAn hnavn hSAm hnm hdiv hSNm
   set ST := v.sharesTotal.toRat with hST
   set N := nav.toRat with hN
   have hST0 : 0 ≤ ST := v.wf.sharesTotal_nonneg
@@ -97,7 +97,7 @@ lemma shares_bounds (v : Vault) (a s : STAmount) (w : Bool) (nav : Number)
   set T0 := ST * a.toRat with hT0
   have hT0pos : 0 < T0 := mul_pos hSTpos hpos
   have hmulb : |SA.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by
-    have := operator_mul_rounds_to_nearest _ _ _ v.wf.sharesTotal_norm hann hmul hSAm
+    have := Number.operator_mul_rounds_to_nearest _ _ _ v.wf.sharesTotal_norm hann hmul hSAm
     change |SA.toRat - v.sharesTotal.toRat * an.toRat| ≤
       |v.sharesTotal.toRat * an.toRat| * (5 / (2 ^ 63 + 7)) at this
     rwa [hanv, ← hST, ← hT0, abs_of_pos hT0pos] at this

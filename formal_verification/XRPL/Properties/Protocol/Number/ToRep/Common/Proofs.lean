@@ -8,7 +8,7 @@ namespace XRPL.Model.Protocol
 
 /-! # Helper invariants for `Number.to_rep`
 
-Guard, sign and `grow`/`shift` lemmas behind `to_rep_within_one` and `to_rep_exact_of_exponent_nonneg`. -/
+Guard, sign and `grow`/`shift` lemmas behind `Number.to_rep_within_one` and `Number.to_rep_exact_of_exponent_nonneg`. -/
 
 /-- `to_rep.grow` with a raw multiplication. -/
 def growSpec (drops : rep) (offset : Int) : Except Error rep :=
@@ -100,7 +100,7 @@ lemma shift_snd_clean (D : Int64) (off : Int) (g : Guard) (h0 : 0 ≤ D.toInt)
     exact ⟨hg1, hg2⟩
 
 /-- The external mantissa is nonpositive when negative, nonnegative otherwise. -/
-lemma mantissa_sign (n : Number) :
+lemma Number.mantissa_sign (n : Number) :
     (n.negative_ = true → n.mantissa.toInt ≤ 0) ∧
     (n.negative_ = false → 0 ≤ n.mantissa.toInt) := by
   rw [Number.mantissa_toInt n]
@@ -117,7 +117,7 @@ lemma magnitude_toInt (n : Number) :
     (if n.negative_ then -n.mantissa else n.mantissa).toInt = n.mantissa.toInt.natAbs := by
   have hbound : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le n
   have hlt : (n.mantissa.toInt.natAbs : ℤ) < 2 ^ 63 := by rw [maxRep_val] at hbound; omega
-  rcases mantissa_sign n with ⟨hsneg, hsnn⟩
+  rcases Number.mantissa_sign n with ⟨hsneg, hsnn⟩
   by_cases hneg : n.negative_
   · rw [if_pos hneg, Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
     have hnp : n.mantissa.toInt ≤ 0 := hsneg hneg
@@ -315,7 +315,7 @@ lemma Number.to_rep_eq_spec (n : Number) (mode : rounding_mode) : n.to_rep mode 
     · rw [if_neg hneg, if_neg hneg]; rfl
 
 /-- A successful `to_rep` on a normalized `Number` returns an integer less than 1 away from `n.toRat`. -/
-theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
+theorem Number.to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
     (hn : n.isNormalized)
     (hok : n.to_rep mode = .ok r) :
     |(r.toInt : ℚ) - n.toRat| < 1 := by
@@ -330,7 +330,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
       rw [beq_iff_eq] at hz
       rw [hz]; decide
     have htr : n.toRat = 0 := by
-      rw [← mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
+      rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
     rw [hr, htr]
     have : (0 : Int64).toInt = 0 := by decide
     rw [this]; norm_num
@@ -344,7 +344,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
         have := hc; exact Int64.toInt_inj.mp (by rw [hc]; decide)
       exact this
     have hmagM_pos : 0 < n.mantissa.toInt.natAbs := Int.natAbs_pos.mpr hmant_ne
-    have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := mantissa_natAbs_le_maxRep n hn
+    have hmagM_le : n.mantissa.toInt.natAbs ≤ maxRep.toNat := Number.mantissa_natAbs_le_maxRep n hn
     have hmag : (if n.negative_ then -n.mantissa else n.mantissa).toInt
         = (n.mantissa.toInt.natAbs : ℤ) := magnitude_toInt n
     have hD0_nonneg : 0 ≤ (if n.negative_ then -n.mantissa else n.mantissa).toInt := by
@@ -369,7 +369,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
       have hexp_pow : (10 : ℚ) ^ n.exponent = ((10 : ℚ) ^ k)⁻¹ := by
         rw [show n.exponent = -(k : ℤ) from by rw [hkdef]; omega, zpow_neg, zpow_natCast]
       have habs : |n.toRat| = (magM : ℚ) / (10 : ℚ) ^ k := by
-        rw [← mantissa_mul_exponent_eq_toRat n hn, abs_mul, abs_zpow]
+        rw [← Number.mantissa_mul_exponent_eq_toRat n hn, abs_mul, abs_zpow]
         rw [show |(10 : ℚ)| = 10 from by norm_num, hexp_pow]
         rw [show |(n.mantissa.toInt : ℚ)| = (magM : ℚ) from by
           rw [hmagMdef, Nat.cast_natAbs]; push_cast; rfl]
@@ -491,7 +491,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
         have hdrops_nn : 0 ≤ drops.toInt := by rw [hdrops]; positivity
         have hsign : n.mantissa.toInt
             = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
-          rcases mantissa_sign n with ⟨hsn, hsp⟩
+          rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
           by_cases hneg : n.negative_
           · rw [if_pos hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
           · rw [if_neg hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
@@ -505,7 +505,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
           conv_rhs => rw [hsign]
           ring
         have htoRat : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent := by
-          rw [mantissa_mul_exponent_eq_toRat n hn]
+          rw [Number.mantissa_mul_exponent_eq_toRat n hn]
         have hpow : (10 : ℚ) ^ n.exponent = (10 : ℚ) ^ n.exponent.toNat := by
           rw [← zpow_natCast]; congr 1; omega
         rw [htoRat, hpow, hrInt]
@@ -514,7 +514,7 @@ theorem to_rep_within_one_proof (n : Number) (mode : rounding_mode) (r : Int64)
 
 /-- When `0 ≤ n.exponent`, `to_rep` is exact: the magnitude is grown by an exact
 power of ten with no digits dropped, so the returned integer equals the value. -/
-theorem to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode) (r : Int64)
+theorem Number.to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode) (r : Int64)
     (hn : n.isNormalized) (hexp : 0 ≤ n.exponent)
     (hok : n.to_rep mode = .ok r) :
     (r.toInt : ℚ) = n.toRat := by
@@ -525,7 +525,7 @@ theorem to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode
   · rw [if_pos hz] at hok
     have hr : r = 0 := by injection hok with h; exact h.symm
     have hmant : n.mantissa.toInt = 0 := by rw [beq_iff_eq] at hz; rw [hz]; decide
-    have htr : n.toRat = 0 := by rw [← mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
+    have htr : n.toRat = 0 := by rw [← Number.mantissa_mul_exponent_eq_toRat n hn, hmant]; norm_num
     rw [hr, htr]; decide
   · rw [if_neg hz] at hok
     have hmant_ne : n.mantissa.toInt ≠ 0 := by
@@ -553,7 +553,7 @@ theorem to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode
       have hr : r = (if n.negative_ then -drops else drops) := by injection hok with h; exact h.symm
       have hsign : n.mantissa.toInt
           = (if n.negative_ then -1 else 1) * (n.mantissa.toInt.natAbs : ℤ) := by
-        rcases mantissa_sign n with ⟨hsn, hsp⟩
+        rcases Number.mantissa_sign n with ⟨hsn, hsp⟩
         by_cases hneg : n.negative_
         · rw [if_pos hneg, Int.ofNat_natAbs_of_nonpos (hsn hneg)]; ring
         · rw [if_neg hneg, Int.natAbs_of_nonneg (hsp (by simpa using hneg))]; ring
@@ -566,14 +566,14 @@ theorem to_rep_exact_of_exponent_nonneg_proof (n : Number) (mode : rounding_mode
         rw [hrsign, hdrops]; conv_rhs => rw [hsign]
         ring
       have htoRat : n.toRat = (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent := by
-        rw [mantissa_mul_exponent_eq_toRat n hn]
+        rw [Number.mantissa_mul_exponent_eq_toRat n hn]
       have hpow : (10 : ℚ) ^ n.exponent = (10 : ℚ) ^ n.exponent.toNat := by
         rw [← zpow_natCast]; congr 1; omega
       rw [htoRat, hpow, hrInt]; push_cast; ring
 
 /-- `to_rep` is exact on an exponent-0 (integer) number whose magnitude fits in `maxRep`, with no normalization
 needed: the result is exactly the signed mantissa. -/
-lemma to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode : rounding_mode) (r : Int64)
+lemma Number.to_rep_exact_of_exponent_zero_proof (neg : Bool) (m : UInt64) (mode : rounding_mode) (r : Int64)
     (hm : m.toNat ≤ maxRep.toNat)
     (hok : (Number.unchecked neg m 0).to_rep mode = .ok r) :
     (r.toInt : ℚ) = (if neg then (-1 : ℚ) else 1) * (m.toNat : ℚ) := by

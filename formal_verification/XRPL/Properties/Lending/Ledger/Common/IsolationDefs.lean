@@ -29,11 +29,11 @@ def LendingLedger.txBroker? (l : LendingLedger) : LendingTx → Option Nat
   | .loanBrokerCoverClawback k _ | .loanBrokerDelete k => some k
   | tx => l.loanTxBroker? tx
 
-/-- On an XRP or MPT vault, AssetsAvailable plus the principal and interest a payment of loan `j` pays stays a unit
-below the asset's maximum. -/
+/-- On an XRP or MPT vault, the vault's total after a payment of loan `j` stays a unit below the asset's maximum:
+AssetsAvailable + AssetsDeployed plus the interest paid. C++ `syncAssetsTotal` stores that total as an amount. -/
 def LendingLedger.CreditFits (l : LendingLedger) (j : Nat) (pt : LoanPaymentType) (amount : Number) : Prop :=
   ∀ loan p, l.LoanAt j loan → (loan.payInstalments l.vault pt amount l.now).run = .ok (.ok p) →
-    l.vault.numericType.isIntegral = true → l.vault.assetsAvailable.toRat + p.amounts.principalPaid.toRat +
+    l.vault.numericType.isIntegral = true → l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat +
       p.amounts.interestPaid.toRat + 1 ≤ l.vault.numericType.maxValue.toNat
 
 /-- The fee a payment of loan `j` pays fits: with the broker's cover below `10^89` for an IOU, and alone a unit

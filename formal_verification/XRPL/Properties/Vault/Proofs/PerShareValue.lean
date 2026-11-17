@@ -44,7 +44,7 @@ lemma Vault.withdraw_payout_le_priced (v : Vault) (amount : WithdrawAmount) (wai
   have hpm : payout.mValue ≠ 0 := by simpa [STAmount.isZero] using hpz
   have hfn := (tenthBipsOfValue_upward_facts aN _ fee han (hav ▸ hp0) hfee).1
   have hpNm := STAmount.ofNumber_source_ne_zero _ _ _ _ hpo hpm
-  have hpNn := operator_sub_isNormalized _ _ _ _ han hfn hsub hpNm
+  have hpNn := Number.operator_sub_isNormalized _ _ _ _ han hfn hsub hpNm
   have hpNneg := Number.negative_false_of_nonneg _ hpNn hpN0
   obtain ⟨hpayle, -, hpay0⟩ := STAmount.ofNumber_downward_floor_bounds _ _ _ hpNn hpNneg hpo hpm
   have hpayt : payout.mNumericType = v.numericType := STAmount.ofNumber_mNumericType _ _ _ _ hpo

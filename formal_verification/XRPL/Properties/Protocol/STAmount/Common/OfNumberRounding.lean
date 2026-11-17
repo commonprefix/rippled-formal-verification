@@ -50,7 +50,7 @@ lemma STAmount.ofNumber_integral_within_one (nt : NumericType) (n : Number)
     |result.toRat - n.toRat| < 1 := by
   obtain ⟨intValue, hr, hres⟩ := STAmount.ofNumber_integral_toRat nt n mode result hnt hneg hok
   rw [hres]
-  exact to_rep_within_one n mode intValue hn hr
+  exact Number.to_rep_within_one n mode intValue hn hr
 
 /-- `to_nearest` `ofNumber` on an integral type rounds within half a unit. -/
 lemma STAmount.ofNumber_integral_within_half (nt : NumericType) (n : Number) (result : STAmount)
@@ -160,7 +160,7 @@ lemma STAmount.ofNumber_integral_exact (nt : NumericType) (n : Number)
       · rw [if_pos rfl, neg_one_mul, Rat.neg_den]
         exact hden
     have hkey : (intValue.toInt : ℚ) = w.toRat := by
-      have hone := to_rep_within_one w mode intValue hw_norm hrep
+      have hone := Number.to_rep_within_one w mode intValue hw_norm hrep
       have hwq : w.toRat = (w.toRat.num : ℚ) := by
         conv_lhs => rw [← Rat.num_div_den w.toRat]
         rw [hwden]; simp

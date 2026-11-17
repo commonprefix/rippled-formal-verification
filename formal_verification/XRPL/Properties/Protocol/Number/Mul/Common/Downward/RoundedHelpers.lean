@@ -9,7 +9,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 namespace XRPL.Model.Protocol
 
 /-- No normalized Number lies above `result.toRat` and at or below `truth`. -/
-theorem operator_mul_no_inbetween_below_downward (x y result : Number)
+theorem Number.operator_mul_no_inbetween_below_downward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .downward = .ok result)
@@ -19,7 +19,7 @@ theorem operator_mul_no_inbetween_below_downward (x y result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat * y.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hfloor_constr, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_g_sbit, hzm_succ⟩ :=
-    operator_mul_algorithmic_facts_downward x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_downward x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_below_downward_frame result (x.toRat * y.toRat) zm ze' f g res_pos
     .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne
@@ -32,7 +32,7 @@ theorem operator_mul_no_inbetween_below_downward (x y result : Number)
     h_le
 
 
-theorem operator_mul_rounded_downward_proof (x y result : Number)
+theorem Number.operator_mul_rounded_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -67,7 +67,7 @@ theorem operator_mul_rounded_downward_proof (x y result : Number)
     rfl
   -- Generic path.
   obtain ⟨h_dir, h_mag⟩ :=
-    operator_mul_rounding_bound_downward x y result hx hy hxz hyz hok hresult
+    Number.operator_mul_rounding_bound_downward x y result hx hy hxz hyz hok hresult
   have h_bound : |result.toRat - x.toRat * y.toRat|
       ≤ |x.toRat * y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
     rw [abs_of_nonpos (by linarith : result.toRat - x.toRat * y.toRat ≤ 0)]
@@ -76,7 +76,7 @@ theorem operator_mul_rounded_downward_proof (x y result : Number)
       mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _)
     linarith [le_of_lt h_mag]
   have h_result_norm : result.isNormalized :=
-    operator_mul_result_isNormalized x y result .downward hx hy hxz hyz hok hresult
+    Number.operator_mul_result_isNormalized x y result .downward hx hy hxz hyz hok hresult
   exact closest_lower_of_no_inbetween result (x.toRat * y.toRat)
     h_result_norm
     hresult
@@ -85,9 +85,9 @@ theorem operator_mul_rounded_downward_proof (x y result : Number)
     (fun h => truth_top_of_result_cap result (x.toRat * y.toRat) h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (operator_mul_no_overflow_mantissa x y result .downward hx hy hxz hyz hok hresult h))
+          (Number.operator_mul_no_overflow_mantissa x y result .downward hx hy hxz hyz hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h)
     h_dir
-    (operator_mul_no_inbetween_below_downward x y result hx hy hxz hyz hok hresult h_dir)
+    (Number.operator_mul_no_inbetween_below_downward x y result hx hy hxz hyz hok hresult h_dir)
 
 end XRPL.Model.Protocol

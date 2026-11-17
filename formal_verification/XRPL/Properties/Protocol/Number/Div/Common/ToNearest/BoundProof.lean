@@ -13,7 +13,7 @@ namespace XRPL.Model.Protocol
 `operator_div` ends in `doNormalize128` with an exact sticky flag, so the bound is the general `doNormalize128`
 to-nearest bound `6/(2^63 − 3)`, applied to the quotient state from the division facts. -/
 
-theorem operator_div_rounding_bound_to_nearest (x y result : Number)
+theorem Number.operator_div_rounding_bound_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .to_nearest = .ok result)
@@ -21,7 +21,7 @@ theorem operator_div_rounding_bound_to_nearest (x y result : Number)
     |result.toRat - x.toRat / y.toRat| ≤ |x.toRat / y.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, _, _⟩ :=
-    operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨hbound, hneg⟩ :=
     doNormalize128_rounds_to_nearest zn M ze' δ sticky hδ_low hδ_le hsticky_zero

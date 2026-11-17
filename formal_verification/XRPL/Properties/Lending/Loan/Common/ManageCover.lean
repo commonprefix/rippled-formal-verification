@@ -52,10 +52,10 @@ lemma Number.min_toRat (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized
   unfold Number.min
   by_cases h : y.operator_lt x = true
   · rw [if_pos h]
-    exact ⟨(min_eq_right ((operator_lt_iff _ _ hy hx).mp h).le).symm, hy⟩
+    exact ⟨(min_eq_right ((Number.operator_lt_iff _ _ hy hx).mp h).le).symm, hy⟩
   · rw [if_neg h]
     refine ⟨(min_eq_left ?_).symm, hx⟩
-    exact (operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h)
+    exact (Number.operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h)
 
 /-- A towards-zero `ofNumber` of a value that is not negative stays between zero and the value. -/
 private lemma STAmount.ofNumber_towards_zero_le (nt : NumericType) (n : Number) (r : STAmount) (hn : n.isNormalized)

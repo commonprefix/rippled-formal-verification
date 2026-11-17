@@ -111,7 +111,7 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
     (by linarith) (by linarith)
   have hsv := Number.operator_add_toRat_of_grid _ _ _ j k _ hA hrNn hjc hrNg ⟨by omega, by omega⟩ hsr hs
   have hsA : s.toRat = lb.coverAvailable.toRat + amount.toRat := by rw [hsv, hjc, hkv]; push_cast; ring
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hA hrNn hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hrNn hs
   have hs0 : 0 ≤ s.toRat := by rw [hsA]; linarith
 
   -- the sum keeps the base exponent
@@ -153,14 +153,14 @@ lemma LoanBroker.canCoverDeposit_of_units (lb : LoanBroker) (v : Vault) (amount 
   obtain ⟨L, hL, hLn, hLv⟩ := Vault.openLimit_value v
   have htn := Number.operator_add_isNormalized_any _ _ _ _ hA hrNn ht
   have htle : t.toRat ≤ L.toRat := by
-    obtain ⟨l, hlo, htv⟩ := operator_add_rounded_towards_zero _ _ _ hA hrNn ht
+    obtain ⟨l, hlo, htv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hA hrNn ht
     rw [if_pos (by linarith)] at hlo
     rw [htv, hLv]
     linarith [Number.lower_le _ l hlo]
   have hgt : t.operator_gt L = false := by
     cases h : t.operator_gt L
     · rfl
-    · have := (operator_gt_iff _ _ htn hLn).mp h
+    · have := (Number.operator_gt_iff _ _ htn hLn).mp h
       linarith
   have hcheck : lb.checkCoverOpenLimit v r = .ok .tesSUCCESS := by
     unfold LoanBroker.checkCoverOpenLimit

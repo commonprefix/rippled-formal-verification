@@ -58,7 +58,7 @@ set_option maxHeartbeats 800000 in
 -- unfolds the full normalize pipeline (scaleUp/scaleDown/doRoundUp) zero paths
 /-- A zero result mantissa from `Number.normalize` (nonzero input mantissa)
 forces the input value strictly below the smallest positive representable. -/
-theorem normalize_underflow_truth_small (n result : Number) (mode : rounding_mode)
+lemma Number.normalize_underflow_truth_small_proof (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hres0 : result.mantissa_ = 0) :

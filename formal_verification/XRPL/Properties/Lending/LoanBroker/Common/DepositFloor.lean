@@ -163,9 +163,9 @@ lemma LoanBroker.coverDeposit_floor (lb : LoanBroker) (v : Vault) (amount : STAm
   obtain ⟨d, hd, hst⟩ := bind_ok_peel _ _ _ hs'
   obtain ⟨hbE, -, hE80⟩ := postSumExponent_range _ _ _ _ _ (by omega) (by omega) hE
   obtain ⟨s0, hs0, hE'⟩ := postSumExponent_reduces _ _ _ _ _ hE
-  have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA han hs0
-  have hR0 := operator_add_rounded_to_nearest _ _ _ hA han hs0
-  have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA han hs0 (by linarith)
+  have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA han hs0
+  have hR0 := Number.operator_add_rounded_to_nearest _ _ _ hA han hs0
+  have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA han hs0 (by linarith)
   rcases eq_or_lt_of_le hbE with hEb | hEb
   · -- the sum keeps the base exponent, so the exact sum stays below `10^(16 + b)`
     rw [← hEb] at hE hE'
@@ -226,7 +226,7 @@ lemma LoanBroker.coverDeposit_floor (lb : LoanBroker) (v : Vault) (amount : STAm
     linarith
   have hdm : d.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_of_mantissa_zero d h0] at hd0; exact lt_irrefl _ hd0
-  have hRd := operator_sub_rounded_downward _ _ _ hs'n hA hd hdm
+  have hRd := Number.operator_sub_rounded_downward _ _ _ hs'n hA hd hdm
 
   -- a grid point of `10^E` below the difference survives both downward steps
   have hkeep : ∀ k : ℕ, 1 ≤ k → k < 10 ^ 16 →

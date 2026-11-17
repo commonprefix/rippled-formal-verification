@@ -71,7 +71,7 @@ private lemma Number.OnGrid.add_exact_of_le {s : Int} {x y d : Number} (hx : Num
   have hlt : x.toRat + y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
     by_contra hge
     push Not at hge
-    have := Number.roundsToRepresentable_ge _ _ (operator_add_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
+    have := Number.roundsToRepresentable_ge _ _ (Number.operator_add_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
       (by rw [hmv]; exact hge)
     linarith
   exact Number.OnGrid.add_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
@@ -86,7 +86,7 @@ private lemma Number.OnGrid.sub_exact_of_le {s : Int} {x y d : Number} (hx : Num
   have hlt : x.toRat - y.toRat < 2 * 10 ^ 16 * 10 ^ s := by
     by_contra hge
     push Not at hge
-    have := Number.roundsToRepresentable_ge _ _ (operator_sub_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
+    have := Number.roundsToRepresentable_ge _ _ (Number.operator_sub_rounded_to_nearest x y d hx.1 hy.1 h) _ hm
       (by rw [hmv]; exact hge)
     linarith
   exact Number.OnGrid.sub_toRat hx hy hs (by rw [abs_lt]; constructor <;> linarith) h
@@ -161,7 +161,7 @@ private lemma Loan.instalment_charge (l l' : Loan) (pc0 pc : PaymentComponents) 
   unfold PaymentComponents.totalDue at hdue
   obtain ⟨v1, hv1, hdue⟩ := bind_ok_peel _ _ _ hdue
   have g1 := Number.OnGrid.add gtv gi hs hv1
-  have hv10 : 0 ≤ v1.toRat := rn_nonneg (operator_add_rounded_to_nearest _ _ _ gtv.1 gi.1 hv1)
+  have hv10 : 0 ≤ v1.toRat := rn_nonneg (Number.operator_add_rounded_to_nearest _ _ _ gtv.1 gi.1 hv1)
     (by linarith)
   have hC2 : due.toRat < 2 * 10 ^ 16 * 10 ^ l.loanScale := by nlinarith
   have vdue := Number.OnGrid.add_exact_of_le g1 gf hs (by linarith) hC2 hdue
@@ -198,8 +198,8 @@ private lemma tenthBipsOfValue_nonneg {x r : Number} {rate : TenthBips32} (hx : 
   rw [heq] at h
   obtain ⟨p, hp, h⟩ := bind_ok_peel _ _ _ h
   have hpn := Number.operator_mul_isNormalized _ _ _ _ hx hrn hp
-  have hp0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hx hrn hp) (by rw [hrv]; positivity)
-  exact rn_nonneg (operator_div_rounded_to_nearest _ _ _ hpn hun h) (by rw [huv]; positivity)
+  have hp0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hx hrn hp) (by rw [hrv]; positivity)
+  exact rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hpn hun h) (by rw [huv]; positivity)
 
 /-- The management fee on interest at least zero is on the grid, between zero and the interest, at a rate
 of at most 10%. -/
@@ -277,9 +277,9 @@ private lemma loanLatePaymentInterest_nonneg (l : Loan) (now : UInt32) (li : Num
     obtain ⟨hyn, hyv⟩ := TenthBips32.toNumber_facts (31536000 : UInt32)
     have hy : secondsInYear = TenthBips32.toNumber (31536000 : UInt32) := rfl
     rw [hy] at hrate
-    exact rn_nonneg (operator_div_rounded_to_nearest _ _ _ htbn hyn hrate) (by rw [hyv]; positivity)
+    exact rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ htbn hyn hrate) (by rw [hyv]; positivity)
   exact ⟨Number.operator_mul_isNormalized _ _ _ _ l.wf.principalOutstanding_norm hrn h,
-    rn_nonneg (operator_mul_rounded_to_nearest _ _ _ l.wf.principalOutstanding_norm hrn h)
+    rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ l.wf.principalOutstanding_norm hrn h)
       (mul_nonneg l.exact.principalOutstanding_nonneg hr0)⟩
 
 /-- The parts of a late instalment: the next scheduled one, plus the rounded late interest less its management
@@ -342,13 +342,13 @@ private lemma Loan.late_instalment_charge (l l' : Loan) (now : UInt32) (pc : Pay
     exact_mod_cast this
   obtain ⟨gsp, hsp0, hsplr⟩ := computeManagementFee_le _ _ _ _ _ glr.1 hlr0 hrate hr hint hsp
   have gnet := Number.OnGrid.sub glr gsp hs hnet
-  have hnet0 := rn_nonneg (operator_sub_rounded_to_nearest _ _ _ glr.1 gsp.1 hnet) (by linarith)
+  have hnet0 := rn_nonneg (Number.operator_sub_rounded_to_nearest _ _ _ glr.1 gsp.1 hnet) (by linarith)
   have gsf := Number.OnGrid.add gs gl hs hsf
   have hs0 : 0 ≤ l.fees.serviceFee.toRat := l.exact.serviceFee_nonneg
   have hl0 : 0 ≤ l.fees.latePaymentFee.toRat := l.exact.latePaymentFee_nonneg
-  have hsf0 := rn_nonneg (operator_add_rounded_to_nearest _ _ _ gs.1 gl.1 hsf) (by linarith)
+  have hsf0 := rn_nonneg (Number.operator_add_rounded_to_nearest _ _ _ gs.1 gl.1 hsf) (by linarith)
   have guf := Number.OnGrid.add gsf gsp hs huf
-  have huf0 := rn_nonneg (operator_add_rounded_to_nearest _ _ _ gsf.1 gsp.1 huf) (by linarith)
+  have huf0 := rn_nonneg (Number.operator_add_rounded_to_nearest _ _ _ gsf.1 gsp.1 huf) (by linarith)
   obtain ⟨hsum, hval, hnetle, hufle⟩ := Loan.instalment_charge l l' pc0
     { pc0 with untrackedInterest := net, untrackedManagementFee := uf } a due hlo hint hi hpc0 rfl rfl rfl rfl
     gnet guf hnet0 huf0 hpa hdue hdo hC

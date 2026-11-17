@@ -395,10 +395,10 @@ lemma LoanBroker.debit_lawful (lb : LoanBroker) (m c' : Number) (hmn : m.isNorma
     ∃ lb' : LoanBroker,
       ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).to_lawful = .ok lb' ∧
       lb'.toRawLoanBroker = { lb.toRawLoanBroker with coverAvailable := c' } := by
-  have hle := (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hmn).mp hge
+  have hle := (Number.operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hmn).mp hge
   exact LoanBroker.withCover_lawful lb c'
-    (operator_sub_isNormalized_to_nearest_sz _ _ _ lb.wf.coverAvailable_norm hmn hsub)
-    (operator_sub_nonneg _ _ _ lb.wf.coverAvailable_norm hmn hsub (sub_nonneg.mpr hle))
+    (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ lb.wf.coverAvailable_norm hmn hsub)
+    (Number.operator_sub_nonneg _ _ _ lb.wf.coverAvailable_norm hmn hsub (sub_nonneg.mpr hle))
 
 /-- Adding a normalized nonnegative amount to `coverAvailable` leaves a broker that
 passes the `to_lawful` re-check. -/
@@ -412,10 +412,10 @@ lemma LoanBroker.credit_lawful (lb : LoanBroker) (m c' : Number) (hmn : m.isNorm
     by_cases h0 : c'.mantissa_ = 0
     · rw [Number.operator_add_zero_shape_sz _ _ _ hcn hmn hadd h0]
       exact Or.inl rfl
-    · exact operator_add_isNormalized_to_nearest _ _ _ hcn hmn hadd h0
+    · exact Number.operator_add_isNormalized_to_nearest _ _ _ hcn hmn hadd h0
   have hc0 : 0 ≤ c'.toRat :=
     le_trans lb.exact.coverAvailable_nonneg
-      (operator_add_ge_of_ge_normalized _ _ _ _ hcn hmn hadd hcn (by linarith))
+      (Number.operator_add_ge_of_ge_normalized _ _ _ _ hcn hmn hadd hcn (by linarith))
   exact LoanBroker.withCover_lawful lb c' hcn' hc0
 
 end XRPL.Model.Lending

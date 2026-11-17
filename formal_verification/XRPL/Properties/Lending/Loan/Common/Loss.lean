@@ -57,7 +57,7 @@ lemma Loan.create_lossStep (broker : LoanBroker) (v : Vault) (principal : Number
     (by constructor <;> norm_num) (by unfold minExponent maxExponent; constructor <;> omega)
   have hsums := Vault.poolAdjust_adjustSums v _ _ hpool
   refine ⟨Vault.poolAdjust_loss_zero v r.pool' _ rfl hpool, ?_, by linarith⟩
-  have hd := operator_add_le_of_le_normalized _ _ _ w v.wf.assetsDeployed_norm hp hsums.deployed hw
+  have hd := Number.operator_add_le_of_le_normalized _ _ _ w v.wf.assetsDeployed_norm hp hsums.deployed hw
     (by rw [hwv]; push_cast; linarith)
   rw [hwv] at hd
   push_cast at hd

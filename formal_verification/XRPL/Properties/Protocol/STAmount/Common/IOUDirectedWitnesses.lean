@@ -42,32 +42,6 @@ lemma add_lift_trace_g (mode : rounding_mode) :
       .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
       from by rw_doRoundUp_spec; unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize
-  rw [doNormalize_eq_spec]
-  all_goals try min_fit
-  unfold doNormalizeSpec
-  rw [show (((1000000000000000500 : UInt64)) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUpSpec largeRange.min (1000000000000000500 : UInt64) (-2)
-        = ((1000000000000000500 : UInt64), (-2 : Int)) by unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
-  rw [show doNormalize_scaleDown largeRange.max (1000000000000000500 : UInt64) (-2 : Int) Guard.new
-        = .ok ((1000000000000000500 : UInt64), (-2 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
-  simp only []
-  rw [show ((-2 : Int) < minExponent || (1000000000000000500 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_capAtMaxRep (1000000000000000500 : UInt64) (-2 : Int) Guard.new
-        = .ok ((1000000000000000500 : UInt64), (-2 : Int), Guard.new) from by
-      unfold doNormalize_capAtMaxRep; rw [if_neg (by decide)]]
-  simp only []
-  rw [show Guard.new.doRoundUp false (1000000000000000500 : UInt64) (-2 : Int)
-      largeRange.min largeRange.max mode .normalize2 =
-      .ok { negative_ := false, mantissa_ := 1000000000000000500, exponent_ := -2 }
-      from by
-        rw_doRoundUp_spec
-        unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit Guard.new
-        rfl]
-  simp only [RoundResult.toNumber]
 
 lemma ofnum_dir (mode : rounding_mode) (m16 : UInt64)
     (hm16 : m16 = (if mode = .upward then 1000000000000001 else 1000000000000000))

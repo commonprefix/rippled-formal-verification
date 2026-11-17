@@ -44,13 +44,20 @@ structure DivDecomp (x y result : Number) (mode : rounding_mode)
   δ_lt_one : δ < 1
   sticky_δ_pos : sticky = true → 0 < δ
 
-theorem operator_div_algorithmic_facts_represents
-    (x y result : Number) (mode : rounding_mode)
+/-- `operator_div` is `doNormalize128` on the staged quotient `M` at exponent `ze'`, with
+`|x / y| = (M + δ)·10^ze'` for the division residual `δ` in `[0, 1)`. -/
+lemma Number.operator_div_eq_normalize128
+    (x y : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
-    (hok : Number.operator_div x y mode = .ok result) :
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0) :
     ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (zn sticky : Bool),
-      DivDecomp x y result mode M ze' δ zn sticky := by
+      0 ≤ δ ∧ δ ≤ 1 ∧ (sticky = false → δ = 0) ∧ 1 ≤ M.toNat ∧ M.toNat < 10 ^ 23 ∧
+      (sticky = true → δ * 10 ^ 20 ≤ (M.toNat : ℚ)) ∧
+      |x.toRat / y.toRat| = ((M.toNat : ℚ) + δ) * 10 ^ ze' ∧
+      x.operator_div y mode = doNormalize128 zn M ze' largeRange.min largeRange.max mode sticky ∧
+      ((zn = true → x.toRat / y.toRat ≤ 0) ∧ (zn = false → 0 ≤ x.toRat / y.toRat)) ∧
+      δ < 1 ∧ (sticky = true → 0 < δ) := by
+  generalize hok : x.operator_div y mode = out
   have hx_bounds := hx.mantissaBounds hx_mant_ne
   have hy_bounds := hy.mantissaBounds hy_mant_ne
   have hxm_min : (10 : ℕ) ^ 18 ≤ x.mantissa_.toNat := (mantissaBounds_nat_of hx_bounds).1
@@ -72,7 +79,7 @@ theorem operator_div_algorithmic_facts_represents
   unfold Number.operator_div at hok
   rw [if_neg hy_ne_zero, if_neg hx_ne_zero, heq] at hok
   change doNormalize128 (x.negative_ != y.negative_) zmq zeq
-    largeRange.min largeRange.max mode dropped = Except.ok result at hok
+    largeRange.min largeRange.max mode dropped = out at hok
   -- The residual fraction.
   have hym_q_pos : (0 : ℚ) < (y.mantissa_.toNat : ℚ) := by exact_mod_cast hym_pos
   set δ : ℚ := (r : ℚ) / (y.mantissa_.toNat : ℚ) with hδ_def
@@ -230,6 +237,19 @@ theorem operator_div_algorithmic_facts_represents
     rw [hδ_def]
     exact div_pos hr_pos hym_q_pos
   exact ⟨zmq, zeq, δ, zn, dropped,
-    ⟨hδ_nn, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM, htruth, hok, hsign, hδ_lt, hsticky_pos⟩⟩
+    hδ_nn, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM, htruth, hok.symm, hsign, hδ_lt, hsticky_pos⟩
+
+theorem Number.operator_div_algorithmic_facts_represents
+    (x y result : Number) (mode : rounding_mode)
+    (hx : x.isNormalized) (hy : y.isNormalized)
+    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
+    (hok : Number.operator_div x y mode = .ok result) :
+    ∃ (M : UInt128) (ze' : Int) (δ : ℚ) (zn sticky : Bool),
+      DivDecomp x y result mode M ze' δ zn sticky := by
+  obtain ⟨M, ze', δ, zn, sticky, hδ_nn, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM, htruth, heq, hsign, hδ_lt,
+      hsticky_pos⟩ := Number.operator_div_eq_normalize128 x y mode hx hy hx_mant_ne hy_mant_ne
+  exact ⟨M, ze', δ, zn, sticky,
+    ⟨hδ_nn, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM, htruth, by rw [← heq]; exact hok, hsign, hδ_lt,
+      hsticky_pos⟩⟩
 
 end XRPL.Model.Protocol

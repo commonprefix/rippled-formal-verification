@@ -408,7 +408,8 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
       have hS0 := l.vault.wf.sharesTotal_nonneg
       have hSle := l.vault.sharesTotal_le_maxRep
       have hnd : n.toRat.den = 1 := by rw [hnv]; exact hic.den_eq_one _
-      obtain ⟨hst, -⟩ := operator_sub_exact_int _ _ _ l.vault.wf.sharesTotal_norm hnn l.vault.wf.sharesTotal_int hnd
+      obtain ⟨hst, -⟩ := Number.operator_sub_exact_int _ _ _ l.vault.wf.sharesTotal_norm hnn l.vault.wf.sharesTotal_int
+        hnd
         (Rat.num_natAbs_lt (Rat.den_one_sub _ _ l.vault.wf.sharesTotal_int hnd) (by rw [hnv]; linarith)
           (by rw [hnv]; linarith)) hsub
       simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, hof]
@@ -531,7 +532,7 @@ private lemma LoanBroker.coverWithdraw_cover (lb : LoanBroker) (v : Vault) (amou
   obtain ⟨hav, -⟩ := STAmount.CanonicalOrZero.toNumber_exact hac aN hnum
   have hng := Vault.clamp_onGrid v _ _ _ (STAmount.CanonicalOrZero.operator_neg (Or.inl ha)) hcl aN hnum
   have hle : aN.toRat ≤ lb.coverAvailable.toRat :=
-    (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hng.1).mp hge
+    (Number.operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hng.1).mp hge
   have hv := Number.OnGrid.sub_exact hc hng (by rw [hav]; exact ha0) hle hlt (Vault.baseExponent_grid v).2 hsub
   rw [hamt, show res.loanBroker'.coverAvailable = c' from congrArg RawLoanBroker.coverAvailable hraw, hv, hav]
 
@@ -565,7 +566,7 @@ private lemma LoanBroker.coverClawback_cover (lb : LoanBroker) (v : Vault) (amou
       exact_mod_cast lt_of_mul_lt_mul_right this hp.le
     obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-1) v.baseExponent (by constructor <;> norm_num)
       (Vault.baseExponent_grid v).2
-    have hR := operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hsub
+    have hR := Number.operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hsub
     have hwle : lb.coverAvailable.toRat - m.toRat ≤ w.toRat := by
       rw [hwv, hjc, hjm]
       have : ((jc - jm : ℤ) : ℚ) ≤ -1 := by exact_mod_cast (by omega : jc - jm ≤ -1)
@@ -618,7 +619,7 @@ private lemma LendingLedger.pay_toBroker_cover {l : LendingLedger} (hr : l.Reach
       rw [hwv, ha, ht]
       have : ((a + t : ℤ) : ℚ) ≤ -1 := by exact_mod_cast (by omega : a + t ≤ -1)
       push_cast at this ⊢; nlinarith
-    have hle := Number.RoundsToRepresentable.le_of_ge (operator_add_rounded_to_nearest _ _ _ hcn htn hcov)
+    have hle := Number.RoundsToRepresentable.le_of_ge (Number.operator_add_rounded_to_nearest _ _ _ hcn htn hcov)
       (Or.inl rfl) w hw hwle
     have h0 : (0 : ℚ) ≤ r.loan'.broker.coverAvailable.toRat := r.loan'.broker.exact.coverAvailable_nonneg
     rw [hwv] at hle

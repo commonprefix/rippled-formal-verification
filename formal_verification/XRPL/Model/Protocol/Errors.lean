@@ -16,7 +16,10 @@ inductive Error where
   | wrap
 deriving DecidableEq, Repr, Inhabited
 
--- Detect an overflow error triggered by arithmetic operation.
-def isOverflow (e : Error) : Bool := match e with | .overflow => true | _ => false
+-- Detect an error C++ throws as `std::overflow_error`. Every `Number` failure is one, including division by zero.
+def isOverflow (e : Error) : Bool :=
+  match e with
+  | .overflow | .normalize1 | .normalize1_5 | .normalize2 | .divByZero => true
+  | _ => false
 
 end XRPL.Model.Protocol

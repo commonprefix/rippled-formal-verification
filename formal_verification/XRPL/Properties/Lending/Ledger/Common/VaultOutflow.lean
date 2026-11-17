@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.Ledger.Common.CashPrecision
 import XRPL.Properties.Lending.Ledger.Common.WithdrawHolder
+import XRPL.Properties.Vault.Proofs.TotalStored
 
 /-! # What a withdrawal or a clawback takes from the vault
 
@@ -14,65 +15,16 @@ open XRPL.Model.SingleAssetVault (Vault RawVault WithdrawAmount VaultWithAmounts
 /-- Rounding a negative value to an asset gives at most zero. -/
 private lemma STAmount.roundToNumericType_nonpos (nt : NumericType) (x y : Number)
     (hmax : nt.isIntegral = true → nt.maxValue.toNat ≤ maxRep.toNat) (hx : x.isNormalized) (hx0 : x.toRat < 0)
-    (hok : STAmount.roundToNumericType nt x .to_nearest = .ok y) : y.toRat ≤ 0 := by
-  unfold STAmount.roundToNumericType at hok
-  cases hof : STAmount.ofNumber nt x .to_nearest with
-  | error e => rw [hof] at hok; exact absurd hok (by simp)
-  | ok st =>
-    rw [hof] at hok
-    simp only at hok
-    obtain ⟨hcz, -⟩ := STAmount.ofNumber_canonicalOrZero nt x _ st hmax hof
-    rw [(hcz.toNumber_exact y hok).1]
-    have hneg : x.negative_ = true := by
-      by_contra h
-      have := Number.toRat_nonneg_of_nonnegative x (by simpa using h)
-      linarith
-    cases hint : nt.isIntegral
-    · exact STAmount.ofNumber_signtrue_nonpos nt x _ st hint hx hneg hof
-    · exact STAmount.ofNumber_integral_negative_nonpos nt x _ st hint hneg hof
+    (hok : STAmount.roundToNumericType nt x .to_nearest = .ok y) : y.toRat ≤ 0 :=
+  XRPL.Model.Protocol.STAmount.roundToNumericType_nonpos_of_neg nt x y hmax hx hx0 hok
 
 /-- Rounding a value to an asset never lands above an amount the asset stores exactly and that bounds the
 value. -/
 private lemma STAmount.roundToNumericType_le_stored (nt : NumericType) (w x y : Number)
     (hmax : nt.isIntegral = true → nt.maxValue.toNat ≤ maxRep.toNat) (hw : w.isNormalized) (hw0 : 0 ≤ w.toRat)
     (hst : STAmount.isRounded nt w = false) (hx : x.isNormalized) (hxw : x.toRat ≤ w.toRat)
-    (hok : STAmount.roundToNumericType nt x .to_nearest = .ok y) : y.toRat ≤ w.toRat := by
-  by_cases hx0 : x.toRat < 0
-  · exact (STAmount.roundToNumericType_nonpos nt x y hmax hx hx0 hok).trans hw0
-  push Not at hx0
-  unfold STAmount.roundToNumericType at hok
-  cases hof : STAmount.ofNumber nt x .to_nearest with
-  | error e => rw [hof] at hok; exact absurd hok (by simp)
-  | ok st =>
-    rw [hof] at hok
-    simp only at hok
-    obtain ⟨hcz, hty⟩ := STAmount.ofNumber_canonicalOrZero nt x _ st hmax hof
-    rw [(hcz.toNumber_exact y hok).1]
-    by_cases hz : st.mValue = 0
-    · rw [STAmount.toRat_eq_zero_of_mValue_zero _ hz]; exact hw0
-    unfold STAmount.isRounded STAmount.equalAfterNumberConvert at hst
-    cases ha : STAmount.ofNumber nt w .to_nearest with
-    | error e => rw [ha] at hst; exact absurd hst (by simp)
-    | ok a =>
-      rw [ha] at hst
-      simp only [bind, Except.bind, pure, Except.pure] at hst
-      cases hn : a.toNumber .to_nearest with
-      | error e => rw [hn] at hst; exact absurd hst (by simp)
-      | ok n =>
-        rw [hn] at hst
-        have heq : n.operator_eq w = true := by simpa using hst
-        obtain ⟨hnv, hnn⟩ := (STAmount.ofNumber_canonicalOrZero _ _ _ _ hmax ha).1.toNumber_exact n hn
-        have hav : a.toRat = w.toRat := by rw [← hnv]; exact (operator_eq_iff _ _ hnn hw).mp heq
-        by_cases ha0 : a.mValue = 0
-        · -- a zero bound leaves only a zero value, which converts to zero
-          have hw0' : w.toRat = 0 := by rw [← hav, STAmount.toRat_eq_zero_of_mValue_zero _ ha0]
-          have hxz : x = Number.zero := (Number.toRat_eq_zero_iff_eq_zero hx).mp (by linarith)
-          subst hxz
-          exact absurd (STAmount.ofNumber_source_ne_zero nt _ _ st hof hz) (by decide)
-        have hac := STAmount.ofNumber_exactCanonical nt w .to_nearest a hw hw0 ha ha0
-        have hat := STAmount.ofNumber_mNumericType nt w .to_nearest a ha
-        rw [← hav]
-        exact STAmount.ofNumber_to_nearest_le_of_canonical nt x st a hx hx0 hac hat (by rw [hav]; exact hxw) hof hz
+    (hok : STAmount.roundToNumericType nt x .to_nearest = .ok y) : y.toRat ≤ w.toRat :=
+  XRPL.Model.Protocol.STAmount.roundToNumericType_le_of_stored nt w x y hmax hw hw0 hst hx hxw hok
 
 /-- A debit of a nonnegative amount of the asset leaves AssetsAvailable at most what it was, when the asset
 stores AssetsAvailable exactly. -/
@@ -84,9 +36,10 @@ private lemma Vault.debit_le (v : Vault) (assets shares : STAmount) (raw : RawVa
   obtain ⟨assetsNum, _, s, aa', _, hnum, -, -, hs, haa, rfl⟩ := Vault.adjustAssetsAndShares_ok_reduces v _ _ raw hadj
   obtain ⟨hv, hnorm⟩ := hc.operator_neg.toNumber_exact assetsNum hnum
   rw [STAmount.operator_neg_toRat] at hv
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
   have hsle : s.toRat ≤ v.assetsAvailable.toRat :=
-    Number.roundsToRepresentable_le s _ (operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hnorm hs)
+    Number.roundsToRepresentable_le s _ (Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hnorm
+      hs)
       _ v.wf.assetsAvailable_norm (by rw [hv]; linarith)
   exact STAmount.roundToNumericType_le_stored _ _ _ _ hmax v.wf.assetsAvailable_norm v.exact.assetsAvailable_nonneg
     hst hsn hsle haa

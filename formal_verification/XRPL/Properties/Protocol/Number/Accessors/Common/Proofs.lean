@@ -35,7 +35,7 @@ lemma Number.mantissa_toInt (n : Number) :
     · rw [if_neg hneg, if_neg hneg]
       rw [UInt64.toInt64_toInt_of_lt _ hfit]; ring
 
-theorem mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNormalized) :
+theorem Number.mantissa_mul_exponent_eq_toRat_proof (n : Number) (hn : n.isNormalized) :
     (n.mantissa.toInt : ℚ) * (10 : ℚ) ^ n.exponent = n.toRat := by
   rw [Number.mantissa_toInt n]
   unfold Number.exponent
@@ -88,7 +88,7 @@ lemma Number.mantissa_natAbs_le (n : Number) : n.mantissa.toInt.natAbs ≤ maxRe
   · rw [if_neg hcusp, Int.natAbs_natCast]
     exact le_of_not_gt (fun hc => hcusp (UInt64.lt_iff_toNat_lt.mpr hc))
 
-theorem mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
+theorem Number.mantissa_natAbs_le_maxRep_proof (n : Number) (_hn : n.isNormalized) :
     (n.mantissa).toInt.natAbs ≤ maxRep.toNat :=
   Number.mantissa_natAbs_le n
 

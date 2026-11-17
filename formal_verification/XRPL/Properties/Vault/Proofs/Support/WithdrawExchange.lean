@@ -4,7 +4,7 @@ import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Model.Vault.VaultWithdraw
 import XRPL.Properties.Vault.Common.ReachableDefs
 import XRPL.Properties.Vault.Proofs.Support.NavUnderflow
-import XRPL.Properties.Protocol.Number.Add.Common.ToNearest.Nearest
+import XRPL.Properties.Protocol.Number.Sub.RoundsToRepresentable
 
 /-! # Withdrawal exchange of shares for assets
 
@@ -29,8 +29,8 @@ lemma Vault.assetsTotalForWithdrawal_nonneg (v : Vault) (waive : Bool) (nav : Nu
     have hAD0 : 0 ≤ v.assetsDeployed.toRat := v.exact.assetsDeployed_nonneg
     cases waive
     · have hLU : v.lossUnrealized.toRat ≤ v.assetsDeployed.toRat := v.exact.lossUnrealized_le
-      exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hatn v.wf.lossUnrealized_norm h,
-        operator_sub_nonneg _ _ _ hatn v.wf.lossUnrealized_norm h (by linarith)⟩
+      exact ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hatn v.wf.lossUnrealized_norm h,
+        Number.operator_sub_nonneg _ _ _ hatn v.wf.lossUnrealized_norm h (by linarith)⟩
     · rw [Number.operator_sub_zero] at h
       obtain rfl := Except.ok.inj h
       exact ⟨hatn, by linarith⟩
@@ -58,12 +58,12 @@ lemma Vault.assetsTotalForWithdrawal_steps_proof (v : Vault) (waive : Bool) (nav
         rw [hs0]
         refine ⟨Number.zero, by unfold Number.lower; simp, ?_⟩
         rw [Number.toRat_eq_zero_of_mantissa_zero total hm, Number.toRat_zero]
-      · have hr := operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm
+      · have hr := Number.operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm
           (show v.assetsAvailable.operator_add v.assetsDeployed .downward = .ok total from hat) hm
         exact hr
     · cases waive
-      · simpa using operator_sub_rounded_to_nearest _ _ _ htn v.wf.lossUnrealized_norm h
-      · have h' := operator_sub_rounded_to_nearest _ _ _ htn (Or.inl rfl) h
+      · simpa using Number.operator_sub_rounded_to_nearest _ _ _ htn v.wf.lossUnrealized_norm h
+      · have h' := Number.operator_sub_rounded_to_nearest _ _ _ htn (Or.inl rfl) h
         simpa [Number.toRat_zero] using h'
     · cases waive
       · -- a zero result is an exact zero, the subtraction never flushes on a lawful vault
@@ -108,21 +108,21 @@ lemma assetsToSharesWithdraw_pos (v : Vault) (amount shares : STAmount) (waive :
   have hnavpos : 0 < navN.toRat :=
     lt_of_le_of_ne hnavnn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero navN hmz))
   have hPm : P.mantissa_ ≠ 0 :=
-    operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
+    Number.operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
       (Number.not_operator_eq_zero_of_mantissa_ne hmz) hT0 hT0m
   obtain ⟨hanval, hannorm⟩ := hc.toNumber_exact amountN hamN
-  obtain ⟨hSTm, hanm⟩ := operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
+  obtain ⟨hSTm, hanm⟩ := Number.operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
   have hPnorm : P.isNormalized :=
-    operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
+    Number.operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
       v.wf.sharesTotal_norm hannorm hSTm hanm hP hPm
   have hT0norm : T0.isNormalized :=
-    operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hmz hT0 hT0m
+    Number.operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hmz hT0 hT0m
   have hann : 0 ≤ amountN.toRat := by rw [hanval]; exact hnn
   have hSTnn : 0 ≤ v.sharesTotal.toRat := v.wf.sharesTotal_nonneg
   have hPnn : 0 ≤ P.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-    (operator_mul_rounded_to_nearest _ _ _ v.wf.sharesTotal_norm hannorm hP) (mul_nonneg hSTnn hann)
+    (Number.operator_mul_rounded_to_nearest _ _ _ v.wf.sharesTotal_norm hannorm hP) (mul_nonneg hSTnn hann)
   have hT0nn : 0 ≤ T0.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-    (operator_div_rounded_to_nearest _ _ _ hPnorm hnavnorm hT0) (div_nonneg hPnn (le_of_lt hnavpos))
+    (Number.operator_div_rounded_to_nearest _ _ _ hPnorm hnavnorm hT0) (div_nonneg hPnn (le_of_lt hnavpos))
   have hT0pos : 0 < T0.toRat :=
     lt_of_le_of_ne hT0nn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero T0 hT0m))
   obtain ⟨hTval, hTnorm⟩ :=
@@ -159,10 +159,10 @@ lemma Vault.sharesToAssetsWithdraw_nonneg (v : Vault) (shares assets : STAmount)
     obtain ⟨hsv, hsnorm⟩ := hc.toNumber_exact _ hsn
     have hNSn := Number.operator_mul_isNormalized _ _ _ _ hnavn hsnorm hmul
     have hNS0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-      (operator_mul_rounded_to_nearest _ _ _ hnavn hsnorm hmul) (mul_nonneg hnav0 (by rw [hsv]; exact hnn))
+      (Number.operator_mul_rounded_to_nearest _ _ _ hnavn hsnorm hmul) (mul_nonneg hnav0 (by rw [hsv]; exact hnn))
     have hann := Number.operator_div_isNormalized _ _ _ _ hNSn v.wf.sharesTotal_norm hdiv
     have han0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-      (operator_div_rounded_to_nearest _ _ _ hNSn v.wf.sharesTotal_norm hdiv)
+      (Number.operator_div_rounded_to_nearest _ _ _ hNSn v.wf.sharesTotal_norm hdiv)
       (div_nonneg hNS0 v.wf.sharesTotal_nonneg)
     exact STAmount.ofNumber_nonneg _ _ _ _ hann (Number.negative_false_of_nonneg _ hann han0) hof
 

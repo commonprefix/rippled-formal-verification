@@ -64,7 +64,7 @@ lemma doNormalize128_downward_witness :
   simp only [RoundResult.toNumber]
 
 /-- `operator_div` trace for the `.downward` witness inputs. -/
-lemma operator_div_downward_witness :
+lemma Number.operator_div_downward_witness :
     Number.operator_div ⟨false, 1000735865998746448, 0⟩ ⟨false, 1085000000000003547, 0⟩
         .downward = .ok ⟨false, 9223372036854775810, -19⟩ := by
   unfold Number.operator_div
@@ -83,7 +83,7 @@ lemma operator_div_downward_witness :
 
 /-- Division rounding downward can lose more than `9/(2^63 − 18)` of the value. The error stays under `10/(2^63 + 2)`
 for a negative quotient and `10/(2^63 + 12)` for a positive one, so 9 is the largest numerator over this denominator. -/
-theorem operator_div_downward_attained :
+theorem Number.operator_div_downward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_div x y .downward = .ok result ∧
@@ -93,7 +93,7 @@ theorem operator_div_downward_attained :
           ⟨false, 9223372036854775810, -19⟩, ?_, ?_, ?_, ?_, ?_⟩
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
   · right; refine ⟨?_, ?_, ?_, ?_, ?_⟩ <;> decide
-  · exact operator_div_downward_witness
+  · exact Number.operator_div_downward_witness
   · decide
   · have hx_rat : (⟨false, 1000735865998746448, 0⟩ : Number).toRat = 1000735865998746448 := by
       unfold Number.toRat; rfl

@@ -36,15 +36,15 @@ private lemma Number.min_val (x y : Number) (hx : x.isNormalized) (hy : y.isNorm
     (Number.min x y).toRat = min x.toRat y.toRat := by
   unfold Number.min
   by_cases h : y.operator_lt x = true
-  · rw [if_pos h]; exact (min_eq_right ((operator_lt_iff _ _ hy hx).mp h).le).symm
-  · rw [if_neg h]; exact (min_eq_left ((operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h))).symm
+  · rw [if_pos h]; exact (min_eq_right ((Number.operator_lt_iff _ _ hy hx).mp h).le).symm
+  · rw [if_neg h]; exact (min_eq_left ((Number.operator_lt_eq_false_iff _ _ hy hx).mp (by simpa using h))).symm
 
 private lemma Number.max_val (x y : Number) (hx : x.isNormalized) (hy : y.isNormalized) :
     (Number.max x y).toRat = max x.toRat y.toRat := by
   unfold Number.max
   by_cases h : x.operator_lt y = true
-  · rw [if_pos h]; exact (max_eq_right ((operator_lt_iff _ _ hx hy).mp h).le).symm
-  · rw [if_neg h]; exact (max_eq_left ((operator_lt_eq_false_iff _ _ hx hy).mp (by simpa using h))).symm
+  · rw [if_pos h]; exact (max_eq_right ((Number.operator_lt_iff _ _ hx hy).mp h).le).symm
+  · rw [if_neg h]; exact (max_eq_left ((Number.operator_lt_eq_false_iff _ _ hx hy).mp (by simpa using h))).symm
 
 /-- A clamp into `[lo, hi]` has the clamped value. -/
 private lemma Number.clamp_val (x lo hi : Number) (hx : x.isNormalized) (hlo : lo.isNormalized)
@@ -53,15 +53,15 @@ private lemma Number.clamp_val (x lo hi : Number) (hx : x.isNormalized) (hlo : l
   unfold Number.clamp
   by_cases h1 : x.operator_lt lo = true
   · rw [if_pos h1]
-    have := (operator_lt_iff _ _ hx hlo).mp h1
+    have := (Number.operator_lt_iff _ _ hx hlo).mp h1
     rw [max_eq_left ((min_le_left _ _).trans this.le)]
   · rw [if_neg h1]
-    have h1' := (operator_lt_eq_false_iff _ _ hx hlo).mp (by simpa using h1)
+    have h1' := (Number.operator_lt_eq_false_iff _ _ hx hlo).mp (by simpa using h1)
     by_cases h2 : hi.operator_lt x = true
     · rw [if_pos h2]
-      rw [min_eq_right ((operator_lt_iff _ _ hhi hx).mp h2).le, max_eq_right hle]
+      rw [min_eq_right ((Number.operator_lt_iff _ _ hhi hx).mp h2).le, max_eq_right hle]
     · rw [if_neg h2]
-      have h2' := (operator_lt_eq_false_iff _ _ hhi hx).mp (by simpa using h2)
+      have h2' := (Number.operator_lt_eq_false_iff _ _ hhi hx).mp (by simpa using h2)
       rw [min_eq_left h2', max_eq_right h1']
 
 /-- An amount floored at zero is on the grid and has the floored value. -/
@@ -105,7 +105,7 @@ private lemma reduceCapped_range {s : Int} (value excess v' e' : Number) (B : �
   split at h
   · rename_i hgt
     have hpos : 0 < excess.toRat := by
-      have := (operator_gt_iff excess Number.zero he.1 Number.zero_isNormalized).mp hgt
+      have := (Number.operator_gt_iff excess Number.zero he.1 Number.zero_isNormalized).mp hgt
       rwa [Number.toRat_zero] at this
     walk_ok
     have h1 := Except.ok.inj ‹pure _ = Except.ok (v', e')›
@@ -285,7 +285,7 @@ lemma Loan.scheduledComponents_tracked (l : Loan) (pc : PaymentComponents) (hlo 
     have : l.totalValueOutstanding.operator_le pp' = false := by
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf
       simpa using hnf.2
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, this]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, this]
     simp
   have gtpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint htpo
   have gti := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hti

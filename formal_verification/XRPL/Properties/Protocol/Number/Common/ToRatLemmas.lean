@@ -39,7 +39,7 @@ lemma Number.isNormalized.mantissaBounds_nat {n : Number}
   mantissaBounds_nat_of (h.mantissaBounds hne)
 
 /-- A normalized mantissa is positive (`.toNat`), from the `mantissaBounds` pair. -/
-lemma mantissa_toNat_pos_of_bounds {n : Number}
+lemma Number.mantissa_toNat_pos_of_bounds {n : Number}
     (hb : largeRange.min ≤ n.mantissa_ ∧ n.mantissa_ ≤ largeRange.max) :
     0 < n.mantissa_.toNat := by
   have := (mantissaBounds_nat_of hb).1; omega

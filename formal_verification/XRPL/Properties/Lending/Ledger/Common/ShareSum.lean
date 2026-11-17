@@ -131,7 +131,7 @@ private lemma LendingLedger.holder_sub_exact (l : LendingLedger) (hr : l.Reachab
   have hmax := l.vault.sharesTotal_le_maxRep
   have hd := hl.sharesOf_whole h
   have hv0 := v'.wf.sharesTotal_nonneg
-  obtain ⟨hv, hvd⟩ := operator_sub_exact_int _ _ _ hn hb hd hbd
+  obtain ⟨hv, hvd⟩ := Number.operator_sub_exact_int _ _ _ hn hb hd hbd
     (Rat.num_natAbs_lt (Rat.den_one_sub _ _ hd hbd) (by linarith) (by linarith)) hsub
   exact ⟨hvd, by rw [hST, hv]; ring⟩
 
@@ -169,7 +169,7 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
       have hd := hl.sharesOf_whole h
       have hmd := hsd
       rw [← hmv] at hmd
-      obtain ⟨hv, hvd⟩ := operator_add_exact_int _ _ _ hn hmn' hd hmd
+      obtain ⟨hv, hvd⟩ := Number.operator_add_exact_int _ _ _ hn hmn' hd hmd
         (Rat.num_natAbs_lt (Rat.den_one_add _ _ hd hmd) (by linarith) (by linarith)) ‹_›
       exact ⟨hvd, by rw [hST, hv, hmv]; ring⟩
     · cases hu

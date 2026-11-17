@@ -109,8 +109,8 @@ private lemma clamp_base_of_open (A : Number) (p c : STAmount) (pn : Number) (b 
   rw [hsn, Except.ok.injEq] at hpn
   subst hpn
   obtain ⟨s, hs, hne'⟩ := postSumExponent_reduces _ _ _ _ _ hep
-  have hr1 := operator_add_rounded_to_nearest _ _ _ hA hsnn hs
-  have hsn' := operator_add_isNormalized_to_nearest_sz _ _ _ hA hsnn hs
+  have hr1 := Number.operator_add_rounded_to_nearest _ _ _ hA hsnn hs
+  have hsn' := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hsnn hs
   have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s _ hr1 (by rw [hsnv]; linarith)
   obtain ⟨-, hlarge⟩ := numberExponent_frac_lower s _ ep hsn' hs0 (by omega) hne' hgt
   -- the sum is above the largest 19-digit `Number` below `10 ^ (ep + 15)`
@@ -262,6 +262,7 @@ lemma Vault.deposit_open_bound (v : Vault) (amountDeposit : STAmount) (isDonatio
   obtain ⟨hac, -, hac0⟩ := computeDeposit_assets_form v ra isDonation amounts hra1 hra2 hmax hcomp
   rw [hras]
   exact Vault.checkOpenLimit_bound v amounts.assets hac hac0 navN hat hin
+    (v.deposit_clampedCharge amountDeposit ra isDonation amounts hty (fun h => hcanon.2 h) hra hcomp)
 
 /-- Tight deposit charge bound, priced at the computed total. The charge never exceeds the request and stays
 within one base step below the shares' worth: in the Open zone the pricing error never crosses a base grid point. -/

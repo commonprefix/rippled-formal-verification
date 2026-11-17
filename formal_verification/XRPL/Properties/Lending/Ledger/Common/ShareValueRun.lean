@@ -252,7 +252,7 @@ private lemma LendingLedger.shareValue_step (l l' : LendingLedger) (tx : Lending
       linarith
     exact le_trans (div_nonpos_of_nonpos_of_nonneg hnav (Nat.cast_nonneg _))
       (Vault.perShareValue_nonneg l'.vault)
-  | vaultSet m b ub => exact hgen rfl rfl rfl rfl
+  | vaultSet m b => exact hgen rfl rfl rfl rfl
   | vaultDelete => exact hgen rfl rfl rfl rfl
   | loanBrokerCreate t => exact hgen rfl rfl rfl rfl
   | loanBrokerUpdate j dm => exact hgen rfl rfl rfl rfl

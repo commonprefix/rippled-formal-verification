@@ -70,8 +70,9 @@ private lemma Vault.checkOpenLimit_ne_notLawful (v : Vault) (amount : STAmount) 
     v.checkOpenLimit amount ≠ .error .notLawful := by
   unfold Vault.checkOpenLimit
   simp only [bind, Except.bind, pure, Except.pure]
-  split_ne_notLawful [RawVault.assetsTotal_ne_notLawful, STAmount.toNumber_ne_notLawful,
-    postSumExponent_ne_notLawful, XRPL.Model.Lending.Vault.exceedsOpenLimit_ne_notLawful]
+  split_ne_notLawful [RawVault.assetsTotal_ne_notLawful, clampToSumExponent_ne_notLawful,
+    STAmount.toNumber_ne_notLawful, postSumExponent_ne_notLawful,
+    XRPL.Model.Lending.Vault.exceedsOpenLimit_ne_notLawful]
 
 /-- A deposit never fails its lawfulness re-check when the minted shares keep SharesTotal within the share
 MPT maximum. -/
@@ -174,7 +175,7 @@ private lemma Vault.sharesToAssetsWithdraw_all_idle (v : Vault)
   obtain ⟨sn0, hsn0, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical shares .to_nearest
     (STAmount.Canonical.exactCanonical _ hc)
   obtain rfl := Except.ok.inj (hsn0.symm.trans hsn)
-  have hSTm := operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
+  have hSTm := Number.operator_div_divisor_ne_zero _ _ _ _ v.wf.sharesTotal_norm hdiv
   have hSTpos : 0 < v.sharesTotal.toRat := lt_of_le_of_ne v.wf.sharesTotal_nonneg
     (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hSTm))
   have hST1 : (1 : ℚ) ≤ v.sharesTotal.toRat := rat_one_le_of_den_one_pos _ v.wf.sharesTotal_int hSTpos
@@ -290,9 +291,9 @@ lemma Vault.computeClawback_final_idle (v : Vault)
     obtain ⟨s, hs, hne'⟩ := postSumExponent_reduces _ _ _ _ _ hps
     obtain ⟨hdv, hdn⟩ := hrc.operator_neg.toNumber_exact dN hdN
     rw [STAmount.operator_neg_toRat] at hdv
-    have hr1 := operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs
+    have hr1 := Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs
     rw [hdv, ← sub_eq_add_neg, hrv, sub_self] at hr1
-    have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs
+    have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs
     have hs0 : 0 ≤ s.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg s _ hr1 le_rfl
     have hsle : s.toRat ≤ 0 := by
       have := Number.RoundsToRepresentable.le_of_le_normalized s _ hr1 Number.zero Number.zero_isNormalized
@@ -372,12 +373,12 @@ lemma Vault.update_ok_of_checks (v : Vault) (assetsMaximum : Option Number) (blo
       · rename_i hne
         obtain rfl : m0 = m := Option.some.inj hm
         have h0 : 0 ≤ m0.toRat := by
-          have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp hle
+          have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp hle
           rwa [Number.toRat_zero] at this
         have hne' : m0.toRat ≠ 0 := by
           intro h
-          exact hne ((operator_eq_iff _ _ hn Number.zero_isNormalized).mpr (by rw [h, Number.toRat_zero]))
-        exact ⟨hn, (operator_lt_iff _ _ Number.zero_isNormalized hn).mpr
+          exact hne ((Number.operator_eq_iff _ _ hn Number.zero_isNormalized).mpr (by rw [h, Number.toRat_zero]))
+        exact ⟨hn, (Number.operator_lt_iff _ _ Number.zero_isNormalized hn).mpr
           (by rw [Number.toRat_zero]; exact lt_of_le_of_ne h0 (Ne.symm hne'))⟩
   · intro hb
     cases hbd : blockDeposit

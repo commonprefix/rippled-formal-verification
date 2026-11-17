@@ -256,10 +256,10 @@ lemma operator_div_rounds_to_nearest_sharp (x y result : Number)
     (hok : Number.operator_div x y .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     |result.toRat - x.toRat / y.toRat| ≤ |x.toRat / y.toRat| * divSharpε := by
-  obtain ⟨hx_mant_ne, hy_mant_ne⟩ := operator_div_operands_ne_zero hx hy hok hresult
+  obtain ⟨hx_mant_ne, hy_mant_ne⟩ := Number.operator_div_operands_ne_zero hx hy hok hresult
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, _, _⟩ :=
-    operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨hbound, hneg⟩ :=
     doNormalize128_rounds_to_nearest_sharp zn M ze' δ sticky hδ_low hδ_le hsticky_zero

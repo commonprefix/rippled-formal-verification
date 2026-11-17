@@ -47,7 +47,7 @@ lemma Vault.ClawbackPriced.recovered {v : Vault} {assets holderShares : STAmount
     have har := (Vault.sharesToAssetsWithdraw_form v _ _ waive hmax hs2a).1
     obtain ⟨hv, hnorm⟩ := har.toNumber_exact n hn
     have hle : ¬ v.assetsAvailable.toRat < n.toRat := by
-      rw [← operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
+      rw [← Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
       simpa [Number.operator_gt] using hgt
     exact ⟨hs2a, har, by rw [← hv]; linarith⟩
   cases hpr with
@@ -182,7 +182,7 @@ private lemma Vault.clawback_nav_ne_zero (v : Vault) (assets holderShares : STAm
       obtain ⟨hv, hnorm⟩ := (STAmount.zero_canonicalOrZero _).1.toNumber_exact n0 hn0
       rw [STAmount.zero_toRat _] at hv
       have hlt : v.assetsAvailable.toRat < n0.toRat := by
-        rw [← operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
+        rw [← Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm]
         simpa [Number.operator_gt] using hgt0
       linarith
     · exact hm h0
@@ -219,15 +219,15 @@ lemma pipe_large (x y p q z : Number) (hx : x.isNormalized) (hy : y.isNormalized
     rw [Number.toRat_eq_zero_of_mantissa_zero y h] at hlarge; simp at hlarge
     linarith [zpow_pos (by norm_num : (0 : ℚ) < 10) (-50 : ℤ)]
   have hpm : p.mantissa_ ≠ 0 := fun h => by
-    have h1 := operator_mul_underflow_truth_small x y p _ hx hy hxm hym hmul h
+    have h1 := Number.operator_mul_underflow_truth_small x y p _ hx hy hxm hym hmul h
     rw [abs_of_nonneg hxy0] at h1
     exact lt_irrefl _ (lt_of_le_of_lt (hlarge.trans hxy)
       ((lt_of_lt_of_le h1 ht).trans (h50.trans (half_lt_self h50p))))
-  have hpn := operator_mul_result_isNormalized _ _ _ _ hx hy hxm hym hmul hpm
-  have hzm := operator_div_divisor_ne_zero _ _ _ _ hz hdiv
+  have hpn := Number.operator_mul_result_isNormalized _ _ _ _ hx hy hxm hym hmul hpm
+  have hzm := Number.operator_div_divisor_ne_zero _ _ _ _ hz hdiv
   have hqm : q.mantissa_ ≠ 0 := fun h => by
-    have hu := operator_div_underflow_truth_small p z q _ hpn hz hpm hzm hdiv h
-    have hw1 := operator_mul_rounds_to_nearest x y p hx hy hmul hpm
+    have hu := Number.operator_div_underflow_truth_small p z q _ hpn hz hpm hzm hdiv h
+    have hw1 := Number.operator_mul_rounds_to_nearest x y p hx hy hmul hpm
     simp only [RoundsWithin, RatValued.toRat] at hw1
     change |p.toRat - x.toRat * y.toRat| ≤ |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7)) at hw1
     rw [abs_of_nonneg hxy0] at hw1
@@ -415,10 +415,10 @@ lemma assetsToSharesWithdraw_amount_ne_zero (v : Vault) (amount shares : STAmoun
   obtain ⟨T, hT, hsh⟩ := bind_ok_peel _ _ _ hok
   have hTm := STAmount.ofNumber_integral_source_ne_zero .int64 T .to_nearest shares (by decide) hsh hmv
   have hT0m := Number.truncate_source_ne_zero T0 T hT hTm
-  have hPm := operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
+  have hPm := Number.operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
     (Number.not_operator_eq_zero_of_mantissa_ne hmz) hT0 hT0m
   obtain ⟨hanval, hannorm⟩ := hc.toNumber_exact amountN hamN
-  obtain ⟨-, hanm⟩ := operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
+  obtain ⟨-, hanm⟩ := Number.operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
   rw [← hanval]
   exact Number.toRat_ne_zero_of_mantissa_ne_zero _ hanm
 

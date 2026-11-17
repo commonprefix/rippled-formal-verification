@@ -40,7 +40,7 @@ lemma LoanBroker.coverClawback_cover_pos (lb : LoanBroker) (pool : α) (amount :
   subst hmin
   rw [Number.operator_sub_zero, Except.ok.injEq] at hsub
   subst hsub
-  rw [signum_eq _ lb.wf.coverAvailable_norm] at hpos
+  rw [Number.signum_eq _ lb.wf.coverAvailable_norm] at hpos
   show 0 < lb.coverAvailable.toRat
   by_contra h
   rw [if_neg h] at hpos

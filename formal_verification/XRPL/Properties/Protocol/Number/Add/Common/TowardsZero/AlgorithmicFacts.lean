@@ -3,7 +3,7 @@ import XRPL.Properties.Protocol.Number.Add.Common.SameSignDecompose
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_algorithmic_facts_same_sign_towards_zero (x y result : Number)
+theorem Number.operator_add_algorithmic_facts_same_sign_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -26,7 +26,7 @@ theorem operator_add_algorithmic_facts_same_sign_towards_zero (x y result : Numb
   obtain ⟨zm, ze', f, g, res_pos, h_floor_le, h_le_maxRepUp, hf_nn, hf_lt,
       _h_floor_constraint, h_value, h_rup, h_abs_result, h_respos_ne, h_rep, h_neg,
       _h_sbit, h_floor_succ, h_isNorm, h_truth_top, h_result_ne⟩ :=
-    operator_add_algorithmic_facts_same_sign_anyMode x y result .towards_zero
+    Number.operator_add_algorithmic_facts_same_sign_anyMode x y result .towards_zero
       hx hy hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
   exact ⟨zm, ze', f, g, res_pos, h_floor_le, h_le_maxRepUp, hf_nn, hf_lt, h_value,
     h_rup, h_abs_result, h_respos_ne, h_rep, h_neg, h_floor_succ, h_result_ne,

@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! # Witness for `operator_mul_rounding_bound_downward`
+/-! # Witness for `Number.operator_mul_rounding_bound_downward`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = 9223372036854775810`, `y = 1000000000000000001` exceeds `9/(2^63+2)`,
@@ -32,7 +32,7 @@ lemma scaleDown128_downward_witness :
   rfl
 
 /-- `operator_mul` trace for the downward witness inputs. -/
-lemma operator_mul_downward_witness :
+lemma Number.operator_mul_downward_witness :
     Number.operator_mul
         ⟨false, 9223372036854775810, 0⟩
         ⟨false, 1000000000000000001, 0⟩
@@ -83,7 +83,7 @@ lemma operator_mul_downward_witness :
     simp only [RoundResult.toNumber]]
 
 
-theorem operator_mul_downward_attained :
+theorem Number.operator_mul_downward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_mul x y .downward = .ok result ∧
@@ -95,7 +95,7 @@ theorem operator_mul_downward_attained :
           ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_mul_downward_witness
+  · exact Number.operator_mul_downward_witness
   · decide
   · have hx_rat : (⟨false, 9223372036854775810, 0⟩ : Number).toRat = 9223372036854775810 := by
       unfold Number.toRat; rfl

@@ -120,7 +120,7 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
         have h10 : n.mantissa_.toNat / 10 ≤ 999999999999999999 := by omega
         omega
       -- the final normalize is exact on the representable target
-      have hgrid := normalize_rounded_to_nearest (Number.unchecked n.negative_ m' e') t hok
+      have hgrid := Number.normalize_rounded_to_nearest (Number.unchecked n.negative_ m' e') t hok
       rw [hin_val] at hgrid
       have hrep : ∃ w : Number, w.isNormalized ∧ w.toRat = (K : ℚ) := by
         rcases Nat.eq_zero_or_pos K with h0 | hpos
@@ -140,7 +140,7 @@ lemma Number.truncate_floor (n t : Number) (hn : n.isNormalized)
         have := Number.toRat_ne_zero_of_mantissa_ne_zero t ht_ne
         rw [hexact] at this
         exact this hKzero
-      exact normalize_result_isNormalized (Number.unchecked n.negative_ m' e') t .to_nearest
+      exact Number.normalize_result_isNormalized (Number.unchecked n.negative_ m' e') t .to_nearest
         hm' hok ht_ne
 
 /-- `Number.truncate` is monotone on nonnegative normalized inputs. -/
@@ -175,16 +175,16 @@ lemma Number.mul_div_num_mono (k d a₁ a₂ m₁ m₂ q₁ q₂ : Number)
   have hcm₂ := operator_mul_roundsCuspAware k a₂ m₂ hk ha₂ hkm ha₂m hm₂ hm₂m hprod₂
   have hm₁neg : m₁.negative_ = false := by
     obtain ⟨_, _, _, _, _, hF⟩ :=
-      operator_mul_algorithmic_facts_to_nearest k a₁ m₁ hk ha₁ hkm ha₁m hm₁ hm₁m
+      Number.operator_mul_algorithmic_facts_to_nearest k a₁ m₁ hk ha₁ hkm ha₁m hm₁ hm₁m
     rw [hF.result_neg, hkneg, ha₁neg]; rfl
   have hm₂neg : m₂.negative_ = false := by
     obtain ⟨_, _, _, _, _, hF⟩ :=
-      operator_mul_algorithmic_facts_to_nearest k a₂ m₂ hk ha₂ hkm ha₂m hm₂ hm₂m
+      Number.operator_mul_algorithmic_facts_to_nearest k a₂ m₂ hk ha₂ hkm ha₂m hm₂ hm₂m
     rw [hF.result_neg, hkneg, ha₂neg]; rfl
   have hm₁pos := Number.toRat_pos_of_not_negative m₁ hm₁neg hm₁m
   have hm₂pos := Number.toRat_pos_of_not_negative m₂ hm₂neg hm₂m
-  have hm₁norm := operator_mul_result_isNormalized k a₁ m₁ .to_nearest hk ha₁ hkm ha₁m hm₁ hm₁m
-  have hm₂norm := operator_mul_result_isNormalized k a₂ m₂ .to_nearest hk ha₂ hkm ha₂m hm₂ hm₂m
+  have hm₁norm := Number.operator_mul_result_isNormalized k a₁ m₁ .to_nearest hk ha₁ hkm ha₁m hm₁ hm₁m
+  have hm₂norm := Number.operator_mul_result_isNormalized k a₂ m₂ .to_nearest hk ha₂ hkm ha₂m hm₂ hm₂m
   have hmle : m₁.toRat ≤ m₂.toRat :=
     operator_mul_left_mono_of_cuspAware k a₁ a₂ m₁ m₂ ha₁ ha₂ hm₁ hm₂ hcm₁ hcm₂
       hm₁pos hm₂pos hkpos ha₁pos hle
@@ -194,11 +194,11 @@ lemma Number.mul_div_num_mono (k d a₁ a₂ m₁ m₂ q₁ q₂ : Number)
   have hcq₂ := operator_div_roundsCuspAware m₂ d q₂ hm₂norm hd hm₂m hdm hq₂ hq₂m hquo₂
   have hq₁nn : 0 ≤ q₁.toRat := by
     obtain ⟨_, _, _, _, _, hF⟩ :=
-      operator_div_algorithmic_facts_to_nearest m₁ d q₁ hm₁norm hd hm₁m hdm hq₁ hq₁m
+      Number.operator_div_algorithmic_facts_to_nearest m₁ d q₁ hm₁norm hd hm₁m hdm hq₁ hq₁m
     exact hF.result_nonneg hquo₁
   have hq₂nn : 0 ≤ q₂.toRat := by
     obtain ⟨_, _, _, _, _, hF⟩ :=
-      operator_div_algorithmic_facts_to_nearest m₂ d q₂ hm₂norm hd hm₂m hdm hq₂ hq₂m
+      Number.operator_div_algorithmic_facts_to_nearest m₂ d q₂ hm₂norm hd hm₂m hdm hq₂ hq₂m
     exact hF.result_nonneg hquo₂
   have hq₁pos : 0 < q₁.toRat :=
     lt_of_le_of_ne hq₁nn (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero q₁ hq₁m))
@@ -255,7 +255,7 @@ lemma Number.operator_add_downward_nonneg_le (x y result : Number)
         by_cases hrm : result.mantissa_ = 0
         · rw [Number.toRat_eq_zero_of_mantissa_zero result hrm]
           exact ⟨hs, le_refl _⟩
-        · have hr := operator_add_rounds_downward x y result hx hy hxm hym
+        · have hr := Number.operator_add_rounds_downward x y result hx hy hxm hym
             (by simpa using hxy) hok0 hrm
           have hr' : result.toRat ≤ x.toRat + y.toRat ∧
               (x.toRat + y.toRat) - result.toRat ≤
@@ -341,7 +341,7 @@ lemma operator_add_nonneg_rounds (x y result : Number)
     have := hcon.1.1
     rw [hxneg, hyneg] at this
     exact Bool.noConfusion this
-  have h := operator_add_rounds_same_sign_to_nearest x y result hx hy hxm hym
+  have h := Number.operator_add_rounds_same_sign_to_nearest x y result hx hy hxm hym
     (by rw [hxneg, hyneg]) hnotz hok
   refine RoundsWithin_mono result _ _ _ _ h (by norm_num)
 

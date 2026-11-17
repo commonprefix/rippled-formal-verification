@@ -7,7 +7,7 @@ import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
 
 namespace XRPL.Model.Protocol
 
-lemma operator_add_downward_witness :
+lemma Number.operator_add_downward_witness :
     Number.operator_add
         ⟨false, 5000000000000000004, 0⟩
         ⟨false, 5000000000000000005, 0⟩
@@ -51,37 +51,11 @@ lemma operator_add_downward_witness :
     rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize
-  rw [doNormalize_eq_spec]
-  all_goals try min_fit
-  unfold doNormalizeSpec
-  rw [show (((1000000000000000000 : UInt64) : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUpSpec largeRange.min (1000000000000000000 : UInt64) 1
-        = ((1000000000000000000 : UInt64), (1 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
-  rw [show doNormalize_scaleDown largeRange.max (1000000000000000000 : UInt64) (1 : Int) Guard.new
-        = .ok ((1000000000000000000 : UInt64), (1 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
-  simp only []
-  rw [show ((1 : Int) < minExponent || (1000000000000000000 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_capAtMaxRep (1000000000000000000 : UInt64) (1 : Int) Guard.new
-        = .ok ((1000000000000000000 : UInt64), (1 : Int), Guard.new) from by
-      unfold doNormalize_capAtMaxRep
-      rw [if_neg (by decide)]]
-  simp only []
-  have h_rup2 : Guard.new.doRoundUp false (1000000000000000000 : UInt64) (1 : Int)
-      largeRange.min largeRange.max .downward .normalize2 =
-      .ok { negative_ := false, mantissa_ := 1000000000000000000, exponent_ := 1 } := by
-    rw_doRoundUp_spec
-    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
-  rw [h_rup2]
-  simp only [RoundResult.toNumber]
 
-theorem operator_add_downward_attained :
+theorem Number.operator_add_downward_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
+      x.negative_ = y.negative_ ∧
       Number.operator_add x y .downward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       |result.toRat - (x.toRat + y.toRat)|
@@ -89,10 +63,11 @@ theorem operator_add_downward_attained :
   refine ⟨⟨false, 5000000000000000004, 0⟩,
           ⟨false, 5000000000000000005, 0⟩,
           ⟨false, 1000000000000000000, 1⟩,
-          ?_, ?_, ?_, ?_, ?_⟩
+          ?_, ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_add_downward_witness
+  · rfl
+  · exact Number.operator_add_downward_witness
   · decide
   · have hx_rat : (⟨false, 5000000000000000004, 0⟩ : Number).toRat = 5000000000000000004 := by
       unfold Number.toRat; rfl

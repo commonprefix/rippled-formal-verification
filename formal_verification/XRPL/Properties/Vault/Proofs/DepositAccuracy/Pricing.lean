@@ -55,24 +55,24 @@ lemma deposit_nonempty_chain_facts (v : Vault) (navN : Number) (hat : v.assetsTo
   have hnavnorm : navN.isNormalized := (Vault.assetsTotal_ge_deployed v navN hat).1
   have hnavm : navN.mantissa_ ≠ 0 := hne
   have hPm : P.mantissa_ ≠ 0 :=
-    operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
+    Number.operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
       (Number.not_operator_eq_zero_of_mantissa_ne hnavm) hT0 hT0m
   obtain ⟨an', han', hanval, hannorm⟩ := STAmount.toNumber_canonical_exact amount .to_nearest hc
   have haneq : an' = amountN := by rw [han'] at hamN; exact Except.ok.inj hamN
   rw [haneq] at hanval hannorm
   obtain ⟨hSTm, hanm⟩ :=
-    operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
+    Number.operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
   have hPnorm : P.isNormalized :=
-    operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
+    Number.operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
       v.wf.sharesTotal_norm hannorm hSTm hanm hP hPm
   have hT0norm : T0.isNormalized :=
-    operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hnavm hT0 hT0m
+    Number.operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hnavm hT0 hT0m
   have hann : 0 ≤ amountN.toRat := by rw [hanval]; exact le_of_lt hpos
   have hSTnn : 0 ≤ v.sharesTotal.toRat := v.wf.sharesTotal_nonneg
   have hPnn : 0 ≤ P.toRat := by
     have hb : |P.toRat - v.sharesTotal.toRat * amountN.toRat|
         ≤ |v.sharesTotal.toRat * amountN.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
-      operator_mul_rounds_to_nearest v.sharesTotal amountN P
+      Number.operator_mul_rounds_to_nearest v.sharesTotal amountN P
         v.wf.sharesTotal_norm hannorm hP hPm
     rw [abs_of_nonneg (mul_nonneg hSTnn hann)] at hb
     have hab := abs_le.mp hb
@@ -82,7 +82,7 @@ lemma deposit_nonempty_chain_facts (v : Vault) (navN : Number) (hat : v.assetsTo
   have hT0nn : 0 ≤ T0.toRat := by
     have hb : |T0.toRat - P.toRat / navN.toRat|
         ≤ |P.toRat / navN.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) :=
-      operator_div_rounds_to_nearest P navN T0 hPnorm hnavnorm hT0 hT0m
+      Number.operator_div_rounds_to_nearest P navN T0 hPnorm hnavnorm hT0 hT0m
     rw [abs_of_nonneg hPNnn] at hb
     have hab := abs_le.mp hb
     nlinarith [hPNnn]
@@ -150,7 +150,7 @@ lemma deposit_empty_chain_facts (v : Vault) (hscale : v.scale.toNat ≤ 18)
       (by show minExponent + 18 ≤ amount.exponent + (v.scale.toNat : ℤ)
           have hs : (0 : ℤ) ≤ (v.scale.toNat : ℤ) := by positivity
           unfold minExponent; omega)
-      (by show amount.exponent + (v.scale.toNat : ℤ) ≤ maxExponent - 1
+      (by show amount.exponent + (v.scale.toNat : ℤ) ≤ maxExponent
           have hs : (v.scale.toNat : ℤ) ≤ 18 := by exact_mod_cast hscale
           unfold maxExponent; omega)
   have hn1eq : n1 = ⟨false, M, e1⟩ := by

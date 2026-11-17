@@ -86,7 +86,7 @@ lemma Vault.payout_keeps_cash (v : Vault) (assets : STAmount) (n : Number) (hc :
     0 ≤ v.assetsAvailable.toRat + assets.operator_neg.toRat := by
   obtain ⟨hv, hnorm⟩ := hc.toNumber_exact n hn
   have hle : n.toRat ≤ v.assetsAvailable.toRat := by
-    have h := (operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).not.mp (by simp [hcover])
+    have h := (Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hnorm).not.mp (by simp [hcover])
     linarith [not_lt.mp h]
   rw [STAmount.operator_neg_toRat]
   linarith
@@ -107,7 +107,7 @@ lemma Vault.final_payout_exact (v : Vault) (payout : STAmount)
     have heq : n.operator_eq v.assetsAvailable = true := by simpa using hr
     obtain ⟨hv, hnorm⟩ := (STAmount.ofNumber_canonicalOrZero _ _ _ _ hmax hok).1.toNumber_exact n hn
     rw [← hv]
-    exact (operator_eq_iff _ _ hnorm v.wf.assetsAvailable_norm).mp heq
+    exact (Number.operator_eq_iff _ _ hnorm v.wf.assetsAvailable_norm).mp heq
 
 /-- A withdrawal's cash update writes a lawful record when it pays out a whole number of base units, no more than the
 cash, burns a whole number of shares up to the share total, and burning them all empties the vault. -/
@@ -127,8 +127,9 @@ lemma Vault.withdraw_update_lawful (v : Vault) (assets shares : STAmount) (raw :
   obtain ⟨assetsNum, sharesNum, s, aa', st', hnum, hsnum, hst, hs, haa, rfl⟩ :=
     Vault.adjustAssetsAndShares_ok_reduces v _ _ raw hadj
   obtain ⟨hv, hnorm⟩ := hc.operator_neg.toNumber_exact assetsNum hnum
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
-  have hsum : 0 ≤ s.toRat := operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs (by rw [hv]; exact hcash)
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
+  have hsum : 0 ≤ s.toRat := Number.operator_add_nonneg _ _ _ v.wf.assetsAvailable_norm hnorm hs (by rw [hv]; exact
+    hcash)
   have haa0 := STAmount.roundToNumericType_nonneg _ _ _ hsn hsum haa
   have haan := STAmount.roundToNumericType_isNormalized _ _ _ _ _ haa
   -- the payout is a whole number of base units, so the new cash is stored exactly and on the base grid
@@ -145,9 +146,9 @@ lemma Vault.withdraw_update_lawful (v : Vault) (assets shares : STAmount) (raw :
   rw [← hcast] at hcap
   have hbound := Rat.num_natAbs_add_lt_of_den_one _ _ v.wf.sharesTotal_int hsden
     (by rw [hsv, ← hcast]; linarith) (by rw [hsv, ← hcast]; linarith)
-  obtain ⟨hstv, hstd⟩ := operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
+  obtain ⟨hstv, hstd⟩ := Number.operator_add_exact_int _ _ _ v.wf.sharesTotal_norm hsnorm v.wf.sharesTotal_int
     hsden hbound hst
-  have hstn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsnorm hst
+  have hstn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsnorm hst
   have hst0 : 0 ≤ st'.toRat := by rw [hstv, hsv, ← hcast]; linarith
   refine Vault.cash_shares_update_lawful v aa' st' haan haa0 haar (Vault.onGrid_clause v aa' haan haa0 haak) hstn
     hst0 hstd (by rw [hstv, hsv, ← hcast]; linarith) ?_
@@ -158,7 +159,7 @@ lemma Vault.withdraw_update_lawful (v : Vault) (assets shares : STAmount) (raw :
   obtain ⟨hcash0, hAD⟩ := hempty (by linarith)
   have hs0 : s = Number.zero := by
     have hr := Number.RoundsToRepresentable.eq_of_representable _ _
-      (operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hnorm hs) Number.zero
+      (Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hnorm hs) Number.zero
       Number.zero_isNormalized (by rw [Number.toRat_zero, hv]; linarith)
     have hsq : s.toRat = 0 := by rw [hr, hv]; linarith
     exact (Number.toRat_eq_zero_iff_eq_zero hsn).mp hsq
@@ -209,9 +210,9 @@ lemma Vault.adjustAssetsAndShares_burn_all (v : Vault) (assets shares : STAmount
       x.operator_add y .to_nearest = .ok z → z = Number.zero := by
     intro x y z hx hy h0 hok
     have hr := Number.RoundsToRepresentable.eq_of_representable _ _
-      (operator_add_rounded_to_nearest _ _ _ hx hy hok) Number.zero Number.zero_isNormalized
+      (Number.operator_add_rounded_to_nearest _ _ _ hx hy hok) Number.zero Number.zero_isNormalized
       (by rw [Number.toRat_zero, h0])
-    exact (Number.toRat_eq_zero_iff_eq_zero (operator_add_isNormalized_to_nearest_sz _ _ _ hx hy hok)).mp
+    exact (Number.toRat_eq_zero_iff_eq_zero (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hx hy hok)).mp
       (by rw [hr, h0])
   have hs0 := hzero _ _ _ v.wf.assetsAvailable_norm hnorm (by rw [hv, hpay]; ring) hs
   have hst0 := hzero _ _ _ v.wf.sharesTotal_norm hsnorm (by rw [hsv, hall, hcast]; ring) hst

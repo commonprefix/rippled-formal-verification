@@ -128,11 +128,11 @@ lemma Number.operator_add_zero_shape_sz (x y result : Number)
   by_cases h_sign_eq : x.negative_ = y.negative_
   · exfalso
     obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, hresult_ne, _, _⟩ :=
-      operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
+      Number.operator_add_algorithmic_facts_same_sign_to_nearest x y result hx hy hx_mant_ne hy_mant_ne
         h_sign_eq heq_guard hok
     exact hresult_ne h0
   · obtain ⟨M, ze', δ, zn, sticky, _, _, _, _, _, _, _, hok128, _, _, _⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy
         hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
     exact doNormalize128_zero_shape_sz zn M ze' sticky .to_nearest result hok128 h0
 
@@ -147,24 +147,24 @@ lemma Number.operator_sub_zero_shape_sz (x y result : Number)
     (Number.operator_neg_isNormalized y hy) hok h0
 
 /-- A successful `to_nearest` addition of normalized `Number`s gives a normalized `Number`. -/
-lemma operator_add_isNormalized_to_nearest_sz (x y result : Number)
+lemma Number.operator_add_isNormalized_to_nearest_sz (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .to_nearest = .ok result) :
     result.isNormalized := by
   by_cases h0 : result.mantissa_ = 0
   · rw [Number.operator_add_zero_shape_sz x y result hx hy hok h0]
     exact Or.inl rfl
-  · exact operator_add_isNormalized_to_nearest x y result hx hy hok h0
+  · exact Number.operator_add_isNormalized_to_nearest x y result hx hy hok h0
 
 /-- A successful `to_nearest` subtraction of normalized `Number`s gives a normalized `Number`. -/
-lemma operator_sub_isNormalized_to_nearest_sz (x y result : Number)
+lemma Number.operator_sub_isNormalized_to_nearest_sz (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_sub x y .to_nearest = .ok result) :
     result.isNormalized := by
   by_cases h0 : result.mantissa_ = 0
   · rw [Number.operator_sub_zero_shape_sz x y result hx hy hok h0]
     exact Or.inl rfl
-  · exact operator_sub_isNormalized_to_nearest x y result hx hy hok h0
+  · exact Number.operator_sub_isNormalized_to_nearest x y result hx hy hok h0
 
 /-- `divQuotient128` on a zero numerator yields a zero quotient (no remainder). -/
 lemma divQuotient128_zero_sz (ym : UInt64) (xe ye : Int) :
@@ -191,7 +191,7 @@ lemma doNormalize128_zero_num_sz (zn : Bool) (e : Int) (minM maxM : UInt64)
 
 /-- A nonzero `operator_div` result forces a nonzero numerator, since a zero numerator is either returned as
 it is or gives a zero quotient that `doNormalize128` turns into `Number.zero`. -/
-lemma operator_div_numerator_ne_zero_sz (x y result : Number) (mode : rounding_mode)
+lemma Number.operator_div_numerator_ne_zero_sz (x y result : Number) (mode : rounding_mode)
     (hyne : ¬ y.operator_eq Number.zero = true)
     (hok : Number.operator_div x y mode = .ok result) (hres : result.mantissa_ ≠ 0) :
     x.mantissa_ ≠ 0 := by

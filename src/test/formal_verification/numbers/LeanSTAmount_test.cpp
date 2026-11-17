@@ -88,7 +88,8 @@ stAmountFieldsEqual(LeanSTAmountResult const& lean, STAmount const& cpp)
 }
 
 // Signed drops of raw STAmount fields as int64, or nullopt when they leave the int64 range.
-// C++ casts mValue to int64 without a check there, the model reports `Error.wrap`.
+// For an integral amount C++ casts mValue to int64 without a check there, the model reports
+// `Error.wrap`. For an IOU the model casts like C++.
 std::optional<int64_t>
 signedDrops(uint64_t mValue, bool negative)
 {
@@ -100,22 +101,19 @@ signedDrops(uint64_t mValue, bool negative)
     return std::nullopt;
 }
 
-// Whether the model's IOU add (sub negates b first) reports `Error.wrap`: an operand's mantissa
-// leaves int64. C++ wraps it silently.
+// Whether the model's integral add (sub negates b first) reports `Error.wrap`: the drops of an
+// operand leave int64. C++ wraps them silently.
 bool
 addWraps(STAmountPair const& a, STAmountPair const& b, bool isAdd)
 {
     auto const& x = a.leanSt;
     auto const& y = b.leanSt;
-    if (x.numericType != y.numericType || y.mValue == 0)
+    if (x.numericType != y.numericType || x.numericType == kFractional)
+        return false;
+    if (x.mValue == 0 || y.mValue == 0)
         return false;
     bool const yNegative = (y.isNegative != 0) == isAdd;
-    auto const dy = signedDrops(y.mValue, yNegative);
-    // A zero left operand re-canonicalizes the right one, which reads IOU drops as int64.
-    if (x.mValue == 0)
-        return x.numericType == kFractional && !dy;
-    auto const dx = signedDrops(x.mValue, x.isNegative != 0);
-    return !dx || !dy;
+    return !signedDrops(x.mValue, x.isNegative != 0) || !signedDrops(y.mValue, yNegative);
 }
 
 }  // namespace
@@ -206,22 +204,12 @@ class LeanSTAmount_test : public LeanSuite
         uint8_t const leanMode = toLeanMode(mode);
         bool ok = true;
 
-        // intAmount (integral) or iou (fractional) reads the drops, and toNumber reads them too.
-        if (!signedDrops(mValue, isNeg != 0))
+        // intAmount reads the drops of an integral amount, and toNumber reads them too.
+        if (nt != kFractional && !signedDrops(mValue, isNeg != 0))
         {
             auto const build = [&] { return STAmountFFI::build(nt, mValue, mOffset, isNeg); };
-            if (nt == kFractional)
-            {
-                auto const iou =
-                    readExcept<IOUAmountFFI>(leanCall(lean_stamount_iou, build(), leanMode));
-                ok &= expectWrap(tag + ".iou", iou.error);
-            }
-            else
-            {
-                auto const drops =
-                    readExcept<Int64FFI>(leanCall(lean_stamount_int_amount, build()));
-                ok &= expectWrap(tag + ".intAmount", drops.error);
-            }
+            auto const drops = readExcept<Int64FFI>(leanCall(lean_stamount_int_amount, build()));
+            ok &= expectWrap(tag + ".intAmount", drops.error);
             auto const number =
                 readExcept<NumberFFI>(leanCall(lean_stamount_to_number, build(), leanMode));
             ok &= expectWrap(tag + ".toNumber", number.error);
@@ -925,7 +913,7 @@ public:
                 checkNeg(makeSTAmountPair(nt, 0, 0, neg));
                 checkLt(makeSTAmountPair(nt, u64Max, 0, neg), makeSTAmountPair(nt, 0, 0, neg));
             }
-            // C++ reads u64Max back as int64 (iou() gives -1), the model reports the wrap.
+            // Both sides read u64Max back as int64 (iou() gives -1).
             checkAddSub(
                 "add",
                 true,
@@ -961,44 +949,30 @@ public:
         checkAccessors(makeSTAmountPair(kIntegral, u64Max, 0, 0), m);
     }
 
-    // Finding (FV_M2_1): XRP operator+ adds one drop to an INT64_MAX wraps to INT64_MIN, no guard.
+    // IOU mantissas staged at and above 2^63: both sides cast them to int64 (u64Max -> -1), so a
+    // positive amount reads back negative. Negative 2^63 is left out, C++ negates INT64_MIN there.
     void
-    test_add_xrp_overflow()
+    test_iou_int64_cast()
     {
-        beginCase("LeanSTAmount.add_xrp_overflow");
+        beginCase("LeanSTAmount.iou_int64_cast");
         NumberMantissaScaleGuard sg(MantissaRange::MantissaScale::Large330);
         Number::RoundingMode const m = Number::RoundingMode::ToNearest;
+        constexpr uint64_t u64Max = std::numeric_limits<uint64_t>::max();
+        constexpr uint64_t twoTo63 = uint64_t{1} << 63;
 
-        constexpr uint64_t kIntMax = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-        STAmountPair const a = makeSTAmountPair(kNative, kIntMax, 0, 0);  // INT64_MAX drops
-        STAmountPair const b = makeSTAmountPair(kNative, 1, 0, 0);        // + 1 drop
-
-        bool cppThrew = false;
-        STAmount cppSum;
-        try
+        for (uint8_t neg : {uint8_t{0}, uint8_t{1}})
         {
-            cppSum = a.cppSt + b.cppSt;
+            for (uint64_t mantissa : {twoTo63, twoTo63 + 1, 9'999'999'999'999'999'999ULL, u64Max})
+            {
+                if (neg != 0 && mantissa == twoTo63)
+                    continue;
+                for (int64_t offset : {int64_t{0}, int64_t{80}})
+                {
+                    checkAccessors(makeSTAmountPair(kFractional, mantissa, offset, neg), m);
+                    checkChecked(makeSTAmountPair(kFractional, mantissa, offset, neg), m);
+                }
+            }
         }
-        catch (std::exception const&)
-        {
-            cppThrew = true;
-        }
-
-        NumberRoundModeGuard mg(m);
-        auto const lean = STAmountFFI::fromExcept(leanCall(
-            lean_stamount_add,
-            STAmountFFI::build(
-                a.leanSt.numericType, a.leanSt.mValue, a.leanSt.mOffset, a.leanSt.isNegative),
-            STAmountFFI::build(
-                b.leanSt.numericType, b.leanSt.mValue, b.leanSt.mOffset, b.leanSt.isNegative),
-            toLeanMode(m)));
-
-        BEAST_EXPECTS(
-            cppThrew || cppSum.signum() > 0,
-            "C++ XRP add at INT64_MAX wrapped to a negative value");
-        BEAST_EXPECTS(
-            !lean.ok || lean.isNegative == 0,
-            "Lean XRP add at INT64_MAX wrapped to a negative value");
     }
 
     // ---- Cusp sweeps ----
@@ -1142,6 +1116,7 @@ private:
         test_known_round_to_exponent();
         test_extreme_values();
         test_integral_int64_wrap();
+        test_iou_int64_cast();
         forEachMode([&](Number::RoundingMode mode) {
             sweepChecked("XRP", kNative, kXrpCheckedCases, mode);
             sweepChecked("MPT", kIntegral, kMptCheckedCases, mode);
@@ -1153,11 +1128,6 @@ private:
         });
         // Every sum is exact, so one mode covers them.
         forEachMode([&](Number::RoundingMode mode) { sweepAddSub(mode); }, kToNearestOnly);
-
-        // Known discrepancies, each fails until the C++ code is fixed.
-        // clang-format off
-        // test_add_xrp_overflow();          // FV_M2_1: XRP operator+ at INT64_MAX wraps negative
-        // clang-format on
     }
 };
 

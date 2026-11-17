@@ -95,7 +95,7 @@ lemma Vault.assetsTotal_sub_zero_exact (v : Vault) (total y nav : Number)
   have htneg := Number.negative_false_of_nonneg total htn (by linarith)
   have hyneg := Number.negative_false_of_nonneg y hy hy_nn
   -- the model flushed a nonzero difference, so it is below the underflow bound
-  have hsmall := operator_add_underflow_truth_small total y.operator_neg nav .to_nearest htn
+  have hsmall := Number.operator_add_underflow_truth_small total y.operator_neg nav .to_nearest htn
     (Number.operator_neg_isNormalized y hy) htm (by simp [Number.operator_neg, hym])
     (by simp [Number.operator_neg, hym, htneg, hyneg])
     (fun h => hd (by rw [sub_eq_add_neg_toRat]; exact add_truth_zero_of_eq_neg _ _ h)) hok h0

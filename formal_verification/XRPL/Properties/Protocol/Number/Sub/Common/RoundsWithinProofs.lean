@@ -4,7 +4,7 @@ import XRPL.Properties.Protocol.Number.Common.ToRatLemmas
 
 namespace XRPL.Model.Protocol
 
-theorem operator_sub_rounding_bound_downward_tight_proof (x y result : Number)
+theorem Number.operator_sub_rounding_bound_downward_tight_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -19,10 +19,10 @@ theorem operator_sub_rounding_bound_downward_tight_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounding_bound_downward_tight x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounding_bound_downward_tight x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounds_diff_sign_downward_proof (x y result : Number)
+theorem Number.operator_sub_rounds_diff_sign_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -47,10 +47,10 @@ theorem operator_sub_rounds_diff_sign_downward_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_same_sign_downward x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_same_sign_downward x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_same_sign h_not_zero hok
 
-theorem operator_sub_rounds_downward_proof (x y result : Number)
+theorem Number.operator_sub_rounds_downward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -64,10 +64,10 @@ theorem operator_sub_rounds_downward_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_downward x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_downward x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounding_bound_upward_tight_proof (x y result : Number)
+theorem Number.operator_sub_rounding_bound_upward_tight_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -82,10 +82,10 @@ theorem operator_sub_rounding_bound_upward_tight_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounding_bound_upward_tight x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounding_bound_upward_tight x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounds_diff_sign_upward_proof (x y result : Number)
+theorem Number.operator_sub_rounds_diff_sign_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -110,10 +110,10 @@ theorem operator_sub_rounds_diff_sign_upward_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_same_sign_upward x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_same_sign_upward x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_same_sign h_not_zero hok
 
-theorem operator_sub_rounds_upward_proof (x y result : Number)
+theorem Number.operator_sub_rounds_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -127,10 +127,10 @@ theorem operator_sub_rounds_upward_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_upward x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_upward x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounding_bound_towards_zero_tight_proof (x y result : Number)
+theorem Number.operator_sub_rounding_bound_towards_zero_tight_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -145,10 +145,10 @@ theorem operator_sub_rounding_bound_towards_zero_tight_proof (x y result : Numbe
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounding_bound_towards_zero_tight x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounding_bound_towards_zero_tight x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounds_diff_sign_towards_zero_proof (x y result : Number)
+theorem Number.operator_sub_rounds_diff_sign_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -173,10 +173,10 @@ theorem operator_sub_rounds_diff_sign_towards_zero_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_same_sign_towards_zero x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_same_sign_towards_zero x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_same_sign h_not_zero hok
 
-theorem operator_sub_rounds_towards_zero_proof (x y result : Number)
+theorem Number.operator_sub_rounds_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -190,10 +190,10 @@ theorem operator_sub_rounds_towards_zero_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounds_towards_zero x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounds_towards_zero x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounding_bound_to_nearest_tight_proof (x y result : Number)
+theorem Number.operator_sub_rounding_bound_to_nearest_tight_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
@@ -208,17 +208,17 @@ theorem operator_sub_rounding_bound_to_nearest_tight_proof (x y result : Number)
   have h_not_zero : ¬ x.operator_eq y.operator_neg.operator_neg := by
     rw [neg_neg_of_mant_ne hy_mant_ne]; exact h_not_eq
   rw [sub_eq_add_neg_toRat]
-  exact operator_add_rounding_bound_to_nearest_tight x y.operator_neg result hx hy_neg_norm
+  exact Number.operator_add_rounding_bound_to_nearest_tight x y.operator_neg result hx hy_neg_norm
     hx_mant_ne hy_neg_mant h_not_zero hok hresult
 
-theorem operator_sub_rounds_to_nearest_proof (x y result : Number)
+theorem Number.operator_sub_rounds_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_eq : ¬ x.operator_eq y)
     (hok : Number.operator_sub x y .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     RoundsWithin result (x.toRat - y.toRat) .to_nearest (6 / (2 ^ 63 - 3 : ℚ)) :=
-  operator_sub_rounding_bound_to_nearest_tight_proof x y result hx hy hx_mant_ne hy_mant_ne
+  Number.operator_sub_rounding_bound_to_nearest_tight_proof x y result hx hy hx_mant_ne hy_mant_ne
     h_not_eq hok hresult
 
 end XRPL.Model.Protocol

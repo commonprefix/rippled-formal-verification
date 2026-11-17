@@ -97,7 +97,7 @@ lemma mul_result_nonpos_of_truth_neg (x y result : Number)
 
 set_option maxHeartbeats 1600000 in
 -- Long case split over the rounding modes.
-theorem operator_mul_underflow_truth_small (x y result : Number) (mode : rounding_mode)
+lemma Number.operator_mul_underflow_truth_small_proof (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y mode = .ok result)
@@ -105,8 +105,8 @@ theorem operator_mul_underflow_truth_small (x y result : Number) (mode : roundin
     |x.toRat * y.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
   have hx_bounds := hx.mantissaBounds hx_mant_ne
   have hy_bounds := hy.mantissaBounds hy_mant_ne
-  have hx_mant_pos := mantissa_toNat_pos_of_bounds hx_bounds
-  have hy_mant_pos := mantissa_toNat_pos_of_bounds hy_bounds
+  have hx_mant_pos := Number.mantissa_toNat_pos_of_bounds hx_bounds
+  have hy_mant_pos := Number.mantissa_toNat_pos_of_bounds hy_bounds
   have hx_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hx_mant_ne
   have hy_ne_zero := Number.not_operator_eq_zero_of_mantissa_ne hy_mant_ne
   rw [Number.operator_mul_eq_spec] at hok

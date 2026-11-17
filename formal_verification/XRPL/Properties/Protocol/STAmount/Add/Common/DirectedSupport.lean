@@ -18,7 +18,7 @@ lemma operator_add_negative_eq_of_same_sign (x y result : Number) (mode : roundi
     (hok : Number.operator_add x y mode = .ok result) :
     result.negative_ = x.negative_ := by
   obtain ⟨_, _, _, _, _, hspec⟩ :=
-    operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
+    Number.operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
       hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
   exact hspec.result_neg
 
@@ -91,14 +91,14 @@ lemma operator_add_RoundsWithin_anyMode (xn yn sum : Number) (mode : rounding_mo
   cases mode with
   | to_nearest =>
     exact RoundsWithin_mono sum (xn.toRat + yn.toRat) (6 / (2 ^ 63 - 3 : ℚ)) (11 / (2 ^ 63 - 18 : ℚ))
-      .to_nearest (operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne
+      .to_nearest (Number.operator_add_rounds_to_nearest xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne
         h_no_cancel hadd hsum_ne) (by norm_num)
   | downward =>
-    exact operator_add_rounds_downward xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
+    exact Number.operator_add_rounds_downward xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
   | upward =>
-    exact operator_add_rounds_upward xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
+    exact Number.operator_add_rounds_upward xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
   | towards_zero =>
-    exact operator_add_rounds_towards_zero xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
+    exact Number.operator_add_rounds_towards_zero xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
 
 /-- Magnitude form of the `Number`-addition directed bound, every mode, any operand signs. Under
 `towards_zero` the result has the sign of the exact sum, so `|sum − truth| = |truth| − |sum|`. -/
@@ -144,7 +144,7 @@ lemma operator_add_abs_diff_le_anyMode (xn yn sum : Number) (mode : rounding_mod
           linarith)]
       rw [abs_of_nonpos (by linarith), neg_sub]; exact hm_abs
     · -- different sign: the tight cancellation bound gives the magnitude directly.
-      exact le_of_lt (operator_add_rounding_bound_diff_sign_towards_zero_tight xn yn sum
+      exact le_of_lt (Number.operator_add_rounding_bound_diff_sign_towards_zero_tight xn yn sum
         hxn_norm hyn_norm hxn_ne hyn_ne hss h_no_cancel hadd hsum_ne)
 
 /-- Mode-generic version of `IOUAmount.add_sum_exponent_hi`: the `Number` sum's exponent stays
@@ -247,7 +247,7 @@ lemma IOUAmount.operator_add_decompose_anyMode (x y result : IOUAmount) (mode : 
     have h_no_cancel : ¬ xn.operator_eq yn.operator_neg := by
       intro hc
       have hyn_neg_norm : yn.operator_neg.isNormalized := Number.operator_neg_isNormalized yn hyn_norm
-      have heq := (operator_eq_iff xn yn.operator_neg hxn_norm hyn_neg_norm).mp hc
+      have heq := (Number.operator_eq_iff xn yn.operator_neg hxn_norm hyn_neg_norm).mp hc
       rw [Number.toRat_neg, hxn_val, hyn_val] at heq
       exact h_truth_ne (by linarith)
     have hsum_ne : sum.mantissa_ ≠ 0 :=

@@ -11,14 +11,14 @@ namespace XRPL.Model.Protocol
 lemmas to division. -/
 
 /-- A quotient of nonzero operands is nonzero. -/
-theorem operator_div_truth_ne (x y : Number)
+theorem Number.operator_div_truth_ne (x y : Number)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0) :
     x.toRat / y.toRat ≠ 0 :=
   div_ne_zero (Number.toRat_ne_zero_of_mantissa_ne_zero x hx_mant_ne)
     (Number.toRat_ne_zero_of_mantissa_ne_zero y hy_mant_ne)
 
 /-- A successful `operator_div` has a nonzero divisor, since dividing by zero is an error. -/
-theorem operator_div_divisor_ne_zero (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_div_divisor_ne_zero (x y result : Number) (mode : rounding_mode)
     (hy : y.isNormalized)
     (hok : Number.operator_div x y mode = .ok result) :
     y.mantissa_ ≠ 0 := by
@@ -29,19 +29,19 @@ theorem operator_div_divisor_ne_zero (x y result : Number) (mode : rounding_mode
   exact absurd hok (by intro hh; cases hh)
 
 /-- The division result with nonzero mantissa is normalized. -/
-theorem operator_div_result_isNormalized (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_div_result_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     result.isNormalized := by
   obtain ⟨M, ze', δ, zn, sticky, _, _, _, hM_pos, _, _, _, hok128, _, _, _⟩ :=
-    operator_div_algorithmic_facts_represents x y result mode hx hy
+    Number.operator_div_algorithmic_facts_represents x y result mode hx hy
       hx_mant_ne hy_mant_ne hok
   exact doNormalize128_result_isNormalized zn M ze' sticky mode hM_pos result hok128 hresult
 
 /-- At the top exponent, a nonzero division result has mantissa at most `9223372036854775820`. -/
-theorem operator_div_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_div_no_overflow_mantissa (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y mode = .ok result)
@@ -49,14 +49,14 @@ theorem operator_div_no_overflow_mantissa (x y result : Number) (mode : rounding
     (h_exp_ge : result.exponent_ ≥ maxExponent) :
     result.mantissa_.toNat ≤ 9223372036854775820 := by
   obtain ⟨M, ze', δ, zn, sticky, _, _, _, hM_pos, _, _, _, hok128, _, _, _⟩ :=
-    operator_div_algorithmic_facts_represents x y result mode hx hy
+    Number.operator_div_algorithmic_facts_represents x y result mode hx hy
       hx_mant_ne hy_mant_ne hok
   exact doNormalize128_no_overflow_mantissa zn M ze' sticky mode hM_pos result
     hok128 hresult h_exp_ge
 
 /-- A zero division result forces the quotient strictly below the smallest
 positive representable. -/
-theorem operator_div_underflow_truth_small (x y result : Number) (mode : rounding_mode)
+lemma Number.operator_div_underflow_truth_small_proof (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y mode = .ok result)
@@ -64,7 +64,7 @@ theorem operator_div_underflow_truth_small (x y result : Number) (mode : roundin
     |x.toRat / y.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, _, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, _, hδ_lt, _⟩ :=
-    operator_div_algorithmic_facts_represents x y result mode hx hy
+    Number.operator_div_algorithmic_facts_represents x y result mode hx hy
       hx_mant_ne hy_mant_ne hok
   rw [htruth]
   exact doNormalize128_underflow_value_small zn M ze' δ sticky mode hδ_low hδ_lt
@@ -72,12 +72,12 @@ theorem operator_div_underflow_truth_small (x y result : Number) (mode : roundin
 
 /-- Both operands of a successful, nonzero `operator_div` have nonzero mantissa, since a zero divisor errors
 out and a zero numerator returns zero. -/
-theorem operator_div_operands_ne_zero {x y result : Number} {mode : rounding_mode}
+theorem Number.operator_div_operands_ne_zero {x y result : Number} {mode : rounding_mode}
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
     x.mantissa_ ≠ 0 ∧ y.mantissa_ ≠ 0 := by
   -- The divisor is nonzero (division by the canonical zero errors out).
-  have hyz : y.mantissa_ ≠ 0 := operator_div_divisor_ne_zero x y result _ hy hok
+  have hyz : y.mantissa_ ≠ 0 := Number.operator_div_divisor_ne_zero x y result _ hy hok
   refine ⟨?_, hyz⟩
   -- A zero numerator returns `x`, whose mantissa is zero, contradicting `hresult`.
   intro hxz

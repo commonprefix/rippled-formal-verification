@@ -258,13 +258,13 @@ lemma exists_normalized_of_int_mul_pow (k : ℕ) (s : ℤ)
     omega
 
 /-- `operator_eq` is reflexive. -/
-private lemma operator_eq_refl (x : Number) : x.operator_eq x = true := by
+private lemma Number.operator_eq_refl (x : Number) : x.operator_eq x = true := by
   unfold Number.operator_eq
   simp
 
 /-- Diff-sign addition with an exactly representable sum returns it exactly,
 in every rounding mode: the two grid neighbors of a grid point coincide. -/
-theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_ne : x.mantissa_ ≠ 0) (hy_ne : y.mantissa_ ≠ 0)
     (h_diff : x.negative_ ≠ y.negative_)
@@ -294,7 +294,7 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
       exact hx_ne hmeq
     have h_guard_eq : (x.operator_eq y.operator_neg) = true := by
       rw [h_x_eq]
-      exact operator_eq_refl _
+      exact Number.operator_eq_refl _
     replace hok := Number.operator_add_ok_spec hok
     unfold Number.operator_addSpec at hok
     rw [h_guard_y, h_guard_x, h_guard_eq] at hok
@@ -311,14 +311,14 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
       exact h_truth_ne (add_truth_zero_of_eq_neg x y hg)
     have hresult : result.mantissa_ ≠ 0 := by
       intro hres0
-      have h_small := operator_add_underflow_truth_small x y result mode hx hy
+      have h_small := Number.operator_add_underflow_truth_small_proof x y result mode hx hy
         hx_ne hy_ne h_diff h_not_eq hok hres0
       have h_ge := Number.abs_toRat_ge_spr w hw hw0
       rw [hw_val] at h_ge
       linarith
     rcases mode with _ | _ | _ | _
     · -- .to_nearest
-      have h := operator_add_rounded_to_nearest x y result hx hy hok
+      have h := Number.operator_add_rounded_to_nearest x y result hx hy hok
       rcases h with ⟨n, hn_eq, hn_val⟩ | ⟨n, hn_eq, hn_val⟩
       · obtain ⟨n', hn'_eq, hn'_val⟩ := Number.lower_value_self w hw hw_ne
         rw [← hw_val] at hn_eq
@@ -329,7 +329,7 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
         have hnn' : n = n' := Option.some.inj (hn_eq.symm.trans hn'_eq)
         rw [hn_val, hnn', ← hn'_val, hw_val]
     · -- .towards_zero
-      have h := operator_add_rounded_towards_zero x y result hx hy hok
+      have h := Number.operator_add_rounded_towards_zero x y result hx hy hok
       obtain ⟨n, hn_eq, hn_val⟩ := h
       by_cases h_nn : x.toRat + y.toRat ≥ 0
       · rw [if_pos h_nn] at hn_eq
@@ -343,14 +343,14 @@ theorem operator_add_exact_diff_sign (x y result : Number) (mode : rounding_mode
         have hnn' : n = n' := Option.some.inj (hn_eq.symm.trans hn'_eq)
         rw [hn_val, hnn', ← hn'_val, hw_val]
     · -- .downward
-      have h := operator_add_rounded_downward x y result hx hy hok hresult
+      have h := Number.operator_add_rounded_downward x y result hx hy hok hresult
       obtain ⟨n, hn_eq, hn_val⟩ := h
       obtain ⟨n', hn'_eq, hn'_val⟩ := Number.lower_value_self w hw hw_ne
       rw [← hw_val] at hn_eq
       have hnn' : n = n' := Option.some.inj (hn_eq.symm.trans hn'_eq)
       rw [hn_val, hnn', ← hn'_val, hw_val]
     · -- .upward
-      have h := operator_add_rounded_upward x y result hx hy hok hresult
+      have h := Number.operator_add_rounded_upward x y result hx hy hok hresult
       obtain ⟨n, hn_eq, hn_val⟩ := h
       obtain ⟨n', hn'_eq, hn'_val⟩ := Number.upper_value_self w hw hw_ne
       rw [← hw_val] at hn_eq

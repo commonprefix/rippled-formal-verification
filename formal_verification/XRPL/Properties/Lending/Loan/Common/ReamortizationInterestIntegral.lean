@@ -170,7 +170,7 @@ private lemma Loan.reamortized_interestDue_nonneg_int (l : Loan) (opc : PaymentC
   have htvpos : 0 < tvo'.toRat := by
     have hn : ¬ (tvo'.signum ≤ 0) := by
       intro hle; apply hsig; simp [hle]
-    rw [signum_eq _ gtv.1] at hn
+    rw [Number.signum_eq _ gtv.1] at hn
     split_ifs at hn with h1 h2
     · exact h1
     · exact absurd (show (-1 : Int) ≤ 0 by decide) hn
@@ -193,12 +193,12 @@ private lemma Loan.reamortized_interestDue_nonneg_int (l : Loan) (opc : PaymentC
     by_contra hlt
     push Not at hlt
     have hexp : io.operator_ne Number.zero = true :=
-      (operator_ne_iff _ _ gio.1 Number.zero_isNormalized).mpr (by rw [hiov, Number.toRat_zero]; linarith)
+      (Number.operator_ne_iff _ _ gio.1 Number.zero_isNormalized).mpr (by rw [hiov, Number.toRat_zero]; linarith)
     rw [hexp] at hguard
     obtain ⟨ti, hti, hpos⟩ := LoanProperties.amortizationGuards_interest hguard (by simpa using hg)
     have htiv := Number.OnGrid.sub_toRat gtv gpo hs (hbsub _ _ vtv0 (by linarith) vpo0 (by linarith)) hti
     have gti := Number.OnGrid.sub gtv gpo hs hti
-    rw [signum_eq _ gti.1] at hpos
+    rw [Number.signum_eq _ gti.1] at hpos
     split_ifs at hpos with h1 h2
     · linarith
     · exact absurd hpos (by decide)
@@ -230,9 +230,9 @@ private lemma Loan.reamortized_interestDue_nonneg_int (l : Loan) (opc : PaymentC
   have hGN := Loan.reamortization_gross_normalized l opc hpd hrate hst hth hde h18 hprops hth2 h15
     (by rw [hsP]; exact hpin) hG
   have hpmN := tenthBipsOfValue_normalized hGN hpm
-  have hi11N := operator_sub_isNormalized_to_nearest_sz _ _ _ hGN hpmN hi11
-  have hintN := operator_add_isNormalized_to_nearest_sz _ _ _ hi11N hpmN hint
-  have htvoN := operator_add_isNormalized_to_nearest_sz _ _ _ gpo.1 hintN htvo
+  have hi11N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hGN hpmN hi11
+  have hintN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hi11N hpmN hint
+  have htvoN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ gpo.1 hintN htvo
   -- a fee rounding to a positive amount is at least 0.49 units
   have hpm_pos : 0 < pm.toRat := by
     by_contra hc
@@ -264,14 +264,14 @@ private lemma Loan.reamortized_interestDue_nonneg_int (l : Loan) (opc : PaymentC
     have := mul_le_mul_of_nonneg_left hc (show (0 : ℚ) ≤ G.toRat / 10 by positivity)
     linarith
   -- the pinned interestDue is at least the fee, so it is nonzero and rounds within its relative error
-  have hR11 := operator_sub_rounded_to_nearest G pm _ hGN hpmN hi11
+  have hR11 := Number.operator_sub_rounded_to_nearest G pm _ hGN hpmN hi11
   have hiD_ge : pm.toRat ≤ s11.interestDue.toRat :=
     Number.roundsToRepresentable_ge _ _ hR11 _ hpmN (by linarith)
   have hGm := (hGN.mantissaBounds_nat (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hG0)))
-  have hW11 := operator_sub_rounds_to_nearest G pm _ hGN hpmN
+  have hW11 := Number.operator_sub_rounds_to_nearest G pm _ hGN hpmN
     (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hG0))
     (Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hpm_pos))
-    (fun h => by have := (operator_eq_iff _ _ hGN hpmN).mp h; linarith) hi11
+    (fun h => by have := (Number.operator_eq_iff _ _ hGN hpmN).mp h; linarith) hi11
     (Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith))
   have hWint := operator_add_nonneg_rounds _ _ _ hi11N hpmN (by linarith) hpm_pos.le hint
   have hint0 : 0 ≤ interest.toRat := by

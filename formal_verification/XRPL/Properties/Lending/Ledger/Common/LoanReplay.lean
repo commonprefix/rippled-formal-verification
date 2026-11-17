@@ -182,7 +182,7 @@ lemma LendingLedger.Reachable.manageUnimpair_ok {L : LendingLedger} (hR : L.Reac
       rw [hwv, Number.toRat_neg]; ring
     rw [Number.operator_add_exact_of_fits v.wf.lossUnrealized_norm hnegN hlu' ⟨w, hw', hwv'⟩, Number.toRat_neg]
     ring
-  have hlu'N := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hnegN hlu'
+  have hlu'N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hnegN hlu'
   obtain ⟨aa', hcash, haa0⟩ := cash_zero_sum v { loss := loan.principalOutstanding.operator_neg } rfl
     hR.availableStored
   have hs : Vault.AdjustSums v { loss := loan.principalOutstanding.operator_neg } aa' v.assetsDeployed lu'
@@ -191,12 +191,14 @@ lemma LendingLedger.Reachable.manageUnimpair_ok {L : LendingLedger} (hR : L.Reac
       Number.operator_add_zero_right _ _⟩
   have hle : lu'.operator_gt v.assetsDeployed = false := by
     unfold Number.operator_gt
-    exact (operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hlu'N).mpr (by rw [hlu'v]; linarith)
+    exact (Number.operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hlu'N).mpr (by rw [hlu'v]; linarith)
   have hadj := Vault.adjustBalances_ok v _ _ _ _ _ _ hs
     ⟨haa0, Number.signum_nonneg_of_toRat _ v.wf.assetsDeployed_norm v.exact.assetsDeployed_nonneg,
       Number.signum_nonneg_of_toRat _ hlu'N (by rw [hlu'v]; linarith),
       Number.signum_nonneg_of_toRat _ v.wf.yieldUnrealized_norm v.exact.yieldUnrealized_nonneg,
       Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm v.exact.assetsReserved_nonneg⟩ hle
+    (Vault.cash_zero_totalStores v { loss := loan.principalOutstanding.operator_neg } rfl hR.availableStored
+      hR.totalStored aa' hcash)
   obtain ⟨v', loan', hok, -, -⟩ := Loan.manageUnimpair_success_proof loan v _ hadj
   exact ⟨_, hok⟩
 

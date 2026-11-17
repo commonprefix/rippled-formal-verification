@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 namespace XRPL.Model.Protocol
 
 /-- No normalized Number lies at or above the quotient and below `result.toRat`. -/
-theorem operator_div_no_inbetween_above_upward (x y result : Number)
+theorem Number.operator_div_no_inbetween_above_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .upward = .ok result)
@@ -18,7 +18,7 @@ theorem operator_div_no_inbetween_above_upward (x y result : Number)
       m.toRat < result.toRat → ¬ (x.toRat / y.toRat ≤ m.toRat) := by
   obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-    operator_div_algorithmic_facts_represents x y result .upward hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .upward hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
       h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, h_sbit, hzm_succ,
@@ -47,13 +47,13 @@ theorem operator_div_no_inbetween_above_upward (x y result : Number)
 
 /-- A nonzero `operator_div` result under `.upward` is correctly rounded, equal to `Number.upper` of the exact
 quotient. The nonzero condition is needed because the underflow flush ignores the direction. -/
-theorem operator_div_rounded_upward_proof (x y result : Number)
+theorem Number.operator_div_rounded_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     Number.RoundsToRepresentable result (x.toRat / y.toRat) .upward := by
   -- The divisor is nonzero (division by the canonical zero errors out).
-  have hyz : y.mantissa_ ≠ 0 := operator_div_divisor_ne_zero x y result _ hy hok
+  have hyz : y.mantissa_ ≠ 0 := Number.operator_div_divisor_ne_zero x y result _ hy hok
   -- Zero numerator contradicts `hresult` (the model returns the operand).
   by_cases hxz : x.mantissa_ = 0
   · exfalso
@@ -71,19 +71,19 @@ theorem operator_div_rounded_upward_proof (x y result : Number)
     rw [h_result, hx_zero]
     rfl
   -- Generic path.
-  have h_dir := operator_div_rounding_bound_upward_dir x y result hx hy hxz hyz hok hresult
-  have h_mag := operator_div_rounding_bound_upward x y result hx hy hxz hyz hok hresult
+  have h_dir := Number.operator_div_rounding_bound_upward_dir x y result hx hy hxz hyz hok hresult
+  have h_mag := Number.operator_div_rounding_bound_upward x y result hx hy hxz hyz hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_div_result_isNormalized x y result .upward hx hy hxz hyz hok hresult
+    Number.operator_div_result_isNormalized x y result .upward hx hy hxz hyz hok hresult
   exact closest_upper_of_no_inbetween result (x.toRat / y.toRat)
     h_result_norm
     hresult
-    (operator_div_truth_ne x y hxz hyz)
+    (Number.operator_div_truth_ne x y hxz hyz)
     (le_of_lt h_mag)
     (fun h => truth_top_of_result_cap result (x.toRat / y.toRat) h_result_norm hresult
       (le_of_lt h_mag)
-      (operator_div_no_overflow_mantissa x y result .upward hx hy hxz hyz hok hresult h) h)
+      (Number.operator_div_no_overflow_mantissa x y result .upward hx hy hxz hyz hok hresult h) h)
     h_dir
-    (operator_div_no_inbetween_above_upward x y result hx hy hxz hyz hok hresult h_dir)
+    (Number.operator_div_no_inbetween_above_upward x y result hx hy hxz hyz hok hresult h_dir)
 
 end XRPL.Model.Protocol

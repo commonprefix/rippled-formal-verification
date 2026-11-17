@@ -50,14 +50,41 @@ lemma LendingLedger.vaultDelete_has_broker_proof (l : LendingLedger) (hnd : l.va
 private lemma Vault.checkOpenLimit_exceeded (v : Vault) (amount : STAmount) (assetsTotal amountNum : Number) (e : Int)
     (hat : v.assetsTotal = .ok assetsTotal) (hnum : amount.toNumber .to_nearest = .ok amountNum)
     (hexp : postSumExponent assetsTotal amountNum v.baseExponent v.numericType = .ok e)
-    (hexceeds : v.exceedsOpenLimit amountNum = .ok true) :
+    (hexceeds : v.exceedsOpenLimit amountNum = .ok true) (hcc : v.ClampedCharge amount) :
     v.checkOpenLimit amount = .ok .tecLIMIT_EXCEEDED := by
-  unfold XRPL.Model.SingleAssetVault.Vault.checkOpenLimit
+  rw [v.checkOpenLimit_of_clamped amount hcc]
+  unfold XRPL.Model.SingleAssetVault.Vault.checkOpenLimitUnrounded
   rw [hat]
   simp only [bind, Except.bind, hnum, hexp]
   split
   · rfl
   · rw [hexceeds]; rfl
+
+/-- A VaultDeposit that passes its preflight deposits an amount of the vault's asset, and an IOU amount in canonical
+form. -/
+lemma LendingTx.preflight_vaultDeposit_asset (l : LendingLedger) (h : Nat) (amount : STAmount) (isDonation : Bool)
+    (hpre : (LendingTx.vaultDeposit h amount isDonation).preflight l = .tesSUCCESS) :
+    amount.mNumericType = l.vault.numericType ∧ (amount.integral = false → amount.IOUCanonical) := by
+  simp only [LendingTx.preflight] at hpre
+  split at hpre
+  · rename_i hc
+    cases hnt : l.vault.numericType.isIntegral
+    · have hfr : l.vault.numericType = .fractional := NumericType.eq_fractional_of_not_integral hnt
+      simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hfr, NumericType.isIntegral,
+        Bool.false_eq_true, if_false, beq_iff_eq, Bool.or_eq_true, decide_eq_true_eq, Bool.not_eq_true',
+        bne_iff_ne, ne_eq] at hc
+      obtain ⟨⟨hty, hm⟩, -, hnz⟩ := hc
+      rcases hm with hm | ⟨⟨⟨hlo, hhi⟩, helo⟩, hehi⟩
+      · exact absurd hm hnz
+      · exact ⟨by rw [hty, hfr], fun _ => ⟨hty, hlo, hhi, helo, hehi⟩⟩
+    · simp only [Bool.and_eq_true, isCanonicalAmount, isPositiveAmount, hnt, if_true, beq_iff_eq,
+        decide_eq_true_eq] at hc
+      obtain ⟨⟨hty, -, -⟩, -⟩ := hc
+      refine ⟨hty, fun hfr => absurd hfr ?_⟩
+      unfold STAmount.integral
+      rw [hty, hnt]
+      decide
+  · cases hpre
 
 /-- Proof body of the VaultDeposit exit of `Lending.vault_exits`. -/
 lemma LendingLedger.vaultDeposit_open_zone_proof (l : LendingLedger) (h : Nat) (amount : STAmount) (isDonation : Bool)
@@ -71,7 +98,10 @@ lemma LendingLedger.vaultDeposit_open_zone_proof (l : LendingLedger) (h : Nat) (
     (hexceeds : l.vault.exceedsOpenLimit amountNum = .ok true) :
     (l.apply (.vaultDeposit h amount isDonation)).run = .ok (.error .tecLIMIT_EXCEEDED) := by
   have hdep := Vault.deposit_inflow_rejected_proof l.vault amount isDonation l.now hpos roundedAmount amounts _
-    hopen hrounded hcomp (Vault.checkOpenLimit_exceeded _ _ _ _ _ hat hnum hexp hexceeds) (by decide)
+    hopen hrounded hcomp (Vault.checkOpenLimit_exceeded _ _ _ _ _ hat hnum hexp hexceeds
+      (l.vault.deposit_clampedCharge amount roundedAmount isDonation amounts
+        (LendingTx.preflight_vaultDeposit_asset l h amount isDonation hpre).1
+        (LendingTx.preflight_vaultDeposit_asset l h amount isDonation hpre).2 hrounded hcomp)) (by decide)
   rw [LendingLedger.apply_of_preflight hpre]
   simp only [LendingLedger.applyChecked, hnd, LendingTx.isVault, Bool.false_eq_true, ↓reduceIte,
     LendingLedger.applyVault, hpos, ↓reduceDIte]

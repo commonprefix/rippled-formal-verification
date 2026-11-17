@@ -10,7 +10,7 @@ set_option maxHeartbeats 1600000 in
 -- three-way case split on shouldRoundUp_downward × cusp. Each branch runs nlinarith over
 -- large constants (2^63 + 2 ≈ 9.2e18)
 
-theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : Number)
+theorem Number.operator_add_rounding_bound_same_sign_downward (x y : Number) (result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -19,7 +19,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _h_sbit_pos, _, _, _, _⟩ :=
-    operator_add_algorithmic_facts_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_add_algorithmic_facts_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
       h_same_sign h_not_zero hok
   -- result and x+y have the same sign, so |result - (x+y)| = ||result| - |x+y||.
   have h_abs_diff_eq : |result.toRat - (x.toRat + y.toRat)|
@@ -181,7 +181,7 @@ theorem operator_add_rounding_bound_same_sign_downward (x y : Number) (result : 
             mul_lt_mul_of_pos_right h_inner h10ze'_pos
         _ = (((maxRepNat : ℚ) + 3) + f) * 10 ^ ze' * (10 / ((2 ^ 63 + 2 : ℚ))) := by ring
 
-theorem operator_add_rounding_bound_downward_tight (x y result : Number)
+theorem Number.operator_add_rounding_bound_downward_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -189,7 +189,7 @@ theorem operator_add_rounding_bound_downward_tight (x y result : Number)
     (hresult : result.mantissa_ ≠ 0) :
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
   by_cases h_sign : x.negative_ = y.negative_
-  · have hss := operator_add_rounding_bound_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
+  · have hss := Number.operator_add_rounding_bound_same_sign_downward x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok
     have htruth_nn : 0 ≤ |x.toRat + y.toRat| := abs_nonneg _
     have hconst : (10 / (2 ^ 63 + 2 : ℚ)) ≤ (11 / (2 ^ 63 - 18 : ℚ)) := by norm_num
@@ -197,7 +197,7 @@ theorem operator_add_rounding_bound_downward_tight (x y result : Number)
         < |x.toRat + y.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := hss
       _ ≤ |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
           mul_le_mul_of_nonneg_left hconst htruth_nn
-  · exact operator_add_rounding_bound_diff_sign_downward_tight x y result hx hy hx_mant_ne hy_mant_ne
+  · exact Number.operator_add_rounding_bound_diff_sign_downward_tight x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok hresult
 
 end XRPL.Model.Protocol

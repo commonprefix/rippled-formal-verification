@@ -266,7 +266,7 @@ theorem operator_mul_negative_eq (x y result : Number) (mode : rounding_mode)
     (hok : Number.operator_mul x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
     result.negative_ = (x.negative_ != y.negative_) := by
   obtain ⟨zn, zm, ze', f, g, res, d⟩ :=
-    operator_mul_decompose x y result mode hx hy hx_ne hy_ne hok
+    Number.operator_mul_decompose x y result mode hx hy hx_ne hy_ne hok
   have hzm_ge : zm.toNat ≥ mantissaFloor := by have := d.zm_ge_floorSucc; omega
   have hres_mant_ne : res.mantissa_ ≠ 0 :=
     Number.normalize_mantissa_ne_zero_of_result d.normalizes hresult

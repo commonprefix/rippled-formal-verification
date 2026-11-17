@@ -8,7 +8,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 namespace XRPL.Model.Protocol
 
 /-- No normalized Number lies above `result.toRat` and at or below the quotient when `result.toRat ≤ x/y`. -/
-theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
+theorem Number.operator_div_no_inbetween_below_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .towards_zero = .ok result)
@@ -18,7 +18,7 @@ theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat / y.toRat) := by
   obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-    operator_div_algorithmic_facts_represents x y result .towards_zero hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .towards_zero hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
       h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, _h_sbit, hzm_succ,
@@ -36,7 +36,7 @@ theorem operator_div_no_inbetween_below_towards_zero (x y result : Number)
     h_le
 
 /-- No normalized Number lies at or above the quotient and below `result.toRat` when `x/y ≤ result.toRat`. -/
-theorem operator_div_no_inbetween_above_towards_zero (x y result : Number)
+theorem Number.operator_div_no_inbetween_above_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_div x y .towards_zero = .ok result)
@@ -46,7 +46,7 @@ theorem operator_div_no_inbetween_above_towards_zero (x y result : Number)
       m.toRat < result.toRat → ¬ (x.toRat / y.toRat ≤ m.toRat) := by
   obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-    operator_div_algorithmic_facts_represents x y result .towards_zero hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .towards_zero hx hy
       hx_mant_ne hy_mant_ne hok
   obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
       h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, _h_sbit, hzm_succ,
@@ -71,8 +71,8 @@ lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
     (hres : result.mantissa_ = 0) :
     Number.RoundsToRepresentable result (x.toRat / y.toRat) .towards_zero := by
   have h_res0 : result.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero result hres
-  have h_truth_ne : x.toRat / y.toRat ≠ 0 := operator_div_truth_ne x y hx_mant_ne hy_mant_ne
-  have h_small := operator_div_underflow_truth_small x y result .towards_zero hx hy
+  have h_truth_ne : x.toRat / y.toRat ≠ 0 := Number.operator_div_truth_ne x y hx_mant_ne hy_mant_ne
+  have h_small := Number.operator_div_underflow_truth_small_proof x y result .towards_zero hx hy
     hx_mant_ne hy_mant_ne hok hres
   change ∃ n' : Number, (if x.toRat / y.toRat ≥ 0 then Number.lower (x.toRat / y.toRat)
     else Number.upper (x.toRat / y.toRat)) = some n' ∧ result.toRat = n'.toRat
@@ -94,12 +94,12 @@ lemma div_rounded_towards_zero_of_result_zero (x y result : Number)
 
 /-- `operator_div` under `.towards_zero` is correctly rounded: the result is `Number.lower` of the quotient for
 nonnegative quotients and `Number.upper` for negative ones. -/
-theorem operator_div_rounded_towards_zero_proof (x y result : Number)
+theorem Number.operator_div_rounded_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_div x y .towards_zero = .ok result) :
     Number.RoundsToRepresentable result (x.toRat / y.toRat) .towards_zero := by
   -- The divisor is nonzero (division by the canonical zero errors out).
-  have hyz : y.mantissa_ ≠ 0 := operator_div_divisor_ne_zero x y result _ hy hok
+  have hyz : y.mantissa_ ≠ 0 := Number.operator_div_divisor_ne_zero x y result _ hy hok
   -- Zero numerator: the model short-circuits to the canonical zero.
   by_cases hxz : x.mantissa_ = 0
   · have hx_zero : x = Number.zero := Number.eq_zero_of_mantissa_zero x hx hxz
@@ -127,16 +127,16 @@ theorem operator_div_rounded_towards_zero_proof (x y result : Number)
   · exact div_rounded_towards_zero_of_result_zero x y result hx hy hxz hyz hok hres
   -- Generic path.
   have hresult : result.mantissa_ ≠ 0 := hres
-  have h_dir := operator_div_rounding_bound_towards_zero_dir x y result hx hy hxz hyz hok hresult
-  have h_mag := operator_div_rounding_bound_towards_zero x y result hx hy hxz hyz hok hresult
+  have h_dir := Number.operator_div_rounding_bound_towards_zero_dir x y result hx hy hxz hyz hok hresult
+  have h_mag := Number.operator_div_rounding_bound_towards_zero x y result hx hy hxz hyz hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_div_result_isNormalized x y result .towards_zero hx hy hxz hyz hok hresult
-  have h_truth_ne : x.toRat / y.toRat ≠ 0 := operator_div_truth_ne x y hxz hyz
+    Number.operator_div_result_isNormalized x y result .towards_zero hx hy hxz hyz hok hresult
+  have h_truth_ne : x.toRat / y.toRat ≠ 0 := Number.operator_div_truth_ne x y hxz hyz
   have h_bound := le_of_lt h_mag
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat / y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := fun h =>
     truth_top_of_result_cap result (x.toRat / y.toRat) h_result_norm hresult h_bound
-      (operator_div_no_overflow_mantissa x y result .towards_zero hx hy hxz hyz hok hresult h) h
+      (Number.operator_div_no_overflow_mantissa x y result .towards_zero hx hy hxz hyz hok hresult h) h
   change ∃ n' : Number, (if x.toRat / y.toRat ≥ 0 then Number.lower (x.toRat / y.toRat)
     else Number.upper (x.toRat / y.toRat)) = some n' ∧ result.toRat = n'.toRat
   by_cases h_truth_nn : x.toRat / y.toRat ≥ 0
@@ -148,7 +148,7 @@ theorem operator_div_rounded_towards_zero_proof (x y result : Number)
         _ = x.toRat / y.toRat := abs_of_nonneg h_truth_nn
     exact closest_lower_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_down
-      (operator_div_no_inbetween_below_towards_zero x y result hx hy hxz hyz
+      (Number.operator_div_no_inbetween_below_towards_zero x y result hx hy hxz hyz
         hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
     push Not at h_truth_nn
@@ -161,7 +161,7 @@ theorem operator_div_rounded_towards_zero_proof (x y result : Number)
       linarith [neg_le_neg h_dir]
     exact closest_upper_of_no_inbetween result (x.toRat / y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_up
-      (operator_div_no_inbetween_above_towards_zero x y result hx hy hxz hyz
+      (Number.operator_div_no_inbetween_above_towards_zero x y result hx hy hxz hyz
         hok hresult h_round_up)
 
 end XRPL.Model.Protocol

@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Div.Common.Decompose
 
 /-! # Every successful `normalize` result is normalized
 
-`normalize_result_isNormalized` covers a nonzero input with a nonzero result. A
+`Number.normalize_result_isNormalized` covers a nonzero input with a nonzero result. A
 zero input, or an underflow, returns the literal `Number.zero`. So every
 successful `normalize`, and so every successful `from_rep`, gives a normalized
 `Number`. The same holds for `operator_mul` and `operator_div` of normalized
@@ -66,7 +66,7 @@ lemma Number.normalize_isNormalized (n result : Number) (mode : rounding_mode)
       unfold doNormalizeSpec at hok
       rw [if_pos (by simp [hn])] at hok
       exact hr (by rw [← Except.ok.inj hok]; rfl)
-    · exact normalize_result_isNormalized n result mode hn hok hr
+    · exact Number.normalize_result_isNormalized n result mode hn hok hr
 
 /-- Every successful `from_rep` gives a normalized `Number`. -/
 lemma Number.from_rep_isNormalized (m : Int64) (e : Int) (mode : rounding_mode)
@@ -115,7 +115,7 @@ lemma Number.operator_div_isNormalized (x y result : Number) (mode : rounding_mo
       rw [hq, ok_bind] at hok
       rw [doNormalize128_zero_shape_sz _ _ _ _ mode result hok h0]
       exact Number.zero_isNormalized
-  · obtain ⟨hxm, hym⟩ := operator_div_operands_ne_zero hx hy hok h0
-    exact operator_div_result_isNormalized x y result mode hx hy hxm hym hok h0
+  · obtain ⟨hxm, hym⟩ := Number.operator_div_operands_ne_zero hx hy hok h0
+    exact Number.operator_div_result_isNormalized x y result mode hx hy hxm hym hok h0
 
 end XRPL.Model.Protocol

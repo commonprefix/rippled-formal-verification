@@ -85,7 +85,7 @@ lemma LendingTx.loanPay_preflight_ok {l : LendingLedger} {i : Nat} {pt : LoanPay
   simp only [Bool.and_eq_true, isPositiveInput, decide_eq_true_eq] at hc
   obtain ⟨⟨hN, hpos⟩, heq⟩ := hc
   refine ⟨hN, ?_, ?_⟩
-  · have := (operator_lt_iff Number.zero amount Number.zero_isNormalized hN).mp hpos
+  · have := (Number.operator_lt_iff Number.zero amount Number.zero_isNormalized hN).mp hpos
     rwa [Number.toRat_zero] at this
   · unfold STAmount.isRounded
     cases hcv : STAmount.equalAfterNumberConvert l.vault.numericType amount with

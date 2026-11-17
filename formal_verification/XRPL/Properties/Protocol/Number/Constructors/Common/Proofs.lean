@@ -37,76 +37,76 @@ lemma Number.from_rep_input_toRat (mantissa : Int64) (e : Int) :
       abs_of_nonneg (by exact_mod_cast not_lt.mp h)]
     ring
 
-theorem normalized_rounds_to_nearest_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
+theorem Number.normalized_rounds_to_nearest_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
     (hok : Number.normalized neg m e largeRange.min largeRange.max .to_nearest = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((if neg then (-1 : ℚ) else 1) * ((m.toNat : ℚ) * (10 : ℚ) ^ e))
       .to_nearest (5 / (2 ^ 63 + 7 : ℚ)) := by
   rw [← Number.unchecked_toRat]
-  exact normalize_rounds_to_nearest (Number.unchecked neg m e) result hok hr
+  exact Number.normalize_rounds_to_nearest (Number.unchecked neg m e) result hok hr
 
-theorem normalized_rounds_towards_zero_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
+theorem Number.normalized_rounds_towards_zero_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
     (hok : Number.normalized neg m e largeRange.min largeRange.max .towards_zero = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((if neg then (-1 : ℚ) else 1) * ((m.toNat : ℚ) * (10 : ℚ) ^ e))
       .towards_zero (10 / (2 ^ 63 + 2 : ℚ)) := by
   rw [← Number.unchecked_toRat]
-  exact normalize_rounds_towards_zero (Number.unchecked neg m e) result hok hr
+  exact Number.normalize_rounds_towards_zero (Number.unchecked neg m e) result hok hr
 
-theorem normalized_rounds_upward_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
+theorem Number.normalized_rounds_upward_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
     (hok : Number.normalized neg m e largeRange.min largeRange.max .upward = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((if neg then (-1 : ℚ) else 1) * ((m.toNat : ℚ) * (10 : ℚ) ^ e))
       .upward (10 / (2 ^ 63 + 2 : ℚ)) := by
   rw [← Number.unchecked_toRat]
-  exact normalize_rounds_upward (Number.unchecked neg m e) result hok hr
+  exact Number.normalize_rounds_upward (Number.unchecked neg m e) result hok hr
 
-theorem normalized_rounds_downward_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
+theorem Number.normalized_rounds_downward_proof (neg : Bool) (m : UInt64) (e : Int) (result : Number)
     (hok : Number.normalized neg m e largeRange.min largeRange.max .downward = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((if neg then (-1 : ℚ) else 1) * ((m.toNat : ℚ) * (10 : ℚ) ^ e))
       .downward (10 / (2 ^ 63 + 2 : ℚ)) := by
   rw [← Number.unchecked_toRat]
-  exact normalize_rounds_downward (Number.unchecked neg m e) result hok hr
+  exact Number.normalize_rounds_downward (Number.unchecked neg m e) result hok hr
 
 /-- The `from_rep` rounding-error bound, `to_nearest` mode. -/
-theorem from_rep_rounds_to_nearest_proof (mantissa : Int64) (e : Int) (result : Number)
+theorem Number.from_rep_rounds_to_nearest_proof (mantissa : Int64) (e : Int) (result : Number)
     (hok : Number.from_rep mantissa e largeRange.min largeRange.max .to_nearest = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((mantissa.toInt : ℚ) * (10 : ℚ) ^ e) .to_nearest (5 / (2 ^ 63 + 7 : ℚ)) := by
   have hbridge := Number.from_rep_input_toRat mantissa e
   rw [Number.unchecked_toRat] at hbridge
   rw [← hbridge]
-  exact normalized_rounds_to_nearest_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
+  exact Number.normalized_rounds_to_nearest_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
 
 /-- The `from_rep` rounding-error bound, `towards_zero` mode. -/
-theorem from_rep_rounds_towards_zero_proof (mantissa : Int64) (e : Int) (result : Number)
+theorem Number.from_rep_rounds_towards_zero_proof (mantissa : Int64) (e : Int) (result : Number)
     (hok : Number.from_rep mantissa e largeRange.min largeRange.max .towards_zero = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((mantissa.toInt : ℚ) * (10 : ℚ) ^ e) .towards_zero (10 / (2 ^ 63 + 2 : ℚ)) := by
   have hbridge := Number.from_rep_input_toRat mantissa e
   rw [Number.unchecked_toRat] at hbridge
   rw [← hbridge]
-  exact normalized_rounds_towards_zero_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
+  exact Number.normalized_rounds_towards_zero_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
 
 /-- The `from_rep` rounding-error bound, `upward` mode. -/
-theorem from_rep_rounds_upward_proof (mantissa : Int64) (e : Int) (result : Number)
+theorem Number.from_rep_rounds_upward_proof (mantissa : Int64) (e : Int) (result : Number)
     (hok : Number.from_rep mantissa e largeRange.min largeRange.max .upward = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((mantissa.toInt : ℚ) * (10 : ℚ) ^ e) .upward (10 / (2 ^ 63 + 2 : ℚ)) := by
   have hbridge := Number.from_rep_input_toRat mantissa e
   rw [Number.unchecked_toRat] at hbridge
   rw [← hbridge]
-  exact normalized_rounds_upward_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
+  exact Number.normalized_rounds_upward_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
 
 /-- The `from_rep` rounding-error bound, `downward` mode. -/
-theorem from_rep_rounds_downward_proof (mantissa : Int64) (e : Int) (result : Number)
+theorem Number.from_rep_rounds_downward_proof (mantissa : Int64) (e : Int) (result : Number)
     (hok : Number.from_rep mantissa e largeRange.min largeRange.max .downward = .ok result)
     (hr : result.mantissa_ ≠ 0) :
     RoundsWithin result ((mantissa.toInt : ℚ) * (10 : ℚ) ^ e) .downward (10 / (2 ^ 63 + 2 : ℚ)) := by
   have hbridge := Number.from_rep_input_toRat mantissa e
   rw [Number.unchecked_toRat] at hbridge
   rw [← hbridge]
-  exact normalized_rounds_downward_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
+  exact Number.normalized_rounds_downward_proof (mantissa < 0) mantissa.toInt.natAbs.toUInt64 e result hok hr
 
 end XRPL.Model.Protocol

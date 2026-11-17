@@ -32,8 +32,8 @@ private lemma interest_exact_of_ok (tvo po mfo t i tol : Number) (s : Int) (boun
     i.toRat = tvo.toRat - po.toRat - mfo.toRat := by
   have hs' := scale_room s hs
   have hpos : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
-  have htn' : t.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ t htn hpn h1
-  have hin : i.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ i htn' hmn h2
+  have htn' : t.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ t htn hpn h1
+  have hin : i.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ i htn' hmn h2
   have ht : t.toRat = (((m1 : ℤ) - m2 : ℤ) : ℚ) * (10 : ℚ) ^ s :=
     Number.operator_sub_toRat_of_grid tvo po t m1 m2 s htn hpn (by rw [htv]; norm_cast)
       (by rw [hpv]; norm_cast) (by omega) hs' h1
@@ -55,7 +55,7 @@ private lemma interest_exact_of_ok (tvo po mfo t i tol : Number) (s : Int) (boun
     · -- a negative first difference would leave the rounded interest below the tolerance
       exfalso
       push Not at hge
-      have hR := operator_sub_rounded_to_nearest t mfo i htn' hmn h2
+      have hR := Number.operator_sub_rounded_to_nearest t mfo i htn' hmn h2
       obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (-2) s (by norm_num) hs'
       have htruth : t.toRat - mfo.toRat ≤ w.toRat := by
         rw [ht, hmv, hwv]
@@ -64,7 +64,7 @@ private lemma interest_exact_of_ok (tvo po mfo t i tol : Number) (s : Int) (boun
           exact_mod_cast this
         nlinarith [hpos]
       have hiw : i.toRat ≤ w.toRat := Number.roundsToRepresentable_le i _ hR w hw htruth
-      have hti : tol.toRat ≤ i.toRat := (operator_le_iff _ _ htoln hin).mp hle
+      have hti : tol.toRat ≤ i.toRat := (Number.operator_le_iff _ _ htoln hin).mp hle
       rw [hwv] at hiw
       rcases htol with h0 | hneg
       · push_cast at hiw; linarith
@@ -89,7 +89,7 @@ private lemma interest_ok_of_exact (tvo po mfo : Number) (s : Int) (bound m1 m2 
     exact_mod_cast le_of_mul_le_mul_right h hpos
   obtain ⟨t, h1⟩ := Number.operator_sub_ok_of_grid tvo po m1 m2 s htn hpn htv hpv
     (lt_of_lt_of_le hm1 hbound) (lt_of_lt_of_le hm2 hbound) hs
-  have htn' : t.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ t htn hpn h1
+  have htn' : t.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ t htn hpn h1
   have ht : t.toRat = (((m1 : ℤ) - m2 : ℤ) : ℚ) * (10 : ℚ) ^ s :=
     Number.operator_sub_toRat_of_grid tvo po t m1 m2 s htn hpn (by rw [htv]; norm_cast)
       (by rw [hpv]; norm_cast) (by omega) hs' h1
@@ -105,7 +105,7 @@ private lemma interest_ok_of_exact (tvo po mfo : Number) (s : Int) (bound m1 m2 
       rw [ht]; congr 1; push_cast [Nat.cast_sub hge]; ring
     obtain ⟨i, h2⟩ := Number.operator_sub_ok_of_grid t mfo (m1 - m2) m3 s htn' hmn ht' hmv
       (by omega) (lt_of_lt_of_le hm3 hbound) hs
-    have hin : i.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ i htn' hmn h2
+    have hin : i.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ i htn' hmn h2
     have hi := Number.operator_sub_toRat_of_grid t mfo i ((m1 : ℤ) - m2) m3 s htn' hmn ht
       (by rw [hmv]; norm_cast) (by omega) hs' h2
     refine ⟨t, i, h1, h2, hin, ?_⟩
@@ -116,7 +116,7 @@ private lemma RawLoan.interest_exact_of_valid (rl : RawLoan) (hwf : rl.WF) (hv :
     0 ≤ rl.toExact.interestDue := by
   have nonneg : ∀ n : Number, n.isNormalized → Number.zero.operator_le n = true → 0 ≤ n.toRat :=
     fun n hn h => by
-      have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h
+      have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp h
       rwa [Number.toRat_zero] at this
   obtain ⟨m1, hm1, htv⟩ := (Number.isAtExponent_iff _ _ _ hwf.totalValueOutstanding_norm
     (nonneg _ hwf.totalValueOutstanding_norm hv.totalValueOutstanding_nonneg)).mp
@@ -146,8 +146,8 @@ private lemma RawLoan.interest_exact_of_valid (rl : RawLoan) (hwf : rl.WF) (hv :
         hwf.totalValueOutstanding_norm hwf.principalOutstanding_norm hwf.managementFeeOutstanding_norm
         Number.zero_isNormalized (NumericType.mantissaBound_le _) hm1 hm2 hm3 htv hpv hmv hwf.loanScale_range
         (Or.inl Number.toRat_zero) h1 hI' h
-      have hin : i.isNormalized := operator_sub_isNormalized_to_nearest_sz _ _ i
-        (operator_sub_isNormalized_to_nearest_sz _ _ t hwf.totalValueOutstanding_norm
+      have hin : i.isNormalized := Number.operator_sub_isNormalized_to_nearest_sz _ _ i
+        (Number.operator_sub_isNormalized_to_nearest_sz _ _ t hwf.totalValueOutstanding_norm
           hwf.principalOutstanding_norm h1) hwf.managementFeeOutstanding_norm hI'
       have hle := nonneg i hin h
       show 0 ≤ rl.totalValueOutstanding.toRat - rl.principalOutstanding.toRat - rl.managementFeeOutstanding.toRat
@@ -173,7 +173,7 @@ private lemma RawLoan.interest_valid_of_exact (rl : RawLoan) (hwf : rl.WF) (he :
     unfold RawLoan.interestDue; rw [h1]; simp only [bind, Except.bind]; exact h2
   unfold RawLoan.interestNonneg
   rw [hI]
-  apply (operator_le_iff _ _ Number.zero_isNormalized hin).mpr
+  apply (Number.operator_le_iff _ _ Number.zero_isNormalized hin).mpr
   rw [hi, Number.toRat_zero]
   exact hexactQ
 
@@ -183,10 +183,10 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
     rl.Valid ↔ rl.toExact.Valid := by
   have nonneg : ∀ n : Number, n.isNormalized → Number.zero.operator_le n = true → 0 ≤ n.toRat :=
     fun n hn h => by
-      have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h
+      have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp h
       rwa [Number.toRat_zero] at this
   have nonneg' : ∀ n : Number, n.isNormalized → 0 ≤ n.toRat → Number.zero.operator_le n = true :=
-    fun n hn h => (operator_le_iff _ _ Number.zero_isNormalized
+    fun n hn h => (Number.operator_le_iff _ _ Number.zero_isNormalized
         hn).mpr (by rw [Number.toRat_zero]; exact h)
   constructor
   · -- the operator invariant gives the exact one
@@ -214,7 +214,7 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
         overpaymentInterestRate_cap := UInt32.le_iff_toNat_le.mp hv.overpaymentInterestRate_cap
         overpaymentFee_cap := UInt32.le_iff_toNat_le.mp hv.overpaymentFee_cap
         originationFee_nonneg := nonneg _ hwf.originationFee_norm hv.originationFee_nonneg
-        originationFee_cap := (operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mp
+        originationFee_cap := (Number.operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mp
           hv.originationFee_cap
         paymentTotal_pos := hv.paymentTotal_pos
         paymentInterval_min := hv.paymentInterval_min
@@ -235,7 +235,7 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
       · exact Or.inr (Or.inr fun h =>
           hM ((Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mp h))
     · -- 0 < periodicPayment
-      have := (operator_lt_iff _ _ Number.zero_isNormalized
+      have := (Number.operator_lt_iff _ _ Number.zero_isNormalized
           hwf.periodicPayment_norm).mp hv.periodicPayment_pos
       rwa [Number.toRat_zero] at this
   · -- the exact invariant gives the operator one
@@ -263,7 +263,7 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
         overpaymentInterestRate_cap := UInt32.le_iff_toNat_le.mpr he.overpaymentInterestRate_cap
         overpaymentFee_cap := UInt32.le_iff_toNat_le.mpr he.overpaymentFee_cap
         originationFee_nonneg := nonneg' _ hwf.originationFee_norm he.originationFee_nonneg
-        originationFee_cap := (operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mpr
+        originationFee_cap := (Number.operator_le_iff _ _ hwf.originationFee_norm hwf.principalInitial_norm).mpr
           he.originationFee_cap
         paymentTotal_pos := he.paymentTotal_pos
         paymentInterval_min := he.paymentInterval_min
@@ -282,7 +282,7 @@ theorem RawLoan.valid_iff_exact (rl : RawLoan) (hwf : rl.WF) :
       · exact Or.inr (Or.inr fun h =>
           hM ((Number.toRat_eq_zero_iff_eq_zero hwf.managementFeeOutstanding_norm).mpr h))
     · have h : (0 : ℚ) < rl.periodicPayment.toRat := he.periodicPayment_pos
-      exact (operator_lt_iff _ _ Number.zero_isNormalized
+      exact (Number.operator_lt_iff _ _ Number.zero_isNormalized
           hwf.periodicPayment_norm).mpr (by rw [Number.toRat_zero]; exact h)
 
 /-- The exact-rational invariant of a lawful loan, derived from its operator proof and
@@ -375,8 +375,8 @@ lemma RawLoan.interestDue_isNormalized (loan : Loan) (i : Number) (hi : loan.int
   | error e => rw [h1] at hi; cases hi
   | ok t =>
     rw [h1] at hi
-    exact operator_sub_isNormalized_to_nearest_sz _ _ _
-      (operator_sub_isNormalized_to_nearest_sz _ _ _ loan.wf.totalValueOutstanding_norm
+    exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _
+      (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ loan.wf.totalValueOutstanding_norm
         loan.wf.principalOutstanding_norm h1) loan.wf.managementFeeOutstanding_norm hi
 
 /-- Loans with the same outstanding amounts have the same exact interest. -/
@@ -407,7 +407,7 @@ lemma Loan.interestDue_toExact (loan : Loan) (i : Number) (h : loan.interestDue 
   have hpos : (0 : ℚ) < (10 : ℚ) ^ loan.loanScale := zpow_pos (by norm_num) _
   unfold RawLoan.interestDue at h
   obtain ⟨t, ht, h⟩ := bind_ok_peel _ _ _ h
-  have htn := operator_sub_isNormalized_to_nearest_sz _ _ _ hwf.totalValueOutstanding_norm
+  have htn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hwf.totalValueOutstanding_norm
     hwf.principalOutstanding_norm ht
   have htv' := Number.operator_sub_toRat_of_grid _ _ t m1 m2 _ hwf.totalValueOutstanding_norm
     hwf.principalOutstanding_norm (by rw [htv]; norm_cast) (by rw [hpv]; norm_cast) (by omega) hs ht

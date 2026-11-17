@@ -216,9 +216,9 @@ private lemma Number.operator_sub_between (x y d : Number) (hx : x.isNormalized)
     0 ≤ d.toRat ∧ d.toRat ≤ x.toRat ∧ d.isNormalized := by
   have hneg := Number.operator_neg_isNormalized _ hy
   have h' : x.operator_add y.operator_neg .to_nearest = .ok d := h
-  refine ⟨operator_add_nonneg _ _ _ hx hneg h' (by rw [Number.toRat_neg]; linarith),
-    operator_add_le_of_le_normalized _ _ _ _ hx hneg h' hx (by rw [Number.toRat_neg]; linarith),
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hx hy h⟩
+  refine ⟨Number.operator_add_nonneg _ _ _ hx hneg h' (by rw [Number.toRat_neg]; linarith),
+    Number.operator_add_le_of_le_normalized _ _ _ _ hx hneg h' hx (by rw [Number.toRat_neg]; linarith),
+    Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx hy h⟩
 
 /-- The broker a default writes is lawful: DebtTotal loses a principal it holds, and CoverAvailable a cover
 no larger than itself. -/
@@ -232,8 +232,8 @@ private lemma Loan.defaultedBroker_lawful (loan : Loan) (dc dt' ca' : Number) (h
   have hp0 : 0 ≤ loan.principalOutstanding.toRat := loan.exact.principalOutstanding_nonneg
   obtain ⟨hdt0, hdtle, hdtn⟩ := Number.operator_sub_between _ _ _ loan.broker.wf.debtTotal_norm
     loan.wf.principalOutstanding_norm hp0 hpo hdt
-  have hcan := operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.coverAvailable_norm hdcn hca
-  have hca0 : 0 ≤ ca'.toRat := operator_add_nonneg _ _ _ loan.broker.wf.coverAvailable_norm
+  have hcan := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ loan.broker.wf.coverAvailable_norm hdcn hca
+  have hca0 : 0 ≤ ca'.toRat := Number.operator_add_nonneg _ _ _ loan.broker.wf.coverAvailable_norm
     (Number.operator_neg_isNormalized _ hdcn) hca (by rw [Number.toRat_neg]; linarith)
   have hwf : (loan.defaultedBroker dt' ca').WF := ⟨hdtn, loan.broker.wf.debtMaximum_norm, hcan⟩
   have hex : (loan.defaultedBroker dt' ca').toExact.Valid :=

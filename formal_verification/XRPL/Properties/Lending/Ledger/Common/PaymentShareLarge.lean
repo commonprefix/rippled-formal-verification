@@ -66,7 +66,7 @@ private lemma sumRoundAndSubtract_credit_large (A c : Number) (b : Int) (st : ST
     have hsNv := Number.operator_add_exact_of_fits hA hc hsN ⟨w, hw, hwv'⟩
     by_contra hgt
     push Not at hgt
-    have hsNn := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hsN
+    have hsNn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hsN
     obtain ⟨-, hge⟩ := numberExponent_frac_lower sN b E hsNn (by rw [hsNv]; linarith) (by omega) hsNE (by omega)
     have h1 : (10 : ℚ) ^ (b + 19) ≤ 10 ^ (E + 15) := zpow_le_zpow_right₀ (by norm_num) (by omega)
     have h2 : (10 : ℚ) ^ (b + 19) = 10 ^ 19 * 10 ^ b := by
@@ -153,11 +153,11 @@ private lemma sumRoundAndSubtract_credit_large (A c : Number) (b : Int) (st : ST
   obtain ⟨w3, hw3, hw3v⟩ := Number.exists_normalized_int_mul_pow ((kA : ℤ) + q * 1000) b ⟨by omega, hqA⟩
     ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
   have hw3v' : w3.toRat = A.toRat + (q : ℚ) * 10 ^ (b + 3) := by rw [hw3v, hkA, h3]; push_cast; ring
-  have hR := operator_add_rounded_to_nearest A cr aa hA hcrn haa
+  have hR := Number.operator_add_rounded_to_nearest A cr aa hA hcrn haa
   have haa_ge : A.toRat + (q : ℚ) * 10 ^ (b + 3) ≤ aa.toRat := by
     rw [← hw3v']; exact Number.roundsToRepresentable_ge aa _ hR w3 hw3 (by rw [hw3v', hcrv]; linarith)
   -- the 16-digit rounding of AssetsAvailable' moves it by at most half of `10^(b+3)`
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa
   have haa_le : aa.toRat ≤ w.toRat :=
     Number.roundsToRepresentable_le aa _ hR w hw (by rw [hwv', hcrv]; linarith)
   have haa_pos : 10 ^ (b + 3) ≤ aa.toRat := by

@@ -68,7 +68,7 @@ lemma Number.OnGrid.sub_downward {s : Int} {x y d : Number} (hx : Number.OnGrid 
   have hdn := Number.operator_sub_isNormalized_any x y d .downward hxn hyn hok
   by_cases hd : d.mantissa_ = 0
   · rw [Number.eq_zero_of_mantissa_zero d hdn hd]; exact Number.OnGrid.zero s
-  · have hR := operator_sub_rounded_downward x y d hxn hyn hok hd
+  · have hR := Number.operator_sub_rounded_downward x y d hxn hyn hok hd
     rw [ha, hb, ← sub_mul, show (a : ℚ) - b = ((a - b : ℤ) : ℚ) by push_cast; ring] at hR
     exact Number.OnGrid.of_lower hdn hR hs
 
@@ -405,7 +405,7 @@ lemma STAmount.ofNumber_eq_of_isRounded_false (nt : NumericType) (x : Number) (s
       · exact (STAmount.toNumber_zero_facts st _ n hz hsn).1
       · exact (STAmount.toNumber_exact_of st n (STAmount.ofNumber_exactCanonical nt x _ st hn h0 hok hz) hsn).1
     rw [← hnv]
-    exact (operator_eq_iff n x (STAmount.toNumber_isNormalized st _ n hsn) hn).mp heq
+    exact (Number.operator_eq_iff n x (STAmount.toNumber_isNormalized st _ n hsn) hn).mp heq
 
 /-- A whole number of grid units floors to itself. -/
 lemma floor_units_self (x : ℚ) (b : Int) (k : ℤ) (hx : x = (k : ℚ) * 10 ^ b) :

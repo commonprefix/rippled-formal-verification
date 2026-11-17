@@ -56,7 +56,7 @@ private lemma shares_lower_mint (v : Vault) (amount shares : STAmount)
     have hPb : |P.toRat - T0| ≤ T0 * (5 / (2 ^ 63 + 7)) := by
       have h : |P.toRat - v.sharesTotal.toRat * amountN.toRat|
           ≤ |v.sharesTotal.toRat * amountN.toRat| * (5 / (2 ^ 63 + 7)) :=
-        operator_mul_rounds_to_nearest v.sharesTotal amountN P v.wf.sharesTotal_norm hannorm hP hPm
+        Number.operator_mul_rounds_to_nearest v.sharesTotal amountN P v.wf.sharesTotal_norm hannorm hP hPm
       rwa [hanval, ← hT0_def, abs_of_pos hT0_pos] at h
     have hPlo := (abs_le.mp hPb).1
     have hPpos : 0 < P.toRat := by nlinarith

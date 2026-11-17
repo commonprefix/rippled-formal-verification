@@ -71,7 +71,7 @@ lemma Loan.deletePending_principal_of_exact (r : LoanBrokerWithPool Vault)
   subst hp'
 
   -- AssetsAvailable: the sum is exact, and the asset stores it, so the rounding keeps it
-  have haan : aa.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hpn h1
+  have haan : aa.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hpn h1
   have haav : aa.toRat = v.assetsAvailable.toRat + loan.principalOutstanding.toRat :=
     Number.operator_add_exact_of_fits v.wf.assetsAvailable_norm hpn h1 (STAmount.Representable.number haa)
   have haa0 : 0 ≤ aa.toRat := by
@@ -179,13 +179,13 @@ lemma Loan.createPending_deletePending_restores_proof (r : LoanWithDisbursement 
   rw [show r.pool'.numericType = v.numericType from (congrArg RawVault.numericType hpf :)] at h2D
 
   -- AssetsAvailable: the create's debit is exact and stored, and the delete's credit undoes it
-  have haan : aa.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hneg h1P
+  have haan : aa.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hneg h1P
   have haav : aa.toRat = v.assetsAvailable.toRat - principal'.toRat := by
     have h := Number.operator_add_exact_of_fits v.wf.assetsAvailable_norm hneg h1P
       (by rw [Number.toRat_neg, ← sub_eq_add_neg]; exact STAmount.Representable.number haa')
     rw [h, Number.toRat_neg, ← sub_eq_add_neg]
   have haa0 : 0 ≤ aa.toRat := by
-    have hle := (operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hpn).mp hchecks.funds
+    have hle := (Number.operator_lt_eq_false_iff _ _ v.wf.assetsAvailable_norm hpn).mp hchecks.funds
     rw [haav]; linarith
   have haaP : aaP.toRat = aa.toRat := STAmount.roundToNumericType_of_isRounded_false _ _ _ haan
     ((STAmount.isRounded_eq_false_iff _ _ haan haa0).mpr (by rw [haav]; exact haa')) h2P
@@ -193,32 +193,32 @@ lemma Loan.createPending_deletePending_restores_proof (r : LoanWithDisbursement 
   have haa' : aa' = v.assetsAvailable := by
     have h := Number.operator_add_exact_of_fits haaPn hpn h1D
       ⟨v.assetsAvailable, v.wf.assetsAvailable_norm, by rw [haaP, haav]; ring⟩
-    exact Number.isNormalized.toRat_inj (operator_add_isNormalized_to_nearest_sz _ _ _ haaPn hpn h1D)
+    exact Number.isNormalized.toRat_inj (Number.operator_add_isNormalized_to_nearest_sz _ _ _ haaPn hpn h1D)
       v.wf.assetsAvailable_norm (by rw [h, haaP, haav]; ring)
   subst haa'
   have haaD : aaD = v.assetsAvailable :=
     Number.isNormalized.toRat_inj (STAmount.roundToNumericType_isNormalized _ _ _ _ _ h2D) v.wf.assetsAvailable_norm
       (STAmount.roundToNumericType_of_isRounded_false _ _ _ v.wf.assetsAvailable_norm haa h2D)
 
-  have harPn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hpn hrP
+  have harPn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm hpn hrP
   have harPv := Number.operator_add_exact_of_fits v.wf.assetsReserved_norm hpn hrP
     (STAmount.Representable.number har)
   have harD : arD = v.assetsReserved := by
     have h := Number.operator_add_exact_of_fits harPn hneg hrD
       ⟨v.assetsReserved, v.wf.assetsReserved_norm, by rw [harPv, Number.toRat_neg]; ring⟩
-    exact Number.isNormalized.toRat_inj (operator_add_isNormalized_to_nearest_sz _ _ _ harPn hneg hrD)
+    exact Number.isNormalized.toRat_inj (Number.operator_add_isNormalized_to_nearest_sz _ _ _ harPn hneg hrD)
       v.wf.assetsReserved_norm (by rw [h, harPv, Number.toRat_neg]; ring)
 
   have hdtb : broker'.debtTotal = debtTotal' := (congrArg RawLoanBroker.debtTotal hb :)
   have hlcb : broker'.loanCount = broker.loanCount + 1 := (congrArg RawLoanBroker.loanCount hb :)
   rw [hdtb] at hdebtD
   have hdn := broker.wf.debtTotal_norm
-  have hdt'n := operator_add_isNormalized_to_nearest_sz _ _ _ hdn hpn hchecks.debt
+  have hdt'n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hdn hpn hchecks.debt
   have hdt'v := Number.operator_add_exact_of_fits hdn hpn hchecks.debt (STAmount.Representable.number hdt)
   have hdt'' : debtTotal'' = broker.debtTotal := by
     have h := Number.operator_add_exact_of_fits hdt'n hneg hdebtD
       ⟨broker.debtTotal, hdn, by rw [hdt'v, Number.toRat_neg]; ring⟩
-    exact Number.isNormalized.toRat_inj (operator_sub_isNormalized_to_nearest_sz _ _ _ hdt'n hpn hdebtD) hdn
+    exact Number.isNormalized.toRat_inj (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hdt'n hpn hdebtD) hdn
       (by rw [h, hdt'v, Number.toRat_neg]; ring)
   obtain ⟨hcount, hdebt'⟩ := LoanBroker.releaseLoan_ok_inv _ _ _ hbD
   have hlc : broker'.loanCount - 1 = broker.loanCount := by rw [hlcb]; simp

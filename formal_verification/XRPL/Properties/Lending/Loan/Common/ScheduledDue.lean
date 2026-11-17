@@ -90,8 +90,9 @@ private lemma Loan.scheduled_due_ge (l : Loan) (pc0 : PaymentComponents) (due : 
   rw [hui, Number.operator_add_zero_right, Except.ok.injEq] at hv1
   subst hv1
   have hf := l.wf.serviceFee_norm
-  exact ⟨operator_add_isNormalized_to_nearest_sz _ _ _ htvN hf hdue,
-    Number.RoundsToRepresentable.ge_of_ge_normalized _ _ (operator_add_rounded_to_nearest _ _ _ htvN hf hdue) _ hf
+  exact ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ htvN hf hdue,
+    Number.RoundsToRepresentable.ge_of_ge_normalized _ _ (Number.operator_add_rounded_to_nearest _ _ _ htvN hf hdue) _
+      hf
       (by linarith)⟩
 
 /-- A loan in the schedule keeps the loan's fees. -/
@@ -124,15 +125,15 @@ private lemma UnsettledPayment.PaidDues.step {loan : Loan} {now : UInt32} {q : U
   obtain ⟨htp, htp0, hl, -, hd⟩ := hq
   obtain ⟨hdueN, hfee⟩ := Loan.scheduled_due_ge _ _ _ hpc0 hdue
   have hf0 : 0 ≤ q.loan.fees.serviceFee.toRat := q.loan.exact.serviceFee_nonneg
-  have hR := operator_add_rounded_to_nearest _ _ _ htp hdueN htp'
-  have htpN := operator_add_isNormalized_to_nearest_sz _ _ _ htp hdueN htp'
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ htp hdueN htp'
+  have htpN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ htp hdueN htp'
   have hge1 := Number.RoundsToRepresentable.ge_of_ge_normalized _ _ hR _ htp (by linarith)
   have hge2 := Number.RoundsToRepresentable.ge_of_ge_normalized _ _ hR _ hdueN (by linarith)
   have hpcl : q.loan.paymentComponents .regular now =
       .ok { pc0 with untrackedManagementFee := q.loan.fees.serviceFee } := by
     simp only [Loan.paymentComponents, hpc0]; rfl
   obtain ⟨si, hsi⟩ := Loan.interestDue_ok q.loan
-  have hlt : due.operator_lt due = false := (operator_lt_eq_false_iff _ _ hdueN hdueN).mpr le_rfl
+  have hlt : due.operator_lt due = false := (Number.operator_lt_eq_false_iff _ _ hdueN hdueN).mpr le_rfl
   have hpi : (q.loan.payInstalment q.pool { pc0 with untrackedManagementFee := q.loan.fees.serviceFee } due).run =
       .ok (.ok { loan := loan', pool := q.pool, amounts := inst, totalPaid := due, count := 1,
                  scheduledInterest := si }) := by
@@ -243,7 +244,7 @@ private lemma Loan.scheduled_due_le (l : Loan) (now : UInt32) (pc : PaymentCompo
     · have hle : l.totalValueOutstanding.operator_le pp' = true :=
         (Loan.scheduledComponents_final_cond l pc0 pp' hpp hpc0 hf).resolve_left hlast
       rw [(hfin hf).1]
-      exact ⟨gT, hT0, (operator_le_iff _ _ gT.1 gpp.1).mp hle⟩
+      exact ⟨gT, hT0, (Number.operator_le_iff _ _ gT.1 gpp.1).mp hle⟩
     · exact ⟨ht.totalValue_grid, ht.totalValue_range.1,
         Loan.scheduledComponents_value_le l pc0 pp' hlo hint hi hpp hpc0 hf⟩
   -- the amount due adds LoanServiceFee to it, exactly while it stays below `10^16` units
@@ -258,7 +259,7 @@ private lemma Loan.scheduled_due_le (l : Loan) (now : UInt32) (pc : PaymentCompo
     by_contra hge
     push Not at hge
     have := Number.RoundsToRepresentable.ge_of_ge_normalized _ _
-      (operator_add_rounded_to_nearest _ _ _ gtv.1 gfee.1 hdue) m hm (by rw [hmv]; push_cast; linarith)
+      (Number.operator_add_rounded_to_nearest _ _ _ gtv.1 gfee.1 hdue) m hm (by rw [hmv]; push_cast; linarith)
     rw [hmv] at this
     push_cast at this
     linarith
@@ -304,7 +305,7 @@ private lemma Loan.scheduledComponents_rounded_lt (l : Loan) (pc : PaymentCompon
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf
       simpa using hnf.2
     refine ⟨pp', hpp, ?_⟩
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, hle]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, hle]
     simp
 
 /-- ⌈PeriodicPayment⌉ below TotalValueOutstanding is less than 1 ULP at LoanScale above PeriodicPayment. An integral

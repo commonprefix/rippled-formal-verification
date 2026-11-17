@@ -76,12 +76,12 @@ private lemma Vault.burn_sub_exact (v : Vault) (sharesDestroyed : STAmount) (sha
   have hdiff_nn : 0 ≤ v.sharesTotal.toRat - sdn.toRat := by rw [hsdn_val]; linarith
   have hdiff_le : v.sharesTotal.toRat - sdn.toRat ≤ 2 ^ 63 - 1 := by
     rw [hsdn_val]; linarith [STAmount.toRat_nonneg_of sharesDestroyed hnn]
-  obtain ⟨hst_val, hst_den⟩ := operator_sub_exact_int v.sharesTotal sdn st'
+  obtain ⟨hst_val, hst_den⟩ := Number.operator_sub_exact_int v.sharesTotal sdn st'
     v.wf.sharesTotal_norm hsdn_norm v.wf.sharesTotal_int
     (by rw [hsdn_val]; exact hsd_den)
     (rat_num_natAbs_lt_of_le _ hdiff_den hdiff_nn hdiff_le) hst
   exact ⟨by rw [hst_val, hsdn_val], hst_den,
-    operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsdn_norm hst⟩
+    Number.operator_sub_isNormalized_to_nearest_sz _ _ _ v.wf.sharesTotal_norm hsdn_norm hst⟩
 
 /-- The share total is a whole number below `2^63`, so its `int64` conversion is exact. -/
 lemma Vault.canBurnShares_assets_exact_proof (v : Vault) (amount holderShares sharesTotalAmount : STAmount)

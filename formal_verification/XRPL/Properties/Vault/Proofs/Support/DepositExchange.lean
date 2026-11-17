@@ -20,9 +20,9 @@ open XRPL.Model.Protocol
 of two nonnegative balances, and rounding down never passes below the representable zero. -/
 lemma Vault.assetsTotal_pos (v : Vault) (assetsTotal : Number) (h : v.assetsTotal = .ok assetsTotal)
     (hm : assetsTotal.mantissa_ ≠ 0) : assetsTotal.isNormalized ∧ 0 < assetsTotal.toRat := by
-  have hn := operator_add_isNormalized _ _ _ .downward v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
+  have hn := Number.operator_add_isNormalized _ _ _ .downward v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
   obtain ⟨n, hlo, hval⟩ :=
-    operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
+    Number.operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
   have hsum : (0 : ℚ) ≤ v.assetsAvailable.toRat + v.assetsDeployed.toRat :=
     add_nonneg v.exact.assetsAvailable_nonneg v.exact.assetsDeployed_nonneg
   have h0 : 0 ≤ n.toRat := by
@@ -60,9 +60,9 @@ lemma Vault.assetsTotal_ge_deployed (v : Vault) (assetsTotal : Number) (h : v.as
   have hnd := Number.negative_false_of_nonneg _ hAD hADnn
   have hnz : ¬ v.assetsAvailable.operator_eq v.assetsDeployed.operator_neg = true := by
     simp [Number.operator_eq, Number.operator_neg, hd, hna, hnd]
-  obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
+  obtain ⟨_, _, _, _, _, hspec⟩ := Number.operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
     (by rw [hna, hnd]) hnz h
-  obtain ⟨n, hlo, hval⟩ := operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
+  obtain ⟨n, hlo, hval⟩ := Number.operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
   refine ⟨hspec.result_norm, ?_⟩
   rw [hval]
   exact Number.lower_tight _ n hlo _ hAD (by linarith)
@@ -117,7 +117,7 @@ lemma Vault.assetsTotal_le_exact (v : Vault) (assetsTotal : Number) (h : v.asset
   by_cases hm : assetsTotal.mantissa_ = 0
   · rw [Number.toRat_eq_zero_of_mantissa_zero _ hm]; exact hsum
   obtain ⟨n, hlo, hval⟩ :=
-    operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
+    Number.operator_add_rounded_downward _ _ _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm h hm
   rw [hval]
   exact Number.lower_le _ n hlo
 
@@ -160,11 +160,11 @@ lemma assetsToSharesDeposit_pos (v : Vault) (amount shares : STAmount)
         (amount.exponent + (v.scale.toNat : ℤ))).normalize largeRange.min largeRange.max
           .to_nearest = .ok n1 := hn1
     have hn1norm : n1.isNormalized :=
-      normalize_result_isNormalized _ n1 .to_nearest hamv hn1cast hn1m
+      Number.normalize_result_isNormalized _ n1 .to_nearest hamv hn1cast hn1m
     have hin_nonneg : 0 ≤ (Number.unchecked false amount.mantissa
         (amount.exponent + (v.scale.toNat : ℤ))).toRat := by
       rw [Number.toRat_of_nonneg _ rfl]; positivity
-    have hround := normalize_rounds_to_nearest _ n1 hn1cast hn1m
+    have hround := Number.normalize_rounds_to_nearest _ n1 hn1cast hn1m
     have hn1_nonneg : 0 ≤ n1.toRat := by
       have hb : |n1.toRat - (Number.unchecked false amount.mantissa
           (amount.exponent + (v.scale.toNat : ℤ))).toRat|
@@ -198,24 +198,24 @@ lemma assetsToSharesDeposit_pos (v : Vault) (amount shares : STAmount)
     obtain ⟨hnavnorm, hnavpos⟩ := Vault.assetsTotal_pos v navN hat hmz
     have hnavm : navN.mantissa_ ≠ 0 := hmz
     have hPm : P.mantissa_ ≠ 0 :=
-      operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
+      Number.operator_div_numerator_ne_zero_sz P navN T0 .to_nearest
         (Number.not_operator_eq_zero_of_mantissa_ne hnavm) hT0 hT0m
     obtain ⟨an', han', hanval, hannorm⟩ := STAmount.toNumber_canonical_exact amount .to_nearest hc
     have haneq : an' = amountN := by rw [han'] at hamN; exact Except.ok.inj hamN
     rw [haneq] at hanval hannorm
     obtain ⟨hSTm, hanm⟩ :=
-      operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
+      Number.operator_mul_operands_ne_zero v.wf.sharesTotal_norm hannorm hP hPm
     have hPnorm : P.isNormalized :=
-      operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
+      Number.operator_mul_result_isNormalized v.sharesTotal amountN P .to_nearest
         v.wf.sharesTotal_norm hannorm hSTm hanm hP hPm
     have hT0norm : T0.isNormalized :=
-      operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hnavm hT0 hT0m
+      Number.operator_div_result_isNormalized P navN T0 .to_nearest hPnorm hnavnorm hPm hnavm hT0 hT0m
     have hann : 0 ≤ amountN.toRat := by rw [hanval]; exact le_of_lt hpos
     have hSTnn : 0 ≤ v.sharesTotal.toRat := v.wf.sharesTotal_nonneg
     have hPnn : 0 ≤ P.toRat := by
       have hb : |P.toRat - v.sharesTotal.toRat * amountN.toRat|
           ≤ |v.sharesTotal.toRat * amountN.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
-        operator_mul_rounds_to_nearest v.sharesTotal amountN P
+        Number.operator_mul_rounds_to_nearest v.sharesTotal amountN P
           v.wf.sharesTotal_norm hannorm hP hPm
       rw [abs_of_nonneg (mul_nonneg hSTnn hann)] at hb
       have hab := abs_le.mp hb
@@ -224,7 +224,7 @@ lemma assetsToSharesDeposit_pos (v : Vault) (amount shares : STAmount)
     have hT0nn : 0 ≤ T0.toRat := by
       have hb : |T0.toRat - P.toRat / navN.toRat|
           ≤ |P.toRat / navN.toRat| * (6 / (2 ^ 63 - 3 : ℚ)) :=
-        operator_div_rounds_to_nearest P navN T0 hPnorm hnavnorm hT0 hT0m
+        Number.operator_div_rounds_to_nearest P navN T0 hPnorm hnavnorm hT0 hT0m
       rw [abs_of_nonneg hPNnn] at hb
       have hab := abs_le.mp hb
       nlinarith [hPNnn]

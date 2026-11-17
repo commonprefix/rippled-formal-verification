@@ -159,7 +159,7 @@ set_option maxHeartbeats 3200000 in
 -- assembles the full pipeline: guards, reference, sum stage, exact subtraction
 /-- **`roundToExponent` is correctly rounded onto the grid `10^s·ℤ` at a scale of at least `-81`**, with
 no nonzero hypothesis: a grid coefficient of at least one unit keeps its 16-digit exponent in range. -/
-lemma STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
+lemma STAmount.roundToExponent_rounded_any_proof (value result : STAmount) (s : ℤ)
     (mode : rounding_mode)
     (hc : value.IOUCanonical)
     (h_s : (-81 : ℤ) ≤ s) (h_s_hi : s ≤ 80)
@@ -336,7 +336,7 @@ lemma STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
           push_cast
           ring
         have h_n₂_val : n₂.toRat = 0 := by
-          have h := operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
+          have h := Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
             hs1_mant hs2_mant h_diff Number.zero (Or.inl rfl)
             (by rw [Number.toRat_zero, ← hτ_def, hτ0]) h_add₂
           rw [h, ← hτ_def, hτ0]
@@ -391,7 +391,7 @@ lemma STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
             rw [Number.toRat_set_neg_true_of_nn w₀ hw₀_neg, hw₀_val]
             ring
         have h_n₂_val : n₂.toRat = τ := by
-          have h := operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
+          have h := Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm
             hs1_mant hs2_mant h_diff w hw_norm (by rw [hw_val, hτ_def]) h_add₂
           rw [h, hτ_def]
         have hk_q : (0 : ℚ) < (k : ℚ) := by exact_mod_cast hk_pos
@@ -416,7 +416,7 @@ lemma STAmount.roundToExponent_rounded_any (value result : STAmount) (s : ℤ)
           rw [hτ_def]
           exact add_truth_zero_of_eq_neg s1n s2n h
         have h_n₂_norm : n₂.isNormalized :=
-          operator_add_result_isNormalized s1n s2n n₂ mode hs1_norm hs2_norm
+          Number.operator_add_result_isNormalized s1n s2n n₂ mode hs1_norm hs2_norm
             hs1_mant hs2_mant h_diff h_not_zero₂ h_add₂ h_n₂_mant
         have h_n₂_eq_w : n₂ = w :=
           h_n₂_norm.toRat_inj hw_norm (by rw [h_n₂_val, ← hw_val])

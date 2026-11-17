@@ -26,9 +26,9 @@ private lemma Vault.debit_exact_integral (v : Vault)
   obtain ⟨hv, hnorm⟩ :=
     STAmount.CanonicalOrZero.toNumber_exact (STAmount.CanonicalOrZero.operator_neg hc) assetsNum hnum
   rw [STAmount.operator_neg_toRat] at hv
-  have hr := operator_add_rounded_to_nearest _ _ _ hAAn hnorm hs
+  have hr := Number.operator_add_rounded_to_nearest _ _ _ hAAn hnorm hs
   rw [hv, ← sub_eq_add_neg] at hr
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hnorm hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAn hnorm hs
   -- the difference of two whole numbers below `2^63` is a `Number`, so the 19-digit sum is exact
   obtain ⟨q, hq⟩ : ∃ q : ℤ, c.toRat = q :=
     ⟨_, (Rat.coe_int_num_of_den_eq_one (STAmount.CanonicalOrZero.den_one hc (by rw [hct]; exact hint))).symm⟩
@@ -168,19 +168,19 @@ private lemma Vault.price_one_share (v : Vault)
   obtain ⟨NS, hmul⟩ := Number.operator_mul_ok_of_normalized v.assetsAvailable sn .to_nearest hAAn hsnn hAm hsnm
     (by unfold minExponent; omega) (by unfold maxExponent; omega)
   have hNSv : NS.toRat = v.assetsAvailable.toRat :=
-    Number.RoundsToRepresentable.eq_of_representable _ _ (operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul)
+    Number.RoundsToRepresentable.eq_of_representable _ _ (Number.operator_mul_rounded_to_nearest _ _ _ hAAn hsnn hmul)
       _ hAAn (by rw [hsn1, mul_one]) |>.trans (by rw [hsn1, mul_one])
   have hNSm : NS.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [hNSv]; exact hA.ne')
-  have hNSn := operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
+  have hNSn := Number.operator_mul_result_isNormalized _ _ _ _ hAAn hsnn hAm hsnm hmul hNSm
   have hNS : NS = v.assetsAvailable := Number.isNormalized.toRat_inj hNSn hAAn hNSv
   subst hNS
   obtain ⟨an, hdiv⟩ := Number.operator_div_ok_of_normalized _ v.sharesTotal .to_nearest hNSn hSTn hNSm hSTm
     (by unfold maxExponent; omega)
   have hanv : an.toRat = v.assetsAvailable.toRat :=
-    Number.RoundsToRepresentable.eq_of_representable _ _ (operator_div_rounded_to_nearest _ _ _ hNSn hSTn hdiv)
+    Number.RoundsToRepresentable.eq_of_representable _ _ (Number.operator_div_rounded_to_nearest _ _ _ hNSn hSTn hdiv)
       _ hAAn (by rw [hST, div_one]) |>.trans (by rw [hST, div_one])
   have hanm : an.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by rw [hanv]; exact hA.ne')
-  have hann := operator_div_result_isNormalized _ _ _ _ hNSn hSTn hNSm hSTm hdiv hanm
+  have hann := Number.operator_div_result_isNormalized _ _ _ _ hNSn hSTn hNSm hSTm hdiv hanm
   have han : an = v.assetsAvailable := Number.isNormalized.toRat_inj hann hAAn hanv
   subst han
   obtain ⟨cash, hcash⟩ := Vault.cash_ok_of_exact hexact
@@ -217,7 +217,7 @@ lemma Vault.withdraw_one_share_ok (v : Vault) (t : UInt32) (_hint : v.numericTyp
   obtain ⟨aN, haN⟩ := STAmount.CanonicalOrZero.toNumber_ok hac
   obtain ⟨haNv, haNn⟩ := STAmount.CanonicalOrZero.toNumber_exact hac aN haN
   have hge : v.assetsAvailable.operator_lt aN = false := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff _ _ v.wf.assetsAvailable_norm haNn, haNv, hav]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm haNn, haNv, hav]
     exact lt_irrefl _
   have hAD' : v.assetsDeployed.operator_ne Number.zero = false := by rw [hAD]; decide
   have hLU' : v.lossUnrealized.operator_ne Number.zero = false := by rw [hLU]; decide

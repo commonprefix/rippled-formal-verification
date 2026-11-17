@@ -1,4 +1,5 @@
 import XRPL.Properties.Lending.Ledger.Common.CashPrecision
+import XRPL.Properties.Lending.Ledger.Common.TotalStoredInv
 import XRPL.Properties.Lending.Ledger.Common.ClosedLoans
 import XRPL.Properties.Lending.Ledger.Common.DebtInv
 import XRPL.Properties.Lending.Ledger.Common.VaultPrecision
@@ -82,7 +83,7 @@ private lemma LendingLedger.pending_delete_vault (l : LendingLedger) (hr : l.Rea
   have haav : aa.toRat = l.vault.assetsAvailable.toRat + loan.principalOutstanding.toRat := by
     rw [Number.operator_add_exact_of_fits hAAN hp'N haa
       (by rw [hp'v, hpo]; exact STAmount.Representable.number hfit), hp'v]
-  have haaN := operator_add_isNormalized_to_nearest_sz _ _ _ hAAN hp'N haa
+  have haaN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAAN hp'N haa
   have haa0 : 0 ≤ aa.toRat := by rw [haav]; linarith
   have haaR : STAmount.isRounded l.vault.numericType aa = false :=
     (STAmount.isRounded_eq_false_iff _ _ haaN haa0).mpr (by rw [haav, hpo]; exact hfit)
@@ -123,10 +124,15 @@ private lemma LendingLedger.pending_delete_vault (l : LendingLedger) (hr : l.Rea
     ⟨⟨aa, haa, haa'⟩, had', Number.operator_add_zero_right _ _, har', Number.operator_add_zero_right _ _⟩
   have hLU0 : 0 ≤ l.vault.lossUnrealized.toRat := l.vault.exact.lossUnrealized_nonneg
   have hYU0 : 0 ≤ l.vault.yieldUnrealized.toRat := l.vault.exact.yieldUnrealized_nonneg
-  have had'N := operator_add_isNormalized_to_nearest_sz _ _ _ hADN (Number.operator_neg_isNormalized _ hpN) had'
-  have har'N := operator_add_isNormalized_to_nearest_sz _ _ _ hARN (Number.operator_neg_isNormalized _ hp'N) har'
+  have had'N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hADN (Number.operator_neg_isNormalized _ hpN) had'
+  have har'N := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hARN (Number.operator_neg_isNormalized _ hp'N) har'
   have haa'N := STAmount.roundToNumericType_isNormalized _ _ _ _ _ haa'
   have hT81 := LendingLedger.loss_reserved_deployed_proof l hr
+  -- the principal moves from AssetsDeployed to AssetsAvailable, so the total stays what the vault stored
+  have hst : XRPL.Model.SingleAssetVault.TotalStores l.vault.numericType aa' ad' :=
+    XRPL.Model.SingleAssetVault.TotalStores.mono hr.totalStored hr.holdsAsset hAAN hADN hAA0
+      l.vault.exact.assetsDeployed_nonneg aa' ad' haa'N had'N (by rw [haa'v]; exact haa0)
+      (by rw [had'v]; linarith) (by rw [haa'v, haav, had'v]; linarith)
   have hadj := Vault.adjustBalances_ok l.vault _ _ _ _ _ _ hs
     ⟨Number.signum_nonneg_of_toRat _ haa'N (by rw [haa'v]; exact haa0),
       Number.signum_nonneg_of_toRat _ had'N (by rw [had'v]; linarith),
@@ -136,9 +142,9 @@ private lemma LendingLedger.pending_delete_vault (l : LendingLedger) (hr : l.Rea
     (by
       cases hgt : l.vault.lossUnrealized.operator_gt ad'
       · rfl
-      · have := (operator_gt_iff _ _ l.vault.wf.lossUnrealized_norm had'N).mp hgt
+      · have := (Number.operator_gt_iff _ _ l.vault.wf.lossUnrealized_norm had'N).mp hgt
         rw [had'v] at this
-        linarith)
+        linarith) hst
   have hadrep : STAmount.Representable l.vault.numericType
       (l.vault.assetsDeployed.toRat - loan.principalOutstanding.toRat) := by
     rw [← had'v]

@@ -48,7 +48,7 @@ private lemma LendingLedger.applyVault_holder (l : LendingLedger) (hl : l.Shares
       walk_ok'
       simp only [Option.mem_def, Option.some.injEq] at hp
       subst hp
-      exact operator_add_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
+      exact Number.operator_add_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
         (STAmount.toNumber_isNormalized _ _ _ ‹_›) ‹_›
     · cases hu
   | vaultWithdraw h amount =>
@@ -58,7 +58,7 @@ private lemma LendingLedger.applyVault_holder (l : LendingLedger) (hl : l.Shares
       walk_ok'
       simp only [Option.mem_def, Option.some.injEq] at hp
       subst hp
-      exact operator_sub_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
+      exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
         (STAmount.toNumber_isNormalized _ _ _ ‹_›) ‹_›
     · cases hu
   | vaultClawback h assets =>
@@ -68,7 +68,7 @@ private lemma LendingLedger.applyVault_holder (l : LendingLedger) (hl : l.Shares
       walk_ok'
       simp only [Option.mem_def, Option.some.injEq] at hp
       subst hp
-      exact operator_sub_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
+      exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ (hl.sharesOf h)
         (STAmount.toNumber_isNormalized _ _ _ ‹_›) ‹_›
     · cases hu
   | vaultBurnShares h amount =>

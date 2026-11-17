@@ -48,7 +48,7 @@ lemma IOUAmount.normalize_InRange16_or_zero (a : IOUAmount) (mode : rounding_mod
         have heq : a.mantissa_.toInt.natAbs.toUInt64.toNat = a.mantissa_.toInt.natAbs :=
           UInt64.toNat_ofNat_of_lt hb
         intro h; rw [h] at heq; simp at heq; omega
-      have hv_norm : v.isNormalized := normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
+      have hv_norm : v.isNormalized := Number.normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
       obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv_ne
       have hv_exp_lo : minExponent ≤ v.exponent_ := by
         rcases hv_norm with hz | ⟨_, _, _, hlo', _⟩
@@ -132,7 +132,7 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
           UInt64.toNat_ofNat_of_lt hb
         intro h; rw [h] at heq; simp at heq; omega
       have hv_norm : v.isNormalized :=
-        normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
+        Number.normalize_result_isNormalized _ v mode hun_ne hfr' hv_ne
       obtain ⟨hvm_lo, hvm_hi⟩ := hv_norm.mantissaBounds_nat hv_ne
       have hv_exp_lo : minExponent ≤ v.exponent_ := by
         rcases hv_norm with hz | ⟨_, _, _, hlo', _⟩
@@ -141,7 +141,7 @@ lemma IOUAmount.normalize_mantissa_nonneg (m : Int64) (e : Int) (mode : rounding
       -- Stage 1: the 19-digit re-lift keeps the cleared sign, so `v.negative_ = false`.
       have hvneg : v.negative_ = false := by
         obtain ⟨m3, e3, g3, res, hrup, hres_eq, -, -, -, -⟩ :=
-          normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
+          Number.normalize_doRoundUp_stage _ v mode hun_ne hfr' hv_ne
         have hres_ne : res.mantissa_ ≠ 0 := by rw [hres_eq] at hv_ne; exact hv_ne
         have hsg := doRoundUp_negative_of_mant_ne g3 _ m3 e3 largeRange.min largeRange.max mode
           .normalize2 res hrup hres_ne
@@ -188,7 +188,7 @@ lemma STAmount.canonicalize_signfalse_nonneg (s result : STAmount) (mode : round
   have hint : ¬ s.integral = true := by unfold STAmount.integral; rw [hfr]; decide
   unfold STAmount.canonicalize at hok
   rw [if_neg hint] at hok
-  rw [STAmount.iou_of_lt mode hint hfit] at hok
+  rw [STAmount.iou_eq mode hint] at hok
   have hsd_nn : 0 ≤ s.signedDrops.toInt64.toInt := by
     rw [STAmount.signedDrops_toInt64_toInt_of_lt s hfit]
     unfold STAmount.signedDrops; rw [hneg]; simp
@@ -282,7 +282,7 @@ lemma STAmount.operator_add_fczr (v1 v2 result : STAmount) (mode : rounding_mode
     · rw [show (v2.mValue == 0) = false from beq_eq_false_iff_ne.mpr hv2] at hok
       simp only [Bool.false_eq_true, if_false] at hok
       by_cases hv1 : v1.mValue = 0
-      · rw [if_pos (beq_iff_eq.mpr hv1)] at hok
+      · rw [if_pos (beq_iff_eq.mpr hv1), if_neg (by simp [hint1])] at hok
         rw [STAmount.checked] at hok
         exact STAmount.canonicalize_fczr _ result mode
           (show (STAmount.unchecked v1.mNumericType v2.mValue v2.mOffset
@@ -378,8 +378,8 @@ lemma STAmount.toNumber_zero_fractional (s : STAmount) (mode : rounding_mode)
     have h0 : s.signedDrops = 0 := by unfold STAmount.signedDrops; rw [hz]; simp
     rw [h0]; rfl
   have hiou : s.iou mode = .ok IOUAmount.zero := by
-    unfold STAmount.iou IOUAmount.ofMantissaExp
-    rw [if_neg (by rw [hfr]; decide), STAmount.signedDrops_toInt64Checked s (by rw [hz]; decide), ok_bind, hsd]
+    rw [STAmount.iou_eq mode (by rw [hfr]; decide), hsd]
+    unfold IOUAmount.ofMantissaExp
     show IOUAmount.normalize ⟨0, s.mOffset⟩ mode = .ok IOUAmount.zero
     unfold IOUAmount.normalize
     rw [if_pos (show (((⟨0, s.mOffset⟩ : IOUAmount)).mantissa_ == 0) = true from rfl)]

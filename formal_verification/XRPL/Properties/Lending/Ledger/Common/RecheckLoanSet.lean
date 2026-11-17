@@ -159,7 +159,7 @@ private lemma Loan.create_checks_interest (broker : LoanBroker) (v : Vault) (pri
     have h1 := hchecks.funds
     by_contra hc'
     push Not at hc'
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc'] at h1
     exact absurd h1 (by decide)
   have hj16 : broker.numericType = .fractional → j < 10 ^ 16 := by
     intro hfr
@@ -209,8 +209,8 @@ private lemma Loan.create_checks_interest (broker : LoanBroker) (v : Vault) (pri
           exact_mod_cast h17) hprops).1
       rw [haTv, hj] at h1
       exact le_of_eq (by exact_mod_cast (mul_right_cancel₀ hp10.ne' h1).symm)
-    · have htiN := operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
-      have hR := operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
+    · have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
+      have hR := Number.operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
       by_contra hc'
       push Not at hc'
       have h1 : props.totalValueOutstanding.toRat - principal.toRat ≤ 0 := by
@@ -233,7 +233,7 @@ private lemma Loan.create_checks_interest (broker : LoanBroker) (v : Vault) (pri
     rw [hf] at haT
     exact lt_of_le_of_lt (Nat.sub_le _ _) haT
   obtain ⟨-, hmf_hi, -, ⟨mm, hmm⟩⟩ := computeManagementFee_bounds broker.numericType ti _ (aT - j)
-    broker.managementFeeRate props.loanScale (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
+    broker.managementFeeRate props.loanScale (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) htiv
     (by omega) hR10 ⟨hlo, hls80⟩ hls0 hfr hmfo
   have hmmK : mm ≤ aT - j := by
     have hC : ((aT - j) * broker.managementFeeRate.toNat + 99999) / 100000 ≤ aT - j := by
@@ -375,7 +375,7 @@ private lemma isNonnegativeInput_facts {n : Number} (h : isNonnegativeInput n = 
   rw [Bool.and_eq_true] at h
   have hn := of_decide_eq_true h.1
   refine ⟨hn, ?_⟩
-  have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h.2
+  have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp h.2
   rwa [Number.toRat_zero] at this
 
 /-- The LoanSet preflight and checks fix every field `create` assumes: the principal, the fees, the rates and
@@ -423,7 +423,7 @@ lemma LendingTx.loanSet_createPreflight (l : LendingLedger) (i : Nat) (principal
             principal_exact := hexact principal List.mem_cons_self
             fees_norm := fun fee hf => (hfee fee hf).1
             fees_nonneg := fun fee hf => (hfee fee hf).2
-            originationFee_le := (operator_le_iff _ _ hoN hp.1).mp hole
+            originationFee_le := (Number.operator_le_iff _ _ hoN hp.1).mp hole
             originationFee_exact := hexact fees.originationFee (by simp [LoanFees.amountFields])
             interestRate_cap := hir
             lateInterestRate_cap := hlr
@@ -511,7 +511,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
     exact ⟨w, hwn, by rw [hwv]; simp⟩
   -- the payment is positive, at least `10^-20`
   have hppN := Number.operator_div_isNormalized _ _ _ _ hp hN hdiv
-  have hR1 := operator_div_rounded_to_nearest _ _ _ hp hN hdiv
+  have hR1 := Number.operator_div_rounded_to_nearest _ _ _ hp hN hdiv
   obtain ⟨w20, hw20, hw20v⟩ := hw 20 (by norm_num)
   have hpp20 : (10 : ℚ) ^ (-((20 : ℕ) : ℤ)) ≤ props.periodicPayment.toRat := by
     have := hR1.ge_of_le hmode' w20 hw20 (by
@@ -525,7 +525,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
   have hpp_ne : props.periodicPayment.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h0] at hpp0; exact lt_irrefl _ hpp0
   -- the two roundings of `P / n × n` move it by less than `2·10^-18` of itself
-  have hW1 := operator_div_rounds_to_nearest _ _ _ hp hN hdiv hpp_ne
+  have hW1 := Number.operator_div_rounds_to_nearest _ _ _ hp hN hdiv hpp_ne
   simp only [RoundsWithin] at hW1
   change |props.periodicPayment.toRat - principal.toRat / _| ≤ _ at hW1
   rw [hNv] at hW1
@@ -544,7 +544,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
       _ ≤ P * (7 / 10 ^ 19) := mul_le_mul_of_nonneg_left hε1 hP0.le
   -- `amount` is at least `10^-11`, so nonzero
   have hamtN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamt
-  have hRa := operator_mul_rounded_to_nearest _ _ amount hppN hN hamt
+  have hRa := Number.operator_mul_rounded_to_nearest _ _ amount hppN hN hamt
   obtain ⟨w11, hw11, hw11v⟩ := hw 11 (by norm_num)
   have hamt11 : (10 : ℚ) ^ (-((11 : ℕ) : ℤ)) ≤ amount.toRat := by
     have := hRa.ge_of_le hmode' w11 hw11 (by
@@ -562,7 +562,7 @@ private lemma computeLoanProperties_zero_rate_close (principal : Number) (interv
   have hm0 : amount.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h0] at hamt11
     exact absurd hamt11 (not_le.mpr (by positivity))
-  have hW2 := operator_mul_rounds_to_nearest _ _ _ hppN hN hamt hm0
+  have hW2 := Number.operator_mul_rounds_to_nearest _ _ _ hppN hN hamt hm0
   simp only [RoundsWithin] at hW2
   change |amount.toRat - props.periodicPayment.toRat * _| ≤ _ at hW2
   rw [hNv, abs_of_pos (mul_pos hpp0 hn0)] at hW2
@@ -648,11 +648,11 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
   -- the interest the fee is taken on is at most twenty units
-  have htiN := operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hpoN hti
+  have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hpoN hti
   obtain ⟨w20, hw20, hw20v⟩ := hw 20 (by norm_num)
   have hti20 : ti.toRat ≤ 20 := by
     have := Number.RoundsToRepresentable.le_of_le_normalized _ _
-      (operator_sub_rounded_to_nearest _ _ _ htvN hpoN hti) w20 hw20 (by
+      (Number.operator_sub_rounded_to_nearest _ _ _ htvN hpoN hti) w20 hw20 (by
       rw [hw20v, hpov]; push_cast; linarith [(abs_lt.mp hclose).2])
     rwa [hw20v] at this
   -- so the management fee is at most `10^6` units
@@ -679,7 +679,7 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
     obtain ⟨w11, hw11, hw11v⟩ := hw (10 ^ 11) (by norm_num)
     have hpr11 : pr.toRat ≤ 10 ^ 11 := by
       have := Number.RoundsToRepresentable.le_of_le_normalized _ _
-        (operator_mul_rounded_to_nearest _ _ _ htiN hrn hpr) w11 hw11 (by
+        (Number.operator_mul_rounded_to_nearest _ _ _ htiN hrn hpr) w11 hw11 (by
         rw [hw11v, hrv]; push_cast
         rcases le_total 0 ti.toRat with h0 | h0
         · nlinarith
@@ -689,7 +689,7 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
     obtain ⟨w6, hw6, hw6v⟩ := hw (10 ^ 6) (by norm_num)
     have hraw6 : raw.toRat ≤ 10 ^ 6 := by
       have := Number.RoundsToRepresentable.le_of_le_normalized _ _
-        (operator_div_rounded_to_nearest _ _ _ hprN hun hraw) w6 hw6 (by
+        (Number.operator_div_rounded_to_nearest _ _ _ hprN hun hraw) w6 hw6 (by
         rw [hw6v, hu5, div_le_iff₀ (by norm_num)]; push_cast; linarith)
       rwa [hw6v] at this
     unfold STAmount.roundToNumericType at hmfo
@@ -730,16 +730,16 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
     rw [heq] at hmfo
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ hmfo
     exact STAmount.roundToNumericType_isNormalized _ _ _ _ _ h
-  have hv1N := operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hp hv1
+  have hv1N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ htvN hp hv1
   obtain ⟨wm, hwm, hwmv⟩ := hw (-20) (by norm_num)
   have hv1lo : -20 ≤ v1.toRat := by
-    have := (operator_sub_rounded_to_nearest _ _ _ htvN hp hv1).ge_of_le hmode wm hwm (by
+    have := (Number.operator_sub_rounded_to_nearest _ _ _ htvN hp hv1).ge_of_le hmode wm hwm (by
       rw [hwmv]; push_cast; linarith [(abs_lt.mp hclose).1])
     rwa [hwmv] at this
-  have hiN := operator_sub_isNormalized_to_nearest_sz _ _ _ hv1N hmfN hid
+  have hiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hv1N hmfN hid
   obtain ⟨wi, hwi, hwiv⟩ := hw (-(10 ^ 6 + 20)) (by norm_num)
   have hilo : -(10 ^ 6 + 20) ≤ loanState.interestDue.toRat := by
-    have := (operator_sub_rounded_to_nearest _ _ _ hv1N hmfN hid).ge_of_le hmode wi hwi (by
+    have := (Number.operator_sub_rounded_to_nearest _ _ _ hv1N hmfN hid).ge_of_le hmode wi hwi (by
       rw [hwiv]; push_cast; linarith)
     rw [hwiv] at this; push_cast at this; linarith
   -- the passed Open-limit check keeps AssetsAvailable, and so the principal, below `10^17` units
@@ -749,7 +749,7 @@ private lemma Loan.create_zero_rate_lt (broker : LoanBroker) (v : Vault) (princi
     have h2 := hchecks.funds
     by_contra hlt
     push Not at hlt
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hlt] at h2
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hlt] at h2
     exact absurd h2 (by decide)
   norm_num at hAA
   linarith
@@ -780,7 +780,7 @@ lemma LendingLedger.loanSet_ne_notLawful (l : LendingLedger) (hr : l.Reachable) 
     have h2 := hchecks.funds
     by_contra hlt
     push Not at hlt
-    rw [(operator_lt_iff _ _ l.vault.wf.assetsAvailable_norm hpf.principal_norm).mpr hlt] at h2
+    rw [(Number.operator_lt_iff _ _ l.vault.wf.assetsAvailable_norm hpf.principal_norm).mpr hlt] at h2
     exact absurd h2 (by decide)
   have hfrac : broker.numericType = .fractional →
       principal.toRat < 10 ^ 16 * 10 ^ l.vault.baseExponent := by

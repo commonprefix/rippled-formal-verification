@@ -212,7 +212,7 @@ private lemma LendingLedger.half_unit_withdraw_fails {l l' : LendingLedger} (hr 
     obtain ⟨hsic, hs64, -⟩ := Vault.withdraw_shares_form _ _ _ _ hpos hc hty _ hw
     obtain ⟨sn, hsn, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical _ .to_nearest
       (STAmount.Canonical.exactCanonical _ (hsic.canonical (by rw [hs64]; decide)))
-    have hle := (operator_lt_eq_false_iff _ _ hheldn hsnn).mp (hheld sn hsn)
+    have hle := (Number.operator_lt_eq_false_iff _ _ hheldn hsnn).mp (hheld sn hsn)
     refine Vault.half_unit_withdraw_fails l.vault hz hfr hA l.now hfee amount _ hpos hc hty _ hw ?_
     rw [← hsnv, hcast]
     linarith

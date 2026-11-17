@@ -172,7 +172,9 @@ lemma Vault.adjustBalances_ne_wrap (v : Vault) (change : Lending.PoolBalanceChan
   simp only [Vault.adjustBalances] at h
   unfold_ter at h
   walk_ok
-  all_goals close_wrap [Number.operator_add_ne_wrap, STAmount.roundToNumericType_ne_wrap]
+  all_goals first
+    | close_wrap [Number.operator_add_ne_wrap, STAmount.roundToNumericType_ne_wrap, STAmount.ofNumber_ne_wrap]
+    | (refine RawVault.assetsTotal_ne_wrap _ ?_ ?_ ‹_› <;> wrap_side)
 
 lemma Vault.adjustAssetsAndShares_ne_wrap (v : Vault) (assets shares : STAmount)
     (ha : assets.mValue.toNat < 2 ^ 63) (hs : shares.mValue.toNat < 2 ^ 63) :

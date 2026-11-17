@@ -16,7 +16,7 @@ namespace XRPL.Model.Protocol
 lemma tenthBipsOfValue_zero (rate : TenthBips32) :
     tenthBipsOfValue Number.zero rate .upward = .ok Number.zero := by
   have hz : Number.zero.operator_eq Number.zero = true :=
-    (operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
+    (Number.operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
   obtain ⟨r, hok, hval, hnorm⟩ := Number.from_rep_exact (100000 : Int64) 0 .to_nearest
     (by decide) (by unfold minExponent; norm_num) (by unfold maxExponent; norm_num)
   have hunit : kTenthBipsPerUnity.toNumber = r := by
@@ -25,7 +25,7 @@ lemma tenthBipsOfValue_zero (rate : TenthBips32) :
   have hu : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false := by
     rw [hunit, Bool.eq_false_iff]
     intro h
-    have := (operator_eq_iff _ _ hnorm Number.zero_isNormalized).mp h
+    have := (Number.operator_eq_iff _ _ hnorm Number.zero_isNormalized).mp h
     rw [hval, Number.toRat_zero] at this
     norm_num at this
     exact absurd this (by decide)
@@ -65,7 +65,7 @@ lemma zero_div_unity (mode : rounding_mode) :
   have hu : kTenthBipsPerUnity.toNumber.operator_eq Number.zero = false := by
     rw [Bool.eq_false_iff]
     intro h
-    have := (operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
+    have := (Number.operator_eq_iff _ _ hun Number.zero_isNormalized).mp h
     rw [huv, Number.toRat_zero] at this
     exact absurd this (by decide)
   unfold Number.operator_div
@@ -120,11 +120,11 @@ lemma tenthBipsOfValue_upward_facts (d : Number) (rate : TenthBips32) (raw : Num
   have hp0 : 0 ≤ p.toRat := hge p _ (mul_nonneg h0 hr0) (by
     by_cases h : p.mantissa_ = 0
     · exact Or.inl h
-    · exact Or.inr (operator_mul_rounded_upward _ _ _ hd hrn hp h))
+    · exact Or.inr (Number.operator_mul_rounded_upward _ _ _ hd hrn hp h))
   refine ⟨Number.operator_div_isNormalized _ _ _ _ hpn hun hok, hge raw _ (div_nonneg hp0 hu0) ?_⟩
   by_cases h : raw.mantissa_ = 0
   · exact Or.inl h
-  · exact Or.inr (operator_div_rounded_upward _ _ _ hpn hun hok h)
+  · exact Or.inr (Number.operator_div_rounded_upward _ _ _ hpn hun hok h)
 
 /-- Upward `tenthBipsOfValue` keeps the order of nonnegative products when the larger result is nonzero. The
 multiplication by the rate and the division by unity both round up, and rounding up keeps the order. -/
@@ -150,24 +150,24 @@ lemma tenthBipsOfValue_upward_le (d d' : Number) (rate rate' : TenthBips32) (raw
       Number.RoundsToRepresentable p (d.toRat * rate.toNumber.toRat) .upward := by
     by_cases h : p.mantissa_ = 0
     · exact Or.inl h
-    · exact Or.inr (operator_mul_rounded_upward _ _ _ hd hrn hp h)
+    · exact Or.inr (Number.operator_mul_rounded_upward _ _ _ hd hrn hp h)
   have hp0 : 0 ≤ p.toRat := by
     rcases hpr with h0' | ⟨n, hn, hv⟩
     · exact le_of_eq (Number.toRat_eq_zero_of_mantissa_zero p h0').symm
     · rw [hv]
       exact le_trans (mul_nonneg h0 hr0) (Number.le_upper _ _ hn)
   -- the larger side is nonzero all the way back
-  have hp'0 : p'.mantissa_ ≠ 0 := (operator_div_operands_ne_zero hpn' hun hok' hnz').1
+  have hp'0 : p'.mantissa_ ≠ 0 := (Number.operator_div_operands_ne_zero hpn' hun hok' hnz').1
   have hple : p.toRat ≤ p'.toRat :=
     Number.toRat_le_of_rounds_upward p p' _ _ hpn' (mul_nonneg h0 hr0) hprod hpr
-      (operator_mul_rounded_upward _ _ _ hd' hrn' hp' hp'0)
+      (Number.operator_mul_rounded_upward _ _ _ hd' hrn' hp' hp'0)
   have hrr : raw.mantissa_ = 0 ∨
       Number.RoundsToRepresentable raw (p.toRat / kTenthBipsPerUnity.toNumber.toRat) .upward := by
     by_cases h : raw.mantissa_ = 0
     · exact Or.inl h
-    · exact Or.inr (operator_div_rounded_upward _ _ _ hpn hun hok h)
+    · exact Or.inr (Number.operator_div_rounded_upward _ _ _ hpn hun hok h)
   exact Number.toRat_le_of_rounds_upward raw raw' _ _ hrawn' (div_nonneg hp0 hu0)
     (div_le_div_of_nonneg_right hple hu0) hrr
-    (operator_div_rounded_upward _ _ _ hpn' hun hok' hnz')
+    (Number.operator_div_rounded_upward _ _ _ hpn' hun hok' hnz')
 
 end XRPL.Model.Protocol

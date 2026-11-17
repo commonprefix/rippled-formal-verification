@@ -58,7 +58,7 @@ lemma Number.operator_add_tail_ne_wrap (xn yn : Bool) (xm ym : UInt64) (xe : Int
           pure (zm, xe, g))
       match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
       | .error err => .error err
-      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
+      | .ok res => .ok res.toNumber
     else do
       let (zm128, zn, ze) ←
         (if xm > ym then do
@@ -99,7 +99,7 @@ lemma Number.operator_add_tail_ne_wrap (xn yn : Bool) (xm ym : UInt64) (xe : Int
       · rename_i err herr
         intro h; cases h
         exact Guard.doRoundUp_ne_wrap _ _ _ _ _ _ largeRange_min_toNat_le (by decide) herr
-      · exact doNormalize_ne_wrap _ _ _ _ _ largeRange_min_toNat_le
+      · exact nofun
   · rename_i hxy
     have hne : xn ≠ yn := by simpa using hxy
     have hulim : (toUInt128 largeRange.min * 1000).toNat * 10 < 2 ^ 128 := by decide
@@ -148,7 +148,8 @@ lemma Number.operator_add_tail_ne_wrap (xn yn : Bool) (xm ym : UInt64) (xe : Int
         omega
 
 /-- A normalized nonzero mantissa has 19 digits. -/
-private lemma mantissa_bounds_of_ne_zero {x : Number} (hx : x.isNormalized) (h0 : ¬ x.operator_eq Number.zero = true) :
+private lemma Number.mantissa_bounds_of_ne_zero {x : Number} (hx : x.isNormalized) (h0 : ¬ x.operator_eq Number.zero =
+  true) :
     10 ^ 18 ≤ x.mantissa_.toNat ∧ x.mantissa_.toNat < 10 ^ 19 := by
   rcases hx with hz | hb
   · exact absurd (by rw [hz]; decide) h0
@@ -182,8 +183,8 @@ theorem Number.operator_add_ne_wrap (x y : Number) (mode : rounding_mode) (hx : 
   rename_i hx0
   split
   · exact nofun
-  have hxb := mantissa_bounds_of_ne_zero hx hx0
-  have hyb := mantissa_bounds_of_ne_zero hy hy0
+  have hxb := Number.mantissa_bounds_of_ne_zero hx hx0
+  have hyb := Number.mantissa_bounds_of_ne_zero hy hy0
   dsimp (config := { iota := false, proj := false, etaStruct := .none }) only
   by_cases h1 : x.exponent_ < y.exponent_
   · rw [if_pos h1]

@@ -235,7 +235,7 @@ private lemma Loan.overpaymentComponents_parts (l : Loan) (ov : Number) (opc : P
   obtain ⟨gmf, hmf0, hmflr⟩ := computeManagementFee_le _ _ _ _ _ glr.1 hlr0 l.broker.managementFeeRate_le hr hint hfee
   have gnet := Number.OnGrid.sub glr gmf hs hnet
   have hnet0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-    (operator_sub_rounded_to_nearest _ _ _ glr.1 gmf.1 hnet) (by linarith)
+    (Number.operator_sub_rounded_to_nearest _ _ _ glr.1 gmf.1 hnet) (by linarith)
   -- some principal is left, so each part comes off a positive remainder and every difference is exact
   have gpai := Number.OnGrid.sub gov gnet hs hpai
   have gpaf := Number.OnGrid.sub gpai gmf hs hpaf
@@ -319,7 +319,7 @@ private lemma Loan.reamortized_principal_le (l : Loan) (opc : PaymentComponents)
   have grpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hrpo
   have gpo := Number.OnGrid.clamp grpo (Number.OnGrid.zero _) gP
   have hlt : (Number.clamp rpo Number.zero l.principalOutstanding).toRat < l.principalOutstanding.toRat := by
-    have := (operator_le_iff _ _ gP.1 gpo.1).not.mp hguard
+    have := (Number.operator_le_iff _ _ gP.1 gpo.1).not.mp hguard
     push Not at this
     exact this
   have hpo_ge : pin.toRat ≤ (Number.clamp rpo Number.zero l.principalOutstanding).toRat := by
@@ -472,11 +472,11 @@ private lemma UnsettledPayment.overpayment_tail_le (p0 : UnsettledPayment Vault)
   have hlt : p0.totalPaid.toRat < a'.toRat := by
     have : p0.totalPaid.operator_lt a' = true := by
       revert hcond; cases p0.totalPaid.operator_lt a' <;> simp
-    exact (operator_lt_iff _ _ hm.charged_grid.1 ga'.1).mp this
+    exact (Number.operator_lt_iff _ _ hm.charged_grid.1 ga'.1).mp this
   -- the leftover, capped at TotalValueOutstanding and rounded down
-  have hunN := operator_sub_isNormalized_to_nearest_sz _ _ _ ga'.1 hm.charged_grid.1 hun
+  have hunN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ ga'.1 hm.charged_grid.1 hun
   have hun0 := Number.RoundsToRepresentable.nonneg_of_nonneg _ _
-    (operator_sub_rounded_to_nearest _ _ _ ga'.1 hm.charged_grid.1 hun) (by linarith)
+    (Number.operator_sub_rounded_to_nearest _ _ _ ga'.1 hm.charged_grid.1 hun) (by linarith)
   have hmin : (un.min p0.loan.totalValueOutstanding).isNormalized ∧
       0 ≤ (un.min p0.loan.totalValueOutstanding).toRat ∧
       (un.min p0.loan.totalValueOutstanding).toRat ≤ p0.loan.totalValueOutstanding.toRat ∧
@@ -485,9 +485,9 @@ private lemma UnsettledPayment.overpayment_tail_le (p0 : UnsettledPayment Vault)
     split
     · rename_i hc
       exact ⟨p0.loan.wf.totalValueOutstanding_norm, hTL, le_rfl,
-        ((operator_lt_iff _ _ p0.loan.wf.totalValueOutstanding_norm hunN).mp hc).le⟩
+        ((Number.operator_lt_iff _ _ p0.loan.wf.totalValueOutstanding_norm hunN).mp hc).le⟩
     · rename_i hn
-      exact ⟨hunN, hun0, (operator_lt_eq_false_iff _ _ p0.loan.wf.totalValueOutstanding_norm hunN).mp
+      exact ⟨hunN, hun0, (Number.operator_lt_eq_false_iff _ _ p0.loan.wf.totalValueOutstanding_norm hunN).mp
         (by simpa using hn), le_rfl⟩
   obtain ⟨hmN, hm0, hmT, hmun⟩ := hmin
   have hovN := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hov
@@ -506,7 +506,7 @@ private lemma UnsettledPayment.overpayment_tail_le (p0 : UnsettledPayment Vault)
   have hpd' : 0 < opc.principalDelta.toRat := by
     have : opc.principalDelta.operator_gt Number.zero = true := by
       revert hpd; cases opc.principalDelta.operator_gt Number.zero <;> simp
-    have := (operator_gt_iff _ _ hpdN Number.zero_isNormalized).mp this
+    have := (Number.operator_gt_iff _ _ hpdN Number.zero_isNormalized).mp this
     rwa [Number.toRat_zero] at this
   obtain ⟨gpd, gui, gmf, gumf, hui0, hmf0, humf0, hsum⟩ := Loan.overpaymentComponents_parts p0.loan ov opc
     (by rw [hls]; exact gov) hov0 (by rw [hls]; linarith) (by rw [hls]; exact hlo) hint hopc hpd'
@@ -582,7 +582,8 @@ private lemma Loan.late_charge (loan : Loan) (v : Vault) (amount : Number) (now 
   obtain ⟨n1, -, -, n4, n5⟩ := Loan.lateComponents_norm _ _ _ hpc'
   unfold PaymentComponents.totalDue at hdue'
   obtain ⟨v1, hv1, hd⟩ := bind_ok_peel _ _ _ hdue'
-  exact ⟨hsum, operator_add_isNormalized_to_nearest_sz _ _ _ (operator_add_isNormalized_to_nearest_sz _ _ _ n1 n4 hv1)
+  exact ⟨hsum, Number.operator_add_isNormalized_to_nearest_sz _ _ _ (Number.operator_add_isNormalized_to_nearest_sz _ _
+    _ n1 n4 hv1)
     n5 hd, Loan.payInstalment_covers _ _ _ _ _ hpi'⟩
 
 /-- A full payment pays the payoff instalment of the loan without its impaired flag, whose totalDue the amount
@@ -678,14 +679,14 @@ private lemma Loan.full_charge (loan : Loan) (v : Vault) (amount : Number) (now 
     push Not at hcon
     have hC : (2 : ℚ) ^ 62 ≤ c := by exact_mod_cast hcon
     obtain ⟨m1, hm1N, hm1v⟩ := Number.exists_normalized_int_mul_pow (10 ^ 16) loan.loanScale (by norm_num) hs
-    have hcfmN := operator_add_isNormalized_to_nearest_sz _ _ _ gcf'.1 gfee.1 hcfm
+    have hcfmN := Number.operator_add_isNormalized_to_nearest_sz _ _ _ gcf'.1 gfee.1 hcfm
     have hcfm_ge := Number.RoundsToRepresentable.ge_of_ge_normalized _ _
-      (operator_add_rounded_to_nearest _ _ _ gcf'.1 gfee.1 hcfm) cf gcf'.1 (by linarith)
+      (Number.operator_add_rounded_to_nearest _ _ _ gcf'.1 gfee.1 hcfm) cf gcf'.1 (by linarith)
     have hmq : (mN : ℚ) ≤ 10 ^ 16 + 2 := by
       have : (mN : ℤ) ≤ 10 ^ 16 + 2 := by omega
       exact_mod_cast this
     have huf_ge := Number.RoundsToRepresentable.ge_of_ge_normalized _ _
-      (operator_sub_rounded_to_nearest _ _ _ hcfmN hmv.norm huf) m1 hm1N (by
+      (Number.operator_sub_rounded_to_nearest _ _ _ hcfmN hmv.norm huf) m1 hm1N (by
         rw [hm1v, hmv.val]; rw [hcv'] at hcfm_ge; push_cast; nlinarith)
     have hvpi0 : 0 ≤ vpi.toRat := by
       rw [hvpi'.val]
@@ -693,9 +694,9 @@ private lemma Loan.full_charge (loan : Loan) (v : Vault) (amount : Number) (now 
       have : (0 : ℚ) ≤ (((pN : ℤ) + ((tN : ℤ) - pN - mN) + mN + ((a - b) - ((tN : ℤ) - pN - mN)) : ℤ) : ℚ) := by
         exact_mod_cast this
       positivity
-    have hufN := operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
+    have hufN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmN hmv.norm huf
     have htp_ge := Number.RoundsToRepresentable.ge_of_ge_normalized _ _
-      (operator_add_rounded_to_nearest _ _ _ hvpi'.norm hufN hd) m1 hm1N (by linarith)
+      (Number.operator_add_rounded_to_nearest _ _ _ hvpi'.norm hufN hd) m1 hm1N (by linarith)
     rw [hm1v] at htp_ge
     push_cast at htp_ge
     linarith
@@ -745,14 +746,15 @@ lemma Loan.payment_charge_le_amount_proof (loan : Loan) (v : Vault) (amount : Nu
   cases paymentType
   · have hm := Loan.regular_charges loan v amount now t p hreach hp hdue
     rw [hm.sum]
-    exact (operator_lt_eq_false_iff _ _ hamount hm.charged_grid.1).mp (Loan.regular_covers loan v amount now p hp).2
+    exact (Number.operator_lt_eq_false_iff _ _ hamount hm.charged_grid.1).mp (Loan.regular_covers loan v amount now p
+      hp).2
   · obtain ⟨hsum, hN, hcov⟩ := Loan.late_charge loan v amount now t p hreach hp hdue
     rw [hsum]
-    exact (operator_lt_eq_false_iff _ _ hamount hN).mp hcov
+    exact (Number.operator_lt_eq_false_iff _ _ hamount hN).mp hcov
   · obtain ⟨hsum, hN⟩ := Loan.full_charge loan v amount now t p hreach hp hdue
     obtain ⟨-, -, -, hcov⟩ := Loan.full_parts loan v amount now p hp
     rw [hsum]
-    exact (operator_lt_eq_false_iff _ _ hamount hN).mp hcov
+    exact (Number.operator_lt_eq_false_iff _ _ hamount hN).mp hcov
   · obtain ⟨p0, h0, h1⟩ := Loan.overPayInstalments_ok loan v amount now p hp
     have htp := UnsettledPayment.applyOverpayment_totalPaid p0 p amount h1
     rw [htp] at hdue
@@ -766,6 +768,6 @@ lemma Loan.payment_charge_le_amount_proof (loan : Loan) (v : Vault) (amount : Nu
     have hM0 : 0 ≤ loan.managementFeeOutstanding.toRat := loan.exact.managementFeeOutstanding_nonneg
     exact UnsettledPayment.applyOverpayment_charge p0 p amount hm hlo hint hreach.totalValue_le (by linarith)
       loan.exact.serviceFee_nonneg (by linarith) (by linarith) hcount hamount
-      ((operator_lt_eq_false_iff _ _ hamount hm.charged_grid.1).mp hcov) h1
+      ((Number.operator_lt_eq_false_iff _ _ hamount hm.charged_grid.1).mp hcov) h1
 
 end XRPL.Model.Lending

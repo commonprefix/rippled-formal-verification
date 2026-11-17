@@ -80,10 +80,10 @@ lemma operator_div_lower_exact (x y result : Number)
           m = 9223372036854775807 ∨ m = 9223372036854775810)) ∨
       (∃ E : ℤ, |result.toRat| = 9223372036854775807 * 10 ^ E ∧
         |x.toRat / y.toRat| ≤ (9223372036854775808 + 1 / 2) * 10 ^ E) := by
-  obtain ⟨hx_mant_ne, hy_mant_ne⟩ := operator_div_operands_ne_zero hx hy hok hresult
+  obtain ⟨hx_mant_ne, hy_mant_ne⟩ := Number.operator_div_operands_ne_zero hx hy hok hresult
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, -, hsticky_zero, hM_pos, hM_lt, hδM,
       htruth, hok128, -, hδ_lt, -⟩ :=
-    operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
+    Number.operator_div_algorithmic_facts_represents x y result .to_nearest hx hy
       hx_mant_ne hy_mant_ne hok
   rw [htruth]
   exact (doNormalize128_lower_exact zn M ze' δ sticky hδ_low hδ_lt hsticky_zero hM_pos

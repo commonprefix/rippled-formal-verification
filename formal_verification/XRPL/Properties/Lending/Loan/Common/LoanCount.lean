@@ -35,7 +35,7 @@ lemma Loan.create_loanCount (broker : LoanBroker) (v : Vault) (principal : Numbe
       rfl
     have hd0 := b.valid.empty_broker hzero
     rw [hdebt] at hd0
-    have hge := operator_add_ge_of_ge_normalized broker.debtTotal principal d principal broker.wf.debtTotal_norm
+    have hge := Number.operator_add_ge_of_ge_normalized broker.debtTotal principal d principal broker.wf.debtTotal_norm
       hp hc.debt hp (by
         have : 0 ≤ broker.debtTotal.toRat := broker.exact.debtTotal_nonneg
         linarith)

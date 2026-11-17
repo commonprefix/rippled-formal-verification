@@ -1,5 +1,6 @@
 import XRPL.Model.Protocol.Exponent
 import XRPL.Model.Protocol.Number
+import XRPL.Model.Protocol.Rounding
 import XRPL.Model.Protocol.STAmount
 import XRPL.Model.Protocol.TER
 import XRPL.Model.Lending.AssetPool
@@ -20,10 +21,12 @@ def Vault.exceedsOpenLimit (v : Vault) (amount : Number) : Except Error Bool := 
   let openLimit ← v.openLimit
   return capacity.operator_gt openLimit
 
--- C++ `checkOptionalVaultInflow`: a deposit must keep the total at the base exponent and inside the Open zone.
+-- C++ `checkOptionalVaultInflow`: a deposit, rounded toward zero at the posterior exponent, must keep the total at
+-- the base exponent and inside the Open zone.
 def Vault.checkOpenLimit (v : Vault) (amount : STAmount) : Except Error TER := do
   let assetsTotal ← v.assetsTotal
-  let amountNum ← amount.toNumber .to_nearest
+  let rounded ← clampToSumExponent assetsTotal amount v.baseExponent
+  let amountNum ← rounded.toNumber .to_nearest
   let exponent ← postSumExponent assetsTotal amountNum v.baseExponent v.numericType
 
   if exponent != v.baseExponent then
@@ -68,12 +71,18 @@ def Vault.adjustBalances (v : Vault) (change : PoolBalanceChange) : TerExcept Ra
   if lossUnrealized'.operator_gt assetsDeployed' then
     throw .tecLIMIT_EXCEEDED
 
-  return { v.toRawVault with
+  let rawVault' : RawVault := { v.toRawVault with
     assetsAvailable := assetsAvailable'
     assetsDeployed := assetsDeployed'
     assetsReserved := assetsReserved'
     lossUnrealized := lossUnrealized'
     yieldUnrealized := yieldUnrealized' }
+
+  -- C++ `syncAssetsTotal`: the new total is stored as an amount of the asset
+  let assetsTotal' ← rawVault'.assetsTotal
+  let _ ← STAmount.ofNumber v.numericType assetsTotal' .downward
+
+  return rawVault'
 
 def Vault.adjustAssetsAndShares (v : Vault) (assets shares : STAmount) : TerExcept RawVault := do
   let assetsNum ← assets.toNumber .to_nearest

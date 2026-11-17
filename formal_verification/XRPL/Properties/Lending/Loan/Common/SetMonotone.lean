@@ -100,7 +100,7 @@ lemma Loan.create_periodicPayment_principal_monotone_proof (broker : LoanBroker)
     rcases loanPeriodicPayment_cases _ _ _ _ hpay₂ (hne _ hpos₂) with ⟨hz', hd₂⟩ | ⟨hz', f', hf', hm₂⟩
   · -- a zero rate: the principal over the count
     have ht := Number.pos_of_roundsToRepresentable _ _
-      (operator_div_rounded_to_nearest _ _ _ hp₁ hN hd₁) hpos₁
+      (Number.operator_div_rounded_to_nearest _ _ _ hp₁ hN hd₁) hpos₁
     have hNpos : 0 < (Number.ofInt64 schedule.paymentTotal.toInt64).toRat := by
       by_contra hc
       push Not at hc
@@ -118,7 +118,7 @@ lemma Loan.create_periodicPayment_principal_monotone_proof (broker : LoanBroker)
     have hrateN := loanPeriodicRate_isNormalized _ _ rate hrate
     have hfN := computePaymentFactor_isNormalized rate _ _ f hrateN hN hf
     have ht := Number.pos_of_roundsToRepresentable _ _
-      (operator_mul_rounded_to_nearest _ _ _ hp₁ hfN hm₁) hpos₁
+      (Number.operator_mul_rounded_to_nearest _ _ _ hp₁ hfN hm₁) hpos₁
     have hfpos : 0 < f.toRat := by
       by_contra hc
       push Not at hc

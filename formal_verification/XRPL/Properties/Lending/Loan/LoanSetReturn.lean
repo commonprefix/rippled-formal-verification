@@ -2,6 +2,7 @@ import XRPL.Properties.Lending.Loan.Common.GuardProofs
 import XRPL.Properties.Lending.Loan.Common.SetExits
 import XRPL.Properties.Lending.Loan.Common.SetLawful
 import XRPL.Properties.Lending.Loan.Common.SetReachable
+import XRPL.Properties.Lending.Ledger.Common.AmountRangeWitness
 
 /-! # `LoanSet` exits
 
@@ -261,5 +262,17 @@ theorem Loan.create_error_codes (l : LendingLedger) (hr : l.Reachable) (j : Nat)
     ter = .tecINSUFFICIENT_FUNDS ∨ ter = .tecPRECISION_LOSS ∨ ter = .tecLIMIT_EXCEEDED :=
   Loan.create_error_codes_reachable_proof l hr j broker hb principalRequested rates fees schedule twoStep
     allowsOverpayment pending ter hpre hc hroom hcount hok
+
+/-- Witness for `create_error_codes`: on a reachable XRP ledger with `3.3·10^15` drops in the vault, a LoanSet whose
+total value is above the largest XRP amount ends in an error, not a result code. -/
+theorem Loan.create_error_codes_attained :
+    ∃ (l : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
+      (twoStep allowsOverpayment : Bool),
+      l.Reachable ∧
+      l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
+      (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
+        allowsOverpayment)).run = .error .outOfRange :=
+  LendingLedger.loanSet_out_of_range_witness
 
 end XRPL.Model.Lending

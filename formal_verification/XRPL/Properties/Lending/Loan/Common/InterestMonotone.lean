@@ -311,7 +311,7 @@ private lemma Loan.reamortized_interestDue_le (l : Loan) {po tvo' mfo x y z : Nu
     push Not at hc
     apply hgi
     have hn := Number.operator_neg_isNormalized di gdi.1
-    rw [operator_gt_iff _ _ hn Number.zero_isNormalized, Number.toRat_neg, Number.toRat_zero]
+    rw [Number.operator_gt_iff _ _ hn Number.zero_isNormalized, Number.toRat_neg, Number.toRat_zero]
     linarith
   rw [h5T, h5P, h5M]
   show _ ≤ l.totalValueOutstanding.toRat - l.principalOutstanding.toRat - l.managementFeeOutstanding.toRat

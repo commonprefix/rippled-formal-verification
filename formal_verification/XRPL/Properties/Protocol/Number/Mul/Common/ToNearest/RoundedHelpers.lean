@@ -9,7 +9,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 namespace XRPL.Model.Protocol
 
 /-- No normalized Number lies above `result.toRat` and at or below `truth` when `result.toRat ≤ truth`. -/
-theorem operator_mul_no_inbetween_below_to_nearest (x y result : Number)
+theorem Number.operator_mul_no_inbetween_below_to_nearest (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -19,7 +19,7 @@ theorem operator_mul_no_inbetween_below_to_nearest (x y result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat * y.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor_constr, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_below_to_nearest_frame result (x.toRat * y.toRat) zm ze' f g res_pos
     .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr h_truth_abs
     h_rup_pos h_result_abs hres_pos_mant_ne
@@ -32,7 +32,7 @@ theorem operator_mul_no_inbetween_below_to_nearest (x y result : Number)
     h_le
 
 /-- No normalized Number lies at or above `truth` and below `result.toRat` when `truth ≤ result.toRat`. -/
-theorem operator_mul_no_inbetween_above (x y result : Number)
+theorem Number.operator_mul_no_inbetween_above (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -42,7 +42,7 @@ theorem operator_mul_no_inbetween_above (x y result : Number)
       m.toRat < result.toRat → ¬ (x.toRat * y.toRat ≤ m.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, hfloor_constr, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_above_to_nearest_frame result (x.toRat * y.toRat) zm ze' f g res_pos
     .overflow hzm_ge hzm_le hf_nn hf_lt hfloor_constr h_truth_abs
     h_rup_pos h_result_abs hres_pos_mant_ne
@@ -57,7 +57,7 @@ theorem operator_mul_no_inbetween_above (x y result : Number)
 
 /-- If `result.toRat ≤ truth` and no normalized Number lies above `result.toRat` and at or below `truth`, the result
 has the value of `Number.lower truth`. -/
-theorem operator_mul_rounded_branchA (x y result : Number)
+theorem Number.operator_mul_rounded_branchA (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -67,9 +67,9 @@ theorem operator_mul_rounded_branchA (x y result : Number)
                        result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat * y.toRat)) :
     ∃ n_lo : Number, Number.lower (x.toRat * y.toRat) = some n_lo ∧
                      result.toRat = n_lo.toRat := by
-  have h5 := operator_mul_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h5 := Number.operator_mul_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_mul_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_bound : |result.toRat - x.toRat * y.toRat|
       ≤ |x.toRat * y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
@@ -81,13 +81,13 @@ theorem operator_mul_rounded_branchA (x y result : Number)
     (fun h => truth_top_of_result_cap result (x.toRat * y.toRat) h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (operator_mul_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h))
+          (Number.operator_mul_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h)
     h_round_down h_no_inbetween
 
 /-- If `truth ≤ result.toRat` and no normalized Number lies at or above `truth` and below `result.toRat`, the result
 has the value of `Number.upper truth`. -/
-theorem operator_mul_rounded_branchB (x y result : Number)
+theorem Number.operator_mul_rounded_branchB (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -97,9 +97,9 @@ theorem operator_mul_rounded_branchB (x y result : Number)
                        m.toRat < result.toRat → ¬ (x.toRat * y.toRat ≤ m.toRat)) :
     ∃ n_up : Number, Number.upper (x.toRat * y.toRat) = some n_up ∧
                      result.toRat = n_up.toRat := by
-  have h5 := operator_mul_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+  have h5 := Number.operator_mul_rounding_bound_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_mul_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_result_isNormalized x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_bound : |result.toRat - x.toRat * y.toRat|
       ≤ |x.toRat * y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
@@ -111,12 +111,12 @@ theorem operator_mul_rounded_branchB (x y result : Number)
     (fun h => truth_top_of_result_cap result (x.toRat * y.toRat) h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (operator_mul_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h))
+          (Number.operator_mul_no_overflow_mantissa x y result .to_nearest hx hy hx_mant_ne hy_mant_ne hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h)
     h_round_up h_no_inbetween
 
 
-theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
+theorem Number.operator_mul_rounded_to_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y .to_nearest = .ok result) :
     Number.RoundsToRepresentable result (x.toRat * y.toRat) .to_nearest := by
@@ -166,7 +166,7 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
       exact abs_eq_zero.mp h
     have h_truth_ne : x.toRat * y.toRat ≠ 0 :=
       toRat_mul_ne_zero_of_normalized x y hx hy hxz hyz
-    have h_small := operator_mul_underflow_truth_small x y result .to_nearest hx hy
+    have h_small := Number.operator_mul_underflow_truth_small_proof x y result .to_nearest hx hy
       hxz hyz hok hres
     rcases lt_or_gt_of_ne h_truth_ne with h_neg | h_pos
     · right
@@ -187,8 +187,8 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
   by_cases h_le : result.toRat ≤ truth
   · have h_no_inbetween : ∀ m : Number, m.isNormalized →
                           result.toRat < m.toRat → ¬ (m.toRat ≤ truth) := by
-      apply operator_mul_no_inbetween_below_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult h_le
-    have h_branchA := operator_mul_rounded_branchA x y result hx hy hx_mant_ne hy_mant_ne
+      apply Number.operator_mul_no_inbetween_below_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult h_le
+    have h_branchA := Number.operator_mul_rounded_branchA x y result hx hy hx_mant_ne hy_mant_ne
       hok hresult h_le h_no_inbetween
     obtain ⟨n_lo, h_lo_eq, h_lo_toRat⟩ := h_branchA
     left
@@ -197,8 +197,8 @@ theorem operator_mul_rounded_to_nearest_proof (x y result : Number)
     have h_ge : truth ≤ result.toRat := le_of_lt h_le
     have h_no_inbetween : ∀ m : Number, m.isNormalized →
                           m.toRat < result.toRat → ¬ (truth ≤ m.toRat) := by
-      apply operator_mul_no_inbetween_above x y result hx hy hx_mant_ne hy_mant_ne hok hresult h_ge
-    have h_branchB := operator_mul_rounded_branchB x y result hx hy hx_mant_ne hy_mant_ne
+      apply Number.operator_mul_no_inbetween_above x y result hx hy hx_mant_ne hy_mant_ne hok hresult h_ge
+    have h_branchB := Number.operator_mul_rounded_branchB x y result hx hy hx_mant_ne hy_mant_ne
       hok hresult h_ge h_no_inbetween
     obtain ⟨n_up, h_up_eq, h_up_toRat⟩ := h_branchB
     right

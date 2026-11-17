@@ -52,12 +52,27 @@ private lemma cash_zero_sum (v : Vault) (c : PoolBalanceChange) (hc : c.cash = N
   exact Number.signum_nonneg_of_toRat aa' (STAmount.roundToNumericType_isNormalized _ _ _ _ _ hround)
     (STAmount.roundToNumericType_nonneg _ _ _ v.wf.assetsAvailable_norm v.exact.assetsAvailable_nonneg hround)
 
+/-- An update that moves no cash writes AssetsAvailable back as it was, so the total the vault stores stays an
+amount of the asset. -/
+lemma Vault.cash_zero_totalStores (v : Vault) (c : PoolBalanceChange) (hc : c.cash = Number.zero)
+    (haa : STAmount.isRounded v.numericType v.assetsAvailable = false) (hts : v.TotalStored) (aa' : Number)
+    (hcash : ∃ aa, v.assetsAvailable.operator_add c.cash .to_nearest = .ok aa ∧
+      STAmount.roundToNumericType v.numericType aa .to_nearest = .ok aa') :
+    XRPL.Model.SingleAssetVault.TotalStores v.numericType aa' v.assetsDeployed := by
+  obtain ⟨aa, h1, h2⟩ := hcash
+  rw [hc, Number.operator_add_zero_right] at h1
+  cases h1
+  have haaeq : aa' = v.assetsAvailable :=
+    Number.isNormalized.toRat_inj (STAmount.roundToNumericType_isNormalized _ _ _ _ _ h2)
+      v.wf.assetsAvailable_norm (STAmount.roundToNumericType_of_isRounded_false _ _ _ v.wf.assetsAvailable_norm haa h2)
+  exact haaeq ▸ hts
+
 variable (loan : Loan) (v : Vault) (now : UInt32)
 
 /-- An impair of a late loan succeeds when AssetsDeployed has room for its principal. The asset stores
 AssetsAvailable exactly, and LossUnrealized + PrincipalOutstanding is at most AssetsDeployed. -/
 lemma Loan.manageImpair_ok_of_room (haa : STAmount.isRounded v.numericType v.assetsAvailable = false)
-    (hlate : loan.nextPaymentDueDate < now)
+    (hts : v.TotalStored) (hlate : loan.nextPaymentDueDate < now)
     (hroom : v.lossUnrealized.toRat + loan.principalOutstanding.toRat ≤ v.assetsDeployed.toRat) :
     ∃ r, (loan.manageImpair v now).run = .ok (.ok r) := by
   have hpn := loan.wf.principalOutstanding_norm
@@ -67,23 +82,24 @@ lemma Loan.manageImpair_ok_of_room (haa : STAmount.isRounded v.numericType v.ass
   have had := Vault.assetsDeployed_lt_pow v
   obtain ⟨lu', hsum⟩ := Number.operator_add_ok_of_lt v.lossUnrealized loan.principalOutstanding .to_nearest hln
     hpn hl0 (by linarith) hp0 (by linarith)
-  have hlun := operator_add_isNormalized_to_nearest_sz _ _ _ hln hpn hsum
-  have hlu0 : 0 ≤ lu'.toRat := operator_add_nonneg _ _ _ hln hpn hsum (by linarith)
+  have hlun := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hln hpn hsum
+  have hlu0 : 0 ≤ lu'.toRat := Number.operator_add_nonneg _ _ _ hln hpn hsum (by linarith)
   have hluv : lu'.toRat ≤ v.assetsDeployed.toRat :=
-    operator_add_le_of_le_normalized _ _ _ _ hln hpn hsum v.wf.assetsDeployed_norm hroom
+    Number.operator_add_le_of_le_normalized _ _ _ _ hln hpn hsum v.wf.assetsDeployed_norm hroom
   obtain ⟨aa', hcash, haa0⟩ := cash_zero_sum v { loss := loan.principalOutstanding } rfl haa
+  have hst := Vault.cash_zero_totalStores v { loss := loan.principalOutstanding } rfl haa hts aa' hcash
   have hs : Vault.AdjustSums v { loss := loan.principalOutstanding } aa' v.assetsDeployed lu'
       v.assetsReserved v.yieldUnrealized :=
     ⟨hcash, Number.operator_add_zero_right _ _, hsum, Number.operator_add_zero_right _ _,
       Number.operator_add_zero_right _ _⟩
   have hle : lu'.operator_gt v.assetsDeployed = false := by
     unfold Number.operator_gt
-    exact (operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hlun).mpr hluv
+    exact (Number.operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hlun).mpr hluv
   have hadj := Vault.adjustBalances_ok v _ _ _ _ _ _ hs
     ⟨haa0, Number.signum_nonneg_of_toRat _ v.wf.assetsDeployed_norm v.exact.assetsDeployed_nonneg,
       Number.signum_nonneg_of_toRat _ hlun hlu0,
       Number.signum_nonneg_of_toRat _ v.wf.yieldUnrealized_norm v.exact.yieldUnrealized_nonneg,
-      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm v.exact.assetsReserved_nonneg⟩ hle
+      Number.signum_nonneg_of_toRat _ v.wf.assetsReserved_norm v.exact.assetsReserved_nonneg⟩ hle hst
   obtain ⟨v', loan', hok, -⟩ := Loan.manageImpair_success_proof loan v now _ hlate hadj
   exact ⟨_, hok⟩
 

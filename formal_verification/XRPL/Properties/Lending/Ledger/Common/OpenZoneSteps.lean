@@ -52,8 +52,8 @@ private lemma Vault.cash_update_le' (v : Vault) (cash aa aa' : Number) (hasset :
   have hmax := hasset.maxValue_le
   obtain ⟨hb, hsr⟩ := Vault.baseExponent_grid v
   have hp : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
-  have han := operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
-  have hR := operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
+  have han := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
   by_cases hneg : v.assetsAvailable.toRat + cash.toRat < 0
   · -- the sum rounds to at most zero, and so does its rounding to the asset
     have haa0 : aa.toRat ≤ Number.zero.toRat := Number.roundsToRepresentable_le aa _ hR Number.zero
@@ -133,7 +133,7 @@ private lemma Loan.create_total_le' (broker : LoanBroker) (v : Vault) (principal
     have hf := hchecks.funds
     by_contra hc
     push Not at hc
-    rw [(operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
+    rw [(Number.operator_lt_iff _ _ v.wf.assetsAvailable_norm hp).mpr hc] at hf
     cases hf
   obtain ⟨raw, hadj, hlaw⟩ := Vault.poolAdjust_ok_inv v _ r.pool' hpool
   have hp' : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
@@ -287,7 +287,7 @@ lemma Vault.exceedsOpenLimit_false_total (v : Vault) (x atot : Number) (hx : x.i
     exact_mod_cast this
   obtain ⟨m, hm, hmv⟩ := Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) v.baseExponent
     (by constructor <;> norm_num) (by unfold minExponent maxExponent; constructor <;> omega)
-  obtain ⟨n₁, hlo₁, hs₁v⟩ := operator_add_rounded_towards_zero _ _ _ hatn v.wf.yieldUnrealized_norm hs₁
+  obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hatn v.wf.yieldUnrealized_norm hs₁
   rw [if_pos (by linarith)] at hlo₁
   have hs₁n := Number.operator_add_isNormalized_any _ _ _ _ hatn v.wf.yieldUnrealized_norm hs₁
   have hs₁ge : m.toRat ≤ s₁.toRat + x.toRat := by
@@ -314,7 +314,7 @@ lemma Vault.exceedsOpenLimit_false_total (v : Vault) (x atot : Number) (hx : x.i
         push_cast at this ⊢
         nlinarith
       linarith
-  obtain ⟨n, hlo, hcapv⟩ := operator_add_rounded_towards_zero _ _ _ hs₁n hx hcap
+  obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁n hx hcap
   rw [if_pos (by linarith [show (0 : ℚ) ≤ m.toRat by rw [hmv]; positivity])] at hlo
   have hmn := Number.lower_tight _ n hlo m hm hs₁ge
   have hlt : limit.toRat < capacity.toRat := by
@@ -327,8 +327,8 @@ lemma Vault.exceedsOpenLimit_false_total (v : Vault) (x atot : Number) (hx : x.i
     rw [hlimv] at hlt
     have : (0 : ℚ) < 9 * 10 ^ 15 * 10 ^ v.baseExponent := by positivity
     linarith
-  have hcapn := operator_add_isNormalized _ _ _ .towards_zero hs₁n hx hcap hcap0
-  have : capacity.operator_gt limit = true := (operator_lt_iff _ _ hwn hcapn).mpr hlt
+  have hcapn := Number.operator_add_isNormalized _ _ _ .towards_zero hs₁n hx hcap hcap0
+  have : capacity.operator_gt limit = true := (Number.operator_lt_iff _ _ hwn hcapn).mpr hlt
   rw [this] at hgt
   exact absurd hgt (by decide)
 
@@ -367,7 +367,7 @@ private lemma Vault.yield_open (v : Vault) (x yu' : Number) (T : ℚ) (hv : Vaul
 private lemma Vault.yield_le_of_nonpos (v : Vault) (x yu' : Number) (hx : x.isNormalized) (hx0 : x.toRat ≤ 0)
     (hadd : v.yieldUnrealized.operator_add x .to_nearest = .ok yu') :
     yu'.toRat ≤ v.yieldUnrealized.toRat :=
-  Number.roundsToRepresentable_le yu' _ (operator_add_rounded_to_nearest _ _ _ v.wf.yieldUnrealized_norm hx hadd)
+  Number.roundsToRepresentable_le yu' _ (Number.operator_add_rounded_to_nearest _ _ _ v.wf.yieldUnrealized_norm hx hadd)
     v.yieldUnrealized v.wf.yieldUnrealized_norm (by linarith)
 
 /-- A new loan stays in the Open zone. It keeps AssetsTotal, a pending loan books no yield, and an active
@@ -453,9 +453,10 @@ private lemma Loan.accept_openZone (loan : Loan) (v : Vault) (t : UInt32) (r : L
 
 /-- A check that passed read the Open-limit capacity of the charge as not exceeded. -/
 lemma Vault.checkOpenLimit_ok_inv (v : Vault) (amount : STAmount)
-    (hin : v.checkOpenLimit amount = .ok .tesSUCCESS) :
+    (hin : v.checkOpenLimit amount = .ok .tesSUCCESS) (hcc : v.ClampedCharge amount) :
     ∃ amountNum, amount.toNumber .to_nearest = .ok amountNum ∧ v.exceedsOpenLimit amountNum = .ok false := by
-  unfold XRPL.Model.SingleAssetVault.Vault.checkOpenLimit at hin
+  rw [v.checkOpenLimit_of_clamped amount hcc] at hin
+  unfold XRPL.Model.SingleAssetVault.Vault.checkOpenLimitUnrounded at hin
   obtain ⟨at', -, hin⟩ := bind_ok_peel _ _ _ hin
   obtain ⟨n, hn, hin⟩ := bind_ok_peel _ _ _ hin
   obtain ⟨e, -, hin⟩ := bind_ok_peel _ _ _ hin
@@ -509,6 +510,7 @@ private lemma Vault.deposit_openZone (v : Vault) (amount : STAmount) (isDonation
     · obtain ⟨assetsTotal, -, -, hcl, -⟩ := computeDeposit_donation_reduces v ra amounts hcomp
       exact Vault.clamp_grid v _ _ _ hrac hcl
   obtain ⟨amountNum, hnum, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+    (v.deposit_clampedCharge amount ra isDonation amounts hty (fun h => hc.2 h) hra hcomp)
   obtain ⟨hnv, hnn⟩ := hcf.toNumber_exact amountNum hnum
   obtain ⟨k, hk⟩ := hcharge
   have hex' := hex

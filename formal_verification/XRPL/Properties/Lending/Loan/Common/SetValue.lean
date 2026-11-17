@@ -427,7 +427,7 @@ lemma STAmount.roundToExponent_nonneg_units (value result : STAmount) (s : ℤ) 
     · -- `k = 0` cancels exactly to the canonical zero
       subst hk0
       have h_n₂_val : n₂.toRat = 0 := by
-        have h := operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
+        have h := Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
           Number.zero (Or.inl rfl) (by rw [Number.toRat_zero, hτ]; push_cast; ring) h_add₂
         rw [h, hτ]; push_cast; ring
       have h_n₂_mant : n₂.mantissa_ = 0 := Number.toRat_eq_zero_iff.mp h_n₂_val
@@ -442,7 +442,7 @@ lemma STAmount.roundToExponent_nonneg_units (value result : STAmount) (s : ℤ) 
         exists_normalized_of_int_mul_pow k s hk_pos (by omega)
           (by unfold minExponent; omega) (by unfold maxExponent; omega)
       have hn₂_val : n₂.toRat = w.toRat := by
-        rw [operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
+        rw [Number.operator_add_exact_diff_sign s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
           w hw_norm (by rw [hw_val, hτ]) h_add₂, hτ, hw_val]
       have hτ_ne : s1n.toRat + s2n.toRat ≠ 0 := by
         rw [hτ]
@@ -455,7 +455,7 @@ lemma STAmount.roundToExponent_nonneg_units (value result : STAmount) (s : ℤ) 
         exact Number.toRat_eq_zero_iff.mpr h0
       have h_not_zero₂ : ¬ s1n.operator_eq s2n.operator_neg := fun h => hτ_ne (add_truth_zero_of_eq_neg s1n s2n h)
       have hn₂ : n₂ = w :=
-        (operator_add_result_isNormalized s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
+        (Number.operator_add_result_isNormalized s1n s2n n₂ mode hs1_norm hs2_norm hs1_mant hs2_mant h_diff
           h_not_zero₂ h_add₂ h_n₂_mant).toRat_inj hw_norm hn₂_val
       subst hn₂
       obtain ⟨hof, hpack, hr_c, hr_val⟩ :=
@@ -624,7 +624,7 @@ lemma STAmount.roundToNumericType_int_grid (nt : NumericType) (hnt : nt.isIntegr
 
 /-- A normalized `Number` has a positive sign exactly when its value is positive. -/
 lemma Number.signum_pos_iff_toRat {n : Number} (hn : n.isNormalized) : 0 < n.signum ↔ 0 < n.toRat := by
-  rw [signum_eq n hn]
+  rw [Number.signum_eq n hn]
   split_ifs with h1 h2
   · exact iff_of_true (by decide) h1
   · exact iff_of_false (by decide) h1
@@ -632,7 +632,7 @@ lemma Number.signum_pos_iff_toRat {n : Number} (hn : n.isNormalized) : 0 < n.sig
 
 /-- A normalized `Number` has a nonnegative sign exactly when its value is nonnegative. -/
 lemma Number.signum_nonneg_iff_toRat {n : Number} (hn : n.isNormalized) : 0 ≤ n.signum ↔ 0 ≤ n.toRat := by
-  rw [signum_eq n hn]
+  rw [Number.signum_eq n hn]
   split_ifs with h1 h2
   · exact iff_of_true (by decide) h1.le
   · exact iff_of_false (by decide) (by linarith)
@@ -1035,9 +1035,9 @@ private lemma loanPeriodicRate_pos (ir : TenthBips32) (interval : UInt32) (rate 
     rw [Number.ofInt64_toRat_of_ne _ (by decide)]; rfl
   have hpN := Number.operator_mul_isNormalized _ _ p _ hI hB hp
   have htN := Number.operator_div_isNormalized _ _ t _ hpN hU ht
-  have hR1 := operator_mul_rounded_to_nearest _ _ p hI hB hp
-  have hR2 := operator_div_rounded_to_nearest _ _ t hpN hU ht
-  have hR3 := operator_div_rounded_to_nearest _ _ rate htN hY h
+  have hR1 := Number.operator_mul_rounded_to_nearest _ _ p hI hB hp
+  have hR2 := Number.operator_div_rounded_to_nearest _ _ t hpN hU ht
+  have hR3 := Number.operator_div_rounded_to_nearest _ _ rate htN hY h
   have hi1 : (1 : ℚ) ≤ interval.toNat := by
     have : 0 < interval.toNat := by
       rcases Nat.eq_zero_or_pos interval.toNat with h0 | h0
@@ -1131,7 +1131,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
     unfold valueMode
     rw [if_neg]
     intro heq
-    rw [(operator_eq_iff rate Number.zero hrN Number.zero_isNormalized).mp heq, Number.toRat_zero] at hrate0
+    rw [(Number.operator_eq_iff rate Number.zero hrN Number.zero_isNormalized).mp heq, Number.toRat_zero] at hrate0
     exact lt_irrefl _ hrate0
   rw [hmode] at hamt hst htvo
   have hppN : props.periodicPayment.isNormalized := hPP ▸ hwf.periodicPayment_norm
@@ -1149,7 +1149,7 @@ private lemma Loan.create_value_ceil (broker : LoanBroker) (v : Vault) (principa
       Except.ok.injEq] at htvo
     rw [← htvo, Number.toRat_zero] at htv0'
     exact lt_irrefl _ htv0'
-  have hR := operator_mul_rounded_upward _ _ amount hppN hN hamt hamt0
+  have hR := Number.operator_mul_rounded_upward _ _ amount hppN hN hamt hamt0
   set t := props.periodicPayment.toRat * (Number.ofInt64 schedule.paymentTotal.toInt64).toRat with ht
   have ht0 : 0 ≤ t := by rw [ht, hNv]; positivity
   have hta : t ≤ amount.toRat := by obtain ⟨n', hn', hv⟩ := hR; rw [hv]; exact Number.le_upper _ _ hn'
@@ -1283,11 +1283,11 @@ lemma Loan.create_covers_principal_proof (broker : LoanBroker) (v : Vault) (prin
     positivity
   -- with interest the guard asks for a total value above PrincipalRequested
   obtain ⟨ti, hsub, hpos, -⟩ := LoanProperties.checkGuards_ok_inv _ _ _ _ _ hchecks.guards
-  have htiN := operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hp hsub
+  have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hp hsub
   have hgt : principal.toRat < props.totalValueOutstanding.toRat := by
     by_contra hc
     push Not at hc
-    have hR := operator_sub_rounded_to_nearest _ _ ti htvN hp hsub
+    have hR := Number.operator_sub_rounded_to_nearest _ _ ti htvN hp hsub
     have := Number.roundsToRepresentable_nonpos ti _ hR (by linarith)
     have := (Number.signum_pos_iff_toRat htiN).mp (hpos hrate)
     linarith
@@ -1338,14 +1338,14 @@ private lemma loanPeriodicRate_zero (interval : UInt32) (rate : Number) (h : loa
   have htN := Number.operator_div_isNormalized _ _ t _ hpN hU ht
   have hrN := Number.operator_div_isNormalized _ _ rate _ htN hY h
   have hp0 : p.toRat = 0 := by
-    have hR := operator_mul_rounded_to_nearest _ _ p hI hB hp
+    have hR := Number.operator_mul_rounded_to_nearest _ _ p hI hB hp
     rw [hBv, mul_zero] at hR
     exact hR.toRat_of_zero hmode
   have ht0 : t.toRat = 0 := by
-    have hR := operator_div_rounded_to_nearest _ _ t hpN hU ht
+    have hR := Number.operator_div_rounded_to_nearest _ _ t hpN hU ht
     rw [hp0, zero_div] at hR
     exact hR.toRat_of_zero hmode
-  have hR := operator_div_rounded_to_nearest _ _ rate htN hY h
+  have hR := Number.operator_div_rounded_to_nearest _ _ rate htN hY h
   rw [ht0, zero_div] at hR
   exact (Number.toRat_eq_zero_iff_eq_zero hrN).mp (hR.toRat_of_zero hmode)
 
@@ -1357,7 +1357,8 @@ private lemma loanPeriodicPayment_zero_rate (principal : Number) (n : UInt32) (p
   have hpe : principal.operator_eq Number.zero = false := by
     cases hq : principal.operator_eq Number.zero
     · rfl
-    · exact absurd ((operator_eq_iff _ _ hp Number.zero_isNormalized).mp hq) (by rw [Number.toRat_zero]; exact hp0)
+    · exact absurd ((Number.operator_eq_iff _ _ hp Number.zero_isNormalized).mp hq) (by rw [Number.toRat_zero]; exact
+      hp0)
   have hne : (n == 0) = false := by simpa using hn
   unfold loanPeriodicPayment at h
   simp only [hpe, hne, Bool.or_false, Bool.false_eq_true, if_false] at h
@@ -1404,7 +1405,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
     exact ⟨w, hwn, by rw [hwv]; simp⟩
   -- the payment is positive, at least `10^-20`
   have hppN := Number.operator_div_isNormalized _ _ _ _ hp hN hdiv
-  have hR1 := operator_div_rounded_to_nearest _ _ _ hp hN hdiv
+  have hR1 := Number.operator_div_rounded_to_nearest _ _ _ hp hN hdiv
   obtain ⟨w20, hw20, hw20v⟩ := hw 20 (by norm_num)
   have hpp20 : (10 : ℚ) ^ (-((20 : ℕ) : ℤ)) ≤ props.periodicPayment.toRat := by
     have := hR1.ge_of_le hmode' w20 hw20 (by
@@ -1419,7 +1420,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
   have hpp_ne : props.periodicPayment.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h0] at hpp0; exact lt_irrefl _ hpp0
   -- the two roundings of `P / n × n` move it by less than `2·10^-18` of itself
-  have hW1 := operator_div_rounds_to_nearest _ _ _ hp hN hdiv hpp_ne
+  have hW1 := Number.operator_div_rounds_to_nearest _ _ _ hp hN hdiv hpp_ne
   simp only [RoundsWithin] at hW1
   change |props.periodicPayment.toRat - principal.toRat / _| ≤ _ at hW1
   rw [hNv] at hW1
@@ -1438,7 +1439,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
       _ ≤ P * (7 / 10 ^ 19) := mul_le_mul_of_nonneg_left hε1 hP0.le
   -- `amount` is at least `10^-11`, so nonzero with an exponent above `-99`
   have hamtN := Number.operator_mul_isNormalized _ _ amount _ hppN hN hamt
-  have hRa := operator_mul_rounded_to_nearest _ _ amount hppN hN hamt
+  have hRa := Number.operator_mul_rounded_to_nearest _ _ amount hppN hN hamt
   obtain ⟨w11, hw11, hw11v⟩ := hw 11 (by norm_num)
   have hamt11 : (10 : ℚ) ^ (-((11 : ℕ) : ℤ)) ≤ amount.toRat := by
     have := hRa.ge_of_le hmode' w11 hw11 (by
@@ -1456,7 +1457,7 @@ lemma computeLoanProperties_zero_rate_value (principal : Number) (interval n : U
   have hm0 : amount.mantissa_ ≠ 0 := fun h0 => by
     rw [Number.toRat_eq_zero_of_mantissa_zero _ h0] at hamt11
     exact absurd hamt11 (not_le.mpr (by positivity))
-  have hW2 := operator_mul_rounds_to_nearest _ _ _ hppN hN hamt hm0
+  have hW2 := Number.operator_mul_rounds_to_nearest _ _ _ hppN hN hamt hm0
   simp only [RoundsWithin] at hW2
   change |amount.toRat - props.periodicPayment.toRat * _| ≤ _ at hW2
   rw [hNv, abs_of_pos (mul_pos hpp0 hn0)] at hW2
@@ -1607,7 +1608,7 @@ lemma Loan.create_zero_rate_proof (broker : LoanBroker) (v : Vault) (principal :
     rw [hsc, UInt32.lt_iff_toNat_lt] at h
     exact_mod_cast h
   have hP0 : 0 < principal.toRat := by
-    have hR := operator_div_rounded_to_nearest _ _ _ hp hN hdiv
+    have hR := Number.operator_div_rounded_to_nearest _ _ _ hp hN hdiv
     have := Number.pos_of_roundsToRepresentable _ _ hR hpp0
     rw [hNv] at this
     exact (div_pos_iff_of_pos_right hn0).mp this
@@ -1651,9 +1652,9 @@ lemma Loan.create_zero_rate_proof (broker : LoanBroker) (v : Vault) (principal :
         exact_mod_cast this
       obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow 1 0 (by norm_num)
         (by unfold minExponent maxExponent; norm_num)
-      have hR := operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
+      have hR := Number.operator_sub_rounded_to_nearest _ _ ti' htvN hp hsub
       have hge := hR.ge_of_le (Or.inl rfl) w hw (by rw [hwv, ha, hj]; push_cast; linarith)
-      have htiN := operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
+      have htiN := Number.operator_sub_isNormalized_to_nearest_sz _ _ ti' htvN hp hsub
       have := (Number.signum_pos_iff_toRat htiN).mpr (by rw [hwv] at hge; push_cast at hge; linarith)
       exact absurd (hle0 hrate) (not_le.mpr this)
     linarith
@@ -1714,8 +1715,8 @@ lemma computeManagementFee_bounds (nt : NumericType) (ti mfo : Number) (K : ℕ)
     rw [Number.ofInt64_count]; rfl
   have hyN := Number.operator_mul_isNormalized _ _ y _ htiN hRB hy
   have hrawN := Number.operator_div_isNormalized _ _ raw _ hyN hU hraw
-  have hR1 := operator_mul_rounded_to_nearest _ _ y htiN hRB hy
-  have hR2 := operator_div_rounded_to_nearest _ _ raw hyN hU hraw
+  have hR1 := Number.operator_mul_rounded_to_nearest _ _ y htiN hRB hy
+  have hR2 := Number.operator_div_rounded_to_nearest _ _ raw hyN hU hraw
   have hmode : rounding_mode.to_nearest = .to_nearest ∨ rounding_mode.to_nearest = .upward ∨
       rounding_mode.to_nearest = .downward := Or.inl rfl
   have hpow5 : (10 : ℚ) ^ (ls + 5) = 100000 * 10 ^ ls := by
@@ -1890,7 +1891,7 @@ lemma Loan.create_managementFee_lower_bound_proof (broker : LoanBroker) (v : Vau
   obtain ⟨hlo, hhi, hint⟩ := Loan.create_loanScale_range broker v principal rates fees schedule props loanState
     debtTotal' hchecks hrange.2
   obtain ⟨hmf_lo, -, -, -⟩ := computeManagementFee_bounds broker.numericType ti _ K broker.managementFeeRate
-    props.loanScale (operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) hKv (by omega) hR10
+    props.loanScale (Number.operator_sub_isNormalized_to_nearest_sz _ _ ti htvN hpoN hti) hKv (by omega) hR10
     ⟨hlo, hhi⟩ hint (fun hnt => by rw [hNT, hnt] at ha; show a - b < 10 ^ 16; exact lt_of_le_of_lt (Nat.sub_le a b) ha)
     hmfo
   -- the share minus its floor is at most `99999` of `10^5` parts of a unit

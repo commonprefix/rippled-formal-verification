@@ -177,8 +177,8 @@ lemma Vault.clamp_fit (v : Vault) (X clamped : STAmount) (hX : X.FracCanonZero) 
   obtain ⟨hdv, hdn⟩ := STAmount.CanonicalOrZero.toNumber_exact
     (STAmount.CanonicalOrZero.operator_neg (STAmount.FracCanonZero.canonicalOrZero hX)) dN hdN
   rw [STAmount.operator_neg_toRat] at hdv
-  have hr1 := operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs0
-  have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs0
+  have hr1 := Number.operator_add_rounded_to_nearest _ _ _ v.wf.assetsAvailable_norm hdn hs0
+  have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hdn hs0
   have hlt := numberExponent_frac_lt s0 v.baseExponent e hs0n (by omega) hne
   obtain ⟨m, hmn, hmv⟩ := Exact.exists_normalized_grid 1 (e + 16) le_rfl (by norm_num)
     (by unfold minExponent; omega) (by unfold maxExponent; omega)

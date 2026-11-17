@@ -6,7 +6,7 @@ import XRPL.Properties.Protocol.Number.Common.Helpers
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_rounding_bound_diff_sign_towards_zero_tight (x y result : Number)
+theorem Number.operator_add_rounding_bound_diff_sign_towards_zero_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -16,7 +16,7 @@ theorem operator_add_rounding_bound_diff_sign_towards_zero_tight (x y result : N
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
       htruth, hok128, hsign, _, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   obtain ⟨hbound, hneg⟩ :=
     doNormalize128_rounds_any zn M ze' δ sticky .towards_zero hδ_low hδ_le hsticky_zero
@@ -41,7 +41,7 @@ theorem operator_add_rounding_bound_diff_sign_towards_zero_tight (x y result : N
         rw [htruth]
         exact mul_lt_mul_of_pos_left (by norm_num) h_truth_pos
 
-theorem operator_add_rounding_bound_diff_sign_towards_zero_dir (x y result : Number)
+theorem Number.operator_add_rounding_bound_diff_sign_towards_zero_dir (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -51,7 +51,7 @@ theorem operator_add_rounding_bound_diff_sign_towards_zero_dir (x y result : Num
     |result.toRat| ≤ |x.toRat + y.toRat| := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
       htruth, hok128, _, _, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result .towards_zero hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   obtain ⟨_, _, hdir⟩ :=
     doNormalize128_rounds_direction zn M ze' δ sticky .towards_zero hδ_low hδ_le hsticky_zero

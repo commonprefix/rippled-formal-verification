@@ -110,7 +110,7 @@ private lemma UnsettledPayment.applyOverpayment_feePaid (p p' : UnsettledPayment
   have hx0 : 0 < extra.toRat := by
     have hgt : extra.operator_gt Number.zero = true := by
       revert hovp; cases extra.operator_gt Number.zero <;> simp
-    have := (operator_gt_iff _ _ hxn Number.zero_isNormalized).mp hgt
+    have := (Number.operator_gt_iff _ _ hxn Number.zero_isNormalized).mp hgt
     rwa [Number.toRat_zero] at this
   have hfn := tenthBipsOfValue_normalized hxn hf
   have hf0 := tenthBipsOfValue_nonneg hxn hx0.le hf

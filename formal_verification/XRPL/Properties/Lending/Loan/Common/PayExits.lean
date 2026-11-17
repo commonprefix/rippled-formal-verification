@@ -44,9 +44,9 @@ private lemma Vault.assetsAvailable_le_assetsTotal (v : Vault) (assetsTotal : Nu
   have hnd := Number.negative_false_of_nonneg _ hAD hAD0
   have hnz : ¬ v.assetsAvailable.operator_eq v.assetsDeployed.operator_neg = true := by
     simp [Number.operator_eq, Number.operator_neg, hd, hna, hnd]
-  obtain ⟨_, _, _, _, _, hspec⟩ := operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
+  obtain ⟨_, _, _, _, _, hspec⟩ := Number.operator_add_algorithmic_facts_same_sign_downward _ _ _ hAA hAD ha hd
     (by rw [hna, hnd]) hnz h
-  obtain ⟨n, hlo, hval⟩ := operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
+  obtain ⟨n, hlo, hval⟩ := Number.operator_add_rounded_downward _ _ _ hAA hAD h hspec.result_mant_ne
   rw [hval]
   exact Number.lower_tight _ n hlo _ hAA (by linarith)
 
@@ -62,7 +62,7 @@ private lemma validatePostPayment_run (v : Vault) (r : LoanWithAmounts Vault) (a
     have hn := (Vault.assetsTotal_ge_deployed r.pool' assetsTotal' hat).1
     rw [Bool.eq_false_iff]
     intro hg
-    rw [operator_gt_iff _ _ r.pool'.wf.assetsAvailable_norm hn] at hg
+    rw [Number.operator_gt_iff _ _ r.pool'.wf.assetsAvailable_norm hn] at hg
     linarith
   simp only [validatePostPayment]
   unfold_ter

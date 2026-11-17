@@ -10,7 +10,7 @@ set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) plus the cusp-range legs need extra heartbeats
 /-- Relative-error bound for `Number.operator_mul` under `.towards_zero` rounding.
 The bound `10/(2^63 + 2)` matches `.downward`, about twice the `.to_nearest` bound. -/
-theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
+theorem Number.operator_mul_rounding_bound_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .towards_zero = .ok result)
@@ -19,7 +19,7 @@ theorem operator_mul_rounding_bound_towards_zero (x y result : Number)
     |x.toRat * y.toRat| - |result.toRat| < |x.toRat * y.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, _h_sign⟩ :=
-    operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge

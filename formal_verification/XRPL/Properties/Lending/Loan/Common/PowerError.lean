@@ -20,12 +20,12 @@ lemma Number.mulError_pos : 0 < Number.mulError := by unfold Number.mulError; no
 lemma Number.mul_within (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (h : x.operator_mul y .to_nearest = .ok r) (hr : r.toRat ≠ 0) :
     |r.toRat - x.toRat * y.toRat| ≤ |x.toRat * y.toRat| * Number.mulError :=
-  operator_mul_rounds_to_nearest x y r hx hy h (fun hm => hr (Number.toRat_eq_zero_iff.mpr hm))
+  Number.operator_mul_rounds_to_nearest x y r hx hy h (fun hm => hr (Number.toRat_eq_zero_iff.mpr hm))
 
 /-- A to-nearest product of values at least one is at least one. -/
 private lemma Number.mul_ge_one (x y r : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (h : x.operator_mul y .to_nearest = .ok r) (hx1 : 1 ≤ x.toRat) (hy1 : 1 ≤ y.toRat) : 1 ≤ r.toRat := by
-  have := rn_ge (operator_mul_rounded_to_nearest _ _ _ hx hy h) _ (Number.ofInt64_isNormalized 1)
+  have := rn_ge (Number.operator_mul_rounded_to_nearest _ _ _ hx hy h) _ (Number.ofInt64_isNormalized 1)
     (by rw [Number.ofInt64_one_toRat]; nlinarith)
   rwa [Number.ofInt64_one_toRat] at this
 

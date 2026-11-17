@@ -83,11 +83,11 @@ lemma LendingLedger.accept_total_proof (l : LendingLedger) (hr : l.Reachable) (h
     l.vault.wf.yieldUnrealized_norm hxn hY0 (by linarith) hx0 (by linarith)
   have har' : l.vault.assetsReserved.operator_add loan.principalOutstanding.operator_neg .to_nearest = .ok ar' := har
   have hnegn := Number.operator_neg_isNormalized _ loan.wf.principalOutstanding_norm
-  have harn := operator_add_isNormalized_to_nearest_sz _ _ _ l.vault.wf.assetsReserved_norm hnegn har'
+  have harn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ l.vault.wf.assetsReserved_norm hnegn har'
   have har0 : 0 ≤ ar'.toRat :=
-    operator_add_nonneg _ _ _ l.vault.wf.assetsReserved_norm hnegn har' (by rw [Number.toRat_neg]; linarith)
-  have hyun := operator_add_isNormalized_to_nearest_sz _ _ _ l.vault.wf.yieldUnrealized_norm hxn hyu
-  have hyu0 : 0 ≤ yu'.toRat := operator_add_nonneg _ _ _ l.vault.wf.yieldUnrealized_norm hxn hyu (by linarith)
+    Number.operator_add_nonneg _ _ _ l.vault.wf.assetsReserved_norm hnegn har' (by rw [Number.toRat_neg]; linarith)
+  have hyun := Number.operator_add_isNormalized_to_nearest_sz _ _ _ l.vault.wf.yieldUnrealized_norm hxn hyu
+  have hyu0 : 0 ≤ yu'.toRat := Number.operator_add_nonneg _ _ _ l.vault.wf.yieldUnrealized_norm hxn hyu (by linarith)
   have hs : Vault.AdjustSums l.vault (loan.acceptChange x) aa' l.vault.assetsDeployed l.vault.lossUnrealized ar'
       yu' :=
     ⟨hcash, Number.operator_add_zero_right _ _, Number.operator_add_zero_right _ _, har', hyu⟩
@@ -96,6 +96,8 @@ lemma LendingLedger.accept_total_proof (l : LendingLedger) (hr : l.Reachable) (h
       Number.signum_nonneg_of_toRat _ l.vault.wf.lossUnrealized_norm l.vault.exact.lossUnrealized_nonneg,
       Number.signum_nonneg_of_toRat _ hyun hyu0, Number.signum_nonneg_of_toRat _ harn har0⟩
     (Vault.lossUnrealized_gt_false l.vault)
+    (Vault.cash_zero_totalStores l.vault (loan.acceptChange x) rfl (hr.storesAvailable hr.holdsAsset.maxValue_le)
+      hr.totalStored aa' hcash)
   obtain ⟨v', hv', -⟩ := Loan.accept_vault_lawful loan l.vault x _ hx hadj
   obtain ⟨loan', hl', -⟩ := Loan.accept_loan_lawful loan
   obtain ⟨a, ha, -⟩ := Loan.acceptAmount_ok loan

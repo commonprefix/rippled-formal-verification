@@ -174,7 +174,7 @@ private lemma LendingLedger.default_frame {l l' : LendingLedger} (hr : l.Reachab
   have hcle : c.toRat ≤ b.coverAvailable.toRat := by
     rw [← hlb]
     exact Number.RoundsToRepresentable.le_of_le_normalized c _
-      (operator_sub_rounded_to_nearest _ _ _ loan.broker.wf.coverAvailable_norm hdcn hcov) _
+      (Number.operator_sub_rounded_to_nearest _ _ _ loan.broker.wf.coverAvailable_norm hdcn hcov) _
       loan.broker.wf.coverAvailable_norm (by linarith)
   refine ⟨e, { e with loan := r₀.loan' }, b, b', he, hb, ?_, rfl, hpr, ?_, ?_, by rw [hc']; exact hcle, rfl, rfl,
     rfl, hs, ?_⟩

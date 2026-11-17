@@ -113,13 +113,13 @@ private lemma sharesToAssetsDeposit_disj_canonical (v : Vault)
       have hshNeq : sn = shN := by rw [hsn] at hshN; exact Except.ok.inj hshN
       rw [hshNeq] at hsnnorm
       have hPm : P.mantissa_ ≠ 0 :=
-        operator_div_numerator_ne_zero_sz P v.sharesTotal Q .to_nearest
+        Number.operator_div_numerator_ne_zero_sz P v.sharesTotal Q .to_nearest
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hQ hQm
-      obtain ⟨hnavm, hshNm⟩ := operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
+      obtain ⟨hnavm, hshNm⟩ := Number.operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
       have hPnorm : P.isNormalized :=
-        operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
+        Number.operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
       have hQnorm : Q.isNormalized :=
-        operator_div_result_isNormalized P v.sharesTotal Q .to_nearest hPnorm v.wf.sharesTotal_norm
+        Number.operator_div_result_isNormalized P v.sharesTotal Q .to_nearest hPnorm v.wf.sharesTotal_norm
           hPm hSTm hQ hQm
       obtain ⟨hlo19, hhi19⟩ := hQnorm.mantissaBounds_nat hQm
       have hQexp_lo : minExponent ≤ Q.exponent_ := Number.exponent_ge_min Q hQnorm hQm
@@ -297,20 +297,20 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
       have hshNm : shN.mantissa_ ≠ 0 :=
         Number.mantissa_ne_zero_of_toRat_ne_zero (ne_of_gt hshN_pos)
       have hPm : P.mantissa_ ≠ 0 :=
-        operator_div_numerator_ne_zero_sz P v.sharesTotal Q .to_nearest
+        Number.operator_div_numerator_ne_zero_sz P v.sharesTotal Q .to_nearest
           (Number.not_operator_eq_zero_of_mantissa_ne hSTm) hQ hQm
-      obtain ⟨hnavm, _⟩ := operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
+      obtain ⟨hnavm, _⟩ := Number.operator_mul_operands_ne_zero hnavnorm hsnnorm hP hPm
       have hnavN_pos := (Vault.assetsTotal_pos v navN hat hmz).2
       have hPnorm : P.isNormalized :=
-        operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
+        Number.operator_mul_result_isNormalized navN shN P .to_nearest hnavnorm hsnnorm hnavm hshNm hP hPm
       have hQnorm : Q.isNormalized :=
-        operator_div_result_isNormalized P v.sharesTotal Q .to_nearest hPnorm v.wf.sharesTotal_norm
+        Number.operator_div_result_isNormalized P v.sharesTotal Q .to_nearest hPnorm v.wf.sharesTotal_norm
           hPm hSTm hQ hQm
       have hmulb : |P.toRat - navN.toRat * shN.toRat|
           ≤ navN.toRat * shN.toRat * (5 / (2 ^ 63 + 7)) := by
         have h : |P.toRat - navN.toRat * shN.toRat|
             ≤ |navN.toRat * shN.toRat| * (5 / (2 ^ 63 + 7)) :=
-          operator_mul_rounds_to_nearest navN shN P hnavnorm hsnnorm hP hPm
+          Number.operator_mul_rounds_to_nearest navN shN P hnavnorm hsnnorm hP hPm
         rwa [abs_of_nonneg (by positivity : (0 : ℚ) ≤ navN.toRat * shN.toRat)] at h
       have hPpos : 0 < P.toRat := by
         have := abs_le.mp hmulb
@@ -320,7 +320,7 @@ lemma sharesToAssetsDeposit_nonneg (v : Vault) (shares c : STAmount)
           ≤ P.toRat / v.sharesTotal.toRat * (6 / (2 ^ 63 - 3)) := by
         have h : |Q.toRat - P.toRat / v.sharesTotal.toRat|
             ≤ |P.toRat / v.sharesTotal.toRat| * (6 / (2 ^ 63 - 3)) :=
-          operator_div_rounds_to_nearest P v.sharesTotal Q hPnorm v.wf.sharesTotal_norm hQ hQm
+          Number.operator_div_rounds_to_nearest P v.sharesTotal Q hPnorm v.wf.sharesTotal_norm hQ hQm
         rwa [abs_of_pos hPN_pos] at h
       have hQpos : 0 < Q.toRat := by
         have := abs_le.mp hdivb

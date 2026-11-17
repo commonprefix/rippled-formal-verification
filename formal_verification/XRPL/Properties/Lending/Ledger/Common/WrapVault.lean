@@ -24,8 +24,8 @@ lemma Vault.checkOpenLimit_ne_wrap (v : Vault) (amount : STAmount) (ha : amount.
     v.checkOpenLimit amount ≠ .error .wrap := by
   unfold Vault.checkOpenLimit
   simp only [bind, Except.bind, pure, Except.pure]
-  split_ne_wrap [RawVault.assetsTotal_ne_wrap, STAmount.toNumber_ne_wrap, postSumExponent_ne_wrap,
-    Vault.exceedsOpenLimit_ne_wrap]
+  split_ne_wrap [RawVault.assetsTotal_ne_wrap, clampToSumExponent_ne_wrap, STAmount.toNumber_ne_wrap,
+    postSumExponent_ne_wrap, Vault.exceedsOpenLimit_ne_wrap]
 
 lemma Vault.roundedDepositAmount_ne_wrap (v : Vault) (amount : STAmount) (ha : amount.mValue.toNat < 2 ^ 63) :
     (v.roundedDepositAmount amount).run ≠ .error .wrap := by

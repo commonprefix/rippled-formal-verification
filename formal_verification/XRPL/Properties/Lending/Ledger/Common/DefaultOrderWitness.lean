@@ -41,17 +41,17 @@ private lemma uncapped_of_check {l : LendingLedger} {i : Nat} (h : uncappedCheck
   simp only [uncappedCheck, he, hb, hw, hmc, hliq] at h
   exact of_decide_eq_true h
 
-/-- The broker of loan `i` on `l` holds a CoverAvailable below `2^63` base units. -/
+/-- The broker of loan `i` on `l` holds a CoverAvailable below `10^16` base units. -/
 private def coverCheck (l : LendingLedger) (i : Nat) : Bool :=
   match l.loan? i with
   | some e =>
     match l.broker? e.brokerIndex with
-    | some b => decide (b.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent)
+    | some b => decide (b.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent)
     | none => false
   | none => false
 
 private lemma cover_of_check {l : LendingLedger} {i : Nat} (h : coverCheck l i = true) :
-    ∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent := by
+    ∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent := by
   intro loan hat
   obtain ⟨e, he, hb, -⟩ := hat.stored
   simp only [coverCheck, he, hb] at h
@@ -134,7 +134,7 @@ lemma LendingLedger.defaults_comm_liquidation_witness :
       (l.apply (.loanManage j .default)).run = .ok (.ok lb) ∧
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent ∧
-      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
+      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
       lab.vault ≠ lba.vault := by
   have h := dlCheck_true
   unfold dlCheck at h
@@ -185,7 +185,7 @@ lemma LendingLedger.defaults_comm_coarsened_witness :
       (l.apply (.loanManage j .default)).run = .ok (.ok lb) ∧
       (lb.apply (.loanManage i .default)).run = .ok (.ok lba) ∧
       (l.DefaultUncapped i ∧ la.DefaultUncapped j ∧ l.DefaultUncapped j ∧ lb.DefaultUncapped i) ∧
-      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
+      (∀ loan, l.LoanAt i loan → loan.broker.coverAvailable.toRat < 10 ^ 16 * (10 : ℚ) ^ l.vault.baseExponent) ∧
       lab.vault ≠ lba.vault := by
   have h := dcCheck_true
   unfold dcCheck at h

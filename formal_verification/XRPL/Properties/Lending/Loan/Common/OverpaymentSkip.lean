@@ -83,7 +83,7 @@ private lemma STAmount.ofNumber_fractional_towards_zero_ok (r : Number) (hn : r.
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if false then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    rw [STAmount.iou_of_lt .towards_zero h_int h_fit]
+    rw [STAmount.iou_eq .towards_zero h_int]
     unfold IOUAmount.ofMantissaExp
     rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp false .towards_zero hmtu_lo hmtu_hi
@@ -193,7 +193,7 @@ lemma UnsettledPayment.applyOverpayment_skips (p : UnsettledPayment Vault) (amou
   have hcN := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hc
   obtain ⟨-, hcle⟩ := STAmount.roundToNumericType_towards_zero_some_le _ amount c _ hN h0
     ⟨by omega, by omega⟩ hc
-  have hlt : p.totalPaid.operator_lt c = false := (operator_lt_eq_false_iff _ _ htN hcN).mpr (by linarith)
+  have hlt : p.totalPaid.operator_lt c = false := (Number.operator_lt_eq_false_iff _ _ htN hcN).mpr (by linarith)
   unfold UnsettledPayment.applyOverpayment
   simp only [hc, hlt, bind, Except.bind, Bool.and_false, Bool.false_and, Bool.not_false, ↓reduceIte, pure,
     Except.pure]

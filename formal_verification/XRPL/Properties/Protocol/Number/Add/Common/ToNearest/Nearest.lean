@@ -15,7 +15,7 @@ lemma Number.roundsToNearest_of_eq {result : Number} {truth : ℚ} (h : result.t
 
 /-- A `to_nearest` addition of normalized Numbers returns a nearest Number, unless it flushes a nonzero sum to
 zero. -/
-lemma Number.operator_add_nearest (x y result : Number)
+lemma Number.operator_add_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0 ∨ x.toRat + y.toRat = 0) :
@@ -52,11 +52,11 @@ lemma Number.operator_add_nearest (x y result : Number)
   have hx_mant_ne : x.mantissa_ ≠ 0 := fun h => hx_guard (by rw [Number.eq_zero_of_mantissa_zero x hx h]; decide)
   have hy_mant_ne : y.mantissa_ ≠ 0 := fun h => hy_guard (by rw [Number.eq_zero_of_mantissa_zero y hy h]; decide)
   have h_truth_ne : x.toRat + y.toRat ≠ 0 :=
-    operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .to_nearest result hok
+    Number.operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .to_nearest result hok
   have hres : result.mantissa_ ≠ 0 := hresult.resolve_right h_truth_ne
   by_cases h_sign_eq : x.negative_ = y.negative_
   · obtain ⟨zm, ze', f, g, res_pos, hs⟩ :=
-      operator_add_algorithmic_facts_same_sign_anyMode x y result .to_nearest hx hy hx_mant_ne hy_mant_ne
+      Number.operator_add_algorithmic_facts_same_sign_anyMode x y result .to_nearest hx hy hx_mant_ne hy_mant_ne
         h_sign_eq heq_guard hok
     exact doRoundUp_nearest_frame result (x.toRat + y.toRat) zm ze' f g res_pos .overflow hs.zm_succ
       hs.zm_le_maxRepUp hs.f_nonneg hs.f_lt_one hs.value_eq (Guard.roundsLike_of_represents hs.represents_f)
@@ -67,7 +67,7 @@ lemma Number.operator_add_nearest (x y result : Number)
         (hs.result_neg.trans (add_same_sign_xn_true_of_truth_neg x y h_sign_eq h_neg)))
   · obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result .to_nearest hx hy
         hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
     obtain ⟨zm, ze', f, g, res_pos, hzm_succ, hzm_le, hf_nn, hf_lt, h_value, h_rup_pos, h_result_abs,
         hres_pos_mant_ne, h_neg, hg⟩ :=
@@ -84,7 +84,7 @@ lemma Number.operator_add_nearest (x y result : Number)
 
 /-- A `to_nearest` subtraction of normalized Numbers returns a nearest Number, unless it flushes a nonzero
 difference to zero. -/
-lemma Number.operator_sub_nearest (x y result : Number)
+lemma Number.operator_sub_nearest_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_sub x y .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0 ∨ x.toRat - y.toRat = 0) :
@@ -94,6 +94,7 @@ lemma Number.operator_sub_nearest (x y result : Number)
     rw [Number.toRat_neg]
     ring
   rw [h_truth_eq] at hresult ⊢
-  exact Number.operator_add_nearest x y.operator_neg result hx (Number.operator_neg_isNormalized y hy) hok hresult
+  exact Number.operator_add_nearest_proof x y.operator_neg result hx (Number.operator_neg_isNormalized y hy) hok
+    hresult
 
 end XRPL.Model.Protocol

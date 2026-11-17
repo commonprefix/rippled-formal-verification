@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.Ledger.Common.Exits
 import XRPL.Properties.Lending.Ledger.Common.WindDownProofs
+import XRPL.Properties.Lending.Ledger.Common.AmountRangeWitness
 
 /-! # Ledger transaction exits
 
@@ -60,5 +61,14 @@ theorem Lending.vault_exits :
         (LendingTx.preflight_vaultClawback_nonneg l h assets hpre) holderShares shares recovered sharesTotalAmount
         hheld hpr hst hfinal,
     fun j b hnd hcan hb => LendingLedger.vaultDelete_has_broker_proof l hnd hcan j b hb⟩
+
+/-- Witness for the first line of `vault_exits`: on a reachable XRP ledger a donation that takes AssetsTotal above the
+largest XRP amount ends in an error, not `tecLIMIT_EXCEEDED`. -/
+theorem Lending.vault_exits_attained :
+    ∃ (l : LendingLedger) (h : Nat) (amount : STAmount) (assetsTotal : Number),
+      l.Reachable ∧ (LendingTx.vaultDeposit h amount true).preflight l = .tesSUCCESS ∧
+      l.vault.assetsTotal = .ok assetsTotal ∧ (10 : ℚ) ^ 17 < assetsTotal.toRat + amount.toRat ∧
+      (l.apply (.vaultDeposit h amount true)).run = .error .outOfRange :=
+  LendingLedger.vaultDonate_out_of_range_witness
 
 end XRPL.Model

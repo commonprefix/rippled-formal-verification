@@ -481,7 +481,7 @@ lemma doRoundUp_stage_truth_top (truth : ℚ) (g : Guard) (neg : Bool) (zm : UIn
 
 /-- In every mode, a successful `normalize` with nonzero result exposes its `doRoundUp` stage together with
 the input-side facts the result lemmas need. -/
-theorem normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
+theorem Number.normalize_doRoundUp_stage (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -662,13 +662,13 @@ lemma Number.toRat_ne_zero_of_mantissa_ne_zero (n : Number) (h : n.mantissa_ ≠
 
 /-- The result of a successful `normalize` with nonzero mantissa is
 normalized. -/
-theorem normalize_result_isNormalized (n result : Number) (mode : rounding_mode)
+theorem Number.normalize_result_isNormalized (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     result.isNormalized := by
   obtain ⟨m3, e3, g3, res, hrup, hresult_eq, hfloor, hle, _, _⟩ :=
-    normalize_doRoundUp_stage n result mode hn_mant_ne hok hresult
+    Number.normalize_doRoundUp_stage n result mode hn_mant_ne hok hresult
   have hres_ne : res.mantissa_ ≠ 0 := by
     rw [hresult_eq] at hresult
     exact hresult
@@ -688,7 +688,7 @@ theorem normalize_result_isNormalized (n result : Number) (mode : rounding_mode)
 
 /-- A successful `normalize` with nonzero result mantissa forces a nonzero operand mantissa, since
 `doNormalize` returns `Number.zero` for a zero-mantissa input. -/
-theorem normalize_operand_ne_zero (n result : Number) (mode : rounding_mode)
+theorem Number.normalize_operand_ne_zero (n result : Number) (mode : rounding_mode)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
     n.mantissa_ ≠ 0 := by
@@ -702,14 +702,14 @@ theorem normalize_operand_ne_zero (n result : Number) (mode : rounding_mode)
   exact absurd rfl hresult
 
 /-- At the top exponent the `normalize` result mantissa stays `≤ maxRepUp`. -/
-theorem normalize_no_overflow_mantissa (n result : Number) (mode : rounding_mode)
+theorem Number.normalize_no_overflow_mantissa (n result : Number) (mode : rounding_mode)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max mode = .ok result)
     (hresult : result.mantissa_ ≠ 0)
     (h_exp_ge : result.exponent_ ≥ maxExponent) :
     result.mantissa_ ≤ maxRepUp := by
   obtain ⟨m3, e3, g3, res, hrup, hresult_eq, _, hle, hcap_exp, hempty⟩ :=
-    normalize_doRoundUp_stage n result mode hn_mant_ne hok hresult
+    Number.normalize_doRoundUp_stage n result mode hn_mant_ne hok hresult
   rw [hresult_eq] at h_exp_ge ⊢
   exact doRoundUp_mantissa_le_maxRepUp_at_maxExp g3 n.negative_ m3 e3 mode
     .normalize2 hle hcap_exp hempty res hrup h_exp_ge

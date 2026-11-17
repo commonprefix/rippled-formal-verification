@@ -10,7 +10,7 @@ set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) needs extra heartbeats
 /-- `Number.normalize` under `.downward` on any nonzero `(mantissa, exponent)` pair with a nonzero result never rounds
 above the input and has relative error strictly below `10/(2^63 + 2)`. -/
-theorem normalize_rounding_bound_downward (n result : Number)
+theorem Number.normalize_rounding_bound_downward (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .downward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -18,7 +18,7 @@ theorem normalize_rounding_bound_downward (n result : Number)
     n.toRat - result.toRat < |n.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1, h_floor_constraint,
           hcusp_state, habs_n_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_g_sbit, _⟩ :=
-    normalize_algorithmic_facts_downward n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_downward n result hn_mant_ne hok hresult
   have h10ze'_pos : (0 : ℚ) < 10 ^ ze' := zpow_pos (by norm_num) _
   have h10ze'_nn : (0 : ℚ) ≤ 10 ^ ze' := le_of_lt h10ze'_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge

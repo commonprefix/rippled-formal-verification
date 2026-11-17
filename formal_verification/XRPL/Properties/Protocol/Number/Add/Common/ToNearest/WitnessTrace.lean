@@ -7,7 +7,7 @@ import XRPL.Properties.Protocol.Number.Add.Common.NoWrap
 
 namespace XRPL.Model.Protocol
 
-lemma operator_add_to_nearest_witness :
+lemma Number.operator_add_to_nearest_witness :
     Number.operator_add
         ⟨false, 5000000000000000000, 0⟩
         ⟨false, 4223372036854775815, 0⟩
@@ -51,41 +51,13 @@ lemma operator_add_to_nearest_witness :
     rfl
   rw [h_rup]
   simp only [RoundResult.toNumber]
-  unfold Number.normalize
-  rw [doNormalize_eq_spec]
-  all_goals try min_fit
-  unfold doNormalizeSpec
-  rw [show (((9223372036854775820 : UInt64) : UInt64) == 0) = false from rfl]
-  simp only [Bool.false_eq_true, if_false]
-  rw [show doNormalize_scaleUpSpec largeRange.min (9223372036854775820 : UInt64) 0
-        = ((9223372036854775820 : UInt64), (0 : Int)) by
-        unfold doNormalize_scaleUpSpec; rw [if_neg (by decide)]]
-  rw [show doNormalize_scaleDown largeRange.max (9223372036854775820 : UInt64) (0 : Int) Guard.new
-        = .ok ((9223372036854775820 : UInt64), (0 : Int), Guard.new) by
-        unfold doNormalize_scaleDown; rw [dif_neg (by decide)]]
-  simp only []
-  rw [show ((0 : Int) < minExponent || (9223372036854775820 : UInt64) < largeRange.min) = false from by decide]
-  simp only [Bool.false_eq_true, if_false]
-  have h_divu : divu10 (9223372036854775820 : UInt64) = (922337203685477582, 0) := by decide
-  rw [show doNormalize_capAtMaxRep (9223372036854775820 : UInt64) (0 : Int) Guard.new
-        = .ok ((922337203685477582 : UInt64), (1 : Int), Guard.new) from by
-      unfold doNormalize_capAtMaxRep
-      rw [if_pos (by decide), if_neg (by decide), h_divu]
-      simp only [guard_new_push_zero]; norm_num]
-  simp only []
-  have h_rup2 : Guard.new.doRoundUp false (922337203685477582 : UInt64) (1 : Int)
-      largeRange.min largeRange.max .to_nearest .normalize2 =
-      .ok { negative_ := false, mantissa_ := 9223372036854775820, exponent_ := 0 } := by
-    rw_doRoundUp_spec
-    unfold Guard.doRoundUpSpec Guard.bringIntoRangeSpec Guard.round Guard.doDropDigit; rfl
-  rw [h_rup2]
-  simp only [RoundResult.toNumber]
 
 /-- The bound `5/(2^63 + 7)` is attained exactly by `x = 5e18`, `y = 4223372036854775815`, whose sum `2^63 + 7`
 ties at an odd mantissa and rounds up by 5. -/
-theorem operator_add_to_nearest_attained :
+theorem Number.operator_add_to_nearest_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
+      x.negative_ = y.negative_ ∧
       Number.operator_add x y .to_nearest = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       |result.toRat - (x.toRat + y.toRat)|
@@ -93,10 +65,11 @@ theorem operator_add_to_nearest_attained :
   refine ⟨⟨false, 5000000000000000000, 0⟩,
           ⟨false, 4223372036854775815, 0⟩,
           ⟨false, 9223372036854775820, 0⟩,
-          ?_, ?_, ?_, ?_, ?_⟩
+          ?_, ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_add_to_nearest_witness
+  · rfl
+  · exact Number.operator_add_to_nearest_witness
   · decide
   · have hx_rat : (⟨false, 5000000000000000000, 0⟩ : Number).toRat = 5000000000000000000 := by
       unfold Number.toRat; rfl

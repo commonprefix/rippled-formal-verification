@@ -189,7 +189,7 @@ lemma Loan.scheduledComponents_principal_le (l : Loan) (pc : PaymentComponents) 
     have : l.totalValueOutstanding.operator_le pp' = false := by
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf
       simpa using hnf.2
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, this]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, this]
     simp
   have gtpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint htpo
   have gti := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hti
@@ -212,7 +212,7 @@ lemma Loan.scheduledComponents_principal_le (l : Loan) (pc : PaymentComponents) 
     · have vdp := Number.OnGrid.sub_toRat gcP gtpo hs (by rw [vcP, abs_lt]; constructor <;> linarith) hdp
       rw [vdp, vcP]
       exact max_le_max (le_refl 0) (by linarith)
-    · have hR := operator_sub_rounded_to_nearest _ _ _ gcP.1 gtpo.1 hdp
+    · have hR := Number.operator_sub_rounded_to_nearest _ _ _ gcP.1 gtpo.1 hdp
       have hdp0 := Number.roundsToRepresentable_nonpos _ _ hR (by rw [vcP]; linarith)
       rw [max_eq_left hdp0]; exact le_max_left _ _
   have gP1 := Number.OnGrid.min gP0 gcP
@@ -434,7 +434,7 @@ private lemma Loan.tryOverpayment_next (l : Loan) (opc : PaymentComponents) (re 
   obtain ⟨hrN, h0r, -, -⟩ := Loan.periodicRate_bounds l rate hrate
   -- the re-amortized principal is positive, or the new PeriodicPayment would be zero
   have hthN := (LoanState.buildTheoretical_normalized l.wf.periodicPayment_norm hrN hth).2.1
-  have hrp0N := operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN hrp0
+  have hrp0N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN hrp0
   have hmaxN := Number.max_isNormalized' hrp0N Number.zero_isNormalized
   have hpp := computeLoanPropertiesFromPeriodicRate_pp _ _ _ _ _ _ _ hprops
   have hppN := loanPeriodicPayment_isNormalized _ _ _ _ hmaxN hrN hpp
@@ -457,7 +457,7 @@ private lemma Loan.tryOverpayment_next (l : Loan) (opc : PaymentComponents) (re 
     by_contra hle1
     push Not at hle1
     have := Number.roundsToRepresentable_nonpos _ _
-      (operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0) (by linarith)
+      (Number.operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0) (by linarith)
     linarith
   -- the theoretical principal is at most PrincipalOutstanding, so the pinned principal is positive and exact
   have hthP := hK rate th.principalOutstanding hrate (LoanState.buildTheoretical_principal_eq _ _ _ _ _ hn hth)
@@ -480,7 +480,7 @@ private lemma Loan.tryOverpayment_next (l : Loan) (opc : PaymentComponents) (re 
     rw [hc]
     exact le_trans (le_min hRge (by rw [hv]; linarith)) (le_max_right _ _)
   have hrpin : rp0.toRat ≤ pin.toRat :=
-    (operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0).le_of_ge (Or.inl rfl) pin gpin.1 (by rw [hv]; linarith)
+    (Number.operator_sub_rounded_to_nearest _ _ _ hthN hδN hrp0).le_of_ge (Or.inl rfl) pin gpin.1 (by rw [hv]; linarith)
   have hmaxv : (rp0.max Number.zero).toRat = rp0.toRat := by
     rw [Number.max_val _ _ hrp0N Number.zero_isNormalized, Number.toRat_zero, max_eq_left hrp.le]
   show 0 < s4.principalOutstanding.toRat ∧ ∀ rate' t, l.periodicRate = .ok rate' →
@@ -518,7 +518,7 @@ private lemma UnsettledPayment.applyOverpayment_nextShape (payment p : Unsettled
   have hδ0 : 0 < opc.principalDelta.toRat := by
     have hgt : opc.principalDelta.operator_gt Number.zero = true := by
       revert hpd; cases opc.principalDelta.operator_gt Number.zero <;> simp
-    have := (operator_gt_iff _ _ hδg.1 Number.zero_isNormalized).mp hgt
+    have := (Number.operator_gt_iff _ _ hδg.1 Number.zero_isNormalized).mp hgt
     rwa [Number.toRat_zero] at this
   have hpp40 := Loan.tryOverpayment_periodic_ge _ _ _ hlo hδg hδ0 hre
   have hK' : payment.loan.TheoryBelow payment.loan.paymentRemaining := fun rate tpo hrate htpo => by

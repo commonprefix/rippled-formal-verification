@@ -78,8 +78,8 @@ lemma LendingLedger.payoff_exit_settled_proof (l : LendingLedger) (hr : l.Reacha
   have hcast := RawVault.WF.toExact_sharesTotal l.vault.toRawVault l.vault.wf
   obtain ⟨hheldn, hheld0⟩ := hr.sharesNonneg.sharesOf h
   unfold LendingLedger.isSoleShareholder at hsole
-  rw [Bool.and_eq_true, operator_ne_iff _ _ hheldn Number.zero_isNormalized,
-    operator_eq_iff _ _ hheldn hSTn, Number.toRat_zero] at hsole
+  rw [Bool.and_eq_true, Number.operator_ne_iff _ _ hheldn Number.zero_isNormalized,
+    Number.operator_eq_iff _ _ hheldn hSTn, Number.toRat_zero] at hsole
   obtain ⟨hne0, heq⟩ := hsole
   have hSTpos : 0 < l.vault.sharesTotal.toRat := by rw [← heq]; exact lt_of_le_of_ne hheld0 (Ne.symm hne0)
   -- the share total as an int64 amount, which the preflight accepts
@@ -112,7 +112,7 @@ lemma LendingLedger.payoff_exit_settled_proof (l : LendingLedger) (hr : l.Reacha
   obtain ⟨sn, hsn, hsnv, hsnn⟩ := STAmount.toNumber_exact_canonical S .to_nearest
     (STAmount.Canonical.exactCanonical _ hc)
   have hlt : (l.sharesOf h).operator_lt sn = false := by
-    rw [Bool.eq_false_iff, ne_eq, operator_lt_iff _ _ hheldn hsnn, hsnv, hSv, heq]
+    rw [Bool.eq_false_iff, ne_eq, Number.operator_lt_iff _ _ hheldn hsnn, hsnv, hSv, heq]
     exact lt_irrefl _
   obtain ⟨d, hd⟩ := Number.operator_sub_ok_of_normalized_cap (l.sharesOf h) sn .to_nearest hheldn hsnn
     (Number.negative_false_of_nonneg _ hheldn hheld0)

@@ -28,13 +28,13 @@ lemma alignDownSpec_step {m : UInt64} {e : Int} {g : Guard} {target : Int}
 
 /-- The output exponent of `alignDown` is always `max e target`. -/
 theorem alignDownSpec_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
-    (alignDownSpec m e g target).2.1 = max e target := by
+    (alignDownSpec m e g target).2.1 = Max.max e target := by
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
     dsimp only [Guard.doDropDigit] at IH
     rw [alignDownSpec_step hlt]
     rw [IH]
-    have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
+    have hmax_r : Max.max e target = target := max_eq_right (le_of_lt hlt)
     by_cases h2 : e + 1 ≤ target
     · rw [max_eq_right h2, hmax_r]
     · push Not at h2
@@ -65,7 +65,7 @@ def alignDownSpec_steps (e target : Int) : ℕ := (target - e).toNat
 /-- Output mantissa is `m / 10 ^ k` for `k = (max e target - e).toNat`. -/
 theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (alignDownSpec m e g target).1.toNat
-      = m.toNat / 10 ^ (max e target - e).toNat := by
+      = m.toNat / 10 ^ (Max.max e target - e).toNat := by
   induction m, e, g using alignDownSpec.induct target with
   | case1 m e g hlt IH =>
     dsimp only [Guard.doDropDigit] at IH
@@ -75,25 +75,25 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
       rw [UInt64.toNat_div]; rfl
     rw [hm10]
     -- max (e+1) target - (e+1) = max e target - e - 1 when e < target.
-    have hmax_le : e ≤ max e target := le_max_left _ _
-    have htarget_le_max : target ≤ max e target := le_max_right _ _
-    have hmax_e1 : max (e + 1) target = max e target := by
-      have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
+    have hmax_le : e ≤ Max.max e target := le_max_left _ _
+    have htarget_le_max : target ≤ Max.max e target := le_max_right _ _
+    have hmax_e1 : Max.max (e + 1) target = Max.max e target := by
+      have hmax_r : Max.max e target = target := max_eq_right (le_of_lt hlt)
       rw [hmax_r]
       by_cases h2 : e + 1 ≤ target
       · exact max_eq_right h2
       · push Not at h2
         rw [max_eq_left (le_of_lt h2)]; omega
     rw [hmax_e1]
-    have hpos : 0 < (max e target - e).toNat := by
-      have : 0 < max e target - e := by
-        have : e < max e target := lt_of_lt_of_le hlt htarget_le_max
+    have hpos : 0 < (Max.max e target - e).toNat := by
+      have : 0 < Max.max e target - e := by
+        have : e < Max.max e target := lt_of_lt_of_le hlt htarget_le_max
         omega
       omega
-    set K := (max e target - e).toNat with hK_def
-    have hK1 : (max e target - (e + 1)).toNat = K - 1 := by
+    set K := (Max.max e target - e).toNat with hK_def
+    have hK1 : (Max.max e target - (e + 1)).toNat = K - 1 := by
       rw [hK_def]
-      have : max e target - (e + 1) = max e target - e - 1 := by ring
+      have : Max.max e target - (e + 1) = Max.max e target - e - 1 := by ring
       rw [this]
       omega
     rw [hK1]
@@ -106,7 +106,7 @@ theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : I
   | case2 m e g hnlt =>
     rw [alignDownSpec_noop hnlt]
     push Not at hnlt
-    have hmax : max e target = e := max_eq_left hnlt
+    have hmax : Max.max e target = e := max_eq_left hnlt
     rw [hmax]
     simp
 
@@ -116,8 +116,8 @@ theorem alignDownSpec_represents
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (f0 : ℚ) (hrep0 : represents g0 f0) :
     represents (alignDownSpec m e g0 target).2.2
-      ((f0 + ((m.toNat % 10 ^ (max e target - e).toNat : ℕ) : ℚ))
-         / 10 ^ (max e target - e).toNat) := by
+      ((f0 + ((m.toNat % 10 ^ (Max.max e target - e).toNat : ℕ) : ℚ))
+         / 10 ^ (Max.max e target - e).toNat) := by
   induction m, e, g0 using alignDownSpec.induct target
     generalizing f0 with
   | case1 m e g0 hlt IH =>
@@ -133,21 +133,21 @@ theorem alignDownSpec_represents
     rw [hstep]
     set f1 : ℚ := (f0 + ((m % 10 : UInt64).toNat : ℚ)) / 10 with hf1_def
     have hIH := IH (f0 := f1) hpush
-    have hmax_e1 : max (e + 1) target = max e target := by
-      have hmax_r : max e target = target := max_eq_right (le_of_lt hlt)
+    have hmax_e1 : Max.max (e + 1) target = Max.max e target := by
+      have hmax_r : Max.max e target = target := max_eq_right (le_of_lt hlt)
       rw [hmax_r]
       by_cases h2 : e + 1 ≤ target
       · exact max_eq_right h2
       · push Not at h2
         rw [max_eq_left (le_of_lt h2)]; omega
-    set K : ℕ := (max e target - e).toNat with hK_def
+    set K : ℕ := (Max.max e target - e).toNat with hK_def
     have hK_pos : 0 < K := by
       rw [hK_def]
-      have hlt' : e < max e target := lt_of_lt_of_le hlt (le_max_right _ _)
+      have hlt' : e < Max.max e target := lt_of_lt_of_le hlt (le_max_right _ _)
       omega
-    have hKstep : (max (e + 1) target - (e + 1)).toNat = K - 1 := by
+    have hKstep : (Max.max (e + 1) target - (e + 1)).toNat = K - 1 := by
       rw [hmax_e1, hK_def]
-      have heq : max e target - (e + 1) = max e target - e - 1 := by ring
+      have heq : Max.max e target - (e + 1) = Max.max e target - e - 1 := by ring
       rw [heq]; omega
     have hm10 : ((m / 10 : UInt64)).toNat = m.toNat / 10 := by
       rw [UInt64.toNat_div]; rfl
@@ -183,8 +183,8 @@ theorem alignDownSpec_represents
   | case2 m e g0 hnlt =>
     rw [alignDownSpec_noop hnlt]
     push Not at hnlt
-    have hmax : max e target = e := max_eq_left hnlt
-    have hk0 : (max e target - e).toNat = 0 := by rw [hmax]; simp
+    have hmax : Max.max e target = e := max_eq_left hnlt
+    have hk0 : (Max.max e target - e).toNat = 0 := by rw [hmax]; simp
     rw [hk0]
     simp only [pow_zero, Nat.mod_one, Nat.cast_zero, add_zero, div_one]
     exact hrep0
@@ -195,8 +195,8 @@ theorem alignDownSpec_steps_ge_17_of_xbit
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (hg0 : represents g0 0)
     (hxbit : (alignDownSpec m e g0 target).2.2.xbit_ = true) :
-    17 ≤ (max e target - e).toNat := by
-  set k := (max e target - e).toNat with hk_def
+    17 ≤ (Max.max e target - e).toNat := by
+  set k := (Max.max e target - e).toNat with hk_def
   have hrep := alignDownSpec_represents m e g0 target 0 hg0
   rw [← hk_def] at hrep
   have hr_eq :
@@ -255,9 +255,9 @@ theorem alignDownSpec_mantissa_le_99_of_xbit
     (hm : m.toNat < 10 ^ 19)
     (hxbit : (alignDownSpec m e g0 target).2.2.xbit_ = true) :
     (alignDownSpec m e g0 target).1.toNat ≤ 99 := by
-  have hk17 : 17 ≤ (max e target - e).toNat :=
+  have hk17 : 17 ≤ (Max.max e target - e).toNat :=
     alignDownSpec_steps_ge_17_of_xbit m e g0 target hg0 hxbit
-  set k := (max e target - e).toNat with hk_def
+  set k := (Max.max e target - e).toNat with hk_def
   rw [alignDownSpec_mantissa_eq]
   rw [← hk_def]
   -- m.toNat / 10^k ≤ m.toNat / 10^17.
@@ -288,7 +288,7 @@ lemma alignDown_step {m : UInt64} {e : Int} {g : Guard} {target : Int}
   exact alignDownSpec_step h
 
 theorem alignDown_e_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
-    (Number.operator_add.alignDown m e g target).2.1 = max e target := by
+    (Number.operator_add.alignDown m e g target).2.1 = Max.max e target := by
   rw [alignDown_eq_spec]; exact alignDownSpec_e_eq m e g target
 
 theorem alignDown_mantissa_le (m : UInt64) (e : Int) (g : Guard) (target : Int) :
@@ -297,15 +297,15 @@ theorem alignDown_mantissa_le (m : UInt64) (e : Int) (g : Guard) (target : Int) 
 
 theorem alignDown_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (Number.operator_add.alignDown m e g target).1.toNat
-      = m.toNat / 10 ^ (max e target - e).toNat := by
+      = m.toNat / 10 ^ (Max.max e target - e).toNat := by
   rw [alignDown_eq_spec]; exact alignDownSpec_mantissa_eq m e g target
 
 theorem alignDown_represents
     (m : UInt64) (e : Int) (g0 : Guard) (target : Int)
     (f0 : ℚ) (hrep0 : represents g0 f0) :
     represents (Number.operator_add.alignDown m e g0 target).2.2
-      ((f0 + ((m.toNat % 10 ^ (max e target - e).toNat : ℕ) : ℚ))
-         / 10 ^ (max e target - e).toNat) := by
+      ((f0 + ((m.toNat % 10 ^ (Max.max e target - e).toNat : ℕ) : ℚ))
+         / 10 ^ (Max.max e target - e).toNat) := by
   rw [alignDown_eq_spec]; exact alignDownSpec_represents m e g0 target f0 hrep0
 
 theorem alignDown_mantissa_le_99_of_xbit

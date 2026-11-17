@@ -238,7 +238,7 @@ private lemma Loan.instalment_interest (l l' : Loan) (pc : PaymentComponents) (i
       exact_mod_cast mul_right_cancel₀ hpos.ne' this
     have hvap := Number.operator_sub_toRat_of_grid _ _ _ a b l.loanScale g1.1 g2.1 (by rw [ha]; push_cast; ring)
       (by rw [hb]; push_cast; ring) (by constructor <;> omega) hsb e1
-    have hvapn := operator_sub_isNormalized_to_nearest_sz _ _ _ g1.1 g2.1 e1
+    have hvapn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ g1.1 g2.1 e1
     have hid := Number.operator_sub_toRat_of_grid _ _ _ ((a : ℤ) - b) c l.loanScale hvapn g3.1 hvap
       (by rw [hc]; push_cast; ring) (by constructor <;> omega) hsb e2
     rw [hid, hkv, hkv', hk'v]
@@ -285,10 +285,12 @@ private lemma Loan.instalment_sum (l l' : Loan) (pc : PaymentComponents) (inst a
   have hinstn : inst.interestPaid.isNormalized := by
     obtain ⟨_, _, e1, e2, e3, -, -⟩ := PaymentComponents.paidAmounts_ok_inv pc inst hpaid
     obtain ⟨n1, n2, n3⟩ := hδ.norm
-    exact operator_add_isNormalized_to_nearest_sz _ _ _ (operator_sub_isNormalized_to_nearest_sz _ _ _
-      (operator_sub_isNormalized_to_nearest_sz _ _ _ n1 n2 e1) n3 e2) (by rw [hδ.1]; exact Number.zero_isNormalized) e3
+    exact Number.operator_add_isNormalized_to_nearest_sz _ _ _ (Number.operator_sub_isNormalized_to_nearest_sz _ _ _
+      (Number.operator_sub_isNormalized_to_nearest_sz _ _ _ n1 n2 e1) n3 e2) (by rw [hδ.1]; exact
+        Number.zero_isNormalized) e3
   have hv := Number.operator_add_toRat_of_grid _ _ _ (k0 - kl) (kl - kl') s hg.1 hinstn hav hbv hrange hsb hsum
-  refine ⟨⟨operator_add_isNormalized_to_nearest_sz _ _ _ hg.1 hinstn hsum, _, hv⟩, ?_, by rw [hst.loanScale, hls],
+  refine ⟨⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ hg.1 hinstn hsum, _, hv⟩, ?_, by rw [hst.loanScale,
+    hls],
     hnt'⟩
   rw [hv, hkl', hk0v]; push_cast; ring
 

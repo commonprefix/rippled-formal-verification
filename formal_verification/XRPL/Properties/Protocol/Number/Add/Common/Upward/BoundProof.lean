@@ -7,7 +7,7 @@ namespace XRPL.Model.Protocol
 
 set_option maxHeartbeats 800000 in
 -- nlinarith over large constants (2^63+2) needs extra heartbeats
-theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Number)
+theorem Number.operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -16,7 +16,7 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, hf_nn, hf_lt1, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, _h_sbit, _, _, _, _⟩ :=
-    operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
       h_same_sign h_not_zero hok
   -- Reduce to `||result| - |truth|| ≤ |truth| * bound` via sign alignment.
   have h_abs_diff_eq : |result.toRat - (x.toRat + y.toRat)|
@@ -180,7 +180,7 @@ theorem operator_add_rounding_bound_same_sign_upward (x y : Number) (result : Nu
 
 /-- Relative-error bound `11/(2^63 - 18)` for `Number.operator_add` under `.upward`, for both sign cases, when the
 result is nonzero. -/
-theorem operator_add_rounding_bound_upward_tight (x y result : Number)
+theorem Number.operator_add_rounding_bound_upward_tight (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -188,7 +188,7 @@ theorem operator_add_rounding_bound_upward_tight (x y result : Number)
     (hresult : result.mantissa_ ≠ 0) :
     |result.toRat - (x.toRat + y.toRat)| < |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
   by_cases h_sign : x.negative_ = y.negative_
-  · have hss := operator_add_rounding_bound_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
+  · have hss := Number.operator_add_rounding_bound_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok
     have htruth_nn : 0 ≤ |x.toRat + y.toRat| := abs_nonneg _
     have hconst : (10 / (2 ^ 63 + 2 : ℚ)) ≤ (11 / (2 ^ 63 - 18 : ℚ)) := by norm_num
@@ -196,7 +196,7 @@ theorem operator_add_rounding_bound_upward_tight (x y result : Number)
         < |x.toRat + y.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := hss
       _ ≤ |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
           mul_le_mul_of_nonneg_left hconst htruth_nn
-  · exact operator_add_rounding_bound_diff_sign_upward_tight x y result hx hy hx_mant_ne hy_mant_ne
+  · exact Number.operator_add_rounding_bound_diff_sign_upward_tight x y result hx hy hx_mant_ne hy_mant_ne
       h_sign h_not_zero hok hresult
 
 end XRPL.Model.Protocol

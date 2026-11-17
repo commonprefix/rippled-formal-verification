@@ -518,7 +518,7 @@ def Number.operator_add (x y : Number)
           pure (zm, xe, g))
       match g.doRoundUp xn zm xe largeRange.min largeRange.max mode .overflow with
       | .error err => .error err
-      | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode
+      | .ok res => .ok res.toNumber
     else
       let (zm128, zn, ze) ←
         (if xm > ym then do

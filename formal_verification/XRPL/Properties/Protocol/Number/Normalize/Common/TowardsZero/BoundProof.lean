@@ -8,7 +8,7 @@ namespace XRPL.Model.Protocol
 
 /-- `Number.normalize` under `.towards_zero` on any nonzero `(mantissa, exponent)` pair with a nonzero result never
 increases the magnitude and has relative error below `10/(2^63 + 2)`. -/
-theorem normalize_rounding_bound_towards_zero (n result : Number)
+theorem Number.normalize_rounding_bound_towards_zero (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .towards_zero = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -16,7 +16,7 @@ theorem normalize_rounding_bound_towards_zero (n result : Number)
     |n.toRat| - |result.toRat| < |n.toRat| * (10 / (2 ^ 63 + 2 : ℚ)) := by
   obtain ⟨zm, ze, f, g, res_pos, hzm_ge, hzm_le_max, hf_nn, hf_lt1, _hcusp_state,
           habs_n_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, _h_sign, _⟩ :=
-    normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_towards_zero n result hn_mant_ne hok hresult
   have h10ze_pos : (0 : ℚ) < 10 ^ ze := zpow_pos (by norm_num) _
   have h10ze_nn : (0 : ℚ) ≤ 10 ^ ze := le_of_lt h10ze_pos
   have hzm_q_ge : (mantissaFloor : ℚ) ≤ (zm.toNat : ℚ) := by exact_mod_cast hzm_ge

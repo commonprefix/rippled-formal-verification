@@ -54,8 +54,8 @@ lemma loanPeriodicRate_bounds (ir : TenthBips32) (interval : UInt32) (rate : Num
   rw [hIv, hBv] at np
   have hi0 : (0 : ℚ) ≤ interval.toNat := by positivity
   have hb0 : (0 : ℚ) ≤ ir.toNat := by positivity
-  have hp0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hI hB hp) (by rw [hIv, hBv]; positivity)
-  have ht0 := rn_nonneg (operator_div_rounded_to_nearest _ _ _ hpN hU ht) (by rw [hUv]; positivity)
+  have hp0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hI hB hp) (by rw [hIv, hBv]; positivity)
+  have ht0 := rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hpN hU ht) (by rw [hUv]; positivity)
   have e3 : interval.toNat * ir.toNat / (10 ^ 5 * 31536000) * (1 + ε) ^ 3 =
       interval.toNat * ir.toNat * (1 + ε) / 100000 * (1 + ε) / 31536000 * (1 + ε) := by ring
   constructor
@@ -70,7 +70,7 @@ lemma loanPeriodicRate_bounds (ir : TenthBips32) (interval : UInt32) (rate : Num
       intro h0
       have := nr.le (by rw [h0]; norm_num)
       rw [h0] at this
-      exact hr (le_antisymm (by linarith) (rn_nonneg (operator_div_rounded_to_nearest _ _ _ htN hY h)
+      exact hr (le_antisymm (by linarith) (rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ htN hY h)
         (by rw [hYv]; positivity)))
     have hp' : p.toRat ≠ 0 := by
       intro h0

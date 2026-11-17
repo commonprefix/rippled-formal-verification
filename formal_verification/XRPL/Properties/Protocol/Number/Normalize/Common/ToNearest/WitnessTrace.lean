@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.ToNearest.BoundProof
 namespace XRPL.Model.Protocol
 
 /-- `Number.normalize` trace for the to_nearest witness input `2^63 + 7`. -/
-lemma normalize_to_nearest_witness :
+lemma Number.normalize_to_nearest_witness :
     Number.normalize ⟨false, twoPow63Add7, 0⟩
         largeRange.min largeRange.max .to_nearest =
       .ok ⟨false, twoPow63Add12, 0⟩ := by
@@ -42,7 +42,7 @@ lemma normalize_to_nearest_witness :
 
 /-- The `5/(2^63+7)` to-nearest normalize bound is attained: normalizing `2^63+7` ties on an odd mantissa and
 rounds up by exactly 5, so 5 is the optimal numerator. -/
-theorem normalize_to_nearest_attained :
+theorem Number.normalize_to_nearest_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .to_nearest = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -50,7 +50,7 @@ theorem normalize_to_nearest_attained :
   refine ⟨⟨false, twoPow63Add7, 0⟩,
           ⟨false, twoPow63Add12, 0⟩,
           ?_, ?_, ?_⟩
-  · exact normalize_to_nearest_witness
+  · exact Number.normalize_to_nearest_witness
   · decide
   · have hn_rat : (⟨false, twoPow63Add7, 0⟩ : Number).toRat = twoPow63Add7 := by
       unfold Number.toRat; rfl

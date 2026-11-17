@@ -110,10 +110,9 @@ lemma STAmount.ofNumber_fractional_ok (r : Number) (mode : rounding_mode)
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toUInt64.toInt64 else mant.toUInt64.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_eq mode h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [STAmount.signedDrops_toInt64Checked _ h_fit, ok_bind, h_sd]
+    rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant.toUInt64 exp neg mode hmtu_lo hmtu_hi
       (by rw [hw_exp] at hexp_lo3; omega) (by omega)
   rw [STAmount.checked]

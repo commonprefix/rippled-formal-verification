@@ -29,11 +29,11 @@ private lemma impair_sums_nonneg (loan : Loan) (v : Vault) (aa' ad' lu' ar' yu' 
   have hr := Number.eq_of_add_zero hs.reserved
   subst hd hy hr
   have hl := hs.loss
-  have hln := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm
+  have hln := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm
     loan.wf.principalOutstanding_norm hl
   refine ⟨(cash_zero_nonneg v _ _ _ _ _ _ rfl hs).2, ?_, ?_, ?_, ?_⟩
   · exact Number.signum_nonneg_of_toRat _ v.wf.assetsDeployed_norm v.exact.assetsDeployed_nonneg
-  · exact Number.signum_nonneg_of_toRat _ hln (operator_add_nonneg _ _ _ v.wf.lossUnrealized_norm
+  · exact Number.signum_nonneg_of_toRat _ hln (Number.operator_add_nonneg _ _ _ v.wf.lossUnrealized_norm
       loan.wf.principalOutstanding_norm hl (add_nonneg v.exact.lossUnrealized_nonneg
         loan.exact.principalOutstanding_nonneg))
   · exact Number.signum_nonneg_of_toRat _ v.wf.yieldUnrealized_norm v.exact.yieldUnrealized_nonneg
@@ -43,7 +43,7 @@ private lemma impair_sums_nonneg (loan : Loan) (v : Vault) (aa' ad' lu' ar' yu' 
 private lemma toRat_nonneg_of_signum (n : Number) (hn : n.isNormalized) (h : 0 ≤ n.signum) : 0 ≤ n.toRat := by
   by_contra hlt
   push Not at hlt
-  rw [signum_eq n hn, if_neg (by linarith), if_pos hlt] at h
+  rw [Number.signum_eq n hn, if_neg (by linarith), if_pos hlt] at h
   omega
 
 /-- An update that only moves LossUnrealized leaves a lawful vault once it succeeds. -/
@@ -65,9 +65,9 @@ private lemma loss_only_lawful (v : Vault) (c : PoolBalanceChange) (raw : RawVau
   subst hd'' hy'' hr''
   obtain ⟨hcash, -⟩ := cash_zero_nonneg v _ _ _ _ _ _ hc hs
   have han := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hcash
-  have hln := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hl hs.loss
+  have hln := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hl hs.loss
   have hlu : lu'.toRat ≤ v.assetsDeployed.toRat :=
-    (operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hln).mp hle
+    (Number.operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hln).mp hle
   refine Vault.balances_lawful v _ _ _ _ _ ⟨han, v.wf.assetsDeployed_norm, v.wf.assetsReserved_norm, hln,
     v.wf.yieldUnrealized_norm⟩ ⟨toRat_nonneg_of_signum _ han hnn.1, v.exact.assetsDeployed_nonneg,
     v.exact.assetsReserved_nonneg, toRat_nonneg_of_signum _ hln hnn.2.2.1, v.exact.yieldUnrealized_nonneg⟩
@@ -86,13 +86,13 @@ private lemma unimpair_loss_not_gt (loan : Loan) (v : Vault) (aa' ad' lu' ar' yu
   have hd := Number.eq_of_add_zero hs.deployed
   subst hd
   have hpn := Number.operator_neg_isNormalized _ loan.wf.principalOutstanding_norm
-  have hln := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hpn hs.loss
+  have hln := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.lossUnrealized_norm hpn hs.loss
   have hle : lu'.toRat ≤ v.lossUnrealized.toRat :=
-    operator_add_le_of_le_normalized _ _ _ _ v.wf.lossUnrealized_norm hpn hs.loss v.wf.lossUnrealized_norm (by
+    Number.operator_add_le_of_le_normalized _ _ _ _ v.wf.lossUnrealized_norm hpn hs.loss v.wf.lossUnrealized_norm (by
       have : 0 ≤ loan.principalOutstanding.toRat := loan.exact.principalOutstanding_nonneg
       rw [Number.toRat_neg]; linarith)
   unfold Number.operator_gt
-  exact (operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hln).mpr (hle.trans v.exact.lossUnrealized_le)
+  exact (Number.operator_lt_eq_false_iff _ _ v.wf.assetsDeployed_norm hln).mpr (hle.trans v.exact.lossUnrealized_le)
 
 variable (loan : Loan) (v : Vault) (now : UInt32)
 

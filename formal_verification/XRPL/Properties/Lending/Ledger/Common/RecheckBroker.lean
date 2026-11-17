@@ -84,7 +84,7 @@ lemma LoanBroker.create_ok_of_preflight (l : LendingLedger) (tx : LoanBrokerSetC
     cases hd : tx.debtMaximum with
     | none =>
       refine ⟨Number.zero_isNormalized, hz, ?_⟩
-      rw [Option.getD_none, operator_le_iff _ _ Number.zero_isNormalized hcn, Number.toRat_zero, hcv]
+      rw [Option.getD_none, Number.operator_le_iff _ _ Number.zero_isNormalized hcn, Number.toRat_zero, hcv]
       norm_num
     | some d => simpa using hdm d hd
   have hwf : (LoanBroker.createRaw tx nt).WF := ⟨Number.zero_isNormalized, hdm'.1, Number.zero_isNormalized⟩
@@ -139,10 +139,10 @@ lemma LoanBroker.update_ok_of_checks (l : LendingLedger) (i : Nat) (lb : LoanBro
       { lb.valid with
         debt_within_cap := fun hne => by
           have hs : d.signum ≠ 0 := fun h0 =>
-            hne ((Number.toRat_eq_zero_iff_eq_zero hn).mp ((signum_eq_zero_iff d hn).mp h0))
+            hne ((Number.toRat_eq_zero_iff_eq_zero hn).mp ((Number.signum_eq_zero_iff d hn).mp h0))
           have hlt : d.operator_lt lb.debtTotal = false := by simpa [hs] using hlim
-          exact (operator_le_iff _ _ lb.wf.debtTotal_norm hn).mpr
-            ((operator_lt_eq_false_iff _ _ hn lb.wf.debtTotal_norm).mp hlt)
+          exact (Number.operator_le_iff _ _ lb.wf.debtTotal_norm hn).mpr
+            ((Number.operator_lt_eq_false_iff _ _ hn lb.wf.debtTotal_norm).mp hlt)
         debtMaximum_nonneg := hnn
         debtMaximum_cap := hcap }
     obtain ⟨b, hb, -⟩ := RawLoanBroker.to_lawful_ok_of hwf hv
@@ -195,7 +195,7 @@ private lemma LoanBroker.withCover_ok (lb : LoanBroker) (c' : Number) (hn' : c'.
     ⟨lb.wf.debtTotal_norm, lb.wf.debtMaximum_norm, hn'⟩
   have hv : ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).Valid :=
     { lb.valid with
-      coverAvailable_nonneg := (operator_le_iff _ _ Number.zero_isNormalized hn').mpr
+      coverAvailable_nonneg := (Number.operator_le_iff _ _ Number.zero_isNormalized hn').mpr
         (by rw [Number.toRat_zero]; exact h0') }
   obtain ⟨b, hb, -⟩ := RawLoanBroker.to_lawful_ok_of hwf hv
   exact ⟨b, hb⟩
@@ -213,8 +213,8 @@ lemma LoanBroker.applyCoverTransaction_credit_ne_notLawful (lb : LoanBroker) (a 
   split at h
   · simp_all [Number.operator_add_ne_notLawful]
   · rename_i c' hc'
-    obtain ⟨b, hb⟩ := LoanBroker.withCover_ok lb c' (operator_add_isNormalized_to_nearest_sz _ _ _ hcn haN hc')
-      (operator_add_nonneg _ _ _ hcn haN hc' h0)
+    obtain ⟨b, hb⟩ := LoanBroker.withCover_ok lb c' (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hcn haN hc')
+      (Number.operator_add_nonneg _ _ _ hcn haN hc' h0)
     rw [hb] at h
     cases h
 
@@ -233,8 +233,8 @@ lemma LoanBroker.applyCoverTransaction_debit_ne_notLawful (lb : LoanBroker) (a :
   · simp_all [Number.operator_sub_ne_notLawful]
   · rename_i c' hc'
     have hc'' : lb.coverAvailable.operator_add aN.operator_neg .to_nearest = .ok c' := hc'
-    obtain ⟨b, hb⟩ := LoanBroker.withCover_ok lb c' (operator_add_isNormalized_to_nearest_sz _ _ _ hcn hneg hc'')
-      (operator_add_nonneg _ _ _ hcn hneg hc'' (by rw [Number.toRat_neg]; linarith))
+    obtain ⟨b, hb⟩ := LoanBroker.withCover_ok lb c' (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hcn hneg hc'')
+      (Number.operator_add_nonneg _ _ _ hcn hneg hc'' (by rw [Number.toRat_neg]; linarith))
     rw [hb] at h
     cases h
 
@@ -255,7 +255,7 @@ lemma LoanBroker.canCoverWithdraw_le (lb : LoanBroker) (v : Vault) (amount : STA
   walk_ok
   refine ⟨_, _, ‹clampToSumExponent _ _ _ = .ok _›, ‹STAmount.toNumber _ _ = .ok _›, ?_⟩
   have hn := STAmount.toNumber_isNormalized _ _ _ ‹STAmount.toNumber _ _ = .ok _›
-  exact (operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hn).mp (by simpa using ‹¬ _ = true›)
+  exact (Number.operator_lt_eq_false_iff _ _ lb.wf.coverAvailable_norm hn).mp (by simpa using ‹¬ _ = true›)
 
 /-- A cover withdrawal that passed its checks never fails the broker re-check. -/
 lemma LoanBroker.coverWithdraw_ne_notLawful (lb : LoanBroker) (v : Vault) (amount : STAmount)
@@ -321,9 +321,9 @@ lemma postSumExponent_frac_lt_pow (A c : Number) (b E : Int) (hA : A.isNormalize
     (hc0 : 0 ≤ c.toRat) (h : postSumExponent A c b .fractional = .ok E) :
     A.toRat < 10 ^ 96 := by
   obtain ⟨sum, hsum, hne⟩ := postSumExponent_reduces A c b .fractional E h
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hsum
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hsum
   have hge : A.toRat ≤ sum.toRat :=
-    (operator_add_rounded_to_nearest _ _ _ hA hc hsum).ge_of_le (Or.inl rfl) A hA (by linarith)
+    (Number.operator_add_rounded_to_nearest _ _ _ hA hc hsum).ge_of_le (Or.inl rfl) A hA (by linarith)
   by_contra hbig
   push Not at hbig
   have hs0 : sum.mantissa_ ≠ 0 := fun h0 => by
@@ -518,7 +518,7 @@ private lemma LoanBroker.maxClaw_facts (lb : LoanBroker) (e : Int) (he : -81 ≤
   have hmxn := Number.operator_sub_isNormalized_any _ _ _ _ lb.wf.coverAvailable_norm hmcn hmx
   have hmx0 : 0 < mx.toRat := (Number.signum_pos_iff_toRat hmxn).mp (by omega)
   have hmxz : mx.mantissa_ ≠ 0 := fun h0 => by rw [Number.toRat_eq_zero_of_mantissa_zero mx h0] at hmx0; linarith
-  obtain ⟨n, hn, hv⟩ := operator_sub_rounded_downward _ _ _ lb.wf.coverAvailable_norm hmcn hmx hmxz
+  obtain ⟨n, hn, hv⟩ := Number.operator_sub_rounded_downward _ _ _ lb.wf.coverAvailable_norm hmcn hmx hmxz
   have := Number.lower_le _ n hn
   exact ⟨hmxn, hmx0, by rw [hv]; linarith⟩
 
@@ -574,7 +574,7 @@ lemma LoanBroker.coverClawback_ne_notLawful (lb : LoanBroker) (v : Vault) (amoun
   obtain ⟨hmn, hm0⟩ := hamt _ rfl (by simpa using ‹¬ (_ : STAmount).isZero = true›) _ ‹STAmount.toNumber _ _ = .ok _›
   have hgt := ‹¬ (_ : Number).operator_gt _ = true›
   unfold Number.operator_gt at hgt
-  have hle := (operator_lt_eq_false_iff _ _ hmxn hmn).mp (by simpa using hgt)
+  have hle := (Number.operator_lt_eq_false_iff _ _ hmxn hmn).mp (by simpa using hgt)
   exact hfin _ _ _ _ _ hmc hmx ‹_› hmn hm0 hle ‹_› ‹_› ‹_›
 
 /-- A cover clawback that passed its preflight names no amount, zero, or an amount whose Number is normalized and

@@ -55,8 +55,8 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
         by show amount.operator_neg.mOffset - 3 + 22 ≤ maxExponent; have := hniou.exp_hi; unfold maxExponent; omega⟩
     obtain ⟨sum, hsum⟩ := Number.operator_add_ok_of_exp lb.coverAvailable nN .to_nearest hAn hnNn
       (Number.exponent_headroom_of_lt _ hAn hA0 hA96) hnNe
-    have hR := operator_add_rounded_to_nearest _ _ _ hAn hnNn hsum
-    have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hAn hnNn hsum
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ hAn hnNn hsum
+    have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAn hnNn hsum
     have hs0 : 0 ≤ sum.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg sum _ hR (by rw [hnNv]; linarith)
     have hsA : sum.toRat ≤ lb.coverAvailable.toRat :=
       Number.RoundsToRepresentable.le_of_le_normalized sum _ hR _ hAn (by rw [hnNv]; linarith)
@@ -105,21 +105,21 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
   -- the amount is not zero, converts exactly and fits in the cover
   obtain ⟨aN, haN, haNv, haNn⟩ := STAmount.toNumber_canonical_exact amount .to_nearest hc
   have hlt : lb.coverAvailable.operator_lt aN = false :=
-    (operator_lt_eq_false_iff _ _ hAn haNn).mpr (by rw [haNv]; linarith)
+    (Number.operator_lt_eq_false_iff _ _ hAn haNn).mpr (by rw [haNv]; linarith)
   have hz0 : amount.isZero = false := (STAmount.isZero_eq_false_iff_pos amount hpos.le).mpr hpos
 
   -- the cover left after the withdrawal is still at least the minimum cover
   obtain ⟨c', hsub⟩ := Number.operator_sub_ok_of_lt lb.coverAvailable aN .to_nearest hAn haNn hA0 hA96
     (by rw [haNv]; exact hpos.le) (by rw [haNv]; linarith)
-  have hc'n := operator_sub_isNormalized_to_nearest_sz _ _ _ hAn haNn hsub
+  have hc'n := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hAn haNn hsub
   have hc'm : minimumCover.toRat ≤ c'.toRat :=
-    (operator_sub_rounded_to_nearest _ _ _ hAn haNn hsub).ge_of_le (Or.inl rfl) _ hmn (by rw [haNv]; linarith)
+    (Number.operator_sub_rounded_to_nearest _ _ _ hAn haNn hsub).ge_of_le (Or.inl rfl) _ hmn (by rw [haNv]; linarith)
   have hmc : ({ lb.toRawLoanBroker with coverAvailable := c' } : RawLoanBroker).hasMinimumCover
       (AssetPool.baseExponent v) = .ok true := by
     have hmin' : minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum (AssetPool.baseExponent v) =
         .ok minimumCover := hmin
     unfold RawLoanBroker.hasMinimumCover
-    rw [hmin', ok_bind, (operator_le_iff _ _ hmn hc'n).mpr hc'm]
+    rw [hmin', ok_bind, (Number.operator_le_iff _ _ hmn hc'n).mpr hc'm]
     rfl
   unfold LoanBroker.canCoverWithdraw
   simp only [hcl, ok_bind, hz0, haN, hlt, hsub, hmc, Bool.false_eq_true, if_false, Bool.not_true, pure_bind]

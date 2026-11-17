@@ -19,8 +19,8 @@ lemma post_exp_ge (A : Number) (p : STAmount) (pn : Number) (exponent e : ℤ)
   obtain ⟨sn, hsn, hsnv, hsnn⟩ := STAmount.toNumber_iou_exact p .to_nearest hp
   rw [hsn, Except.ok.injEq] at hpn
   subst hpn
-  have hrsum := operator_add_rounded_to_nearest A sn sum hA hsnn hsum
-  have hsum_norm := operator_add_isNormalized_to_nearest_sz A sn sum hA hsnn hsum
+  have hrsum := Number.operator_add_rounded_to_nearest A sn sum hA hsnn hsum
+  have hsum_norm := Number.operator_add_isNormalized_to_nearest_sz A sn sum hA hsnn hsum
   have hge : sn.toRat ≤ sum.toRat :=
     Number.RoundsToRepresentable.ge_of_ge_normalized sum _ hrsum sn hsnn (by linarith)
   have hband := (STAmount.IOUCanonical.toRat_bounds p hp hppos).1

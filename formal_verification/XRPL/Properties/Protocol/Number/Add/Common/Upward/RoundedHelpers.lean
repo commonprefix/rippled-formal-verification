@@ -10,7 +10,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.GridPoint
 
 namespace XRPL.Model.Protocol
 
-theorem operator_add_no_inbetween_above_upward (x y result : Number)
+theorem Number.operator_add_no_inbetween_above_upward (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -23,7 +23,7 @@ theorem operator_add_no_inbetween_above_upward (x y result : Number)
   · -- Same-sign: the guard holds the exact dropped fraction, so the general lemma applies directly.
     obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, _hfloor_constr, habs_xy_eq,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign, h_sbit, hzm_succ, _, _, _⟩ :=
-      operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
+      Number.operator_add_algorithmic_facts_same_sign_upward x y result hx hy hx_mant_ne hy_mant_ne
         h_sign_eq h_not_zero hok
     exact no_inbetween_above_upward_frame result (x.toRat + y.toRat) zm ze' f g res_pos
       .overflow hzm_ge hzm_le hf_nn hf_lt habs_xy_eq h_rup_pos
@@ -39,7 +39,7 @@ theorem operator_add_no_inbetween_above_upward (x y result : Number)
   · -- Diff-sign: through the general `doNormalize128` lemmas.
     obtain ⟨M, ze0, δ, zn, sticky, hδ_low, _hδ_le, hsticky_zero, hM_pos, hM_lt, hM_big,
         htruth, hok128, hsign, hδ_lt, hsticky_pos⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result .upward hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     obtain ⟨zm, ze', f, g, res_pos, ftilde, hzm_ge, hzm_le, hf_nn, hf_lt, h_value,
         h_rup_pos, h_result_abs, hres_pos_mant_ne, h_neg, h_sbit, hzm_succ,
@@ -69,7 +69,7 @@ theorem operator_add_no_inbetween_above_upward (x y result : Number)
         exact h_sbit.trans hzn_false)
       h_ge
 
-theorem operator_add_rounded_upward_proof (x y result : Number)
+theorem Number.operator_add_rounded_upward_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_add x y .upward = .ok result)
     (hresult : result.mantissa_ ≠ 0) :
@@ -132,34 +132,34 @@ theorem operator_add_rounded_upward_proof (x y result : Number)
     rw [hy_zero]
     decide
   have h_truth_ne : x.toRat + y.toRat ≠ 0 :=
-    operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .upward result hok
+    Number.operator_add_truth_ne x y hx hy hx_mant_ne hy_mant_ne heq_guard .upward result hok
   have h_dir : x.toRat + y.toRat ≤ result.toRat :=
-    (operator_add_rounds_upward x y result hx hy hx_mant_ne hy_mant_ne heq_guard
+    (Number.operator_add_rounds_upward x y result hx hy hx_mant_ne hy_mant_ne heq_guard
       hok hresult).1
   have h_result_norm : result.isNormalized := by
     by_cases h_sign_eq : x.negative_ = y.negative_
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_norm, _, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_upward x y result hx hy
+        Number.operator_add_algorithmic_facts_same_sign_upward x y result hx hy
           hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
       exact h_norm
-    · exact operator_add_result_isNormalized x y result .upward hx hy
+    · exact Number.operator_add_result_isNormalized x y result .upward hx hy
         hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok hresult
   have h_bound : |result.toRat - (x.toRat + y.toRat)|
       ≤ |x.toRat + y.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
-    le_of_lt (operator_add_rounding_bound_upward_tight x y result hx hy
+    le_of_lt (Number.operator_add_rounding_bound_upward_tight x y result hx hy
       hx_mant_ne hy_mant_ne heq_guard hok hresult)
   have h_truth_top : result.exponent_ ≥ maxExponent →
       |x.toRat + y.toRat| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ) := by
     intro _
     by_cases h_sign_eq : x.negative_ = y.negative_
     · obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, h_top, _⟩ :=
-        operator_add_algorithmic_facts_same_sign_upward x y result hx hy
+        Number.operator_add_algorithmic_facts_same_sign_upward x y result hx hy
           hx_mant_ne hy_mant_ne h_sign_eq heq_guard hok
       exact h_top
     · exact add_diff_sign_truth_top x y hx hy h_sign_eq
   exact closest_upper_of_no_inbetween result (x.toRat + y.toRat) h_result_norm hresult
     h_truth_ne h_bound h_truth_top h_dir
-    (operator_add_no_inbetween_above_upward x y result hx hy hx_mant_ne hy_mant_ne
+    (Number.operator_add_no_inbetween_above_upward x y result hx hy hx_mant_ne hy_mant_ne
       heq_guard hok hresult h_dir)
 
 end XRPL.Model.Protocol

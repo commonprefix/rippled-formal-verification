@@ -42,8 +42,8 @@ lemma loanPeriodicRate_le (ir : TenthBips32) (interval : UInt32) (rate : Number)
   rw [hY'] at hYv
   have hpN := Number.operator_mul_isNormalized _ _ p _ hI hB hp
   have htN := Number.operator_div_isNormalized _ _ t _ hpN hU ht
-  have hp0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hI hB hp) (by rw [hIv, hBv]; positivity)
-  have ht0 := rn_nonneg (operator_div_rounded_to_nearest _ _ _ hpN hU ht) (by rw [hUv]; positivity)
+  have hp0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hI hB hp) (by rw [hIv, hBv]; positivity)
+  have ht0 := rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hpN hU ht) (by rw [hUv]; positivity)
   have g1 := (Number.mul_near _ _ _ hI hB hp).le (by rw [hIv, hBv]; positivity)
   have g2 := (Number.div_near _ _ _ hpN hU ht).le (by rw [hUv]; positivity)
   have g3 := (Number.div_near _ _ _ htN hY h).le (by rw [hYv]; positivity)
@@ -81,9 +81,9 @@ private lemma Number.power_ge_base (base : Number) (hb : base.isNormalized) (h1 
       obtain ⟨sq, hs, h⟩ := bind_ok_peel _ _ _ h
       have hsqN := Number.operator_mul_isNormalized _ _ sq _ hhalfN hhalfN hs
       have hsq : base.toRat ≤ sq.toRat :=
-        rn_ge (operator_mul_rounded_to_nearest _ _ _ hhalfN hhalfN hs) _ hb (by nlinarith)
+        rn_ge (Number.operator_mul_rounded_to_nearest _ _ _ hhalfN hhalfN hs) _ hb (by nlinarith)
       split at h
-      · exact rn_ge (operator_mul_rounded_to_nearest _ _ _ hsqN hb h) _ hb (by nlinarith)
+      · exact rn_ge (Number.operator_mul_rounded_to_nearest _ _ _ hsqN hb h) _ hb (by nlinarith)
       · cases h; exact hsq
 
 /-- The binomial series of `(1 + rate)^n − 1` never drops below its first partial sum. Each term is at least
@@ -110,13 +110,13 @@ private lemma powerMinusOneLoop_ge (rate : Number) (hrate : rate.isNormalized) (
       have hc1 := Number.operator_mul_isNormalized _ _ c1 _ hc hrate h1
       have hc2 := Number.operator_mul_isNormalized _ _ c2 _ hc1 (Number.ofInt64_isNormalized _) h2
       have hc3 := Number.operator_div_isNormalized _ _ c3 _ hc2 (Number.ofInt64_isNormalized _) h3
-      have hns := operator_add_isNormalized_to_nearest_sz _ _ ns hs hc3 h4
-      have hc10 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hc hrate h1) (mul_nonneg hc0 hr0)
-      have hc20 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hc1 (Number.ofInt64_isNormalized _) h2)
+      have hns := Number.operator_add_isNormalized_to_nearest_sz _ _ ns hs hc3 h4
+      have hc10 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hc hrate h1) (mul_nonneg hc0 hr0)
+      have hc20 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hc1 (Number.ofInt64_isNormalized _) h2)
         (mul_nonneg hc10 (Number.ofInt64_nat_nonneg _ (by omega)))
-      have hc30 := rn_nonneg (operator_div_rounded_to_nearest _ _ _ hc2 (Number.ofInt64_isNormalized _) h3)
+      have hc30 := rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hc2 (Number.ofInt64_isNormalized _) h3)
         (div_nonneg hc20 (Number.ofInt64_nat_nonneg _ (by omega)))
-      have hns0 := rn_ge (operator_add_rounded_to_nearest _ _ _ hs hc3 h4) rs hs (by linarith)
+      have hns0 := rn_ge (Number.operator_add_rounded_to_nearest _ _ _ hs hc3 h4) rs hs (by linarith)
       split at h
       · cases h; exact le_refl _
       · exact hns0.trans (ih (pr - (index + 1)) (by omega) (index + 1) c3 ns r rfl hc3 hns hc30 h)
@@ -150,9 +150,9 @@ private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : 
   · -- the closed form: `(1 + rate)^n` is at least `1 + rate` rounded
     obtain ⟨b, hb, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨raised, hraised, h⟩ := bind_ok_peel _ _ _ h
-    have hbN := operator_add_isNormalized_to_nearest_sz _ _ b hone hrate hb
+    have hbN := Number.operator_add_isNormalized_to_nearest_sz _ _ b hone hrate hb
     have hb1 : 1 ≤ b.toRat := by
-      have := rn_ge (operator_add_rounded_to_nearest _ _ _ hone hrate hb) _ hone
+      have := rn_ge (Number.operator_add_rounded_to_nearest _ _ _ hone hrate hb) _ hone
         (by rw [Number.ofInt64_one_toRat]; linarith)
       rwa [Number.ofInt64_one_toRat] at this
     have hbge := (Number.add_near _ _ _ hone hrate hb).ge (by linarith)
@@ -173,9 +173,9 @@ private lemma computePowerMinusOneHybrid_ge (rate : Number) (pr : UInt32) (pm : 
     obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨c, hc, h⟩ := bind_ok_peel _ _ _ h
     have hcN := Number.operator_mul_isNormalized _ _ c _ hN hrate hc
-    have hc0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hN hrate hc)
+    have hc0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hN hrate hc)
       (by rw [hNv]; positivity)
-    have hcr : rate.toRat ≤ c.toRat := rn_ge (operator_mul_rounded_to_nearest _ _ _ hN hrate hc) _ hrate
+    have hcr : rate.toRat ≤ c.toRat := rn_ge (Number.operator_mul_rounded_to_nearest _ _ _ hN hrate hc) _ hrate
       (by rw [hNv]; have : (1 : ℚ) ≤ pr.toNat := by exact_mod_cast hN1
           nlinarith)
     have := powerMinusOneLoop_ge rate hrate hr0.le pr.toNat pr.toNat_lt _ 1 c c pm rfl hcN hcN hc0 h
@@ -199,7 +199,7 @@ private lemma computePaymentFactor_le (rate : Number) (pr : UInt32) (f : Number)
   obtain ⟨_, -, h⟩ := bind_ok_peel _ _ _ h
   split at h
   · rename_i hz
-    have := (operator_eq_iff rate Number.zero hrate Number.zero_isNormalized).mp hz
+    have := (Number.operator_eq_iff rate Number.zero hrate Number.zero_isNormalized).mp hz
     rw [Number.toRat_zero] at this; linarith
   obtain ⟨pmo, hpmo, h⟩ := bind_ok_peel _ _ _ h
   obtain ⟨rr, hrr, h⟩ := bind_ok_peel _ _ _ h
@@ -209,13 +209,13 @@ private lemma computePaymentFactor_le (rate : Number) (pr : UInt32) (f : Number)
   have hpne : pmo.toRat ≠ 0 := fun h0 => Number.div_zero_error (Number.eq_zero_of_toRat hpN h0) h
   have hp : 0 < pmo.toRat := lt_of_le_of_ne hp0 (Ne.symm hpne)
   have hpm3 := computePowerMinusOneHybrid_ge rate pr pmo hrate hlow hpne hpmo
-  have hrrN := operator_add_isNormalized_to_nearest_sz _ _ rr hone hpN hrr
-  have hrr0 := rn_nonneg (operator_add_rounded_to_nearest _ _ _ hone hpN hrr)
+  have hrrN := Number.operator_add_isNormalized_to_nearest_sz _ _ rr hone hpN hrr
+  have hrr0 := rn_nonneg (Number.operator_add_rounded_to_nearest _ _ _ hone hpN hrr)
     (by rw [Number.ofInt64_one_toRat]; linarith)
   have hrrle := (Number.add_near _ _ _ hone hpN hrr).le (by rw [Number.ofInt64_one_toRat]; linarith)
   rw [Number.ofInt64_one_toRat] at hrrle
   have hnumN := Number.operator_mul_isNormalized _ _ num _ hrate hrrN hnum
-  have hnum0 := rn_nonneg (operator_mul_rounded_to_nearest _ _ _ hrate hrrN hnum) (mul_nonneg hr0.le hrr0)
+  have hnum0 := rn_nonneg (Number.operator_mul_rounded_to_nearest _ _ _ hrate hrrN hnum) (mul_nonneg hr0.le hrr0)
   have hnumle := (Number.mul_near _ _ _ hrate hrrN hnum).le (mul_nonneg hr0.le hrr0)
   have hfle := (Number.div_near _ _ _ hnumN hpN h).le (div_nonneg hnum0 hp0)
   -- `rate/m ≤ 3`, so `rate·(1 + m)/m ≤ 203`
@@ -325,7 +325,7 @@ lemma loanPrincipalFromPeriodicPayment_ge (pp rate : Number) (pr : UInt32) (tpo 
   · -- no interest: `pp·n` is at least `pp`
     have hm : tpo.mantissa_ ≠ 0 := by
       intro h0
-      have := operator_mul_underflow_truth_small _ _ _ _ hpp hN hppm hNm h h0
+      have := Number.operator_mul_underflow_truth_small _ _ _ _ hpp hN hppm hNm h h0
       rw [hNv, abs_of_nonneg (by positivity)] at this
       nlinarith
     have hge := (Number.mul_near _ _ _ hpp hN h).ge (fun h0 => hm (Number.toRat_eq_zero_iff.mp h0))
@@ -353,7 +353,7 @@ lemma loanPrincipalFromPeriodicPayment_ge (pp rate : Number) (pr : UInt32) (tpo 
       rw [div_le_div_iff₀ (by norm_num) hfpos]; nlinarith
     have hm : tpo.mantissa_ ≠ 0 := by
       intro h0
-      have := operator_div_underflow_truth_small _ _ _ _ hpp hfN hppm hfm h h0
+      have := Number.operator_div_underflow_truth_small _ _ _ _ hpp hfN hppm hfm h h0
       rw [abs_of_nonneg (by positivity)] at this
       linarith
     have hge := (Number.div_near _ _ _ hpp hfN h).ge (fun h0 => hm (Number.toRat_eq_zero_iff.mp h0))

@@ -648,22 +648,21 @@ lemma STAmount.intAmount_ne_wrap (s : STAmount) (h : s.Fits) : s.intAmount ≠ .
   · rw [Int.toInt64Checked_of_bounds h.1 h.2, ok_bind]; exact nofun
   · exact nofun
 
-lemma STAmount.iou_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) : s.iou mode ≠ .error .wrap := by
+lemma STAmount.iou_ne_wrap (s : STAmount) (mode : rounding_mode) : s.iou mode ≠ .error .wrap := by
   unfold STAmount.iou
   split
   · exact nofun
-  · rw [Int.toInt64Checked_of_bounds h.1 h.2, ok_bind]; exact IOUAmount.ofMantissaExp_ne_wrap _ _ _
+  · exact IOUAmount.ofMantissaExp_ne_wrap _ _ _
 
 lemma STAmount.toNumber_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) :
     s.toNumber mode ≠ .error .wrap := by
   unfold STAmount.toNumber
-  split_ne_wrap [STAmount.intAmount_ne_wrap _ h, IntAmount.toNumber_ne_wrap, STAmount.iou_ne_wrap _ _ h,
+  split_ne_wrap [STAmount.intAmount_ne_wrap _ h, IntAmount.toNumber_ne_wrap, STAmount.iou_ne_wrap,
     IOUAmount.toNumber_ne_wrap]
 
-lemma STAmount.canonicalize_ne_wrap (s : STAmount) (mode : rounding_mode) (h : s.Fits) :
-    s.canonicalize mode ≠ .error .wrap := by
+lemma STAmount.canonicalize_ne_wrap (s : STAmount) (mode : rounding_mode) : s.canonicalize mode ≠ .error .wrap := by
   unfold STAmount.canonicalize
-  split_ne_wrap [IntAmount.ofNumber_ne_wrap, STAmount.iou_ne_wrap _ _ h]
+  split_ne_wrap [IntAmount.ofNumber_ne_wrap, STAmount.iou_ne_wrap]
 
 /-- `canonicalize` stores the magnitude and sign of an `Int64`, so its result fits. -/
 lemma STAmount.canonicalize_fits {s r : STAmount} {mode : rounding_mode} (h : s.canonicalize mode = .ok r) :
@@ -688,14 +687,12 @@ lemma STAmount.canonicalize_fits {s r : STAmount} {mode : rounding_mode} (h : s.
     exact STAmount.Fits.of_magnitude i.mantissa_ rfl (by simp [IOUAmount.signum_neg_iff])
 
 lemma STAmount.checked_ne_wrap (nt : NumericType) (mValue : UInt64) (mOffset : Int) (mIsNegative : Bool)
-    (mode : rounding_mode) (h : (STAmount.unchecked nt mValue mOffset mIsNegative).Fits) :
-    STAmount.checked nt mValue mOffset mIsNegative mode ≠ .error .wrap :=
-  STAmount.canonicalize_ne_wrap _ _ h
+    (mode : rounding_mode) : STAmount.checked nt mValue mOffset mIsNegative mode ≠ .error .wrap :=
+  STAmount.canonicalize_ne_wrap _ _
 
 lemma STAmount.ofIOUAmount_ne_wrap (a : IOUAmount) (mode : rounding_mode) :
     STAmount.ofIOUAmount a mode ≠ .error .wrap :=
   STAmount.canonicalize_ne_wrap _ _
-    (STAmount.Fits.of_magnitude a.mantissa_ rfl (by simp [STAmount.unchecked, IOUAmount.signum_neg_iff]))
 
 /-- `ofNumber` never wraps: it converts the sign-cleared value, whose integer or 16-digit mantissa fits. -/
 lemma STAmount.ofNumber_ne_wrap (nt : NumericType) (n : Number) (mode : rounding_mode) :
@@ -715,22 +712,15 @@ lemma STAmount.ofNumber_ne_wrap (nt : NumericType) (n : Number) (mode : rounding
   · split
     · rename_i e he; intro h; cases h; exact Number.to_rep_ne_wrap _ _ he
     · rename_i r hr
-      obtain ⟨h0, hle⟩ := Number.to_rep_nonneg_range _ _ r hw hr
+      obtain ⟨h0, -⟩ := Number.to_rep_nonneg_range _ _ r hw hr
       rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using h0)), ok_bind]
-      refine STAmount.checked_ne_wrap _ _ _ _ _ (STAmount.Fits.of_lt ?_)
-      have := toUInt64_toNat_of_nonneg r h0
-      have : maxRep.toNat = 2 ^ 63 - 1 := by decide
-      show r.toUInt64.toNat < 2 ^ 63
-      omega
+      exact STAmount.checked_ne_wrap _ _ _ _ _
   · split
     · rename_i e he; intro h; cases h; exact Number.normalizeToRange_ne_wrap _ _ he
     · rename_i m ex hm
-      obtain ⟨h0, hlt⟩ := Number.normalizeToRange_nonneg hw hm
+      obtain ⟨h0, -⟩ := Number.normalizeToRange_nonneg hw hm
       rw [Int64.toUInt64Checked_of_nonneg (Int64.le_iff_toInt_le.mpr (by simpa using h0)), ok_bind]
-      refine STAmount.checked_ne_wrap _ _ _ _ _ (STAmount.Fits.of_lt ?_)
-      have := toUInt64_toNat_of_nonneg m h0
-      show m.toUInt64.toNat < 2 ^ 63
-      omega
+      exact STAmount.checked_ne_wrap _ _ _ _ _
 
 /-- An `ofNumber` result is canonicalized, so it fits. -/
 lemma STAmount.ofNumber_fits {nt : NumericType} {n : Number} {mode : rounding_mode} {r : STAmount}
@@ -766,7 +756,9 @@ lemma STAmount.operator_add_ne_wrap (v1 v2 : STAmount) (mode : rounding_mode) (h
   split
   · exact nofun
   split
-  · exact STAmount.checked_ne_wrap _ _ _ _ _ h2
+  · split
+    · exact nofun
+    · exact STAmount.checked_ne_wrap _ _ _ _ _
   split
   · rename_i hint
     obtain ⟨hs1, hs2⟩ := hsum hint
@@ -779,12 +771,12 @@ lemma STAmount.operator_add_ne_wrap (v1 v2 : STAmount) (mode : rounding_mode) (h
     dsimp only
     split
     · exact nofun
-    · exact STAmount.canonicalize_ne_wrap _ _ (STAmount.uncheckedFromInt64_fits _ _ _)
+    · exact STAmount.canonicalize_ne_wrap _ _
   · intro h
     split at h
-    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ h1 he
+    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ he
     split at h
-    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ h2 he
+    · rename_i e he; cases h; exact STAmount.iou_ne_wrap _ _ he
     split at h
     · rename_i e he; cases h; exact IOUAmount.operator_add_ne_wrap _ _ _ he
     · exact STAmount.ofIOUAmount_ne_wrap _ _ h
@@ -798,7 +790,9 @@ lemma STAmount.operator_add_fractional {v1 v2 r : STAmount} {mode : rounding_mod
   split at h
   · cases h; simpa using h1
   split at h
-  · have := STAmount.canonicalize_mNumericType _ _ _ h
+  · split at h
+    · cases h
+    have := STAmount.canonicalize_mNumericType _ _ _ h
     unfold STAmount.integral at h1 ⊢
     rw [this]; simpa using h1
   split at h
@@ -822,7 +816,9 @@ lemma STAmount.operator_add_fits {v1 v2 r : STAmount} {mode : rounding_mode} (h1
   split at h
   · cases h; exact h1
   split at h
-  · exact STAmount.canonicalize_fits h
+  · split at h
+    · cases h
+    exact STAmount.canonicalize_fits h
   split at h
   · obtain ⟨_, _, h⟩ := bind_ok_peel _ _ _ h
     obtain ⟨_, _, h⟩ := bind_ok_peel _ _ _ h
@@ -862,7 +858,7 @@ lemma STAmount.roundToExponent_ne_wrap (value : STAmount) (exponent : Int) (roun
       r.Fits := fun r hr => STAmount.canonicalize_fits hr
   split
   · rename_i e he; intro hh; cases hh
-    exact STAmount.checked_ne_wrap _ _ _ _ _ (STAmount.Fits.of_lt (show kMinValue.toNat < 2 ^ 63 by decide)) he
+    exact STAmount.checked_ne_wrap _ _ _ _ _ he
   rename_i ref href
   split
   · rename_i e he; intro hh; cases hh
@@ -1069,7 +1065,9 @@ lemma STAmount.operator_add_fractional_mValue_lt {v1 v2 r : STAmount} {mode : ro
   split at h
   · cases h; exact h1
   split at h
-  · exact STAmount.canonicalize_fractional_mValue_lt
+  · split at h
+    · cases h
+    exact STAmount.canonicalize_fractional_mValue_lt
       (s := STAmount.unchecked v1.mNumericType v2.mValue v2.mOffset v2.mIsNegative) hint h
   split at h
   · cases h

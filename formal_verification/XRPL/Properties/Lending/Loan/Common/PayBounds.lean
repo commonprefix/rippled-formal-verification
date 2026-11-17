@@ -58,7 +58,7 @@ private lemma roundAndClamp_le_cap (value cap : Number) (mode : rounding_mode) (
     split_ifs with h1 h2
     · rw [Number.toRat_zero]; exact hcap0
     · exact le_refl _
-    · exact (operator_lt_eq_false_iff _ _ hcap hrn).mp (by simpa using h2)
+    · exact (Number.operator_lt_eq_false_iff _ _ hcap hrn).mp (by simpa using h2)
 
 private lemma LoanState.build_eq (a b c : Number) (st : LoanState) (h : LoanState.build a b c = .ok st) :
     st.valueOutstanding = a ∧ st.principalOutstanding = b ∧ st.managementFeeDue = c ∧
@@ -149,7 +149,7 @@ private lemma UnsettledPayment.applyOverpayment_lowers (p p' : UnsettledPayment 
     have hn2 := hp'.norm
     unfold Number.operator_le at hpo
     simp only [Bool.not_eq_false'] at hpo
-    have := (operator_lt_iff _ _ hn2 hn1).mp hpo
+    have := (Number.operator_lt_iff _ _ hn2 hn1).mp hpo
     rw [hp.val, hp'.val] at this
     exact_mod_cast lt_of_mul_lt_mul_right this hpos.le
   have hle : m' ≤ m := by
@@ -157,7 +157,8 @@ private lemma UnsettledPayment.applyOverpayment_lowers (p p' : UnsettledPayment 
     exact_mod_cast le_of_mul_le_mul_right hmf hpos
   have hid : (t' : ℤ) - pr' - m' ≤ (t : ℤ) - pr - m := by
     by_contra hcon
-    have hR := operator_sub_rounded_to_nearest _ _ _ hi.norm hi'.norm (LoanState.calculateDeltas_interest _ _ _ hd)
+    have hR := Number.operator_sub_rounded_to_nearest _ _ _ hi.norm hi'.norm (LoanState.calculateDeltas_interest _ _ _
+      hd)
     have hq : state.interestDue.toRat - re.state.interestDue.toRat ≤ -(10 : ℚ) ^ p.loan.loanScale := by
       rw [hi.val, hi'.val]
       have : (((t : ℤ) - pr - m : ℤ) : ℚ) - (((t' : ℤ) - pr' - m' : ℤ) : ℚ) ≤ -1 := by
@@ -165,10 +166,10 @@ private lemma UnsettledPayment.applyOverpayment_lowers (p p' : UnsettledPayment 
         exact_mod_cast this
       nlinarith
     have hneg := Number.neg_of_rounds_le _ _ _ hs hR hq
-    have hn := operator_sub_isNormalized_to_nearest_sz _ _ _ hi.norm hi'.norm
+    have hn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hi.norm hi'.norm
       (LoanState.calculateDeltas_interest _ _ _ hd)
     have : deltas.interest.operator_neg.operator_gt Number.zero = true := by
-      rw [operator_gt_iff _ _ (Number.operator_neg_isNormalized _ hn) Number.zero_isNormalized, Number.toRat_neg,
+      rw [Number.operator_gt_iff _ _ (Number.operator_neg_isNormalized _ hn) Number.zero_isNormalized, Number.toRat_neg,
         Number.toRat_zero]
       linarith
     rw [hint] at this
@@ -266,7 +267,7 @@ private lemma sumRoundAndSubtract_frac_room (A c : Number) (e : Int) (st : STAmo
   · push Not at hd0
     have hdm : d.mantissa_ ≠ 0 := fun h0 => by
       rw [Number.toRat_eq_zero_of_mantissa_zero d h0] at hd0; exact lt_irrefl _ hd0
-    obtain ⟨n, hn, hv⟩ := operator_sub_rounded_downward sum' A d hs'n hA hd hdm
+    obtain ⟨n, hn, hv⟩ := Number.operator_sub_rounded_downward sum' A d hs'n hA hd hdm
     have hdle : d.toRat ≤ sum'.toRat - A.toRat := by rw [hv]; exact Number.lower_le _ n hn
     have hstd : st.toRat ≤ d.toRat := le_trans hst (max_le le_rfl hd0.le)
     refine Or.inr ⟨a, ha, by rw [hav]; exact hs'0, by rw [hav]; linarith, by rw [hav]; linarith⟩
@@ -304,8 +305,8 @@ private lemma vault_credit_frac_le (A c toPool aa A' : Number) (e : Int) (st : S
     A'.toRat ≤ A.toRat + c.toRat := by
   obtain ⟨-, htn⟩ := sumRoundAndSubtract_downward_le A c e .fractional st hA hA0 hc hc0 he hst
   obtain ⟨htv, htnn⟩ := htn toPool hto
-  have hR := operator_add_rounded_to_nearest A toPool aa hA htnn haa
-  have haan := operator_add_isNormalized_to_nearest_sz A toPool aa hA htnn haa
+  have hR := Number.operator_add_rounded_to_nearest A toPool aa hA htnn haa
+  have haan := Number.operator_add_isNormalized_to_nearest_sz A toPool aa hA htnn haa
   rcases sumRoundAndSubtract_frac_room A c e st hA hA0 hc hc0 he hst with hneg | ⟨a, ha, ha0, h1, h2⟩
   · -- a credit that isn't positive leaves AssetsAvailable at most where it was
     have haale : aa.toRat ≤ A.toRat := Number.roundsToRepresentable_le aa _ hR A hA (by rw [htv]; linarith)
@@ -353,8 +354,8 @@ private lemma vault_credit_int_le (nt : NumericType) (hint : nt.isIntegral = tru
         exact ⟨k, hk, hv⟩
 
   -- the new AssetsAvailable is the `to_rep` integer of the sum
-  have haa0 : 0 ≤ aa.toRat := operator_add_nonneg A toPool aa hA htnn haa (by rw [htv, hiv]; linarith)
-  have haan := operator_add_isNormalized_to_nearest_sz A toPool aa hA htnn haa
+  have haa0 : 0 ≤ aa.toRat := Number.operator_add_nonneg A toPool aa hA htnn haa (by rw [htv, hiv]; linarith)
+  have haan := Number.operator_add_isNormalized_to_nearest_sz A toPool aa hA htnn haa
   unfold STAmount.roundToNumericType at hA'
   cases hof : STAmount.ofNumber nt aa .to_nearest with
   | error err => rw [hof] at hA'; exact absurd hA' (by simp)
@@ -405,17 +406,17 @@ private lemma PaymentAmounts.add_norm {a b c : PaymentAmounts} (ha : a.Norm) (hb
   simp only [bind, Except.bind] at h
   walk_ok
   obtain rfl := (Except.ok.inj ‹pure _ = Except.ok c›)
-  exact ⟨operator_add_isNormalized_to_nearest_sz _ _ _ ha.1 hb.1 ‹_›,
-    operator_add_isNormalized_to_nearest_sz _ _ _ ha.2.1 hb.2.1 ‹_›,
-    operator_add_isNormalized_to_nearest_sz _ _ _ ha.2.2 hb.2.2 ‹_›⟩
+  exact ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ ha.1 hb.1 ‹_›,
+    Number.operator_add_isNormalized_to_nearest_sz _ _ _ ha.2.1 hb.2.1 ‹_›,
+    Number.operator_add_isNormalized_to_nearest_sz _ _ _ ha.2.2 hb.2.2 ‹_›⟩
 
 private lemma PaymentComponents.paidAmounts_norm {pc : PaymentComponents} {a : PaymentAmounts} (h : pc.Norm)
     (hp : pc.paidAmounts = .ok a) : a.Norm := by
   obtain ⟨vap, id, h1, h2, h3, h4, h5⟩ := PaymentComponents.paidAmounts_ok_inv pc a hp
-  have hv := operator_sub_isNormalized_to_nearest_sz _ _ _ h.1 h.2.1 h1
-  have hi := operator_sub_isNormalized_to_nearest_sz _ _ _ hv h.2.2.1 h2
-  exact ⟨by rw [h5]; exact h.2.1, operator_add_isNormalized_to_nearest_sz _ _ _ hi h.2.2.2.1 h3,
-    operator_add_isNormalized_to_nearest_sz _ _ _ h.2.2.1 h.2.2.2.2 h4⟩
+  have hv := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ h.1 h.2.1 h1
+  have hi := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hv h.2.2.1 h2
+  exact ⟨by rw [h5]; exact h.2.1, Number.operator_add_isNormalized_to_nearest_sz _ _ _ hi h.2.2.2.1 h3,
+    Number.operator_add_isNormalized_to_nearest_sz _ _ _ h.2.2.1 h.2.2.2.2 h4⟩
 
 /-- The next scheduled instalment takes normalized amounts off the loan. -/
 private lemma Loan.scheduledComponents_norm (l : Loan) (pc : PaymentComponents)
@@ -472,7 +473,7 @@ private lemma roundAndSplitInterest_norm (interest : Number) (rate : TenthBips16
   obtain ⟨i', h1, h2, h3⟩ := roundAndSplitInterest_ok_inv _ _ _ _ _ _ _ h
   have hi := STAmount.roundToNumericType_isNormalized _ _ _ _ _ h1
   have hf := computeManagementFee_isNormalized _ _ _ _ _ h2
-  exact ⟨operator_sub_isNormalized_to_nearest_sz _ _ _ hi hf h3, hf⟩
+  exact ⟨Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hi hf h3, hf⟩
 
 /-- The late instalment is made of normalized numbers. -/
 private lemma Loan.lateComponents_norm (l : Loan) (now : UInt32) (pc : PaymentComponents)
@@ -483,9 +484,9 @@ private lemma Loan.lateComponents_norm (l : Loan) (now : UInt32) (pc : PaymentCo
   obtain rfl := (Except.ok.inj ‹pure _ = Except.ok pc›)
   obtain ⟨h1, h2, h3, -⟩ := Loan.scheduledComponents_norm l _ ‹Loan.scheduledComponents l = _›
   obtain ⟨hn, hf⟩ := roundAndSplitInterest_norm _ _ _ _ _ _ _ ‹roundAndSplitInterest _ _ _ _ _ = _›
-  have hsl := operator_add_isNormalized_to_nearest_sz _ _ _ l.wf.serviceFee_norm l.wf.latePaymentFee_norm
+  have hsl := Number.operator_add_isNormalized_to_nearest_sz _ _ _ l.wf.serviceFee_norm l.wf.latePaymentFee_norm
     ‹l.fees.serviceFee.operator_add _ _ = _›
-  exact ⟨h1, h2, h3, hn, operator_add_isNormalized_to_nearest_sz _ _ _ hsl hf ‹_›⟩
+  exact ⟨h1, h2, h3, hn, Number.operator_add_isNormalized_to_nearest_sz _ _ _ hsl hf ‹_›⟩
 
 /-- The full payoff is made of normalized numbers. -/
 private lemma Loan.fullComponents_norm (l : Loan) (now : UInt32) (pc : PaymentComponents)
@@ -497,10 +498,11 @@ private lemma Loan.fullComponents_norm (l : Loan) (now : UInt32) (pc : PaymentCo
   have hM : state.managementFeeDue.isNormalized := by rw [h3]; exact l.wf.managementFeeOutstanding_norm
   obtain ⟨hn, hf⟩ := roundAndSplitInterest_norm _ _ _ _ _ _ _ hsplit
   have hcfn := STAmount.roundToNumericType_isNormalized _ _ _ _ _ hcf
-  have hppin := operator_add_isNormalized_to_nearest_sz _ _ _ hP h4 hppi
-  have hcfmn := operator_add_isNormalized_to_nearest_sz _ _ _ hcfn hf hcfm
-  exact ⟨operator_add_isNormalized_to_nearest_sz _ _ _ hppin hM htracked, hP, hM,
-    operator_sub_isNormalized_to_nearest_sz _ _ _ hn h4 hui, operator_sub_isNormalized_to_nearest_sz _ _ _ hcfmn hM huf⟩
+  have hppin := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hP h4 hppi
+  have hcfmn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hcfn hf hcfm
+  exact ⟨Number.operator_add_isNormalized_to_nearest_sz _ _ _ hppin hM htracked, hP, hM,
+    Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hn h4 hui, Number.operator_sub_isNormalized_to_nearest_sz _ _ _
+      hcfmn hM huf⟩
 
 /-- The split of an overpayment is made of normalized numbers. -/
 private lemma Loan.overpaymentComponents_norm (l : Loan) (x : Number) (opc : PaymentComponents)
@@ -536,7 +538,7 @@ private lemma LoanState.calculateDeltas_principal_norm (x y : LoanState) (d : Lo
   simp only [bind, Except.bind] at h
   walk_ok
   obtain rfl := (Except.ok.inj ‹pure _ = Except.ok d›)
-  exact operator_sub_isNormalized_to_nearest_sz _ _ _ hx hy ‹_›
+  exact Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hx hy ‹_›
 
 /-- A re-amortization pays normalized amounts. -/
 private lemma Loan.tryOverpayment_norm (l : Loan) (opc : PaymentComponents) (re : Reamortization)
@@ -560,7 +562,7 @@ private lemma Loan.tryOverpayment_norm (l : Loan) (opc : PaymentComponents) (re 
   have hd := (by with_reducible assumption : LoanState.calculateDeltas _ _ = Except.ok _)
   refine ⟨LoanState.calculateDeltas_principal_norm _ _ _ (by rw [hs2]; exact l.wf.principalOutstanding_norm)
     (by rw [b2]; exact roundAndClamp_norm _ _ _ _ _ _ (by rw [hs2]; exact l.wf.principalOutstanding_norm) hcl) hd,
-    hopc.2.1, operator_add_isNormalized_to_nearest_sz _ _ _ hopc.1 hopc.2.2 hfee⟩
+    hopc.2.1, Number.operator_add_isNormalized_to_nearest_sz _ _ _ hopc.1 hopc.2.2 hfee⟩
 
 /-- The extra amount of an overpayment adds normalized amounts. -/
 private lemma UnsettledPayment.applyOverpayment_norm (p p' : UnsettledPayment Vault) (amount : Number)
@@ -672,7 +674,7 @@ private lemma Loan.pay_vault_le (pt : LoanPaymentType) (r : LoanWithAmounts Vaul
   obtain ⟨w, hw, hw0, hwv⟩ := hsum
   obtain ⟨hpp, hip, -⟩ := Loan.payInstalments_norm loan v amount now pt payment hpay
   have htpv := Number.operator_add_exact_of_fits hpp hip htp ⟨w, hw, hwv⟩
-  have htpn := operator_add_isNormalized_to_nearest_sz _ _ _ hpp hip htp
+  have htpn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hpp hip htp
   obtain ⟨hAv, hArep, hnt1, hbe, -⟩ := Loan.unimpair_pool loan v payment.pool hu hAA
   have hA := payment.pool.wf.assetsAvailable_norm
   have hA0 := payment.pool.exact.assetsAvailable_nonneg
@@ -769,7 +771,7 @@ lemma Loan.payment_fees_upper_bound_of_fits (payment : UnsettledPayment Vault)
   have he : (-96 : ℤ) ≤ v.baseExponent ∧ v.baseExponent ≤ 80 := by omega
   obtain ⟨hfcle, htn⟩ := sumRoundAndSubtract_downward_le _ _ _ _ fc hC hC0 hfn hfee he hfc
   obtain ⟨htv, htnn⟩ := htn toBroker hto
-  have hR := operator_add_rounded_to_nearest _ _ _ hC htnn hcov
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ hC htnn hcov
   cases hint : loan.broker.numericType.isIntegral
   · have hfr : loan.broker.numericType = .fractional :=
       NumericType.eq_fractional_of_not_integral (by simpa using hint)
@@ -886,7 +888,7 @@ lemma Loan.payment_vault_at_base (payment : UnsettledPayment Vault) (a : ℕ)
   obtain ⟨w, hw, hw0, hwv⟩ := hsum
   obtain ⟨hpp, hip, -⟩ := Loan.payInstalments_norm loan v amount now paymentType payment hpay
   have htpv := Number.operator_add_exact_of_fits hpp hip htp ⟨w, hw, hwv⟩
-  have htpn := operator_add_isNormalized_to_nearest_sz _ _ _ hpp hip htp
+  have htpn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hpp hip htp
   obtain ⟨hAv, -, hnt1, hbe, -⟩ := Loan.unimpair_pool loan v payment.pool hu hAA
   obtain ⟨hblo, hbhi, hbint⟩ := Vault.baseExponent_bounds v
   rw [hb, hnt, ← hnt1, hbe] at hcredit

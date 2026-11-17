@@ -88,8 +88,8 @@ lemma LoanBroker.coverWithdraw_floor (lb : LoanBroker) (v : Vault) (amount : STA
     STAmount.CanonicalOrZero.toNumber_exact (STAmount.CanonicalOrZero.operator_neg (Or.inl hc)) aN haN
   rw [STAmount.operator_neg_toRat] at haNv
   have hAn := lb.wf.coverAvailable_norm
-  have hR := operator_add_rounded_to_nearest _ _ _ hAn haNn hs
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ hAn haNn hs
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ hAn haNn hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hAn haNn hs
   have hbig := numberExponent_frac_abs_lower s v.baseExponent e hsn (by omega) hse hgt
   have hpe : (0 : ℚ) < 10 ^ e := zpow_pos (by norm_num) _
   have h15 : (10 : ℚ) ^ (e + 15) = 10 ^ 15 * 10 ^ e := by

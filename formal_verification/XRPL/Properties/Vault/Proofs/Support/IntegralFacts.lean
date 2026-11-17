@@ -140,7 +140,7 @@ lemma STAmount.canonicalize_integral_facts (s result : STAmount) (mode : roundin
     | ok r =>
       rw [hr] at hok
       simp only [] at hok
-      have hkey := to_rep_exact_of_exponent_zero s.mIsNegative s.mValue mode r hval_le hr
+      have hkey := Number.to_rep_exact_of_exponent_zero s.mIsNegative s.mValue mode r hval_le hr
       have hnatAbs : r.toInt.natAbs = s.mValue.toNat := by
         have h1 : (r.toInt : ℚ) = (if s.mIsNegative then (-1 : ℚ) else 1) * s.mValue.toNat := hkey
         have h2 : r.toInt.natAbs = ((if s.mIsNegative then (-1 : ℤ) else 1) * s.mValue.toNat).natAbs := by

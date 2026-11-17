@@ -191,10 +191,9 @@ lemma checked_frac_zero (mant : UInt64) (exp : Int) (neg : Bool) (mode : roundin
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_eq mode h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [STAmount.signedDrops_toInt64Checked _ h_fit, ok_bind, h_sd]
+    rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · exfalso

@@ -70,8 +70,8 @@ def LendingLedger.OpeningsSucceedAlong (start : LendingLedger) (txs : List Lendi
   ∀ (pre : List LendingTx) (m : LendingLedger) (tx : LendingTx), pre ++ [tx] <+: txs →
     LendingLedger.Reaches start pre m → tx.isOpening = true → ∃ m', (m.apply tx).run = .ok (.ok m')
 
-/-- The balances the model does not track fit before each transaction of `txs` from `start`: broker `k`'s cover as
-an amount of the asset, and a LoanPay's credit to the vault and fee within the XRP or MPT supply. -/
+/-- Before each transaction of `txs` from `start` broker `k`'s cover and a LoanPay's fee fit the asset, and on XRP
+or an MPT the vault total after a LoanPay is an amount of the asset (FV_M4_59). -/
 def LendingLedger.BrokerUntrackedFitsAlong (start : LendingLedger) (k : Nat) (txs : List LendingTx) : Prop :=
   ∀ (pre : List LendingTx) (m : LendingLedger) (tx : LendingTx), pre ++ [tx] <+: txs →
     LendingLedger.Reaches start pre m →

@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Normalize.Common.TowardsZero.BoundProof
 namespace XRPL.Model.Protocol
 
 /-- `Number.normalize` trace for the towards_zero witness input `10^19 + 9`. -/
-lemma normalize_towards_zero_witness :
+lemma Number.normalize_towards_zero_witness :
     Number.normalize ⟨false, 10000000000000000009, 0⟩
         largeRange.min largeRange.max .towards_zero =
       .ok ⟨false, 1000000000000000000, 1⟩ := by
@@ -46,7 +46,7 @@ lemma normalize_towards_zero_witness :
 
 /-- Rounding towards zero can be off by more than `8/(2^63 + 2)` of the value, here on the input `10^19 + 9`. The
 largest error is `9/(2^63 + 11)`, on the input `2^63 + 11` or its negative. -/
-theorem normalize_towards_zero_attained :
+theorem Number.normalize_towards_zero_attained :
     ∃ (n result : Number),
       Number.normalize n largeRange.min largeRange.max .towards_zero = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -54,7 +54,7 @@ theorem normalize_towards_zero_attained :
   refine ⟨⟨false, 10000000000000000009, 0⟩,
           ⟨false, 1000000000000000000, 1⟩,
           ?_, ?_, ?_⟩
-  · exact normalize_towards_zero_witness
+  · exact Number.normalize_towards_zero_witness
   · decide
   · have hn_rat : (⟨false, 10000000000000000009, 0⟩ : Number).toRat = 10000000000000000009 := by
       unfold Number.toRat; rfl

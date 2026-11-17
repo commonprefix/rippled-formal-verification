@@ -83,7 +83,7 @@ private lemma toRat_eq_abs (n : Number) (hneg : n.negative_ = false) :
 
 /-- Correctness of `operator_lt`: on normalized values the comparison agrees
 with the rational order. -/
-theorem operator_lt_iff_proof (x y : Number)
+theorem Number.operator_lt_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_lt y = true ↔ x.toRat < y.toRat := by
   by_cases hsx : x.negative_ = true
@@ -225,14 +225,14 @@ theorem operator_lt_iff_proof (x y : Number)
             linarith
 
 /-- Correctness of `operator_le`. -/
-theorem operator_le_iff_proof (x y : Number)
+theorem Number.operator_le_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_le y = true ↔ x.toRat ≤ y.toRat := by
   constructor
   · intro h
     by_contra hc
     push Not at hc
-    have hbt := (operator_lt_iff_proof y x hy hx).mpr hc
+    have hbt := (Number.operator_lt_iff_proof y x hy hx).mpr hc
     unfold Number.operator_le at h
     rw [hbt] at h
     exact absurd h (by decide)
@@ -241,26 +241,26 @@ theorem operator_le_iff_proof (x y : Number)
     have hbf : y.operator_lt x = false := by
       cases hb : y.operator_lt x
       · rfl
-      · exact absurd ((operator_lt_iff_proof y x hy hx).mp hb) (not_lt.mpr h)
+      · exact absurd ((Number.operator_lt_iff_proof y x hy hx).mp hb) (not_lt.mpr h)
     rw [hbf]
     rfl
 
 /-- Correctness of `operator_gt`. -/
-theorem operator_gt_iff_proof (x y : Number)
+theorem Number.operator_gt_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_gt y = true ↔ y.toRat < x.toRat := by
   unfold Number.operator_gt
-  exact operator_lt_iff_proof y x hy hx
+  exact Number.operator_lt_iff_proof y x hy hx
 
 /-- Correctness of `operator_ge`. -/
-theorem operator_ge_iff_proof (x y : Number)
+theorem Number.operator_ge_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_ge y = true ↔ y.toRat ≤ x.toRat := by
   constructor
   · intro h
     by_contra hc
     push Not at hc
-    have hbt := (operator_lt_iff_proof x y hx hy).mpr hc
+    have hbt := (Number.operator_lt_iff_proof x y hx hy).mpr hc
     unfold Number.operator_ge at h
     rw [hbt] at h
     exact absurd h (by decide)
@@ -269,13 +269,13 @@ theorem operator_ge_iff_proof (x y : Number)
     have hbf : x.operator_lt y = false := by
       cases hb : x.operator_lt y
       · rfl
-      · exact absurd ((operator_lt_iff_proof x y hx hy).mp hb) (not_lt.mpr h)
+      · exact absurd ((Number.operator_lt_iff_proof x y hx hy).mp hb) (not_lt.mpr h)
     rw [hbf]
     rfl
 
 /-- Correctness of `operator_eq`: normalized representations are canonical,
 so field equality decides rational equality. -/
-theorem operator_eq_iff_proof (x y : Number)
+theorem Number.operator_eq_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_eq y = true ↔ x.toRat = y.toRat := by
   constructor
@@ -346,12 +346,12 @@ theorem operator_eq_iff_proof (x y : Number)
       simp
 
 /-- Correctness of `operator_ne`. -/
-theorem operator_ne_iff_proof (x y : Number)
+theorem Number.operator_ne_iff_proof (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized) :
     x.operator_ne y = true ↔ x.toRat ≠ y.toRat := by
   constructor
   · intro h hc
-    have hbt := (operator_eq_iff_proof x y hx hy).mpr hc
+    have hbt := (Number.operator_eq_iff_proof x y hx hy).mpr hc
     unfold Number.operator_ne at h
     rw [hbt] at h
     exact absurd h (by decide)
@@ -360,7 +360,7 @@ theorem operator_ne_iff_proof (x y : Number)
     have hbf : x.operator_eq y = false := by
       cases hb : x.operator_eq y
       · rfl
-      · exact absurd ((operator_eq_iff_proof x y hx hy).mp hb) h
+      · exact absurd ((Number.operator_eq_iff_proof x y hx hy).mp hb) h
     rw [hbf]
     rfl
 

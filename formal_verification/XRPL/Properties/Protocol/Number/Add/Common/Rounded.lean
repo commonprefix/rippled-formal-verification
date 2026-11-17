@@ -50,7 +50,7 @@ lemma add_truth_zero_of_eq_neg (x y : Number)
   ring
 
 /-- When addition succeeds on nonzero operands that do not cancel exactly, the true sum `x + y` is nonzero. -/
-theorem operator_add_truth_ne (x y : Number)
+theorem Number.operator_add_truth_ne (x y : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_not_zero : ¬ x.operator_eq y.operator_neg)
@@ -73,7 +73,7 @@ theorem operator_add_truth_ne (x y : Number)
       linarith
   · -- Diff sign: the diff-sign facts give `|x + y| = (M + δ)·10^ze` with `M ≥ 1`.
     obtain ⟨M, ze', δ, zn, sticky, hδ_low, _, _, hM_pos, _, _, htruth, _, _, _, _⟩ :=
-      operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
+      Number.operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
         hx_mant_ne hy_mant_ne h_sign_eq h_not_zero hok
     intro h0
     rw [h0, abs_zero] at htruth
@@ -82,7 +82,7 @@ theorem operator_add_truth_ne (x y : Number)
     nlinarith
 
 /-- A diff-sign addition result with nonzero mantissa is normalized. -/
-theorem operator_add_result_isNormalized (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_add_result_isNormalized (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -91,13 +91,13 @@ theorem operator_add_result_isNormalized (x y result : Number) (mode : rounding_
     (hresult : result.mantissa_ ≠ 0) :
     result.isNormalized := by
   obtain ⟨M, ze', δ, zn, sticky, _, _, _, hM_pos, _, _, _, hok128, _, _, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   exact doNormalize128_result_isNormalized zn M ze' sticky mode hM_pos result hok128 hresult
 
 /-- A zero diff-sign addition result forces the sum strictly below the
 smallest positive representable. -/
-theorem operator_add_underflow_truth_small (x y result : Number) (mode : rounding_mode)
+lemma Number.operator_add_underflow_truth_small_proof (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_diff_sign : x.negative_ ≠ y.negative_)
@@ -107,7 +107,7 @@ theorem operator_add_underflow_truth_small (x y result : Number) (mode : roundin
     |x.toRat + y.toRat| < (10 : ℚ) ^ (18 : ℕ) * (10 : ℚ) ^ (minExponent : ℤ) := by
   obtain ⟨M, ze', δ, zn, sticky, hδ_low, _, hsticky_zero, hM_pos, hM_lt, hM_big,
       htruth, hok128, _, hδ_lt, _⟩ :=
-    operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
+    Number.operator_add_algorithmic_facts_diff_sign_represents x y result mode hx hy
       hx_mant_ne hy_mant_ne h_diff_sign h_not_zero hok
   rw [htruth]
   exact doNormalize128_underflow_value_small zn M ze' δ sticky mode hδ_low hδ_lt

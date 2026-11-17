@@ -9,7 +9,7 @@ import XRPL.Properties.Protocol.Number.Common.Closest.NoInbetween
 namespace XRPL.Model.Protocol
 
 /-- No normalized Number lies above `result.toRat` and at or below `truth` when `result.toRat ≤ truth`. -/
-theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
+theorem Number.operator_mul_no_inbetween_below_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .towards_zero = .ok result)
@@ -19,7 +19,7 @@ theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ x.toRat * y.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
-    operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_below_towards_zero_frame result (x.toRat * y.toRat) zm ze' f g res_pos
     .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
@@ -27,7 +27,7 @@ theorem operator_mul_no_inbetween_below_towards_zero (x y result : Number)
     h_le
 
 /-- No normalized Number lies at or above `truth` and below `result.toRat` when `truth ≤ result.toRat`. -/
-theorem operator_mul_no_inbetween_above_towards_zero (x y result : Number)
+theorem Number.operator_mul_no_inbetween_above_towards_zero (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .towards_zero = .ok result)
@@ -37,7 +37,7 @@ theorem operator_mul_no_inbetween_above_towards_zero (x y result : Number)
       m.toRat < result.toRat → ¬ (x.toRat * y.toRat ≤ m.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hf_nn, hf_lt, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, _hf_rep, h_sign, hzm_succ⟩ :=
-    operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   exact no_inbetween_above_towards_zero_frame result (x.toRat * y.toRat) zm ze' f g res_pos
     .overflow hzm_ge hzm_le hf_nn hf_lt h_truth_abs h_rup_pos
     h_result_abs hres_pos_mant_ne hzm_succ
@@ -60,7 +60,7 @@ lemma rounded_towards_zero_of_result_zero (x y result : Number)
     exact abs_eq_zero.mp h
   have h_truth_ne : x.toRat * y.toRat ≠ 0 :=
     toRat_mul_ne_zero_of_normalized x y hx hy hx_mant_ne hy_mant_ne
-  have h_small := operator_mul_underflow_truth_small x y result .towards_zero hx hy
+  have h_small := Number.operator_mul_underflow_truth_small_proof x y result .towards_zero hx hy
     hx_mant_ne hy_mant_ne hok hres
   change ∃ n, (if x.toRat * y.toRat ≥ 0 then Number.lower (x.toRat * y.toRat)
               else Number.upper (x.toRat * y.toRat)) = some n ∧ result.toRat = n.toRat
@@ -80,7 +80,7 @@ lemma rounded_towards_zero_of_result_zero (x y result : Number)
     · rw [h_res0, Number.toRat_zero]
 
 
-theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
+theorem Number.operator_mul_rounded_towards_zero_proof (x y result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hok : Number.operator_mul x y .towards_zero = .ok result) :
     Number.RoundsToRepresentable result (x.toRat * y.toRat) .towards_zero := by
@@ -132,14 +132,14 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
   have hy_mant_ne : y.mantissa_ ≠ 0 := hyz
   have hresult : result.mantissa_ ≠ 0 := hres
   obtain ⟨h_dir, h_mag⟩ :=
-    operator_mul_rounding_bound_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_rounding_bound_towards_zero x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_result_norm : result.isNormalized :=
-    operator_mul_result_isNormalized x y result .towards_zero hx hy hx_mant_ne hy_mant_ne
+    Number.operator_mul_result_isNormalized x y result .towards_zero hx hy hx_mant_ne hy_mant_ne
       hok hresult
   have h_truth_ne : x.toRat * y.toRat ≠ 0 :=
     toRat_mul_ne_zero_of_normalized x y hx hy hx_mant_ne hy_mant_ne
   obtain ⟨_, _, _, _, _, _, _, _, _, _, _, _, _, _, h_sign, _⟩ :=
-    operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
+    Number.operator_mul_algorithmic_facts_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
       hok hresult
   have h_sign_xy := toRat_mul_sign x y
   have h_abs_diff_eq : |result.toRat - x.toRat * y.toRat|
@@ -171,7 +171,7 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
     truth_top_of_result_cap result (x.toRat * y.toRat) h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (operator_mul_no_overflow_mantissa x y result .towards_zero hx hy hx_mant_ne hy_mant_ne
+          (Number.operator_mul_no_overflow_mantissa x y result .towards_zero hx hy hx_mant_ne hy_mant_ne
             hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h
   change ∃ n, (if x.toRat * y.toRat ≥ 0 then Number.lower (x.toRat * y.toRat)
@@ -185,7 +185,7 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
         _ = x.toRat * y.toRat := abs_of_nonneg h_truth_nn
     exact closest_lower_of_no_inbetween result (x.toRat * y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_down
-      (operator_mul_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
+      (Number.operator_mul_no_inbetween_below_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         hok hresult h_round_down)
   · rw [if_neg h_truth_nn]
     push Not at h_truth_nn
@@ -198,7 +198,7 @@ theorem operator_mul_rounded_towards_zero_proof (x y result : Number)
       linarith [neg_le_neg h_dir]
     exact closest_upper_of_no_inbetween result (x.toRat * y.toRat) h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_round_up
-      (operator_mul_no_inbetween_above_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
+      (Number.operator_mul_no_inbetween_above_towards_zero x y result hx hy hx_mant_ne hy_mant_ne
         hok hresult h_round_up)
 
 end XRPL.Model.Protocol

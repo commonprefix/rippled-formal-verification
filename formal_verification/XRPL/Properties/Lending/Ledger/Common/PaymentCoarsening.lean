@@ -132,8 +132,8 @@ private lemma vault_credit_reaches (A c : Number) (b : Int) (st : STAmount) (cr 
         · -- the exponent after the payment comes from the sum, which is then past `10^(E + 14)`
           subst hGE
           obtain ⟨s0, hs0', hne⟩ := postSumExponent_reduces _ _ _ _ _ hE
-          have hs0n := operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0'
-          have hs00 : 0 ≤ s0.toRat := operator_add_nonneg _ _ _ hA hc hs0' (by linarith)
+          have hs0n := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hc hs0'
+          have hs00 : 0 ≤ s0.toRat := Number.operator_add_nonneg _ _ _ hA hc hs0' (by linarith)
           obtain ⟨-, hbig⟩ := numberExponent_frac_lower s0 b G hs0n hs00 (by omega) hne (by omega)
           obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow 1 (G + 14) (by constructor <;> norm_num)
             ⟨by unfold minExponent; omega, by unfold maxExponent; omega⟩
@@ -142,7 +142,7 @@ private lemma vault_credit_reaches (A c : Number) (b : Int) (st : STAmount) (cr 
           have hge14 : (10 : ℚ) ^ (G + 14) ≤ A.toRat + c.toRat := by
             by_contra hlt14
             push Not at hlt14
-            have := operator_add_le_of_le_normalized _ _ _ _ hA hc hs0' hw (by rw [hwv]; linarith)
+            have := Number.operator_add_le_of_le_normalized _ _ _ _ hA hc hs0' hw (by rw [hwv]; linarith)
             rw [hwv] at this
             linarith
           have hs14 := add_downward_ge_any A c sum w hA hc hsum hw (by rw [hwv]; positivity) (by rw [hwv]; exact hge14)
@@ -269,9 +269,9 @@ private lemma vault_credit_reaches (A c : Number) (b : Int) (st : STAmount) (cr 
 
   have haaW : 10 ^ 16 * 10 ^ b ≤ aa.toRat := by
     rw [← hWv']
-    exact Number.roundsToRepresentable_ge aa _ (operator_add_rounded_to_nearest _ _ _ hA hcrn haa) Wn hWn
+    exact Number.roundsToRepresentable_ge aa _ (Number.operator_add_rounded_to_nearest _ _ _ hA hcrn haa) Wn hWn
       (by rw [hWv']; exact hcrW)
-  exact STAmount.round_iou_line aa a' b (operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa) haaW hb ha'
+  exact STAmount.round_iou_line aa a' b (Number.operator_add_isNormalized_to_nearest_sz _ _ _ hA hcrn haa) haaW hb ha'
 
 /-- A payment that leaves AssetsAvailable below `10^16` base units was paid at base scale: AssetsAvailable plus
 principalPaid + interestPaid was below the line before it. -/
@@ -324,8 +324,8 @@ lemma LendingLedger.pay_below_line {L L' : LendingLedger} (hR : L.Reachable) {k 
   -- were the sum past the line, so would AssetsAvailable plus the rounded sum of principal and interest
   by_contra hge
   push Not at hge
-  have htotn := operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
-  have htot0 : 0 ≤ tot.toRat := operator_add_nonneg _ _ _ hPg.1 hIg.1 htot (by linarith)
+  have htotn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hPg.1 hIg.1 htot
+  have htot0 : 0 ≤ tot.toRat := Number.operator_add_nonneg _ _ _ hPg.1 hIg.1 htot (by linarith)
   have hpAA0 : 0 ≤ p.pool.assetsAvailable.toRat := by rw [hpAA]; exact hAA0
   have htotW : 10 ^ 16 * 10 ^ L.vault.baseExponent ≤ p.pool.assetsAvailable.toRat + tot.toRat := by
     by_cases hsmall : p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat <
@@ -334,7 +334,8 @@ lemma LendingLedger.pay_below_line {L L' : LendingLedger} (hR : L.Reachable) {k 
       rw [this, hpAA]
       linarith
     · push Not at hsmall
-      have := Number.roundsToRepresentable_ge tot _ (operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) Wn hWn
+      have := Number.roundsToRepresentable_ge tot _ (Number.operator_add_rounded_to_nearest _ _ _ hPg.1 hIg.1 htot) Wn
+        hWn
         (by rw [hWv']; exact hsmall)
       rw [hWv'] at this
       linarith
@@ -381,13 +382,13 @@ lemma LendingLedger.pay_below_line {L L' : LendingLedger} (hR : L.Reachable) {k 
       omega
     have haaW : (10 ^ 16 : ℚ) ≤ aa.toRat := by
       have := Number.roundsToRepresentable_ge aa _
-        (operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa) Wn hWn (by
+        (Number.operator_add_rounded_to_nearest _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa) Wn hWn (by
           rw [hWv', hsnv, hxv, hpAA, hn]
           have : ((10 ^ 16 : ℤ) : ℚ) ≤ ((n : ℤ) + iv.toInt : ℤ) := by exact_mod_cast hline
           push_cast at this
           linarith)
       rwa [hWv'] at this
-    have haan := operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
+    have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ p.pool.wf.assetsAvailable_norm hcrn haa
     -- rounding to the asset lands on the floor or the ceiling of a value past the line
     unfold STAmount.roundToNumericType at hround
     cases hof : STAmount.ofNumber L.vault.numericType aa .to_nearest with

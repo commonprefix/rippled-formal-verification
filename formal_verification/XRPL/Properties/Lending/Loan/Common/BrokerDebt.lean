@@ -18,12 +18,12 @@ open private Loan.changeImpairment from XRPL.Model.Lending.Loan.LoanManage
 /-- Taking an amount of at least zero off a balance never raises it. -/
 lemma Number.operator_sub_le_self {x y d : Number} (hx : x.isNormalized) (hy : y.isNormalized)
     (hy0 : 0 ≤ y.toRat) (hok : x.operator_sub y .to_nearest = .ok d) : d.toRat ≤ x.toRat :=
-  operator_sub_le_of_le_normalized x y d x hx hy hok hx (by linarith)
+  Number.operator_sub_le_of_le_normalized x y d x hx hy hok hx (by linarith)
 
 /-- Adding a change of at most zero never raises a balance. -/
 lemma Number.operator_add_le_self {x y d : Number} (hx : x.isNormalized) (hy : y.isNormalized)
     (hy0 : y.toRat ≤ 0) (hok : x.operator_add y .to_nearest = .ok d) : d.toRat ≤ x.toRat :=
-  operator_add_le_of_le_normalized x y d x hx hy hok hx (by linarith)
+  Number.operator_add_le_of_le_normalized x y d x hx hy hok hx (by linarith)
 
 /-- A vault update without a reserved change keeps AssetsReserved. -/
 lemma Vault.poolAdjust_reserved_zero (v v' : Vault) (c : PoolBalanceChange) (hc : c.reserved = Number.zero)

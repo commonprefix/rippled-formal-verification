@@ -133,7 +133,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
   have hrateN := loanPeriodicRate_isNormalized _ _ _ hrate
   have hppN := l.wf.periodicPayment_norm
   have hpp : 0 < l.periodicPayment.toRat := by
-    have := (operator_lt_iff _ _ Number.zero_isNormalized hppN).mp l.valid.periodicPayment_pos
+    have := (Number.operator_lt_iff _ _ Number.zero_isNormalized hppN).mp l.valid.periodicPayment_pos
     rwa [Number.toRat_zero] at this
   have hN := Number.ofInt64_isNormalized l.paymentRemaining.toInt64
   have hNv := Number.ofInt64_count l.paymentRemaining
@@ -144,7 +144,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
   have htpo := LoanState.buildTheoretical_principal_eq _ _ _ _ _ hn hth
   have hpp' := computeLoanPropertiesFromPeriodicRate_pp _ _ _ _ _ _ _ hprops
   have hthN := (LoanState.buildTheoretical_normalized hppN hrateN hth).2.1
-  have hv18N := operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN h18
+  have hv18N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hthN hδN h18
   have hmaxN : (v18.max Number.zero).isNormalized := by
     unfold Number.max; split
     · exact Number.zero_isNormalized
@@ -162,16 +162,16 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
   have hrp : (v18.max Number.zero).operator_eq Number.zero = false := by
     revert hz; cases (v18.max Number.zero).operator_eq Number.zero <;> simp
   have hzz : Number.zero.operator_eq Number.zero = true :=
-    (operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
+    (Number.operator_eq_iff _ _ Number.zero_isNormalized Number.zero_isNormalized).mpr rfl
   obtain ⟨hmax, hx0⟩ : v18.max Number.zero = v18 ∧ 0 < v18.toRat := by
     unfold Number.max at hrp ⊢
     split at hrp
     · rw [hzz] at hrp; cases hrp
     · rename_i hlt
       refine ⟨by rw [if_neg hlt], ?_⟩
-      have h0 := (operator_lt_eq_false_iff _ _ hv18N Number.zero_isNormalized).mp (by simpa using hlt)
+      have h0 := (Number.operator_lt_eq_false_iff _ _ hv18N Number.zero_isNormalized).mp (by simpa using hlt)
       have hne : v18.toRat ≠ 0 := fun h0' => by
-        rw [(operator_eq_iff _ _ hv18N Number.zero_isNormalized).mpr (by rw [h0', Number.toRat_zero])] at hrp
+        rw [(Number.operator_eq_iff _ _ hv18N Number.zero_isNormalized).mpr (by rw [h0', Number.toRat_zero])] at hrp
         cases hrp
       rw [Number.toRat_zero] at h0
       exact lt_of_le_of_ne h0 (Ne.symm hne)
@@ -216,7 +216,7 @@ private lemma Loan.reamortized_periodic_lt (l : Loan) (opc : PaymentComponents) 
     have hfN := computePaymentFactor_isNormalized _ _ _ _ hrateN hN hf
     have hfne : f.toRat ≠ 0 := fun h0 => Number.div_zero_error (Number.eq_zero_of_toRat hfN h0) htpo
     have hrne : rate.toRat ≠ 0 := fun h0 =>
-      hrz ((operator_eq_iff _ _ hrateN Number.zero_isNormalized).mpr (by rw [h0, Number.toRat_zero]))
+      hrz ((Number.operator_eq_iff _ _ hrateN Number.zero_isNormalized).mpr (by rw [h0, Number.toRat_zero]))
     have hint : 60 ≤ l.schedule.paymentInterval.toNat := UInt32.le_iff_toNat_le.mp l.valid.paymentInterval_min
     have hlow := loanPeriodicRate_ge _ _ _ hint hrate hrne
     have hfn := computePaymentFactor_ge_third rate _ f hrateN hlow hf hfne
@@ -304,7 +304,7 @@ private lemma UnsettledPayment.applyOverpayment_periodic_lt (p p' : UnsettledPay
   have hδ0 : 0 < opc.principalDelta.toRat := by
     have hgt : opc.principalDelta.operator_gt Number.zero = true := by
       revert hpd; cases opc.principalDelta.operator_gt Number.zero <;> simp
-    have := (operator_gt_iff _ _ hδg.1 Number.zero_isNormalized).mp hgt
+    have := (Number.operator_gt_iff _ _ hδg.1 Number.zero_isNormalized).mp hgt
     rwa [Number.toRat_zero] at this
   have hδ : (10 : ℚ) ^ p.loan.loanScale ≤ opc.principalDelta.toRat := by
     obtain ⟨-, k, hk⟩ := hδg
@@ -407,7 +407,7 @@ lemma Loan.overpayment_reduces_proof (loan : Loan) (v : Vault) (amount : Number)
   have hroom : (payment.loan.paymentRemaining.toNat : ℚ) * payment.loan.periodicPayment.toRat ≤
       2 * ((10 ^ 16 + 1) * 10 ^ payment.loan.loanScale) := by
     have hpp0 : 0 < payment.loan.periodicPayment.toRat := by
-      have := (operator_lt_iff _ _ Number.zero_isNormalized payment.loan.wf.periodicPayment_norm).mp
+      have := (Number.operator_lt_iff _ _ Number.zero_isNormalized payment.loan.wf.periodicPayment_norm).mp
         payment.loan.valid.periodicPayment_pos
       rwa [Number.toRat_zero] at this
     rw [hls]

@@ -125,7 +125,7 @@ private lemma Number.add_count {x y : Number} {c : ℕ} (hx : x.isNormalized) (h
   have he' := Number.nearestError_le
   have hcq : (c : ℚ) ≤ 100 := by exact_mod_cast hc
   obtain ⟨r, hr⟩ := Number.operator_add_ok_of_abs x y .to_nearest hx hy (by nlinarith) (by nlinarith)
-  refine ⟨r, hr, operator_add_isNormalized_to_nearest_sz _ _ _ hx hy hr, ?_⟩
+  refine ⟨r, hr, Number.operator_add_isNormalized_to_nearest_sz _ _ _ hx hy hr, ?_⟩
   have h1 := (Number.add_near _ _ _ hx hy hr).abs_le
   have h2 := abs_add_le x.toRat y.toRat
   have h3 : (c * (2 * 10 ^ 99) + 10 ^ 99 : ℚ) * (1 + ε) ≤ ((c + 1 : ℕ) : ℚ) * (2 * 10 ^ 99) := by
@@ -149,7 +149,7 @@ private lemma PaymentAmounts.add_count {a b : PaymentAmounts} {c : ℕ} (ha : a.
   obtain ⟨i, hi, hiN, hil⟩ := Number.add_count ha.2.1 hb.2.1 h2 g2 hc
   obtain ⟨f, hf', hfN, hfl⟩ := Number.add_count ha.2.2 hb.2.2 h3 g3 hc
   refine ⟨⟨p, i, f⟩, ?_, ⟨hpN, hiN, hfN⟩, hpl, hil, hfl, fun h0 h0' =>
-    operator_add_nonneg _ _ _ ha.2.2 hb.2.2 hf' (by linarith)⟩
+    Number.operator_add_nonneg _ _ _ ha.2.2 hb.2.2 hf' (by linarith)⟩
   unfold PaymentAmounts.add
   simp only [hp, hi, hf', bind, Except.bind, pure, Except.pure]
 
@@ -182,7 +182,7 @@ lemma UnsettledPayment.payInstalments_computes {α : Type} (amount : Number) :
       rw [hu]; exact Number.operator_add_zero_right _ _
     obtain ⟨due, hdue⟩ := Number.Below.add_ok (by norm_num) (b1.mono (by norm_num)) bS
     have bdue := Number.Below.add (b1.mono (by norm_num)) bS hdue
-    have hdue0 := operator_add_nonneg _ _ _ b1.1 bS.1 hdue (by linarith)
+    have hdue0 := Number.operator_add_nonneg _ _ _ b1.1 bS.1 hdue (by linarith)
     have hdue' : ({ pc with untrackedManagementFee := p.loan.fees.serviceFee } : PaymentComponents).totalDue =
         .ok due := by
       unfold PaymentComponents.totalDue
@@ -190,7 +190,7 @@ lemma UnsettledPayment.payInstalments_computes {α : Type} (amount : Number) :
     have hdl : |due.toRat| < 10 ^ 99 := lt_of_lt_of_le bdue.2 (by norm_num)
     obtain ⟨tp', htp', htp'N, htp'l⟩ := Number.add_count htN bdue.1 htl hdl hcq
     have htp'ge : p.totalPaid.toRat ≤ tp'.toRat := by
-      have := rn_ge (operator_add_rounded_to_nearest _ _ _ htN bdue.1 htp') p.totalPaid htN (by linarith)
+      have := rn_ge (Number.operator_add_rounded_to_nearest _ _ _ htN bdue.1 htp') p.totalPaid htN (by linarith)
       exact this
     by_cases hlt : amount.operator_lt tp' = true
     · simp only [hpr0, Bool.false_eq_true, ↓reduceIte, hpc, hdue', htp', hlt, bind, Except.bind, pure,
@@ -209,7 +209,7 @@ lemma UnsettledPayment.payInstalments_computes {α : Type} (amount : Number) :
         rw [hu]; exact ⟨Number.zero_isNormalized, by simp [Number.toRat_zero]⟩) hip
       exact this
     have bfp : inst.feePaid.Below 98 := Number.Below.add (b3.mono (by norm_num)) bS hfp
-    have hfp0 : 0 ≤ inst.feePaid.toRat := operator_add_nonneg _ _ _ b3.1 bS.1 hfp (by linarith)
+    have hfp0 : 0 ≤ inst.feePaid.toRat := Number.operator_add_nonneg _ _ _ b3.1 bS.1 hfp (by linarith)
     have bpp : inst.principalPaid.Below 17 := by rw [hpp]; exact b2
     have hne := Loan.doPayment_scheduled_ne_notLawful p.loan hroom.shape pc
       ({ pc with untrackedManagementFee := p.loan.fees.serviceFee } : PaymentComponents) hpc hpr ⟨rfl, rfl, rfl, rfl⟩
@@ -297,7 +297,7 @@ lemma Loan.regularPayInstalments_due (loan : Loan) (hroom : loan.LoopRoom) (v : 
   have bip : ip.Below 20 := Number.Below.add bid (show pc0.untrackedInterest.Below 19 by
       rw [hu]; exact ⟨Number.zero_isNormalized, by simp [Number.toRat_zero]⟩) hip
   have bfp : fp.Below 98 := Number.Below.add (b3.mono (by norm_num)) bS hfp
-  have hfp0 : 0 ≤ fp.toRat := operator_add_nonneg _ _ _ b3.1 bS.1 hfp (by linarith)
+  have hfp0 : 0 ≤ fp.toRat := Number.operator_add_nonneg _ _ _ b3.1 bS.1 hfp (by linarith)
   set pc := ({ pc0 with untrackedManagementFee := loan.fees.serviceFee } : PaymentComponents) with hpcdef
   have hinst : pc.paidAmounts = .ok ⟨pc0.principalDelta, ip, fp⟩ := by
     unfold PaymentComponents.paidAmounts PaymentComponents.interestDelta
@@ -352,7 +352,7 @@ lemma Loan.regularPayInstalments_due (loan : Loan) (hroom : loan.LoopRoom) (v : 
     simp only [hpr0, Bool.false_eq_true, ↓reduceIte, Loan.scheduledComponents_unimpaired, hpc0, hfee, bind,
       Except.bind]
     rw [show ({ pc0 with untrackedManagementFee := loan.fees.serviceFee } : PaymentComponents) = pc from rfl]
-    simp only [hdue', Number.operator_add_zero_left, (operator_lt_eq_false_iff amount due hamt hdueN).mpr hge,
+    simp only [hdue', Number.operator_add_zero_left, (Number.operator_lt_eq_false_iff amount due hamt hdueN).mpr hge,
       Bool.false_eq_true,
       ↓reduceIte, hinst, hl1, PaymentAmounts.zero_add, pure, Except.pure]
     by_cases hfin : pc0.isFinal = true

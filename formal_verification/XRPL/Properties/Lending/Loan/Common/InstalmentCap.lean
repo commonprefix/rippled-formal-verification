@@ -63,7 +63,7 @@ private lemma reduceCapped_exact {s : Int} (value excess v' e' : Number) (hv : N
     have he' : excess.toRat ≤ 0 := by
       by_contra hc
       push Not at hc
-      exact hgt ((operator_gt_iff _ _ he.1 Number.zero_isNormalized).mpr (by rw [Number.toRat_zero]; exact hc))
+      exact hgt ((Number.operator_gt_iff _ _ he.1 Number.zero_isNormalized).mpr (by rw [Number.toRat_zero]; exact hc))
     have hz : excess.toRat = 0 := le_antisymm he' he0
     refine ⟨hv, he, hv0, he0, ?_, ?_⟩
     · rw [hz, min_eq_right hv0]; ring
@@ -191,7 +191,7 @@ lemma Loan.scheduledComponents_value_le (l : Loan) (pc : PaymentComponents) (pp'
     have : l.totalValueOutstanding.operator_le pp' = false := by
       simp only [Bool.or_eq_true, beq_iff_eq, not_or] at hnf'
       simpa using hnf'.2
-    rw [← not_le, ← operator_le_iff _ _ gT.1 gpp.1, this]
+    rw [← not_le, ← Number.operator_le_iff _ _ gT.1 gpp.1, this]
     simp
   have gtpo := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint htpo
   have gti := STAmount.roundToNumericType_onGrid _ _ _ _ _ hr hint hti
@@ -275,7 +275,7 @@ lemma Loan.scheduledComponents_value_le (l : Loan) (pc : PaymentComponents) (pp'
         have vov := Number.OnGrid.sub_toRat gt1 gcT hs (by rw [hvt1, vcT, abs_lt]; constructor <;> linarith) hov
         rw [Bool.eq_false_iff]
         intro hgt
-        rw [operator_gt_iff _ _ (Number.OnGrid.sub gt1 gcT hs hov).1 Number.zero_isNormalized, Number.toRat_zero,
+        rw [Number.operator_gt_iff _ _ (Number.OnGrid.sub gt1 gcT hs hov).1 Number.zero_isNormalized, Number.toRat_zero,
           vov, hvt1, vcT] at hgt
         linarith
       have hd2e : d2 = { principal := P1, interest := I1, managementFee := M1 } := by
@@ -312,7 +312,7 @@ lemma Loan.scheduledComponents_value_le (l : Loan) (pc : PaymentComponents) (pp'
           have vov := Number.OnGrid.sub_toRat gt1 gcT hs (by
             rw [vt1, vcT, abs_lt]; constructor <;> linarith [hsm1.sum_lt]) hov
           have hov0 : 0 < ov.toRat := by
-            have := (operator_gt_iff _ _ gov.1 Number.zero_isNormalized).mp hc
+            have := (Number.operator_gt_iff _ _ gov.1 Number.zero_isNormalized).mp hc
             rwa [Number.toRat_zero] at this
           have hovb : ov.toRat < 2 ^ 63 * 10 ^ l.loanScale := by rw [vov, vt1, vcT]; linarith [hsm1.sum_lt]
           have hovle : ov.toRat ≤ P1.toRat + I1.toRat + M1.toRat := by rw [vov, vt1, vcT]; linarith

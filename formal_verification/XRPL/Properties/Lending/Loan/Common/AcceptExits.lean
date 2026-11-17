@@ -30,8 +30,8 @@ private lemma Vault.lossUnrealized_gt_false (v : Vault) :
 /-- A normalized `Number` with a nonnegative sign is at least zero. -/
 private lemma Number.zero_le_of_signum (n : Number) (hn : n.isNormalized) (h : 0 ≤ n.signum) :
     Number.zero.operator_le n = true := by
-  rw [operator_le_iff _ _ Number.zero_isNormalized hn, Number.toRat_zero]
-  rw [signum_eq n hn] at h
+  rw [Number.operator_le_iff _ _ Number.zero_isNormalized hn, Number.toRat_zero]
+  rw [Number.signum_eq n hn] at h
   by_contra hlt
   push Not at hlt
   rw [if_neg (by linarith), if_pos hlt] at h
@@ -40,20 +40,20 @@ private lemma Number.zero_le_of_signum (n : Number) (hn : n.isNormalized) (h : 0
 /-- A `Number` at least zero, read exactly. -/
 private lemma Number.toRat_nonneg_of_le {n : Number} (hn : n.isNormalized)
     (h : Number.zero.operator_le n = true) : 0 ≤ n.toRat := by
-  have := (operator_le_iff _ _ Number.zero_isNormalized hn).mp h
+  have := (Number.operator_le_iff _ _ Number.zero_isNormalized hn).mp h
   rwa [Number.toRat_zero] at this
 
 /-- Taking a nonnegative amount off a balance never leaves it above the balance. -/
 private lemma Number.operator_sub_toRat_le (x y d : Number) (hx : x.isNormalized) (hy : y.isNormalized)
     (hy0 : 0 ≤ y.toRat) (hok : x.operator_add y.operator_neg .to_nearest = .ok d) : d.toRat ≤ x.toRat := by
-  have hR := operator_add_rounded_to_nearest x y.operator_neg d hx (Number.operator_neg_isNormalized _ hy) hok
+  have hR := Number.operator_add_rounded_to_nearest x y.operator_neg d hx (Number.operator_neg_isNormalized _ hy) hok
   exact Number.roundsToRepresentable_le d _ hR x hx (by rw [Number.toRat_neg]; linarith)
 
 /-- A normalized `Number` at least zero has a nonnegative sign. -/
 private lemma Number.signum_nonneg_of_le (n : Number) (hn : n.isNormalized)
     (h : Number.zero.operator_le n = true) : 0 ≤ n.signum := by
   have h0 := Number.toRat_nonneg_of_le hn h
-  rw [signum_eq n hn]
+  rw [Number.signum_eq n hn]
   split_ifs <;> first | omega | linarith
 
 /-- The balance change an accept makes to the vault: the principal leaves AssetsReserved and the
@@ -167,9 +167,9 @@ lemma Loan.accept_vault_lawful (loan : Loan) (v : Vault) (interestDue : Number) 
   simp only [Loan.acceptChange, Number.operator_add_zero_right, Except.ok.injEq] at h1 hd hl hr hy
   subst h1 hd hl
   have hpn := loan.wf.principalOutstanding_norm
-  have harn : ar'.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm
+  have harn : ar'.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsReserved_norm
     (Number.operator_neg_isNormalized _ hpn) hr
-  have hyun : yu'.isNormalized := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm
+  have hyun : yu'.isNormalized := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.yieldUnrealized_norm
     (RawLoan.interestDue_isNormalized loan _ hi) hy
   have haan : aa'.isNormalized := STAmount.roundToNumericType_isNormalized _ _ _ _ _ h2
   apply RawVault.to_lawful_ok_of
@@ -183,7 +183,7 @@ lemma Loan.accept_vault_lawful (loan : Loan) (v : Vault) (interestDue : Number) 
       assetsAvailable_representable := (Vault.round_cash_valid v aa' h2).1
       assetsAvailable_onGrid := Vault.onGrid_clause v aa' haan (by
         have := Number.zero_le_of_signum _ haan haa
-        rwa [operator_le_iff _ _ Number.zero_isNormalized haan, Number.toRat_zero] at this)
+        rwa [Number.operator_le_iff _ _ Number.zero_isNormalized haan, Number.toRat_zero] at this)
         (Vault.round_cash_valid v aa' h2).2 }
     · intro h0
       obtain ⟨hA, hD⟩ := v.valid.empty_shares h0
@@ -192,9 +192,9 @@ lemma Loan.accept_vault_lawful (loan : Loan) (v : Vault) (interestDue : Number) 
     · -- the release keeps AssetsReserved at most its old value, so at most AssetsDeployed
       have hle := Number.operator_sub_toRat_le _ _ _ v.wf.assetsReserved_norm hpn
         ((show 0 ≤ loan.principalOutstanding.toRat from loan.exact.principalOutstanding_nonneg)) hr
-      have hrd := (operator_le_iff _ _ v.wf.assetsReserved_norm v.wf.assetsDeployed_norm).mp
+      have hrd := (Number.operator_le_iff _ _ v.wf.assetsReserved_norm v.wf.assetsDeployed_norm).mp
         v.valid.assetsReserved_le
-      exact (operator_le_iff _ _ harn v.wf.assetsDeployed_norm).mpr (le_trans hle hrd)
+      exact (Number.operator_le_iff _ _ harn v.wf.assetsDeployed_norm).mpr (le_trans hle hrd)
 
 variable (loan : Loan) (v : Vault)
 

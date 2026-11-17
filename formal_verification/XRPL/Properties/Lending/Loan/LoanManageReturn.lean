@@ -4,7 +4,7 @@ import XRPL.Properties.Lending.Loan.Common.ManageExits
 /-! # `LoanManage` exits
 
 The exits of `canManage` and of impair, unimpair and default, in check order. A later exit assumes the earlier
-checks passed. On a loan whose schedule fits, the grace period end never passes the largest ledger time. -/
+checks passed. On a lawful loan the grace period end never passes the largest ledger time. -/
 
 namespace XRPL.Model.Lending
 
@@ -20,12 +20,10 @@ theorem Loan.canManage_exits :
     (loan.isImpaired = false → loan.canManage .unimpair now = .ok .tecNO_PERMISSION) ∧
     (loan.paymentRemaining = 0 → loan.canManage action now = .ok .tecNO_PERMISSION) ∧
     (loan.isPending = false → loan.isDefault = false → loan.paymentRemaining ≠ 0 →
-      loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat →
       now.toNat ≤ loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat →
       loan.canManage .default now = .ok .tecTOO_SOON) ∧
     (loan.isPending = false → loan.isDefault = false → loan.paymentRemaining ≠ 0 →
       (action = .impair → loan.isImpaired = false) → (action = .unimpair → loan.isImpaired = true) →
-      loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat →
       (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) →
       loan.canManage action now = .ok .tesSUCCESS) :=
   ⟨Loan.canManage_pending_proof loan action now, Loan.canManage_defaulted_proof loan action now,
@@ -41,13 +39,12 @@ theorem Loan.canManage_error_codes :
 
 /-- Success ⟺ the loan is active and not paid off, an impair needs a loan that isn't impaired, an unimpair an
 impaired one, and a default now > NextPaymentDueDate + GracePeriod. -/
-theorem Loan.canManage_lawful_iff
-    (hfit : loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat ≤ maxTime.toNat) :
+theorem Loan.canManage_lawful_iff :
     loan.canManage action now = .ok .tesSUCCESS ↔
       loan.isPending = false ∧ loan.isDefault = false ∧ loan.paymentRemaining ≠ 0 ∧
         (action = .impair → loan.isImpaired = false) ∧ (action = .unimpair → loan.isImpaired = true) ∧
         (action = .default → loan.nextPaymentDueDate.toNat + loan.schedule.gracePeriod.toNat < now.toNat) :=
-  Loan.canManage_lawful_iff_proof loan action now hfit
+  Loan.canManage_lawful_iff_proof loan action now
 
 open XRPL.Model.SingleAssetVault (Vault RawVault)
 

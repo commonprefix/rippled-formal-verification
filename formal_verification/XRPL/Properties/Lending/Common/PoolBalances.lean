@@ -2,6 +2,7 @@ import XRPL.Model.Lending1_1.AssetPool
 import XRPL.Properties.Lending.Common.Reduction
 import XRPL.Properties.Vault.Proofs.Walk
 import XRPL.Properties.Vault.VaultValid
+import XRPL.Properties.Vault.Proofs.Support.TotalStores
 
 /-! # The vault as the lending pool
 
@@ -10,7 +11,7 @@ What the lending operations read from a vault, and the exits of the balance upda
 namespace XRPL.Model.Lending
 
 open XRPL.Model.Protocol
-open XRPL.Model.SingleAssetVault (Vault RawVault)
+open XRPL.Model.SingleAssetVault (Vault RawVault TotalStores)
 
 /-- The vault holds an IOU, XRP or an MPT. -/
 def Vault.HoldsAsset (v : Vault) : Prop :=
@@ -121,11 +122,12 @@ lemma Vault.adjustBalances_limit_exceeded (v : Vault) (c : PoolBalanceChange) (a
     simp only [Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt]; tauto
   simp [h1, h2, hs.deployed, hs.loss, hs.reserved, hs.yield, hb, hgt]
 
-/-- Otherwise the update writes the five new balances. -/
+/-- Otherwise the update writes the five new balances, when the new total is an amount of the asset
+(C++ `syncAssetsTotal`). -/
 lemma Vault.adjustBalances_ok (v : Vault) (c : PoolBalanceChange) (aa' ad' lu' ar' yu' : Number)
     (hs : Vault.AdjustSums v c aa' ad' lu' ar' yu')
     (hnn : 0 ≤ aa'.signum ∧ 0 ≤ ad'.signum ∧ 0 ≤ lu'.signum ∧ 0 ≤ yu'.signum ∧ 0 ≤ ar'.signum)
-    (hle : lu'.operator_gt ad' = false) :
+    (hle : lu'.operator_gt ad' = false) (hst : TotalStores v.numericType aa' ad') :
     (v.adjustBalances c).run = .ok (.ok { v.toRawVault with
       assetsAvailable := aa'
       assetsDeployed := ad'
@@ -133,12 +135,22 @@ lemma Vault.adjustBalances_ok (v : Vault) (c : PoolBalanceChange) (aa' ad' lu' a
       lossUnrealized := lu'
       yieldUnrealized := yu' }) := by
   obtain ⟨aa, h1, h2⟩ := hs.cash
+  obtain ⟨total, amount, htotal, hamount⟩ := hst
   simp only [XRPL.Model.SingleAssetVault.Vault.adjustBalances]
   unfold_ter
   have hb : (decide (aa'.signum < 0) || decide (ad'.signum < 0) || decide (lu'.signum < 0) ||
       decide (yu'.signum < 0) || decide (ar'.signum < 0)) = false := by
     simp only [Bool.or_eq_false_iff, decide_eq_false_iff_not, not_lt]; tauto
-  simp [h1, h2, hs.deployed, hs.loss, hs.reserved, hs.yield, hb, hle]
+  simp [h1, h2, hs.deployed, hs.loss, hs.reserved, hs.yield, hb, hle, RawVault.assetsTotal, htotal, hamount]
+
+/-- A successful vault update left a total that is an amount of the asset. -/
+lemma Vault.adjustBalances_ok_totalStores (v : Vault) (c : PoolBalanceChange) (raw : RawVault)
+    (h : (v.adjustBalances c).run = .ok (.ok raw)) :
+    TotalStores v.numericType raw.assetsAvailable raw.assetsDeployed := by
+  simp only [XRPL.Model.SingleAssetVault.Vault.adjustBalances] at h
+  unfold_ter at h
+  walk_ok
+  exact ⟨_, _, ‹_›, ‹_›⟩
 
 /-- A successful vault update wrote the five new balances, each the old balance plus its change. -/
 lemma Vault.adjustBalances_ok_parts (v : Vault) (c : PoolBalanceChange) (raw : RawVault)

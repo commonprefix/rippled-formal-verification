@@ -4,8 +4,8 @@ import XRPL.Properties.Protocol.Number.Mul.Common.ToNearest.AlgorithmicFacts
 namespace XRPL.Model.Protocol
 
 /-- Relative-error bound for `Number.operator_mul` under `.to_nearest` rounding.
-The bound `5/(2^63 + 7)` is the tight supremum (see `operator_mul_rounding_bound_to_nearest_attained`). -/
-theorem operator_mul_rounding_bound_to_nearest (x y : Number) (result : Number)
+The bound `5/(2^63 + 7)` is the tight supremum (see `Number.operator_mul_rounding_bound_to_nearest_attained`). -/
+theorem Number.operator_mul_rounding_bound_to_nearest (x y : Number) (result : Number)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (hok : Number.operator_mul x y .to_nearest = .ok result)
@@ -13,7 +13,7 @@ theorem operator_mul_rounding_bound_to_nearest (x y : Number) (result : Number)
     |result.toRat - x.toRat * y.toRat| ≤ |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le_maxRep, _hf_nn, _hf_lt, h_floor_constraint,
           habs_xy_eq, h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
+    Number.operator_mul_algorithmic_facts_to_nearest x y result hx hy hx_mant_ne hy_mant_ne hok hresult
   have h_sign_xy := toRat_mul_sign x y
   have h_abs_diff_eq : |result.toRat - x.toRat * y.toRat|
       = |(|result.toRat| - |x.toRat * y.toRat|)| := by

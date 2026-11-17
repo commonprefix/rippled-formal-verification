@@ -38,8 +38,8 @@ private lemma Vault.cash_update_le (v : Vault) (cash aa aa' : Number) (hasset : 
       ∃ E : ℤ, -96 ≤ E ∧ E ≤ 80 ∧ (10 : ℚ) ^ (E + 15) ≤ aa'.toRat ∧
         aa'.toRat ≤ v.assetsAvailable.toRat + cash.toRat + 6 / 10 * 10 ^ E) := by
   have hmax := hasset.maxValue_le
-  have haan := operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
-  have hsr := operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
+  have haan := Number.operator_add_isNormalized_to_nearest_sz _ _ _ hv.1 hc.1 hs
+  have hsr := Number.operator_add_rounded_to_nearest _ _ _ hv.1 hc.1 hs
   have haa0 : 0 ≤ aa.toRat := Number.RoundsToRepresentable.nonneg_of_nonneg aa _ hsr h0
   by_cases hint' : v.numericType.isIntegral = true
   · -- a whole-number sum below `2^63`, which the asset stores
@@ -175,7 +175,7 @@ private lemma Vault.le_scale_of_cash (v : Vault) (E : ℤ) (hE : -96 ≤ E) (hE'
   have hwt := add_downward_ge_any _ _ t w v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm ht hwn hw0
     (by rw [hwv]; linarith)
   have htm : t.mantissa_ ≠ 0 := Number.mantissa_ne_zero_of_toRat_ne_zero (by linarith)
-  have htn := operator_add_isNormalized _ _ t _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm ht htm
+  have htn := Number.operator_add_isNormalized _ _ t _ v.wf.assetsAvailable_norm v.wf.assetsDeployed_norm ht htm
   rw [hfr] at he
   exact numberExponent_frac_of_le t _ e E htn hE (by rw [hwv] at hwt; exact hwt) he
 
@@ -341,10 +341,11 @@ private lemma Vault.deposit_not_coarsened (v : Vault) (amount : STAmount) (isDon
   have hmax := hasset.maxValue_le
   obtain ⟨hrac, hraty, -⟩ := Vault.roundedDepositAmount_form v amount ra hc hty hra
   obtain ⟨hcf, -, hc0⟩ := computeDeposit_assets_form v ra isDonation amounts hrac hraty hmax hcomp
-  obtain ⟨amountNum, -, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin
+  have hcc := (v.deposit_clampedCharge amount ra isDonation amounts hty (fun h => hc.2 h) hra hcomp)
+  obtain ⟨amountNum, -, hex⟩ := Vault.checkOpenLimit_ok_inv v _ hin hcc
   unfold XRPL.Model.SingleAssetVault.Vault.exceedsOpenLimit at hex
   obtain ⟨atot, hat, -⟩ := bind_ok_peel _ _ _ hex
-  have hb := Vault.checkOpenLimit_bound v _ hcf hc0 atot hat hin
+  have hb := Vault.checkOpenLimit_bound v _ hcf hc0 atot hat hin hcc
   by_contra hge
   push Not at hge
   obtain ⟨hblo, hbhi, -⟩ := v.baseExponent_bounds

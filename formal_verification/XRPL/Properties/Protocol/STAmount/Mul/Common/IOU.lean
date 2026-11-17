@@ -97,11 +97,9 @@ lemma STAmount.checked_iou_cases (nt : NumericType) (mant : UInt64) (exp : Int) 
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_eq mode h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [STAmount.signedDrops_toInt64Checked _ (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat
-      < 2 ^ 63 from h_fit), ok_bind, h_sd]
+    rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · exfalso
@@ -154,11 +152,9 @@ lemma STAmount.checked_iou_zero_exp_lt (mant : UInt64) (exp : Int) (neg : Bool)
       = (if exp > cMaxOffset then .error .overflow
          else if exp < cMinOffset then .ok IOUAmount.zero
          else .ok ⟨if neg then -mant.toInt64 else mant.toInt64, exp⟩) := by
-    unfold STAmount.iou
-    rw [if_neg h_int]
+    rw [STAmount.iou_eq mode h_int]
     unfold IOUAmount.ofMantissaExp
-    rw [STAmount.signedDrops_toInt64Checked _ (show (STAmount.unchecked .fractional mant exp neg).mValue.toNat
-      < 2 ^ 63 from h_fit), ok_bind, h_sd]
+    rw [h_sd]
     exact IOUAmount.normalize_canonical16 mant exp neg mode h_lo h_hi he_lo he_hi
   by_cases hhi : exp > cMaxOffset
   · have hb : STAmount.checked .fractional mant exp neg mode = .error .overflow := by
@@ -497,10 +493,9 @@ lemma STAmount.ofNumber_iou_mantissa_ne_zero (nt : NumericType) (r : Number) (mo
     rcases neg <;> decide
   have hiou0 : (STAmount.unchecked .fractional (0 : Int64).toUInt64 Number.zero.exponent_ neg).iou mode
       = .ok IOUAmount.zero := by
-    unfold STAmount.iou
-    rw [if_neg h_unint]
+    rw [STAmount.iou_eq mode h_unint]
     unfold IOUAmount.ofMantissaExp IOUAmount.normalize
-    rw [STAmount.signedDrops_toInt64Checked _ (show ((0 : Int64).toUInt64).toNat < 2 ^ 63 by decide), ok_bind, hsd0]
+    rw [hsd0]
     rfl
   rw [STAmount.checked] at hok
   unfold STAmount.canonicalize at hok

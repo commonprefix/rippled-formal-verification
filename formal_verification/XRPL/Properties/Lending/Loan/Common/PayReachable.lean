@@ -330,7 +330,7 @@ private lemma Loan.pay_yieldDelta (l : LendingLedger) (hr : l.Reachable) (i : Na
   have hg2 := Loan.interestDue_onGrid loan _ hsi
   have hydv := Number.operator_sub_toRat_of_grid i' p.scheduledInterest yd a c l.vault.baseExponent hg1.1 hg2.1 ha hc
     hac hsb hyd
-  have hydn := operator_sub_isNormalized_to_nearest_sz _ _ _ hg1.1 hg2.1 hyd
+  have hydn := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hg1.1 hg2.1 hyd
   refine ⟨yd, hydn, hy, a - c, by rw [hydv], hac.1, hac.2, ?_⟩
   rw [hydv, hrl, hae, hce]
   push_cast
@@ -358,7 +358,7 @@ lemma Loan.payment_yield_proof (l : LendingLedger) (hr : l.Reachable) (i : Nat) 
     by_contra hge
     push Not at hge
     obtain ⟨w, hw, hwv⟩ := Number.exists_normalized_int_mul_pow (2 ^ 62) l.vault.baseExponent (by norm_num) hsb
-    have hR := operator_add_rounded_to_nearest _ _ _ hYn hydn hy
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ hYn hydn hy
     have hle := Number.roundsToRepresentable_ge _ _ hR w hw (by
       rw [hwv, hky, hydv, ← add_mul]
       apply mul_le_mul_of_nonneg_right _ hp.le
@@ -403,7 +403,7 @@ lemma Loan.regularPayment_yieldUnrealized_proof (l : LendingLedger) (hr : l.Reac
     obtain ⟨yd, hydn, hy, -, -, -, -, hyde⟩ := Loan.pay_yieldDelta loan amount .regular r l hr i hat hok'
     obtain ⟨-, hip0, -⟩ := Loan.pay_parts_nonneg loan amount .regular r l.vault l.now payment hpay hok'
     have hyd0 : yd.toRat ≤ 0 := by rw [hyde, hrl]; linarith
-    have hR := operator_add_rounded_to_nearest _ _ _ l.vault.wf.yieldUnrealized_norm hydn hy
+    have hR := Number.operator_add_rounded_to_nearest _ _ _ l.vault.wf.yieldUnrealized_norm hydn hy
     have := Number.roundsToRepresentable_le _ _ hR l.vault.yieldUnrealized l.vault.wf.yieldUnrealized_norm
       (by linarith)
     linarith

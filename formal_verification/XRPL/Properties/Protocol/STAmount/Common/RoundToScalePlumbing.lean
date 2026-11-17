@@ -96,9 +96,7 @@ theorem STAmount.iou_canonical_id (s : STAmount) (mode : rounding_mode)
     unfold STAmount.integral
     rw [hc.is_fractional]
     decide
-  unfold STAmount.iou
-  rw [if_neg h_int, Int.toInt64Checked_of_bounds (by unfold STAmount.signedDrops; split <;> omega)
-    (by unfold STAmount.signedDrops; split <;> omega), ok_bind, ← hsd_def]
+  rw [STAmount.iou_eq mode h_int, ← hsd_def]
   -- ofMantissaExp → normalize: mantissa ≠ 0.
   unfold IOUAmount.ofMantissaExp IOUAmount.normalize
   have h_sd_ne : ¬ (sd == 0) = true := by

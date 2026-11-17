@@ -1,4 +1,5 @@
 import XRPL.Properties.Lending.Ledger.Common.CashPrecision
+import XRPL.Properties.Lending.Ledger.Common.TotalStoredInv
 import XRPL.Properties.Lending.Ledger.Common.ClosedLoans
 import XRPL.Properties.Lending.Ledger.Common.LossInv
 import XRPL.Properties.Lending.Ledger.Common.YieldGridInv
@@ -91,7 +92,7 @@ private lemma LendingLedger.impair_total_of_deployed (l : LendingLedger) (hr : l
   have hroom : l.vault.lossUnrealized.toRat + loan.principalOutstanding.toRat ≤ l.vault.assetsDeployed.toRat := by
     rw [hr.lossInv.sum, hpo]
     exact le_trans (LendingLedger.principalSum_add_le_all l (·.isImpaired) he himp) hdeployed
-  obtain ⟨r, hok⟩ := Loan.manageImpair_ok_of_room loan l.vault l.now (hr.storesAvailable hmax)
+  obtain ⟨r, hok⟩ := Loan.manageImpair_ok_of_room loan l.vault l.now (hr.storesAvailable hmax) hr.totalStored
     (by rw [hnpd]; exact hlate) hroom
   exact ⟨_, LendingLedger.apply_manage_ok l hnd i e b loan .impair r he hb hw
     (by rw [Loan.canManage_withBroker hw]; exact hc) hok⟩

@@ -64,7 +64,7 @@ lemma FactorGap.of_zero_rate (rate : Number) (hrate : rate.isNormalized) (h0 : r
   have hkm1 : (1 : ℚ) ≤ k.toNat - 1 := by linarith
   have hf'ne : f'.toRat ≠ 0 := by
     intro h'
-    have hu := operator_div_underflow_truth_small _ _ _ _ hone hN' hm1 hmN' hf' (Number.toRat_eq_zero_iff.mp h')
+    have hu := Number.operator_div_underflow_truth_small _ _ _ _ hone hN' hm1 hmN' hf' (Number.toRat_eq_zero_iff.mp h')
     rw [Number.ofInt64_one_toRat, hNv', hkq, abs_of_nonneg (by positivity)] at hu
     have hmin : (10 : ℚ) ^ (minExponent : ℤ) ≤ 10 ^ (-200 : ℤ) :=
       zpow_le_zpow_right₀ (by norm_num) (by unfold minExponent; norm_num)
@@ -75,7 +75,7 @@ lemma FactorGap.of_zero_rate (rate : Number) (hrate : rate.isNormalized) (h0 : r
     exact absurd (lt_of_lt_of_le hu h2) (not_lt.mpr (le_trans h3.le h1))
   have hge := (Number.div_near _ _ _ hone hN' hf').ge hf'ne (by rw [Number.ofInt64_one_toRat, hNv', hkq]; positivity)
   rw [Number.ofInt64_one_toRat, hNv', hkq] at hge
-  have hf0 : 0 ≤ f.toRat := rn_nonneg (operator_div_rounded_to_nearest _ _ _ hone hN hf)
+  have hf0 : 0 ≤ f.toRat := rn_nonneg (Number.operator_div_rounded_to_nearest _ _ _ hone hN hf)
     (by rw [Number.ofInt64_one_toRat, hNv]; positivity)
   -- `(k − 1)·(1 + ε)^5 ≤ k·(1 − ε)`
   have h5 : (1 + ε) ^ 5 ≤ 1 + 10 * ε := by

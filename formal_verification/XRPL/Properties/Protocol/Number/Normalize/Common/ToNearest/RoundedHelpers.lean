@@ -15,7 +15,7 @@ The result is `Number.lower` or `Number.upper` of the input value. A zero input 
 neighbour of any value below the smallest positive `Number`, so no nonzero hypothesis is needed. -/
 
 /-- No normalized Number lies above `result.toRat` and at or below `n.toRat` when `result.toRat ≤ n.toRat`. -/
-theorem normalize_no_inbetween_below_to_nearest (n result : Number)
+theorem Number.normalize_no_inbetween_below_to_nearest (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0)
@@ -24,7 +24,7 @@ theorem normalize_no_inbetween_below_to_nearest (n result : Number)
       result.toRat < m.toRat → ¬ (m.toRat ≤ n.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hfloor_constr, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
   exact no_inbetween_below_to_nearest_frame result n.toRat zm ze' f g res_pos
     .normalize2 hzm_ge hzm_le (represents_nonneg hf_rep)
     (represents_lt_one hf_rep) hfloor_constr h_truth_abs h_rup_pos
@@ -43,7 +43,7 @@ theorem normalize_no_inbetween_below_to_nearest (n result : Number)
     h_le
 
 /-- No normalized Number lies at or above `n.toRat` and below `result.toRat` when `n.toRat ≤ result.toRat`. -/
-theorem normalize_no_inbetween_above (n result : Number)
+theorem Number.normalize_no_inbetween_above (n result : Number)
     (hn_mant_ne : n.mantissa_ ≠ 0)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result)
     (hresult : result.mantissa_ ≠ 0)
@@ -52,7 +52,7 @@ theorem normalize_no_inbetween_above (n result : Number)
       m.toRat < result.toRat → ¬ (n.toRat ≤ m.toRat) := by
   obtain ⟨zm, ze', f, g, res_pos, hzm_ge, hzm_le, hfloor_constr, h_truth_abs,
           h_rup_pos, h_result_abs, hres_pos_mant_ne, hf_rep, h_sign⟩ :=
-    normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
+    Number.normalize_algorithmic_facts_to_nearest n result hn_mant_ne hok hresult
   exact no_inbetween_above_to_nearest_frame result n.toRat zm ze' f g res_pos
     .normalize2 hzm_ge hzm_le (represents_nonneg hf_rep)
     (represents_lt_one hf_rep) hfloor_constr h_truth_abs h_rup_pos
@@ -79,7 +79,7 @@ theorem normalize_no_inbetween_above (n result : Number)
 
 /-- Any successful `Number.normalize` under `.to_nearest` returns `Number.lower` or `Number.upper` of the input
 value. -/
-theorem normalize_rounded_to_nearest_proof (n result : Number)
+theorem Number.normalize_rounded_to_nearest_proof (n result : Number)
     (hok : n.normalize largeRange.min largeRange.max .to_nearest = .ok result) :
     Number.RoundsToRepresentable result n.toRat .to_nearest := by
   -- Zero input: the model short-circuits to the canonical zero.
@@ -100,7 +100,7 @@ theorem normalize_rounded_to_nearest_proof (n result : Number)
   by_cases hres : result.mantissa_ = 0
   · have h_res0 : result.toRat = 0 := Number.toRat_eq_zero_of_mantissa_zero result hres
     have h_truth_ne : n.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero n hnz
-    have h_small := normalize_underflow_truth_small n result .to_nearest hnz hok hres
+    have h_small := Number.normalize_underflow_truth_small_proof n result .to_nearest hnz hok hres
     rcases lt_or_gt_of_ne h_truth_ne with h_neg | h_pos
     · right
       refine ⟨Number.zero, ?_, ?_⟩
@@ -114,9 +114,9 @@ theorem normalize_rounded_to_nearest_proof (n result : Number)
       · rw [h_res0, Number.toRat_zero]
   -- Generic path.
   have hresult : result.mantissa_ ≠ 0 := hres
-  have h5 := normalize_rounding_bound_to_nearest n result hnz hok hresult
+  have h5 := Number.normalize_rounding_bound_to_nearest n result hnz hok hresult
   have h_result_norm : result.isNormalized :=
-    normalize_result_isNormalized n result .to_nearest hnz hok hresult
+    Number.normalize_result_isNormalized n result .to_nearest hnz hok hresult
   have h_truth_ne : n.toRat ≠ 0 := Number.toRat_ne_zero_of_mantissa_ne_zero n hnz
   have h_bound : |result.toRat - n.toRat| ≤ |n.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) :=
     le_trans h5 (mul_le_mul_of_nonneg_left (by norm_num) (abs_nonneg _))
@@ -125,18 +125,18 @@ theorem normalize_rounded_to_nearest_proof (n result : Number)
     truth_top_of_result_cap result n.toRat h_result_norm hresult h_bound
       (le_trans
         (UInt64.le_iff_toNat_le.mp
-          (normalize_no_overflow_mantissa n result .to_nearest hnz hok hresult h))
+          (Number.normalize_no_overflow_mantissa n result .to_nearest hnz hok hresult h))
         (by rw [show maxRepUp.toNat = maxRepUpNat from rfl]; norm_num)) h
   by_cases h_le : result.toRat ≤ n.toRat
   · left
     exact closest_lower_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_le
-      (normalize_no_inbetween_below_to_nearest n result hnz hok hresult h_le)
+      (Number.normalize_no_inbetween_below_to_nearest n result hnz hok hresult h_le)
   · push Not at h_le
     have h_ge : n.toRat ≤ result.toRat := le_of_lt h_le
     right
     exact closest_upper_of_no_inbetween result n.toRat h_result_norm hresult
       h_truth_ne h_bound h_truth_top h_ge
-      (normalize_no_inbetween_above n result hnz hok hresult h_ge)
+      (Number.normalize_no_inbetween_above n result hnz hok hresult h_ge)
 
 end XRPL.Model.Protocol

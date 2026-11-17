@@ -5,7 +5,7 @@ import XRPL.Properties.Protocol.Number.Common.ProofTactics
 
 namespace XRPL.Model.Protocol
 
-/-! # Witness for `operator_mul_rounding_bound_towards_zero`
+/-! # Witness for `Number.operator_mul_rounding_bound_towards_zero`
 
 The bound `10/(2^63+2)` is tight: the relative error at
 `x = 9223372036854775810`, `y = 1000000000000000001` exceeds `9/(2^63+2)`.
@@ -31,7 +31,7 @@ lemma scaleDown128_towards_zero_witness :
   conv_lhs => rw [scaleDown128Spec]; rw [dif_neg (by decide)]
   rfl
 
-lemma operator_mul_towards_zero_witness :
+lemma Number.operator_mul_towards_zero_witness :
     Number.operator_mul
         ⟨false, 9223372036854775810, 0⟩
         ⟨false, 1000000000000000001, 0⟩
@@ -82,7 +82,7 @@ lemma operator_mul_towards_zero_witness :
     simp only [RoundResult.toNumber]]
 
 
-theorem operator_mul_towards_zero_attained :
+theorem Number.operator_mul_towards_zero_attained :
     ∃ (x y result : Number),
       x.isNormalized ∧ y.isNormalized ∧
       Number.operator_mul x y .towards_zero = .ok result ∧
@@ -94,7 +94,7 @@ theorem operator_mul_towards_zero_attained :
           ?_, ?_, ?_, ?_, ?_⟩
   · norm_isNormalized
   · norm_isNormalized
-  · exact operator_mul_towards_zero_witness
+  · exact Number.operator_mul_towards_zero_witness
   · decide
   · have hx_rat : (⟨false, 9223372036854775810, 0⟩ : Number).toRat = 9223372036854775810 := by
       unfold Number.toRat; rfl

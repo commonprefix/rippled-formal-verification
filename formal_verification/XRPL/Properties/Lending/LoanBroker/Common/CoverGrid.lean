@@ -118,7 +118,8 @@ lemma LoanBroker.applyCoverTransaction_debit_le (lb : LoanBroker) (a : STAmount)
   obtain ⟨m, c', hm, hc', -, hraw⟩ := LoanBroker.applyCoverTransaction_debit_inv lb a r h
   rw [show r.loanBroker'.coverAvailable = c' from congrArg RawLoanBroker.coverAvailable hraw]
   obtain ⟨hmv, hmn⟩ := ha.toNumber_exact m hm
-  exact Number.roundsToRepresentable_le _ _ (operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn hc')
+  exact Number.roundsToRepresentable_le _ _ (Number.operator_sub_rounded_to_nearest _ _ _ lb.wf.coverAvailable_norm hmn
+    hc')
     _ lb.wf.coverAvailable_norm (by rw [hmv]; linarith)
 
 /-- A sum of two amounts on a grid that the towards-zero check keeps at most the Open limit lands, rounded to
@@ -129,7 +130,7 @@ private lemma cover_credit_le (c n t L c' : Number) (s : Int) (hc : Number.OnGri
     (htz : c.operator_add n .towards_zero = .ok t) (hgt : ¬ t.operator_gt L = true)
     (hadd : c.operator_add n .to_nearest = .ok c') : c'.toRat ≤ max c.toRat L.toRat := by
   have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
-  have hR := operator_add_rounded_to_nearest _ _ _ hc.1 hn.1 hadd
+  have hR := Number.operator_add_rounded_to_nearest _ _ _ hc.1 hn.1 hadd
   by_cases hn0 : n.toRat ≤ 0
   · -- a deposit that rounded to nothing or less keeps the cover at most where it was
     exact (Number.roundsToRepresentable_le _ _ hR c hc.1 (by linarith)).trans (le_max_left _ _)
@@ -147,7 +148,7 @@ private lemma cover_credit_le (c n t L c' : Number) (s : Int) (hc : Number.OnGri
     have := lt_of_mul_lt_mul_right h1 hp.le
     exact_mod_cast this
   obtain ⟨m, hm, hmv⟩ := Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) s (by constructor <;> norm_num) hs
-  obtain ⟨l, hlo, htv⟩ := operator_add_rounded_towards_zero _ _ _ hc.1 hn.1 htz
+  obtain ⟨l, hlo, htv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hc.1 hn.1 htz
   rw [if_pos (by linarith)] at hlo
   have hmt : m.toRat ≤ c.toRat + n.toRat := by
     rw [hmv, hkc, hkn]
@@ -164,7 +165,8 @@ private lemma cover_credit_le (c n t L c' : Number) (s : Int) (hc : Number.OnGri
     rw [Number.toRat_eq_zero_of_mantissa_zero t h0, hLv] at hlt
     have : (0 : ℚ) < 9 * 10 ^ 15 * 10 ^ s := by positivity
     linarith
-  exact hgt ((operator_gt_iff _ _ (operator_add_isNormalized _ _ _ .towards_zero hc.1 hn.1 htz ht0) hLn).mpr hlt)
+  exact hgt ((Number.operator_gt_iff _ _ (Number.operator_add_isNormalized _ _ _ .towards_zero hc.1 hn.1 htz ht0)
+    hLn).mpr hlt)
 
 /-- A deposit that passes the Open-limit check leaves the cover at most the larger of the old cover and the
 Open limit. -/

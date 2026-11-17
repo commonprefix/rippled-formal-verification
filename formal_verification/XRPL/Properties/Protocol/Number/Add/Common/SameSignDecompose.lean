@@ -28,7 +28,7 @@ structure PostAlignSpec (truth : ℚ) (xn : Bool) (result : Number) (mode : roun
   truth_top : |truth| < 10 ^ 19 * (10 : ℚ) ^ (maxExponent : ℤ)
   result_mant_ne : result.mantissa_ ≠ 0
 
-private theorem operator_add_post_alignment_anyMode
+private theorem Number.operator_add_post_alignment_anyMode
     {mode : rounding_mode} (xn : Bool) (xm_a ym_a : UInt64) (e_common : Int) (g_aln : Guard)
     (f_aln : ℚ) (hrep_aln : represents g_aln f_aln)
     (h_g_aln_sbit : g_aln.sbit_ = xn)
@@ -50,7 +50,7 @@ private theorem operator_add_post_alignment_anyMode
             match p.2.2.doRoundUp xn p.1 p.2.1 largeRange.min largeRange.max
                   mode .overflow with
             | .error err => Except.error err
-            | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+            | .ok res => .ok res.toNumber)
            = .ok result) :
     ∃ (zm : UInt64) (ze' : Int) (f : ℚ) (g : Guard) (res_pos : RoundResult),
       PostAlignSpec truth xn result mode zm ze' f g res_pos := by
@@ -186,7 +186,7 @@ private theorem operator_add_post_alignment_anyMode
     have hok' : (match g_new.doRoundUp xn zm_new (e_common + 1) largeRange.min largeRange.max
                        mode .overflow with
                  | .error err => Except.error err
-                 | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+                 | .ok res => .ok res.toNumber)
                 = .ok result := by
       have h := hok
       simp only [h_cond_true, if_true] at h
@@ -229,8 +229,7 @@ private theorem operator_add_post_alignment_anyMode
     have hres_pos_mant_ne : res_pos.mantissa_ ≠ 0 := hres_mant_ne
     have h_rup_pos : g_new.doRoundUp false zm_new (e_common + 1) largeRange.min largeRange.max mode .overflow = .ok res_pos :=
       doRoundUp_false_from_ok g_new xn zm_new (e_common + 1) mode .overflow res h_rup
-    have h_result_eq_res : result = res.toNumber :=
-      Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok'
+    have h_result_eq_res : result = res.toNumber := (Except.ok.inj hok').symm
     have h_result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [h_result_eq_res, abs_toRat_eq res.toNumber]; rfl
     have h_res_neg_eq_xn : result.negative_ = xn := by
@@ -303,7 +302,7 @@ private theorem operator_add_post_alignment_anyMode
     have hok' : (match g_aln.doRoundUp xn zm_new e_common largeRange.min largeRange.max
                        mode .overflow with
                  | .error err => Except.error err
-                 | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+                 | .ok res => .ok res.toNumber)
                 = .ok result := by
       have h := hok
       simp only [h_cond_false, Bool.false_eq_true, if_false] at h
@@ -345,8 +344,7 @@ private theorem operator_add_post_alignment_anyMode
     have hres_pos_mant_ne : res_pos.mantissa_ ≠ 0 := hres_mant_ne
     have h_rup_pos : g_aln.doRoundUp false zm_new e_common largeRange.min largeRange.max mode .overflow = .ok res_pos :=
       doRoundUp_false_from_ok g_aln xn zm_new e_common mode .overflow res h_rup
-    have h_result_eq_res : result = res.toNumber :=
-      Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod hok'
+    have h_result_eq_res : result = res.toNumber := (Except.ok.inj hok').symm
     have h_result_abs : |result.toRat| = (res_pos.mantissa_.toNat : ℚ) * 10 ^ res_pos.exponent_ := by
       rw [h_result_eq_res, abs_toRat_eq res.toNumber]; rfl
     have h_res_neg_eq_xn : result.negative_ = xn := by
@@ -382,7 +380,7 @@ private theorem operator_add_post_alignment_anyMode
 
 set_option maxHeartbeats 1600000 in
 -- Unfolding `operator_add` over the three exponent cases needs a raised heartbeat budget.
-theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (mode : rounding_mode)
+theorem Number.operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (mode : rounding_mode)
     (hx : x.isNormalized) (hy : y.isNormalized)
     (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
     (h_same_sign : x.negative_ = y.negative_)
@@ -447,13 +445,13 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
     have hxm_a_le_xm : xm_a.toNat ≤ x.mantissa_.toNat :=
       alignDown_mantissa_le x.mantissa_ x.exponent_ g₀ y.exponent_
     have hxm_a_lt : xm_a.toNat < 10 ^ 19 := by omega
-    set K : ℕ := (max x.exponent_ y.exponent_ - x.exponent_).toNat with hK_def
-    have hmax_eq : max x.exponent_ y.exponent_ = y.exponent_ :=
+    set K : ℕ := (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat with hK_def
+    have hmax_eq : Max.max x.exponent_ y.exponent_ = y.exponent_ :=
       max_eq_right (le_of_lt h_xe_lt_ye)
     set f_aln : ℚ := (0 + ((x.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
     have hf_aln_rep' : represents g_aln f_aln := by
       have h := alignDown_represents x.mantissa_ x.exponent_ g₀ y.exponent_ 0 hg₀_rep
-      have hK_eq : (max x.exponent_ y.exponent_ - x.exponent_).toNat = K := by rw [hK_def]
+      have hK_eq : (Max.max x.exponent_ y.exponent_ - x.exponent_).toNat = K := by rw [hK_def]
       rw [hK_eq] at h
       exact h
     have htruth_eq : |x.toRat + y.toRat|
@@ -489,7 +487,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                      match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                            mode .overflow with
                      | .error err => Except.error err
-                     | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+                     | .ok res => .ok res.toNumber)
                     = .ok result := by
       have h := hok
       simp only [h_xneqyn, if_true] at h
@@ -498,7 +496,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
     have h_g_aln_sbit : g_aln.sbit_ = x.negative_ := by
       rw [hg_aln_def, haln_def, alignDown_sbit_preserved, hg₀_def]
       cases hxn : x.negative_ <;> rfl
-    have h_result := operator_add_post_alignment_anyMode x.negative_ xm_a y.mantissa_ e_common g_aln
+    have h_result := Number.operator_add_post_alignment_anyMode x.negative_ xm_a y.mantissa_ e_common g_aln
       f_aln hf_aln_rep' h_g_aln_sbit hxm_a_lt hy_mant_bound hsum_ge
       (by rw [he_common_eq]; exact hye_min)
       (by rw [he_common_eq]; exact hye_max) (x.toRat + y.toRat) htruth_eq
@@ -522,13 +520,13 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       have hym_a_le_ym : ym_a.toNat ≤ y.mantissa_.toNat :=
         alignDown_mantissa_le y.mantissa_ y.exponent_ g₀ x.exponent_
       have hym_a_lt : ym_a.toNat < 10 ^ 19 := by omega
-      set K : ℕ := (max y.exponent_ x.exponent_ - y.exponent_).toNat with hK_def
-      have hmax_eq : max y.exponent_ x.exponent_ = x.exponent_ :=
+      set K : ℕ := (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat with hK_def
+      have hmax_eq : Max.max y.exponent_ x.exponent_ = x.exponent_ :=
         max_eq_right (le_of_lt h_xe_gt_ye)
       set f_aln : ℚ := (0 + ((y.mantissa_.toNat % 10 ^ K : ℕ) : ℚ)) / 10 ^ K with hf_aln_def
       have hf_aln_rep' : represents g_aln f_aln := by
         have h := alignDown_represents y.mantissa_ y.exponent_ g₀ x.exponent_ 0 hg₀_rep
-        have hK_eq : (max y.exponent_ x.exponent_ - y.exponent_).toNat = K := by rw [hK_def]
+        have hK_eq : (Max.max y.exponent_ x.exponent_ - y.exponent_).toNat = K := by rw [hK_def]
         rw [hK_eq] at h
         exact h
       have htruth_eq : |x.toRat + y.toRat|
@@ -564,7 +562,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                              mode .overflow with
                        | .error err => Except.error err
-                       | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+                       | .ok res => .ok res.toNumber)
                       = .ok result := by
         have h := hok
         simp only [h_xneqyn, if_true] at h
@@ -574,7 +572,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       have h_g_aln_sbit : g_aln.sbit_ = x.negative_ := by
         rw [hg_aln_def, haln_def, alignDown_sbit_preserved, hg₀_def, h_same_sign]
         cases hyn : y.negative_ <;> rfl
-      exact operator_add_post_alignment_anyMode x.negative_ x.mantissa_ ym_a e_common g_aln
+      exact Number.operator_add_post_alignment_anyMode x.negative_ x.mantissa_ ym_a e_common g_aln
         f_aln hf_aln_rep' h_g_aln_sbit hx_mant_bound hym_a_lt hsum_ge
         (by rw [he_common_eq]; exact hxe_min)
         (by rw [he_common_eq]; exact hxe_max) (x.toRat + y.toRat) htruth_eq
@@ -613,7 +611,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
                        match p.2.2.doRoundUp x.negative_ p.1 p.2.1 largeRange.min largeRange.max
                              mode .overflow with
                        | .error err => Except.error err
-                       | .ok res => res.toNumber.normalize largeRange.min largeRange.max mode)
+                       | .ok res => .ok res.toNumber)
                       = .ok result := by
         have h := hok
         simp only [h_xneqyn, if_true] at h
@@ -624,7 +622,7 @@ theorem operator_add_algorithmic_facts_same_sign_anyMode (x y result : Number) (
       have h_g_aln_sbit : g_aln.sbit_ = x.negative_ := by
         rw [hg_aln_def]
         cases hxn : x.negative_ <;> rfl
-      exact operator_add_post_alignment_anyMode x.negative_ xm_a ym_a e_common g_aln
+      exact Number.operator_add_post_alignment_anyMode x.negative_ xm_a ym_a e_common g_aln
         f_aln hf_aln_rep' h_g_aln_sbit hxm_a_lt hym_a_lt hsum_ge
         (by rw [he_common_def]; exact hxe_min)
         (by rw [he_common_def]; exact hxe_max) (x.toRat + y.toRat) htruth_eq

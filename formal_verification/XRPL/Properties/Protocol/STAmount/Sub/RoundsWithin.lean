@@ -1,4 +1,5 @@
 import XRPL.Properties.Protocol.STAmount.Sub.Common.RoundsWithinProofs
+import XRPL.Properties.Protocol.STAmount.Add.Common.Underflow
 
 namespace XRPL.Model.Protocol
 
@@ -68,5 +69,13 @@ theorem STAmount.operator_sub_rounds_iou_towards_zero_witness :
       STAmount.operator_sub v1 v2 .towards_zero = .ok result ∧ result.mValue ≠ 0 ∧
       RoundsWithinWitness result (v1.toRat - v2.toRat) (4 / 10 ^ 16 : ℚ) :=
   sub_dir_wit_core .towards_zero 1000000000000000 (by decide) (Or.inr (Or.inr rfl))
+
+/-- IOU subtraction returns zero only when the exact difference is below `10⁻⁸¹` in magnitude, the smallest
+positive IOU amount. -/
+theorem STAmount.operator_sub_underflow_truth_small_iou (v1 v2 result : STAmount) (mode : rounding_mode)
+    (hc1 : v1.IOUCanonical) (hc2 : v2.IOUCanonical)
+    (hok : STAmount.operator_sub v1 v2 mode = .ok result) (hres0 : result.mValue = 0) :
+    |v1.toRat - v2.toRat| < (10 : ℚ) ^ (-81 : ℤ) :=
+  STAmount.operator_sub_underflow_truth_small_iou_proof v1 v2 result mode hc1 hc2 hok hres0
 
 end XRPL.Model.Protocol

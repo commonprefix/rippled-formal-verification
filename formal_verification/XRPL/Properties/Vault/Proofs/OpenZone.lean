@@ -1,4 +1,5 @@
 import XRPL.Properties.Vault.Proofs.Support.VaultBalances
+import XRPL.Properties.Vault.Proofs.Support.InflowCheck
 import XRPL.Properties.Vault.Proofs.Support.ComputeDeposit
 import XRPL.Properties.Vault.Proofs.Support.WithdrawPayout
 import XRPL.Properties.Vault.Proofs.Support.ComputeClawback
@@ -138,7 +139,7 @@ lemma Vault.adjustAssetsAndShares_units (v : Vault) (assets shares : STAmount) (
       hAv (by rw [hv, hj]) (by rw [hkj]; constructor <;> push_cast <;> omega)
       (by unfold minExponent maxExponent; constructor <;> omega) hs
     rw [h, hkj]; push_cast; rfl
-  have hsn := operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
+  have hsn := Number.operator_add_isNormalized_to_nearest_sz _ _ _ v.wf.assetsAvailable_norm hnorm hs
   have hs0 : 0 ≤ s.toRat := by rw [hsv]; positivity
   -- the asset stores the sum exactly
   have hsr : STAmount.isRounded v.numericType s = false := by
@@ -151,7 +152,7 @@ lemma Vault.adjustAssetsAndShares_units (v : Vault) (assets shares : STAmount) (
   have haav := STAmount.roundToNumericType_of_isRounded_false _ s aa' hsn hsr haa
   have haan := STAmount.roundToNumericType_isNormalized _ _ _ _ _ haa
   have heq : aa' = s :=
-    (Number.operator_eq_iff_eq _ _).mp ((operator_eq_iff aa' s haan hsn).mpr haav)
+    (Number.operator_eq_iff_eq _ _).mp ((Number.operator_eq_iff aa' s haan hsn).mpr haav)
   subst heq
   exact ⟨hsv, hsr⟩
 
@@ -159,7 +160,7 @@ lemma Vault.adjustAssetsAndShares_units (v : Vault) (assets shares : STAmount) (
 on any lawful vault. The capacity it compares never rounds below the computed total plus the charge. -/
 lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.CanonicalOrZero)
     (hc0 : 0 ≤ charge.toRat) (navN : Number) (hat : v.assetsTotal = .ok navN)
-    (hin : v.checkOpenLimit charge = .ok .tesSUCCESS) :
+    (hin : v.checkOpenLimit charge = .ok .tesSUCCESS) (hcc : v.ClampedCharge charge) :
     navN.toRat + charge.toRat < 9 * (10 : ℚ) ^ (15 + v.baseExponent) + 10 ^ v.baseExponent := by
   obtain ⟨hblo, hbhi, -⟩ := v.baseExponent_bounds
   obtain ⟨hnavn, hAD⟩ := Vault.assetsTotal_ge_deployed v navN hat
@@ -181,7 +182,7 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
     subst hww
     have hpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
     -- the first sum keeps at least the total, and is a normalized `Number`
-    obtain ⟨n₁, hlo₁, hs₁v⟩ := operator_add_rounded_towards_zero _ _ _ hnavn v.wf.yieldUnrealized_norm hs₁
+    obtain ⟨n₁, hlo₁, hs₁v⟩ := Number.operator_add_rounded_towards_zero _ _ _ hnavn v.wf.yieldUnrealized_norm hs₁
     rw [if_pos (by linarith)] at hlo₁
     have hs₁ge : navN.toRat ≤ s₁.toRat := by
       rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ navN hnavn (by linarith)
@@ -194,7 +195,7 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
           rw [hs₁v]; exact Number.lower_tight _ n₁ hlo₁ _ v.wf.yieldUnrealized_norm (by linarith)
         have hYpos : 0 < v.yieldUnrealized.toRat :=
           lt_of_le_of_ne hY0 (Ne.symm (Number.toRat_ne_zero_of_mantissa_ne_zero _ hY))
-        exact operator_add_isNormalized _ _ _ .towards_zero hnavn v.wf.yieldUnrealized_norm hs₁ (fun h0 => by
+        exact Number.operator_add_isNormalized _ _ _ .towards_zero hnavn v.wf.yieldUnrealized_norm hs₁ (fun h0 => by
           have := Number.toRat_eq_zero_of_mantissa_zero s₁ h0; linarith)
     -- one base step past the limit
     obtain ⟨m, hm, hmv⟩ := Number.exists_normalized_int_mul_pow (9 * 10 ^ 15 + 1) v.baseExponent
@@ -203,7 +204,7 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
       rw [zpow_add₀ (by norm_num)]; norm_num; ring
     have htruth : 0 ≤ s₁.toRat + amountNum.toRat := by
       rw [hnv]; exact add_nonneg (le_trans hnav0 hs₁ge) hc0
-    obtain ⟨n, hlo, hcapv⟩ := operator_add_rounded_towards_zero _ _ _ hs₁n hnn hcapok
+    obtain ⟨n, hlo, hcapv⟩ := Number.operator_add_rounded_towards_zero _ _ _ hs₁n hnn hcapok
     rw [if_pos htruth] at hlo
     have hmle : m.toRat ≤ s₁.toRat + amountNum.toRat := by
       rw [hmv, hnv]; push_cast; rw [h9] at hge; linarith
@@ -222,11 +223,12 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
       have : (0 : ℚ) < 9 * 10 ^ (15 + v.baseExponent) := by positivity
       push_cast at hlt
       linarith
-    have hcapn := operator_add_isNormalized _ _ _ .towards_zero hs₁n hnn hcapok hcap0
+    have hcapn := Number.operator_add_isNormalized _ _ _ .towards_zero hs₁n hnn hcapok hcap0
     apply hng
     show w.operator_lt capacity = true
-    exact (operator_lt_iff _ _ hwn hcapn).mpr hlt
-  simp only [Vault.checkOpenLimit, Vault.exceedsOpenLimit, Vault.openLimit, bind, Except.bind, pure,
+    exact (Number.operator_lt_iff _ _ hwn hcapn).mpr hlt
+  rw [v.checkOpenLimit_of_clamped charge hcc] at hin
+  simp only [Vault.checkOpenLimitUnrounded, Vault.exceedsOpenLimit, Vault.openLimit, bind, Except.bind, pure,
     Except.pure, hat] at hin
   walk_ok
   exact key _ _ _ _ ‹_› ‹_› ‹_› ‹_› ‹_›
@@ -234,14 +236,14 @@ lemma Vault.checkOpenLimit_bound (v : Vault) (charge : STAmount) (hc : charge.Ca
 /-- A charge the inflow check accepts keeps the cash within the Open-zone limit. -/
 lemma Vault.checkOpenLimit_openZone (v : Vault) (hz : v.OpenZone) (charge : STAmount)
     (hc : charge.CanonicalOrZero) (j : ℕ) (hj : charge.toRat = (j : ℚ) * (10 : ℚ) ^ v.baseExponent)
-    (hin : v.checkOpenLimit charge = .ok .tesSUCCESS) :
+    (hin : v.checkOpenLimit charge = .ok .tesSUCCESS) (hcc : v.ClampedCharge charge) :
     ∃ k : ℕ, k ≤ 9 * 10 ^ 15 ∧
       v.assetsAvailable.toRat + charge.toRat = (k : ℚ) * (10 : ℚ) ^ v.baseExponent := by
   obtain ⟨kA, -, hAv⟩ := hz.cash
   have hpos : (0 : ℚ) < 10 ^ v.baseExponent := zpow_pos (by norm_num) _
   refine ⟨kA + j, ?_, by rw [hAv, hj]; push_cast; ring⟩
   -- the new cash is whole base units below the limit plus one step, so at most the limit
-  have hb := Vault.checkOpenLimit_bound v charge hc (by rw [hj]; positivity) _ hz.assetsTotal_eq hin
+  have hb := Vault.checkOpenLimit_bound v charge hc (by rw [hj]; positivity) _ hz.assetsTotal_eq hin hcc
   have h15 : (10 : ℚ) ^ (15 : ℤ) = 10 ^ 15 := by norm_num
   rw [hAv, hj, zpow_add₀ (by norm_num), h15] at hb
   have hlt : ((kA + j : ℕ) : ℚ) * 10 ^ v.baseExponent < ((9 * 10 ^ 15 + 1 : ℕ) : ℚ) * 10 ^ v.baseExponent := by
@@ -341,6 +343,7 @@ lemma Vault.deposit_openZone (v : Vault) (amount : STAmount) (isDonation : Bool)
         (fun hi => le_of_eq (hbint (by rw [← hra2]; exact hi))) hcl
   obtain ⟨j, hj⟩ := hunits
   obtain ⟨k, hk, hkv⟩ := Vault.checkOpenLimit_openZone v hz _ hac j hj hin
+    (v.deposit_clampedCharge amount ra isDonation amounts hty (fun h => hc.2 h) hra hcomp)
   obtain ⟨haav, haar⟩ :=
     Vault.adjustAssetsAndShares_units v _ _ raw k hz hac ⟨j, by rw [hj]; push_cast; rfl⟩ hk hkv hadj
   obtain ⟨aa', st', hfr⟩ := Vault.adjustAssetsAndShares_frame v _ _ raw hadj
