@@ -113,8 +113,8 @@ lemma Vault.burnShares_frame (v : Vault) (sharesDestroyed : STAmount) (v' : Vaul
   exact ⟨_, rfl⟩
 
 /-- A successful update writes only `assetsMaximum` and `depositBlocked`. -/
-lemma Vault.update_frame (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
-    (v' : Vault) (hok : v.update assetsMaximum blockDeposit unblockDeposit = .ok v') :
+lemma Vault.update_frame (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool)
+    (v' : Vault) (hok : v.update assetsMaximum blockDeposit = .ok v') :
     ∃ assetsMaximum' depositBlocked', v'.toRawVault =
       { v.toRawVault with assetsMaximum := assetsMaximum', depositBlocked := depositBlocked' } := by
   unfold Vault.update at hok

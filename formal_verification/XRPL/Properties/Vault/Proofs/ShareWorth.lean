@@ -261,8 +261,8 @@ private lemma Vault.Reachable.sharesTotal_le_cash_of_fits (v : Vault) (t : UInt3
     have hbpos : (0 : ℚ) < 10 ^ u.baseExponent := zpow_pos (by norm_num) _
     exfalso
     nlinarith [mul_pos hSpos hbpos]
-  | update u t₁ t₂ _ _ _ u' _ _ _ hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ _ u' hok
+  | update u t₁ t₂ _ _ u' _ _ _ hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u _ _ u' hok
     have hnt : u'.numericType = u.numericType := (congrArg RawVault.numericType hv).trans rfl
     have hsc' : u'.scale = u.scale := (congrArg RawVault.scale hv).trans rfl
     have hAA : u'.assetsAvailable = u.assetsAvailable := (congrArg RawVault.assetsAvailable hv).trans rfl

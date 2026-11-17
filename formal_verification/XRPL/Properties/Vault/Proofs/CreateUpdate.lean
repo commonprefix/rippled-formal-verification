@@ -216,21 +216,21 @@ lemma Vault.create_fee_above_maximum_proof (scale : Option UInt8) (assetsMaximum
   exact UInt32.not_le.mpr hbad (hv.earlyExitFeeRate_le r rfl)
 
 /-- `update` re-checks the vault with only `assetsMaximum` and `depositBlocked` replaced. -/
-lemma Vault.update_eq (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) :
-    v.update assetsMaximum blockDeposit unblockDeposit =
+lemma Vault.update_eq (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool) :
+    v.update assetsMaximum blockDeposit =
       ({ v.toRawVault with
         assetsMaximum := match assetsMaximum with
           | none => v.assetsMaximum
           | some m => if m.operator_eq Number.zero then none else some m
-        depositBlocked := if blockDeposit then true else if unblockDeposit then false else v.depositBlocked } :
+        depositBlocked := blockDeposit.getD v.depositBlocked } :
         RawVault).to_lawful := rfl
 
 /-- Proof body of the update line of `Vault.update_success`. -/
-lemma Vault.update_success_proof (v : Vault) (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool)
+lemma Vault.update_success_proof (v : Vault) (assetsMaximum : Option Number) (blockDeposit : Option Bool)
     (hmax : ∀ m ∈ assetsMaximum, m.operator_eq Number.zero = false →
       m.isNormalized ∧ Number.zero.operator_lt m = true)
-    (hblock : blockDeposit = true → v.ownerCanBlockDeposit = true) :
-    ∃ v', v.update assetsMaximum blockDeposit unblockDeposit = .ok v' := by
+    (hblock : blockDeposit = some true → v.ownerCanBlockDeposit = true) :
+    ∃ v', v.update assetsMaximum blockDeposit = .ok v' := by
   -- the stored maximum is the old one, or a requested one that is not zero
   have hmax' : ∀ m ∈ (match assetsMaximum with
       | none => v.assetsMaximum
@@ -250,21 +250,19 @@ lemma Vault.update_success_proof (v : Vault) (assetsMaximum : Option Number) (bl
       assetsMaximum := match assetsMaximum with
         | none => v.assetsMaximum
         | some m => if m.operator_eq Number.zero then none else some m
-      depositBlocked := if blockDeposit then true else if unblockDeposit then false else v.depositBlocked })
+      depositBlocked := blockDeposit.getD v.depositBlocked })
     { v.wf with assetsMaximum_norm := fun m hm => (hmax' m hm).1 }
     { v.valid with
       assetsMaximum_pos := fun m hm => (hmax' m hm).2
       depositBlocked_owner := fun h => by
-        cases hb : blockDeposit
-        · cases hu : unblockDeposit
-          · simp only [hb, hu, Bool.false_eq_true, if_false] at h; exact v.valid.depositBlocked_owner h
-          · simp [hb, hu] at h
-        · exact hblock hb }
+        cases hb : blockDeposit with
+        | none => simp only [hb, Option.getD_none] at h; exact v.valid.depositBlocked_owner h
+        | some b => simp only [hb, Option.getD_some] at h; exact hblock (by rw [hb, h]) }
   exact ⟨v', hv'⟩
 
 /-- Proof body of the stored-maximum line of `Vault.update_success`. -/
-lemma Vault.canVaultUpdate_assetsMaximum_not_rounded_proof (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
-    (hcan : v.canVaultUpdate (some m) blockDeposit unblockDeposit = .ok .tesSUCCESS) :
+lemma Vault.canVaultUpdate_assetsMaximum_not_rounded_proof (v : Vault) (m : Number) (blockDeposit : Option Bool)
+    (hcan : v.canVaultUpdate (some m) blockDeposit = .ok .tesSUCCESS) :
     STAmount.isRounded v.numericType m = false := by
   apply Number.isRounded_eq_false_of_isOnExponentGrid m v.baseExponent
   simp only [Vault.canVaultUpdate, bind, Except.bind, pure, Except.pure] at hcan
@@ -272,16 +270,16 @@ lemma Vault.canVaultUpdate_assetsMaximum_not_rounded_proof (v : Vault) (m : Numb
   all_goals simp_all
 
 /-- Proof body of the no-change line of `Vault.update_success`. -/
-lemma Vault.update_none_proof (v : Vault) : v.update none false false = .ok v := by
+lemma Vault.update_none_proof (v : Vault) : v.update none none = .ok v := by
   rw [Vault.update_eq]
   unfold RawVault.to_lawful
   rw [dif_pos ⟨v.wf, v.valid⟩]
   rfl
 
 /-- Proof body of the maximum line of `Vault.update_not_lawful`. -/
-lemma Vault.update_assetsMaximum_out_of_range_proof (v : Vault) (m : Number) (blockDeposit unblockDeposit : Bool)
+lemma Vault.update_assetsMaximum_out_of_range_proof (v : Vault) (m : Number) (blockDeposit : Option Bool)
     (hne : m.operator_eq Number.zero = false) (hbad : ¬ m.isNormalized ∨ Number.zero.operator_lt m = false) :
-    v.update (some m) blockDeposit unblockDeposit = .error .notLawful := by
+    v.update (some m) blockDeposit = .error .notLawful := by
   rw [Vault.update_eq]
   apply RawVault.to_lawful_not_lawful
   rintro ⟨hwf, hv⟩
@@ -292,9 +290,9 @@ lemma Vault.update_assetsMaximum_out_of_range_proof (v : Vault) (m : Number) (bl
     simp [h1] at hneg
 
 /-- Proof body of the deposit-block line of `Vault.update_not_lawful`. -/
-lemma Vault.update_block_not_permitted_proof (v : Vault) (assetsMaximum : Option Number) (unblockDeposit : Bool)
+lemma Vault.update_block_not_permitted_proof (v : Vault) (assetsMaximum : Option Number)
     (hocb : v.ownerCanBlockDeposit = false) :
-    v.update assetsMaximum true unblockDeposit = .error .notLawful := by
+    v.update assetsMaximum (some true) = .error .notLawful := by
   rw [Vault.update_eq]
   apply RawVault.to_lawful_not_lawful
   rintro ⟨-, hv⟩

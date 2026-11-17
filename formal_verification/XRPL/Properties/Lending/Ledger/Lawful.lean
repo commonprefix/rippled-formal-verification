@@ -67,8 +67,8 @@ theorem Lending.transactions_lawful (hr : l.Reachable) :
     (∀ (h : Nat) (amount : STAmount),
       ((l.sharesOf h).toRat.den = 1 ∧ 0 ≤ (l.sharesOf h).toRat ∧ (l.sharesOf h).toRat ≤ l.vault.sharesTotal.toRat) →
       (l.apply (.vaultBurnShares h amount)).run ≠ .error .notLawful) ∧
-    (∀ (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool),
-      (l.apply (.vaultSet assetsMaximum blockDeposit unblockDeposit)).run ≠ .error .notLawful) ∧
+    (∀ (assetsMaximum : Option Number) (blockDeposit : Option Bool),
+      (l.apply (.vaultSet assetsMaximum blockDeposit)).run ≠ .error .notLawful) ∧
     (l.apply .vaultDelete).run ≠ .error .notLawful ∧
     ∀ time : UInt32, (l.apply (.close time)).run ≠ .error .notLawful :=
   ⟨LendingLedger.loanSet_ne_notLawful l hr, LendingLedger.loanAccept_ne_notLawful l hr,

@@ -53,9 +53,9 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
       ∀ waive' : Bool, ∃ r' : VaultWithAmounts,
         (r.vault'.withdraw (.vaultShares shares) waive' t hpos).run = .ok (.ok r')) ∧
     -- an update by the owner
-    (∀ (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) (v' : Vault),
-      v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      v.update assetsMaximum blockDeposit unblockDeposit = .ok v' →
+    (∀ (assetsMaximum : Option Number) (blockDeposit : Option Bool) (v' : Vault),
+      v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      v.update assetsMaximum blockDeposit = .ok v' →
       ∀ waive' : Bool, ∃ r' : VaultWithAmounts,
         (v'.withdraw (.vaultShares shares) waive' t hpos).run = .ok (.ok r')) ∧
     -- a burn by the owner, which needs an insolvent vault and so never succeeds here
@@ -73,9 +73,9 @@ theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reacha
     fun assets holderShares waiveX hnn r hcX htyX hhs hsole hok hheld hother hwhole waive' =>
     Vault.Reachable.isolation_clawback_proof v t0 t hr ht shares waive hpos hc hty rW hW assets holderShares waiveX
       hnn hcX htyX hhs hsole r hok hheld hother hwhole waive',
-    fun assetsMaximum blockDeposit unblockDeposit v' hcan hok waive' =>
+    fun assetsMaximum blockDeposit v' hcan hok waive' =>
     Vault.Reachable.isolation_update_proof v t0 t hr ht shares waive hpos hc hty rW hW assetsMaximum blockDeposit
-      unblockDeposit v' hcan hok waive',
+      v' hcan hok waive',
     fun amount holderShares sharesTotalAmount _ hcan _ _ =>
     (Vault.Reachable.isolation_burn_proof v t0 t hr shares waive hpos hc hty rW hW amount holderShares
       sharesTotalAmount hcan).elim⟩

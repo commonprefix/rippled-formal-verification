@@ -88,7 +88,7 @@ lemma LendingLedger.applyVault_ne_wrap (l : LendingLedger) (hr : l.Reachable) (t
     unfold_ter at h
     walk_ok
     all_goals wrap_leaf
-  | vaultSet am bd ud =>
+  | vaultSet am bd =>
     simp only [LendingLedger.applyVault] at h
     unfold_ter at h
     walk_ok

@@ -546,8 +546,32 @@ lemma Vault.Reachable.deposit_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr : 
   simp only [Vault.deposit] at hok
   unfold_ter at hok
   walk_ok
-  · rcases Vault.checkOpenLimit_codes _ _ _ ‹_› with h | h <;> exact absurd h (by decide)
-  · rcases Vault.adjustAssetsAndShares_codes _ _ _ _ ‹_› with h | h <;> exact absurd h (by decide)
+  all_goals try first
+    | (rcases Vault.checkOpenLimit_codes _ _ _ ‹_› with h | h <;> exact absurd h (by decide))
+    | (rcases Vault.adjustAssetsAndShares_codes _ _ _ _ ‹_› with h | h <;> exact absurd h (by decide))
+    | exact absurd (Vault.roundedDepositAmount_rejected_code_proof v amountDeposit _ ‹_›) (by decide)
+  · -- the share cap: at most 9·10^15 shares are outstanding and the deposit mints at most 10^17
+    obtain ⟨ra, amounts, hra, hcomp, hcap⟩ : ∃ ra amounts, (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra) ∧
+        (computeDeposit v ra isDonation).run = .ok (.ok amounts) ∧
+        v.sharesTotal.toRat + amounts.shares.toRat > (maxRep.toNat : ℚ) := ⟨_, _, ‹_›, ‹_›, ‹_›⟩
+    obtain ⟨hrcz, -, hr0⟩ := v.roundedDepositAmount_form amountDeposit ra hc hty hra
+    obtain ⟨A, -, hcl, hrz⟩ := roundedDepositAmount_rounded v amountDeposit ra hra
+    have hrm : ra.mValue ≠ 0 := by simpa [STAmount.isZero] using hrz
+    have hrc : ra.Canonical := hrcz.resolve_right (by simpa using hrz)
+    have hrp : 0 < ra.toRat := lt_of_le_of_ne hr0 (Ne.symm (STAmount.toRat_ne_zero _ hrm))
+    have hle := clampToSumExponent_le_abs A amountDeposit ra v.baseExponent (Or.inl hc) v.baseExponent_range.1
+      v.baseExponent_range.2 hcl
+    rw [abs_of_pos hpos] at hle
+    obtain ⟨-, -, -, hS9, -⟩ := Vault.Reachable.size_facts v t0 hr
+    have hsh : amounts.shares.toRat ≤ 10 ^ 17 := by
+      cases isDonation
+      · obtain ⟨_, _, ha2s, hz, _⟩ := computeDeposit_success_reduces v ra amounts hcomp
+        exact (Vault.Reachable.deposit_shares_facts v t0 hr ra _ hrc hrp (le_trans hle hl) ha2s hz).2.2.2.1
+      · obtain ⟨_, hsh0, _⟩ := computeDeposit_donation_reduces v ra amounts hcomp
+        rw [hsh0, STAmount.zero_toRat]; norm_num
+    rw [show maxRep.toNat = 2 ^ 63 - 1 from rfl] at hcap
+    push_cast at hcap
+    linarith
   · -- the rounded amount is a positive canonical amount at most the request
     obtain ⟨ra, hra, hcomp⟩ : ∃ ra, (v.roundedDepositAmount amountDeposit).run = .ok (.ok ra) ∧
         (computeDeposit v ra isDonation).run = .ok (.error .tecPATH_DRY) := ⟨_, ‹_›, ‹_›⟩
@@ -560,7 +584,6 @@ lemma Vault.Reachable.deposit_no_path_dry_proof (v : Vault) (t0 : UInt32) (hr : 
       v.baseExponent_range.2 hcl
     rw [abs_of_pos hpos] at hle
     exact Vault.Reachable.computeDeposit_ne_path_dry v t0 hr ra isDonation hrc hrp hrt (le_trans hle hl) hcomp
-  · exact absurd (Vault.roundedDepositAmount_rejected_code_proof v amountDeposit _ ‹_›) (by decide)
 
 /-- The withdrawal amount is within the Open limit when it names assets, and at most the share total when it
 names shares. -/

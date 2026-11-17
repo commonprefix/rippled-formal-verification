@@ -851,11 +851,11 @@ lemma LendingLedger.noLoss_step (l l' : LendingLedger) (tx : LendingTx) (hr : l.
       walk_ok
       obtain ⟨_, hf⟩ := Vault.burnShares_frame _ _ _ ‹_›
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
-    | vaultSet m b ub =>
+    | vaultSet m b =>
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok
-      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ _ ‹_›
+      obtain ⟨_, _, hf⟩ := Vault.update_frame _ _ _ _ ‹_›
       rw [(congrArg RawVault.assetsAvailable hf :), (congrArg RawVault.assetsDeployed hf :)]
     | _ => simp only [LendingTx.isVault] at hvt; cases hvt
   by_cases hb : tx.isBroker = true

@@ -4,6 +4,7 @@
 #include <test/formal_verification/ffi/protocol/IOUAmountFFI.h>
 #include <test/formal_verification/ffi/protocol/NumberFFI.h>
 #include <test/formal_verification/ffi/protocol/STAmountFFI.h>
+#include <test/formal_verification/numbers/helpers/NumberHelpers.h>
 
 #include <xrpl/basics/Number.h>
 #include <xrpl/protocol/Asset.h>
@@ -96,6 +97,31 @@ makeNumberPair(bool negative, uint64_t mantissa, int exponent)
     return {
         Number{negative, mantissa, exponent, Number::Unchecked{}},
         LeanNumber{negative, mantissa, static_cast<uint64_t>(exponent)}};
+}
+
+inline NumberPair
+makeNumberPair(int64_t signedMantissa, int exponent)
+{
+    return makeNumberPair(signedMantissa < 0, magnitude(signedMantissa), exponent);
+}
+
+// m * 10^e as ToNearest stores it, in the internal form both sides read: a stored mantissa above
+// kMaxRep is reported divided by 10.
+inline NumberPair
+storedNumber(int64_t m, int64_t e)
+{
+    NumberRoundModeGuard const g(Number::RoundingMode::ToNearest);
+    Number const n{m < 0, magnitude(m), static_cast<int>(e), Number::Normalized{}};
+    uint64_t mantissa = magnitude(n.mantissa());
+    if (mantissa == 0)
+        return makeNumberPair(false, 0, 0);
+    int exponent = n.exponent();
+    if (mantissa < Number::minMantissa())
+    {
+        mantissa *= 10;
+        --exponent;
+    }
+    return makeNumberPair(n.mantissa() < 0, mantissa, exponent);
 }
 
 inline NumberPair

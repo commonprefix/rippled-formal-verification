@@ -40,12 +40,12 @@ lemma Vault.investment_shares_fixed_proof (v : Vault) (t : UInt32) (hphase : v.p
     (∀ (amount holderShares sharesTotalAmount : STAmount) (v' : Vault),
       (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
       (v.burnShares holderShares).run = .ok (.ok v') → v.isInsolvent = true) ∧
-    (∀ (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) (v' : Vault),
-      v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      v.update assetsMaximum blockDeposit unblockDeposit = .ok v' → v'.sharesTotal = v.sharesTotal) := by
+    (∀ (assetsMaximum : Option Number) (blockDeposit : Option Bool) (v' : Vault),
+      v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      v.update assetsMaximum blockDeposit = .ok v' → v'.sharesTotal = v.sharesTotal) := by
   refine ⟨fun amount isDonation hpos r hok => ?_, fun amount waive hpos r hok => ?_,
     fun amount holderShares sharesTotalAmount _ hcan _ => ?_,
-    fun assetsMaximum blockDeposit unblockDeposit v' _ hok => ?_⟩
+    fun assetsMaximum blockDeposit v' _ hok => ?_⟩
   · cases isDonation with
     | false =>
       -- a deposit after the subscription period is refused
@@ -64,7 +64,7 @@ lemma Vault.investment_shares_fixed_proof (v : Vault) (t : UInt32) (hphase : v.p
     rw [Vault.withdraw_too_soon_proof v amount waive t hpos hsoon] at hok
     exact absurd hok (by simp)
   · exact (Vault.canBurnShares_ok_reduces v amount holderShares sharesTotalAmount hcan).1
-  · obtain ⟨_, _, hv⟩ := Vault.update_frame v assetsMaximum blockDeposit unblockDeposit v' hok
+  · obtain ⟨_, _, hv⟩ := Vault.update_frame v assetsMaximum blockDeposit v' hok
     show v'.toRawVault.sharesTotal = _
     rw [hv]
 

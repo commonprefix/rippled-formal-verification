@@ -471,6 +471,13 @@ def Number.power (base : Number) (exponent : Nat) : Except Error Number :=
   termination_by exponent
   decreasing_by omega
 
+-- C++ normalizes the raw sum, which overflows at the top exponent before any digit drop
+def checkSumAtTop (zm128 : UInt128) (e : Int) : Except Error Unit :=
+  if e < maxExponent then .ok ()
+  else if zm128 > toUInt128 largeRange.max then .error .normalize1
+  else if zm128 > toUInt128 maxRepUp then .error .normalize1_5
+  else .ok ()
+
 def Number.operator_add (x y : Number)
     (mode : rounding_mode) : Except Error Number := do
   if y.operator_eq Number.zero then return x
@@ -500,6 +507,7 @@ def Number.operator_add (x y : Number)
         (xm, xe, ym, ye, g)
     if xn == yn then
       let zm128 ← (toUInt128 xm).addChecked (toUInt128 ym)
+      checkSumAtTop zm128 xe
       let (zm, xe, g) ←
         (if zm128 > toUInt128 largeRange.max || zm128 > toUInt128 maxRepUp then do
           let (g', zm128', xe') ← g.doDropDigit128 zm128 xe

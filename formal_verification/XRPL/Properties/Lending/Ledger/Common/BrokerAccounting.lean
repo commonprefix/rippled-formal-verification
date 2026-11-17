@@ -414,11 +414,11 @@ private lemma LendingLedger.sharesTotal_step {l l' : LendingLedger} {tx : Lendin
       simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf, hof]
       rw [show (_ : Vault).sharesTotal = st' from congrArg RawVault.sharesTotal hv', hst, hnv]
       ring
-    | vaultSet assetsMaximum blockDeposit unblockDeposit =>
+    | vaultSet assetsMaximum blockDeposit =>
       simp only [LendingLedger.applyVault] at hu
       unfold_ter at hu
       walk_ok
-      have hupd : l.vault.update assetsMaximum blockDeposit unblockDeposit = .ok _ := ‹_›
+      have hupd : l.vault.update assetsMaximum blockDeposit = .ok _ := ‹_›
       unfold Vault.update at hupd
       have hraw := congrArg RawVault.sharesTotal (RawVault.to_lawful_ok hupd).1
       simp only [LendingLedger.sharesCreatedOf, LendingLedger.sharesRemovedOf]

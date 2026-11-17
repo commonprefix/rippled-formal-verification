@@ -237,12 +237,12 @@ private lemma LendingLedger.applyVault_sharesSum (l : LendingLedger) (hr : l.Rea
     refine ⟨by rw [Number.toRat_zero]; rfl, ?_⟩
     rw [hST, Number.toRat_zero]
     ring
-  | vaultSet assetsMaximum blockDeposit unblockDeposit =>
+  | vaultSet assetsMaximum blockDeposit =>
     simp only [LendingLedger.applyVault] at hu
     unfold_ter at hu
     walk_ok
     refine ⟨fun p hp => (by cases hp), fun _ => ?_⟩
-    have hupd : l.vault.update assetsMaximum blockDeposit unblockDeposit = .ok _ := ‹_›
+    have hupd : l.vault.update assetsMaximum blockDeposit = .ok _ := ‹_›
     unfold Vault.update at hupd
     have hraw := congrArg RawVault.sharesTotal (RawVault.to_lawful_ok hupd).1
     exact congrArg Number.toRat hraw

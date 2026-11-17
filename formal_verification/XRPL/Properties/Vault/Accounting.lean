@@ -52,8 +52,8 @@ private lemma Vault.Flows.balances {w : Vault} {t : UInt32} (hr : Vault.Reachabl
   | burnShares u t₁ _ _ _ _ _ _ _ amount holderShares sharesTotalAmount _ hf _ _ hcan _ _ =>
     exact (Vault.Reachable.canBurnShares_not_ok u t₁ (Vault.Flows.reachable hr hf) amount holderShares
       sharesTotalAmount hcan).elim
-  | update u _ _ _ _ _ _ _ _ assetsMaximum blockDeposit unblockDeposit u' _ _ _ hok ih =>
-    obtain ⟨_, _, hv⟩ := Vault.update_frame u assetsMaximum blockDeposit unblockDeposit u' hok
+  | update u _ _ _ _ _ _ _ _ assetsMaximum blockDeposit u' _ _ _ hok ih =>
+    obtain ⟨_, _, hv⟩ := Vault.update_frame u assetsMaximum blockDeposit u' hok
     have hA : u'.assetsAvailable = u.assetsAvailable := (congrArg RawVault.assetsAvailable hv).trans rfl
     have hS : u'.toExact.sharesTotal = u.toExact.sharesTotal := by
       show u'.toRawVault.toExact.sharesTotal = u.toRawVault.toExact.sharesTotal

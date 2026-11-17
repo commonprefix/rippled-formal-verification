@@ -147,9 +147,9 @@ lemma Number.operator_div_ne_notLawful (x y : Number) (mode : rounding_mode) :
 lemma Number.operator_add_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_add y mode ≠ .error .notLawful := by
   refine (Number.operator_add_refines _ _ _).ne_error ?_ (by decide)
-  unfold Number.operator_addSpec
+  unfold Number.operator_addSpec checkSumAtTop
   split_ne_notLawful [Number.normalize_ne_notLawful, Guard.doRoundUp_ne_notLawful,
-    doNormalize128_ne_notLawful]
+    doNormalize128_ne_notLawful, ok_bind]
 
 lemma Number.operator_sub_ne_notLawful (x y : Number) (mode : rounding_mode) :
     x.operator_sub y mode ≠ .error .notLawful :=

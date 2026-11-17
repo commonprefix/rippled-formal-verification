@@ -24,9 +24,9 @@ theorem Vault.investment_shares_fixed (v : Vault) (t : UInt32) (hphase : v.phase
     (∀ (amount holderShares sharesTotalAmount : STAmount) (v' : Vault),
       (v.canBurnShares amount holderShares).run = .ok (.ok sharesTotalAmount) →
       (v.burnShares holderShares).run = .ok (.ok v') → v.isInsolvent = true) ∧
-    (∀ (assetsMaximum : Option Number) (blockDeposit unblockDeposit : Bool) (v' : Vault),
-      v.canVaultUpdate assetsMaximum blockDeposit unblockDeposit = .ok .tesSUCCESS →
-      v.update assetsMaximum blockDeposit unblockDeposit = .ok v' → v'.sharesTotal = v.sharesTotal) :=
+    (∀ (assetsMaximum : Option Number) (blockDeposit : Option Bool) (v' : Vault),
+      v.canVaultUpdate assetsMaximum blockDeposit = .ok .tesSUCCESS →
+      v.update assetsMaximum blockDeposit = .ok v' → v'.sharesTotal = v.sharesTotal) :=
   Vault.investment_shares_fixed_proof v t hphase
 
 end XRPL.Model.SingleAssetVault
