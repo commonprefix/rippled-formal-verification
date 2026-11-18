@@ -34,12 +34,12 @@ theorem Vault.Reachable.canEmpty (v : Vault) (t0 : UInt32) (hr : Vault.Reachable
         r.vault'.sharesTotal = Number.zero) ∧
     (∀ (shares : STAmount) (waiveUnrealizedLoss : Bool) (t : UInt32)
       (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat),
-      shares.Canonical → -- a transaction amount is a canonical amount
+      shares.Canonical →
       shares.toRat ≤ v.toExact.sharesTotal →
       (v.withdraw (.vaultShares shares) waiveUnrealizedLoss t hpos).run ≠ .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
     ∀ (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
-      amount.amount.Canonical → -- a transaction amount is a canonical amount
-      amount.InAsset v.numericType → -- of the vault's asset, or its shares
+      amount.amount.Canonical →
+      amount.InAsset v.numericType →
       ∀ r : VaultWithAmounts, (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) →
       (r.shares.toRat = v.toExact.sharesTotal → r.assets.toRat = v.assetsAvailable.toRat) ∧
       (r.shares.toRat = v.toExact.sharesTotal ↔

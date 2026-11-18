@@ -1,4 +1,5 @@
-import XRPL.Properties.Lending.Loan.Common.ManageRoundToExponent
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 import XRPL.Properties.Protocol.Number.AtExponent
 import XRPL.Properties.Protocol.Number.Div.RoundsWithin
 import XRPL.Properties.Protocol.Number.Mul.RoundsWithin
@@ -266,7 +267,7 @@ lemma STAmount.roundToNumericType_onGrid (nt : NumericType) (x T : Number) (mode
           rw [hsn, Except.ok.injEq] at h
           subst h
           rcases hfc.2 with hstc | hst0
-          · have hR := STAmount.roundToExponent_rounded_of_scale st r s mode hstc hs.1 hs.2 hr
+          · have hR := STAmount.roundToExponent_rounded_any_proof st r s mode hstc hs.1 hs.2 hr
             unfold RoundsToRepresentableAt at hR
             rw [hv]
             cases mode with

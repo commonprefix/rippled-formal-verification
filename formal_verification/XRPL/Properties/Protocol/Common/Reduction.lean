@@ -18,17 +18,6 @@ theorem pure_eq {ε α} (a : α) : (pure a : Except ε α) = .ok a := rfl
 /-- `.pure x` in an `Except` block is `.ok x`. -/
 theorem except_pure_eq {ε α} (a : α) : (Except.pure a : Except ε α) = .ok a := rfl
 
-/-- `throw e` in an `Except` block is `.error e`. -/
-theorem throw_eq {ε α} (e : ε) : (throw e : Except ε α) = .error e := rfl
-
-/-- A `try` around a successful step never runs the `catch` handler. -/
-theorem tryCatch_ok {ε α} (a : α) (h : ε → Except ε α) :
-    (tryCatch (Except.ok a : Except ε α) h) = .ok a := rfl
-
-/-- A `try` around a thrown error runs the `catch` handler on it. -/
-theorem tryCatch_error {ε α} (e : ε) (h : ε → Except ε α) :
-    (tryCatch (Except.error e) h) = h e := rfl
-
 /-- Peel one bind off a successful block: the first step succeeded, and the rest
 of the block reached the same result. -/
 theorem bind_ok_peel {ε α β} (x : Except ε α) (f : α → Except ε β) (r : β)

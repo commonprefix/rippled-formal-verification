@@ -76,7 +76,7 @@ private lemma roundDown_shape (sum sum' : Number) (E : Int) (hsn : sum.isNormali
     obtain ⟨hlo, hhi⟩ := hsn.mantissaBounds_nat hnz
     have hc := (STAmount.ofNumber_iou_ok_facts sum _ ret hlo hhi (Number.exponent_ge_min sum hsn hnz) hret hrz).1
     obtain ⟨hfl, hexp⟩ := STAmount.ofNumber_iou_downward_floor_value sum ret hsn hnz hs0 hret hrz
-    have hrnd := STAmount.roundToExponent_rounded_of_scale ret rd E .downward hc hE.1 hE.2 hrd
+    have hrnd := STAmount.roundToExponent_rounded_any_proof ret rd E .downward hc hE.1 hE.2 hrd
     change rd.toRat = (⌊ret.toRat / 10 ^ E⌋ : ℚ) * 10 ^ E at hrnd
     have hs3 : sum.exponent_ + 3 ≤ 80 := by
       have := hc.exp_hi; rw [show ret.mOffset = ret.exponent from rfl, hexp] at this; exact this

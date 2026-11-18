@@ -202,58 +202,6 @@ lemma canonicalize_fractional_error {s : STAmount} {mode : rounding_mode} {e : E
     exact iou_normalize_error he
   · cases h
 
-/-- Bringing an XRP or MPT amount to its stored form fails with an overflow error, a wrap or `outOfRange`. -/
-lemma canonicalize_error {s : STAmount} {mode : rounding_mode} {e : Error}
-    (h : s.canonicalize mode = .error e) : isOverflow e = true ∨ e = .wrap ∨ e = .outOfRange := by
-  by_cases hint : s.integral = true
-  · unfold STAmount.canonicalize at h
-    rw [if_pos hint] at h
-    split_ifs at h
-    · cases h; exact Or.inr (Or.inr rfl)
-    · dsimp only at h
-      split at h
-      · rename_i e' he
-        cases h
-        unfold IntAmount.ofNumber at he
-        split at he
-        · cases he
-        · rename_i e'' he'
-          cases he
-          rcases to_rep_error he' with h1 | h1
-          · exact Or.inl h1
-          · exact Or.inr (Or.inl h1)
-      · split_ifs at h
-        cases h
-        exact Or.inr (Or.inr rfl)
-  · rcases canonicalize_fractional_error hint h with h1 | h1
-    · exact Or.inl h1
-    · exact Or.inr (Or.inl h1)
-
-/-- Converting a Number to an amount fails with an overflow error, a wrap or `outOfRange`. -/
-lemma ofNumber_error {nt : NumericType} {n : Number} {mode : rounding_mode} {e : Error}
-    (h : STAmount.ofNumber nt n mode = .error e) : isOverflow e = true ∨ e = .wrap ∨ e = .outOfRange := by
-  have hkind : ∀ e' : Error, isOverflow e' = true ∨ e' = .wrap →
-      isOverflow e' = true ∨ e' = .wrap ∨ e' = .outOfRange :=
-    fun e' h' => h'.elim Or.inl fun h1 => Or.inr (Or.inl h1)
-  unfold STAmount.ofNumber at h
-  dsimp only at h
-  generalize (if decide (n.signum < 0) = true then n.operator_neg else n) = w at h
-  by_cases hint : nt.isIntegral = true
-  · rw [if_pos hint] at h
-    split at h
-    · rename_i e' he; cases h; exact hkind _ (to_rep_error he)
-    · rename_i r hr
-      rcases hv : r.toUInt64Checked with e' | value
-      · rw [hv, err_bind] at h; cases h; exact Or.inr (Or.inl (Int64.toUInt64Checked_eq_error hv))
-      · rw [hv, ok_bind] at h; exact canonicalize_error h
-  · rw [if_neg hint] at h
-    split at h
-    · rename_i e' he; cases h; exact hkind _ (normalizeToRange_error (by decide) he)
-    · rename_i m ex hm
-      rcases hv : m.toUInt64Checked with e' | value
-      · rw [hv, err_bind] at h; cases h; exact Or.inr (Or.inl (Int64.toUInt64Checked_eq_error hv))
-      · rw [hv, ok_bind] at h; exact canonicalize_error h
-
 /-- Converting a Number to an IOU amount fails only with an overflow error or a wrap. -/
 lemma ofNumber_fractional_error {n : Number} {mode : rounding_mode} {e : Error}
     (h : STAmount.ofNumber .fractional n mode = .error e) : isOverflow e = true ∨ e = .wrap := by

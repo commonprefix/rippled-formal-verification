@@ -61,8 +61,11 @@ theorem Lending.manageDefault_coverAvailable (l' : LendingLedger) (i : Nat)
 leaves `1000000000001` at the scale `10^-10`, and a default of `1.0000000001` leaves `10^12`. -/
 theorem Lending.manageDefault_coverAvailable_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan loan' : Loan) (r : LoanWithAmounts Vault),
-      l.Reachable ∧ (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧ (loan.manageDefault l.vault).run = .ok (.ok r) ∧
+      l.Reachable ∧
+      (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       loan'.broker.coverAvailable.toRat ≠ loan.broker.coverAvailable.toRat - r.amountToPool.toRat :=
   LendingLedger.manageDefault_coverAvailable_witness
 
@@ -82,12 +85,14 @@ cover is covered in full. -/
 theorem Lending.manageDefault_cover_upper_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan : Loan) (minimumCover liquidationAmount : Number)
       (r : LoanWithAmounts Vault),
-      l.Reachable ∧ (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       tenthBipsOfValue loan.broker.debtTotal loan.broker.coverRateMinimum .upward = .ok minimumCover ∧
       tenthBipsOfValue minimumCover loan.broker.coverRateLiquidation .upward = .ok liquidationAmount ∧
-      r.amountToPool.toRat -
-        min (min liquidationAmount.toRat loan.principalOutstanding.toRat) loan.broker.coverAvailable.toRat = 0 :=
+      r.amountToPool.toRat - min (min liquidationAmount.toRat loan.principalOutstanding.toRat)
+        loan.broker.coverAvailable.toRat = 0 :=
   LendingLedger.manageDefault_cover_upper_bound_witness
 
 /-- Impair -> loan marked impaired and no other loan field changes, LossUnrealized grows by PrincipalOutstanding and
@@ -147,7 +152,9 @@ the coarsened vault AssetsAvailable is `999999999999999.9`, and loan B's default
 theorem Lending.manageDefault_cover_lower_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan : Loan) (minimumCover liquidationAmount : Number)
       (r : LoanWithAmounts Vault) (e : Int),
-      l.Reachable ∧ (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       tenthBipsOfValue loan.broker.debtTotal loan.broker.coverRateMinimum .upward = .ok minimumCover ∧
       tenthBipsOfValue minimumCover loan.broker.coverRateLiquidation .upward = .ok liquidationAmount ∧
@@ -160,22 +167,27 @@ theorem Lending.manageDefault_cover_lower_bound_attained :
 default of loan B pays the vault `-0.9`. -/
 theorem Lending.manageDefault_cover_nonneg_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan : Loan) (r : LoanWithAmounts Vault),
-      l.Reachable ∧ (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      (loan.manageDefault l.vault).run = .ok (.ok r) ∧ r.amountToPool.toRat < 0 :=
+      l.Reachable ∧
+      (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      (loan.manageDefault l.vault).run = .ok (.ok r) ∧
+      r.amountToPool.toRat < 0 :=
   LendingLedger.manageDefault_cover_nonneg_witness
 
 /-- Witness: a run where a larger CoverAvailable makes AssetsTotal − AssetsTotal' larger. On the coarsened vault loan
 B with its cover of `0.1` loses 1.9 of AssetsTotal, and the same loan on a broker with `0.09` of cover loses 1. -/
 theorem Lending.manageDefault_cover_monotone_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (e : LoanEntry) (b b₁ : LoanBroker) (l₁ l₁' : LendingLedger),
-      l.Reachable ∧ (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧ l.loan? i = some e ∧
+      l.Reachable ∧
+      (l.apply (.loanManage i .default)).run = .ok (.ok l') ∧
+      l.loan? i = some e ∧
       l.broker? e.brokerIndex = some b ∧
       b₁.toRawLoanBroker = { b.toRawLoanBroker with coverAvailable := b₁.coverAvailable } ∧
       b₁.coverAvailable.toRat ≤ b.coverAvailable.toRat ∧
       l₁ = { l with brokers := l.brokers.set e.brokerIndex (some b₁) } ∧
       (l₁.apply (.loanManage i .default)).run = .ok (.ok l₁') ∧
-      l₁.vault.toExact.assetsTotal - l₁'.vault.toExact.assetsTotal <
-        l.vault.toExact.assetsTotal - l'.vault.toExact.assetsTotal :=
+      l₁.vault.toExact.assetsTotal - l₁'.vault.toExact.assetsTotal < l.vault.toExact.assetsTotal -
+        l'.vault.toExact.assetsTotal :=
   LendingLedger.manageDefault_cover_monotone_witness
 
 end XRPL.Model

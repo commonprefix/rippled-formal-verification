@@ -61,7 +61,10 @@ theorem Lending.accept_keeps_minimum_cover (l l' : LendingLedger) (i : Nat)
 loan A of 600 and pending loan B of 400, the default of A takes all 100, then B is accepted with minCover 40. -/
 theorem Lending.accept_keeps_minimum_cover_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan loan' : Loan),
-      l.Reachable ∧ (l.apply (.loanAccept i)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧ l'.LoanAt i loan' ∧
+      l.Reachable ∧
+      (l.apply (.loanAccept i)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
       loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
       loan'.broker.hasMinimumCover l'.vault.baseExponent = .ok false :=
   LendingLedger.accept_keeps_minimum_cover_witness

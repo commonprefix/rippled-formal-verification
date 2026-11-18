@@ -610,7 +610,7 @@ lemma Vault.clamp_ok_of_exact (v : Vault) (hexact : STAmount.isRounded v.numeric
       rw [h80]
       exact STAmount.roundToExponent_top_ok p hpio hpneg (by have : p.exponent = p.mOffset := rfl; omega)
   refine ⟨c, hc, ?_⟩
-  have hround := STAmount.roundToExponent_rounded_of_scale p c E' .towards_zero hpio (by omega) hE'80 hc
+  have hround := STAmount.roundToExponent_rounded_any_proof p c E' .towards_zero hpio (by omega) hE'80 hc
   simp only [RoundsToRepresentableAt] at hround
   change c.toRat = _ at hround
   rw [if_pos hp0.le] at hround

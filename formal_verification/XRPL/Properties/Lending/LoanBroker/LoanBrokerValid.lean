@@ -106,11 +106,6 @@ well-formedness. -/
 theorem LoanBroker.exact (lb : LoanBroker) : lb.toExact.Valid :=
   (RawLoanBroker.valid_iff_exact lb.toRawLoanBroker lb.wf).mp lb.valid
 
-/-- A lawful broker's `coverAvailable` has a clear sign bit. -/
-lemma LoanBroker.coverAvailable_negative_false (lb : LoanBroker) :
-    lb.coverAvailable.negative_ = false :=
-  Number.negative_false_of_nonneg _ lb.wf.coverAvailable_norm lb.exact.coverAvailable_nonneg
-
 /-- When the re-validation succeeds, the lawful broker is the raw state it checked, and that state
 is well-formed and valid. -/
 theorem RawLoanBroker.to_lawful_ok {rb : RawLoanBroker} {lb : LoanBroker}

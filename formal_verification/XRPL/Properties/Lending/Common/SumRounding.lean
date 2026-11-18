@@ -1,4 +1,5 @@
-import XRPL.Properties.Lending.Loan.Common.ManageRoundToExponent
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 import XRPL.Properties.Lending.Common.Reduction
 import XRPL.Properties.Protocol.STAmount.RoundToScale.RoundToScale
 import XRPL.Properties.Protocol.STAmount.Mul.Common.DirectedSupport
@@ -192,12 +193,6 @@ private lemma floor_grid_eq (s : ℚ) (k : ℤ) (b : ℤ) (h1 : (k : ℚ) * 10 ^
   rw [Int.floor_eq_iff]
   exact ⟨by rw [le_div_iff₀ hp]; exact h1, by rw [div_lt_iff₀ hp]; exact h2⟩
 
-/-- A sum of two values that are not negative is zero only when both are. -/
-private lemma add_zero_sum (x y r : Number) (mode : rounding_mode) (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx0 : 0 ≤ x.toRat) (hy0 : 0 ≤ y.toRat) (hok : x.operator_add y mode = .ok r) (hr0 : r.mantissa_ = 0) :
-    x.toRat + y.toRat = 0 :=
-  Number.add_nonneg_zero_sum x y r mode hx hy hx0 hy0 hok hr0
-
 /-- A downward sum of two values that are not negative never lands below a representable value under the
 exact sum. -/
 private lemma add_downward_ge (x y r w : Number) (hx : x.isNormalized) (hy : y.isNormalized)
@@ -355,7 +350,7 @@ lemma sumRoundAndSubtract_at_base_of_exponent (A c : Number) (b : Int) (st : STA
               hrz).1
             have hfl := STAmount.ofNumber_iou_downward_floor sum ret hsn hnz hs0' hof hrz
             change ret.toRat = (⌊sum.toRat / 10 ^ (sum.exponent_ + 3)⌋ : ℚ) * 10 ^ (sum.exponent_ + 3) at hfl
-            have hrnd := STAmount.roundToExponent_rounded_of_scale ret rounded E .downward hc' hb.1 (by omega) hre
+            have hrnd := STAmount.roundToExponent_rounded_any_proof ret rounded E .downward hc' hb.1 (by omega) hre
             change rounded.toRat = (⌊ret.toRat / 10 ^ E⌋ : ℚ) * 10 ^ E at hrnd
             -- the sum's 16-digit grid is no coarser than the base grid
             have hg : sum.exponent_ + 3 ≤ E := by

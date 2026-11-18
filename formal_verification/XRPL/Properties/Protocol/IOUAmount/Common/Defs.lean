@@ -27,15 +27,4 @@ structure IOUAmount.ToNumberExact (a : IOUAmount) : Prop where
   exp_lo : minExponent + 18 ≤ a.exponent_
   exp_hi : a.exponent_ ≤ maxExponent
 
-/-- A canonical 16-digit amount satisfies `ToNumberExact` (with enormous margin). -/
-lemma IOUAmount.InRange16.toNumberExact {a : IOUAmount} (h : a.InRange16) :
-    a.ToNumberExact := by
-  refine ⟨?_, ?_, ?_⟩
-  · intro hmin
-    have hh := h.mant_hi
-    rw [hmin, show Int64.minValue.toInt.natAbs = 9223372036854775808 from by decide] at hh
-    omega
-  · have := h.exp_lo; have hm : minExponent = -32768 := rfl; omega
-  · have := h.exp_hi; have hM : maxExponent = 32768 := rfl; omega
-
 end XRPL.Model.Protocol

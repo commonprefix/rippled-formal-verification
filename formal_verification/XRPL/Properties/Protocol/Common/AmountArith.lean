@@ -45,25 +45,6 @@ lemma Rat.den_one_sub (a b : ℚ) (ha : a.den = 1) (hb : b.den = 1) : (a - b).de
   rw [← Rat.coe_int_num_of_den_eq_one ha, ← Rat.coe_int_num_of_den_eq_one hb, ← Int.cast_sub]
   exact Rat.den_intCast _
 
-/-- A whole number below `2 ^ 63` is at most `2 ^ 63 - 1`. -/
-lemma Rat.le_pred_of_lt {q : ℚ} (hq : q.den = 1) (h : q < 2 ^ 63) : q ≤ 2 ^ 63 - 1 := by
-  rw [← Rat.coe_int_num_of_den_eq_one hq] at h ⊢
-  have h1 : q.num < 2 ^ 63 := by exact_mod_cast h
-  have h2 : q.num ≤ 2 ^ 63 - 1 := by omega
-  exact_mod_cast h2
-
-/-- Numerator magnitude bound of a whole rational. -/
-lemma Rat.num_natAbs_lt_of_abs_le (q : ℚ) (hden : q.den = 1)
-    (h : |q| ≤ (2 : ℚ) ^ 63 - 1) : q.num.natAbs < 2 ^ 63 := by
-  have hq : q = (q.num : ℚ) := by
-    conv_lhs => rw [← Rat.num_div_den q]
-    rw [hden]; simp
-  have habs : |(q.num : ℚ)| ≤ (2 : ℚ) ^ 63 - 1 := by rw [← hq]; exact h
-  have : (|q.num| : ℚ) ≤ (2 : ℚ) ^ 63 - 1 := by exact_mod_cast habs
-  have hle : |q.num| ≤ (2 : ℤ) ^ 63 - 1 := by exact_mod_cast this
-  rw [Int.abs_eq_natAbs] at hle
-  omega
-
 /-- Rational floor of a natural division. -/
 lemma Int.floor_nat_div (a b : ℕ) (hb : 0 < b) :
     ⌊(a : ℚ) / (b : ℚ)⌋ = ((a / b : ℕ) : ℤ) := by

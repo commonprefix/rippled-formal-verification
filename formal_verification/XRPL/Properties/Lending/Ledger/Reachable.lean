@@ -72,10 +72,15 @@ theorem Lending.Reachable.pay_unimpairs_only_current (hr : l.Reachable) (i : Nat
 On a loan of 100 at 10% due every 30 days, a payment of 20.5 clears the LossUnrealized of 100. -/
 theorem Lending.Reachable.pay_unimpairs_only_current_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧ loan.isImpaired = true ∧ loan'.paymentRemaining ≠ 0 ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      loan.isImpaired = true ∧
+      loan'.paymentRemaining ≠ 0 ∧
       loan.nextPaymentDueDate.toNat + 2 * loan.schedule.paymentInterval.toNat < l.now.toNat ∧
-      loan'.isImpaired = false ∧ loan'.isPaymentLate l'.now = true :=
+      loan'.isImpaired = false ∧
+      loan'.isPaymentLate l'.now = true :=
   LendingLedger.pay_unimpairs_only_current_witness
 
 /-- Unimpair -> the loan is not late. False as stated: every impaired loan with payments left is late
@@ -99,9 +104,11 @@ theorem Lending.Reachable.within_open_zone (genesis l : LendingLedger) (txs : Li
 /-- Witness: a run where deleting a pending loan raises AssetsTotal by rounding. On a coarsened vault a pending
 loan of 0.6 is credited back as 1, which leaves the sum 0.4 above the bound. -/
 theorem Lending.Reachable.within_open_zone_attained :
-    ∃ (genesis l : LendingLedger) (txs : List LendingTx), genesis.Genesis ∧ LendingLedger.Reaches genesis txs l ∧
-      ¬ l.vault.toRawVault.toExact.assetsTotal + l.vault.yieldUnrealized.toRat ≤
-        l.openLimit + genesis.extraInterestPaid txs := by
+    ∃ (genesis l : LendingLedger) (txs : List LendingTx),
+      genesis.Genesis ∧
+      LendingLedger.Reaches genesis txs l ∧
+      ¬ l.vault.toRawVault.toExact.assetsTotal + l.vault.yieldUnrealized.toRat ≤ l.openLimit + genesis.extraInterestPaid
+        txs := by
   obtain ⟨genesis, l, txs, _, hg, hrun, h⟩ := LendingLedger.within_open_zone_witness
   obtain ⟨hreach, rfl⟩ := hrun.reaches_sum
   exact ⟨genesis, l, txs, hg, hreach, h⟩
@@ -125,8 +132,10 @@ theorem Lending.Reachable.cover_within_open_zone (genesis l : LendingLedger) (tx
 /-- Witness: a run where a default raises the cover past the bound. Broker 1 holds a cover at the Open limit, and on
 the coarsened vault defaulting loan B pays the vault a cover of −0.9. -/
 theorem Lending.Reachable.cover_within_open_zone_attained :
-    ∃ (genesis l : LendingLedger) (txs : List LendingTx) (j : Nat) (b : LoanBroker), genesis.Genesis ∧
-      LendingLedger.Reaches genesis txs l ∧ l.broker? j = some b ∧
+    ∃ (genesis l : LendingLedger) (txs : List LendingTx) (j : Nat) (b : LoanBroker),
+      genesis.Genesis ∧
+      LendingLedger.Reaches genesis txs l ∧
+      l.broker? j = some b ∧
       ¬ b.coverAvailable.toRat ≤ l.openLimit + genesis.coverFees j txs :=
   let ⟨genesis, l, txs, _, j, b, hg, hrun, hb, h⟩ := LendingLedger.cover_within_open_zone_witness
   ⟨genesis, l, txs, j, b, hg, hrun.reaches_sum.1, hb, h⟩

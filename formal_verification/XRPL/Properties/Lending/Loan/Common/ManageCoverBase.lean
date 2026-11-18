@@ -1,5 +1,6 @@
 import XRPL.Properties.Lending.Loan.Common.ManageCover
-import XRPL.Properties.Lending.Loan.Common.ManageRoundToExponent
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 import XRPL.Properties.Vault.Proofs.Support.PostSumExponent
 import XRPL.Properties.Vault.Proofs.Support.EarlyExitFee
 

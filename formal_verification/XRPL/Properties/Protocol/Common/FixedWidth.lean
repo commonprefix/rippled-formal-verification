@@ -279,13 +279,6 @@ lemma _root_.UInt32.toNat_add_one_lt {a : UInt32} (h : a + 1 ≠ 0) : a.toNat + 
   simp only [UInt32.toNat_one, UInt32.toNat_zero]
   omega
 
-/-- A checked subtraction of a smaller value never wraps. -/
-lemma _root_.UInt32.subChecked_ne_wrap_of_lt {a b : UInt32} (h : b < a) : a.subChecked b ≠ .error .wrap := by
-  rw [UInt32.subChecked_of_le (UInt32.le_of_lt h)]; exact nofun
-
-/-- The widening conversion is the two-step one the model used before. -/
-lemma _root_.UInt32.toInt64_eq (a : UInt32) : a.toInt64 = a.toUInt64.toInt64 := rfl
-
 lemma _root_.UInt32.toInt_toInt64 (a : UInt32) : a.toInt64.toInt = a.toNat := by
   have h := a.toNat_lt
   unfold UInt32.toInt64 Int64.toInt UInt64.toInt64
@@ -304,7 +297,7 @@ lemma _root_.Int64.toNat_magnitude (a : Int64) : a.magnitude.toNat = a.toInt.nat
   rw [Nat.toUInt64_eq, UInt64.toNat_ofNat', Nat.mod_eq_of_lt (by omega)]
 
 /-- A non-negative `Int64` read as a `UInt64` keeps its value. -/
-private lemma toUInt64_toNat_of_nonneg' (a : Int64) (h0 : 0 ≤ a.toInt) : (a.toUInt64.toNat : ℤ) = a.toInt := by
+lemma toUInt64_toNat_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) : (a.toUInt64.toNat : ℤ) = a.toInt := by
   have hsz : a.toUInt64.toNat < 2 ^ 64 := UInt64.toNat_lt_size _
   have h1 : a.toInt = a.toBitVec.toInt := rfl
   have hb : a.toBitVec.toNat = a.toUInt64.toNat := rfl
@@ -320,7 +313,7 @@ private lemma toUInt64_toNat_of_nonneg' (a : Int64) (h0 : 0 ≤ a.toInt) : (a.to
 /-- A non-negative `Int64` read as a `UInt64` is its magnitude. -/
 lemma _root_.Int64.toUInt64_eq_magnitude {a : Int64} (h : 0 ≤ a) : a.toUInt64 = a.magnitude := by
   have h0 : 0 ≤ a.toInt := by simpa using Int64.le_iff_toInt_le.mp h
-  have hc := toUInt64_toNat_of_nonneg' a h0
+  have hc := toUInt64_toNat_of_nonneg a h0
   apply UInt64.toNat_inj.mp
   rw [Int64.toNat_magnitude]
   omega
@@ -335,7 +328,7 @@ lemma _root_.Int64.neg_toUInt64_eq_magnitude {a : Int64} (h : a < 0) : (-a).toUI
   have hneg : (-a).toInt = -a.toInt := by
     rw [Int64.toInt_neg, Int.bmod_eq_iff (by norm_num)]
     refine ⟨?_, ?_⟩ <;> push_cast <;> omega
-  have hc := toUInt64_toNat_of_nonneg' (-a) (by rw [hneg]; omega)
+  have hc := toUInt64_toNat_of_nonneg (-a) (by rw [hneg]; omega)
   apply UInt64.toNat_inj.mp
   rw [Int64.toNat_magnitude]
   omega

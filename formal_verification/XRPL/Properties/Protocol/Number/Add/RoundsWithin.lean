@@ -31,7 +31,8 @@ theorem Number.operator_add_rounds_downward (x y result : Number)
 
 theorem Number.operator_add_rounding_bound_same_sign_downward_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       x.negative_ = y.negative_ ∧
       Number.operator_add x y .downward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -60,7 +61,8 @@ theorem Number.operator_add_rounds_upward (x y result : Number)
 
 theorem Number.operator_add_rounding_bound_same_sign_upward_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       x.negative_ = y.negative_ ∧
       Number.operator_add x y .upward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -89,7 +91,8 @@ theorem Number.operator_add_rounds_towards_zero (x y result : Number)
 
 theorem Number.operator_add_rounding_bound_same_sign_towards_zero_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       x.negative_ = y.negative_ ∧
       Number.operator_add x y .towards_zero = .ok result ∧
       result.mantissa_ ≠ 0 ∧
@@ -118,12 +121,12 @@ theorem Number.operator_add_rounds_to_nearest (x y result : Number)
 
 theorem Number.operator_add_rounding_bound_same_sign_to_nearest_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       x.negative_ = y.negative_ ∧
       Number.operator_add x y .to_nearest = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      |result.toRat - (x.toRat + y.toRat)|
-        = |x.toRat + y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
+      |result.toRat - (x.toRat + y.toRat)| = |x.toRat + y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
   Number.operator_add_to_nearest_attained
 
 /-- A zero sum of two nonzero Numbers with different signs, other than `x + (-x)`, means the exact sum is below

@@ -50,12 +50,6 @@ lemma Refines.ok_eq {α : Type} {new old : Except Error α} {r : α} (h : Refine
   · exact hn
   · cases hn
 
-lemma Refines.error_eq {α : Type} {new old : Except Error α} {e : Error} (h : Refines new old)
-    (hn : new = .error e) : e = .wrap ∨ old = .error e := by
-  rcases h with rfl | rfl
-  · exact Or.inr hn
-  · cases hn; exact Or.inl rfl
-
 lemma Refines.ne_error {α : Type} {new old : Except Error α} {e : Error} (h : Refines new old)
     (hold : old ≠ .error e) (he : e ≠ .wrap) : new ≠ .error e := by
   rcases h with rfl | rfl

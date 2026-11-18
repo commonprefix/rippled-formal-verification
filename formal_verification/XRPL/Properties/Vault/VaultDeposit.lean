@@ -30,7 +30,7 @@ variable (v : Vault)
 roundedAmount never lowers sharesCreated, and sharesCreated = ⌊idealShares⌋. -/
 theorem Vault.deposit_sharesCreated (v : Vault) :
     (∀ amountDeposit : STAmount,
-      (amountDeposit.integral = false → amountDeposit.IOUCanonical) → -- an IOU request is canonical
+      (amountDeposit.integral = false → amountDeposit.IOUCanonical) →
       0 < amountDeposit.toRat →
       (∀ roundedAmount : STAmount, (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
         (amountDeposit.integral = false → ∃ e : ℤ, v.depositExponent amountDeposit = .ok e ∧ v.baseExponent ≤ e ∧
@@ -45,7 +45,6 @@ theorem Vault.deposit_sharesCreated (v : Vault) :
       RoundsToRepresentableAt roundedAmount amountDeposit.toRat 0 .downward) ∧
     (∀ (amountDeposit₁ amountDeposit₂ roundedAmount₁ roundedAmount₂ : STAmount) (t₁ t₂ : UInt32)
       (hpos₁ : 0 < amountDeposit₁.toRat) (hpos₂ : 0 < amountDeposit₂.toRat),
-      -- transaction amounts are canonical amounts
       amountDeposit₁.Canonical → amountDeposit₂.Canonical →
       (v.roundedDepositAmount amountDeposit₁).run = .ok (.ok roundedAmount₁) →
       (v.roundedDepositAmount amountDeposit₂).run = .ok (.ok roundedAmount₂) →
@@ -54,7 +53,7 @@ theorem Vault.deposit_sharesCreated (v : Vault) :
       (v.deposit amountDeposit₂ false t₂ hpos₂).run = .ok (.ok r₂) →
       roundedAmount₁.toRat ≤ roundedAmount₂.toRat → r₁.shares.toRat ≤ r₂.shares.toRat) ∧
     ∀ (amountDeposit roundedAmount : STAmount) (t : UInt32) (assetsTotal : Number) (hposA : 0 < amountDeposit.toRat),
-      amountDeposit.Canonical → -- a transaction amount is a canonical amount
+      amountDeposit.Canonical →
       v.assetsTotal = .ok assetsTotal →
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
       ∀ r : VaultWithAmounts, (v.deposit amountDeposit false t hposA).run = .ok (.ok r) →
@@ -83,7 +82,7 @@ theorem Vault.deposit_sharesCreated (v : Vault) :
 /-- A successful donation takes exactly `roundedAmount` and issues no shares. -/
 theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (t : UInt32)
     (hpos : 0 < amountDeposit.toRat)
-    (hcanon : amountDeposit.Canonical) -- a transaction amount is a canonical amount
+    (hcanon : amountDeposit.Canonical)
     (hrounded : (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount))
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit true t hpos).run = .ok (.ok r)) :
     r.assets = roundedAmount ∧ r.shares = STAmount.zero .int64 :=
@@ -93,7 +92,7 @@ theorem Vault.deposit_donation (amountDeposit roundedAmount : STAmount) (t : UIn
 sharesWorth of whole base units. -/
 theorem Vault.deposit_charge (v : Vault) (amountDeposit : STAmount) (t : UInt32) (assetsTotal : Number)
     (hpos : 0 < amountDeposit.toRat)
-    (hcanon : amountDeposit.Canonical) -- a transaction amount is a canonical amount
+    (hcanon : amountDeposit.Canonical)
     (hat : v.assetsTotal = .ok assetsTotal)
     (r : VaultWithAmounts) (hok : (v.deposit amountDeposit false t hpos).run = .ok (.ok r))
     -- the range of the proof: past the Open limit the 19-digit price can err by more than a unit
@@ -112,7 +111,9 @@ rounded down. -/
 theorem Vault.deposit_sharesCreated_shortfall_attained :
     ∃ (v : Vault) (t t0 : UInt32) (amountDeposit roundedAmount : STAmount) (assetsTotal : Number)
       (hposA : 0 < amountDeposit.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ v.assetsTotal = .ok assetsTotal ∧
+      Vault.Reachable v t0 ∧
+      amountDeposit.Canonical ∧
+      v.assetsTotal = .ok assetsTotal ∧
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) ∧
       (v.deposit amountDeposit false t hposA).run = .ok (.ok r) ∧
       v.sharesTotal.toRat + r.shares.toRat ≤ maxRep.toNat ∧
@@ -124,7 +125,9 @@ rounded down. -/
 theorem Vault.deposit_sharesCreated_overshoot_attained :
     ∃ (v : Vault) (t t0 : UInt32) (amountDeposit roundedAmount : STAmount) (assetsTotal : Number)
       (hposA : 0 < amountDeposit.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ v.assetsTotal = .ok assetsTotal ∧
+      Vault.Reachable v t0 ∧
+      amountDeposit.Canonical ∧
+      v.assetsTotal = .ok assetsTotal ∧
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) ∧
       (v.deposit amountDeposit false t hposA).run = .ok (.ok r) ∧
       v.sharesTotal.toRat + r.shares.toRat ≤ maxRep.toNat ∧
@@ -134,9 +137,11 @@ theorem Vault.deposit_sharesCreated_overshoot_attained :
 /-- Witness for `deposit_charge`: on a reachable IOU vault a run charges less than the issued shares' worth, the
 fraction dropped (`1` for `1.999999999999999`). -/
 theorem Vault.deposit_charge_undercharge_frac_attained :
-    ∃ (v : Vault) (t t0 : UInt32) (amountDeposit : STAmount) (assetsTotal : Number)
-      (hpos : 0 < amountDeposit.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ v.assetsTotal = .ok assetsTotal ∧
+    ∃ (v : Vault) (t t0 : UInt32) (amountDeposit : STAmount) (assetsTotal : Number) (hpos : 0 < amountDeposit.toRat)
+      (r : VaultWithAmounts),
+      Vault.Reachable v t0 ∧
+      amountDeposit.Canonical ∧
+      v.assetsTotal = .ok assetsTotal ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
       v.numericType.isIntegral = false ∧
@@ -146,9 +151,11 @@ theorem Vault.deposit_charge_undercharge_frac_attained :
 /-- Witness for `deposit_charge`: on a reachable integral vault a run charges less than the issued shares' worth,
 half a unit below it (`2` for `2.5`). -/
 theorem Vault.deposit_charge_undercharge_integral_attained :
-    ∃ (v : Vault) (t t0 : UInt32) (amountDeposit : STAmount) (assetsTotal : Number)
-      (hpos : 0 < amountDeposit.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ amountDeposit.Canonical ∧ v.assetsTotal = .ok assetsTotal ∧
+    ∃ (v : Vault) (t t0 : UInt32) (amountDeposit : STAmount) (assetsTotal : Number) (hpos : 0 < amountDeposit.toRat)
+      (r : VaultWithAmounts),
+      Vault.Reachable v t0 ∧
+      amountDeposit.Canonical ∧
+      v.assetsTotal = .ok assetsTotal ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r) ∧
       v.idealChargeDepositAt assetsTotal.toRat r.shares.toRat ≤ 9 * 10 ^ 15 * (10 : ℚ) ^ v.baseExponent ∧
       v.numericType.isIntegral = true ∧

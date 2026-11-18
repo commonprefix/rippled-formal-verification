@@ -428,11 +428,4 @@ lemma Loan.Reachable.nextPaymentDueDate_ne_zero (loan : Loan) (t : UInt32) (hr :
   simp only [UInt32.toNat_zero] at hdue
   omega
 
-/-- A reachable loan with payments left is due after its previous due date. -/
-lemma Loan.Reachable.dueDates_ordered (loan : Loan) (t : UInt32) (hr : loan.Reachable t)
-    (hpr : loan.paymentRemaining ≠ 0) : loan.previousPaymentDueDate < loan.nextPaymentDueDate := by
-  obtain ⟨start, t₀, hc, hr⟩ := hr
-  obtain ⟨hend, hon⟩ := hc.onSchedule
-  exact ((hr.onSchedule hend hon).2.2 hpr).2
-
 end XRPL.Model.Lending

@@ -25,9 +25,11 @@ theorem STAmount.ofNumber_ok_iff (nt : NumericType) (n : Number) (mode : roundin
 /-- A negative Number that `downward` conversion accepts although it rounds out of range: XRP from
 `-(10^17 + 0.1)` returns `-10^17`. -/
 theorem STAmount.ofNumber_ok_iff_attained :
-    ∃ (nt : NumericType) (n : Number) (mode : rounding_mode) (result : STAmount), n.isNormalized ∧
+    ∃ (nt : NumericType) (n : Number) (mode : rounding_mode) (result : STAmount),
+      n.isNormalized ∧
       (nt = .fractional ∨ nt = NumericType.native ∨ nt = NumericType.int64) ∧
-      STAmount.ofNumber nt n mode = .ok result ∧ ¬ STAmount.RoundsInRange nt mode n.toRat :=
+      STAmount.ofNumber nt n mode = .ok result ∧
+      ¬ STAmount.RoundsInRange nt mode n.toRat :=
   ⟨NumericType.native, ⟨true, 1000000000000000001, -1⟩, .downward,
     ⟨NumericType.native, 100000000000000000, 0, true⟩, STAmount.ofNumber_range_witness_normalized,
     Or.inr (Or.inl rfl), STAmount.ofNumber_range_witness, STAmount.ofNumber_range_witness_out⟩
@@ -75,9 +77,12 @@ theorem STAmount.operator_add_ok_iff_iou (v1 v2 : STAmount) (mode : rounding_mod
 /-- A `to_nearest` sum inside the IOU range that fails because it is rounded twice:
 `9999999999999999e80 + 4996000000000000e64`. -/
 theorem STAmount.operator_add_ok_iff_iou_attained :
-    ∃ (v1 v2 : STAmount) (mode : rounding_mode), v1.IOUCanonical ∧ v2.IOUCanonical ∧
+    ∃ (v1 v2 : STAmount) (mode : rounding_mode),
+      v1.IOUCanonical ∧
+      v2.IOUCanonical ∧
       STAmount.RoundsInRange .fractional mode (v1.toRat + v2.toRat) ∧
-      ∃ err, STAmount.operator_add v1 v2 mode = .error err :=
+      ∃ err,
+        STAmount.operator_add v1 v2 mode = .error err :=
   ⟨⟨.fractional, 9999999999999999, 80, false⟩, ⟨.fractional, 4996000000000000, 64, false⟩, .to_nearest,
     STAmount.iou_range_witness_canonical_left, STAmount.iou_range_witness_canonical_right false,
     STAmount.operator_add_iou_range_witness_in, .overflow, STAmount.operator_add_iou_range_witness⟩
@@ -93,8 +98,10 @@ theorem STAmount.operator_add_ok_xrp (v1 v2 : STAmount) (mode : rounding_mode)
 /-- An XRP sum above `10^17` that is returned although it is out of range: `10^17 + 1`. -/
 theorem STAmount.operator_add_ok_xrp_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.native ∧ v2.mNumericType = NumericType.native ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.native ∧
+      v2.mNumericType = NumericType.native ∧
       STAmount.operator_add v1 v2 mode = .ok result ∧
       ¬ STAmount.RoundsInRange NumericType.native mode (v1.toRat + v2.toRat) :=
   ⟨⟨NumericType.native, 100000000000000000, 0, false⟩, ⟨NumericType.native, 1, 0, false⟩, .to_nearest,
@@ -115,8 +122,10 @@ theorem STAmount.operator_add_ok_iff_mpt (v1 v2 : STAmount) (mode : rounding_mod
 /-- The MPT sum `-2^63` is returned as `-(2^63 - 8)` although it is out of range: `-(2^63 - 1) + -1`. -/
 theorem STAmount.operator_add_ok_iff_mpt_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧ v2.mNumericType = NumericType.int64 ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.int64 ∧
+      v2.mNumericType = NumericType.int64 ∧
       STAmount.operator_add v1 v2 mode = .ok result ∧
       ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat + v2.toRat) :=
   ⟨⟨NumericType.int64, 9223372036854775807, 0, true⟩, ⟨NumericType.int64, 1, 0, true⟩, .to_nearest,
@@ -136,9 +145,12 @@ theorem STAmount.operator_sub_ok_iff_iou (v1 v2 : STAmount) (mode : rounding_mod
 /-- A `to_nearest` difference inside the IOU range that fails because it is rounded twice:
 `9999999999999999e80 - (-4996000000000000e64)`. -/
 theorem STAmount.operator_sub_ok_iff_iou_attained :
-    ∃ (v1 v2 : STAmount) (mode : rounding_mode), v1.IOUCanonical ∧ v2.IOUCanonical ∧
+    ∃ (v1 v2 : STAmount) (mode : rounding_mode),
+      v1.IOUCanonical ∧
+      v2.IOUCanonical ∧
       STAmount.RoundsInRange .fractional mode (v1.toRat - v2.toRat) ∧
-      ∃ err, STAmount.operator_sub v1 v2 mode = .error err :=
+      ∃ err,
+        STAmount.operator_sub v1 v2 mode = .error err :=
   ⟨⟨.fractional, 9999999999999999, 80, false⟩, ⟨.fractional, 4996000000000000, 64, true⟩, .to_nearest,
     STAmount.iou_range_witness_canonical_left, STAmount.iou_range_witness_canonical_right true,
     STAmount.operator_sub_iou_range_witness_in, .overflow, STAmount.operator_sub_iou_range_witness⟩
@@ -155,8 +167,10 @@ theorem STAmount.operator_sub_ok_xrp (v1 v2 : STAmount) (mode : rounding_mode)
 /-- An XRP difference above `10^17` that is returned although it is out of range: `10^17 - (-1)`. -/
 theorem STAmount.operator_sub_ok_xrp_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.native ∧ v2.mNumericType = NumericType.native ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.native ∧
+      v2.mNumericType = NumericType.native ∧
       STAmount.operator_sub v1 v2 mode = .ok result ∧
       ¬ STAmount.RoundsInRange NumericType.native mode (v1.toRat - v2.toRat) :=
   ⟨⟨NumericType.native, 100000000000000000, 0, false⟩, ⟨NumericType.native, 1, 0, true⟩, .to_nearest,
@@ -177,8 +191,10 @@ theorem STAmount.operator_sub_ok_iff_mpt (v1 v2 : STAmount) (mode : rounding_mod
 /-- The MPT difference `-2^63` is returned as `-(2^63 - 8)` although it is out of range: `-(2^63 - 1) - 1`. -/
 theorem STAmount.operator_sub_ok_iff_mpt_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode) (result : STAmount),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧ v2.mNumericType = NumericType.int64 ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.int64 ∧
+      v2.mNumericType = NumericType.int64 ∧
       STAmount.operator_sub v1 v2 mode = .ok result ∧
       ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat - v2.toRat) :=
   ⟨⟨NumericType.int64, 9223372036854775807, 0, true⟩, ⟨NumericType.int64, 1, 0, false⟩, .to_nearest,

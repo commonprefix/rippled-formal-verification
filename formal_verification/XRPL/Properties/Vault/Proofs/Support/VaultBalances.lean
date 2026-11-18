@@ -398,11 +398,6 @@ lemma Vault.adjustAssetsAndShares_rejected_bad_ledger (v : Vault) (assets shares
   all_goals subst_vars
   all_goals first | rfl | simp_all
 
-/-- A cash update never reports `tecLIMIT_EXCEEDED`. -/
-lemma Vault.adjustAssetsAndShares_not_limit (v : Vault) (assets shares : STAmount) :
-    (v.adjustAssetsAndShares assets shares).run ≠ .ok (.error .tecLIMIT_EXCEEDED) := fun h =>
-  absurd (Vault.adjustAssetsAndShares_rejected_bad_ledger v assets shares _ h) (by decide)
-
 /-- A canonical deposit amount in the vault's asset bounds an integral asset type within `maxRep`. -/
 lemma Vault.maxValue_fits_of_canonical (v : Vault) (a : STAmount) (hc : a.Canonical)
     (hty : a.mNumericType = v.numericType) :

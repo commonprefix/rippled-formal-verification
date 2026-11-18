@@ -97,7 +97,7 @@ private lemma roundToNumericType_frac_downward_ge_units (x c : Number) (k : ℕ)
       have hnz : x.mantissa_ ≠ 0 := STAmount.ofNumber_source_ne_zero .fractional x _ ret hof hrz
       obtain ⟨hlo, hhi⟩ := hx.mantissaBounds_nat hnz
       have hc := (STAmount.ofNumber_iou_ok_facts x _ ret hlo hhi (Number.exponent_ge_min x hx hnz) hof hrz).1
-      have hrnd := STAmount.roundToExponent_rounded_of_scale ret rounded e .downward hc he.1 he.2 hre
+      have hrnd := STAmount.roundToExponent_rounded_any_proof ret rounded e .downward hc he.1 he.2 hre
       change rounded.toRat = (⌊ret.toRat / 10 ^ e⌋ : ℚ) * 10 ^ e at hrnd
       have hK : (k : ℤ) ≤ ⌊ret.toRat / 10 ^ e⌋ := by
         rw [Int.le_floor, le_div_iff₀ hp]; exact_mod_cast hret

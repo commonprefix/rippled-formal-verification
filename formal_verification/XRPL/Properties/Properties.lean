@@ -55,7 +55,7 @@ import XRPL.Properties.Lending.Loan.LoanValid
 import XRPL.Properties.Lending.Ledger.Accounting
 import XRPL.Properties.Lending.Ledger.AssociateAsset
 import XRPL.Properties.Lending.Ledger.Brokers
-import XRPL.Properties.Lending.Ledger.Common.NegativeCreditWitness
+import XRPL.Properties.Lending.Ledger.Common.CoarsenedVault
 import XRPL.Properties.Lending.Ledger.Lawful
 import XRPL.Properties.Lending.Ledger.LendingReturn
 import XRPL.Properties.Lending.Ledger.NeverStuck

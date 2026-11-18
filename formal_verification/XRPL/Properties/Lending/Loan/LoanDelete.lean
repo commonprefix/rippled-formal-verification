@@ -49,7 +49,10 @@ theorem Lending.deletePending_principal (l : LendingLedger) (hr : l.Reachable) (
 vault to AssetsAvailable 1874246907153724 on the grid of 1, and deleting a pending loan of 0.6 credits 1. -/
 theorem Lending.deletePending_principal_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (loan : Loan),
-      l.Reachable ∧ (l.apply (.loanDelete i)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧ loan.isPending = true ∧
+      l.Reachable ∧
+      (l.apply (.loanDelete i)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      loan.isPending = true ∧
       l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat ≠ loan.principalOutstanding.toRat :=
   LendingLedger.deletePending_principal_witness
 

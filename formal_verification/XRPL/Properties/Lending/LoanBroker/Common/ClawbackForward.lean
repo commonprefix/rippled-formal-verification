@@ -90,7 +90,7 @@ private lemma LoanBroker.clamp_units (lb : LoanBroker) (v : Vault) (hz : lb.Open
   -- the magnitude is the amount, already on the base grid
   obtain ⟨c, hc⟩ := STAmount.roundToExponent_ok_any d v.baseExponent .towards_zero hdi
     (STAmount.mIsNegative_false_of_pos d hd0) (by omega) (by omega)
-  have hR := STAmount.roundToExponent_rounded_of_scale d c v.baseExponent .towards_zero hdi (by omega) (by omega) hc
+  have hR := STAmount.roundToExponent_rounded_any_proof d c v.baseExponent .towards_zero hdi (by omega) (by omega) hc
   simp only [RoundsToRepresentableAt] at hR
   change c.toRat = _ at hR
   rw [if_pos hd0.le, hdv, mul_div_assoc, div_self hp.ne', mul_one, Int.floor_natCast] at hR

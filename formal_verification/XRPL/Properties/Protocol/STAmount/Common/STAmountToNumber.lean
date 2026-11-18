@@ -28,15 +28,6 @@ lemma STAmount.IntegralCanonical.toRat_eq_signedDrops (s : STAmount)
     s.toRat = (s.signedDrops : ℚ) :=
   STAmount.toRat_of_offset_zero s hc.offset_zero
 
-/-- A canonical integral amount whose magnitude fits `2^63 - 1` has a value
-within `2^63 - 1` of zero. -/
-lemma STAmount.IntegralCanonical.abs_toRat_le_of_mValue_le (s : STAmount) (hc : s.IntegralCanonical)
-    (hsz : s.mValue.toNat ≤ 2 ^ 63 - 1) : |s.toRat| ≤ 2 ^ 63 - 1 := by
-  rw [STAmount.abs_toRat, hc.offset_zero, zpow_zero, mul_one]
-  have h1 : (s.mValue.toNat : ℚ) ≤ ((2 ^ 63 - 1 : ℕ) : ℚ) := by exact_mod_cast hsz
-  have h2 : ((2 ^ 63 - 1 : ℕ) : ℚ) = 2 ^ 63 - 1 := by norm_num
-  linarith
-
 /-- A canonical integral amount is integer-valued. -/
 lemma STAmount.IntegralCanonical.den_eq_one (s : STAmount) (hc : s.IntegralCanonical) :
     s.toRat.den = 1 := by

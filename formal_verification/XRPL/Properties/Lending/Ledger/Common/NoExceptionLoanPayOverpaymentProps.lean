@@ -527,34 +527,4 @@ lemma LoanProperties.amortizationGuards_computes (props : LoanProperties) (nt : 
     simp only [bind, Except.bind, pure, Except.pure, hti, hrp, hz, hratio, hc]
     split_ifs <;> exact ⟨_, rfl⟩
 
-/-- The state of a new loan computes from values below `10^100` in size. Its interest is below `10^102` in size. -/
-lemma LoanState.build_computes_ream (tvo principal mfo : Number) (htN : tvo.isNormalized)
-    (hpN : principal.isNormalized) (hmN : mfo.isNormalized) (ht : |tvo.toRat| < 10 ^ 100)
-    (hp : |principal.toRat| < 10 ^ 100) (hm : |mfo.toRat| < 10 ^ 100) :
-    ∃ st, LoanState.build tvo principal mfo = .ok st ∧ st.interestDue.isNormalized ∧
-      |st.interestDue.toRat| < 10 ^ 102 := by
-  have he := Number.nearestError_pos
-  have he' := Number.nearestError_le
-  have h200 : (10 : ℚ) ^ 100 < 10 ^ 200 := by norm_num
-  obtain ⟨v1, hv1⟩ := Number.operator_sub_ok_of_abs tvo principal .to_nearest htN hpN (by linarith) (by linarith)
-  have hv1N := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ htN hpN hv1
-  have hv1abs : |v1.toRat| ≤ 4 * 10 ^ 100 := by
-    refine le_trans (Number.sub_near _ _ _ htN hpN hv1).abs_le ?_
-    have h1 : |tvo.toRat - principal.toRat| ≤ |tvo.toRat| + |principal.toRat| := abs_sub _ _
-    calc |tvo.toRat - principal.toRat| * (1 + ε) ≤ (10 ^ 100 + 10 ^ 100) * 2 := by gcongr <;> linarith
-      _ = 4 * 10 ^ 100 := by ring
-  obtain ⟨id, hid⟩ := Number.operator_sub_ok_of_abs v1 mfo .to_nearest hv1N hmN
-    (by linarith [show (4 : ℚ) * 10 ^ 100 < 10 ^ 200 by norm_num]) (by linarith)
-  have hidN := Number.operator_sub_isNormalized_to_nearest_sz _ _ _ hv1N hmN hid
-  have hidabs : |id.toRat| < 10 ^ 102 := by
-    refine lt_of_le_of_lt (Number.sub_near _ _ _ hv1N hmN hid).abs_le ?_
-    have h1 : |v1.toRat - mfo.toRat| ≤ |v1.toRat| + |mfo.toRat| := abs_sub _ _
-    calc |v1.toRat - mfo.toRat| * (1 + ε) ≤ (4 * 10 ^ 100 + 10 ^ 100) * 2 := by gcongr <;> linarith
-      _ < 10 ^ 102 := by norm_num
-  refine ⟨{ valueOutstanding := tvo, principalOutstanding := principal, interestDue := id,
-            managementFeeDue := mfo }, ?_, hidN, hidabs⟩
-  unfold LoanState.build
-  rw [hv1, ok_bind, hid, ok_bind]
-  rfl
-
 end XRPL.Model.Lending

@@ -405,7 +405,7 @@ lemma STAmount.roundToNumericType_upward_ge_of_large (nt : NumericType) (x T : N
             rcases hfc.2 with hstc | hstz
             · obtain ⟨-, -, -, hup, -⟩ :=
                 STAmount.ofNumber_frac_stage x .upward st hx h0 (Or.inr (Or.inl rfl)) hof hst
-              have hR := STAmount.roundToExponent_rounded_of_scale st r s .upward hstc hs.1 hs.2 hr
+              have hR := STAmount.roundToExponent_rounded_any_proof st r s .upward hstc hs.1 hs.2 hr
               unfold RoundsToRepresentableAt at hR
               have hp : (0 : ℚ) < 10 ^ s := zpow_pos (by norm_num) _
               have hce : st.toRat / 10 ^ s ≤ (⌈st.toRat / 10 ^ s⌉ : ℚ) := Int.le_ceil _

@@ -59,9 +59,6 @@ theorem alignDownSpec_mantissa_le (m : UInt64) (e : Int) (g : Guard) (target : I
   | case2 m e g hnlt =>
     rw [alignDownSpec_noop hnlt]
 
-/-- Number of steps performed by `alignDown m e g target`. -/
-def alignDownSpec_steps (e target : Int) : ℕ := (target - e).toNat
-
 /-- Output mantissa is `m / 10 ^ k` for `k = (max e target - e).toNat`. -/
 theorem alignDownSpec_mantissa_eq (m : UInt64) (e : Int) (g : Guard) (target : Int) :
     (alignDownSpec m e g target).1.toNat

@@ -52,8 +52,7 @@ theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hn
       (computeClawback v assets holderShares waive).run = .ok (.ok amounts) → amounts.shares.isZero = false →
       amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.checkDebitNotDust assetsNumber = .ok ter →
       (ter != .tesSUCCESS) = true → (v.clawback assets holderShares waive hnn).run = .ok (.error ter)) ∧
-    -- a clawback amount is canonical, or zero to claw back the holding, and the asset's maximum fits an int64
-    -- amount, as C++ caps every MPT maximum
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
     (assets.CanonicalOrZero → holderShares.ShareBalance →
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
       (∀ amounts : VaultAmounts, (computeClawback v assets holderShares waive).run = .ok (.ok amounts) →
@@ -65,8 +64,7 @@ theorem Vault.clawback_exits (assets holderShares : STAmount) (waive : Bool) (hn
       r.shares.toRat = v.toExact.sharesTotal →
       r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
         r.vault'.sharesTotal = Number.zero) ∧
-    -- a clawback amount is canonical, or zero to claw back the holding. The clawback destroys every outstanding
-    -- share
+    -- the clawback destroys every outstanding share
     ∀ t0 : UInt32, Vault.Reachable v t0 → assets.CanonicalOrZero → holderShares.ShareBalance →
       (∀ amounts : VaultAmounts, (computeClawback v assets holderShares waive).run = .ok (.ok amounts) →
         amounts.shares.toRat = v.toExact.sharesTotal) →

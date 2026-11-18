@@ -68,8 +68,7 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
       ((v.assetsMaximum.getD Number.zero).operator_ne Number.zero &&
         assetsTotal'.operator_gt (v.assetsMaximum.getD Number.zero)) = true →
       (v.deposit amountDeposit isDonation t hpos).run = .ok (.error .tecLIMIT_EXCEEDED)) ∧
-    -- a transaction amount is a canonical amount of the vault's asset, and the new share total stays within the
-    -- MPT maximum
+    -- the new share total stays within the MPT maximum
     ∀ (roundedAmount : STAmount) (amounts : VaultAmounts) (raw : RawVault) (assetsTotal' : Number),
       amountDeposit.Canonical → amountDeposit.mNumericType = v.numericType → v.DepositOpen isDonation t →
       (v.roundedDepositAmount amountDeposit).run = .ok (.ok roundedAmount) →
@@ -98,8 +97,8 @@ theorem Vault.deposit_exits (amountDeposit : STAmount) (isDonation : Bool) (t : 
 /-- Every rejection of a deposit. -/
 theorem Vault.deposit_error_codes (amountDeposit : STAmount) (isDonation : Bool) (t : UInt32)
     (hpos : 0 < amountDeposit.toRat)
-    (hc : amountDeposit.Canonical) -- a transaction amount is a canonical amount
-    (hty : amountDeposit.mNumericType = v.numericType) -- of the vault's asset
+    (hc : amountDeposit.Canonical)
+    (hty : amountDeposit.mNumericType = v.numericType)
     (ter : TER) (hok : (v.deposit amountDeposit isDonation t hpos).run = .ok (.error ter)) :
     ter = .tecEXPIRED ∨ ter = .tecNO_PERMISSION ∨ ter = .tecLOCKED ∨ ter = .tecPRECISION_LOSS ∨
       ter = .tecINTERNAL ∨ ter = .tecPATH_DRY ∨ ter = .tecLIMIT_EXCEEDED :=

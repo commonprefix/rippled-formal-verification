@@ -31,14 +31,6 @@ lemma recover_step {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
   rw [recoverSpec.eq_def]
   simp only [if_pos (And.intro h1 h2)]
 
-/-- Once the exit condition holds at the entry, `recover` is a no-op for any fuel. -/
-lemma recover_exit_idemp {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
-    (h : ¬ (m < upperLimit ∧ ¬ g.empty)) :
-    recoverSpec upperLimit m e g fuel = (m, e, g) := by
-  cases fuel with
-  | zero => exact recover_noop_zero upperLimit m e g
-  | succ n => exact recover_noop_exit h
-
 /-- `recover` keeps the guard's sticky bit `xbit_`, since `Guard.pop` does not change it. -/
 theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
     (recoverSpec upperLimit m e g fuel).2.2.xbit_ = g.xbit_ := by
@@ -53,12 +45,6 @@ theorem recover_xbit (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ)
     rfl
   | case3 m e g fuel hcond =>
     rw [recover_noop_exit hcond]
-
-/-- The popped digit is strictly less than 16 (it's a nibble). -/
-lemma pop_digit_lt_16 (g : Guard) : g.pop.2.toNat < 16 := by
-  rw [pop_digit_eq_nibble_15]
-  unfold nibble
-  exact Nat.mod_lt _ (by decide)
 
 /-- If all nibbles of `g.digits_` are valid decimal digits (≤ 9), then
 the popped digit is at most 9. -/
@@ -110,38 +96,6 @@ theorem recover_exponent_le (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel
   | case3 m e g fuel hcond =>
     rw [recover_noop_exit hcond]
 
-/-- Output exponent is at least `e - fuel`: at most `fuel` steps execute. -/
-theorem recover_exponent_ge (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    e - fuel ≤ (recoverSpec upperLimit m e g fuel).2.1 := by
-  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
-  | case1 m e g => rw [recover_noop_zero]; simp
-  | case2 m e g fuel hcond g' d hpop IH =>
-    obtain ⟨h1, h2⟩ := hcond
-    rw [recover_step h1 h2, show g.pop = (g', d) from hpop]
-    have IH' := IH
-    push_cast at IH' ⊢
-    linarith
-  | case3 m e g fuel hcond =>
-    rw [recover_noop_exit hcond]; push_cast; omega
-
-/-- The output exponent is exactly `e - k` for some `0 ≤ k ≤ fuel`. -/
-theorem recover_exponent_eq (upperLimit m : UInt128) (e : Int) (g : Guard) (fuel : ℕ) :
-    ∃ k : ℕ, k ≤ fuel ∧
-      (recoverSpec upperLimit m e g fuel).2.1 = e - k := by
-  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
-  | case1 m e g =>
-    refine ⟨0, le_refl _, ?_⟩
-    rw [recover_noop_zero]; simp
-  | case2 m e g fuel hcond g' d hpop IH =>
-    obtain ⟨h1, h2⟩ := hcond
-    rw [recover_step h1 h2, show g.pop = (g', d) from hpop]
-    obtain ⟨k, hk_le, hk_eq⟩ := IH
-    refine ⟨k + 1, by omega, ?_⟩
-    rw [hk_eq]; push_cast; ring
-  | case3 m e g fuel hcond =>
-    refine ⟨0, by omega, ?_⟩
-    rw [recover_noop_exit hcond]; simp
-
 /-- Either the `recover` output meets the loop-exit condition, or the fuel ran out and the exponent dropped by
 exactly `fuel`. -/
 theorem recover_output_exits_or_fuel_exhausted
@@ -160,32 +114,5 @@ theorem recover_output_exits_or_fuel_exhausted
   | case3 m e g fuel hcond =>
     rw [recover_noop_exit hcond]
     left; exact hcond
-
-/-- Once the output satisfies the exit condition, additional fuel is a no-op. -/
-theorem recover_fuel_add_of_exits {upperLimit m : UInt128} {e : Int} {g : Guard} {fuel : ℕ}
-    (hexit : let r := recoverSpec upperLimit m e g fuel
-             ¬ (r.1 < upperLimit ∧ ¬ r.2.2.empty))
-    (extra : ℕ) :
-    recoverSpec upperLimit m e g (fuel + extra)
-      = recoverSpec upperLimit m e g fuel := by
-  induction m, e, g, fuel using recoverSpec.induct (upperLimit := upperLimit) with
-  | case1 m e g =>
-    rw [recover_noop_zero] at hexit
-    simp only at hexit
-    rw [recover_noop_zero, Nat.zero_add, recover_exit_idemp hexit]
-  | case2 m e g fuel hcond g' d hpop IH =>
-    obtain ⟨h1, h2⟩ := hcond
-    have hreidx : fuel + 1 + extra = (fuel + extra) + 1 := by omega
-    rw [hreidx]
-    rw [recover_step h1 h2]
-    rw [recover_step h1 h2] at hexit
-    have hpop1 : g.pop.1 = g' := by rw [hpop]
-    have hpop2 : g.pop.2 = d := by rw [hpop]
-    rw [hpop1, hpop2] at hexit
-    rw [hpop1, hpop2]
-    conv_rhs => rw [recover_step h1 h2, hpop1, hpop2]
-    exact IH hexit
-  | case3 m e g fuel hcond =>
-    rw [recover_exit_idemp hcond, recover_exit_idemp hcond]
 
 end XRPL.Model.Protocol

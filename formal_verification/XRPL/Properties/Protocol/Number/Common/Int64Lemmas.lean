@@ -66,22 +66,6 @@ lemma toInt_mod_ten_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
     (a % 10).toInt = a.toInt % 10 := by
   rw [Int64.toInt_mod, int64_ten_toInt, Int.tmod_eq_emod_of_nonneg h0]
 
-/-- For a non-negative `Int64`, the `UInt64` bit-reinterpretation reads back the
-same value (the bit pattern lies in `[0, 2^63)`). -/
-lemma toUInt64_toNat_of_nonneg (a : Int64) (h0 : 0 ≤ a.toInt) :
-    (a.toUInt64.toNat : ℤ) = a.toInt := by
-  have hsz : a.toUInt64.toNat < 2 ^ 64 := UInt64.toNat_lt_size _
-  have h1 : a.toInt = a.toBitVec.toInt := rfl
-  have hb : a.toBitVec.toNat = a.toUInt64.toNat := rfl
-  by_cases hlt : 2 * a.toUInt64.toNat < 2 ^ 64
-  · have h := BitVec.toInt_eq_toNat_of_lt (x := a.toBitVec) (by rw [hb]; omega)
-    rw [h1, h, hb]
-  · exfalso
-    have h2 : a.toInt = Int.bmod (a.toUInt64.toNat : ℤ) (2 ^ 64) := by
-      rw [h1, BitVec.toInt_eq_toNat_bmod, hb]
-    rw [Int.bmod_def] at h2
-    split at h2 <;> omega
-
 /-- The `UInt64` view of a non-negative `Int64` bounded by `maxRep` is at most `maxRep`. -/
 lemma toUInt64_toNat_le_maxRep (a : Int64) (h0 : 0 ≤ a.toInt)
     (hle : a.toInt ≤ (maxRep.toNat : ℤ)) :

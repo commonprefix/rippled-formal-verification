@@ -704,8 +704,6 @@ public:
         }
     }
 
-    // EXPECTED FAILURE: xrpld's operator+ has two rounding bugs (reported
-    // upstream)
     void
     testAdd()
     {
@@ -716,7 +714,6 @@ public:
         runFuzzBinOp(lean_number_add, '+', add);
     }
 
-    // EXPECTED FAILURE: see testAdd
     void
     testSub()
     {

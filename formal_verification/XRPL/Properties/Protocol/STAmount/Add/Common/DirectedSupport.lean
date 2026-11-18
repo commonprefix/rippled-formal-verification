@@ -8,20 +8,6 @@ Mode-generic versions of the `to_nearest` IOU-addition composition lemmas. The d
 
 namespace XRPL.Model.Protocol
 
-/-- The `Number`-addition result sign equals the (common) operand sign when both
-operands share a sign and do not cancel. -/
-lemma operator_add_negative_eq_of_same_sign (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx_mant_ne : x.mantissa_ ≠ 0) (hy_mant_ne : y.mantissa_ ≠ 0)
-    (h_same_sign : x.negative_ = y.negative_)
-    (h_not_zero : ¬ x.operator_eq y.operator_neg)
-    (hok : Number.operator_add x y mode = .ok result) :
-    result.negative_ = x.negative_ := by
-  obtain ⟨_, _, _, _, _, hspec⟩ :=
-    Number.operator_add_algorithmic_facts_same_sign_anyMode x y result mode hx hy
-      hx_mant_ne hy_mant_ne h_same_sign h_not_zero hok
-  exact hspec.result_neg
-
 lemma IOUAmount.ofNumber_rounds_within (sum : Number) (mode : rounding_mode) (result : IOUAmount)
     (h_lo : 10 ^ 18 ≤ sum.mantissa_.toNat) (h_hi : sum.mantissa_.toNat < 10 ^ 19)
     (he_lo : minExponent ≤ sum.exponent_ + 3) (he_hi : sum.exponent_ + 4 ≤ maxExponent)
@@ -99,53 +85,6 @@ lemma operator_add_RoundsWithin_anyMode (xn yn sum : Number) (mode : rounding_mo
     exact Number.operator_add_rounds_upward xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
   | towards_zero =>
     exact Number.operator_add_rounds_towards_zero xn yn sum hxn_norm hyn_norm hxn_ne hyn_ne h_no_cancel hadd hsum_ne
-
-/-- Magnitude form of the `Number`-addition directed bound, every mode, any operand signs. Under
-`towards_zero` the result has the sign of the exact sum, so `|sum − truth| = |truth| − |sum|`. -/
-lemma operator_add_abs_diff_le_anyMode (xn yn sum : Number) (mode : rounding_mode)
-    (hxn_norm : xn.isNormalized) (hyn_norm : yn.isNormalized)
-    (hxn_ne : xn.mantissa_ ≠ 0) (hyn_ne : yn.mantissa_ ≠ 0)
-    (h_no_cancel : ¬ xn.operator_eq yn.operator_neg) (hsum_ne : sum.mantissa_ ≠ 0)
-    (hadd : Number.operator_add xn yn mode = .ok sum) :
-    |sum.toRat - (xn.toRat + yn.toRat)| ≤ |xn.toRat + yn.toRat| * (11 / (2 ^ 63 - 18 : ℚ)) := by
-  have hrw := operator_add_RoundsWithin_anyMode xn yn sum mode hxn_norm hyn_norm hxn_ne hyn_ne
-    h_no_cancel hsum_ne hadd
-  unfold RoundsWithin at hrw
-  cases mode with
-  | to_nearest => exact hrw
-  | downward =>
-    obtain ⟨hle, hm⟩ := hrw
-    rw [show RatValued.toRat sum = sum.toRat from rfl] at hle hm
-    rw [abs_of_nonpos (by linarith), neg_sub]; exact hm
-  | upward =>
-    obtain ⟨hge, hm⟩ := hrw
-    rw [show RatValued.toRat sum = sum.toRat from rfl] at hge hm
-    rw [abs_of_nonneg (by linarith)]; exact hm
-  | towards_zero =>
-    by_cases hss : xn.negative_ = yn.negative_
-    · -- same sign: the result sign equals the operand sign, hence aligned with the sum.
-      obtain ⟨hle_abs, hm_abs⟩ := hrw
-      rw [show RatValued.toRat sum = sum.toRat from rfl] at hle_abs hm_abs
-      have hsumneg : sum.negative_ = xn.negative_ :=
-        operator_add_negative_eq_of_same_sign xn yn sum .towards_zero hxn_norm hyn_norm
-          hxn_ne hyn_ne hss h_no_cancel hadd
-      rw [abs_diff_eq_abs_sub_abs_of_sign_aligned sum (xn.toRat + yn.toRat)
-        (fun hneg => by
-          have hxneg : xn.negative_ = true := hsumneg ▸ hneg
-          have hyneg : yn.negative_ = true := hss ▸ hxneg
-          have h1 := Number.toRat_nonpos_of_negative xn hxneg
-          have h2 := Number.toRat_nonpos_of_negative yn hyneg
-          linarith)
-        (fun hpos => by
-          have hxpos : xn.negative_ = false := hsumneg ▸ hpos
-          have hypos : yn.negative_ = false := hss ▸ hxpos
-          have h1 := Number.toRat_nonneg_of_nonnegative xn hxpos
-          have h2 := Number.toRat_nonneg_of_nonnegative yn hypos
-          linarith)]
-      rw [abs_of_nonpos (by linarith), neg_sub]; exact hm_abs
-    · -- different sign: the tight cancellation bound gives the magnitude directly.
-      exact le_of_lt (Number.operator_add_rounding_bound_diff_sign_towards_zero_tight xn yn sum
-        hxn_norm hyn_norm hxn_ne hyn_ne hss h_no_cancel hadd hsum_ne)
 
 /-- Mode-generic version of `IOUAmount.add_sum_exponent_hi`: the `Number` sum's exponent stays
 `≤ maxExponent − 4` in every mode, because `|sum| ≤ 2·|x+y|` holds in every mode. -/

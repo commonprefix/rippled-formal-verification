@@ -27,9 +27,8 @@
 
 namespace xrpl::test::formal_verification {
 
-// The number bugs found in Milestone 1. A Number case runs the reported inputs through the Lean
-// model and C++ and expects the same result. Calls that fail are commented out in runTests(), the
-// rest run as regression tests.
+// The number bugs of Milestone 1. Each case runs the reported inputs through the Lean model and
+// C++. Calls that fail are commented out in runTests(), the rest are regression tests.
 class NumberFindings_test : public LeanSuite
 {
     // FV_M1_11: MPTAmount mulRatio returns INT64_MIN for a result below INT64_MIN instead of

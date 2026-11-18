@@ -17,17 +17,6 @@ lemma STAmount.exists_int_grid (a : STAmount) :
   show _ = _ * (10 : ℚ) ^ a.mOffset
   rcases h : a.mIsNegative with _ | _ <;> simp
 
-/-- Any `STAmount` sits on its own exponent grid: the trivial `.downward` floor
-equation at `s = a.exponent`. -/
-lemma STAmount.self_grid (a : STAmount) :
-    RoundsToRepresentableAt a a.toRat a.exponent .downward := by
-  show a.toRat = (⌊a.toRat / 10 ^ a.exponent⌋ : ℚ) * 10 ^ a.exponent
-  obtain ⟨z, hval⟩ := STAmount.exists_int_grid a
-  have h10 : ((10 : ℚ) ^ a.exponent) ≠ 0 := zpow_ne_zero _ (by norm_num)
-  have hdiv : a.toRat / 10 ^ a.exponent = (z : ℚ) := by
-    rw [hval]; field_simp
-  rw [hdiv, Int.floor_intCast, ← hval]
-
 /-- A nonzero `STAmount` is at least one step of its own grid. -/
 lemma STAmount.ulp_le_abs_toRat (a : STAmount) (h : a.mValue ≠ 0) :
     (10 : ℚ) ^ a.exponent ≤ |a.toRat| := by

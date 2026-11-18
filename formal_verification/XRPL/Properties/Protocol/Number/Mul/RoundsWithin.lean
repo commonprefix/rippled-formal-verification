@@ -30,7 +30,8 @@ theorem Number.operator_mul_rounds_downward (x y result : Number)
 
 theorem Number.operator_mul_rounding_bound_downward_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       Number.operator_mul x y .downward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       RoundsWithinWitness result (x.toRat * y.toRat) (9 / (2 ^ 63 + 2 : ℚ)) :=
@@ -48,7 +49,8 @@ theorem Number.operator_mul_rounds_upward (x y result : Number)
 
 theorem Number.operator_mul_rounding_bound_upward_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       Number.operator_mul x y .upward = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       RoundsWithinWitness result (x.toRat * y.toRat) (9 / (2 ^ 63 + 2 : ℚ)) :=
@@ -66,7 +68,8 @@ theorem Number.operator_mul_rounds_towards_zero (x y result : Number)
 
 theorem Number.operator_mul_rounding_bound_towards_zero_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       Number.operator_mul x y .towards_zero = .ok result ∧
       result.mantissa_ ≠ 0 ∧
       RoundsWithinWitness result (x.toRat * y.toRat) (9 / (2 ^ 63 + 2 : ℚ)) :=
@@ -82,11 +85,11 @@ theorem Number.operator_mul_rounds_to_nearest (x y result : Number)
 
 theorem Number.operator_mul_rounding_bound_to_nearest_attained :
     ∃ (x y result : Number),
-      x.isNormalized ∧ y.isNormalized ∧
+      x.isNormalized ∧
+      y.isNormalized ∧
       Number.operator_mul x y .to_nearest = .ok result ∧
       result.mantissa_ ≠ 0 ∧
-      |result.toRat - x.toRat * y.toRat|
-        = |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
+      |result.toRat - x.toRat * y.toRat| = |x.toRat * y.toRat| * (5 / (2 ^ 63 + 7 : ℚ)) :=
   Number.operator_mul_to_nearest_attained
 
 /-- A zero product of two nonzero Numbers means the exact product is below the smallest positive `Number`. -/

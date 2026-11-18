@@ -18,8 +18,8 @@ succeeded still succeeds. -/
 theorem Vault.Reachable.isolation (v : Vault) (t0 t : UInt32) (hr : Vault.Reachable v t0)
     (ht : t0 ≤ t) -- close times only move forward
     (shares : STAmount) (waive : Bool) (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat)
-    (hc : shares.Canonical) -- a transaction amount is a canonical amount
-    (hty : shares.mNumericType = .int64) -- of the vault's shares
+    (hc : shares.Canonical)
+    (hty : shares.mNumericType = .int64)
     (rW : VaultWithAmounts) (hW : (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok rW)) :
     -- a deposit or a donation
     (∀ (amount : STAmount) (isDonation : Bool) (hposX : 0 < amount.toRat) (r : VaultWithAmounts),
@@ -86,13 +86,20 @@ theorem Vault.Reachable.isolation_clawback_attained :
     ∃ (v : Vault) (t0 t : UInt32) (shares : STAmount) (waive : Bool)
       (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) (rW : VaultWithAmounts)
       (assets holderShares : STAmount) (waiveX : Bool) (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ shares.Canonical ∧ shares.mNumericType = .int64 ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      shares.Canonical ∧
+      shares.mNumericType = .int64 ∧
       (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok rW) ∧
-      assets.CanonicalOrZero ∧ assets.mNumericType = v.numericType ∧ holderShares.ShareBalance ∧
+      assets.CanonicalOrZero ∧
+      assets.mNumericType = v.numericType ∧
+      holderShares.ShareBalance ∧
       (waiveX = true ↔ v.IsSoleShareholder holderShares) ∧
-      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) ∧ r.shares.toRat ≤ holderShares.toRat ∧
+      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) ∧
+      r.shares.toRat ≤ holderShares.toRat ∧
       r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal ∧
-      v.earlyExitFeeRateAt t ≠ 0 ∧ v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
+      v.earlyExitFeeRateAt t ≠ 0 ∧
+      v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
       (∃ k : ℤ, v.idealAssetsWithdraw waive shares.toRat = k * 10 ^ v.baseExponent) ∧
       (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) :=
   Vault.Reachable.isolation_clawback_witness
@@ -103,13 +110,20 @@ theorem Vault.Reachable.isolation_clawback_tie_attained :
     ∃ (v : Vault) (t0 t : UInt32) (shares : STAmount) (waive : Bool)
       (hpos : 0 < (WithdrawAmount.vaultShares shares).amount.toRat) (rW : VaultWithAmounts)
       (assets holderShares : STAmount) (waiveX : Bool) (hnn : 0 ≤ assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ shares.Canonical ∧ shares.mNumericType = .int64 ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      shares.Canonical ∧
+      shares.mNumericType = .int64 ∧
       (v.withdraw (.vaultShares shares) waive t hpos).run = .ok (.ok rW) ∧
-      assets.CanonicalOrZero ∧ assets.mNumericType = v.numericType ∧ holderShares.ShareBalance ∧
+      assets.CanonicalOrZero ∧
+      assets.mNumericType = v.numericType ∧
+      holderShares.ShareBalance ∧
       (waiveX = true ↔ v.IsSoleShareholder holderShares) ∧
-      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) ∧ r.shares.toRat ≤ holderShares.toRat ∧
+      (v.clawback assets holderShares waiveX hnn).run = .ok (.ok r) ∧
+      r.shares.toRat ≤ holderShares.toRat ∧
       r.shares.toRat + shares.toRat ≤ v.toExact.sharesTotal ∧
-      v.earlyExitFeeRateAt t ≠ 0 ∧ v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
+      v.earlyExitFeeRateAt t ≠ 0 ∧
+      v.earlyExitFeeRateAt t ≠ maxEarlyExitFeeRate ∧
       (∃ k : ℤ, v.idealAssetsWithdraw waiveX r.shares.toRat = k * 10 ^ v.baseExponent) ∧
       r.vault'.withdrawNav * (v.toExact.sharesTotal : ℚ) = v.withdrawNav * (r.vault'.toExact.sharesTotal : ℚ) ∧
       (r.vault'.withdraw (.vaultShares shares) waive t hpos).run = .ok (.error .tecPRECISION_LOSS) :=

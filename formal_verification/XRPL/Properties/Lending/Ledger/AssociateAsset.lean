@@ -36,8 +36,11 @@ theorem Lending.Reachable.associateAsset_noop (hr : l.Reachable) :
 /-- Witness: a run where associateAsset rounds CoverAvailable. A default on a reachable ledger leaves a CoverAvailable
 of 17 digits. -/
 theorem Lending.Reachable.associateAsset_noop_attained :
-    ∃ (l l' : LendingLedger) (b b' : LoanBroker), l.Reachable ∧
-      (l.apply (.loanManage 2 .default)).run = .ok (.ok l') ∧ l.broker? 0 = some b ∧ l'.broker? 0 = some b' ∧
+    ∃ (l l' : LendingLedger) (b b' : LoanBroker),
+      l.Reachable ∧
+      (l.apply (.loanManage 2 .default)).run = .ok (.ok l') ∧
+      l.broker? 0 = some b ∧
+      l'.broker? 0 = some b' ∧
       STAmount.isRounded l.vault.numericType b.coverAvailable = false ∧
       STAmount.isRounded l'.vault.numericType b'.coverAvailable = true :=
   let ⟨l, l', b, b', hr, h, hb, hb', h0, h1, _⟩ := LendingLedger.cover_rounded_reachable

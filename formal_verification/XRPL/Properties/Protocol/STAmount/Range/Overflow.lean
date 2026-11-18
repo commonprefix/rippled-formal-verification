@@ -69,8 +69,10 @@ theorem STAmount.operator_sub_overflow_mpt (v1 v2 : STAmount) (mode : rounding_m
 error, where C++ returns the wrapped value `-(2^63 - 1)`. -/
 theorem STAmount.operator_add_overflow_mpt_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧ v2.mNumericType = NumericType.int64 ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.int64 ∧
+      v2.mNumericType = NumericType.int64 ∧
       ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat + v2.toRat) ∧
       STAmount.operator_add v1 v2 mode = .error .wrap :=
   ⟨⟨NumericType.int64, 9223372036854775807, 0, false⟩, ⟨NumericType.int64, 2, 0, false⟩, .to_nearest,
@@ -80,8 +82,10 @@ theorem STAmount.operator_add_overflow_mpt_attained :
 /-- An MPT difference above `2^63 - 1` whose int64 addition wraps around: `(2^63 - 1) - (-2)`. -/
 theorem STAmount.operator_sub_overflow_mpt_attained :
     ∃ (v1 v2 : STAmount) (mode : rounding_mode),
-      v1.IntegralCanonical ∧ v2.IntegralCanonical ∧
-      v1.mNumericType = NumericType.int64 ∧ v2.mNumericType = NumericType.int64 ∧
+      v1.IntegralCanonical ∧
+      v2.IntegralCanonical ∧
+      v1.mNumericType = NumericType.int64 ∧
+      v2.mNumericType = NumericType.int64 ∧
       ¬ STAmount.RoundsInRange NumericType.int64 mode (v1.toRat - v2.toRat) ∧
       STAmount.operator_sub v1 v2 mode = .error .wrap :=
   ⟨⟨NumericType.int64, 9223372036854775807, 0, false⟩, ⟨NumericType.int64, 2, 0, true⟩, .to_nearest,

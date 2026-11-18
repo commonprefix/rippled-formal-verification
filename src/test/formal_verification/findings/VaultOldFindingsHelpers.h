@@ -64,10 +64,8 @@ checkDeposit(
     return cpp.ter;
 }
 
-// A withdrawal (by assets, or by shares when `amount` is in shares) from a staged vault whose
-// pseudo-account holds the available assets and whose holder holds `holderShares` (all shares
-// when unset). Both sides must agree, also on the payout: what left the vault (an early-exit fee
-// stays behind), equal to `expectedPayout` when given.
+// A withdrawal by assets, or by shares when `amount` is in shares, from a staged vault. Both
+// sides must agree, also on the payout, which equals `expectedPayout` when given.
 inline AppliedVaultTx
 checkWithdraw(
     beast::unit_test::Suite& suite,

@@ -22,7 +22,9 @@ theorem STAmount.checked_integral_within_one (nt : NumericType) (m : UInt64) (e 
 /-- A mantissa above the largest int64 that ends 8 away: MPT `2^63` becomes `2^63 - 8`. -/
 theorem STAmount.checked_integral_within_one_attained :
     ∃ (nt : NumericType) (m : UInt64) (e : Int) (neg : Bool) (mode : rounding_mode) (result : STAmount),
-      nt.isIntegral = true ∧ -20 < e ∧ STAmount.checked nt m e neg mode = .ok result ∧
+      nt.isIntegral = true ∧
+      -20 < e ∧
+      STAmount.checked nt m e neg mode = .ok result ∧
       1 ≤ |result.toRat - (STAmount.unchecked nt m e neg).toRat| :=
   ⟨NumericType.int64, 9223372036854775808, 0, false, .to_nearest,
     ⟨NumericType.int64, 9223372036854775800, 0, false⟩, rfl, by decide,
@@ -40,7 +42,8 @@ theorem STAmount.checked_integral_upward (nt : NumericType) (m : UInt64) (e : In
 /-- An exponent of -20 where `upward` gives an amount below the value: XRP `10 * 10^-20` becomes 0. -/
 theorem STAmount.checked_integral_upward_attained :
     ∃ (nt : NumericType) (m : UInt64) (e : Int) (neg : Bool) (result : STAmount),
-      nt.isIntegral = true ∧ m ≤ maxRep ∧
+      nt.isIntegral = true ∧
+      m ≤ maxRep ∧
       STAmount.checked nt m e neg .upward = .ok result ∧
       result.toRat < (STAmount.unchecked nt m e neg).toRat :=
   ⟨NumericType.native, 10, -20, false, ⟨NumericType.native, 0, 0, false⟩, rfl, by decide,

@@ -1,7 +1,8 @@
 import XRPL.Properties.Lending.Ledger.Common.SettledVault
 import XRPL.Properties.Lending.Ledger.Common.AssetsTotalExponent
 import XRPL.Properties.Lending.Loan.Common.RoundTotal
-import XRPL.Properties.Lending.Loan.Common.ManageRoundToExponent
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.AnyResult
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 import XRPL.Properties.Vault.Proofs.WithdrawFee
 import XRPL.Properties.Vault.Proofs.PerShareValue
 import XRPL.Properties.Vault.Proofs.Support.ExactCash

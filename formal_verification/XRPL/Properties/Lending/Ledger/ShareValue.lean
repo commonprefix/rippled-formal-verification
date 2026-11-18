@@ -42,7 +42,9 @@ credited as 1. -/
 theorem Lending.payment_share_value_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan : Loan)
       (payment : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment) ∧
       l'.vault.toRawVault.shareValue < l.vault.toRawVault.shareValue :=
   LendingLedger.payment_share_value_falls_reachable
@@ -61,8 +63,11 @@ theorem Lending.Reachable.payoff_returns_principal (hr : l.Reachable) (i : Nat) 
 instalments of 1.5, of which the vault receives 1 each. -/
 theorem Lending.Reachable.payoff_returns_principal_attained :
     ∃ (l : LendingLedger) (i : Nat) (loan : Loan) (l' : LendingLedger) (paid : ℚ),
-      l.Reachable ∧ l.LoanAt i loan ∧ l.PaysLoan i (fun _ _ _ => True) l' paid ∧
-      (∃ e, l'.loan? i = some e ∧ e.loan.paymentRemaining = 0) ∧ paid < loan.principalOutstanding.toRat :=
+      l.Reachable ∧
+      l.LoanAt i loan ∧
+      l.PaysLoan i (fun _ _ _ => True) l' paid ∧
+      (∃ e, l'.loan? i = some e ∧ e.loan.paymentRemaining = 0) ∧
+      paid < loan.principalOutstanding.toRat :=
   LendingLedger.payoff_short_run_reachable
 
 /-- Default with min(liquidationAmount, CoverAvailable) ≥ PrincipalOutstanding -> defaultCovered = PrincipalOutstanding
@@ -82,9 +87,10 @@ theorem Lending.default_fully_covered (hr : l.Reachable) (i : Nat) (loan : Loan)
 /-- Witness: a run where AssetsTotal' < AssetsTotal. On the coarsened vault AssetsAvailable is `999999999999999.9`,
 loan B of 1 is covered in full, yet the cover pays only `0.1` and AssetsTotal drops by `0.9`. -/
 theorem Lending.default_fully_covered_attained :
-    ∃ (l : LendingLedger) (i : Nat) (loan : Loan) (minimumCover liquidationAmount : Number)
-      (r : LoanWithAmounts Vault),
-      l.Reachable ∧ l.LoanAt i loan ∧ (loan.manageDefault l.vault).run = .ok (.ok r) ∧
+    ∃ (l : LendingLedger) (i : Nat) (loan : Loan) (minimumCover liquidationAmount : Number) (r : LoanWithAmounts Vault),
+      l.Reachable ∧
+      l.LoanAt i loan ∧
+      (loan.manageDefault l.vault).run = .ok (.ok r) ∧
       tenthBipsOfValue loan.broker.debtTotal loan.broker.coverRateMinimum .upward = .ok minimumCover ∧
       tenthBipsOfValue minimumCover loan.broker.coverRateLiquidation .upward = .ok liquidationAmount ∧
       loan.principalOutstanding.toRat ≤ min liquidationAmount.toRat loan.broker.coverAvailable.toRat ∧
@@ -119,17 +125,27 @@ theorem Lending.Reachable.no_dilution (start l : LendingLedger) (txs : List Lend
 /-- Witness: a sequence where a VaultWithdraw price rounded to nearest lowers shareValue. One share of 2, worth
 `1.5`, is redeemed for `2`, and shareValue falls from `1.5` to `1`. -/
 theorem Lending.Reachable.no_dilution_withdraw_attained :
-    ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
-      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.NotCoarsenedAlong txs ∧
-      start.SharesFitAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
+    ∃ (start l : LendingLedger) (txs : List LendingTx),
+      start.Reachable ∧
+      LendingLedger.Reaches start txs l ∧
+      start.KeepsShareValueAlong txs ∧
+      start.SharesLeftAlong txs ∧
+      start.NotCoarsenedAlong txs ∧
+      start.SharesFitAlong txs ∧
+      l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
   LendingLedger.no_dilution_withdraw_witness
 
 /-- Witness: a sequence where a payment on a coarsened vault lowers shareValue. An instalment of `1.5` without
 interest is credited as `1`. -/
 theorem Lending.Reachable.no_dilution_coarsened_attained :
-    ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
-      start.KeepsShareValueAlong txs ∧ start.SharesLeftAlong txs ∧ start.SharesFitAlong txs ∧
-      start.WholeWorthAlong txs ∧ l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
+    ∃ (start l : LendingLedger) (txs : List LendingTx),
+      start.Reachable ∧
+      LendingLedger.Reaches start txs l ∧
+      start.KeepsShareValueAlong txs ∧
+      start.SharesLeftAlong txs ∧
+      start.SharesFitAlong txs ∧
+      start.WholeWorthAlong txs ∧
+      l.vault.toRawVault.shareValue < start.vault.toRawVault.shareValue :=
   LendingLedger.no_dilution_coarsened_witness
 
 end XRPL.Model

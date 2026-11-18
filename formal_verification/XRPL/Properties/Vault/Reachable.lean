@@ -35,15 +35,15 @@ theorem Vault.Reachable.vault_fields (v : Vault) (t : UInt32) (hr : Vault.Reacha
 exactly its payout and burned shares. A deposit never decreases the cash, withdrawal and clawback never increase it. -/
 theorem Vault.vault_updates_exact (v : Vault) (t0 : UInt32) (hr : Vault.Reachable v t0) :
     (∀ (amount : STAmount) (isDonation : Bool) (t : UInt32) (hpos : 0 < amount.toRat),
-      amount.Canonical → -- a transaction amount is a canonical amount
-      amount.mNumericType = v.numericType → -- of the vault's asset
+      amount.Canonical →
+      amount.mNumericType = v.numericType →
       ∀ r : VaultWithAmounts, (v.deposit amount isDonation t hpos).run = .ok (.ok r) →
         r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat + r.assets.toRat ∧
           (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal + r.shares.toRat ∧
           v.assetsAvailable.toRat ≤ r.vault'.assetsAvailable.toRat) ∧
     (∀ (amount : WithdrawAmount) (waive : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
-      amount.amount.Canonical → -- a transaction amount is a canonical amount
-      amount.InAsset v.numericType → -- of the vault's asset or of its shares
+      amount.amount.Canonical →
+      amount.InAsset v.numericType →
       ∀ r : VaultWithAmounts, (v.withdraw amount waive t hpos).run = .ok (.ok r) →
         r.vault'.assetsAvailable.toRat = v.assetsAvailable.toRat - r.assets.toRat ∧
           (r.vault'.toExact.sharesTotal : ℚ) = v.toExact.sharesTotal - r.shares.toRat ∧

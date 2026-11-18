@@ -20,8 +20,11 @@ theorem STAmount.operator_sub_nearest_iou (v1 v2 result : STAmount) (h1 : v1.IOU
 /-- A difference rounded twice that ends more than half a unit away: `1000000000000001 - 0.4996` gives
 `1000000000000000`. -/
 theorem STAmount.operator_sub_nearest_iou_attained :
-    ∃ v1 v2 result : STAmount, v1.IOUCanonical ∧ v2.IOUCanonical ∧
-      STAmount.operator_sub v1 v2 .to_nearest = .ok result ∧ result.mValue ≠ 0 ∧
+    ∃ v1 v2 result : STAmount,
+      v1.IOUCanonical ∧
+      v2.IOUCanonical ∧
+      STAmount.operator_sub v1 v2 .to_nearest = .ok result ∧
+      result.mValue ≠ 0 ∧
       (10 : ℚ) ^ result.mOffset / 2 < |result.toRat - (v1.toRat - v2.toRat)| :=
   ⟨⟨.fractional, 1000000000000001, 0, false⟩, ⟨.fractional, 4996000000000000, -16, false⟩,
     ⟨.fractional, 1000000000000000, 0, false⟩, STAmount.add_nearest_witness_canonical_left,

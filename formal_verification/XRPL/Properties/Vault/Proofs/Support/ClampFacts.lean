@@ -62,16 +62,6 @@ lemma clampToSumExponent_integral_nonneg (amount : Number) (a c : STAmount) (exp
       linarith
     simp [STAmount.negative, hsgn]
 
-/-- On an integral delta the clamp returns the delta's magnitude, so it changes
-nothing but the sign bit: type, offset and mantissa all carry through. -/
-lemma clampToSumExponent_integral_fields (amount : Number) (s r : STAmount) (exponent : Int)
-    (hint : s.integral = true)
-    (hok : clampToSumExponent amount s exponent = .ok r) :
-    r.mNumericType = s.mNumericType ∧ r.mOffset = s.mOffset ∧ r.mValue = s.mValue := by
-  rw [clampToSumExponent_integral amount s exponent hint] at hok
-  rw [← Except.ok.inj hok]
-  exact ⟨(clamp_magnitude s).1, (clamp_magnitude s).2.1, (clamp_magnitude s).2.2.1⟩
-
 /-- Rounding a nonnegative canonical amount down onto a grid keeps it nonnegative. -/
 lemma STAmount.roundToExponent_downward_nonneg (value result : STAmount) (s : ℤ)
     (hc : value.IOUCanonical) (hs_lo : (-96 : ℤ) ≤ s) (hs_hi : s ≤ 80)

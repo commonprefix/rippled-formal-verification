@@ -50,7 +50,6 @@ theorem Lending.Reachable.accounting (start l : LendingLedger) (txs : List Lendi
         b'.coverAvailable.toRat = b.coverAvailable.toRat + start.coverDeposits j txs - start.coverWithdrawals j txs -
           start.coverClawbacks j txs + start.feesToCover j txs - start.brokerDefaultCovered j txs) ∧
       (b'.loanCount.toNat : ℚ) = b.loanCount.toNat + start.newLoans j txs - start.deletedLoans j txs) ∧
-    -- a loan present before and after the sequence
     (∀ (i : Nat) (loan loan' : Loan), start.LoanAt i loan → l.LoanAt i loan' →
       loan'.principalOutstanding.toRat =
           loan.principalOutstanding.toRat - start.loanPrincipalPaid i txs - start.defaultPrincipal i txs ∧
@@ -65,7 +64,8 @@ theorem Lending.Reachable.accounting (start l : LendingLedger) (txs : List Lendi
 /-- Witness: a sequence where AssetsTotal' differs from the sums. On a coarsened vault a late instalment of 1.5
 without interest is credited as 1, so AssetsTotal ends 0.5 below. -/
 theorem Lending.Reachable.accounting_assetsTotal_attained :
-    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger), start.Reachable ∧
+    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger),
+      start.Reachable ∧
       LendingLedger.Reaches start txs l ∧
       l.vault.toRawVault.toExact.assetsTotal ≠ start.vault.toRawVault.toExact.assetsTotal + start.deposits txs -
         start.withdrawals txs - start.clawbacks txs + start.interestPaid txs - start.defaulted txs +
@@ -75,39 +75,46 @@ theorem Lending.Reachable.accounting_assetsTotal_attained :
 /-- Witness: a sequence where AssetsAvailable' differs from the sums. On a coarsened vault a LoanDelete of a pending
 loan of 0.6 credits 1, so AssetsAvailable ends 0.4 above. -/
 theorem Lending.Reachable.accounting_assetsAvailable_attained :
-    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger), start.Reachable ∧
+    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger),
+      start.Reachable ∧
       LendingLedger.Reaches start txs l ∧
       l.vault.assetsAvailable.toRat ≠ start.vault.assetsAvailable.toRat + start.deposits txs - start.withdrawals txs -
-        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs +
-        start.deletedPending txs :=
+        start.clawbacks txs - start.lent txs + start.amountToPool txs + start.defaultCovered txs + start.deletedPending
+        txs :=
   LendingLedger.accounting_assetsAvailable_witness
 
 /-- Witness: a sequence where CoverAvailable' differs from the sums. A default covering 1.0000000001 from a cover of
 1000000000001 at the scale 10^-10 leaves 10^12. -/
 theorem Lending.Reachable.accounting_coverAvailable_attained :
-    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger), start.Reachable ∧
-      LendingLedger.Reaches start txs l ∧ ∃ (j : Nat) (b b' : LoanBroker), start.broker? j = some b ∧
+    ∃ (start : LendingLedger) (txs : List LendingTx) (l : LendingLedger),
+      start.Reachable ∧
+      LendingLedger.Reaches start txs l ∧
+      ∃ (j : Nat) (b b' : LoanBroker),
+        start.broker? j = some b ∧
         l.broker? j = some b' ∧
-        b'.coverAvailable.toRat ≠ b.coverAvailable.toRat + start.coverDeposits j txs -
-          start.coverWithdrawals j txs - start.coverClawbacks j txs + start.feesToCover j txs -
-          start.brokerDefaultCovered j txs :=
+        b'.coverAvailable.toRat ≠ b.coverAvailable.toRat + start.coverDeposits j txs - start.coverWithdrawals j txs -
+          start.coverClawbacks j txs + start.feesToCover j txs - start.brokerDefaultCovered j txs :=
   LendingLedger.accounting_coverAvailable_witness
 
 /-- Witness: runs past both sides. A coarsened pending delete and a withdrawal leave AssetsTotal' 4 ULP above
 exactTotal, and a late payment that moves the scale from 10^-1 to 10^1 leaves it 1.99 ULP below. -/
 theorem Lending.Reachable.assetsTotal_bounds_attained :
     (∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧ LendingLedger.Reaches start txs l ∧
-      0 < l.vault.toRawVault.toExact.assetsTotal - (start.vault.toRawVault.toExact.assetsTotal +
-        start.deposits txs - start.withdrawals txs - start.clawbacks txs + start.interestPaid txs -
-        start.defaulted txs + start.defaultCovered txs)) ∧
+      0 < l.vault.toRawVault.toExact.assetsTotal - (start.vault.toRawVault.toExact.assetsTotal + start.deposits txs -
+      start.withdrawals txs - start.clawbacks txs + start.interestPaid txs - start.defaulted txs + start.defaultCovered
+      txs)) ∧
     ∃ (start l : LendingLedger) (txs : List LendingTx) (total₀ total : Number) (e₀ e : Int),
-      start.Reachable ∧ LendingLedger.Reaches start txs l ∧ txs.length = 1 ∧
-      start.vault.assetsTotal = .ok total₀ ∧ l.vault.assetsTotal = .ok total ∧
+      start.Reachable ∧
+      LendingLedger.Reaches start txs l ∧
+      txs.length = 1 ∧
+      start.vault.assetsTotal = .ok total₀ ∧
+      l.vault.assetsTotal = .ok total ∧
       numberExponent total₀ start.vault.baseExponent start.vault.numericType = .ok e₀ ∧
-      numberExponent total l.vault.baseExponent l.vault.numericType = .ok e ∧ e₀ < e ∧
+      numberExponent total l.vault.baseExponent l.vault.numericType = .ok e ∧
+      e₀ < e ∧
       start.vault.toRawVault.toExact.assetsTotal + start.deposits txs - start.withdrawals txs - start.clawbacks txs +
-        start.interestPaid txs - start.defaulted txs + start.defaultCovered txs -
-        l.vault.toRawVault.toExact.assetsTotal = (199 / 100 : ℚ) * 10 ^ e := by
+        start.interestPaid txs - start.defaulted txs + start.defaultCovered txs - l.vault.toRawVault.toExact.assetsTotal
+        = (199 / 100 : ℚ) * 10 ^ e := by
   refine ⟨?_, ?_⟩
   · obtain ⟨start, l, txs, _, _, _, hr, hrun, _, _, _, h⟩ := LendingLedger.assetsTotal_upper_bound_witness
     have hreach := hrun.reaches_sum.1
@@ -142,8 +149,10 @@ theorem Lending.Reachable.no_loss_without_default (start l : LendingLedger) (txs
 /-- Witness: a run where a payment lowers AssetsTotal. On a coarsened vault an instalment of 1.5 without
 interest is credited as 1. -/
 theorem Lending.Reachable.no_loss_without_default_attained :
-    ∃ (start l : LendingLedger) (txs : List LendingTx), start.Reachable ∧
-      LendingLedger.Reaches start txs l ∧ (∀ tx ∈ txs, tx.isOutflow = false) ∧
+    ∃ (start l : LendingLedger) (txs : List LendingTx),
+      start.Reachable ∧
+      LendingLedger.Reaches start txs l ∧
+      (∀ tx ∈ txs, tx.isOutflow = false) ∧
       ¬ start.vault.toRawVault.toExact.assetsTotal ≤ l.vault.toRawVault.toExact.assetsTotal :=
   let ⟨l, l', hr, hok, hlt⟩ := LendingLedger.payment_lowers_assetsTotal_reachable
   ⟨l, l', [.loanPay 3 .late ⟨false, 1500000000000000000, -18⟩], hr, .step _ .refl hok,

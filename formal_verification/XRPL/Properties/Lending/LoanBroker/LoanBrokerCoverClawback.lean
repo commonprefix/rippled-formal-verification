@@ -39,7 +39,9 @@ A LoanPay fee takes the cover to `2000001` at the scale `10^-10`, and a full cla
 theorem LoanBroker.roundedCoverClawback_all_attained :
     ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount) (res : LoanBrokerCoverResult)
       (minimumCover : Number),
-      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
+      l.Reachable ∧
+      l.broker? j = some lb ∧
+      l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
       (amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) ∧
@@ -82,12 +84,15 @@ to `2000001` at the scale `10^-10`, and a clawback of `2000000` claws `1999500.9
 theorem LoanBroker.roundedCoverClawback_capped_attained :
     ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (minimumCover : Number) (a : STAmount)
       (res : LoanBrokerCoverResult),
-      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
+      l.Reachable ∧
+      l.broker? j = some lb ∧
+      l.vault.numericType = lb.numericType ∧
       minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
-      (a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧ a.isZero = false ∧
+      (a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
+      a.isZero = false ∧
       (lb.coverClawback l.vault (some a)).run = .ok (.ok res) ∧
-      (⌊min a.toRat (lb.toExact.coverAvailable - minimumCover.toRat) / 10 ^ l.vault.baseExponent⌋ : ℚ) *
-        10 ^ l.vault.baseExponent < res.amount'.toRat :=
+      (⌊min a.toRat (lb.toExact.coverAvailable - minimumCover.toRat) / 10 ^ l.vault.baseExponent⌋ : ℚ) * 10 ^
+        l.vault.baseExponent < res.amount'.toRat :=
   LoanBroker.roundedCoverClawback_capped_witness
 
 /-- Cover clawback -> CoverAvailable drops by exactly clawAmount, at most the amount when it is ≠ 0, and the drop

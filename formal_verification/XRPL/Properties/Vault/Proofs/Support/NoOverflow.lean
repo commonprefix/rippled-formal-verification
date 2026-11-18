@@ -133,11 +133,6 @@ lemma Number.normalized_ne_overflow (negative : Bool) (mantissa : UInt64) (expon
     Number.normalized negative mantissa exponent minMant maxMant mode ≠ .error err :=
   Number.normalize_ne_overflow _ _ _ _ hov hexp
 
-lemma Number.from_rep_ne_overflow (mantissa : Int64) (exponent : Int) (minMant maxMant : UInt64)
-    (mode : rounding_mode) {err : Error} (hov : isOverflow err = true) (hexp : exponent + 22 ≤ maxExponent) :
-    Number.from_rep mantissa exponent minMant maxMant mode ≠ .error err :=
-  Number.normalized_ne_overflow _ _ _ _ _ _ hov hexp
-
 /-- Truncating a nonpositive exponent stops at exponent `0` at the latest. -/
 lemma Number.truncateAux_exp_le (m : UInt64) (e : Int) (he : e ≤ 0) : (Number.truncateAux m e).2 ≤ 0 := by
   induction m, e using Number.truncateAux.induct with

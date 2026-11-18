@@ -212,7 +212,7 @@ lemma STAmount.roundToNumericType_frac_nonpos (x T : Number) (mode : rounding_mo
       have hrint : r.integral = false := by unfold STAmount.integral; rw [hrc.1]; rfl
       have hr0 : r.toRat ≤ 0 := by
         rcases hfc.2 with hstc | hstz
-        · have hR := STAmount.roundToExponent_rounded_of_scale st r s mode hstc hs.1 hs.2 hr
+        · have hR := STAmount.roundToExponent_rounded_any_proof st r s mode hstc hs.1 hs.2 hr
           have hq : st.toRat / 10 ^ s ≤ 0 := div_nonpos_of_nonpos_of_nonneg hst0 hp.le
           have hf : (⌊st.toRat / 10 ^ s⌋ : ℚ) ≤ 0 := by exact_mod_cast Int.floor_nonpos hq
           have hc : (⌈st.toRat / 10 ^ s⌉ : ℚ) ≤ 0 := by exact_mod_cast Int.ceil_le.mpr (by simpa using hq)
@@ -270,7 +270,7 @@ lemma STAmount.roundToNumericType_frac_upward_ge (x T : Number) (s : ℤ) (hx : 
       rcases hfc.2 with hstc | hstz
       · have hst : st.mValue ≠ 0 := by intro h; have := hstc.mant_lo; rw [h] at this; simp at this
         obtain ⟨-, -, -, hup, -⟩ := STAmount.ofNumber_frac_stage x .upward st hx h0 (Or.inr (Or.inl rfl)) hof hst
-        have hR := STAmount.roundToExponent_rounded_of_scale st r s .upward hstc hs.1 hs.2 hr
+        have hR := STAmount.roundToExponent_rounded_any_proof st r s .upward hstc hs.1 hs.2 hr
         unfold RoundsToRepresentableAt at hR
         have hce : st.toRat / 10 ^ s ≤ (⌈st.toRat / 10 ^ s⌉ : ℚ) := Int.le_ceil _
         have : st.toRat ≤ r.toRat := by
@@ -386,7 +386,7 @@ lemma STAmount.roundToNumericType_frac_downward_le (x T : Number) (s : ℤ) (hx 
       · have hst : st.mValue ≠ 0 := by intro h; have := hstc.mant_lo; rw [h] at this; simp at this
         obtain ⟨-, -, -, -, hdown⟩ :=
           STAmount.ofNumber_frac_stage x .downward st hx h0 (Or.inr (Or.inr rfl)) hof hst
-        have hR := STAmount.roundToExponent_rounded_of_scale st r s .downward hstc hs.1 hs.2 hr
+        have hR := STAmount.roundToExponent_rounded_any_proof st r s .downward hstc hs.1 hs.2 hr
         unfold RoundsToRepresentableAt at hR
         have hfl : (⌊st.toRat / 10 ^ s⌋ : ℚ) ≤ st.toRat / 10 ^ s := Int.floor_le _
         have : r.toRat ≤ st.toRat := by

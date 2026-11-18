@@ -67,8 +67,11 @@ theorem LoanBroker.canCoverDeposit_error_codes (pool : α) (amount : STAmount) (
 of `10^17` drops ends in an error, not a result code. CoverAvailable + amount is above the largest XRP amount. -/
 theorem LoanBroker.canCoverDeposit_error_codes_attained :
     ∃ (lb : LoanBroker) (v : SingleAssetVault.Vault) (amount : STAmount),
-      lb.Reachable v.baseExponent ∧ v.numericType = lb.numericType ∧ amount.Canonical ∧
-      amount.mNumericType = lb.numericType ∧ 0 < amount.toRat ∧
+      lb.Reachable v.baseExponent ∧
+      v.numericType = lb.numericType ∧
+      amount.Canonical ∧
+      amount.mNumericType = lb.numericType ∧
+      0 < amount.toRat ∧
       lb.canCoverDeposit v amount = .error .outOfRange :=
   LoanBroker.canCoverDeposit_out_of_range_witness
 

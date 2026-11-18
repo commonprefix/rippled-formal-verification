@@ -21,14 +21,14 @@ give CoverAvailable' ≤ CoverAvailable. -/
 theorem LoanBroker.cover_direction (lb : LoanBroker) :
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount) (res : LoanBrokerCoverResult),
       (lb.coverDeposit pool amount).run = .ok (.ok res) →
-      amount.Canonical → -- a transaction amount is a canonical amount
+      amount.Canonical →
       0 ≤ amount.toRat →
       -- the vault's base exponent is in the IOU exponent range
       (-96 : ℤ) ≤ AssetPool.baseExponent pool ∧ AssetPool.baseExponent pool ≤ 80 →
       lb.toExact.coverAvailable ≤ res.loanBroker'.toExact.coverAvailable) ∧
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount) (res : LoanBrokerCoverResult),
       (lb.coverWithdraw pool amount).run = .ok (.ok res) →
-      amount.Canonical → -- a transaction amount is a canonical amount
+      amount.Canonical →
       -- the vault's base exponent is in the IOU exponent range
       (-96 : ℤ) ≤ AssetPool.baseExponent pool ∧ AssetPool.baseExponent pool ≤ 80 →
       res.loanBroker'.toExact.coverAvailable ≤ lb.toExact.coverAvailable) ∧
@@ -48,7 +48,7 @@ after a withdrawal, and after a clawback. -/
 theorem LoanBroker.cover_keeps_minimum (lb : LoanBroker) :
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount) (res : LoanBrokerCoverResult),
       (lb.coverDeposit pool amount).run = .ok (.ok res) →
-      amount.Canonical → -- a transaction amount is a canonical amount
+      amount.Canonical →
       0 ≤ amount.toRat →
       -- the vault's base exponent is in the IOU exponent range
       (-96 : ℤ) ≤ AssetPool.baseExponent pool ∧ AssetPool.baseExponent pool ≤ 80 →
@@ -77,7 +77,9 @@ cover to `2000001` at the scale `10^-10`, and a full clawback leaves `500.1`, be
 theorem LoanBroker.cover_keeps_minimum_clawback_attained :
     ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount) (res : LoanBrokerCoverResult)
       (minimumCover : Number),
-      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
+      l.Reachable ∧
+      l.broker? j = some lb ∧
+      l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
       minimumBrokerCover lb.numericType lb.debtTotal lb.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
@@ -89,7 +91,7 @@ theorem LoanBroker.cover_keeps_minimum_clawback_attained :
 roundedAmount, clawback with clawAmount. -/
 theorem LoanBroker.cover_total (lb : LoanBroker) :
     (∀ {α : Type} [AssetPool α] (pool : α) (amount : STAmount),
-      amount.Canonical → -- a transaction amount is a canonical amount
+      amount.Canonical →
       0 ≤ amount.toRat →
       -- the vault's base exponent is in the IOU exponent range
       (-96 : ℤ) ≤ AssetPool.baseExponent pool ∧ AssetPool.baseExponent pool ≤ 80 →
@@ -116,7 +118,9 @@ theorem LoanBroker.cover_total (lb : LoanBroker) :
 a cover of `1999999.9999999999`, and a full clawback rounds the claw up to `2000000`, above the cover. -/
 theorem LoanBroker.cover_total_clawback_attained :
     ∃ (l : LendingLedger) (j : Nat) (lb : LoanBroker) (amount : Option STAmount),
-      l.Reachable ∧ l.broker? j = some lb ∧ l.vault.numericType = lb.numericType ∧
+      l.Reachable ∧
+      l.broker? j = some lb ∧
+      l.vault.numericType = lb.numericType ∧
       (lb.numericType.isIntegral = true → lb.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (∀ a ∈ amount, a.CanonicalOrZero ∧ a.mNumericType = lb.numericType ∧ 0 ≤ a.toRat) ∧
       lb.canCoverClawback l.vault amount = .ok .tesSUCCESS ∧
@@ -301,20 +305,28 @@ theorem LoanBroker.cover_split (lb : LoanBroker) (base : Int) (hr : lb.Reachable
 the two is credited one base unit, the single deposit all three. -/
 theorem LoanBroker.cover_split_deposit_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
-      lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
-      a.Canonical ∧ b.Canonical ∧ c.Canonical ∧
-      a.mNumericType = lb.numericType ∧ b.mNumericType = lb.numericType ∧ c.mNumericType = lb.numericType ∧
-      0 < a.toRat ∧ 0 < b.toRat ∧ c.toRat = a.toRat + b.toRat ∧
-      (lb.numericType.isIntegral = true →
-        lb.toExact.coverAvailable + a.toRat ≤ lb.numericType.maxValue.toNat) ∧
-      lb.canCoverDeposit v a = .ok .tesSUCCESS ∧ (lb.coverDeposit v a).run = .ok (.ok r1) ∧
-      (lb.numericType.isIntegral = true →
-        r1.loanBroker'.toExact.coverAvailable + b.toRat ≤ lb.numericType.maxValue.toNat) ∧
+      lb.Reachable base ∧
+      v.baseExponent = base ∧
+      v.numericType = lb.numericType ∧
+      a.Canonical ∧
+      b.Canonical ∧
+      c.Canonical ∧
+      a.mNumericType = lb.numericType ∧
+      b.mNumericType = lb.numericType ∧
+      c.mNumericType = lb.numericType ∧
+      0 < a.toRat ∧
+      0 < b.toRat ∧
+      c.toRat = a.toRat + b.toRat ∧
+      (lb.numericType.isIntegral = true → lb.toExact.coverAvailable + a.toRat ≤ lb.numericType.maxValue.toNat) ∧
+      lb.canCoverDeposit v a = .ok .tesSUCCESS ∧
+      (lb.coverDeposit v a).run = .ok (.ok r1) ∧
+      (lb.numericType.isIntegral = true → r1.loanBroker'.toExact.coverAvailable + b.toRat ≤
+        lb.numericType.maxValue.toNat) ∧
       r1.loanBroker'.canCoverDeposit v b = .ok .tesSUCCESS ∧
       (r1.loanBroker'.coverDeposit v b).run = .ok (.ok r2) ∧
-      (lb.numericType.isIntegral = true →
-        lb.toExact.coverAvailable + c.toRat ≤ lb.numericType.maxValue.toNat) ∧
-      lb.canCoverDeposit v c = .ok .tesSUCCESS ∧ (lb.coverDeposit v c).run = .ok (.ok s) ∧
+      (lb.numericType.isIntegral = true → lb.toExact.coverAvailable + c.toRat ≤ lb.numericType.maxValue.toNat) ∧
+      lb.canCoverDeposit v c = .ok .tesSUCCESS ∧
+      (lb.coverDeposit v c).run = .ok (.ok s) ∧
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverDeposit_split_witness
 
@@ -322,14 +334,24 @@ theorem LoanBroker.cover_split_deposit_attained :
 of the two pays out one base unit, the single withdrawal all three. -/
 theorem LoanBroker.cover_split_withdraw_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
-      lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
-      a.Canonical ∧ b.Canonical ∧ c.Canonical ∧
-      a.mNumericType = lb.numericType ∧ b.mNumericType = lb.numericType ∧ c.mNumericType = lb.numericType ∧
-      0 < a.toRat ∧ 0 < b.toRat ∧ c.toRat = a.toRat + b.toRat ∧
-      lb.canCoverWithdraw v a = .ok .tesSUCCESS ∧ (lb.coverWithdraw v a).run = .ok (.ok r1) ∧
+      lb.Reachable base ∧
+      v.baseExponent = base ∧
+      v.numericType = lb.numericType ∧
+      a.Canonical ∧
+      b.Canonical ∧
+      c.Canonical ∧
+      a.mNumericType = lb.numericType ∧
+      b.mNumericType = lb.numericType ∧
+      c.mNumericType = lb.numericType ∧
+      0 < a.toRat ∧
+      0 < b.toRat ∧
+      c.toRat = a.toRat + b.toRat ∧
+      lb.canCoverWithdraw v a = .ok .tesSUCCESS ∧
+      (lb.coverWithdraw v a).run = .ok (.ok r1) ∧
       r1.loanBroker'.canCoverWithdraw v b = .ok .tesSUCCESS ∧
       (r1.loanBroker'.coverWithdraw v b).run = .ok (.ok r2) ∧
-      lb.canCoverWithdraw v c = .ok .tesSUCCESS ∧ (lb.coverWithdraw v c).run = .ok (.ok s) ∧
+      lb.canCoverWithdraw v c = .ok .tesSUCCESS ∧
+      (lb.coverWithdraw v c).run = .ok (.ok s) ∧
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverWithdraw_split_witness
 
@@ -337,14 +359,24 @@ theorem LoanBroker.cover_split_withdraw_attained :
 of the two takes one base unit, the single clawback all three. -/
 theorem LoanBroker.cover_split_clawback_attained :
     ∃ (lb : LoanBroker) (base : Int) (v : Vault) (a b c : STAmount) (r1 r2 s : LoanBrokerCoverResult),
-      lb.Reachable base ∧ v.baseExponent = base ∧ v.numericType = lb.numericType ∧
-      a.Canonical ∧ b.Canonical ∧ c.Canonical ∧
-      a.mNumericType = lb.numericType ∧ b.mNumericType = lb.numericType ∧ c.mNumericType = lb.numericType ∧
-      0 < a.toRat ∧ 0 < b.toRat ∧ c.toRat = a.toRat + b.toRat ∧
-      lb.canCoverClawback v (some a) = .ok .tesSUCCESS ∧ (lb.coverClawback v (some a)).run = .ok (.ok r1) ∧
+      lb.Reachable base ∧
+      v.baseExponent = base ∧
+      v.numericType = lb.numericType ∧
+      a.Canonical ∧
+      b.Canonical ∧
+      c.Canonical ∧
+      a.mNumericType = lb.numericType ∧
+      b.mNumericType = lb.numericType ∧
+      c.mNumericType = lb.numericType ∧
+      0 < a.toRat ∧
+      0 < b.toRat ∧
+      c.toRat = a.toRat + b.toRat ∧
+      lb.canCoverClawback v (some a) = .ok .tesSUCCESS ∧
+      (lb.coverClawback v (some a)).run = .ok (.ok r1) ∧
       r1.loanBroker'.canCoverClawback v (some b) = .ok .tesSUCCESS ∧
       (r1.loanBroker'.coverClawback v (some b)).run = .ok (.ok r2) ∧
-      lb.canCoverClawback v (some c) = .ok .tesSUCCESS ∧ (lb.coverClawback v (some c)).run = .ok (.ok s) ∧
+      lb.canCoverClawback v (some c) = .ok .tesSUCCESS ∧
+      (lb.coverClawback v (some c)).run = .ok (.ok s) ∧
       r2.loanBroker'.toExact.coverAvailable ≠ s.loanBroker'.toExact.coverAvailable :=
   LoanBroker.coverClawback_split_witness
 

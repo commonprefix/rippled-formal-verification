@@ -66,8 +66,10 @@ theorem Lending.vault_exits :
 largest XRP amount ends in an error, not `tecLIMIT_EXCEEDED`. -/
 theorem Lending.vault_exits_attained :
     ∃ (l : LendingLedger) (h : Nat) (amount : STAmount) (assetsTotal : Number),
-      l.Reachable ∧ (LendingTx.vaultDeposit h amount true).preflight l = .tesSUCCESS ∧
-      l.vault.assetsTotal = .ok assetsTotal ∧ (10 : ℚ) ^ 17 < assetsTotal.toRat + amount.toRat ∧
+      l.Reachable ∧
+      (LendingTx.vaultDeposit h amount true).preflight l = .tesSUCCESS ∧
+      l.vault.assetsTotal = .ok assetsTotal ∧
+      (10 : ℚ) ^ 17 < assetsTotal.toRat + amount.toRat ∧
       (l.apply (.vaultDeposit h amount true)).run = .error .outOfRange :=
   LendingLedger.vaultDonate_out_of_range_witness
 

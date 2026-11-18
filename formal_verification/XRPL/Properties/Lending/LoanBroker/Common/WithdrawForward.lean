@@ -86,7 +86,7 @@ lemma LoanBroker.canCoverWithdraw_of_units (lb : LoanBroker) (v : Vault) (amount
     have hround : STAmount.roundToExponent amount v.baseExponent .towards_zero = .ok amount := by
       obtain ⟨r, hr⟩ := STAmount.roundToExponent_ok_any amount v.baseExponent .towards_zero hiou
         (STAmount.mIsNegative_false_of_pos amount hpos) (by omega) (by omega)
-      have hrnd := STAmount.roundToExponent_rounded_of_scale amount r _ _ hiou (by omega) (by omega) hr
+      have hrnd := STAmount.roundToExponent_rounded_any_proof amount r _ _ hiou (by omega) (by omega) hr
       simp only [RoundsToRepresentableAt] at hrnd
       change r.toRat = _ at hrnd
       rw [if_pos hpos.le, hkv, mul_div_assoc, div_self hp.ne', mul_one] at hrnd

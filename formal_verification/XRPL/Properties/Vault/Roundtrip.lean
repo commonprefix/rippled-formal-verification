@@ -22,8 +22,8 @@ theorem Vault.deposit_withdraw_roundtrip (v : Vault) (amountDeposit : STAmount) 
     (t t0 : UInt32) (hpos : 0 < amountDeposit.toRat)
     (hr : Vault.Reachable v t0)
     (ht : t0 ≤ t) -- ledger close times never decrease
-    (hcanon : amountDeposit.Canonical) -- a transaction amount is a canonical amount
-    (hty : amountDeposit.mNumericType = v.numericType) -- of the vault's asset
+    (hcanon : amountDeposit.Canonical)
+    (hty : amountDeposit.mNumericType = v.numericType)
     (r₁ : VaultWithAmounts) (hok₁ : (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁))
     -- the depositor redeems exactly the issued shares from the updated vault, at the same close time
     (hpos₂ : 0 < (WithdrawAmount.vaultShares r₁.shares).amount.toRat) (r₂ : VaultWithAmounts)
@@ -40,7 +40,10 @@ theorem Vault.deposit_withdraw_roundtrip_loss_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (waiveUnrealizedLoss : Bool) (t t0 : UInt32)
       (hpos : 0 < amountDeposit.toRat) (r₁ : VaultWithAmounts)
       (hpos₂ : 0 < (WithdrawAmount.vaultShares r₁.shares).amount.toRat) (r₂ : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      amountDeposit.Canonical ∧
+      amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁) ∧
       (r₁.vault'.withdraw (.vaultShares r₁.shares) waiveUnrealizedLoss t hpos₂).run = .ok (.ok r₂) ∧
       r₁.assets.toRat - r₂.assets.toRat = (10 : ℚ) ^ v.baseExponent := by
@@ -55,10 +58,14 @@ theorem Vault.deposit_withdraw_roundtrip_gain_attained :
     ∃ (v : Vault) (amountDeposit : STAmount) (waiveUnrealizedLoss : Bool) (t t0 : UInt32)
       (hpos : 0 < amountDeposit.toRat) (r₁ : VaultWithAmounts)
       (hpos₂ : 0 < (WithdrawAmount.vaultShares r₁.shares).amount.toRat) (r₂ : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ amountDeposit.Canonical ∧ amountDeposit.mNumericType = v.numericType ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      amountDeposit.Canonical ∧
+      amountDeposit.mNumericType = v.numericType ∧
       (v.deposit amountDeposit false t hpos).run = .ok (.ok r₁) ∧
       (r₁.vault'.withdraw (.vaultShares r₁.shares) waiveUnrealizedLoss t hpos₂).run = .ok (.ok r₂) ∧
-      0 < (v.toExact.sharesTotal : ℚ) ∧ r₂.assets.toRat = r₁.assets.toRat := by
+      0 < (v.toExact.sharesTotal : ℚ) ∧
+      r₂.assets.toRat = r₁.assets.toRat := by
   obtain ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty, -,
     hok₁, -, hok₂, hS, heq⟩ := Vault.deposit_withdraw_roundtrip_gain_witness
   exact ⟨v, amountDeposit, waiveUnrealizedLoss, t, t0, hpos, r₁, hpos₂, r₂, hr, ht, hcanon, hty,

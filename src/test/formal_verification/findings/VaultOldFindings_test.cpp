@@ -66,9 +66,8 @@ lean_stamount_add(lean_object*, lean_object*, uint8_t);
 
 namespace xrpl::test::formal_verification {
 
-// The FV_M2 bugs found before fixed precision vaults (FV_M2_1 to FV_M2_19), vault cases with no
-// bug ID and two gaps in the model. Most cases compare the Lean model with C++ on a staged vault.
-// Calls that fail are commented out in runTests(), the rest run as regression tests.
+// The vault bugs FV_M2_1 to FV_M2_19, vault cases with no bug ID and two gaps in the model.
+// Calls that fail are commented out in runTests(), the rest are regression tests.
 class VaultOldFindings_test : public LeanSuite
 {
     // The accounts of the two ledgers built in runTests. issuer_ is the depositor of the IOU

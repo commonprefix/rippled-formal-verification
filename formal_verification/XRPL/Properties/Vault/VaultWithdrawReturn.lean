@@ -79,21 +79,18 @@ theorem Vault.withdraw_exits (amount : WithdrawAmount) (waive : Bool) (t : UInt3
       amounts.shares.operator_eq sharesTotalAmount = true →
       amounts.assets.toNumber .to_nearest = .ok assetsNumber → v.assetsAvailable.operator_lt assetsNumber = true →
       (v.withdraw amount waive t hpos).run = .ok (.error .tecINSUFFICIENT_FUNDS)) ∧
-    -- a transaction amount is a canonical amount of the vault's asset or of its shares, and the asset's maximum
-    -- fits an int64 amount, as C++ caps every MPT maximum. The holder redeems fewer than all the shares
+    -- the asset's maximum fits an int64 amount, as C++ caps every MPT maximum
     (amount.amount.Canonical → amount.InAsset v.numericType →
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) →
       (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
         amounts.shares.toRat < v.toExact.sharesTotal) →
       (v.withdraw amount waive t hpos).run ≠ .error .notLawful) ∧
-    -- a transaction amount is a canonical amount of the vault's asset or of its shares
     (∀ (t0 : UInt32) (r : VaultWithAmounts), Vault.Reachable v t0 → amount.amount.Canonical →
       amount.InAsset v.numericType → (v.withdraw amount waive t hpos).run = .ok (.ok r) →
       r.shares.toRat = v.toExact.sharesTotal →
       r.assets.toRat = v.assetsAvailable.toRat ∧ r.vault'.assetsAvailable = Number.zero ∧
         r.vault'.sharesTotal = Number.zero) ∧
-    -- a transaction amount is a canonical amount of the vault's asset or of its shares. The holder redeems every
-    -- outstanding share
+    -- the holder redeems every outstanding share
     ∀ t0 : UInt32, Vault.Reachable v t0 → amount.amount.Canonical → amount.InAsset v.numericType →
       (∀ amounts : VaultAmounts, (computeWithdraw v amount waive).run = .ok (.ok amounts) →
         amounts.shares.toRat = v.toExact.sharesTotal) →
@@ -130,7 +127,8 @@ theorem Vault.withdraw_error_codes (amount : WithdrawAmount) (waive : Bool) (t :
 `10^17 + 1` shares ends in an error, not a result code. The shares are worth more than the largest XRP amount. -/
 theorem Vault.withdraw_error_codes_attained :
     ∃ (v : Vault) (t0 t : UInt32) (amount : WithdrawAmount) (waive : Bool) (hpos : 0 < amount.amount.toRat),
-      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧
+      Vault.Reachable v t0 ∧
+      amount.amount.Canonical ∧
       (v.numericType.isIntegral = true → v.numericType.maxValue.toNat ≤ maxRep.toNat) ∧
       (v.withdraw amount waive t hpos).run = .error .outOfRange :=
   Vault.withdraw_out_of_range_witness

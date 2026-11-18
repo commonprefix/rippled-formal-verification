@@ -41,9 +41,13 @@ theorem Lending.payoff_exit (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaul
 /-- Witness: an MPT vault whose one-day loan is paid 136 years late holds about 1.23·10^18 units. In redemption,
 with every loan closed, its sole holder's withdrawal of every share fails with tecINSUFFICIENT_FUNDS. -/
 theorem Lending.payoff_exit_attained :
-    ∃ (l : LendingLedger) (h : Nat), l.Reachable ∧ l.vaultDeleted = false ∧ l.vault.phase l.now = .redemption ∧
+    ∃ (l : LendingLedger) (h : Nat),
+      l.Reachable ∧
+      l.vaultDeleted = false ∧
+      l.vault.phase l.now = .redemption ∧
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.paymentRemaining = 0) ∧
-      l.isSoleShareholder h = true ∧ l.vault.numericType = NumericType.int64 ∧
+      l.isSoleShareholder h = true ∧
+      l.vault.numericType = NumericType.int64 ∧
       ∀ (shares : STAmount) (l' : LendingLedger), shares.toRat = (l.sharesOf h).toRat →
         (l.apply (.vaultWithdraw h (.vaultShares shares))).run ≠ .ok (.ok l') :=
   LendingLedger.payoff_exit_mpt_witness
@@ -52,7 +56,6 @@ theorem Lending.payoff_exit_attained :
 shares. No VaultDeposit or VaultClawback is needed before VaultDelete succeeds. -/
 theorem Lending.Reachable.wind_down (l : LendingLedger) (hr : l.Reachable) (hnd : l.vaultDeleted = false)
     (s : SingleAssetVault.VaultSchedule) (hs : l.vault.schedule = some s)
-    -- the close time is past RedemptionDate
     (hpast : s.redemptionDate < l.now)
     -- and past RedemptionDate + GracePeriod of every loan, which the LoanSet schedule check leaves out (FV_M4_49)
     (hgrace : ∀ (i : Nat) (e : LoanEntry), l.loan? i = some e →
@@ -80,37 +83,40 @@ theorem Lending.Reachable.wind_down (l : LendingLedger) (hr : l.Reachable) (hnd 
 /-- Witness: a run where two holders can never redeem their shares. Past RedemptionDate and loan A's grace period,
 with no broker or loan left, each holder's shares are worth half a base unit, so every VaultWithdraw fails. -/
 theorem Lending.Reachable.wind_down_attained :
-    ∃ (l : LendingLedger) (s : SingleAssetVault.VaultSchedule), l.Reachable ∧ l.vaultDeleted = false ∧
-      l.vault.schedule = some s ∧ s.redemptionDate < l.now ∧
+    ∃ (l : LendingLedger) (s : SingleAssetVault.VaultSchedule),
+      l.Reachable ∧
+      l.vaultDeleted = false ∧
+      l.vault.schedule = some s ∧
+      s.redemptionDate < l.now ∧
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e →
         s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat < l.now.toNat) ∧
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened) ∧
-      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
-        e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
-      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
-        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false → e.loan.paymentRemaining ≠ 0 →
+        l.NotCoarsened) ∧
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
       l.SharesSum ∧
-      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
-        (∀ tx ∈ txs, tx.isWindDown) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
+      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' → (∀ tx ∈ txs, tx.isWindDown) →
+        (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
   LendingLedger.wind_down_dust_witness
 
 /-- Witness: a run where no wind-down deletes the vault one second past RedemptionDate. A loan's payment is due 60
 seconds before RedemptionDate and its GracePeriod runs on, so it can't be defaulted or deleted and its broker stays. -/
 theorem Lending.Reachable.wind_down_grace_attained :
-    ∃ (l : LendingLedger) (s : SingleAssetVault.VaultSchedule), l.Reachable ∧ l.vaultDeleted = false ∧
-      l.vault.schedule = some s ∧ s.redemptionDate < l.now ∧
+    ∃ (l : LendingLedger) (s : SingleAssetVault.VaultSchedule),
+      l.Reachable ∧
+      l.vaultDeleted = false ∧
+      l.vault.schedule = some s ∧
+      s.redemptionDate < l.now ∧
       (∃ (i : Nat) (e : LoanEntry), l.loan? i = some e ∧
         l.now.toNat ≤ s.redemptionDate.toNat + e.loan.schedule.gracePeriod.toNat) ∧
       (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = true → l.NotCoarsened) ∧
-      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false →
-        e.loan.paymentRemaining ≠ 0 → l.NotCoarsened) ∧
-      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b →
-        b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
+      (∀ (i : Nat) (e : LoanEntry), l.loan? i = some e → e.loan.isPending = false → e.loan.paymentRemaining ≠ 0 →
+        l.NotCoarsened) ∧
+      (∀ (j : Nat) (b : LoanBroker), l.broker? j = some b → b.coverAvailable.toRat ≤ l.vault.numericType.maxAmount) ∧
       l.SharesSum ∧
-      (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) →
-        l'.NoDust) ∧
-      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' →
-        (∀ tx ∈ txs, tx.isWindDown) → (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
+      (∀ (txs : List LendingTx) (l' : LendingLedger), l.WindsDownWhole txs l' → (∀ i, l'.loan? i = none) → l'.NoDust) ∧
+      ∀ (txs : List LendingTx) (l' l'' : LendingLedger), LendingLedger.Reaches l txs l' → (∀ tx ∈ txs, tx.isWindDown) →
+        (l'.apply .vaultDelete).run ≠ .ok (.ok l'') :=
   LendingLedger.wind_down_grace_witness
 
 end XRPL.Model

@@ -41,7 +41,8 @@ theorem Lending.vaultDeposit_no_exception (hr : l.Reachable) (h : Nat) (amount :
 largest XRP amount ends in an error. -/
 theorem Lending.vaultDeposit_no_exception_attained :
     ∃ (l : LendingLedger) (h : Nat) (amount : STAmount) (isDonation : Bool),
-      l.Reachable ∧ l.vault.numericType = NumericType.native ∧
+      l.Reachable ∧
+      l.vault.numericType = NumericType.native ∧
       (LendingTx.vaultDeposit h amount isDonation).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < l.vault.toExact.assetsTotal + amount.toRat ∧
       (l.apply (.vaultDeposit h amount isDonation)).run = .error .outOfRange :=
@@ -50,7 +51,8 @@ theorem Lending.vaultDeposit_no_exception_attained :
 /-- Witness for `vaultDeposit_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.vaultDeposit_no_exception_mpt_attained :
     ∃ (l : LendingLedger) (h : Nat) (amount : STAmount) (isDonation : Bool),
-      l.Reachable ∧ l.vault.numericType = NumericType.int64 ∧
+      l.Reachable ∧
+      l.vault.numericType = NumericType.int64 ∧
       (LendingTx.vaultDeposit h amount isDonation).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < l.vault.toExact.assetsTotal + amount.toRat ∧
       (l.apply (.vaultDeposit h amount isDonation)).run = .error .overflow :=
@@ -70,7 +72,8 @@ theorem Lending.vaultWithdraw_no_exception (hr : l.Reachable) (h : Nat) (amount 
 worth more than `10^17` drops and the withdrawal ends in an error. -/
 theorem Lending.vaultWithdraw_no_exception_attained :
     ∃ (l : LendingLedger) (h : Nat) (shares : STAmount),
-      l.Reachable ∧ l.vault.numericType = NumericType.native ∧
+      l.Reachable ∧
+      l.vault.numericType = NumericType.native ∧
       (LendingTx.vaultWithdraw h (.vaultShares shares)).preflight l = .tesSUCCESS ∧
       (10 : ℚ) ^ 17 < l.vault.idealAssetsWithdraw (l.isSoleShareholder h) shares.toRat ∧
       (l.apply (.vaultWithdraw h (.vaultShares shares))).run = .error .outOfRange := by
@@ -95,7 +98,8 @@ theorem Lending.vaultClawback_no_exception (hr : l.Reachable) (h : Nat) (assets 
 /-- Witness for `vaultClawback_no_exception`: on a reachable ledger a clawback from a holder that owns the shares
 destroyed ends in an error, the failed re-check of FV_M4_36 and FV_M4_38. -/
 theorem Lending.vaultClawback_no_exception_attained :
-    ∃ (l : LendingLedger) (h : Nat) (assets : STAmount), l.Reachable ∧
+    ∃ (l : LendingLedger) (h : Nat) (assets : STAmount),
+      l.Reachable ∧
       (∀ (hs : STAmount) (amounts : VaultAmounts), STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok hs →
         (computeClawback l.vault assets hs (l.isSoleShareholder h)).run = .ok (.ok amounts) →
         amounts.shares.toRat ≤ (l.sharesOf h).toRat) ∧
@@ -144,8 +148,10 @@ theorem Lending.loanBrokerCoverDeposit_no_exception (hr : l.Reachable) (i : Nat)
 /-- Witness for `loanBrokerCoverDeposit_no_exception`: on a reachable XRP ledger a deposit that takes CoverAvailable
 above the largest XRP amount ends in an error. -/
 theorem Lending.loanBrokerCoverDeposit_no_exception_attained :
-    ∃ (l : LendingLedger) (i : Nat) (amount : STAmount) (b : LoanBroker), l.Reachable ∧
-      l.vault.numericType = NumericType.native ∧ l.broker? i = some b ∧
+    ∃ (l : LendingLedger) (i : Nat) (amount : STAmount) (b : LoanBroker),
+      l.Reachable ∧
+      l.vault.numericType = NumericType.native ∧
+      l.broker? i = some b ∧
       (LendingTx.loanBrokerCoverDeposit i amount).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < b.coverAvailable.toRat + amount.toRat ∧
       (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .outOfRange :=
@@ -153,8 +159,10 @@ theorem Lending.loanBrokerCoverDeposit_no_exception_attained :
 
 /-- Witness for `loanBrokerCoverDeposit_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.loanBrokerCoverDeposit_no_exception_mpt_attained :
-    ∃ (l : LendingLedger) (i : Nat) (amount : STAmount) (b : LoanBroker), l.Reachable ∧
-      l.vault.numericType = NumericType.int64 ∧ l.broker? i = some b ∧
+    ∃ (l : LendingLedger) (i : Nat) (amount : STAmount) (b : LoanBroker),
+      l.Reachable ∧
+      l.vault.numericType = NumericType.int64 ∧
+      l.broker? i = some b ∧
       (LendingTx.loanBrokerCoverDeposit i amount).preflight l = .tesSUCCESS ∧
       l.vault.numericType.maxAmount < b.coverAvailable.toRat + amount.toRat ∧
       (l.apply (.loanBrokerCoverDeposit i amount)).run = .error .overflow :=
@@ -211,15 +219,15 @@ theorem Lending.loanSet_no_exception (hr : l.Reachable) (i : Nat) (principal : N
 above the largest XRP amount ends in an error. -/
 theorem Lending.loanSet_no_exception_attained :
     ∃ (l : LendingLedger) (i : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (rate periodicPayment : Number),
-      l.Reachable ∧ (∀ b, l.broker? i = some b → b.loanCount + 1 ≠ 0) ∧
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (rate periodicPayment : Number),
+      l.Reachable ∧
+      (∀ b, l.broker? i = some b → b.loanCount + 1 ≠ 0) ∧
       l.vault.numericType = NumericType.native ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat ≤ l.vault.numericType.maxValue.toNat ∧
       loanPeriodicRate rates.interestRate (paymentInterval.getD defaultPaymentInterval) = .ok rate ∧
       loanPeriodicPayment principal rate (paymentTotal.getD defaultPaymentTotal) = .ok periodicPayment ∧
-      (l.vault.numericType.maxValue.toNat : ℚ) <
-        periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
+      (l.vault.numericType.maxValue.toNat : ℚ) < periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
       (l.apply (.loanSet i principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
         allowsOverpayment)).run = .error .outOfRange :=
   LendingLedger.loanSet_value_exception_witness
@@ -227,15 +235,15 @@ theorem Lending.loanSet_no_exception_attained :
 /-- Witness for `loanSet_no_exception`: the same on a reachable MPT ledger. -/
 theorem Lending.loanSet_no_exception_mpt_attained :
     ∃ (l : LendingLedger) (i : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (rate periodicPayment : Number),
-      l.Reachable ∧ (∀ b, l.broker? i = some b → b.loanCount + 1 ≠ 0) ∧
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (rate periodicPayment : Number),
+      l.Reachable ∧
+      (∀ b, l.broker? i = some b → b.loanCount + 1 ≠ 0) ∧
       l.vault.numericType = NumericType.int64 ∧
       l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat ≤ l.vault.numericType.maxValue.toNat ∧
       loanPeriodicRate rates.interestRate (paymentInterval.getD defaultPaymentInterval) = .ok rate ∧
       loanPeriodicPayment principal rate (paymentTotal.getD defaultPaymentTotal) = .ok periodicPayment ∧
-      (l.vault.numericType.maxValue.toNat : ℚ) <
-        periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
+      (l.vault.numericType.maxValue.toNat : ℚ) < periodicPayment.toRat * (paymentTotal.getD defaultPaymentTotal).toNat ∧
       (l.apply (.loanSet i principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
         allowsOverpayment)).run = .error .overflow :=
   LendingLedger.loanSet_value_exception_mpt_witness
@@ -296,10 +304,16 @@ theorem Lending.loanPay_no_exception (hr : l.Reachable) (i : Nat) (pt : LoanPaym
 largest XRP amount ends in an error, while every other condition holds. -/
 theorem Lending.loanPay_no_exception_attained :
     ∃ (l : LendingLedger) (i : Nat) (amount : Number) (loan : Loan),
-      l.Reachable ∧ l.LoanAt i loan ∧ l.vault.numericType = NumericType.native ∧
-      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧ loan.nextPaymentDueDate < l.now ∧
-      loan.paymentRemaining = 1 ∧ loan.broker.coverAvailable.toRat < 10 ^ 96 ∧ l.CreditFits i .late amount ∧
-      l.FeeFits i .late amount ∧ (10 : ℚ) ^ 17 < loan.lateInterestExact l.now ∧
+      l.Reachable ∧
+      l.LoanAt i loan ∧
+      l.vault.numericType = NumericType.native ∧
+      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧
+      loan.nextPaymentDueDate < l.now ∧
+      loan.paymentRemaining = 1 ∧
+      loan.broker.coverAvailable.toRat < 10 ^ 96 ∧
+      l.CreditFits i .late amount ∧
+      l.FeeFits i .late amount ∧
+      (10 : ℚ) ^ 17 < loan.lateInterestExact l.now ∧
       (l.apply (.loanPay i .late amount)).run = .error .outOfRange :=
   LendingLedger.loanPay_late_out_of_range_witness
 
@@ -307,10 +321,15 @@ theorem Lending.loanPay_no_exception_attained :
 AssetsDeployed above the largest XRP amount ends in an error, while every other condition holds (FV_M4_59). -/
 theorem Lending.loanPay_no_exception_total_attained :
     ∃ (l : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (q : UnsettledPayment SingleAssetVault.Vault),
-      l.Reachable ∧ l.LoanAt i loan ∧ l.vault.numericType = NumericType.native ∧
-      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧ loan.nextPaymentDueDate < l.now ∧
-      loan.paymentRemaining = 1 ∧ loan.broker.coverAvailable.toRat < 10 ^ 96 ∧
-      loan.lateInterestExact l.now + 2 ≤ 10 ^ 17 ∧ l.FeeFits i .late amount ∧
+      l.Reachable ∧
+      l.LoanAt i loan ∧
+      l.vault.numericType = NumericType.native ∧
+      (LendingTx.loanPay i .late amount).preflight l = .tesSUCCESS ∧
+      loan.nextPaymentDueDate < l.now ∧
+      loan.paymentRemaining = 1 ∧
+      loan.broker.coverAvailable.toRat < 10 ^ 96 ∧
+      loan.lateInterestExact l.now + 2 ≤ 10 ^ 17 ∧
+      l.FeeFits i .late amount ∧
       (loan.payInstalments l.vault .late amount l.now).run = .ok (.ok q) ∧
       l.vault.assetsAvailable.toRat + q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + 1 ≤ 10 ^ 17 ∧
       (10 : ℚ) ^ 17 < l.vault.assetsAvailable.toRat + l.vault.assetsDeployed.toRat + q.amounts.interestPaid.toRat ∧

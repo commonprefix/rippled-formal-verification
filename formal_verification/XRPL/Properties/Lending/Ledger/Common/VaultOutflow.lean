@@ -12,12 +12,6 @@ namespace XRPL.Model.Lending
 open XRPL.Model.Protocol
 open XRPL.Model.SingleAssetVault (Vault RawVault WithdrawAmount VaultWithAmounts computeClawback_success_reduces)
 
-/-- Rounding a negative value to an asset gives at most zero. -/
-private lemma STAmount.roundToNumericType_nonpos (nt : NumericType) (x y : Number)
-    (hmax : nt.isIntegral = true → nt.maxValue.toNat ≤ maxRep.toNat) (hx : x.isNormalized) (hx0 : x.toRat < 0)
-    (hok : STAmount.roundToNumericType nt x .to_nearest = .ok y) : y.toRat ≤ 0 :=
-  XRPL.Model.Protocol.STAmount.roundToNumericType_nonpos_of_neg nt x y hmax hx hx0 hok
-
 /-- Rounding a value to an asset never lands above an amount the asset stores exactly and that bounds the
 value. -/
 private lemma STAmount.roundToNumericType_le_stored (nt : NumericType) (w x y : Number)

@@ -19,8 +19,8 @@ open XRPL.Model.Protocol
 going second, and A's payout when B goes first exceeds A's payout when A goes first by at most two base units. -/
 theorem Vault.redemption_exit_order (v : Vault) (t t0 : UInt32) (hr : Vault.Reachable v t0)
     (ht : t0 ≤ t) -- the withdrawals come after the history
-    (hphase : v.phase t = .redemption) -- in the redemption phase
-    (sA sB : STAmount) (hA : sA.ShareBalance) (hB : sB.ShareBalance) -- the holders' share balances
+    (hphase : v.phase t = .redemption)
+    (sA sB : STAmount) (hA : sA.ShareBalance) (hB : sB.ShareBalance)
     (hposA : 0 < sA.toRat) (hposB : 0 < sB.toRat)
     (hsum : sA.toRat + sB.toRat ≤ v.toExact.sharesTotal) -- both balances are part of the share total
     (waiveA waiveB waiveA' : Bool) (rA1 rB2 rA2 : VaultWithAmounts)
@@ -43,8 +43,8 @@ theorem Vault.redemption_exit_order (v : Vault) (t t0 : UInt32) (hr : Vault.Reac
 payout when B goes first exceeds A's payout when A goes first by at most one base unit. -/
 theorem Vault.redemption_exit_order_lower_bound_final (v : Vault) (t t0 : UInt32) (hr : Vault.Reachable v t0)
     (ht : t0 ≤ t) -- the withdrawals come after the history
-    (hphase : v.phase t = .redemption) -- in the redemption phase
-    (sA sB : STAmount) (hA : sA.ShareBalance) (hB : sB.ShareBalance) -- the holders' share balances
+    (hphase : v.phase t = .redemption)
+    (sA sB : STAmount) (hA : sA.ShareBalance) (hB : sB.ShareBalance)
     (hposA : 0 < sA.toRat) (hposB : 0 < sB.toRat)
     (hsum : sA.toRat + sB.toRat = v.toExact.sharesTotal) -- the two balances make up the share total
     (waiveA waiveB waiveA' : Bool) (rA1 rB2 rA2 : VaultWithAmounts)
@@ -62,7 +62,11 @@ alone, `1` after B, from a vault of `3` assets and `2` shares). -/
 theorem Vault.redemption_exit_order_upper_bound_attained :
     ∃ (v : Vault) (t t0 : UInt32) (sA sB : STAmount) (hposA : 0 < sA.toRat) (hposB : 0 < sB.toRat)
       (waiveA waiveB waiveA' : Bool) (rA1 rB2 rA2 : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ v.phase t = .redemption ∧ sA.ShareBalance ∧ sB.ShareBalance ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      v.phase t = .redemption ∧
+      sA.ShareBalance ∧
+      sB.ShareBalance ∧
       sA.toRat + sB.toRat ≤ v.toExact.sharesTotal ∧
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
@@ -75,7 +79,11 @@ alone, `1000000000000001` after B), holding `9·10^14` of `1800000000000001` sha
 theorem Vault.redemption_exit_order_lower_bound_attained :
     ∃ (v : Vault) (t t0 : UInt32) (sA sB : STAmount) (hposA : 0 < sA.toRat) (hposB : 0 < sB.toRat)
       (waiveA waiveB waiveA' : Bool) (rA1 rB2 rA2 : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ v.phase t = .redemption ∧ sA.ShareBalance ∧ sB.ShareBalance ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      v.phase t = .redemption ∧
+      sA.ShareBalance ∧
+      sB.ShareBalance ∧
       sA.toRat + sB.toRat ≤ v.toExact.sharesTotal ∧
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧
@@ -88,7 +96,11 @@ after B (`2` alone, `3` after B, from a vault of `5` assets and `2` shares). -/
 theorem Vault.redemption_exit_order_lower_bound_final_attained :
     ∃ (v : Vault) (t t0 : UInt32) (sA sB : STAmount) (hposA : 0 < sA.toRat) (hposB : 0 < sB.toRat)
       (waiveA waiveB waiveA' : Bool) (rA1 rB2 rA2 : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ t0 ≤ t ∧ v.phase t = .redemption ∧ sA.ShareBalance ∧ sB.ShareBalance ∧
+      Vault.Reachable v t0 ∧
+      t0 ≤ t ∧
+      v.phase t = .redemption ∧
+      sA.ShareBalance ∧
+      sB.ShareBalance ∧
       sA.toRat + sB.toRat = v.toExact.sharesTotal ∧
       (v.withdraw (.vaultShares sA) waiveA t hposA).run = .ok (.ok rA1) ∧
       (v.withdraw (.vaultShares sB) waiveB t hposB).run = .ok (.ok rB2) ∧

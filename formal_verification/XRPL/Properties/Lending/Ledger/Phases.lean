@@ -41,11 +41,12 @@ theorem Lending.Reachable.loans_mature (hr : l.Reachable) (s : VaultSchedule) (h
 /-- Witness: a run where a loan's last due date + GracePeriod is after RedemptionDate. Its one payment is due 60
 seconds before RedemptionDate and its GracePeriod is as long as its PaymentInterval. -/
 theorem Lending.Reachable.loans_mature_attained :
-    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule), l.Reachable ∧ l.vault.schedule = some s ∧
+    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule),
+      l.Reachable ∧
+      l.vault.schedule = some s ∧
       l.loan? j = some e ∧
-      s.redemptionDate.toNat < e.loan.schedule.startDate.toNat +
-        e.loan.schedule.paymentInterval.toNat * e.loan.schedule.paymentTotal.toNat +
-          e.loan.schedule.gracePeriod.toNat :=
+      s.redemptionDate.toNat < e.loan.schedule.startDate.toNat + e.loan.schedule.paymentInterval.toNat *
+        e.loan.schedule.paymentTotal.toNat + e.loan.schedule.gracePeriod.toNat :=
   LendingLedger.loans_mature_witness
 
 /-- Investment -> AssetsAvailable decreases only through a loan transaction, a withdrawal, which needs an early-exit
@@ -82,8 +83,11 @@ theorem Lending.redemption_recovery (l' : LendingLedger) (tx : LendingTx) (hr : 
 /-- Witness: a run where a late payment raises YieldUnrealized. In the redemption phase a late payment at a 100%
 LateInterestRate covers an instalment's interest part of −3.24, so YieldUnrealized rises by 3.24. -/
 theorem Lending.redemption_recovery_attained :
-    ∃ (l l' : LendingLedger) (tx : LendingTx), l.Reachable ∧ l.vault.phase l.now = .redemption ∧
-      (l.apply tx).run = .ok (.ok l') ∧ l.vault.yieldUnrealized.toRat < l'.vault.yieldUnrealized.toRat :=
+    ∃ (l l' : LendingLedger) (tx : LendingTx),
+      l.Reachable ∧
+      l.vault.phase l.now = .redemption ∧
+      (l.apply tx).run = .ok (.ok l') ∧
+      l.vault.yieldUnrealized.toRat < l'.vault.yieldUnrealized.toRat :=
   LendingLedger.redemption_yield_witness
 
 /-- Redemption, loan with payments left -> when NextPaymentDueDate < now, then only a late payment can pay it, and
@@ -101,9 +105,13 @@ theorem Lending.Reachable.redemption_loans_late (hr : l.Reachable) (hred : l.vau
 /-- Witness: a run in the redemption phase where now ≤ NextPaymentDueDate + GracePeriod. The payment is due 60
 seconds before RedemptionDate and its GracePeriod is longer, so the default returns tecTOO_SOON. -/
 theorem Lending.Reachable.redemption_loans_late_attained :
-    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule), l.Reachable ∧
-      l.vault.phase l.now = .redemption ∧ l.loan? j = some e ∧ e.loan.paymentRemaining ≠ 0 ∧
-      l.vault.schedule = some s ∧ s.redemptionDate.toNat < l.now.toNat ∧
+    ∃ (l : LendingLedger) (j : Nat) (e : LoanEntry) (s : VaultSchedule),
+      l.Reachable ∧
+      l.vault.phase l.now = .redemption ∧
+      l.loan? j = some e ∧
+      e.loan.paymentRemaining ≠ 0 ∧
+      l.vault.schedule = some s ∧
+      s.redemptionDate.toNat < l.now.toNat ∧
       l.now.toNat ≤ e.loan.nextPaymentDueDate.toNat + e.loan.schedule.gracePeriod.toNat ∧
       (l.apply (.loanManage j .default)).run = .ok (.error .tecTOO_SOON) :=
   LendingLedger.redemption_default_witness

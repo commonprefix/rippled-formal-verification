@@ -421,7 +421,7 @@ private lemma vault_credit_cross (A c : Number) (b : Int) (st : STAmount) (cr aa
       calc (10 : ℚ) ^ E ≤ 10 ^ (s + 15) := zpow_le_zpow_right₀ (by norm_num) (by omega)
         _ = 10 ^ (15 : ℕ) * 10 ^ s := by rw [zpow_add₀ (by norm_num : (10 : ℚ) ≠ 0)]; norm_num; ring
   have hretc := STAmount.FracCanonZero.canonical_of_pos hretf (by linarith)
-  have hR := STAmount.roundToExponent_rounded_of_scale ret rd E .downward hretc (by omega) hErange.2.2 hrd
+  have hR := STAmount.roundToExponent_rounded_any_proof ret rd E .downward hretc (by omega) hErange.2.2 hrd
   unfold RoundsToRepresentableAt at hR
   change rd.toRat = _ at hR
   have hrdW : 10 ^ 16 * 10 ^ b ≤ rd.toRat := by

@@ -84,7 +84,8 @@ theorem Lending.transactions_lawful (hr : l.Reachable) :
 /-- Witness: a run where a full VaultClawback would leave AssetsAvailable > 0 with SharesTotal = 0. The MPT vault,
 grown past 10^18 units by late interest, prices a full clawback one unit short of its cash. -/
 theorem Lending.transactions_lawful_attained :
-    ∃ (l : LendingLedger) (h : Nat) (assets : STAmount), l.Reachable ∧
+    ∃ (l : LendingLedger) (h : Nat) (assets : STAmount),
+      l.Reachable ∧
       ((l.sharesOf h).toRat.den = 1 ∧ 0 ≤ (l.sharesOf h).toRat ∧ (l.sharesOf h).toRat ≤ l.vault.sharesTotal.toRat) ∧
       (∀ (hs : STAmount) (amounts : VaultAmounts), STAmount.ofNumber .int64 (l.sharesOf h) .to_nearest = .ok hs →
         (computeClawback l.vault assets hs (l.isSoleShareholder h)).run = .ok (.ok amounts) →

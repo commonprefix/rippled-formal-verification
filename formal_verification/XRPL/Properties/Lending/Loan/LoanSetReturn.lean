@@ -68,7 +68,7 @@ theorem Loan.canCreate_error_codes (ter : TER)
 /-- Success ⟺ the schedule fits the ledger clock and the vault's phases, now < StartDate for a pending loan, the current
 vault scale = the initial vault scale, and PrincipalRequested and the fees fit an STAmount exactly. -/
 theorem Loan.canCreate_lawful_iff (assetsTotal : Number) (e : Int)
-    (hn : 0 < schedule.paymentTotal) (hi : 0 < schedule.paymentInterval) -- LoanSet preflight
+    (hn : 0 < schedule.paymentTotal) (hi : 0 < schedule.paymentInterval)
     (hat : v.assetsTotal = .ok assetsTotal)
     (hexp : numberExponent assetsTotal v.baseExponent broker.numericType = .ok e) :
     Loan.canCreate broker v principalRequested fees schedule t twoStep = .ok .tesSUCCESS ↔
@@ -251,7 +251,7 @@ theorem Loan.create_not_lawful :
 tecLIMIT_EXCEEDED. The guards never reject with tecINTERNAL, and the vault update never with tefBAD_LEDGER. -/
 theorem Loan.create_error_codes (l : LendingLedger) (hr : l.Reachable) (j : Nat) (hb : l.broker? j = some broker)
     (ter : TER)
-    (hpre : Loan.CreatePreflight broker principalRequested rates fees schedule) -- LoanSet preflight and preclaim
+    (hpre : Loan.CreatePreflight broker principalRequested rates fees schedule)
     (hc : Loan.canCreate broker l.vault principalRequested fees schedule l.now twoStep = .ok .tesSUCCESS)
     -- the range of the proof: an XRP or MPT vault holds less than `10^16` units
     (hroom : l.vault.numericType.isIntegral = true →

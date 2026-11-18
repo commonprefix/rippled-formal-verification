@@ -25,7 +25,7 @@ variable (l : LendingLedger)
 /-- Now ≤ NextPaymentDueDate -> regular, full and overpayments pass the date check and a late payment
 fails, otherwise only a late payment passes. `hpre` - the LoanPay preflight, which reads only the amount -/
 theorem Lending.payment_lateness (hr : l.Reachable) (i : Nat) (amount : Number) (loan : Loan) (hat : l.LoanAt i loan)
-    (hc : loan.canPay .regular = .tesSUCCESS) -- LoanPay preclaim: the loan is accepted and not paid off
+    (hc : loan.canPay .regular = .tesSUCCESS) -- the loan is accepted and not paid off
     (hpre : (LendingTx.loanPay i .regular amount).preflight l = .tesSUCCESS) :
     (l.now ≤ loan.nextPaymentDueDate →
       (l.apply (.loanPay i .regular amount)).run ≠ .ok (.error .tecEXPIRED) ∧
@@ -68,7 +68,9 @@ theorem Lending.payment_charge (hr : l.Reachable) (l' : LendingLedger) (i : Nat)
 `10^30`, then a regular payment of exactly its totalDue, which drops the instalment's value. -/
 theorem Lending.payment_charge_le_amount_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (p : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok p) ∧
       amount.toRat < p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat + p.amounts.feePaid.toRat :=
   LendingLedger.payment_charge_le_amount_witness
@@ -78,7 +80,9 @@ LoanServiceFee `10^30`, then one instalment of exactly its totalDue, which drops
 theorem Lending.payment_charge_split_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan lk : Loan) (pc : PaymentComponents)
       (q : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧
       q.totalPaid.toRat < q.amounts.principalPaid.toRat + q.amounts.interestPaid.toRat + q.amounts.feePaid.toRat :=
   LendingLedger.payment_split_witness
@@ -87,10 +91,13 @@ theorem Lending.payment_charge_split_attained :
 LatePaymentFee `10^30`, then a late payment of exactly its totalDue, which drops the instalment's value. -/
 theorem Lending.payment_charge_late_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (p : UnsettledPayment Vault) (li lr : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .late amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .late amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .late amount l.now).run = .ok (.ok p) ∧
-      loanLatePaymentInterest loan.principalOutstanding loan.rates.lateInterestRate l.now loan.nextPaymentDueDate =
-        .ok li ∧ STAmount.roundToNumericType loan.broker.numericType li .to_nearest (some loan.loanScale) = .ok lr ∧
+      loanLatePaymentInterest loan.principalOutstanding loan.rates.lateInterestRate l.now loan.nextPaymentDueDate = .ok
+        li ∧
+      STAmount.roundToNumericType loan.broker.numericType li .to_nearest (some loan.loanScale) = .ok lr ∧
       p.totalPaid.toRat < p.amounts.principalPaid.toRat + p.amounts.interestPaid.toRat + p.amounts.feePaid.toRat ∧
       p.totalPaid.toRat < loan.totalValueOutstanding.toRat - p.loan.totalValueOutstanding.toRat +
         loan.fees.serviceFee.toRat + loan.fees.latePaymentFee.toRat + lr.toRat :=
@@ -111,9 +118,14 @@ theorem Lending.payment_decreases (hr : l.Reachable) (l' : LendingLedger) (i : N
 instalments with a 10% management fee reaches an instalment of value 0, and its late interest alone is paid. -/
 theorem Lending.payment_decreases_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan loan' : Loan) (pc : PaymentComponents),
-      l.Reachable ∧ (l.apply (.loanPay i .late amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧ loan.paymentComponents .late l.now = .ok pc ∧ pc.isFinal = false ∧
-      pc.totalValueDelta.toRat = 0 ∧ loan'.paymentRemaining < loan.paymentRemaining ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .late amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      loan.paymentComponents .late l.now = .ok pc ∧
+      pc.isFinal = false ∧
+      pc.totalValueDelta.toRat = 0 ∧
+      loan'.paymentRemaining < loan.paymentRemaining ∧
       loan'.principalOutstanding = loan.principalOutstanding ∧
       loan'.totalValueOutstanding.toRat = loan.totalValueOutstanding.toRat :=
   LendingLedger.payment_decreases_witness
@@ -159,11 +171,14 @@ theorem Lending.payment_fees (hr : l.Reachable) (l' : LendingLedger) (i : Nat) (
 theorem Lending.payment_fees_upper_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan)
       (payment : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧ loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
       (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment) ∧
-      (loan.broker.numericType.isIntegral = true → loan.broker.coverAvailable.toRat +
-        payment.amounts.feePaid.toRat < 2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
+      (loan.broker.numericType.isIntegral = true → loan.broker.coverAvailable.toRat + payment.amounts.feePaid.toRat < 2
+        ^ 63 * (10 : ℚ) ^ l.vault.baseExponent) ∧
       (loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat) - payment.amounts.feePaid.toRat = 0 :=
   LendingLedger.payment_fees_upper_bound_witness
 
@@ -172,12 +187,14 @@ fee on a loan paid 32 years late lifts a cover of `0.5` to the scale `10^0`, on 
 theorem Lending.payment_fees_lower_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan loan' : Loan)
       (payment : UnsettledPayment Vault) (e : Int),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      l'.LoanAt i loan' ∧ loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      l'.LoanAt i loan' ∧
+      loan.broker.hasMinimumCover l.vault.baseExponent = .ok false ∧
       (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment) ∧
       numberExponent loan'.broker.coverAvailable l.vault.baseExponent loan.broker.numericType = .ok e ∧
-      payment.amounts.feePaid.toRat - (loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat) =
-        10 ^ e :=
+      payment.amounts.feePaid.toRat - (loan'.broker.coverAvailable.toRat - loan.broker.coverAvailable.toRat) = 10 ^ e :=
   let ⟨l, l', i, pt, amount, loan, loan', payment, e, hr, h, hat, hat', hc, hp, he, hd⟩ :=
     LendingLedger.payment_fees_lower_bound_witness
   ⟨l, l', i, pt, amount, loan, loan', payment, e, hr, h, hat, hat', hc, hp, he, by linarith⟩
@@ -201,11 +218,16 @@ payments with a 0.1% management fee owes `6.31645547` after 35 payments, ⌈Peri
 theorem Lending.regularPayment_amount_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (p : UnsettledPayment Vault) (k : Nat)
       (lk : Loan) (pc : PaymentComponents) (due pp' : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok p) ∧ k < p.count ∧
-      loan.ScheduledBefore l.now k lk ∧ lk.paymentComponents .regular l.now = .ok pc ∧ pc.totalDue = .ok due ∧
-      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) =
-        .ok pp' ∧ p.totalPaid.toRat < 10 ^ 16 * 10 ^ loan.loanScale ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok p) ∧
+      k < p.count ∧
+      loan.ScheduledBefore l.now k lk ∧
+      lk.paymentComponents .regular l.now = .ok pc ∧
+      pc.totalDue = .ok due ∧
+      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) = .ok pp' ∧
+      p.totalPaid.toRat < 10 ^ 16 * 10 ^ loan.loanScale ∧
       pp'.toRat + loan.fees.serviceFee.toRat < due.toRat :=
   LendingLedger.regularPayment_amount_last_witness
 
@@ -214,11 +236,17 @@ the 19-digit totalDue rounds ⌈PeriodicPayment⌉ `33.37` up to `33.4`. -/
 theorem Lending.regularPayment_amount_fee_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (p : UnsettledPayment Vault) (k : Nat)
       (lk : Loan) (pc : PaymentComponents) (due pp' : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok p) ∧ k < p.count ∧
-      loan.ScheduledBefore l.now k lk ∧ lk.paymentComponents .regular l.now = .ok pc ∧ pc.totalDue = .ok due ∧
-      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) =
-        .ok pp' ∧ lk.paymentRemaining ≠ 1 ∧ pp'.toRat + loan.fees.serviceFee.toRat < due.toRat :=
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok p) ∧
+      k < p.count ∧
+      loan.ScheduledBefore l.now k lk ∧
+      lk.paymentComponents .regular l.now = .ok pc ∧
+      pc.totalDue = .ok due ∧
+      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) = .ok pp' ∧
+      lk.paymentRemaining ≠ 1 ∧
+      pp'.toRat + loan.fees.serviceFee.toRat < due.toRat :=
   LendingLedger.regularPayment_amount_fee_witness
 
 /-- Regular payment, a scheduled payment that isn't the last -> (TotalValueOutstanding − TotalValueOutstanding') −
@@ -236,8 +264,11 @@ theorem Lending.regularPayment_periodicPayment (hr : l.Reachable) (i : Nat) (amo
 theorem Lending.regularPayment_periodicPayment_below_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan lk : Loan) (pc : PaymentComponents)
       (q : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧ q.loan.paymentRemaining ≠ 0 ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧
+      q.loan.paymentRemaining ≠ 0 ∧
       10 ^ loan.loanScale ≤ loan.periodicPayment.toRat -
         (lk.totalValueOutstanding.toRat - q.loan.totalValueOutstanding.toRat) :=
   LendingLedger.regularPayment_periodicPayment_below_witness
@@ -247,10 +278,13 @@ at 21% over 2 monthly payments with a 6% fee: the last is `50665`, ⌈PeriodicPa
 theorem Lending.regularPayment_periodicPayment_last_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan lk : Loan) (pc : PaymentComponents)
       (q : UnsettledPayment Vault) (pp' : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧ q.loan.paymentRemaining = 0 ∧
-      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) =
-        .ok pp' ∧ 0 < lk.totalValueOutstanding.toRat - pp'.toRat :=
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧
+      q.loan.paymentRemaining = 0 ∧
+      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) = .ok pp' ∧
+      0 < lk.totalValueOutstanding.toRat - pp'.toRat :=
   LendingLedger.regularPayment_periodicPayment_last_witness
 
 /-- Witness: a run where ⌊management fee⌉ puts the last payment 2 ULP below ⌈PeriodicPayment⌉. A loan of `6188`
@@ -258,10 +292,13 @@ at 9% over 3 monthly payments with a 3% fee: the last is `2092`, ⌈PeriodicPaym
 theorem Lending.regularPayment_periodicPayment_last_below_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan lk : Loan) (pc : PaymentComponents)
       (q : UnsettledPayment Vault) (pp' : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
-      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧ q.loan.paymentRemaining = 0 ∧
-      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) =
-        .ok pp' ∧ 10 ^ loan.loanScale < pp'.toRat - lk.totalValueOutstanding.toRat :=
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
+      loan.PaysInstalment l.vault amount l.now .regular lk pc q ∧
+      q.loan.paymentRemaining = 0 ∧
+      STAmount.roundToNumericType loan.broker.numericType loan.periodicPayment .upward (some loan.loanScale) = .ok pp' ∧
+      10 ^ loan.loanScale < pp'.toRat - lk.totalValueOutstanding.toRat :=
   LendingLedger.regularPayment_periodicPayment_last_below_witness
 
 /-- Regular payment -> pays as many whole scheduled payments as requestedAmount covers, at most
@@ -308,12 +345,17 @@ two instalments of 1.5 credit 3 to AssetsAvailable paid together and 1 each paid
 theorem Lending.regularPayment_split_attained :
     ∃ (l l₁ : LendingLedger) (i : Nat) (amount : Number) (loan loan₁ : Loan) (payment : UnsettledPayment Vault)
       (l₂ : LendingLedger) (loan₂ : Loan),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l₁) ∧ l.LoanAt i loan ∧
-      l₁.LoanAt i loan₁ ∧ (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok payment) ∧
-      payment.count = 2 ∧ l.SeparatePayments i payment.count l₂ ∧ l₂.LoanAt i loan₂ ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l₁) ∧
+      l.LoanAt i loan ∧
+      l₁.LoanAt i loan₁ ∧
+      (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok payment) ∧
+      payment.count = 2 ∧
+      l.SeparatePayments i payment.count l₂ ∧
+      l₂.LoanAt i loan₂ ∧
       loan₂.toRawLoan = { loan₁.toRawLoan with broker := loan₂.broker } ∧
-      loan₂.broker.toRawLoanBroker =
-        { loan₁.broker.toRawLoanBroker with coverAvailable := loan₂.broker.coverAvailable } ∧
+      loan₂.broker.toRawLoanBroker = { loan₁.broker.toRawLoanBroker with coverAvailable := loan₂.broker.coverAvailable }
+        ∧
       l₂.vault ≠ l₁.vault :=
   LendingLedger.regularPayment_split_witness
 
@@ -346,11 +388,13 @@ theorem Lending.fullPayment_cheaper (hr : l.Reachable) (l' : LendingLedger) (i :
 loan books almost no interest, and a full payment at the first due date charges one period of interest. -/
 theorem Lending.fullPayment_cheaper_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (p : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .full amount l.now).run = .ok (.ok p) ∧
-      loan.rates.closeInterestRate = 0 ∧ loan.fees.closePaymentFee.toRat ≤ loan.fees.serviceFee.toRat ∧
-      loan.totalValueOutstanding.toRat + loan.paymentRemaining.toNat * loan.fees.serviceFee.toRat <
-        p.totalPaid.toRat :=
+      loan.rates.closeInterestRate = 0 ∧
+      loan.fees.closePaymentFee.toRat ≤ loan.fees.serviceFee.toRat ∧
+      loan.totalValueOutstanding.toRat + loan.paymentRemaining.toNat * loan.fees.serviceFee.toRat < p.totalPaid.toRat :=
   LendingLedger.fullPayment_cheaper_witness
 
 /-- Full payment -> the loan is paid off, principalPaid = PrincipalOutstanding and
@@ -381,9 +425,13 @@ theorem Lending.fullPayment_payoff (hr : l.Reachable) (l' : LendingLedger) (i : 
 accepted on day 0 with StartDate on day 30 is paid in full on day 29. -/
 theorem Lending.fullPayment_payoff_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (payment : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .full amount l.now).run = .ok (.ok payment) ∧
-      loan.rates.interestRate ≠ 0 ∧ 0 < loan.principalOutstanding.toRat ∧ l.now < loan.schedule.startDate ∧
+      loan.rates.interestRate ≠ 0 ∧
+      0 < loan.principalOutstanding.toRat ∧
+      l.now < loan.schedule.startDate ∧
       payment.amounts.interestPaid.toRat = 0 :=
   LendingLedger.fullPayment_before_start_witness
 
@@ -411,16 +459,18 @@ a management fee of `100.000003` has 32 digits, and the payoff keeps 19 of them.
 theorem Lending.fullPayment_broker_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (payment : UnsettledPayment Vault)
       (rate tpo fullInterest fullInterest' managementFee : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .full amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .full amount l.now).run = .ok (.ok payment) ∧
       loan.periodicRate = .ok rate ∧
       loanPrincipalFromPeriodicPayment loan.periodicPayment rate loan.paymentRemaining = .ok tpo ∧
       computeFullPaymentInterest tpo rate l.now loan.schedule.paymentInterval loan.previousPaymentDueDate
         loan.schedule.startDate loan.rates.closeInterestRate = .ok fullInterest ∧
-      STAmount.roundToNumericType loan.broker.numericType fullInterest .downward (some loan.loanScale) =
-        .ok fullInterest' ∧
-      computeManagementFee loan.broker.numericType fullInterest' loan.broker.managementFeeRate loan.loanScale =
-        .ok managementFee ∧
+      STAmount.roundToNumericType loan.broker.numericType fullInterest .downward (some loan.loanScale) = .ok
+        fullInterest' ∧
+      computeManagementFee loan.broker.numericType fullInterest' loan.broker.managementFeeRate loan.loanScale = .ok
+        managementFee ∧
       payment.amounts.feePaid.toRat ≠ loan.fees.closePaymentFee.toRat + managementFee.toRat :=
   LendingLedger.fullPayment_broker_witness
 
@@ -521,21 +571,22 @@ theorem Lending.overpayment_fees (hr : l.Reachable) (l' : LendingLedger) (i : Na
 theorem Lending.overpayment_fees_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (payment p : UnsettledPayment Vault)
       (amount' unspent extra f fee interest interest' managementFee : Number),
-      l.Reachable ∧ (l.apply (.loanPay i .overpayment amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .overpayment amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok payment) ∧
       (loan.payInstalments l.vault .overpayment amount l.now).run = .ok (.ok p) ∧
       (l.apply (.loanPay i .overpayment amount)).run ≠ (l.apply (.loanPay i .regular amount)).run ∧
       STAmount.roundToNumericType loan.broker.numericType amount .towards_zero (some loan.loanScale) = .ok amount' ∧
       amount'.operator_sub payment.totalPaid .to_nearest = .ok unspent ∧
-      STAmount.roundToNumericType loan.broker.numericType
-        (Number.min unspent payment.loan.totalValueOutstanding) .downward (some loan.loanScale) = .ok extra ∧
+      STAmount.roundToNumericType loan.broker.numericType (Number.min unspent payment.loan.totalValueOutstanding)
+        .downward (some loan.loanScale) = .ok extra ∧
       tenthBipsOfValue extra loan.rates.overpaymentFee .to_nearest = .ok f ∧
       STAmount.roundToNumericType loan.broker.numericType f .to_nearest (some loan.loanScale) = .ok fee ∧
       tenthBipsOfValue extra loan.rates.overpaymentInterestRate .to_nearest = .ok interest ∧
-      STAmount.roundToNumericType loan.broker.numericType interest .to_nearest (some loan.loanScale) =
-        .ok interest' ∧
-      computeManagementFee loan.broker.numericType interest' loan.broker.managementFeeRate loan.loanScale =
-        .ok managementFee ∧
+      STAmount.roundToNumericType loan.broker.numericType interest .to_nearest (some loan.loanScale) = .ok interest' ∧
+      computeManagementFee loan.broker.numericType interest' loan.broker.managementFeeRate loan.loanScale = .ok
+        managementFee ∧
       p.amounts.feePaid.toRat ≠ payment.amounts.feePaid.toRat + fee.toRat + managementFee.toRat :=
   LendingLedger.overpayment_fees_witness
 
@@ -576,7 +627,9 @@ of the loan of `603946999675283.3` at its due date. -/
 theorem Lending.payment_vault_upper_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan : Loan)
       (payment : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment) ∧
       (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) -
         (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) = 0 :=
@@ -587,10 +640,12 @@ scale of AssetsAvailable'. The loan of `603946999675283.3` paid 32 years late pa
 theorem Lending.payment_vault_lower_bound_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (paymentType : LoanPaymentType) (amount : Number) (loan : Loan)
       (payment : UnsettledPayment Vault) (e : Int),
-      l.Reachable ∧ (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i paymentType amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault paymentType amount l.now).run = .ok (.ok payment) ∧
-      l.vault.assetsAvailable.toRat + (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) <
-        2 ^ 63 * (10 : ℚ) ^ l.vault.baseExponent ∧
+      l.vault.assetsAvailable.toRat + (payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat) < 2 ^
+        63 * (10 : ℚ) ^ l.vault.baseExponent ∧
       numberExponent l'.vault.assetsAvailable l.vault.baseExponent l.vault.numericType = .ok e ∧
       payment.amounts.principalPaid.toRat + payment.amounts.interestPaid.toRat -
         (l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat) = (199 / 100 : ℚ) * 10 ^ e :=
@@ -600,11 +655,13 @@ theorem Lending.payment_vault_lower_bound_attained :
 instalment takes 1.9 off TotalValueOutstanding, but the vault holding about `1.87·10^15` gets 1. -/
 theorem Lending.payment_vault_coarsened_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan loan' : Loan),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       l'.LoanAt i loan' ∧
       l'.vault.assetsAvailable.toRat - l.vault.assetsAvailable.toRat <
         (loan.totalValueOutstanding.toRat - loan'.totalValueOutstanding.toRat) -
-          (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat) :=
+        (loan.managementFeeOutstanding.toRat - loan'.managementFeeOutstanding.toRat) :=
   LendingLedger.payment_vault_credit_coarsened_witness
 
 /-- Regular payment -> AssetsTotal' − AssetsTotal = YieldUnrealized − YieldUnrealized' = interestPaid. -/
@@ -623,7 +680,9 @@ theorem Lending.regularPayment_yield (hr : l.Reachable) (l' : LendingLedger) (i 
 of 1.9 is credited as 1, so AssetsTotal falls by 0.5 while interestPaid is 0.4. -/
 theorem Lending.regularPayment_yield_attained :
     ∃ (l l' : LendingLedger) (i : Nat) (amount : Number) (loan : Loan) (payment : UnsettledPayment Vault),
-      l.Reachable ∧ (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧ l.LoanAt i loan ∧
+      l.Reachable ∧
+      (l.apply (.loanPay i .regular amount)).run = .ok (.ok l') ∧
+      l.LoanAt i loan ∧
       (loan.payInstalments l.vault .regular amount l.now).run = .ok (.ok payment) ∧
       l'.vault.toExact.assetsTotal - l.vault.toExact.assetsTotal < payment.amounts.interestPaid.toRat :=
   LendingLedger.regularPayment_yield_witness

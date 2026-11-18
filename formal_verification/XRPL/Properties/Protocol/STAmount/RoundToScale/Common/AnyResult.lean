@@ -1,6 +1,7 @@
 import Mathlib.Tactic
 
 import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Sum
+import XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 
 
 namespace XRPL.Model.Protocol
@@ -10,150 +11,10 @@ namespace XRPL.Model.Protocol
 A copy of `STAmount.roundToExponent_rounded_proof` for a scale of at least `-81`. There a nonzero grid
 coefficient never flushes to zero, so the result needs no nonzero hypothesis.
 
-The lending `Loan` proofs carry the same lemma as `STAmount.roundToExponent_rounded_of_scale`. -/
+The lending `Loan` proofs carry the same lemma as `STAmount.roundToExponent_rounded_any_proof`. -/
 
-/-- A zero-mantissa `Number` renormalizes to the zero `IOUAmount`. -/
-private lemma IOUAmount.ofNumber_zero_mantissa (n : Number) (mode : rounding_mode)
-    (h : n.mantissa_ = 0) :
-    IOUAmount.ofNumber n mode = .ok IOUAmount.zero := by
-  have hd : doNormalize n.negative_ n.mantissa_ n.exponent_ cMinValue cMaxValue mode
-      = .ok Number.zero := by
-    unfold doNormalize
-    rw [show (n.mantissa_ == 0) = true from beq_iff_eq.mpr h, if_pos rfl]
-  unfold IOUAmount.ofNumber IOUAmount.fromNumber Number.normalizeToRange
-  rw [hd]
-  rfl
-
-/-- `ofIOUAmount` of the zero `IOUAmount` is the canonical zero record. -/
-private lemma STAmount.ofIOU_zero (mode : rounding_mode) :
-    STAmount.ofIOUAmount IOUAmount.zero mode = .ok ⟨.fractional, 0, -100, false⟩ := by
-  unfold STAmount.ofIOUAmount STAmount.canonicalize STAmount.iou
-  simp only [STAmount.unchecked, STAmount.integral, NumericType.isIntegral,
-    Bool.false_eq_true, if_false]
-  rfl
-
-/-- Convert the per-mode magnitude characterization into `RoundsToRepresentableAt`. -/
-private lemma conclude (result value : STAmount) (s : ℤ) (mode : rounding_mode) (k : ℕ)
-    (h_mv : value.mValue ≠ 0)
-    (h_res_val : result.toRat
-      = (if value.mIsNegative then (-1 : ℚ) else 1) * (k : ℚ) * 10 ^ s)
-    (h_tn : mode = .to_nearest →
-      (k : ℤ) = ⌊|value.toRat| / 10 ^ s⌋ ∨ (k : ℤ) = ⌈|value.toRat| / 10 ^ s⌉)
-    (h_tz : mode = .towards_zero → (k : ℤ) = ⌊|value.toRat| / 10 ^ s⌋)
-    (h_dn : mode = .downward → (k : ℤ) = if value.mIsNegative
-      then ⌈|value.toRat| / 10 ^ s⌉ else ⌊|value.toRat| / 10 ^ s⌋)
-    (h_up : mode = .upward → (k : ℤ) = if value.mIsNegative
-      then ⌊|value.toRat| / 10 ^ s⌋ else ⌈|value.toRat| / 10 ^ s⌉) :
-    RoundsToRepresentableAt result value.toRat s mode := by
-  have h_mv_nat : value.mValue.toNat ≠ 0 := by
-    intro h0
-    exact h_mv (by rw [← UInt64.toNat_inj, h0]; rfl)
-  rcases hn : value.mIsNegative with _ | _
-  · -- nonnegative value
-    have h_nn : 0 ≤ value.toRat := by
-      rw [STAmount.toRat_of_nonneg value hn]
-      positivity
-    have h_abs : |value.toRat| = value.toRat := abs_of_nonneg h_nn
-    rw [hn] at h_res_val
-    simp only [Bool.false_eq_true, if_false, one_mul] at h_res_val
-    rcases mode with _ | _ | _ | _
-    · rcases h_tn rfl with h | h
-      · refine Or.inl ?_
-        show result.toRat = _
-        rw [h_abs] at h
-        rw [h_res_val, ← h]
-        push_cast
-        ring
-      · refine Or.inr ?_
-        show result.toRat = _
-        rw [h_abs] at h
-        rw [h_res_val, ← h]
-        push_cast
-        ring
-    · show result.toRat = _
-      have h := h_tz rfl
-      rw [h_abs] at h
-      rw [if_pos (show value.toRat ≥ 0 from h_nn), h_res_val, ← h]
-      push_cast
-      ring
-    · show result.toRat = _
-      have h := h_dn rfl
-      rw [hn, if_neg Bool.false_ne_true, h_abs] at h
-      rw [h_res_val, ← h]
-      push_cast
-      ring
-    · show result.toRat = _
-      have h := h_up rfl
-      rw [hn, if_neg Bool.false_ne_true, h_abs] at h
-      rw [h_res_val, ← h]
-      push_cast
-      ring
-  · -- negative value
-    have h_lt : value.toRat < 0 := by
-      rw [STAmount.toRat_of_neg value hn]
-      have h1 : (0 : ℚ) < (value.mValue.toNat : ℚ) := by
-        have : 0 < value.mValue.toNat := Nat.pos_of_ne_zero h_mv_nat
-        exact_mod_cast this
-      have h2 : (0 : ℚ) < (10 : ℚ) ^ value.mOffset := zpow_pos (by norm_num) _
-      nlinarith
-    have h_abs : |value.toRat| = -value.toRat := abs_of_neg h_lt
-    have h_conv_f : ⌊value.toRat / 10 ^ s⌋ = -⌈|value.toRat| / 10 ^ s⌉ := by
-      rw [h_abs, neg_div, Int.ceil_neg]
-      omega
-    have h_conv_c : ⌈value.toRat / 10 ^ s⌉ = -⌊|value.toRat| / 10 ^ s⌋ := by
-      rw [h_abs, neg_div, Int.floor_neg]
-      omega
-    rw [hn] at h_res_val
-    simp only [if_true] at h_res_val
-    rcases mode with _ | _ | _ | _
-    · rcases h_tn rfl with h | h
-      · refine Or.inr ?_
-        show result.toRat = _
-        rw [h_conv_c, h_res_val, ← h]
-        push_cast
-        ring
-      · refine Or.inl ?_
-        show result.toRat = _
-        rw [h_conv_f, h_res_val, ← h]
-        push_cast
-        ring
-    · show result.toRat = _
-      have h := h_tz rfl
-      rw [if_neg (show ¬ value.toRat ≥ 0 from not_le.mpr h_lt), h_conv_c, h_res_val, ← h]
-      push_cast
-      ring
-    · show result.toRat = _
-      have h := h_dn rfl
-      rw [hn, if_pos rfl] at h
-      rw [h_conv_f, h_res_val, ← h]
-      push_cast
-      ring
-    · show result.toRat = _
-      have h := h_up rfl
-      rw [hn, if_pos rfl] at h
-      rw [h_conv_c, h_res_val, ← h]
-      push_cast
-      ring
-
-/-- A value already on the grid satisfies `RoundsToRepresentableAt` in every mode. -/
-private lemma RoundsToRepresentableAt_grid_self (result : STAmount) (truth : ℚ) (s : ℤ)
-    (mode : rounding_mode) (t : ℤ)
-    (h_truth : truth = (t : ℚ) * 10 ^ s)
-    (h_res : result.toRat = truth) :
-    RoundsToRepresentableAt result truth s mode := by
-  have h_pow_pos : (0 : ℚ) < (10 : ℚ) ^ s := zpow_pos (by norm_num) _
-  have h_div : truth / 10 ^ s = (t : ℚ) := by
-    rw [h_truth, mul_div_assoc, div_self (ne_of_gt h_pow_pos), mul_one]
-  have h_floor : ⌊truth / 10 ^ s⌋ = t := by rw [h_div, Int.floor_intCast]
-  have h_ceil : ⌈truth / 10 ^ s⌉ = t := by rw [h_div, Int.ceil_intCast]
-  rcases mode with _ | _ | _ | _
-  · exact Or.inl (by show result.toRat = _; rw [h_res, h_floor, h_truth])
-  · show result.toRat = _
-    rw [h_res, h_floor, h_ceil, ite_self, h_truth]
-  · show result.toRat = _
-    rw [h_res, h_floor, h_truth]
-  · show result.toRat = _
-    rw [h_res, h_ceil, h_truth]
+open private conclude RoundsToRepresentableAt_grid_self
+  from XRPL.Properties.Protocol.STAmount.RoundToScale.Common.Proofs
 
 set_option maxHeartbeats 3200000 in
 -- assembles the full pipeline: guards, reference, sum stage, exact subtraction

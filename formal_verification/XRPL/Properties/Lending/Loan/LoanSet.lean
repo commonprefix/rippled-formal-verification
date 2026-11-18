@@ -46,15 +46,17 @@ theorem Lending.create_periodicPayment_monotone (l₁ l₂ : LendingLedger)
 on `10^6`: InterestRate 14 gives a lower payment than InterestRate 13. -/
 theorem Lending.create_periodicPayment_monotone_rate_attained :
     ∃ (l l₁ l₂ : LendingLedger) (j : Nat) (principal : Number) (rates₁ rates₂ : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (loan₁ loan₂ : Loan),
-      l.Reachable ∧ rates₂ = { rates₁ with interestRate := rates₂.interestRate } ∧
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (loan₁ loan₂ : Loan),
+      l.Reachable ∧
+      rates₂ = { rates₁ with interestRate := rates₂.interestRate } ∧
       rates₁.interestRate < rates₂.interestRate ∧
       (l.apply (.loanSet j principal rates₁ fees paymentInterval paymentTotal gracePeriod startDate twoStep
         allowsOverpayment)).run = .ok (.ok l₁) ∧
       (l.apply (.loanSet j principal rates₂ fees paymentInterval paymentTotal gracePeriod startDate twoStep
         allowsOverpayment)).run = .ok (.ok l₂) ∧
-      l₁.LoanAt l.loans.length loan₁ ∧ l₂.LoanAt l.loans.length loan₂ ∧
+      l₁.LoanAt l.loans.length loan₁ ∧
+      l₂.LoanAt l.loans.length loan₂ ∧
       loan₂.toExact.periodicPayment < loan₁.toExact.periodicPayment :=
   LendingLedger.create_periodicPayment_rate_monotone_witness
 
@@ -69,7 +71,8 @@ theorem Lending.create_periodicPayment_monotone_count_attained :
         allowsOverpayment)).run = .ok (.ok l₁) ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal₂ gracePeriod startDate twoStep
         allowsOverpayment)).run = .ok (.ok l₂) ∧
-      l₁.LoanAt l.loans.length loan₁ ∧ l₂.LoanAt l.loans.length loan₂ ∧
+      l₁.LoanAt l.loans.length loan₁ ∧
+      l₂.LoanAt l.loans.length loan₂ ∧
       paymentTotal₁.getD defaultPaymentTotal < paymentTotal₂.getD defaultPaymentTotal ∧
       loan₁.toExact.periodicPayment < loan₂.toExact.periodicPayment :=
   LendingLedger.create_periodicPayment_count_antitone_witness
@@ -94,11 +97,13 @@ theorem Lending.create_value
 /-- Witness: a run where they are equal. One payment after a year at 10% on `10`: both are `11`. -/
 theorem Lending.create_value_lower_bound_attained :
     ∃ (l l' : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (loan' : Loan),
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (loan' : Loan),
       l.Reachable ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .ok (.ok l') ∧ l'.LoanAt l.loans.length loan' ∧ rates.interestRate ≠ 0 ∧
+        allowsOverpayment)).run = .ok (.ok l') ∧
+      l'.LoanAt l.loans.length loan' ∧
+      rates.interestRate ≠ 0 ∧
       loan'.toExact.periodicPayment * loan'.toExact.paymentTotal.toNat - loan'.toExact.totalValueOutstanding = 0 :=
   LendingLedger.create_value_lower_bound_witness
 
@@ -106,13 +111,15 @@ theorem Lending.create_value_lower_bound_attained :
 60 seconds at InterestRate 1 on one base unit. -/
 theorem Lending.create_value_upper_bound_attained :
     ∃ (l l' : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (loan' : Loan),
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (loan' : Loan),
       l.Reachable ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .ok (.ok l') ∧ l'.LoanAt l.loans.length loan' ∧ rates.interestRate ≠ 0 ∧
-      (1 - 1 / 10 ^ 10 : ℚ) * 10 ^ loan'.toExact.loanScale <
-        loan'.toExact.totalValueOutstanding - loan'.toExact.periodicPayment * loan'.toExact.paymentTotal.toNat :=
+        allowsOverpayment)).run = .ok (.ok l') ∧
+      l'.LoanAt l.loans.length loan' ∧
+      rates.interestRate ≠ 0 ∧
+      (1 - 1 / 10 ^ 10 : ℚ) * 10 ^ loan'.toExact.loanScale < loan'.toExact.totalValueOutstanding -
+        loan'.toExact.periodicPayment * loan'.toExact.paymentTotal.toNat :=
   LendingLedger.create_value_upper_bound_witness
 
 /-- Create -> ManagementFeeOutstanding − ManagementFeeRate × (TotalValueOutstanding − PrincipalOutstanding) ≤ 0.
@@ -131,11 +138,12 @@ theorem Lending.create_managementFee_upper_bound
 `615000000.00667` with a 9.999% fee: the fee share `922407750.0100039995` rounds up to `922407750.010004`. -/
 theorem Lending.create_managementFee_upper_bound_attained :
     ∃ (l l' : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (loan' : Loan),
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (loan' : Loan),
       l.Reachable ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .ok (.ok l') ∧ l'.LoanAt l.loans.length loan' ∧
+        allowsOverpayment)).run = .ok (.ok l') ∧
+      l'.LoanAt l.loans.length loan' ∧
       0 < loan'.toExact.managementFeeOutstanding - (loan'.broker.managementFeeRate.toNat : ℚ) / 100000 *
         (loan'.toExact.totalValueOutstanding - loan'.toExact.principalOutstanding) :=
   LendingLedger.create_managementFee_upper_bound_witness
@@ -155,11 +163,12 @@ theorem Lending.create_managementFee_lower_bound
 `0.10001` with a 9.999% fee: the interest is 10001 units and its fee share 999.99999 units. -/
 theorem Lending.create_managementFee_lower_bound_attained :
     ∃ (l l' : LendingLedger) (j : Nat) (principal : Number) (rates : LoanRates) (fees : LoanFees)
-      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32)
-      (twoStep allowsOverpayment : Bool) (loan' : Loan),
+      (paymentInterval paymentTotal gracePeriod : Option UInt32) (startDate : UInt32) (twoStep allowsOverpayment : Bool)
+      (loan' : Loan),
       l.Reachable ∧
       (l.apply (.loanSet j principal rates fees paymentInterval paymentTotal gracePeriod startDate twoStep
-        allowsOverpayment)).run = .ok (.ok l') ∧ l'.LoanAt l.loans.length loan' ∧
+        allowsOverpayment)).run = .ok (.ok l') ∧
+      l'.LoanAt l.loans.length loan' ∧
       (loan'.broker.managementFeeRate.toNat : ℚ) / 100000 *
         (loan'.toExact.totalValueOutstanding - loan'.toExact.principalOutstanding) -
         loan'.toExact.managementFeeOutstanding = 99999 / 100000 * 10 ^ loan'.toExact.loanScale :=

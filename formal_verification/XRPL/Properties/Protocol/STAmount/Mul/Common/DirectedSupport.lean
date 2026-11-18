@@ -259,26 +259,4 @@ lemma STAmount.ofNumber_iou_abs_le_towards_zero (nt : NumericType) (r : Number) 
       rw [hres_toRat, abs_mul]; rcases hn : neg with _ | _ <;> simp
     rw [hres_abs, ← hwabs]; exact hmono
 
-/-- The `Number`-multiply result sign is the XOR of the operand signs (any mode). -/
-theorem operator_mul_negative_eq (x y result : Number) (mode : rounding_mode)
-    (hx : x.isNormalized) (hy : y.isNormalized)
-    (hx_ne : x.mantissa_ ≠ 0) (hy_ne : y.mantissa_ ≠ 0)
-    (hok : Number.operator_mul x y mode = .ok result) (hresult : result.mantissa_ ≠ 0) :
-    result.negative_ = (x.negative_ != y.negative_) := by
-  obtain ⟨zn, zm, ze', f, g, res, d⟩ :=
-    Number.operator_mul_decompose x y result mode hx hy hx_ne hy_ne hok
-  have hzm_ge : zm.toNat ≥ mantissaFloor := by have := d.zm_ge_floorSucc; omega
-  have hres_mant_ne : res.mantissa_ ≠ 0 :=
-    Number.normalize_mantissa_ne_zero_of_result d.normalizes hresult
-  obtain ⟨h_res_min, h_res_max, h_res_exp, h_res_mod⟩ :=
-    doRoundUp_output_invariants_upTo_maxRepUp_anyMode g zn zm ze' mode hzm_ge d.zm_le_maxRepUp
-      .overflow res d.rounds hres_mant_ne
-  have hres_eq : result = res.toNumber :=
-    Number.normalize_eq_of_invariants h_res_min h_res_max h_res_exp h_res_mod d.normalizes
-  have hres_neg : res.negative_ = zn :=
-    doRoundUp_negative_of_mant_ne g zn zm ze' largeRange.min largeRange.max mode
-      .overflow res d.rounds hres_mant_ne
-  rw [hres_eq, show res.toNumber.negative_ = res.negative_ from rfl, hres_neg]
-  exact d.neg_eq
-
 end XRPL.Model.Protocol

@@ -70,15 +70,6 @@ lemma ceil_grid_le_of_scale_le (x : ℚ) (s s' : ℤ) (hle : s ≤ s') :
   calc (⌈x / 10 ^ s⌉ : ℚ) * 10 ^ s ≤ ((k' * n : ℤ) : ℚ) * 10 ^ s := by gcongr
     _ = (k' : ℚ) * 10 ^ s' := by rw [hsplit]; push_cast; ring
 
-/-- Rounding up onto a coarser grid never gives less. -/
-lemma RoundsToRepresentableAt.upward_mono {A : Type} [RatValued A] (r r' : A) (truth : ℚ)
-    (s s' : ℤ) (hle : s ≤ s') (hr : RoundsToRepresentableAt r truth s .upward)
-    (hr' : RoundsToRepresentableAt r' truth s' .upward) :
-    RatValued.toRat r ≤ RatValued.toRat r' := by
-  unfold RoundsToRepresentableAt at hr hr'
-  rw [hr, hr']
-  exact ceil_grid_le_of_scale_le truth s s' hle
-
 /-- An exact result rounds within zero relative error in every mode. -/
 lemma RoundsWithin_of_eq {A : Type} [RatValued A] (result : A) (truth : ℚ)
     (mode : rounding_mode) (h : RatValued.toRat result = truth) :

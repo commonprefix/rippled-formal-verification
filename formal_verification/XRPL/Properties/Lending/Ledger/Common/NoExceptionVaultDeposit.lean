@@ -405,11 +405,6 @@ open XRPL.Model.SingleAssetVault (Vault RawVault)
 open XRPL.Model.SingleAssetVault.VaultDepositNoException
 open XRPL.Model.Lending.VaultDepositNoException
 
-/-- A ledger close always returns a result. -/
-lemma LendingLedger.close_no_exception_proof (l : LendingLedger) (time : UInt32) :
-    ∃ r, (l.apply (.close time)).run = .ok r :=
-  ⟨_, rfl⟩
-
 /-- A VaultDelete always returns a result. -/
 lemma LendingLedger.vaultDelete_no_exception_proof (l : LendingLedger) :
     ∃ r, (l.apply .vaultDelete).run = .ok r := by

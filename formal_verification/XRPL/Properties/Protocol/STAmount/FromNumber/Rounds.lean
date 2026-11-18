@@ -20,8 +20,10 @@ theorem STAmount.ofNumber_rounds_downward (nt : NumericType) (n : Number) (resul
 
 /-- A negative Number that `downward` conversion rounds up: -1.5 XRP becomes -1. -/
 theorem STAmount.ofNumber_rounds_downward_attained :
-    ∃ (nt : NumericType) (n : Number) (result : STAmount), n.isNormalized ∧
-      STAmount.ofNumber nt n .downward = .ok result ∧ (nt.isIntegral = true ∨ result.mValue ≠ 0) ∧
+    ∃ (nt : NumericType) (n : Number) (result : STAmount),
+      n.isNormalized ∧
+      STAmount.ofNumber nt n .downward = .ok result ∧
+      (nt.isIntegral = true ∨ result.mValue ≠ 0) ∧
       n.toRat < result.toRat :=
   ⟨NumericType.native, ⟨true, 1500000000000000000, -18⟩, ⟨NumericType.native, 1, 0, true⟩,
     STAmount.ofNumber_negative_witness_normalized, STAmount.ofNumber_downward_negative_witness,
@@ -37,8 +39,10 @@ theorem STAmount.ofNumber_rounds_upward (nt : NumericType) (n : Number) (result 
 
 /-- A negative Number that `upward` conversion rounds down: -1.5 XRP becomes -2. -/
 theorem STAmount.ofNumber_rounds_upward_attained :
-    ∃ (nt : NumericType) (n : Number) (result : STAmount), n.isNormalized ∧
-      STAmount.ofNumber nt n .upward = .ok result ∧ (nt.isIntegral = true ∨ result.mValue ≠ 0) ∧
+    ∃ (nt : NumericType) (n : Number) (result : STAmount),
+      n.isNormalized ∧
+      STAmount.ofNumber nt n .upward = .ok result ∧
+      (nt.isIntegral = true ∨ result.mValue ≠ 0) ∧
       result.toRat < n.toRat :=
   ⟨NumericType.native, ⟨true, 1500000000000000000, -18⟩, ⟨NumericType.native, 2, 0, true⟩,
     STAmount.ofNumber_negative_witness_normalized, STAmount.ofNumber_upward_negative_witness,

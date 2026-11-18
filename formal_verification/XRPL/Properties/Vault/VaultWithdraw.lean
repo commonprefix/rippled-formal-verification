@@ -51,7 +51,7 @@ theorem Vault.withdraw_sharesRedeemed (v : Vault) :
       (v.withdraw (.vaultShares shares) waiveUnrealizedLoss t hpos).run = .ok (.ok r) → r.shares = shares) ∧
     ∀ (assets : STAmount) (waiveUnrealizedLoss : Bool) (t : UInt32) (netAssetValue : Number)
       (hpos : 0 < assets.toRat),
-      assets.Canonical → -- a transaction amount is a canonical amount
+      assets.Canonical →
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue →
       ∀ r : VaultWithAmounts, (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) →
       -- the 19-digit price can cross a whole number within `sharesε` relatively of the ideal
@@ -70,8 +70,8 @@ theorem Vault.withdraw_sharesRedeemed (v : Vault) :
 units, and a larger sharesRedeemed never lowers it. -/
 theorem Vault.withdraw_payout (v : Vault) :
     (∀ (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool) (t : UInt32) (hpos : 0 < amount.amount.toRat),
-      amount.amount.Canonical → -- a transaction amount is a canonical amount
-      amount.InAsset v.numericType → -- of the vault's asset, or its shares
+      amount.amount.Canonical →
+      amount.InAsset v.numericType →
       ∀ r : VaultWithAmounts, (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) →
       r.shares.toRat < v.toExact.sharesTotal →
       -- C++ prices the shares to nearest, so the payout is ⌊price × (1 − feeRate)⌋ rather than of sharesWorth (FV_M2_3)
@@ -118,9 +118,12 @@ pays `2`, half a unit above the worth. -/
 theorem Vault.withdraw_payout_worth_attained :
     ∃ (v : Vault) (t t0 : UInt32) (amount : WithdrawAmount) (waiveUnrealizedLoss : Bool)
       (hpos : 0 < amount.amount.toRat) (r : VaultWithAmounts) (netAssetValue : Number),
-      Vault.Reachable v t0 ∧ amount.amount.Canonical ∧ amount.InAsset v.numericType ∧
+      Vault.Reachable v t0 ∧
+      amount.amount.Canonical ∧
+      amount.InAsset v.numericType ∧
       (v.withdraw amount waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
-      r.shares.toRat < v.toExact.sharesTotal ∧ v.earlyExitFeeRateAt t = 0 ∧
+      r.shares.toRat < v.toExact.sharesTotal ∧
+      v.earlyExitFeeRateAt t = 0 ∧
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
       v.idealAssetsWithdrawAt netAssetValue.toRat r.shares.toRat < r.assets.toRat :=
   Vault.withdraw_payout_worth_witness
@@ -130,7 +133,8 @@ ideal rounded down. -/
 theorem Vault.withdraw_sharesRedeemed_truncation_attained :
     ∃ (v : Vault) (t t0 : UInt32) (assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
       (hpos : 0 < assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧
+      assets.Canonical ∧
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
       (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
       r.shares.toRat < ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ :=
@@ -141,7 +145,8 @@ the ideal sitting just below a whole share. -/
 theorem Vault.withdraw_sharesRedeemed_relative_attained :
     ∃ (v : Vault) (t t0 : UInt32) (assets : STAmount) (waiveUnrealizedLoss : Bool) (netAssetValue : Number)
       (hpos : 0 < assets.toRat) (r : VaultWithAmounts),
-      Vault.Reachable v t0 ∧ assets.Canonical ∧
+      Vault.Reachable v t0 ∧
+      assets.Canonical ∧
       v.assetsTotalForWithdrawal waiveUnrealizedLoss = .ok netAssetValue ∧
       (v.withdraw (.vaultAssets assets) waiveUnrealizedLoss t hpos).run = .ok (.ok r) ∧
       ⌊v.idealSharesWithdrawAt netAssetValue.toRat assets.toRat⌋ < r.shares.toRat :=

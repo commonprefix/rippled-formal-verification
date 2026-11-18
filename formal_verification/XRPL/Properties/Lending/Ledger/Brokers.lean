@@ -45,10 +45,15 @@ theorem Lending.coverClawback_minimum (hr : l.Reachable) (l' : LendingLedger) (j
 takes the cover to `2000001` at the scale `10^-10`, and the clawback leaves `500.1`. -/
 theorem Lending.coverClawback_minimum_attained :
     ∃ (l l' : LendingLedger) (j : Nat) (amount : Option STAmount) (b b' : LoanBroker) (r : LoanBrokerCoverResult)
-      (minimumCover : Number), l.Reachable ∧ (l.apply (.loanBrokerCoverClawback j amount)).run = .ok (.ok l') ∧
-      l.broker? j = some b ∧ l'.broker? j = some b' ∧ (b.coverClawback l.vault amount).run = .ok (.ok r) ∧
+      (minimumCover : Number),
+      l.Reachable ∧
+      (l.apply (.loanBrokerCoverClawback j amount)).run = .ok (.ok l') ∧
+      l.broker? j = some b ∧
+      l'.broker? j = some b' ∧
+      (b.coverClawback l.vault amount).run = .ok (.ok r) ∧
       minimumBrokerCover b.numericType b.debtTotal b.coverRateMinimum l.vault.baseExponent = .ok minimumCover ∧
-      (amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) ∧ b'.coverAvailable.toRat < minimumCover.toRat :=
+      (amount = none ∨ ∃ a, amount = some a ∧ a.isZero = true) ∧
+      b'.coverAvailable.toRat < minimumCover.toRat :=
   LendingLedger.coverClawback_minimum_witness
 
 end XRPL.Model

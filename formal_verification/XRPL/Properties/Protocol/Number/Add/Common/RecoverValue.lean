@@ -262,48 +262,6 @@ theorem recover_value_preserved_bounded
 
 set_option maxHeartbeats 800000 in
 -- repeated `recoverSpec upperLimit m e g fuel` terms are expensive to elaborate
-/-- `recover` preserves the diff-sign value `(m - f_g) * 10^e` with an output residue in `[0, 1 + 10^fuel / 10^16)`.
-The slack `10^fuel / 10^16` is the worst-case growth of the hidden fraction over `fuel` pops. -/
-theorem recover_value_in_unit_interval
-    {upperLimit m : UInt128} (hUL : upperLimit.toNat * 10 < 2 ^ 128)
-    {e : Int} {g : Guard} {fuel : ℕ}
-    (hm_pos : 1 ≤ m.toNat)
-    {f_g : ℚ} (hg : represents g f_g) :
-    ∃ f_g_after : ℚ,
-      0 ≤ f_g_after ∧
-      f_g_after < 1 + (10 : ℚ) ^ fuel / 10 ^ 16 ∧
-      ((m.toNat : ℚ) - f_g) * (10 : ℚ) ^ e
-        = (((recoverSpec upperLimit m e g fuel).1.toNat : ℚ) - f_g_after)
-          * (10 : ℚ) ^ ((recoverSpec upperLimit m e g fuel).2.1) := by
-  obtain ⟨x, hx_nn, hx_lt, hf_eq, _, hall⟩ := hg
-  have hB_pos : (0 : ℚ) < 1 / 10 ^ 16 := by positivity
-  obtain ⟨x_after, hxa_nn, hxa_lt, hall_after, heq⟩ :=
-    recover_value_preserved_bounded upperLimit m hUL e g fuel hm_pos hall x (1 / 10 ^ 16) hB_pos hx_nn hx_lt
-  refine ⟨(decimalValue (recoverSpec upperLimit m e g fuel).2.2.digits_ : ℚ) / 10 ^ 16
-          + x_after, ?_, ?_, ?_⟩
-  · -- 0 ≤ residue
-    have h16_pos : (0 : ℚ) < 10 ^ 16 := by positivity
-    have h_dv_nn :
-        (0 : ℚ) ≤ (decimalValue (recoverSpec upperLimit m e g fuel).2.2.digits_ : ℚ) / 10 ^ 16 := by
-      apply div_nonneg
-      · exact_mod_cast Nat.zero_le _
-      · linarith
-    linarith
-  · -- residue < 1 + 10^fuel / 10^16
-    have h16_pos : (0 : ℚ) < 10 ^ 16 := by positivity
-    have h_nat : decimalValue (recoverSpec upperLimit m e g fuel).2.2.digits_ < 10 ^ 16 :=
-      decimalValue_lt_pow_16 hall_after
-    have h_q :
-        (decimalValue (recoverSpec upperLimit m e g fuel).2.2.digits_ : ℚ) < (10 : ℚ) ^ 16 := by
-      exact_mod_cast h_nat
-    have h_dv_lt :
-        (decimalValue (recoverSpec upperLimit m e g fuel).2.2.digits_ : ℚ) / 10 ^ 16 < 1 := by
-      rw [div_lt_iff₀ h16_pos]; linarith
-    have h_xa_eq : (10 : ℚ) ^ fuel * (1 / 10 ^ 16) = (10 : ℚ) ^ fuel / 10 ^ 16 := by ring
-    rw [h_xa_eq] at hxa_lt
-    linarith
-  · rw [hf_eq]
-    exact heq
 
 set_option maxHeartbeats 800000 in
 -- functional induction over `recover` with branch reindexing is heartbeat-heavy
